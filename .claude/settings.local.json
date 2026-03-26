@@ -9,7 +9,8 @@
       "Bash(npx tsc:*)",
       "Bash(npx vite:*)",
       "Bash(curl -s http://localhost:8080)",
-      "Bash(node -e \"const fs=require\\(''fs''\\); const buf=fs.readFileSync\\(''day-book-2024-25.pdf''\\); const text=buf.toString\\(''latin1''\\); const matches=text.match\\(/Opening[^\\\\n\\\\r]*/gi\\); console.log\\(matches?.slice\\(0,20\\).join\\(''\\\\n''\\)\\);\")"
+      "Bash(node -e \"const fs=require\\(''fs''\\); const buf=fs.readFileSync\\(''day-book-2024-25.pdf''\\); const text=buf.toString\\(''latin1''\\); const matches=text.match\\(/Opening[^\\\\n\\\\r]*/gi\\); console.log\\(matches?.slice\\(0,20\\).join\\(''\\\\n''\\)\\);\")",
+      "Bash(npm list:*)"
     ]
   }
 }
