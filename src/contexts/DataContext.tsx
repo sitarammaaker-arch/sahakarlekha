@@ -20,7 +20,7 @@ interface DataContextType {
   assets: Asset[];
 
   addVoucher: (data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>) => Voucher;
-  updateVoucher: (id: string, data: Partial<Pick<Voucher, 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId'>>) => void;
+  updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId'>>) => void;
   cancelVoucher: (id: string, reason: string, deletedBy: string) => void;
   restoreVoucher: (id: string) => void;
   auditObjections: AuditObjection[];
@@ -100,6 +100,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const withSoc = (d: Record<string, any>) => ({ ...d, society_id: societyIdRef.current });
 
   const [vouchers, setVouchersState] = useState<Voucher[]>(() => storage.getVouchers());
+  const vouchersRef = useRef<Voucher[]>(vouchers);
+  useEffect(() => { vouchersRef.current = vouchers; }, [vouchers]);
   const [members, setMembersState] = useState<Member[]>(() => storage.getMembers());
   const [accounts, setAccountsState] = useState<LedgerAccount[]>(() => storage.getAccounts());
   const [society, setSocietyState] = useState<SocietySettings>(() => storage.getSociety());
@@ -192,47 +194,42 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return newVoucher;
   }, [society.financialYear]);
 
-  const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId'>>) => {
-    let updatedVoucher: Voucher | undefined;
+  const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId'>>) => {
+    const current = vouchersRef.current.find(v => v.id === id);
+    if (!current) return;
+    const updatedVoucher = { ...current, ...data };
     setVouchersState(prev => {
-      const updated = prev.map(v => v.id === id ? { ...v, ...data } : v);
-      updatedVoucher = updated.find(v => v.id === id);
+      const updated = prev.map(v => v.id === id ? updatedVoucher : v);
       storage.setVouchers(updated);
       return updated;
     });
-    if (updatedVoucher) {
-      supabase.from('vouchers').upsert(updatedVoucher).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-    }
+    supabase.from('vouchers').upsert(withSoc(updatedVoucher)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
   }, []);
 
   const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string) => {
-    let cancelledVoucher: Voucher | undefined;
+    const current = vouchersRef.current.find(v => v.id === id);
+    if (!current) return;
+    const cancelledVoucher = { ...current, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy, deletedReason: reason };
     setVouchersState(prev => {
-      const updated = prev.map(v => v.id === id
-        ? { ...v, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy, deletedReason: reason }
-        : v);
-      cancelledVoucher = updated.find(v => v.id === id);
+      const updated = prev.map(v => v.id === id ? cancelledVoucher : v);
       storage.setVouchers(updated);
       return updated;
     });
-    if (cancelledVoucher) {
-      supabase.from('vouchers').upsert(cancelledVoucher).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-    }
+    supabase.from('vouchers').upsert(withSoc(cancelledVoucher)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
   }, []);
 
   const restoreVoucher = useCallback((id: string) => {
-    let restoredVoucher: Voucher | undefined;
+    const current = vouchersRef.current.find(v => v.id === id);
+    if (!current) return;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { deletedAt: _da, deletedBy: _db, deletedReason: _dr, ...rest } = current as Voucher & { deletedAt?: string; deletedBy?: string; deletedReason?: string };
+    const restoredVoucher = { ...rest, isDeleted: false };
     setVouchersState(prev => {
-      const updated = prev.map(v => v.id === id
-        ? { ...v, isDeleted: false, deletedAt: undefined, deletedBy: undefined, deletedReason: undefined }
-        : v);
-      restoredVoucher = updated.find(v => v.id === id);
+      const updated = prev.map(v => v.id === id ? restoredVoucher : v);
       storage.setVouchers(updated);
       return updated;
     });
-    if (restoredVoucher) {
-      supabase.from('vouchers').upsert(restoredVoucher).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-    }
+    supabase.from('vouchers').upsert(withSoc(restoredVoucher)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
   }, []);
 
   const addAuditObjection = useCallback((data: Omit<AuditObjection, 'id' | 'objectionNo' | 'createdAt'>): AuditObjection => {

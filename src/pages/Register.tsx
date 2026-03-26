@@ -159,6 +159,26 @@ const Register: React.FC = () => {
         pinCode: '',
       });
 
+      // 4. Insert default accounts so balances work from day one
+      const sid = society.id;
+      await supabase.from('accounts').insert([
+        { id: 'CASH',       society_id: sid, name: 'Cash in Hand',            nameHi: 'हाथ में नकद',       type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true  },
+        { id: 'BANK',       society_id: sid, name: 'Bank - SBI',              nameHi: 'बैंक - एसबीआई',     type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true  },
+        { id: 'SHARE_CAP',  society_id: sid, name: 'Share Capital',           nameHi: 'अंश पूंजी',          type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: true  },
+        { id: 'MEM_DEP',    society_id: sid, name: 'Member Deposits',         nameHi: 'सदस्य जमा',          type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
+        { id: 'RES_FUND',   society_id: sid, name: 'Reserve Fund',            nameHi: 'आरक्षित निधि',        type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
+        { id: 'DEBTORS',    society_id: sid, name: 'Sundry Debtors',          nameHi: 'देनदार',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false },
+        { id: 'CREDITORS',  society_id: sid, name: 'Sundry Creditors',        nameHi: 'लेनदार',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
+        { id: 'COMM_INC',   society_id: sid, name: 'Commission Income',       nameHi: 'कमीशन आय',           type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
+        { id: 'INT_INC',    society_id: sid, name: 'Interest Income',         nameHi: 'ब्याज आय',           type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
+        { id: 'SAL_EXP',    society_id: sid, name: 'Salary Expense',          nameHi: 'वेतन व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false },
+        { id: 'RENT_EXP',   society_id: sid, name: 'Rent Expense',            nameHi: 'किराया व्यय',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false },
+        { id: 'OFF_EXP',    society_id: sid, name: 'Office Expenses',         nameHi: 'कार्यालय व्यय',        type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false },
+        { id: 'ELEC_EXP',   society_id: sid, name: 'Electricity Expense',     nameHi: 'बिजली व्यय',          type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false },
+        { id: 'STOCK',      society_id: sid, name: 'Stock in Trade',          nameHi: 'व्यापारिक स्टॉक',     type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false },
+        { id: 'SURPLUS_BF', society_id: sid, name: 'Surplus Brought Forward', nameHi: 'अग्रनीत अधिशेष',     type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
+      ]);
+
       setSuccess(true);
     } catch {
       setError('Registration failed. Please check your connection and try again.');

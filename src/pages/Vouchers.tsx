@@ -72,6 +72,7 @@ const Vouchers: React.FC = () => {
       return;
     }
     updateVoucher(editId, {
+      type: editType,
       date: editDate,
       debitAccountId: editDebit,
       creditAccountId: editCredit,
