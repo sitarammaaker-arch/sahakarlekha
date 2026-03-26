@@ -46,6 +46,96 @@ const TYPE_BADGE_CLASS: Record<AccountType, string> = {
   expense: 'bg-red-100 text-red-700 border-red-200',
 };
 
+interface AccountFormProps {
+  form: typeof EMPTY_FORM;
+  setForm: React.Dispatch<React.SetStateAction<typeof EMPTY_FORM>>;
+  onSubmit: (e: React.FormEvent) => void;
+  submitLabel: string;
+  onCancel: () => void;
+  hi: boolean;
+}
+
+const AccountForm: React.FC<AccountFormProps> = ({ form, setForm, onSubmit, submitLabel, onCancel, hi }) => (
+  <form onSubmit={onSubmit} className="space-y-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="space-y-2">
+        <Label>
+          {hi ? 'नाम (अंग्रेजी)' : 'Name (English)'} <span className="text-destructive">*</span>
+        </Label>
+        <Input
+          value={form.name}
+          onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+          placeholder="e.g. Cash in Hand"
+          required
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
+        <Input
+          value={form.nameHi}
+          onChange={e => setForm(f => ({ ...f, nameHi: e.target.value }))}
+          placeholder="जैसे नकद"
+        />
+      </div>
+    </div>
+    <div className="space-y-2">
+      <Label>
+        {hi ? 'खाता प्रकार' : 'Account Type'} <span className="text-destructive">*</span>
+      </Label>
+      <Select
+        value={form.type}
+        onValueChange={val => setForm(f => ({ ...f, type: val as AccountType }))}
+      >
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {TYPE_OPTIONS.map(opt => (
+            <SelectItem key={opt.value} value={opt.value}>
+              {hi ? opt.labelHi : opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+    <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-2">
+        <Label>{hi ? 'प्रारंभिक शेष' : 'Opening Balance'} (₹)</Label>
+        <Input
+          type="number"
+          min="0"
+          value={form.openingBalance}
+          onChange={e => setForm(f => ({ ...f, openingBalance: e.target.value }))}
+          placeholder="0"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>{hi ? 'शेष प्रकार' : 'Balance Type'}</Label>
+        <Select
+          value={form.openingBalanceType}
+          onValueChange={val =>
+            setForm(f => ({ ...f, openingBalanceType: val as 'debit' | 'credit' }))
+          }
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="debit">{hi ? 'नाम (Dr)' : 'Debit (Dr)'}</SelectItem>
+            <SelectItem value="credit">{hi ? 'जमा (Cr)' : 'Credit (Cr)'}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+    <div className="flex gap-2 justify-end pt-2">
+      <Button variant="outline" type="button" onClick={onCancel}>
+        {hi ? 'रद्द करें' : 'Cancel'}
+      </Button>
+      <Button type="submit">{submitLabel}</Button>
+    </div>
+  </form>
+);
+
 const LedgerHeads: React.FC = () => {
   const { language } = useLanguage();
   const { accounts, addAccount, updateAccount, deleteAccount } = useData();
@@ -160,95 +250,6 @@ const LedgerHeads: React.FC = () => {
     const opt = TYPE_OPTIONS.find(o => o.value === type);
     return opt ? (hi ? opt.labelHi : opt.label) : type;
   };
-
-  const AccountForm = ({
-    onSubmit,
-    submitLabel,
-    onCancel,
-  }: {
-    onSubmit: (e: React.FormEvent) => void;
-    submitLabel: string;
-    onCancel: () => void;
-  }) => (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>
-            {hi ? 'नाम (अंग्रेजी)' : 'Name (English)'} <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            value={form.name}
-            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            placeholder="e.g. Cash in Hand"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
-          <Input
-            value={form.nameHi}
-            onChange={e => setForm(f => ({ ...f, nameHi: e.target.value }))}
-            placeholder="जैसे नकद"
-          />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label>
-          {hi ? 'खाता प्रकार' : 'Account Type'} <span className="text-destructive">*</span>
-        </Label>
-        <Select
-          value={form.type}
-          onValueChange={val => setForm(f => ({ ...f, type: val as AccountType }))}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {TYPE_OPTIONS.map(opt => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {hi ? opt.labelHi : opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>{hi ? 'प्रारंभिक शेष' : 'Opening Balance'} (₹)</Label>
-          <Input
-            type="number"
-            min="0"
-            value={form.openingBalance}
-            onChange={e => setForm(f => ({ ...f, openingBalance: e.target.value }))}
-            placeholder="0"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>{hi ? 'शेष प्रकार' : 'Balance Type'}</Label>
-          <Select
-            value={form.openingBalanceType}
-            onValueChange={val =>
-              setForm(f => ({ ...f, openingBalanceType: val as 'debit' | 'credit' }))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="debit">{hi ? 'नाम (Dr)' : 'Debit (Dr)'}</SelectItem>
-              <SelectItem value="credit">{hi ? 'जमा (Cr)' : 'Credit (Cr)'}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div className="flex gap-2 justify-end pt-2">
-        <Button variant="outline" type="button" onClick={onCancel}>
-          {hi ? 'रद्द करें' : 'Cancel'}
-        </Button>
-        <Button type="submit">{submitLabel}</Button>
-      </div>
-    </form>
-  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -468,6 +469,9 @@ const LedgerHeads: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <AccountForm
+            form={form}
+            setForm={setForm}
+            hi={hi}
             onSubmit={handleAdd}
             submitLabel={hi ? 'सहेजें' : 'Save'}
             onCancel={() => {
@@ -496,6 +500,9 @@ const LedgerHeads: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <AccountForm
+            form={form}
+            setForm={setForm}
+            hi={hi}
             onSubmit={handleEdit}
             submitLabel={hi ? 'अपडेट करें' : 'Update'}
             onCancel={() => {
