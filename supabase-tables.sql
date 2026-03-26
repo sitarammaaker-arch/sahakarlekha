@@ -1,154 +1,287 @@
 -- =============================================
--- Sahakarlekha - Supabase Database Tables
--- Run this in Supabase SQL Editor
+-- Sahakarlekha - Complete Supabase Schema
+-- Column names match TypeScript field names exactly
+-- Run in Supabase SQL Editor (fresh setup)
 -- =============================================
+
+-- ── STEP 1: Drop existing tables (if rebuilding fresh) ───────────────────────
+-- Uncomment these lines only if you want to start fresh:
+-- drop table if exists salary_records cascade;
+-- drop table if exists employees cascade;
+-- drop table if exists purchases cascade;
+-- drop table if exists sales cascade;
+-- drop table if exists stock_movements cascade;
+-- drop table if exists stock_items cascade;
+-- drop table if exists audit_objections cascade;
+-- drop table if exists assets cascade;
+-- drop table if exists loans cascade;
+-- drop table if exists vouchers cascade;
+-- drop table if exists members cascade;
+-- drop table if exists accounts cascade;
+-- drop table if exists society_settings cascade;
+-- drop table if exists society_users cascade;
+-- drop table if exists societies cascade;
+
+
+-- ── STEP 2: Multi-Society tables ─────────────────────────────────────────────
+
+create table if not exists societies (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  name_hi text,
+  registration_no text unique not null,
+  address text,
+  district text not null,
+  state text not null,
+  phone text,
+  financial_year text default '2024-25',
+  created_at timestamp default now()
+);
+
+create table if not exists society_users (
+  id uuid primary key default gen_random_uuid(),
+  society_id uuid references societies(id) on delete cascade,
+  name text not null,
+  email text unique not null,
+  password text not null,
+  role text not null check (role in ('admin', 'accountant', 'viewer')),
+  is_active boolean default true,
+  created_at timestamp default now()
+);
+
+
+-- ── STEP 3: Data tables (column names match TypeScript camelCase) ─────────────
+-- NOTE: Quoted identifiers ("voucherNo") preserve camelCase in PostgreSQL.
+-- This ensures Supabase stores/returns the exact same keys the app sends.
 
 -- 1. Society Settings
 create table if not exists society_settings (
   id text primary key default 'main',
-  name text, name_hi text, registration_no text,
-  financial_year text, financial_year_start text,
-  address text, district text, state text,
-  pin_code text, phone text, email text,
-  previous_financial_year text,
-  previous_year_balances jsonb default '{}'
+  society_id text not null default 'SOC001',
+  name text,
+  "nameHi" text,
+  "registrationNo" text,
+  "financialYear" text,
+  "financialYearStart" text,
+  address text,
+  district text,
+  state text,
+  "pinCode" text,
+  phone text,
+  email text,
+  "previousFinancialYear" text,
+  "previousYearBalances" jsonb default '{}'
 );
 
 -- 2. Accounts (Ledger Heads)
 create table if not exists accounts (
   id text primary key,
-  name text not null, name_hi text,
+  society_id text not null default 'SOC001',
+  name text not null,
+  "nameHi" text,
   type text not null,
-  opening_balance numeric default 0,
-  opening_balance_type text default 'debit',
-  is_system boolean default false,
-  is_active boolean default true
+  "openingBalance" numeric default 0,
+  "openingBalanceType" text default 'debit',
+  "isSystem" boolean default false
 );
 
 -- 3. Members
 create table if not exists members (
   id text primary key,
-  member_no text, name text, name_hi text,
-  phone text, address text, village text,
-  share_amount numeric default 0,
-  loan_amount numeric default 0,
-  join_date text, is_active boolean default true,
-  created_at timestamp default now()
+  society_id text not null default 'SOC001',
+  "memberId" text,
+  name text,
+  "fatherName" text,
+  address text,
+  phone text,
+  "shareCapital" numeric default 0,
+  "joinDate" text,
+  status text default 'active',
+  "shareCertNo" text,
+  "shareCount" numeric,
+  "shareFaceValue" numeric,
+  "nomineeName" text,
+  "nomineeRelation" text,
+  "nomineePhone" text,
+  "createdAt" timestamp default now()
 );
 
 -- 4. Vouchers
 create table if not exists vouchers (
   id text primary key,
-  voucher_no text, date text, type text,
-  debit_account_id text, credit_account_id text,
-  amount numeric default 0, narration text,
-  member_id text,
-  is_deleted boolean default false,
-  deleted_at text, deleted_by text, deleted_reason text,
-  created_at timestamp default now(),
-  created_by text
+  society_id text not null default 'SOC001',
+  "voucherNo" text,
+  date text,
+  type text,
+  "debitAccountId" text,
+  "creditAccountId" text,
+  amount numeric default 0,
+  narration text,
+  "memberId" text,
+  "isDeleted" boolean default false,
+  "deletedAt" text,
+  "deletedBy" text,
+  "deletedReason" text,
+  "createdAt" timestamp default now(),
+  "createdBy" text
 );
 
 -- 5. Loans
 create table if not exists loans (
   id text primary key,
-  loan_no text, member_id text, member_name text,
-  loan_type text, principal_amount numeric,
-  interest_rate numeric, tenure_months integer,
-  disbursement_date text, status text,
-  repaid_amount numeric default 0,
-  created_at timestamp default now()
+  society_id text not null default 'SOC001',
+  "loanNo" text,
+  "memberId" text,
+  "loanType" text,
+  purpose text,
+  amount numeric,
+  "interestRate" numeric,
+  "disbursementDate" text,
+  "dueDate" text,
+  "repaidAmount" numeric default 0,
+  status text,
+  security text,
+  "createdAt" timestamp default now()
 );
 
 -- 6. Assets
 create table if not exists assets (
   id text primary key,
-  asset_no text, name text, name_hi text,
-  category text, purchase_date text,
-  purchase_value numeric, current_value numeric,
-  depreciation_rate numeric, location text,
-  is_active boolean default true
+  society_id text not null default 'SOC001',
+  "assetNo" text,
+  name text,
+  category text,
+  "purchaseDate" text,
+  cost numeric,
+  "depreciationRate" numeric,
+  location text,
+  description text,
+  status text default 'active'
 );
 
 -- 7. Audit Objections
 create table if not exists audit_objections (
   id text primary key,
-  objection_no text, audit_year text,
-  objection_date text, auditor_name text,
-  description text, amount numeric,
-  status text, reply text, reply_date text,
-  created_at timestamp default now()
+  society_id text not null default 'SOC001',
+  "objectionNo" text,
+  "auditYear" text,
+  "paraNo" text,
+  category text,
+  objection text,
+  "amountInvolved" numeric default 0,
+  "dueDate" text,
+  "actionTaken" text,
+  "rectifiedDate" text,
+  status text,
+  remarks text,
+  "createdAt" timestamp default now()
 );
 
 -- 8. Stock Items
 create table if not exists stock_items (
   id text primary key,
-  item_code text, name text, name_hi text,
-  unit text, opening_stock numeric default 0,
-  current_stock numeric default 0,
-  purchase_rate numeric default 0,
-  sale_rate numeric default 0,
-  is_active boolean default true
+  society_id text not null default 'SOC001',
+  "itemCode" text,
+  name text,
+  "nameHi" text,
+  unit text,
+  "openingStock" numeric default 0,
+  "currentStock" numeric default 0,
+  "purchaseRate" numeric default 0,
+  "saleRate" numeric default 0,
+  "isActive" boolean default true
 );
 
 -- 9. Stock Movements
 create table if not exists stock_movements (
   id text primary key,
-  item_id text, type text,
-  quantity numeric, rate numeric,
-  reference_id text, narration text,
-  created_at timestamp default now(),
-  created_by text
+  society_id text not null default 'SOC001',
+  date text,
+  "itemId" text,
+  type text,
+  qty numeric,
+  rate numeric,
+  amount numeric,
+  "referenceNo" text,
+  narration text,
+  "createdAt" timestamp default now()
 );
 
 -- 10. Sales
 create table if not exists sales (
   id text primary key,
-  sale_no text, date text,
-  customer_name text, customer_phone text,
+  society_id text not null default 'SOC001',
+  "saleNo" text,
+  date text,
+  "customerName" text,
+  "customerPhone" text,
   items jsonb default '[]',
-  total_amount numeric, discount numeric default 0,
-  net_amount numeric, payment_mode text,
-  voucher_id text, narration text,
-  created_at timestamp default now(),
-  created_by text
+  "totalAmount" numeric,
+  discount numeric default 0,
+  "netAmount" numeric,
+  "paymentMode" text,
+  "voucherId" text,
+  narration text,
+  "createdAt" timestamp default now(),
+  "createdBy" text
 );
 
 -- 11. Purchases
 create table if not exists purchases (
   id text primary key,
-  purchase_no text, date text,
-  supplier_name text, supplier_phone text,
+  society_id text not null default 'SOC001',
+  "purchaseNo" text,
+  date text,
+  "supplierName" text,
+  "supplierPhone" text,
   items jsonb default '[]',
-  total_amount numeric, discount numeric default 0,
-  net_amount numeric, payment_mode text,
-  voucher_id text, narration text,
-  created_at timestamp default now(),
-  created_by text
+  "totalAmount" numeric,
+  discount numeric default 0,
+  "netAmount" numeric,
+  "paymentMode" text,
+  "voucherId" text,
+  narration text,
+  "createdAt" timestamp default now(),
+  "createdBy" text
 );
 
 -- 12. Employees
 create table if not exists employees (
   id text primary key,
-  emp_no text, name text, name_hi text,
-  designation text, join_date text,
-  basic_salary numeric, phone text,
-  bank_account text, status text
+  society_id text not null default 'SOC001',
+  "empNo" text,
+  name text,
+  "nameHi" text,
+  designation text,
+  "joinDate" text,
+  "basicSalary" numeric,
+  phone text,
+  "bankAccount" text,
+  status text default 'active'
 );
 
 -- 13. Salary Records
 create table if not exists salary_records (
   id text primary key,
-  slip_no text, employee_id text,
-  month text, basic_salary numeric,
+  society_id text not null default 'SOC001',
+  "slipNo" text,
+  "employeeId" text,
+  month text,
+  "basicSalary" numeric,
   allowances numeric default 0,
   deductions numeric default 0,
-  net_salary numeric, payment_mode text,
-  voucher_id text, is_paid boolean default false,
-  paid_date text, created_at timestamp default now()
+  "netSalary" numeric,
+  "paymentMode" text,
+  "voucherId" text,
+  "isPaid" boolean default false,
+  "paidDate" text,
+  "createdAt" timestamp default now()
 );
 
--- Enable Row Level Security (allow all for now — add auth later)
+
+-- ── STEP 4: Enable Row Level Security ────────────────────────────────────────
+alter table societies enable row level security;
+alter table society_users enable row level security;
 alter table society_settings enable row level security;
 alter table accounts enable row level security;
 alter table members enable row level security;
@@ -163,17 +296,74 @@ alter table purchases enable row level security;
 alter table employees enable row level security;
 alter table salary_records enable row level security;
 
--- Allow all operations (public access for now)
-create policy "Allow all" on society_settings for all using (true) with check (true);
-create policy "Allow all" on accounts for all using (true) with check (true);
-create policy "Allow all" on members for all using (true) with check (true);
-create policy "Allow all" on vouchers for all using (true) with check (true);
-create policy "Allow all" on loans for all using (true) with check (true);
-create policy "Allow all" on assets for all using (true) with check (true);
-create policy "Allow all" on audit_objections for all using (true) with check (true);
-create policy "Allow all" on stock_items for all using (true) with check (true);
-create policy "Allow all" on stock_movements for all using (true) with check (true);
-create policy "Allow all" on sales for all using (true) with check (true);
-create policy "Allow all" on purchases for all using (true) with check (true);
-create policy "Allow all" on employees for all using (true) with check (true);
-create policy "Allow all" on salary_records for all using (true) with check (true);
+
+-- ── STEP 5: RLS Policies (allow all — add proper auth policies later) ────────
+do $$ begin
+  -- societies
+  if not exists (select 1 from pg_policies where tablename='societies' and policyname='allow_all_societies') then
+    create policy "allow_all_societies" on societies for all using (true) with check (true);
+  end if;
+  -- society_users
+  if not exists (select 1 from pg_policies where tablename='society_users' and policyname='allow_all_society_users') then
+    create policy "allow_all_society_users" on society_users for all using (true) with check (true);
+  end if;
+  -- data tables
+  if not exists (select 1 from pg_policies where tablename='society_settings' and policyname='allow_all') then
+    create policy "allow_all" on society_settings for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='accounts' and policyname='allow_all') then
+    create policy "allow_all" on accounts for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='members' and policyname='allow_all') then
+    create policy "allow_all" on members for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='vouchers' and policyname='allow_all') then
+    create policy "allow_all" on vouchers for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='loans' and policyname='allow_all') then
+    create policy "allow_all" on loans for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='assets' and policyname='allow_all') then
+    create policy "allow_all" on assets for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='audit_objections' and policyname='allow_all') then
+    create policy "allow_all" on audit_objections for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='stock_items' and policyname='allow_all') then
+    create policy "allow_all" on stock_items for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='stock_movements' and policyname='allow_all') then
+    create policy "allow_all" on stock_movements for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='sales' and policyname='allow_all') then
+    create policy "allow_all" on sales for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='purchases' and policyname='allow_all') then
+    create policy "allow_all" on purchases for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='employees' and policyname='allow_all') then
+    create policy "allow_all" on employees for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='salary_records' and policyname='allow_all') then
+    create policy "allow_all" on salary_records for all using (true) with check (true);
+  end if;
+end $$;
+
+
+-- ── MIGRATION: If you have existing tables with old snake_case columns ────────
+-- Run these ALTER statements to fix existing tables instead of dropping them.
+-- Only needed if you ran the OLD supabase-tables.sql before.
+--
+-- alter table society_settings  add column if not exists society_id text default 'SOC001';
+-- alter table accounts          add column if not exists society_id text default 'SOC001';
+-- alter table members           add column if not exists society_id text default 'SOC001';
+-- alter table vouchers          add column if not exists society_id text default 'SOC001';
+-- alter table loans             add column if not exists society_id text default 'SOC001';
+-- alter table assets            add column if not exists society_id text default 'SOC001';
+-- alter table audit_objections  add column if not exists society_id text default 'SOC001';
+-- alter table stock_items       add column if not exists society_id text default 'SOC001';
+-- alter table stock_movements   add column if not exists society_id text default 'SOC001';
+-- alter table sales             add column if not exists society_id text default 'SOC001';
+-- alter table purchases         add column if not exists society_id text default 'SOC001';
+-- alter table employees         add column if not exists society_id text default 'SOC001';
+-- alter table salary_records    add column if not exists society_id text default 'SOC001';
