@@ -1,0 +1,150 @@
+import React, { createContext, useContext, useState, ReactNode } from 'react';
+
+type Language = 'hi' | 'en';
+
+interface Translations {
+  [key: string]: {
+    hi: string;
+    en: string;
+  };
+}
+
+// Core translations for the application
+export const translations: Translations = {
+  // Navigation
+  dashboard: { hi: 'डैशबोर्ड', en: 'Dashboard' },
+  cashBook: { hi: 'नकद बही', en: 'Cash Book' },
+  bankBook: { hi: 'बैंक बही', en: 'Bank Book' },
+  dayBook: { hi: 'दिन पुस्तिका', en: 'Day Book' },
+  vouchers: { hi: 'वाउचर', en: 'Vouchers' },
+  ledger: { hi: 'खाता बही', en: 'Ledger' },
+  members: { hi: 'सदस्य', en: 'Members' },
+  trialBalance: { hi: 'तलपट', en: 'Trial Balance' },
+  profitLoss: { hi: 'आय-व्यय', en: 'Income & Expenditure' },
+  receiptsPayments: { hi: 'प्राप्ति-भुगतान', en: 'Receipts & Payments' },
+  balanceSheet: { hi: 'तुलन पत्र', en: 'Balance Sheet' },
+  reports: { hi: 'रिपोर्ट', en: 'Reports' },
+  settings: { hi: 'सेटिंग्स', en: 'Settings' },
+  societySetup: { hi: 'समिति सेटअप', en: 'Society Setup' },
+  registers: { hi: 'रजिस्टर', en: 'Registers' },
+  shareRegister: { hi: 'अंश रजिस्टर', en: 'Share Register' },
+  loanRegister: { hi: 'ऋण रजिस्टर', en: 'Loan Register' },
+  assetRegister: { hi: 'संपत्ति रजिस्टर', en: 'Asset Register' },
+  auditRegister: { hi: 'ऑडिट रजिस्टर', en: 'Audit Register' },
+  operations: { hi: 'संचालन', en: 'Operations' },
+  ledgerHeads: { hi: 'खाता शीर्ष', en: 'Ledger Heads' },
+  inventory: { hi: 'माल भंडार', en: 'Inventory' },
+  sales: { hi: 'बिक्री', en: 'Sales' },
+  purchases: { hi: 'खरीद', en: 'Purchases' },
+  salary: { hi: 'वेतन', en: 'Salary' },
+  
+  // Common actions
+  save: { hi: 'सहेजें', en: 'Save' },
+  cancel: { hi: 'रद्द करें', en: 'Cancel' },
+  edit: { hi: 'संपादित करें', en: 'Edit' },
+  delete: { hi: 'हटाएं', en: 'Delete' },
+  add: { hi: 'जोड़ें', en: 'Add' },
+  search: { hi: 'खोजें', en: 'Search' },
+  print: { hi: 'प्रिंट', en: 'Print' },
+  export: { hi: 'निर्यात', en: 'Export' },
+  view: { hi: 'देखें', en: 'View' },
+  submit: { hi: 'जमा करें', en: 'Submit' },
+  
+  // Financial terms
+  receipt: { hi: 'रसीद', en: 'Receipt' },
+  payment: { hi: 'भुगतान', en: 'Payment' },
+  balance: { hi: 'शेष', en: 'Balance' },
+  debit: { hi: 'नाम (डेबिट)', en: 'Debit' },
+  credit: { hi: 'जमा (क्रेडिट)', en: 'Credit' },
+  amount: { hi: 'राशि', en: 'Amount' },
+  total: { hi: 'कुल', en: 'Total' },
+  date: { hi: 'तिथि', en: 'Date' },
+  particulars: { hi: 'विवरण', en: 'Particulars' },
+  voucherNo: { hi: 'वाउचर नं.', en: 'Voucher No.' },
+  narration: { hi: 'विवरण', en: 'Narration' },
+  openingBalance: { hi: 'प्रारंभिक शेष', en: 'Opening Balance' },
+  closingBalance: { hi: 'अंतिम शेष', en: 'Closing Balance' },
+  
+  // Dashboard
+  totalCash: { hi: 'कुल नकद', en: 'Total Cash' },
+  totalBank: { hi: 'कुल बैंक', en: 'Total Bank' },
+  totalMembers: { hi: 'कुल सदस्य', en: 'Total Members' },
+  netProfit: { hi: 'शुद्ध लाभ', en: 'Net Profit' },
+  todayTransactions: { hi: 'आज के लेनदेन', en: "Today's Transactions" },
+  recentVouchers: { hi: 'हाल के वाउचर', en: 'Recent Vouchers' },
+  quickActions: { hi: 'त्वरित कार्य', en: 'Quick Actions' },
+  
+  // Members
+  memberId: { hi: 'सदस्य आईडी', en: 'Member ID' },
+  memberName: { hi: 'सदस्य का नाम', en: 'Member Name' },
+  shareCapital: { hi: 'अंश पूंजी', en: 'Share Capital' },
+  address: { hi: 'पता', en: 'Address' },
+  phone: { hi: 'फोन', en: 'Phone' },
+  
+  // Voucher types
+  receiptVoucher: { hi: 'रसीद वाउचर', en: 'Receipt Voucher' },
+  paymentVoucher: { hi: 'भुगतान वाउचर', en: 'Payment Voucher' },
+  journalVoucher: { hi: 'जर्नल वाउचर', en: 'Journal Voucher' },
+  
+  // Society
+  societyName: { hi: 'समिति का नाम', en: 'Society Name' },
+  registrationNo: { hi: 'पंजीकरण संख्या', en: 'Registration No.' },
+  financialYear: { hi: 'वित्तीय वर्ष', en: 'Financial Year' },
+  
+  // Auth
+  login: { hi: 'लॉगिन', en: 'Login' },
+  logout: { hi: 'लॉगआउट', en: 'Logout' },
+  email: { hi: 'ईमेल', en: 'Email' },
+  password: { hi: 'पासवर्ड', en: 'Password' },
+  welcomeBack: { hi: 'पुनः स्वागत है', en: 'Welcome Back' },
+  
+  // Roles
+  admin: { hi: 'व्यवस्थापक', en: 'Admin' },
+  accountant: { hi: 'लेखाकार', en: 'Accountant' },
+  viewer: { hi: 'दर्शक', en: 'Viewer' },
+  
+  // Messages
+  successSaved: { hi: 'सफलतापूर्वक सहेजा गया', en: 'Saved successfully' },
+  errorOccurred: { hi: 'कोई त्रुटि हुई', en: 'An error occurred' },
+  confirmDelete: { hi: 'क्या आप वाकई हटाना चाहते हैं?', en: 'Are you sure you want to delete?' },
+  noData: { hi: 'कोई डेटा नहीं', en: 'No data available' },
+  
+  // Reports
+  fromDate: { hi: 'तिथि से', en: 'From Date' },
+  toDate: { hi: 'तिथि तक', en: 'To Date' },
+  generateReport: { hi: 'रिपोर्ट बनाएं', en: 'Generate Report' },
+};
+
+interface LanguageContextType {
+  language: Language;
+  setLanguage: (lang: Language) => void;
+  t: (key: string) => string;
+}
+
+const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+
+export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [language, setLanguage] = useState<Language>('hi');
+
+  const t = (key: string): string => {
+    if (translations[key]) {
+      return translations[key][language];
+    }
+    console.warn(`Translation missing for key: ${key}`);
+    return key;
+  };
+
+  return (
+    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+};
+
+export const useLanguage = (): LanguageContextType => {
+  const context = useContext(LanguageContext);
+  if (!context) {
+    throw new Error('useLanguage must be used within a LanguageProvider');
+  }
+  return context;
+};

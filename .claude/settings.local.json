@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(\"/c/Program Files/nodejs/npm.cmd\" install)",
+      "Bash(\"/c/Program Files/nodejs/npm.cmd\" install jspdf jspdf-autotable)",
+      "Bash(\"/c/Program Files/nodejs/npm.cmd\" run build)",
+      "WebSearch",
+      "Bash(npx tsc:*)",
+      "Bash(npx vite:*)",
+      "Bash(curl -s http://localhost:8080)",
+      "Bash(node -e \"const fs=require\\(''fs''\\); const buf=fs.readFileSync\\(''day-book-2024-25.pdf''\\); const text=buf.toString\\(''latin1''\\); const matches=text.match\\(/Opening[^\\\\n\\\\r]*/gi\\); console.log\\(matches?.slice\\(0,20\\).join\\(''\\\\n''\\)\\);\")"
+    ]
+  }
+}

@@ -1,0 +1,86 @@
+import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { getAuthSession, setAuthSession } from '@/lib/storage';
+
+export type UserRole = 'admin' | 'accountant' | 'viewer';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  societyId: string;
+}
+
+interface AuthContextType {
+  user: User | null;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => void;
+  hasPermission: (requiredRole: UserRole | UserRole[]) => boolean;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const demoUsers: { email: string; password: string; user: User }[] = [
+  {
+    email: 'admin@society.com',
+    password: 'admin123',
+    user: { id: '1', name: 'राजेश कुमार', email: 'admin@society.com', role: 'admin', societyId: 'SOC001' },
+  },
+  {
+    email: 'accountant@society.com',
+    password: 'acc123',
+    user: { id: '2', name: 'सुनीता देवी', email: 'accountant@society.com', role: 'accountant', societyId: 'SOC001' },
+  },
+  {
+    email: 'viewer@society.com',
+    password: 'view123',
+    user: { id: '3', name: 'मोहन लाल', email: 'viewer@society.com', role: 'viewer', societyId: 'SOC001' },
+  },
+];
+
+function restoreSession(): User | null {
+  const session = getAuthSession();
+  if (!session) return null;
+  const found = demoUsers.find(u => u.user.email === session.email);
+  return found ? found.user : null;
+}
+
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(() => restoreSession());
+
+  const login = async (email: string, password: string): Promise<boolean> => {
+    await new Promise(resolve => setTimeout(resolve, 400));
+    const found = demoUsers.find(u => u.email === email && u.password === password);
+    if (found) {
+      setUser(found.user);
+      setAuthSession({ email: found.user.email, name: found.user.name, role: found.user.role, societyId: found.user.societyId });
+      return true;
+    }
+    return false;
+  };
+
+  const logout = () => {
+    setUser(null);
+    setAuthSession(null);
+  };
+
+  const hasPermission = (requiredRole: UserRole | UserRole[]): boolean => {
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+    return roles.includes(user.role);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout, hasPermission }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
+  return context;
+};

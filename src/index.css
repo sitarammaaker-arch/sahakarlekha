@@ -1,0 +1,286 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Indian Cooperative Society Accounting - Design System
+   Inspired by Government/Banking portals - Professional, Trustworthy
+   All colors in HSL format
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Hind:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    /* Core Brand Colors - Deep Blue (Trust/Government) */
+    --background: 210 20% 98%;
+    --foreground: 220 25% 15%;
+
+    /* Card surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 15%;
+
+    /* Popover surfaces */
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 15%;
+
+    /* Primary - Deep Government Blue */
+    --primary: 215 70% 28%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Light Blue Gray */
+    --secondary: 210 25% 93%;
+    --secondary-foreground: 220 25% 20%;
+
+    /* Muted - Subtle backgrounds */
+    --muted: 210 20% 96%;
+    --muted-foreground: 220 10% 45%;
+
+    /* Accent - Saffron (Indian Identity) */
+    --accent: 28 90% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Financial Status Colors */
+    --success: 145 65% 35%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Info - Teal */
+    --info: 185 60% 40%;
+    --info-foreground: 0 0% 100%;
+
+    /* Border and Input */
+    --border: 214 20% 85%;
+    --input: 214 20% 85%;
+    --ring: 215 70% 28%;
+
+    /* Radius */
+    --radius: 0.5rem;
+
+    /* Sidebar - Darker professional */
+    --sidebar-background: 215 65% 20%;
+    --sidebar-foreground: 210 20% 95%;
+    --sidebar-primary: 28 90% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 55% 28%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 215 50% 30%;
+    --sidebar-ring: 28 90% 55%;
+
+    /* Custom tokens for financial data */
+    --credit: 145 65% 35%;
+    --debit: 0 72% 50%;
+    --balance-positive: 145 65% 35%;
+    --balance-negative: 0 72% 50%;
+
+    /* Dashboard cards */
+    --card-cash: 215 70% 28%;
+    --card-bank: 185 60% 40%;
+    --card-members: 28 90% 55%;
+    --card-profit: 145 65% 35%;
+  }
+
+  .dark {
+    --background: 220 25% 10%;
+    --foreground: 210 20% 95%;
+
+    --card: 220 25% 13%;
+    --card-foreground: 210 20% 95%;
+
+    --popover: 220 25% 13%;
+    --popover-foreground: 210 20% 95%;
+
+    --primary: 215 60% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 20% 20%;
+    --secondary-foreground: 210 20% 90%;
+
+    --muted: 220 20% 18%;
+    --muted-foreground: 210 15% 60%;
+
+    --accent: 28 85% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --success: 145 55% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 85% 55%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --info: 185 50% 50%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 220 20% 25%;
+    --input: 220 20% 25%;
+    --ring: 215 60% 50%;
+
+    --sidebar-background: 220 30% 8%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 28 85% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 25% 15%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 220 20% 18%;
+    --sidebar-ring: 28 85% 50%;
+
+    --credit: 145 55% 45%;
+    --debit: 0 65% 55%;
+    --balance-positive: 145 55% 45%;
+    --balance-negative: 0 65% 55%;
+
+    --card-cash: 215 60% 45%;
+    --card-bank: 185 50% 45%;
+    --card-members: 28 85% 50%;
+    --card-profit: 145 55% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-hindi antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Large readable text for non-technical users */
+  h1 {
+    @apply text-3xl font-bold tracking-tight;
+  }
+
+  h2 {
+    @apply text-2xl font-semibold tracking-tight;
+  }
+
+  h3 {
+    @apply text-xl font-semibold;
+  }
+
+  h4 {
+    @apply text-lg font-medium;
+  }
+}
+
+@layer components {
+  /* Financial amount styling */
+  .amount-credit {
+    @apply text-success font-semibold;
+  }
+
+  .amount-debit {
+    @apply text-destructive font-semibold;
+  }
+
+  .amount-balance {
+    @apply font-bold text-lg;
+  }
+
+  /* Dashboard stat cards */
+  .stat-card {
+    @apply relative overflow-hidden rounded-xl p-6 text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-1;
+  }
+
+  .stat-card::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-br from-white/10 to-transparent;
+  }
+
+  /* Form styling for easy use */
+  .form-group {
+    @apply space-y-2;
+  }
+
+  .form-label {
+    @apply text-sm font-medium text-foreground;
+  }
+
+  /* Voucher styling */
+  .voucher-header {
+    @apply bg-primary text-primary-foreground p-4 rounded-t-lg;
+  }
+
+  .voucher-body {
+    @apply border border-t-0 rounded-b-lg p-6 bg-card;
+  }
+
+  /* Report table styling */
+  .report-table {
+    @apply w-full text-sm;
+  }
+
+  .report-table th {
+    @apply bg-muted font-semibold text-left p-3 border-b-2 border-border;
+  }
+
+  .report-table td {
+    @apply p-3 border-b border-border;
+  }
+
+  .report-table tr:hover {
+    @apply bg-muted/50;
+  }
+
+  /* Navigation active state */
+  .nav-active {
+    @apply bg-sidebar-accent text-sidebar-accent-foreground border-l-4 border-sidebar-primary;
+  }
+
+  /* Print-friendly styles */
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+
+    .print-only {
+      display: block !important;
+    }
+
+    body {
+      font-size: 12pt;
+      line-height: 1.4;
+    }
+
+    .report-table {
+      border: 1px solid #000;
+    }
+
+    .report-table th,
+    .report-table td {
+      border: 1px solid #000;
+      padding: 8px;
+    }
+  }
+}
+
+@layer utilities {
+  /* Financial formatting */
+  .rupee::before {
+    content: '₹ ';
+  }
+
+  /* Transition utilities */
+  .transition-smooth {
+    @apply transition-all duration-300 ease-in-out;
+  }
+
+  /* Focus states for accessibility */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+  }
+
+  /* Low bandwidth optimizations */
+  .lazy-load {
+    @apply bg-muted animate-pulse;
+  }
+}
