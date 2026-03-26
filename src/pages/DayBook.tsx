@@ -176,7 +176,7 @@ const DayBook: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <BookOpen className="h-7 w-7 text-primary" />
-              {language === 'hi' ? 'दिन पुस्तिका' : 'Day Book'}
+              {language === 'hi' ? 'रोजनामचा' : 'Day Book'}
             </h1>
             <p className="text-muted-foreground">
               {language === 'hi' ? 'सभी लेनदेन का दिनवार विवरण' : 'Day-wise chronological record of all transactions'}

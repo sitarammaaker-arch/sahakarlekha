@@ -15,7 +15,7 @@ export const translations: Translations = {
   dashboard: { hi: 'डैशबोर्ड', en: 'Dashboard' },
   cashBook: { hi: 'नकद बही', en: 'Cash Book' },
   bankBook: { hi: 'बैंक बही', en: 'Bank Book' },
-  dayBook: { hi: 'दिन पुस्तिका', en: 'Day Book' },
+  dayBook: { hi: 'रोजनामचा', en: 'Day Book' },
   vouchers: { hi: 'वाउचर', en: 'Vouchers' },
   ledger: { hi: 'खाता बही', en: 'Ledger' },
   members: { hi: 'सदस्य', en: 'Members' },

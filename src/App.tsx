@@ -34,7 +34,12 @@ import PurchaseManagement from "./pages/PurchaseManagement";
 import SalaryManagement from "./pages/SalaryManagement";
 import NotFound from "./pages/NotFound";
 
+import { preloadHindiFont } from '@/lib/fontLoader';
+
 const queryClient = new QueryClient();
+
+// Start loading Hindi font in background so it's ready when user generates a PDF
+preloadHindiFont();
 
 // Protected Route wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
