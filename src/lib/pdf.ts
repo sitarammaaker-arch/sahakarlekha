@@ -282,7 +282,7 @@ export function generateBalanceSheetPDF(
   const { startY, font } = addHeader(doc, 'Balance Sheet', society, `As at 31st March 20${society.financialYear.split('-')[1]}`);
 
   const totalAssets = assetBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0);
-  const totalLiabilities = liabilityBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0) + (netProfit > 0 ? netProfit : 0);
+  const totalLiabilities = liabilityBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0) + netProfit;
   const distributableSurplus = netProfit > 0 ? netProfit - reserveFund : 0;
   const pyBalances = society.previousYearBalances || {};
   const pyYear = society.previousFinancialYear || '';
@@ -306,6 +306,9 @@ export function generateBalanceSheetPDF(
       : []),
     ...(netProfit > 0
       ? [hasPY ? ['Distributable Surplus', '—', fmt(distributableSurplus)] : ['Distributable Surplus', fmt(distributableSurplus)]]
+      : []),
+    ...(netProfit < 0
+      ? [hasPY ? ['Deficit (Current Year)', '—', `(${fmt(Math.abs(netProfit))})`] : ['Deficit (Current Year)', `(${fmt(Math.abs(netProfit))})`]]
       : []),
   ];
 

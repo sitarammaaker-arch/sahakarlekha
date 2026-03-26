@@ -26,7 +26,7 @@ const BalanceSheet: React.FC = () => {
 
   const totalAssets = assetBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0);
   const totalLiabilities = liabilityBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0)
-    + (netProfit > 0 ? netProfit : 0);
+    + netProfit; // surplus adds, deficit subtracts (negative value)
 
   const pyBalances = society.previousYearBalances || {};
   const pyYear = society.previousFinancialYear || '';
