@@ -128,30 +128,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const loadFromSupabase = async () => {
       try {
         const [
-          { data: vData }, { data: mData }, { data: aData },
+          { data: vData, error: vErr }, { data: mData }, { data: aData },
           { data: lData }, { data: asData }, { data: aoData },
           { data: siData }, { data: smData }, { data: slData },
           { data: puData }, { data: emData }, { data: srData },
           { data: socData },
         ] = await Promise.all([
-          supabase.from('vouchers').select('*').eq('society_id', sid).order('created_at'),
+          supabase.from('vouchers').select('*').eq('society_id', sid).order('createdAt'),
           supabase.from('members').select('*').eq('society_id', sid),
           supabase.from('accounts').select('*').eq('society_id', sid),
           supabase.from('loans').select('*').eq('society_id', sid),
           supabase.from('assets').select('*').eq('society_id', sid),
           supabase.from('audit_objections').select('*').eq('society_id', sid),
           supabase.from('stock_items').select('*').eq('society_id', sid),
-          supabase.from('stock_movements').select('*').eq('society_id', sid).order('created_at'),
-          supabase.from('sales').select('*').eq('society_id', sid).order('created_at'),
-          supabase.from('purchases').select('*').eq('society_id', sid).order('created_at'),
+          supabase.from('stock_movements').select('*').eq('society_id', sid).order('createdAt'),
+          supabase.from('sales').select('*').eq('society_id', sid).order('createdAt'),
+          supabase.from('purchases').select('*').eq('society_id', sid).order('createdAt'),
           supabase.from('employees').select('*').eq('society_id', sid),
-          supabase.from('salary_records').select('*').eq('society_id', sid).order('created_at'),
+          supabase.from('salary_records').select('*').eq('society_id', sid).order('createdAt'),
           supabase.from('society_settings').select('*').eq('society_id', sid).limit(1),
         ]);
 
-        setVouchersState(vData && vData.length > 0 ? vData : []); if (vData && vData.length > 0) storage.setVouchers(vData);
-        setMembersState(mData && mData.length > 0 ? mData : []); if (mData && mData.length > 0) storage.setMembers(mData);
-        setAccountsState(aData && aData.length > 0 ? aData : storage.getAccounts()); if (aData && aData.length > 0) storage.setAccounts(aData);
+        if (vErr) console.warn('Vouchers query error:', vErr.message);
+        if (vData && vData.length > 0) { setVouchersState(vData); storage.setVouchers(vData); }
+        else if (!vErr) setVouchersState([]); // genuinely empty — clear state
+        if (mData && mData.length > 0) { setMembersState(mData); storage.setMembers(mData); }
+        else setMembersState([]);
+        if (aData && aData.length > 0) { setAccountsState(aData); storage.setAccounts(aData); }
+        else setAccountsState(storage.getAccounts());
         setLoansState(lData || []);
         setAssetsState(asData || []);
         setAuditObjectionsState(aoData || []);
