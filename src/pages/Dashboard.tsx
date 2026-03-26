@@ -3,7 +3,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { QuickActions } from '@/components/dashboard/QuickActions';
-import { Wallet, Building2, Users, TrendingUp } from 'lucide-react';
+import { Wallet, Building2, Users, TrendingUp, TrendingDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -141,11 +141,11 @@ const Dashboard: React.FC = () => {
           trend={{ value: 0, isPositive: true }}
         />
         <StatCard
-          title={t('netProfit')}
+          title={netProfit >= 0 ? (language === 'hi' ? 'शुद्ध लाभ' : 'Net Profit') : (language === 'hi' ? 'शुद्ध हानि' : 'Net Loss')}
           value={fmt(Math.abs(netProfit))}
-          subtitle={netProfit >= 0 ? (language === 'hi' ? 'शुद्ध लाभ' : 'Net Profit') : (language === 'hi' ? 'शुद्ध हानि' : 'Net Loss')}
-          icon={TrendingUp}
-          variant="profit"
+          subtitle={netProfit >= 0 ? (language === 'hi' ? 'कुल आय − व्यय' : 'Total Income − Expenses') : (language === 'hi' ? 'कुल व्यय − आय' : 'Total Expenses − Income')}
+          icon={netProfit >= 0 ? TrendingUp : TrendingDown}
+          variant={netProfit >= 0 ? 'profit' : 'loss'}
           trend={{ value: 0, isPositive: netProfit >= 0 }}
         />
       </div>

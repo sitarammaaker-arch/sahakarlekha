@@ -11,7 +11,7 @@ interface StatCardProps {
     value: number;
     isPositive: boolean;
   };
-  variant: 'cash' | 'bank' | 'members' | 'profit';
+  variant: 'cash' | 'bank' | 'members' | 'profit' | 'loss';
   className?: string;
 }
 
@@ -20,6 +20,7 @@ const variantStyles = {
   bank: 'bg-card-bank',
   members: 'bg-card-members',
   profit: 'bg-card-profit',
+  loss: 'bg-destructive',
 };
 
 export const StatCard: React.FC<StatCardProps> = ({
