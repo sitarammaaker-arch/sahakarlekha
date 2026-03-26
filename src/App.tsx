@@ -32,6 +32,7 @@ import Inventory from "./pages/Inventory";
 import SaleManagement from "./pages/SaleManagement";
 import PurchaseManagement from "./pages/PurchaseManagement";
 import SalaryManagement from "./pages/SalaryManagement";
+import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 
 import { preloadHindiFont } from '@/lib/fontLoader';
@@ -68,6 +69,7 @@ const AppRoutes = () => {
     <Routes>
       {/* Public Routes */}
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
       
       {/* Protected Routes */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

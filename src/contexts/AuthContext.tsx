@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { getAuthSession, setAuthSession } from '@/lib/storage';
+import { supabase } from '@/lib/supabase';
 
 export type UserRole = 'admin' | 'accountant' | 'viewer';
 
@@ -21,6 +22,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Demo users as fallback
 const demoUsers: { email: string; password: string; user: User }[] = [
   {
     email: 'admin@society.com',
@@ -42,21 +44,69 @@ const demoUsers: { email: string; password: string; user: User }[] = [
 function restoreSession(): User | null {
   const session = getAuthSession();
   if (!session) return null;
+
+  // Check demo users first
   const found = demoUsers.find(u => u.user.email === session.email);
-  return found ? found.user : null;
+  if (found) return found.user;
+
+  // Restore from stored session (Supabase user)
+  if (session.email && session.name && session.role && session.societyId) {
+    return {
+      id: session.email,
+      name: session.name,
+      email: session.email,
+      role: session.role as UserRole,
+      societyId: session.societyId,
+    };
+  }
+
+  return null;
 }
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => restoreSession());
 
   const login = async (email: string, password: string): Promise<boolean> => {
+    // 1. Try Supabase society_users first
+    try {
+      const { data, error } = await supabase
+        .from('society_users')
+        .select('id, name, email, role, society_id, is_active')
+        .eq('email', email)
+        .eq('password', password)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!error && data) {
+        const u: User = {
+          id: data.id,
+          name: data.name,
+          email: data.email,
+          role: data.role as UserRole,
+          societyId: data.society_id,
+        };
+        setUser(u);
+        setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId });
+        return true;
+      }
+    } catch {
+      // Supabase unreachable — fall through to demo users
+    }
+
+    // 2. Fallback: demo users
     await new Promise(resolve => setTimeout(resolve, 400));
     const found = demoUsers.find(u => u.email === email && u.password === password);
     if (found) {
       setUser(found.user);
-      setAuthSession({ email: found.user.email, name: found.user.name, role: found.user.role, societyId: found.user.societyId });
+      setAuthSession({
+        email: found.user.email,
+        name: found.user.name,
+        role: found.user.role,
+        societyId: found.user.societyId,
+      });
       return true;
     }
+
     return false;
   };
 

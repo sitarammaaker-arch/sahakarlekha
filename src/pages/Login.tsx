@@ -205,8 +205,16 @@ const Login: React.FC = () => {
           </CardContent>
         </Card>
 
+        {/* Register link */}
+        <p className="mt-4 text-sm text-center">
+          {language === 'hi' ? 'नई समिति?' : 'New society?'}{' '}
+          <a href="/register" className="text-primary font-medium hover:underline">
+            {language === 'hi' ? 'यहाँ पंजीकरण करें' : 'Register here'}
+          </a>
+        </p>
+
         {/* Footer */}
-        <p className="mt-8 text-sm text-muted-foreground text-center">
+        <p className="mt-4 text-sm text-muted-foreground text-center">
           © 2024 समिति लेखा प्रणाली | {language === 'hi' ? 'सभी अधिकार सुरक्षित' : 'All rights reserved'}
         </p>
       </div>
