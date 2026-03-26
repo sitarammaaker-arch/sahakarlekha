@@ -648,7 +648,7 @@ export function generateDayBookPDF(
   const typeLabel = (t: string) => t === 'receipt' ? 'Receipt' : t === 'payment' ? 'Payment' : 'Journal';
 
   const subtitle = `${fmtDate(fromDate)} to ${fmtDate(toDate)} | FY: ${society.financialYear}`;
-  const { startY, font } = addHeader(doc, 'रोजनामचा (Day Book)', society, subtitle);
+  const { startY, font } = addHeader(doc, 'Day Book', society, subtitle);
 
   // Group by date
   const groups: { date: string; items: typeof entries }[] = [];
