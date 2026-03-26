@@ -142,6 +142,23 @@ const Register: React.FC = () => {
         return;
       }
 
+      // 3. Insert society_settings so the correct name shows after login
+      await supabase.from('society_settings').insert({
+        id: society.id,
+        society_id: society.id,
+        name: societyName,
+        nameHi: societyNameHi || societyName,
+        registrationNo: registrationNo,
+        financialYear: financialYear,
+        financialYearStart: financialYear.split('-')[0] + '-04-01',
+        address: address || '',
+        district: district,
+        state: state,
+        phone: phone || '',
+        email: adminEmail,
+        pinCode: '',
+      });
+
       setSuccess(true);
     } catch {
       setError('Registration failed. Please check your connection and try again.');
