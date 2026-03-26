@@ -27,6 +27,57 @@ import type { Member, MemberStatus } from '@/types';
 
 const EMPTY_FORM = { memberId: '', name: '', fatherName: '', address: '', phone: '', shareCapital: '', joinDate: new Date().toISOString().split('T')[0], status: 'active' as MemberStatus };
 
+interface MemberFormProps {
+  form: typeof EMPTY_FORM;
+  setForm: React.Dispatch<React.SetStateAction<typeof EMPTY_FORM>>;
+  language: string;
+  t: (key: string) => string;
+  onSubmit: (e: React.FormEvent) => void;
+  submitLabel: string;
+  onCancel: () => void;
+}
+
+const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onSubmit, submitLabel, onCancel }) => (
+  <form onSubmit={onSubmit} className="space-y-4">
+    <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-2">
+        <Label>{t('memberId')} *</Label>
+        <Input value={form.memberId} onChange={e => setForm(f => ({ ...f, memberId: e.target.value }))} placeholder="M001" required />
+      </div>
+      <div className="space-y-2">
+        <Label>{language === 'hi' ? 'शामिल होने की तिथि' : 'Join Date'}</Label>
+        <Input type="date" value={form.joinDate} onChange={e => setForm(f => ({ ...f, joinDate: e.target.value }))} />
+      </div>
+    </div>
+    <div className="space-y-2">
+      <Label>{t('memberName')} *</Label>
+      <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={language === 'hi' ? 'पूरा नाम' : 'Full name'} required />
+    </div>
+    <div className="space-y-2">
+      <Label>{language === 'hi' ? 'पिता/पति का नाम' : "Father's/Husband's Name"}</Label>
+      <Input value={form.fatherName} onChange={e => setForm(f => ({ ...f, fatherName: e.target.value }))} placeholder={language === 'hi' ? 'श्री...' : 'Mr...'} />
+    </div>
+    <div className="space-y-2">
+      <Label>{t('address')}</Label>
+      <Textarea value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder={language === 'hi' ? 'पूरा पता' : 'Full address'} />
+    </div>
+    <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-2">
+        <Label>{t('phone')} *</Label>
+        <Input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="9876543210" required />
+      </div>
+      <div className="space-y-2">
+        <Label>{t('shareCapital')} (₹)</Label>
+        <Input type="number" value={form.shareCapital} onChange={e => setForm(f => ({ ...f, shareCapital: e.target.value }))} placeholder="10000" min="0" />
+      </div>
+    </div>
+    <div className="flex gap-2 justify-end">
+      <Button variant="outline" type="button" onClick={onCancel}>{t('cancel')}</Button>
+      <Button type="submit">{submitLabel}</Button>
+    </div>
+  </form>
+);
+
 const Members: React.FC = () => {
   const { t, language } = useLanguage();
   const { members, addMember, updateMember, deleteMember, getMemberLedger, society } = useData();
@@ -83,47 +134,6 @@ const Members: React.FC = () => {
     setForm({ memberId: m.memberId, name: m.name, fatherName: m.fatherName, address: m.address, phone: m.phone, shareCapital: String(m.shareCapital), joinDate: m.joinDate, status: m.status });
   };
 
-  const MemberForm = ({ onSubmit, submitLabel }: { onSubmit: (e: React.FormEvent) => void; submitLabel: string }) => (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>{t('memberId')} *</Label>
-          <Input value={form.memberId} onChange={e => setForm(f => ({ ...f, memberId: e.target.value }))} placeholder="M001" required />
-        </div>
-        <div className="space-y-2">
-          <Label>{language === 'hi' ? 'शामिल होने की तिथि' : 'Join Date'}</Label>
-          <Input type="date" value={form.joinDate} onChange={e => setForm(f => ({ ...f, joinDate: e.target.value }))} />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label>{t('memberName')} *</Label>
-        <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={language === 'hi' ? 'पूरा नाम' : 'Full name'} required />
-      </div>
-      <div className="space-y-2">
-        <Label>{language === 'hi' ? 'पिता/पति का नाम' : "Father's/Husband's Name"}</Label>
-        <Input value={form.fatherName} onChange={e => setForm(f => ({ ...f, fatherName: e.target.value }))} placeholder={language === 'hi' ? 'श्री...' : 'Mr...'} />
-      </div>
-      <div className="space-y-2">
-        <Label>{t('address')}</Label>
-        <Textarea value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder={language === 'hi' ? 'पूरा पता' : 'Full address'} />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>{t('phone')} *</Label>
-          <Input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="9876543210" required />
-        </div>
-        <div className="space-y-2">
-          <Label>{t('shareCapital')} (₹)</Label>
-          <Input type="number" value={form.shareCapital} onChange={e => setForm(f => ({ ...f, shareCapital: e.target.value }))} placeholder="10000" min="0" />
-        </div>
-      </div>
-      <div className="flex gap-2 justify-end">
-        <Button variant="outline" type="button" onClick={() => { setIsAddOpen(false); setEditMember(null); }}>{t('cancel')}</Button>
-        <Button type="submit">{submitLabel}</Button>
-      </div>
-    </form>
-  );
-
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -143,7 +153,7 @@ const Members: React.FC = () => {
               <DialogTitle>{language === 'hi' ? 'नया सदस्य जोड़ें' : 'Add New Member'}</DialogTitle>
               <DialogDescription>{language === 'hi' ? 'सदस्य का विवरण भरें' : 'Fill in member details'}</DialogDescription>
             </DialogHeader>
-            <MemberForm onSubmit={handleAdd} submitLabel={t('save')} />
+            <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleAdd} submitLabel={t('save')} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
           </DialogContent>
         </Dialog>
       </div>
@@ -264,7 +274,7 @@ const Members: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{language === 'hi' ? 'सदस्य संपादित करें' : 'Edit Member'}</DialogTitle>
           </DialogHeader>
-          <MemberForm onSubmit={handleEdit} submitLabel={language === 'hi' ? 'अपडेट करें' : 'Update'} />
+          <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleEdit} submitLabel={language === 'hi' ? 'अपडेट करें' : 'Update'} onCancel={() => setEditMember(null)} />
         </DialogContent>
       </Dialog>
 

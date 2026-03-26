@@ -29,6 +29,85 @@ const EMPTY_FORM = {
   security: '',
 };
 
+interface LoanFormProps {
+  form: typeof EMPTY_FORM;
+  setForm: React.Dispatch<React.SetStateAction<typeof EMPTY_FORM>>;
+  hi: boolean;
+  members: import('@/types').Member[];
+  onSubmit: (e: React.FormEvent) => void;
+  onCancel: () => void;
+}
+
+const LoanForm: React.FC<LoanFormProps> = ({ form, setForm, hi, members, onSubmit, onCancel }) => (
+  <form onSubmit={onSubmit} className="space-y-4">
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1 col-span-2">
+        <Label>{hi ? 'सदस्य *' : 'Member *'}</Label>
+        <Select value={form.memberId} onValueChange={v => setForm(f => ({ ...f, memberId: v }))}>
+          <SelectTrigger><SelectValue placeholder={hi ? 'सदस्य चुनें' : 'Select member'} /></SelectTrigger>
+          <SelectContent>
+            {members.map(m => <SelectItem key={m.id} value={m.id}>{m.memberId} — {m.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'ऋण प्रकार' : 'Loan Type'}</Label>
+        <Select value={form.loanType} onValueChange={v => setForm(f => ({ ...f, loanType: v as LoanType }))}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="short-term">{hi ? 'अल्पकालीन' : 'Short-term'}</SelectItem>
+            <SelectItem value="medium-term">{hi ? 'मध्यकालीन' : 'Medium-term'}</SelectItem>
+            <SelectItem value="long-term">{hi ? 'दीर्घकालीन' : 'Long-term'}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'ब्याज दर (% वार्षिक)' : 'Interest Rate (% p.a.)'}</Label>
+        <Input type="number" step="0.01" value={form.interestRate} onChange={e => setForm(f => ({ ...f, interestRate: e.target.value }))} placeholder="12" />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'राशि (₹) *' : 'Amount (₹) *'}</Label>
+        <Input type="number" min="0" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="50000" />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'चुकाई गई राशि (₹)' : 'Repaid Amount (₹)'}</Label>
+        <Input type="number" min="0" value={form.repaidAmount} onChange={e => setForm(f => ({ ...f, repaidAmount: e.target.value }))} placeholder="0" />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'वितरण तिथि *' : 'Disbursement Date *'}</Label>
+        <Input type="date" value={form.disbursementDate} onChange={e => setForm(f => ({ ...f, disbursementDate: e.target.value }))} />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'देय तिथि *' : 'Due Date *'}</Label>
+        <Input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'स्थिति' : 'Status'}</Label>
+        <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as LoanStatus }))}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">{hi ? 'सक्रिय' : 'Active'}</SelectItem>
+            <SelectItem value="overdue">{hi ? 'बकाया' : 'Overdue'}</SelectItem>
+            <SelectItem value="cleared">{hi ? 'चुकता' : 'Cleared'}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1 col-span-2">
+        <Label>{hi ? 'उद्देश्य' : 'Purpose'}</Label>
+        <Input value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} placeholder={hi ? 'ऋण उद्देश्य' : 'Loan purpose'} />
+      </div>
+      <div className="space-y-1 col-span-2">
+        <Label>{hi ? 'सुरक्षा / जमानत' : 'Security / Collateral'}</Label>
+        <Textarea rows={2} value={form.security} onChange={e => setForm(f => ({ ...f, security: e.target.value }))} placeholder={hi ? 'भूमि, संपत्ति आदि' : 'Land, property, etc.'} />
+      </div>
+    </div>
+    <div className="flex justify-end gap-2 pt-2">
+      <Button type="button" variant="outline" onClick={onCancel}>{hi ? 'रद्द' : 'Cancel'}</Button>
+      <Button type="submit">{hi ? 'सहेजें' : 'Save'}</Button>
+    </div>
+  </form>
+);
+
 const LoanRegister: React.FC = () => {
   const { language } = useLanguage();
   const { members, loans, addLoan, updateLoan, deleteLoan, society } = useData();
@@ -126,76 +205,6 @@ const LoanRegister: React.FC = () => {
     if (t === 'medium-term') return hi ? 'मध्यकालीन' : 'Medium-term';
     return hi ? 'दीर्घकालीन' : 'Long-term';
   };
-
-  const LoanForm = ({ onSubmit }: { onSubmit: (e: React.FormEvent) => void }) => (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1 col-span-2">
-          <Label>{hi ? 'सदस्य *' : 'Member *'}</Label>
-          <Select value={form.memberId} onValueChange={v => setForm(f => ({ ...f, memberId: v }))}>
-            <SelectTrigger><SelectValue placeholder={hi ? 'सदस्य चुनें' : 'Select member'} /></SelectTrigger>
-            <SelectContent>
-              {members.map(m => <SelectItem key={m.id} value={m.id}>{m.memberId} — {m.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'ऋण प्रकार' : 'Loan Type'}</Label>
-          <Select value={form.loanType} onValueChange={v => setForm(f => ({ ...f, loanType: v as LoanType }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="short-term">{hi ? 'अल्पकालीन' : 'Short-term'}</SelectItem>
-              <SelectItem value="medium-term">{hi ? 'मध्यकालीन' : 'Medium-term'}</SelectItem>
-              <SelectItem value="long-term">{hi ? 'दीर्घकालीन' : 'Long-term'}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'ब्याज दर (% वार्षिक)' : 'Interest Rate (% p.a.)'}</Label>
-          <Input type="number" step="0.01" value={form.interestRate} onChange={e => setForm(f => ({ ...f, interestRate: e.target.value }))} placeholder="12" />
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'राशि (₹) *' : 'Amount (₹) *'}</Label>
-          <Input type="number" min="0" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="50000" />
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'चुकाई गई राशि (₹)' : 'Repaid Amount (₹)'}</Label>
-          <Input type="number" min="0" value={form.repaidAmount} onChange={e => setForm(f => ({ ...f, repaidAmount: e.target.value }))} placeholder="0" />
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'वितरण तिथि *' : 'Disbursement Date *'}</Label>
-          <Input type="date" value={form.disbursementDate} onChange={e => setForm(f => ({ ...f, disbursementDate: e.target.value }))} />
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'देय तिथि *' : 'Due Date *'}</Label>
-          <Input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'स्थिति' : 'Status'}</Label>
-          <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as LoanStatus }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">{hi ? 'सक्रिय' : 'Active'}</SelectItem>
-              <SelectItem value="overdue">{hi ? 'बकाया' : 'Overdue'}</SelectItem>
-              <SelectItem value="cleared">{hi ? 'चुकता' : 'Cleared'}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1 col-span-2">
-          <Label>{hi ? 'उद्देश्य' : 'Purpose'}</Label>
-          <Input value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} placeholder={hi ? 'ऋण उद्देश्य' : 'Loan purpose'} />
-        </div>
-        <div className="space-y-1 col-span-2">
-          <Label>{hi ? 'सुरक्षा / जमानत' : 'Security / Collateral'}</Label>
-          <Textarea rows={2} value={form.security} onChange={e => setForm(f => ({ ...f, security: e.target.value }))} placeholder={hi ? 'भूमि, संपत्ति आदि' : 'Land, property, etc.'} />
-        </div>
-      </div>
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="outline" onClick={() => { setIsAddOpen(false); setEditLoan(null); }}>{hi ? 'रद्द' : 'Cancel'}</Button>
-        <Button type="submit">{hi ? 'सहेजें' : 'Save'}</Button>
-      </div>
-    </form>
-  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -326,7 +335,7 @@ const LoanRegister: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'नया ऋण जोड़ें' : 'Add New Loan'}</DialogTitle>
           </DialogHeader>
-          <LoanForm onSubmit={handleAdd} />
+          <LoanForm form={form} setForm={setForm} hi={hi} members={members} onSubmit={handleAdd} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
         </DialogContent>
       </Dialog>
 
@@ -336,7 +345,7 @@ const LoanRegister: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'ऋण संपादित करें' : 'Edit Loan'} — {editLoan?.loanNo}</DialogTitle>
           </DialogHeader>
-          <LoanForm onSubmit={handleEdit} />
+          <LoanForm form={form} setForm={setForm} hi={hi} members={members} onSubmit={handleEdit} onCancel={() => setEditLoan(null)} />
         </DialogContent>
       </Dialog>
 

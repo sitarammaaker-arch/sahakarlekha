@@ -29,6 +29,68 @@ const EMPTY_FORM = {
   status: 'active' as AssetStatus,
 };
 
+interface AssetFormProps {
+  form: typeof EMPTY_FORM;
+  setForm: React.Dispatch<React.SetStateAction<typeof EMPTY_FORM>>;
+  hi: boolean;
+  onSubmit: (e: React.FormEvent) => void;
+  onCancel: () => void;
+}
+
+const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCancel }) => (
+  <form onSubmit={onSubmit} className="space-y-4">
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1 col-span-2">
+        <Label>{hi ? 'संपत्ति का नाम *' : 'Asset Name *'}</Label>
+        <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={hi ? 'जैसे: अलमारी, जीप आदि' : 'e.g. Steel Almirah, Jeep'} />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'श्रेणी' : 'Category'}</Label>
+        <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v as AssetCategory }))}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {CATEGORIES.map(c => <SelectItem key={c} value={c}>{hi ? { Land: 'भूमि', Building: 'भवन', Furniture: 'फर्नीचर', Equipment: 'उपकरण', Vehicle: 'वाहन', Computer: 'कंप्यूटर', Other: 'अन्य' }[c] : c}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'स्थान' : 'Location'}</Label>
+        <Input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder={hi ? 'कार्यालय/गोदाम' : 'Office/Godown'} />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'क्रय तिथि *' : 'Purchase Date *'}</Label>
+        <Input type="date" value={form.purchaseDate} onChange={e => setForm(f => ({ ...f, purchaseDate: e.target.value }))} />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'लागत (₹) *' : 'Cost (₹) *'}</Label>
+        <Input type="number" min="0" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} placeholder="25000" />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'ह्रास दर (% SLM)' : 'Dep. Rate (% SLM)'}</Label>
+        <Input type="number" step="0.01" min="0" max="100" value={form.depreciationRate} onChange={e => setForm(f => ({ ...f, depreciationRate: e.target.value }))} placeholder="10" />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'स्थिति' : 'Status'}</Label>
+        <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as AssetStatus }))}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">{hi ? 'सक्रिय' : 'Active'}</SelectItem>
+            <SelectItem value="disposed">{hi ? 'निपटाया गया' : 'Disposed'}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1 col-span-2">
+        <Label>{hi ? 'विवरण' : 'Description'}</Label>
+        <Textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder={hi ? 'अतिरिक्त विवरण...' : 'Additional details...'} />
+      </div>
+    </div>
+    <div className="flex justify-end gap-2 pt-2">
+      <Button type="button" variant="outline" onClick={onCancel}>{hi ? 'रद्द' : 'Cancel'}</Button>
+      <Button type="submit">{hi ? 'सहेजें' : 'Save'}</Button>
+    </div>
+  </form>
+);
+
 const AssetRegister: React.FC = () => {
   const { language } = useLanguage();
   const { assets, addAsset, updateAsset, deleteAsset, society } = useData();
@@ -128,60 +190,6 @@ const AssetRegister: React.FC = () => {
     Computer: hi ? 'कंप्यूटर' : 'Computer',
     Other: hi ? 'अन्य' : 'Other',
   };
-
-  const AssetForm = ({ onSubmit }: { onSubmit: (e: React.FormEvent) => void }) => (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1 col-span-2">
-          <Label>{hi ? 'संपत्ति का नाम *' : 'Asset Name *'}</Label>
-          <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={hi ? 'जैसे: अलमारी, जीप आदि' : 'e.g. Steel Almirah, Jeep'} />
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'श्रेणी' : 'Category'}</Label>
-          <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v as AssetCategory }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {CATEGORIES.map(c => <SelectItem key={c} value={c}>{catLabel[c]}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'स्थान' : 'Location'}</Label>
-          <Input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder={hi ? 'कार्यालय/गोदाम' : 'Office/Godown'} />
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'क्रय तिथि *' : 'Purchase Date *'}</Label>
-          <Input type="date" value={form.purchaseDate} onChange={e => setForm(f => ({ ...f, purchaseDate: e.target.value }))} />
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'लागत (₹) *' : 'Cost (₹) *'}</Label>
-          <Input type="number" min="0" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} placeholder="25000" />
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'ह्रास दर (% SLM)' : 'Dep. Rate (% SLM)'}</Label>
-          <Input type="number" step="0.01" min="0" max="100" value={form.depreciationRate} onChange={e => setForm(f => ({ ...f, depreciationRate: e.target.value }))} placeholder="10" />
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'स्थिति' : 'Status'}</Label>
-          <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as AssetStatus }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">{hi ? 'सक्रिय' : 'Active'}</SelectItem>
-              <SelectItem value="disposed">{hi ? 'निपटाया गया' : 'Disposed'}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1 col-span-2">
-          <Label>{hi ? 'विवरण' : 'Description'}</Label>
-          <Textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder={hi ? 'अतिरिक्त विवरण...' : 'Additional details...'} />
-        </div>
-      </div>
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="outline" onClick={() => { setIsAddOpen(false); setEditAsset(null); }}>{hi ? 'रद्द' : 'Cancel'}</Button>
-        <Button type="submit">{hi ? 'सहेजें' : 'Save'}</Button>
-      </div>
-    </form>
-  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -328,7 +336,7 @@ const AssetRegister: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'नई संपत्ति जोड़ें' : 'Add New Asset'}</DialogTitle>
           </DialogHeader>
-          <AssetForm onSubmit={handleAdd} />
+          <AssetForm form={form} setForm={setForm} hi={hi} onSubmit={handleAdd} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
         </DialogContent>
       </Dialog>
 
@@ -338,7 +346,7 @@ const AssetRegister: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'संपत्ति संपादित करें' : 'Edit Asset'} — {editAsset?.assetNo}</DialogTitle>
           </DialogHeader>
-          <AssetForm onSubmit={handleEdit} />
+          <AssetForm form={form} setForm={setForm} hi={hi} onSubmit={handleEdit} onCancel={() => setEditAsset(null)} />
         </DialogContent>
       </Dialog>
 

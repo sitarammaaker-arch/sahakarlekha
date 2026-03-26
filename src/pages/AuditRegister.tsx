@@ -38,6 +38,79 @@ const EMPTY_FORM = {
   remarks: '',
 };
 
+interface ObjectionFormProps {
+  form: typeof EMPTY_FORM;
+  setForm: React.Dispatch<React.SetStateAction<typeof EMPTY_FORM>>;
+  hi: boolean;
+  onSubmit: (e: React.FormEvent) => void;
+  onCancel: () => void;
+}
+
+const ObjectionForm: React.FC<ObjectionFormProps> = ({ form, setForm, hi, onSubmit, onCancel }) => (
+  <form onSubmit={onSubmit} className="space-y-4">
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1">
+        <Label>{hi ? 'लेखा परीक्षा वर्ष *' : 'Audit Year *'}</Label>
+        <Input value={form.auditYear} onChange={e => setForm(f => ({ ...f, auditYear: e.target.value }))} placeholder="2023-24" />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'पैरा सं. *' : 'Para No. *'}</Label>
+        <Input value={form.paraNo} onChange={e => setForm(f => ({ ...f, paraNo: e.target.value }))} placeholder="1, 2a, 3(ii)" />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'श्रेणी' : 'Category'}</Label>
+        <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v as ObjectionCategory }))}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{hi ? c.hi : c.en}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'राशि (₹)' : 'Amount Involved (₹)'}</Label>
+        <Input type="number" min="0" value={form.amountInvolved} onChange={e => setForm(f => ({ ...f, amountInvolved: e.target.value }))} placeholder="0" />
+      </div>
+      <div className="space-y-1 col-span-2">
+        <Label>{hi ? 'आपत्ति विवरण *' : 'Objection Details *'}</Label>
+        <Textarea rows={3} value={form.objection} onChange={e => setForm(f => ({ ...f, objection: e.target.value }))} placeholder={hi ? 'आपत्ति का विवरण...' : 'Describe the audit objection...'} />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'सुधार की अंतिम तिथि' : 'Rectification Due Date'}</Label>
+        <Input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'स्थिति' : 'Status'}</Label>
+        <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as ObjectionStatus }))}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pending">{hi ? 'लंबित' : 'Pending'}</SelectItem>
+            <SelectItem value="partial">{hi ? 'आंशिक' : 'Partial'}</SelectItem>
+            <SelectItem value="rectified">{hi ? 'निराकृत' : 'Rectified'}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1 col-span-2">
+        <Label>{hi ? 'की गई कार्रवाई' : 'Action Taken'}</Label>
+        <Textarea rows={2} value={form.actionTaken} onChange={e => setForm(f => ({ ...f, actionTaken: e.target.value }))} placeholder={hi ? 'सुधारात्मक कार्रवाई का विवरण...' : 'Describe corrective action taken...'} />
+      </div>
+      {form.status === 'rectified' && (
+        <div className="space-y-1">
+          <Label>{hi ? 'सुधार तिथि' : 'Rectified Date'}</Label>
+          <Input type="date" value={form.rectifiedDate} onChange={e => setForm(f => ({ ...f, rectifiedDate: e.target.value }))} />
+        </div>
+      )}
+      <div className={`space-y-1 ${form.status === 'rectified' ? '' : 'col-span-2'}`}>
+        <Label>{hi ? 'टिप्पणी' : 'Remarks'}</Label>
+        <Input value={form.remarks} onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} placeholder={hi ? 'अतिरिक्त टिप्पणी...' : 'Additional remarks...'} />
+      </div>
+    </div>
+    <div className="flex justify-end gap-2 pt-2">
+      <Button type="button" variant="outline" onClick={onCancel}>{hi ? 'रद्द' : 'Cancel'}</Button>
+      <Button type="submit">{hi ? 'सहेजें' : 'Save'}</Button>
+    </div>
+  </form>
+);
+
 const AuditRegister: React.FC = () => {
   const { language } = useLanguage();
   const { auditObjections, addAuditObjection, updateAuditObjection, deleteAuditObjection, society, vouchers } = useData();
@@ -130,71 +203,6 @@ const AuditRegister: React.FC = () => {
   };
 
   const catLabel = (c: ObjectionCategory) => CATEGORIES.find(x => x.value === c)?.[hi ? 'hi' : 'en'] || c;
-
-  const ObjectionForm = ({ onSubmit }: { onSubmit: (e: React.FormEvent) => void }) => (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label>{hi ? 'लेखा परीक्षा वर्ष *' : 'Audit Year *'}</Label>
-          <Input value={form.auditYear} onChange={e => setForm(f => ({ ...f, auditYear: e.target.value }))} placeholder="2023-24" />
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'पैरा सं. *' : 'Para No. *'}</Label>
-          <Input value={form.paraNo} onChange={e => setForm(f => ({ ...f, paraNo: e.target.value }))} placeholder="1, 2a, 3(ii)" />
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'श्रेणी' : 'Category'}</Label>
-          <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v as ObjectionCategory }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{hi ? c.hi : c.en}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'राशि (₹)' : 'Amount Involved (₹)'}</Label>
-          <Input type="number" min="0" value={form.amountInvolved} onChange={e => setForm(f => ({ ...f, amountInvolved: e.target.value }))} placeholder="0" />
-        </div>
-        <div className="space-y-1 col-span-2">
-          <Label>{hi ? 'आपत्ति विवरण *' : 'Objection Details *'}</Label>
-          <Textarea rows={3} value={form.objection} onChange={e => setForm(f => ({ ...f, objection: e.target.value }))} placeholder={hi ? 'आपत्ति का विवरण...' : 'Describe the audit objection...'} />
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'सुधार की अंतिम तिथि' : 'Rectification Due Date'}</Label>
-          <Input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
-        </div>
-        <div className="space-y-1">
-          <Label>{hi ? 'स्थिति' : 'Status'}</Label>
-          <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as ObjectionStatus }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pending">{hi ? 'लंबित' : 'Pending'}</SelectItem>
-              <SelectItem value="partial">{hi ? 'आंशिक' : 'Partial'}</SelectItem>
-              <SelectItem value="rectified">{hi ? 'निराकृत' : 'Rectified'}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1 col-span-2">
-          <Label>{hi ? 'की गई कार्रवाई' : 'Action Taken'}</Label>
-          <Textarea rows={2} value={form.actionTaken} onChange={e => setForm(f => ({ ...f, actionTaken: e.target.value }))} placeholder={hi ? 'सुधारात्मक कार्रवाई का विवरण...' : 'Describe corrective action taken...'} />
-        </div>
-        {form.status === 'rectified' && (
-          <div className="space-y-1">
-            <Label>{hi ? 'सुधार तिथि' : 'Rectified Date'}</Label>
-            <Input type="date" value={form.rectifiedDate} onChange={e => setForm(f => ({ ...f, rectifiedDate: e.target.value }))} />
-          </div>
-        )}
-        <div className={`space-y-1 ${form.status === 'rectified' ? '' : 'col-span-2'}`}>
-          <Label>{hi ? 'टिप्पणी' : 'Remarks'}</Label>
-          <Input value={form.remarks} onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} placeholder={hi ? 'अतिरिक्त टिप्पणी...' : 'Additional remarks...'} />
-        </div>
-      </div>
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="outline" onClick={() => { setIsAddOpen(false); setEditObj(null); }}>{hi ? 'रद्द' : 'Cancel'}</Button>
-        <Button type="submit">{hi ? 'सहेजें' : 'Save'}</Button>
-      </div>
-    </form>
-  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -341,7 +349,7 @@ const AuditRegister: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'नई ऑडिट आपत्ति' : 'Add Audit Objection'}</DialogTitle>
           </DialogHeader>
-          <ObjectionForm onSubmit={handleAdd} />
+          <ObjectionForm form={form} setForm={setForm} hi={hi} onSubmit={handleAdd} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
         </DialogContent>
       </Dialog>
 
@@ -351,7 +359,7 @@ const AuditRegister: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'आपत्ति संपादित करें' : 'Edit Objection'} — {editObj?.objectionNo}</DialogTitle>
           </DialogHeader>
-          <ObjectionForm onSubmit={handleEdit} />
+          <ObjectionForm form={form} setForm={setForm} hi={hi} onSubmit={handleEdit} onCancel={() => setEditObj(null)} />
         </DialogContent>
       </Dialog>
 

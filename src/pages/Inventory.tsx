@@ -64,6 +64,112 @@ const EMPTY_ADJUSTMENT_FORM = {
   date: new Date().toISOString().split('T')[0],
 };
 
+// ─── ItemForm component (outside Inventory to prevent remount on re-render) ────
+
+interface ItemFormProps {
+  itemForm: typeof EMPTY_ITEM_FORM;
+  setItemForm: React.Dispatch<React.SetStateAction<typeof EMPTY_ITEM_FORM>>;
+  hi: boolean;
+  onSubmit: (e: React.FormEvent) => void;
+  submitLabel: string;
+  onCancel: () => void;
+}
+
+const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit, submitLabel, onCancel }) => (
+  <form onSubmit={onSubmit} className="space-y-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="space-y-2">
+        <Label>
+          {hi ? 'नाम (अंग्रेजी)' : 'Name (English)'} <span className="text-destructive">*</span>
+        </Label>
+        <Input
+          value={itemForm.name}
+          onChange={e => setItemForm(f => ({ ...f, name: e.target.value }))}
+          placeholder="e.g. Wheat"
+          required
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
+        <Input
+          value={itemForm.nameHi}
+          onChange={e => setItemForm(f => ({ ...f, nameHi: e.target.value }))}
+          placeholder="जैसे गेहूं"
+        />
+      </div>
+    </div>
+    <div className="space-y-2">
+      <Label>
+        {hi ? 'इकाई' : 'Unit'} <span className="text-destructive">*</span>
+      </Label>
+      <Select
+        value={itemForm.unit}
+        onValueChange={val => setItemForm(f => ({ ...f, unit: val as UnitKey }))}
+      >
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {UNITS.map(u => (
+            <SelectItem key={u.value} value={u.value}>
+              {hi ? u.labelHi : u.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+    <div className="grid grid-cols-3 gap-3">
+      <div className="space-y-2">
+        <Label>{hi ? 'प्रारंभिक स्टॉक' : 'Opening Stock'}</Label>
+        <Input
+          type="number"
+          min="0"
+          value={itemForm.openingStock}
+          onChange={e => setItemForm(f => ({ ...f, openingStock: e.target.value }))}
+          placeholder="0"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>
+          {hi ? 'खरीद दर (₹)' : 'Purchase Rate (₹)'} <span className="text-destructive">*</span>
+        </Label>
+        <Input
+          type="number"
+          min="0"
+          value={itemForm.purchaseRate}
+          onChange={e => setItemForm(f => ({ ...f, purchaseRate: e.target.value }))}
+          placeholder="0"
+          required
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>{hi ? 'बिक्री दर (₹)' : 'Sale Rate (₹)'}</Label>
+        <Input
+          type="number"
+          min="0"
+          value={itemForm.saleRate}
+          onChange={e => setItemForm(f => ({ ...f, saleRate: e.target.value }))}
+          placeholder="0"
+        />
+      </div>
+    </div>
+    <div className="flex items-center gap-3">
+      <Switch
+        id="item-active"
+        checked={itemForm.isActive}
+        onCheckedChange={val => setItemForm(f => ({ ...f, isActive: val }))}
+      />
+      <Label htmlFor="item-active">{hi ? 'सक्रिय' : 'Active'}</Label>
+    </div>
+    <div className="flex gap-2 justify-end pt-2">
+      <Button variant="outline" type="button" onClick={onCancel}>
+        {hi ? 'रद्द करें' : 'Cancel'}
+      </Button>
+      <Button type="submit">{submitLabel}</Button>
+    </div>
+  </form>
+);
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 const Inventory: React.FC = () => {
@@ -251,110 +357,6 @@ const Inventory: React.FC = () => {
     setAdjForm(EMPTY_ADJUSTMENT_FORM);
     setIsAdjustOpen(false);
   };
-
-  // Shared Item Form component
-  const ItemForm = ({
-    onSubmit,
-    submitLabel,
-    onCancel,
-  }: {
-    onSubmit: (e: React.FormEvent) => void;
-    submitLabel: string;
-    onCancel: () => void;
-  }) => (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>
-            {hi ? 'नाम (अंग्रेजी)' : 'Name (English)'} <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            value={itemForm.name}
-            onChange={e => setItemForm(f => ({ ...f, name: e.target.value }))}
-            placeholder="e.g. Wheat"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
-          <Input
-            value={itemForm.nameHi}
-            onChange={e => setItemForm(f => ({ ...f, nameHi: e.target.value }))}
-            placeholder="जैसे गेहूं"
-          />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label>
-          {hi ? 'इकाई' : 'Unit'} <span className="text-destructive">*</span>
-        </Label>
-        <Select
-          value={itemForm.unit}
-          onValueChange={val => setItemForm(f => ({ ...f, unit: val as UnitKey }))}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {UNITS.map(u => (
-              <SelectItem key={u.value} value={u.value}>
-                {hi ? u.labelHi : u.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        <div className="space-y-2">
-          <Label>{hi ? 'प्रारंभिक स्टॉक' : 'Opening Stock'}</Label>
-          <Input
-            type="number"
-            min="0"
-            value={itemForm.openingStock}
-            onChange={e => setItemForm(f => ({ ...f, openingStock: e.target.value }))}
-            placeholder="0"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>
-            {hi ? 'खरीद दर (₹)' : 'Purchase Rate (₹)'} <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            type="number"
-            min="0"
-            value={itemForm.purchaseRate}
-            onChange={e => setItemForm(f => ({ ...f, purchaseRate: e.target.value }))}
-            placeholder="0"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>{hi ? 'बिक्री दर (₹)' : 'Sale Rate (₹)'}</Label>
-          <Input
-            type="number"
-            min="0"
-            value={itemForm.saleRate}
-            onChange={e => setItemForm(f => ({ ...f, saleRate: e.target.value }))}
-            placeholder="0"
-          />
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <Switch
-          id="item-active"
-          checked={itemForm.isActive}
-          onCheckedChange={val => setItemForm(f => ({ ...f, isActive: val }))}
-        />
-        <Label htmlFor="item-active">{hi ? 'सक्रिय' : 'Active'}</Label>
-      </div>
-      <div className="flex gap-2 justify-end pt-2">
-        <Button variant="outline" type="button" onClick={onCancel}>
-          {hi ? 'रद्द करें' : 'Cancel'}
-        </Button>
-        <Button type="submit">{submitLabel}</Button>
-      </div>
-    </form>
-  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -762,6 +764,9 @@ const Inventory: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <ItemForm
+            itemForm={itemForm}
+            setItemForm={setItemForm}
+            hi={hi}
             onSubmit={handleAddItem}
             submitLabel={hi ? 'सहेजें' : 'Save'}
             onCancel={() => {
@@ -790,6 +795,9 @@ const Inventory: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <ItemForm
+            itemForm={itemForm}
+            setItemForm={setItemForm}
+            hi={hi}
             onSubmit={handleEditItem}
             submitLabel={hi ? 'अपडेट करें' : 'Update'}
             onCancel={() => {

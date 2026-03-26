@@ -61,6 +61,105 @@ interface ProcessRow {
   processed: boolean;
 }
 
+// ── EmployeeForm component (outside SalaryManagement to prevent remount) ─────
+
+interface EmployeeFormProps {
+  empForm: typeof EMPTY_EMP_FORM;
+  setEmpForm: React.Dispatch<React.SetStateAction<typeof EMPTY_EMP_FORM>>;
+  hi: boolean;
+  onSubmit: (e: React.FormEvent) => void;
+  onCancel: () => void;
+  submitLabel: string;
+}
+
+const EmployeeForm: React.FC<EmployeeFormProps> = ({ empForm, setEmpForm, hi, onSubmit, onCancel, submitLabel }) => (
+  <form onSubmit={onSubmit} className="space-y-4">
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1 col-span-2 sm:col-span-1">
+        <Label>{hi ? 'नाम (अंग्रेजी) *' : 'Name (English) *'}</Label>
+        <Input
+          value={empForm.name}
+          onChange={e => setEmpForm(f => ({ ...f, name: e.target.value }))}
+          placeholder="Full Name"
+          required
+        />
+      </div>
+      <div className="space-y-1 col-span-2 sm:col-span-1">
+        <Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
+        <Input
+          value={empForm.nameHi}
+          onChange={e => setEmpForm(f => ({ ...f, nameHi: e.target.value }))}
+          placeholder="पूरा नाम"
+        />
+      </div>
+      <div className="space-y-1 col-span-2 sm:col-span-1">
+        <Label>{hi ? 'पदनाम *' : 'Designation *'}</Label>
+        <Input
+          value={empForm.designation}
+          onChange={e => setEmpForm(f => ({ ...f, designation: e.target.value }))}
+          placeholder={hi ? 'लेखाकार' : 'Accountant'}
+          required
+        />
+      </div>
+      <div className="space-y-1 col-span-2 sm:col-span-1">
+        <Label>{hi ? 'नियुक्ति तिथि *' : 'Join Date *'}</Label>
+        <Input
+          type="date"
+          value={empForm.joinDate}
+          onChange={e => setEmpForm(f => ({ ...f, joinDate: e.target.value }))}
+          required
+        />
+      </div>
+      <div className="space-y-1 col-span-2 sm:col-span-1">
+        <Label>{hi ? 'मूल वेतन (₹) *' : 'Basic Salary (₹) *'}</Label>
+        <Input
+          type="number"
+          min="0"
+          value={empForm.basicSalary}
+          onChange={e => setEmpForm(f => ({ ...f, basicSalary: e.target.value }))}
+          placeholder="15000"
+          required
+        />
+      </div>
+      <div className="space-y-1 col-span-2 sm:col-span-1">
+        <Label>{hi ? 'फोन' : 'Phone'}</Label>
+        <Input
+          type="tel"
+          value={empForm.phone}
+          onChange={e => setEmpForm(f => ({ ...f, phone: e.target.value }))}
+          placeholder="9876543210"
+        />
+      </div>
+      <div className="space-y-1 col-span-2">
+        <Label>{hi ? 'बैंक खाता (वैकल्पिक)' : 'Bank Account (optional)'}</Label>
+        <Input
+          value={empForm.bankAccount}
+          onChange={e => setEmpForm(f => ({ ...f, bankAccount: e.target.value }))}
+          placeholder={hi ? 'खाता संख्या' : 'Account number'}
+        />
+      </div>
+      <div className="space-y-1 col-span-2">
+        <Label>{hi ? 'स्थिति' : 'Status'}</Label>
+        <Select value={empForm.status} onValueChange={v => setEmpForm(f => ({ ...f, status: v as 'active' | 'inactive' }))}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">{hi ? 'सक्रिय' : 'Active'}</SelectItem>
+            <SelectItem value="inactive">{hi ? 'निष्क्रिय' : 'Inactive'}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+    <div className="flex justify-end gap-2 pt-2">
+      <Button type="button" variant="outline" onClick={onCancel}>
+        {hi ? 'रद्द' : 'Cancel'}
+      </Button>
+      <Button type="submit">{submitLabel}</Button>
+    </div>
+  </form>
+);
+
 // ── main component ────────────────────────────────────────────────────────────
 
 const SalaryManagement: React.FC = () => {
@@ -273,104 +372,6 @@ const SalaryManagement: React.FC = () => {
     toast({ title: hi ? 'भुगतान चिह्नित किया गया' : 'Marked as paid' });
     setMarkPaidId(null);
   };
-
-  // ── Shared EmployeeForm component ─────────────────────────────────────────
-
-  const EmployeeForm = ({
-    onSubmit,
-    onCancel,
-    submitLabel,
-  }: {
-    onSubmit: (e: React.FormEvent) => void;
-    onCancel: () => void;
-    submitLabel: string;
-  }) => (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1 col-span-2 sm:col-span-1">
-          <Label>{hi ? 'नाम (अंग्रेजी) *' : 'Name (English) *'}</Label>
-          <Input
-            value={empForm.name}
-            onChange={e => setEmpForm(f => ({ ...f, name: e.target.value }))}
-            placeholder="Full Name"
-            required
-          />
-        </div>
-        <div className="space-y-1 col-span-2 sm:col-span-1">
-          <Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
-          <Input
-            value={empForm.nameHi}
-            onChange={e => setEmpForm(f => ({ ...f, nameHi: e.target.value }))}
-            placeholder="पूरा नाम"
-          />
-        </div>
-        <div className="space-y-1 col-span-2 sm:col-span-1">
-          <Label>{hi ? 'पदनाम *' : 'Designation *'}</Label>
-          <Input
-            value={empForm.designation}
-            onChange={e => setEmpForm(f => ({ ...f, designation: e.target.value }))}
-            placeholder={hi ? 'लेखाकार' : 'Accountant'}
-            required
-          />
-        </div>
-        <div className="space-y-1 col-span-2 sm:col-span-1">
-          <Label>{hi ? 'नियुक्ति तिथि *' : 'Join Date *'}</Label>
-          <Input
-            type="date"
-            value={empForm.joinDate}
-            onChange={e => setEmpForm(f => ({ ...f, joinDate: e.target.value }))}
-            required
-          />
-        </div>
-        <div className="space-y-1 col-span-2 sm:col-span-1">
-          <Label>{hi ? 'मूल वेतन (₹) *' : 'Basic Salary (₹) *'}</Label>
-          <Input
-            type="number"
-            min="0"
-            value={empForm.basicSalary}
-            onChange={e => setEmpForm(f => ({ ...f, basicSalary: e.target.value }))}
-            placeholder="15000"
-            required
-          />
-        </div>
-        <div className="space-y-1 col-span-2 sm:col-span-1">
-          <Label>{hi ? 'फोन' : 'Phone'}</Label>
-          <Input
-            type="tel"
-            value={empForm.phone}
-            onChange={e => setEmpForm(f => ({ ...f, phone: e.target.value }))}
-            placeholder="9876543210"
-          />
-        </div>
-        <div className="space-y-1 col-span-2">
-          <Label>{hi ? 'बैंक खाता (वैकल्पिक)' : 'Bank Account (optional)'}</Label>
-          <Input
-            value={empForm.bankAccount}
-            onChange={e => setEmpForm(f => ({ ...f, bankAccount: e.target.value }))}
-            placeholder={hi ? 'खाता संख्या' : 'Account number'}
-          />
-        </div>
-        <div className="space-y-1 col-span-2">
-          <Label>{hi ? 'स्थिति' : 'Status'}</Label>
-          <Select value={empForm.status} onValueChange={v => setEmpForm(f => ({ ...f, status: v as 'active' | 'inactive' }))}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">{hi ? 'सक्रिय' : 'Active'}</SelectItem>
-              <SelectItem value="inactive">{hi ? 'निष्क्रिय' : 'Inactive'}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          {hi ? 'रद्द' : 'Cancel'}
-        </Button>
-        <Button type="submit">{submitLabel}</Button>
-      </div>
-    </form>
-  );
 
   // ── render ────────────────────────────────────────────────────────────────
 
@@ -909,6 +910,9 @@ const SalaryManagement: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <EmployeeForm
+            empForm={empForm}
+            setEmpForm={setEmpForm}
+            hi={hi}
             onSubmit={handleAddEmp}
             onCancel={() => {
               setIsAddEmpOpen(false);
@@ -933,6 +937,9 @@ const SalaryManagement: React.FC = () => {
             </DialogTitle>
           </DialogHeader>
           <EmployeeForm
+            empForm={empForm}
+            setEmpForm={setEmpForm}
+            hi={hi}
             onSubmit={handleEditEmp}
             onCancel={() => setEditEmp(null)}
             submitLabel={hi ? 'अपडेट करें' : 'Update'}
