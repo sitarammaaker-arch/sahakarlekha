@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import type {
   Voucher, Member, LedgerAccount, SocietySettings,
   AccountBalance, CashBookEntry, BankBookEntry, MemberLedgerEntry, ReceiptsPaymentsData,
@@ -90,6 +91,14 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  const societyIdRef = useRef(user?.societyId || 'SOC001');
+  // Keep ref updated when user changes
+  useEffect(() => { societyIdRef.current = user?.societyId || 'SOC001'; }, [user?.societyId]);
+  // Helper: adds society_id to any Supabase record
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const withSoc = (d: Record<string, any>) => ({ ...d, society_id: societyIdRef.current });
+
   const [vouchers, setVouchersState] = useState<Voucher[]>(() => storage.getVouchers());
   const [members, setMembersState] = useState<Member[]>(() => storage.getMembers());
   const [accounts, setAccountsState] = useState<LedgerAccount[]>(() => storage.getAccounts());
@@ -107,43 +116,51 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [dbReady, setDbReady] = useState(false);
 
   useEffect(() => {
+    const sid = user?.societyId || 'SOC001';
+    societyIdRef.current = sid;
+
+    // Reset all state to empty before loading new society's data
+    setVouchersState([]); setMembersState([]); setLoansState([]);
+    setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
+    setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
+    setEmployeesState([]); setSalaryRecordsState([]);
+
     const loadFromSupabase = async () => {
       try {
         const [
-          { data: vData }, { data: mData }, { data: aData }, { data: sData },
+          { data: vData }, { data: mData }, { data: aData },
           { data: lData }, { data: asData }, { data: aoData },
           { data: siData }, { data: smData }, { data: slData },
           { data: puData }, { data: emData }, { data: srData },
           { data: socData },
         ] = await Promise.all([
-          supabase.from('vouchers').select('*').order('created_at'),
-          supabase.from('members').select('*'),
-          supabase.from('accounts').select('*'),
-          supabase.from('sales').select('*').order('created_at'),
-          supabase.from('loans').select('*'),
-          supabase.from('assets').select('*'),
-          supabase.from('audit_objections').select('*'),
-          supabase.from('stock_items').select('*'),
-          supabase.from('stock_movements').select('*').order('created_at'),
-          supabase.from('salary_records').select('*').order('created_at'),
-          supabase.from('purchases').select('*').order('created_at'),
-          supabase.from('employees').select('*'),
-          supabase.from('salary_records').select('*').order('created_at'),
-          supabase.from('society_settings').select('*').limit(1),
+          supabase.from('vouchers').select('*').eq('society_id', sid).order('created_at'),
+          supabase.from('members').select('*').eq('society_id', sid),
+          supabase.from('accounts').select('*').eq('society_id', sid),
+          supabase.from('loans').select('*').eq('society_id', sid),
+          supabase.from('assets').select('*').eq('society_id', sid),
+          supabase.from('audit_objections').select('*').eq('society_id', sid),
+          supabase.from('stock_items').select('*').eq('society_id', sid),
+          supabase.from('stock_movements').select('*').eq('society_id', sid).order('created_at'),
+          supabase.from('sales').select('*').eq('society_id', sid).order('created_at'),
+          supabase.from('purchases').select('*').eq('society_id', sid).order('created_at'),
+          supabase.from('employees').select('*').eq('society_id', sid),
+          supabase.from('salary_records').select('*').eq('society_id', sid).order('created_at'),
+          supabase.from('society_settings').select('*').eq('society_id', sid).limit(1),
         ]);
 
-        if (vData && vData.length > 0) { setVouchersState(vData); storage.setVouchers(vData); }
-        if (mData && mData.length > 0) { setMembersState(mData); storage.setMembers(mData); }
-        if (aData && aData.length > 0) { setAccountsState(aData); storage.setAccounts(aData); }
-        if (slData && slData.length > 0) { setSalesState(slData); }
-        if (lData && lData.length > 0) { setLoansState(lData); }
-        if (asData && asData.length > 0) { setAssetsState(asData); }
-        if (aoData && aoData.length > 0) { setAuditObjectionsState(aoData); }
-        if (siData && siData.length > 0) { setStockItemsState(siData); }
-        if (smData && smData.length > 0) { setStockMovementsState(smData); }
-        if (puData && puData.length > 0) { setPurchasesState(puData); }
-        if (emData && emData.length > 0) { setEmployeesState(emData); }
-        if (srData && srData.length > 0) { setSalaryRecordsState(srData); }
+        setVouchersState(vData && vData.length > 0 ? vData : []); if (vData && vData.length > 0) storage.setVouchers(vData);
+        setMembersState(mData && mData.length > 0 ? mData : []); if (mData && mData.length > 0) storage.setMembers(mData);
+        setAccountsState(aData && aData.length > 0 ? aData : storage.getAccounts()); if (aData && aData.length > 0) storage.setAccounts(aData);
+        setLoansState(lData || []);
+        setAssetsState(asData || []);
+        setAuditObjectionsState(aoData || []);
+        setStockItemsState(siData || []);
+        setStockMovementsState(smData || []);
+        setSalesState(slData || []);
+        setPurchasesState(puData || []);
+        setEmployeesState(emData || []);
+        setSalaryRecordsState(srData || []);
         if (socData && socData.length > 0) { setSocietyState(socData[0]); storage.setSociety(socData[0]); }
       } catch (err) {
         console.warn('Supabase load failed, using localStorage:', err);
@@ -152,7 +169,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
     loadFromSupabase();
-  }, []);
+  }, [user?.societyId]);
 
   const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>): Voucher => {
     const voucherNo = storage.getNextVoucherNo(data.type, society.financialYear);
@@ -167,7 +184,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       storage.setVouchers(updated);
       return updated;
     });
-    supabase.from('vouchers').upsert(newVoucher).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    supabase.from('vouchers').upsert(withSoc(newVoucher)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return newVoucher;
   }, [society.financialYear]);
 
@@ -218,7 +235,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const objectionNo = storage.getNextObjectionNo(data.auditYear);
     const newObj: AuditObjection = { ...data, id: crypto.randomUUID(), objectionNo, createdAt: new Date().toISOString() };
     setAuditObjectionsState(prev => { const updated = [...prev, newObj]; storage.setAuditObjections(updated); return updated; });
-    supabase.from('audit_objections').upsert(newObj).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    supabase.from('audit_objections').upsert(withSoc(newObj)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return newObj;
   }, []);
 
@@ -247,7 +264,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       storage.setMembers(updated);
       return updated;
     });
-    supabase.from('members').upsert(newMember).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    supabase.from('members').upsert(withSoc(newMember)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return newMember;
   }, []);
 
@@ -280,7 +297,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       storage.setAccounts(updated);
       return updated;
     });
-    supabase.from('accounts').upsert(newAccount).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return newAccount;
   }, []);
 
@@ -310,7 +327,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setSocietyState(prev => {
       const updated = { ...prev, ...data };
       storage.setSociety(updated);
-      supabase.from('society_settings').upsert({ id: 'main', ...updated }).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+      supabase.from('society_settings').upsert({ id: societyIdRef.current, society_id: societyIdRef.current, ...updated }).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       return updated;
     });
   }, []);
@@ -470,7 +487,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const loanNo = storage.getNextLoanNo(society.financialYear);
     const newLoan: Loan = { ...data, id: crypto.randomUUID(), loanNo, createdAt: new Date().toISOString() };
     setLoansState(prev => { const updated = [...prev, newLoan]; storage.setLoans(updated); return updated; });
-    supabase.from('loans').upsert(newLoan).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    supabase.from('loans').upsert(withSoc(newLoan)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return newLoan;
   }, [society.financialYear]);
 
@@ -496,7 +513,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const assetNo = storage.getNextAssetNo();
     const newAsset: Asset = { ...data, id: crypto.randomUUID(), assetNo };
     setAssetsState(prev => { const updated = [...prev, newAsset]; storage.setAssets(updated); return updated; });
-    supabase.from('assets').upsert(newAsset).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    supabase.from('assets').upsert(withSoc(newAsset)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return newAsset;
   }, []);
 
@@ -579,7 +596,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addStockItem = useCallback((data: Omit<StockItem, 'id' | 'itemCode'>): StockItem => {
     const item: StockItem = { ...data, id: crypto.randomUUID(), itemCode: storage.getNextItemCode() };
     setStockItemsState(prev => { const updated = [...prev, item]; storage.setStockItems(updated); return updated; });
-    supabase.from('stock_items').upsert(item).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    supabase.from('stock_items').upsert(withSoc(item)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return item;
   }, []);
 
@@ -604,7 +621,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addStockMovement = useCallback((data: Omit<StockMovement, 'id' | 'createdAt'>) => {
     const movement: StockMovement = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     setStockMovementsState(prev => { const updated = [...prev, movement]; storage.setStockMovements(updated); return updated; });
-    supabase.from('stock_movements').upsert(movement).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    supabase.from('stock_movements').upsert(withSoc(movement)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     // Update currentStock on the item
     setStockItemsState(prev => {
       const updated = prev.map(i => {
@@ -628,13 +645,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const voucherNo = storage.getNextVoucherNo('receipt', society.financialYear);
       const newV = { ...v, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
       setVouchersState(prev => { const updated = [...prev, newV]; storage.setVouchers(updated); return updated; });
-      supabase.from('vouchers').upsert(newV).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+      supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       voucherId = newV.id;
     } else {
       const voucherNo = storage.getNextVoucherNo('journal', society.financialYear);
       const newV = { type: 'journal' as const, date: data.date, debitAccountId: 'DEBTORS', creditAccountId: 'STOCK', amount: data.netAmount, narration: `Credit Sale: ${data.customerName} - ${saleNo}`, memberId: undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
       setVouchersState(prev => { const updated = [...prev, newV]; storage.setVouchers(updated); return updated; });
-      supabase.from('vouchers').upsert(newV).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+      supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       voucherId = newV.id;
     }
     // Reduce stock & add movements
@@ -642,11 +659,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setStockItemsState(prev => { const updated = prev.map(i => i.id === item.itemId ? { ...i, currentStock: i.currentStock - item.qty } : i); storage.setStockItems(updated); return updated; });
       const mv: StockMovement = { id: crypto.randomUUID(), date: data.date, itemId: item.itemId, type: 'sale', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: saleNo, narration: `Sale to ${data.customerName}`, createdAt: new Date().toISOString() };
       setStockMovementsState(prev => { const updated = [...prev, mv]; storage.setStockMovements(updated); return updated; });
-      supabase.from('stock_movements').upsert(mv).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+      supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     });
     const sale: Sale = { ...data, id: crypto.randomUUID(), saleNo, voucherId, createdAt: new Date().toISOString() };
     setSalesState(prev => { const updated = [...prev, sale]; storage.setSales(updated); return updated; });
-    supabase.from('sales').upsert(sale).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    supabase.from('sales').upsert(withSoc(sale)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return sale;
   }, [society.financialYear]);
 
@@ -680,13 +697,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const voucherNo = storage.getNextVoucherNo('payment', society.financialYear);
       const newV = { type: 'payment' as const, date: data.date, debitAccountId: 'STOCK', creditAccountId: creditAcc, amount: data.netAmount, narration: `Purchase: ${data.supplierName} - ${purchaseNo}`, memberId: undefined as undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
       setVouchersState(prev => { const updated = [...prev, newV]; storage.setVouchers(updated); return updated; });
-      supabase.from('vouchers').upsert(newV).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+      supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       voucherId = newV.id;
     } else {
       const voucherNo = storage.getNextVoucherNo('journal', society.financialYear);
       const newV = { type: 'journal' as const, date: data.date, debitAccountId: 'STOCK', creditAccountId: 'CREDITORS', amount: data.netAmount, narration: `Credit Purchase: ${data.supplierName} - ${purchaseNo}`, memberId: undefined as undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
       setVouchersState(prev => { const updated = [...prev, newV]; storage.setVouchers(updated); return updated; });
-      supabase.from('vouchers').upsert(newV).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+      supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       voucherId = newV.id;
     }
     // Increase stock & add movements, update purchaseRate
@@ -694,11 +711,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setStockItemsState(prev => { const updated = prev.map(i => i.id === item.itemId ? { ...i, currentStock: i.currentStock + item.qty, purchaseRate: item.rate } : i); storage.setStockItems(updated); return updated; });
       const mv: StockMovement = { id: crypto.randomUUID(), date: data.date, itemId: item.itemId, type: 'purchase', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: purchaseNo, narration: `Purchase from ${data.supplierName}`, createdAt: new Date().toISOString() };
       setStockMovementsState(prev => { const updated = [...prev, mv]; storage.setStockMovements(updated); return updated; });
-      supabase.from('stock_movements').upsert(mv).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+      supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     });
     const purchase: Purchase = { ...data, id: crypto.randomUUID(), purchaseNo, voucherId, createdAt: new Date().toISOString() };
     setPurchasesState(prev => { const updated = [...prev, purchase]; storage.setPurchases(updated); return updated; });
-    supabase.from('purchases').upsert(purchase).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    supabase.from('purchases').upsert(withSoc(purchase)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return purchase;
   }, [society.financialYear]);
 
@@ -727,7 +744,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addEmployee = useCallback((data: Omit<Employee, 'id' | 'empNo'>): Employee => {
     const emp: Employee = { ...data, id: crypto.randomUUID(), empNo: storage.getNextEmpNo() };
     setEmployeesState(prev => { const updated = [...prev, emp]; storage.setEmployees(updated); return updated; });
-    supabase.from('employees').upsert(emp).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    supabase.from('employees').upsert(withSoc(emp)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return emp;
   }, []);
 
@@ -754,7 +771,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const slipNo = storage.getNextSalarySlipNo(society.financialYear);
     const record: SalaryRecord = { ...data, id: crypto.randomUUID(), slipNo, createdAt: new Date().toISOString() };
     setSalaryRecordsState(prev => { const updated = [...prev, record]; storage.setSalaryRecords(updated); return updated; });
-    supabase.from('salary_records').upsert(record).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    supabase.from('salary_records').upsert(withSoc(record)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return record;
   }, [society.financialYear]);
 
@@ -770,7 +787,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const voucherNo = storage.getNextVoucherNo('payment', society.financialYear);
           const newV = { type: 'payment' as const, date: merged.paidDate || new Date().toISOString().split('T')[0], debitAccountId: 'SAL_EXP', creditAccountId: creditAcc, amount: merged.netSalary, narration: `Salary: ${emp?.name || ''} - ${r.month}`, memberId: undefined as undefined, createdBy: 'System', id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
           setVouchersState(v => { const upd = [...v, newV]; storage.setVouchers(upd); return upd; });
-          supabase.from('vouchers').upsert(newV).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+          supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
           merged.voucherId = newV.id;
         }
         return merged;
