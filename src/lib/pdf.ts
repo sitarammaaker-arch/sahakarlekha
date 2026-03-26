@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection } from '@/types';
 
+
 const fmt = (amount: number): string =>
   'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(amount);
 
@@ -9,30 +10,36 @@ const fmtDate = (dateStr: string): string => {
   try { return new Date(dateStr).toLocaleDateString('en-IN'); } catch { return dateStr; }
 };
 
-function addHeader(doc: jsPDF, title: string, society: SocietySettings, subtitle?: string): number {
+/** All PDFs use English only — helvetica font always. */
+function setupFont(_doc: jsPDF): string {
+  return 'helvetica';
+}
+
+function addHeader(doc: jsPDF, title: string, society: SocietySettings, subtitle?: string): { startY: number; font: string } {
+  const font = setupFont(doc);
   const pageW = doc.internal.pageSize.width;
   const cx = pageW / 2;
   const marginR = pageW - 15;
 
   doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  // Always use English name in PDF (jsPDF doesn't support Devanagari)
+  doc.setFont(font, 'bold');
+  // Always use English society name in PDF
   doc.text(society.name, cx, 15, { align: 'center' });
   doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   doc.text(`Reg. No: ${society.registrationNo} | FY: ${society.financialYear}`, cx, 21, { align: 'center' });
   doc.setFontSize(13);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text(title, cx, 30, { align: 'center' });
   if (subtitle) {
     doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(font, 'normal');
     doc.text(subtitle, cx, 36, { align: 'center' });
   }
   doc.setDrawColor(41, 82, 163);
   doc.setLineWidth(0.5);
   doc.line(15, 40, marginR, 40);
-  return 45;
+  return { startY: 45, font };
 }
 
 export function generateCashBookPDF(
@@ -42,7 +49,7 @@ export function generateCashBookPDF(
   language: 'hi' | 'en'
 ) {
   const doc = new jsPDF();
-  const startY = addHeader(doc, 'Cash Book', society, `Financial Year: ${society.financialYear}`);
+  const { startY, font } = addHeader(doc, 'Cash Book', society, `Financial Year: ${society.financialYear}`);
 
   const totalReceipts = entries.filter(e => e.type === 'receipt').reduce((s, e) => s + e.amount, 0);
   const totalPayments = entries.filter(e => e.type === 'payment').reduce((s, e) => s + e.amount, 0);
@@ -65,7 +72,7 @@ export function generateCashBookPDF(
     head: [['Date', 'Voucher No.', 'Particulars', 'Receipt (Dr)', 'Payment (Cr)', 'Balance']],
     body,
     foot: [['', '', 'Total', fmt(totalReceipts), fmt(totalPayments), fmt(closingBalance)]],
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 253] },
@@ -82,7 +89,7 @@ export function generateBankBookPDF(
   language: 'hi' | 'en'
 ) {
   const doc = new jsPDF();
-  const startY = addHeader(doc, 'Bank Book', society, `Financial Year: ${society.financialYear}`);
+  const { startY, font } = addHeader(doc, 'Bank Book', society, `Financial Year: ${society.financialYear}`);
 
   const totalDeposits = entries.filter(e => e.type === 'deposit').reduce((s, e) => s + e.amount, 0);
   const totalWithdrawals = entries.filter(e => e.type === 'withdrawal').reduce((s, e) => s + e.amount, 0);
@@ -105,7 +112,7 @@ export function generateBankBookPDF(
     head: [['Date', 'Voucher No.', 'Particulars', 'Deposit', 'Withdrawal', 'Balance']],
     body,
     foot: [['', '', 'Total', fmt(totalDeposits), fmt(totalWithdrawals), fmt(closingBalance)]],
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 253] },
@@ -117,7 +124,7 @@ export function generateBankBookPDF(
 
 export function generateTrialBalancePDF(balances: AccountBalance[], society: SocietySettings, asOnDate: string, language: 'hi' | 'en') {
   const doc = new jsPDF();
-  const startY = addHeader(doc, 'Trial Balance', society, `As on: ${fmtDate(asOnDate)} | FY: ${society.financialYear}`);
+  const { startY, font } = addHeader(doc, 'Trial Balance', society, `As on: ${fmtDate(asOnDate)} | FY: ${society.financialYear}`);
 
   const totalDebit = balances.reduce((s, b) => s + b.totalDebit, 0);
   const totalCredit = balances.reduce((s, b) => s + b.totalCredit, 0);
@@ -135,7 +142,7 @@ export function generateTrialBalancePDF(balances: AccountBalance[], society: Soc
     head: [['#', 'Account Name', 'Type', 'Debit (Dr)', 'Credit (Cr)']],
     body,
     foot: [['', '', 'Total', fmt(totalDebit), fmt(totalCredit)]],
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 253] },
@@ -153,7 +160,7 @@ export function generateIncomeExpenditurePDF(
   reserveFund: number = 0
 ) {
   const doc = new jsPDF('landscape');
-  const startY = addHeader(doc, 'Income & Expenditure Account', society, `Financial Year: ${society.financialYear}`);
+  const { startY, font } = addHeader(doc, 'Income & Expenditure Account', society, `Financial Year: ${society.financialYear}`);
 
   const totalIncome = incomeItems.reduce((s, i) => s + i.amount, 0);
   const totalExpenses = expenseItems.reduce((s, i) => s + i.amount, 0);
@@ -175,7 +182,7 @@ export function generateIncomeExpenditurePDF(
     head: [['Expenditure (Dr)', 'Amount']],
     body: expBody,
     foot: [['Total', fmt(totalIncome)]],
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [220, 53, 69], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right' } },
@@ -188,7 +195,7 @@ export function generateIncomeExpenditurePDF(
     head: [['Income (Cr)', 'Amount']],
     body: incBody,
     foot: [['Total', fmt(totalIncome)]],
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right' } },
@@ -198,7 +205,7 @@ export function generateIncomeExpenditurePDF(
   if (isSurplus && reserveFund > 0) {
     const finalY = Math.max((doc as any).lastAutoTable.finalY + 8, 185);
     doc.setFontSize(8);
-    doc.setFont('helvetica', 'italic');
+    doc.setFont(font, 'normal');
     doc.text(
       `Note: Statutory Reserve Fund of ${fmt(reserveFund)} (25%) transferred as required under Haryana Cooperative Societies Act 1984, Sec 65`,
       15, finalY
@@ -210,7 +217,7 @@ export function generateIncomeExpenditurePDF(
 
 export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society: SocietySettings) {
   const doc = new jsPDF('landscape');
-  const startY = addHeader(doc, 'Receipts & Payments Account', society, `Financial Year: ${society.financialYear}`);
+  const { startY, font } = addHeader(doc, 'Receipts & Payments Account', society, `Financial Year: ${society.financialYear}`);
 
   const { openingCash, openingBank, receipts, payments, closingCash, closingBank } = data;
   const totalReceipts = receipts.reduce((s, r) => s + r.amount, 0);
@@ -241,7 +248,7 @@ export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society:
     head: [['Dr — Receipts', 'Amount']],
     body: drBody,
     foot: [['Total', fmt(drTotal)]],
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right' } },
@@ -254,7 +261,7 @@ export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society:
     head: [['Cr — Payments', 'Amount']],
     body: crBody,
     foot: [['Total', fmt(crTotal)]],
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [220, 53, 69], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right' } },
@@ -272,7 +279,7 @@ export function generateBalanceSheetPDF(
   reserveFund: number = 0
 ) {
   const doc = new jsPDF('landscape');
-  const startY = addHeader(doc, 'Balance Sheet', society, `As at 31st March 20${society.financialYear.split('-')[1]}`);
+  const { startY, font } = addHeader(doc, 'Balance Sheet', society, `As at 31st March 20${society.financialYear.split('-')[1]}`);
 
   const totalAssets = assetBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0);
   const totalLiabilities = liabilityBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0) + (netProfit > 0 ? netProfit : 0);
@@ -321,7 +328,7 @@ export function generateBalanceSheetPDF(
     head: liabHead,
     body: liabBody,
     foot: [hasPY ? ['Total', fmt(pyLiabTotal), fmt(totalLiabilities)] : ['Total', fmt(totalLiabilities)]],
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: colStyles,
@@ -334,7 +341,7 @@ export function generateBalanceSheetPDF(
     head: assetHead,
     body: assetBody,
     foot: [hasPY ? ['Total', fmt(pyAssetTotal), fmt(totalAssets)] : ['Total', fmt(totalAssets)]],
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: colStyles,
@@ -355,7 +362,7 @@ export function generateLedgerPDF(
   const subtitle = fromDate && toDate
     ? `Account: ${account.name} | ${fmtDate(fromDate)} to ${fmtDate(toDate)}`
     : `Account: ${account.name} | FY: ${society.financialYear}`;
-  const startY = addHeader(doc, 'Ledger Account Statement', society, subtitle);
+  const { startY, font } = addHeader(doc, 'Ledger Account Statement', society, subtitle);
 
   const totalDebit = entries.reduce((s, e) => s + e.debit, 0);
   const totalCredit = entries.reduce((s, e) => s + e.credit, 0);
@@ -375,7 +382,7 @@ export function generateLedgerPDF(
     head: [['Date', 'Voucher No.', 'Particulars', 'Debit (Dr)', 'Credit (Cr)', 'Balance']],
     body,
     foot: [['', '', 'Total', fmt(totalDebit), fmt(totalCredit), closing ? `${fmt(closing.balance)} ${closing.balanceType}` : '']],
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 253] },
@@ -391,11 +398,11 @@ export function generateMemberPassbookPDF(
   society: SocietySettings
 ) {
   const doc = new jsPDF();
-  const startY = addHeader(doc, 'Member Share Ledger', society, `Member: ${member.name} | ID: ${member.memberId}`);
+  const { startY, font } = addHeader(doc, 'Member Share Ledger', society, `Member: ${member.name} | ID: ${member.memberId}`);
 
   // Member info box
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   doc.text(`Father/Husband: ${member.fatherName || '-'}`, 15, startY + 2);
   doc.text(`Phone: ${member.phone}`, 15, startY + 7);
   doc.text(`Address: ${member.address || '-'}`, 15, startY + 12);
@@ -420,7 +427,7 @@ export function generateMemberPassbookPDF(
     head: [['Date', 'Voucher No.', 'Particulars', 'Credit (Cr)', 'Debit (Dr)', 'Balance']],
     body,
     foot: [['', '', 'Total', fmt(totalCredit), fmt(totalDebit), closing ? fmt(closing.balance) : '']],
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 253] },
@@ -439,7 +446,7 @@ export function generateMemberPassbookPDF(
 // ─── Share Register PDF ─────────────────────────────────────────────────────
 export function generateShareRegisterPDF(members: Member[], society: SocietySettings): void {
   const doc = new jsPDF({ orientation: 'landscape' });
-  const startY = addHeader(doc, 'SHARE REGISTER', society, `Financial Year: ${society.financialYear}`);
+  const { startY, font } = addHeader(doc, 'SHARE REGISTER', society, `Financial Year: ${society.financialYear}`);
 
   const rows = members.map((m, i) => [
     String(i + 1),
@@ -469,7 +476,7 @@ export function generateShareRegisterPDF(members: Member[], society: SocietySett
   const finalY = (doc as any).lastAutoTable.finalY + 10;
   const totalCap = members.reduce((s, m) => s + m.shareCapital, 0);
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text(`Total Members: ${members.length}   |   Total Share Capital: ${fmt(totalCap)}`, 15, finalY);
 
   doc.save(`share-register-${society.financialYear}.pdf`);
@@ -478,7 +485,7 @@ export function generateShareRegisterPDF(members: Member[], society: SocietySett
 // ─── Loan Register PDF ────────────────────────────────────────────────────────
 export function generateLoanRegisterPDF(loans: Loan[], members: Member[], society: SocietySettings): void {
   const doc = new jsPDF({ orientation: 'landscape' });
-  const startY = addHeader(doc, 'LOAN REGISTER', society, `Financial Year: ${society.financialYear}`);
+  const { startY, font } = addHeader(doc, 'LOAN REGISTER', society, `Financial Year: ${society.financialYear}`);
 
   const getMemberName = (id: string) => members.find(m => m.id === id)?.name || id;
   const loanTypeLabel = (t: string) => t === 'short-term' ? 'S/T' : t === 'medium-term' ? 'M/T' : 'L/T';
@@ -511,7 +518,7 @@ export function generateLoanRegisterPDF(loans: Loan[], members: Member[], societ
   const totalDisbursed = loans.reduce((s, l) => s + l.amount, 0);
   const totalOutstanding = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + (l.amount - l.repaidAmount), 0);
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text(`Total Loans: ${loans.length}   |   Total Disbursed: ${fmt(totalDisbursed)}   |   Outstanding: ${fmt(totalOutstanding)}`, 15, finalY);
 
   doc.save(`loan-register-${society.financialYear}.pdf`);
@@ -520,7 +527,7 @@ export function generateLoanRegisterPDF(loans: Loan[], members: Member[], societ
 // ─── Asset Register PDF ────────────────────────────────────────────────────────
 export function generateAssetRegisterPDF(assets: Asset[], society: SocietySettings): void {
   const doc = new jsPDF({ orientation: 'landscape' });
-  const startY = addHeader(doc, 'ASSET REGISTER', society, `As on: ${new Date().toLocaleDateString('en-IN')} | Depreciation Method: SLM`);
+  const { startY, font } = addHeader(doc, 'ASSET REGISTER', society, `As on: ${new Date().toLocaleDateString('en-IN')} | Depreciation Method: SLM`);
 
   const calcBookValue = (a: Asset): number => {
     if (!a.purchaseDate || !a.depreciationRate) return a.cost;
@@ -572,7 +579,7 @@ export function generateAssetRegisterPDF(assets: Asset[], society: SocietySettin
 // ─── Audit Rectification Register PDF ─────────────────────────────────────────
 export function generateAuditRegisterPDF(objections: AuditObjection[], society: SocietySettings): void {
   const doc = new jsPDF({ orientation: 'landscape' });
-  const startY = addHeader(doc, 'AUDIT RECTIFICATION REGISTER', society, `Prepared on: ${new Date().toLocaleDateString('en-IN')}`);
+  const { startY, font } = addHeader(doc, 'AUDIT RECTIFICATION REGISTER', society, `Prepared on: ${new Date().toLocaleDateString('en-IN')}`);
 
   const statusLabel = (s: string) => s === 'rectified' ? 'Rectified' : s === 'partial' ? 'Partial' : 'Pending';
 
@@ -617,7 +624,7 @@ export function generateAuditRegisterPDF(objections: AuditObjection[], society: 
   const rectified = objections.filter(o => o.status === 'rectified').length;
   const totalAmt = objections.reduce((s, o) => s + o.amountInvolved, 0);
   doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   doc.text(`Total: ${objections.length} | Pending: ${pending} | Rectified: ${rectified} | Total Amount Involved: ${fmt(totalAmt)}`, 15, finalY);
 
   const sigY = finalY + 15;
@@ -641,7 +648,7 @@ export function generateDayBookPDF(
   const typeLabel = (t: string) => t === 'receipt' ? 'Receipt' : t === 'payment' ? 'Payment' : 'Journal';
 
   const subtitle = `${fmtDate(fromDate)} to ${fmtDate(toDate)} | FY: ${society.financialYear}`;
-  const startY = addHeader(doc, 'Day Book', society, subtitle);
+  const { startY, font } = addHeader(doc, 'रोजनामचा (Day Book)', society, subtitle);
 
   // Group by date
   const groups: { date: string; items: typeof entries }[] = [];
