@@ -103,6 +103,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const vouchersRef = useRef<Voucher[]>(vouchers);
   useEffect(() => { vouchersRef.current = vouchers; }, [vouchers]);
   const [members, setMembersState] = useState<Member[]>(() => storage.getMembers());
+  const membersRef = useRef<Member[]>(members);
+  useEffect(() => { membersRef.current = members; }, [members]);
   const [accounts, setAccountsState] = useState<LedgerAccount[]>(() => storage.getAccounts());
   const [society, setSocietyState] = useState<SocietySettings>(() => storage.getSociety());
   const [loans, setLoansState] = useState<Loan[]>(() => storage.getLoans());
@@ -307,20 +309,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.financialYear]);
 
   const updateMember = useCallback((id: string, data: Partial<Member>) => {
-    let oldMember: Member | undefined;
-    let updatedMember: Member | undefined;
+    const oldMember = membersRef.current.find(m => m.id === id);
+    if (!oldMember) return;
+    const updatedMember = { ...oldMember, ...data };
     setMembersState(prev => {
-      oldMember = prev.find(m => m.id === id);
-      const updated = prev.map(m => m.id === id ? { ...m, ...data } : m);
-      updatedMember = updated.find(m => m.id === id);
+      const updated = prev.map(m => m.id === id ? updatedMember : m);
       storage.setMembers(updated);
       return updated;
     });
-    if (updatedMember) {
-      supabase.from('members').upsert(updatedMember).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-    }
+    supabase.from('members').upsert(withSoc(updatedMember)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     // Update Share Capital voucher if amount changed
-    if (oldMember && data.shareCapital !== undefined && data.shareCapital !== oldMember.shareCapital) {
+    if (data.shareCapital !== undefined && data.shareCapital !== oldMember.shareCapital) {
       const scv = vouchersRef.current.find(v => v.memberId === id && v.creditAccountId === 'SHARE_CAP' && !v.isDeleted);
       if (scv) {
         const updated = { ...scv, amount: data.shareCapital };
@@ -329,7 +328,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     }
     // Update Admission Fee voucher if amount changed
-    if (oldMember && data.admissionFee !== undefined && data.admissionFee !== oldMember.admissionFee) {
+    if (data.admissionFee !== undefined && data.admissionFee !== oldMember.admissionFee) {
       const afv = vouchersRef.current.find(v => v.memberId === id && v.creditAccountId === 'ADM_FEE' && !v.isDeleted);
       if (afv) {
         const updated = { ...afv, amount: data.admissionFee };
