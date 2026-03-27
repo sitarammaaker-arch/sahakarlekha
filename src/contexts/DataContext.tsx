@@ -160,12 +160,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (mData && mData.length > 0) { setMembersState(mData); storage.setMembers(mData); }
         else setMembersState([]);
 
-        // Ensure ADM_FEE account exists for this society
-        const baseAccts: LedgerAccount[] = aData && aData.length > 0 ? [...aData] : [...storage.getAccounts()];
-        if (!baseAccts.some((a: LedgerAccount) => a.id === 'ADM_FEE')) {
-          const admFeeAcc: LedgerAccount = { id: 'ADM_FEE', name: 'Admission Fee Income', nameHi: 'प्रवेश शुल्क आय', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: true };
-          baseAccts.push(admFeeAcc);
-          supabase.from('accounts').upsert({ ...admFeeAcc, society_id: sid }).then(({ error }) => { if (error) console.warn('ADM_FEE account sync error:', error.message); });
+        // Load accounts — merge Supabase accounts with DEFAULT_ACCOUNTS so system accounts always exist
+        const supabaseAccts: LedgerAccount[] = aData && aData.length > 0 ? [...aData] : [];
+        let baseAccts: LedgerAccount[];
+        if (supabaseAccts.length > 0) {
+          // Start with Supabase accounts, add any missing DEFAULT_ACCOUNTS (CASH, BANK, SHARE_CAP, etc.)
+          baseAccts = [...supabaseAccts];
+          const missingDefaults: LedgerAccount[] = [];
+          for (const defAcc of storage.DEFAULT_ACCOUNTS) {
+            if (!baseAccts.some(a => a.id === defAcc.id)) {
+              baseAccts.push(defAcc);
+              missingDefaults.push(defAcc);
+            }
+          }
+          // Sync missing default accounts to Supabase so this only runs once
+          for (const acc of missingDefaults) {
+            supabase.from('accounts').upsert({ ...acc, society_id: sid }).then(({ error }) => {
+              if (error) console.warn('Default account sync error:', error.message);
+            });
+          }
+        } else {
+          // No Supabase accounts yet — use localStorage defaults
+          baseAccts = [...storage.getAccounts()];
         }
         setAccountsState(baseAccts);
         storage.setAccounts(baseAccts);
