@@ -34,6 +34,7 @@ export const DEFAULT_ACCOUNTS: LedgerAccount[] = [
   { id: 'SHARE_CAP', name: 'Share Capital', nameHi: 'अंश पूंजी', type: 'liability', openingBalance: 200000, openingBalanceType: 'credit', isSystem: true },
   { id: 'RES_FUND', name: 'Reserve Fund', nameHi: 'आरक्षित निधि', type: 'liability', openingBalance: 75000, openingBalanceType: 'credit', isSystem: false },
   { id: 'MEM_DEP', name: 'Member Deposits', nameHi: 'सदस्य जमा', type: 'liability', openingBalance: 180000, openingBalanceType: 'credit', isSystem: false },
+  { id: 'ADM_FEE', name: 'Admission Fee Income', nameHi: 'प्रवेश शुल्क आय', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: true },
   { id: 'COMM_INC', name: 'Commission Income', nameHi: 'कमीशन आय', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
   { id: 'INT_INC', name: 'Interest Income', nameHi: 'ब्याज आय', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
   { id: 'SAL_EXP', name: 'Salary Expense', nameHi: 'वेतन व्यय', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false },

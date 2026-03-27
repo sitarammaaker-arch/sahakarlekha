@@ -152,12 +152,38 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ]);
 
         if (vErr) console.warn('Vouchers query error:', vErr.message);
-        if (vData && vData.length > 0) { setVouchersState(vData); storage.setVouchers(vData); }
-        else if (!vErr) setVouchersState([]); // genuinely empty — clear state
         if (mData && mData.length > 0) { setMembersState(mData); storage.setMembers(mData); }
         else setMembersState([]);
-        if (aData && aData.length > 0) { setAccountsState(aData); storage.setAccounts(aData); }
-        else setAccountsState(storage.getAccounts());
+
+        // Ensure ADM_FEE account exists for this society
+        const baseAccts: LedgerAccount[] = aData && aData.length > 0 ? [...aData] : [...storage.getAccounts()];
+        if (!baseAccts.some(a => a.id === 'ADM_FEE')) {
+          const admFeeAcc: LedgerAccount = { id: 'ADM_FEE', name: 'Admission Fee Income', nameHi: 'प्रवेश शुल्क आय', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: true };
+          baseAccts.push(admFeeAcc);
+          supabase.from('accounts').upsert({ ...admFeeAcc, society_id: sid }).then(({ error }) => { if (error) console.warn('ADM_FEE account sync error:', error.message); });
+        }
+        setAccountsState(baseAccts);
+        storage.setAccounts(baseAccts);
+
+        // Auto-create missing member vouchers (Share Capital & Admission Fee) for proper double-entry
+        const loadedVouchers: Voucher[] = !vErr && vData ? vData : [];
+        const fyStr = (socData && socData.length > 0 ? socData[0] : society).financialYear;
+        const autoVouchers: Voucher[] = [];
+        for (const member of (mData || [])) {
+          const mv = loadedVouchers.filter(v => v.memberId === member.id && !v.isDeleted);
+          if (!mv.some(v => v.creditAccountId === 'SHARE_CAP') && (member.shareCapital || 0) > 0) {
+            autoVouchers.push({ id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', fyStr), type: 'receipt', date: member.joinDate, debitAccountId: 'CASH', creditAccountId: 'SHARE_CAP', amount: member.shareCapital, narration: `Share Capital received from ${member.name}`, memberId: member.id, createdAt: new Date().toISOString() });
+          }
+          if (!mv.some(v => v.creditAccountId === 'ADM_FEE') && (member.admissionFee || 0) > 0) {
+            autoVouchers.push({ id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', fyStr), type: 'receipt', date: member.joinDate, debitAccountId: 'CASH', creditAccountId: 'ADM_FEE', amount: member.admissionFee, narration: `Admission Fee received from ${member.name}`, memberId: member.id, createdAt: new Date().toISOString() });
+          }
+        }
+        const finalVouchers = [...loadedVouchers, ...autoVouchers];
+        setVouchersState(finalVouchers);
+        storage.setVouchers(finalVouchers);
+        for (const v of autoVouchers) {
+          supabase.from('vouchers').upsert({ ...v, society_id: sid }).then(({ error }) => { if (error) console.warn('Auto member voucher sync error:', error.message); });
+        }
         setLoansState(lData || []);
         setAssetsState(asData || []);
         setAuditObjectionsState(aoData || []);
@@ -266,12 +292,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return updated;
     });
     supabase.from('members').upsert(withSoc(newMember)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    // Auto-create Receipt vouchers for Share Capital and Admission Fee
+    if ((newMember.shareCapital || 0) > 0) {
+      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear), type: 'receipt', date: newMember.joinDate, debitAccountId: 'CASH', creditAccountId: 'SHARE_CAP', amount: newMember.shareCapital, narration: `Share Capital received from ${newMember.name}`, memberId: newMember.id, createdAt: new Date().toISOString() };
+      setVouchersState(prev => { const updated = [...prev, v]; storage.setVouchers(updated); return updated; });
+      supabase.from('vouchers').upsert(withSoc(v)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    }
+    if ((newMember.admissionFee || 0) > 0) {
+      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear), type: 'receipt', date: newMember.joinDate, debitAccountId: 'CASH', creditAccountId: 'ADM_FEE', amount: newMember.admissionFee!, narration: `Admission Fee received from ${newMember.name}`, memberId: newMember.id, createdAt: new Date().toISOString() };
+      setVouchersState(prev => { const updated = [...prev, v]; storage.setVouchers(updated); return updated; });
+      supabase.from('vouchers').upsert(withSoc(v)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    }
     return newMember;
-  }, []);
+  }, [society.financialYear]);
 
   const updateMember = useCallback((id: string, data: Partial<Member>) => {
+    let oldMember: Member | undefined;
     let updatedMember: Member | undefined;
     setMembersState(prev => {
+      oldMember = prev.find(m => m.id === id);
       const updated = prev.map(m => m.id === id ? { ...m, ...data } : m);
       updatedMember = updated.find(m => m.id === id);
       storage.setMembers(updated);
@@ -279,6 +318,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     if (updatedMember) {
       supabase.from('members').upsert(updatedMember).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    }
+    // Update Share Capital voucher if amount changed
+    if (oldMember && data.shareCapital !== undefined && data.shareCapital !== oldMember.shareCapital) {
+      const scv = vouchersRef.current.find(v => v.memberId === id && v.creditAccountId === 'SHARE_CAP' && !v.isDeleted);
+      if (scv) {
+        const updated = { ...scv, amount: data.shareCapital };
+        setVouchersState(prev => { const list = prev.map(v => v.id === scv.id ? updated : v); storage.setVouchers(list); return list; });
+        supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+      }
+    }
+    // Update Admission Fee voucher if amount changed
+    if (oldMember && data.admissionFee !== undefined && data.admissionFee !== oldMember.admissionFee) {
+      const afv = vouchersRef.current.find(v => v.memberId === id && v.creditAccountId === 'ADM_FEE' && !v.isDeleted);
+      if (afv) {
+        const updated = { ...afv, amount: data.admissionFee };
+        setVouchersState(prev => { const list = prev.map(v => v.id === afv.id ? updated : v); storage.setVouchers(list); return list; });
+        supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+      }
     }
   }, []);
 
@@ -428,9 +485,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [accounts, activeVouchers]);
 
   const getTrialBalance = useCallback((): AccountBalance[] => {
-    // Share Capital from member records → injected into SHARE_CAP account (liability side)
-    const totalMemberShareCapital = members.reduce((s, m) => s + (m.shareCapital || 0), 0);
-
     return accounts.map(account => {
       const openingDebit = account.openingBalanceType === 'debit' ? account.openingBalance : 0;
       const openingCredit = account.openingBalanceType === 'credit' ? account.openingBalance : 0;
@@ -440,38 +494,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (v.debitAccountId === account.id) transactionDebit += v.amount;
         if (v.creditAccountId === account.id) transactionCredit += v.amount;
       });
-      // Inject total member share capital into SHARE_CAP account credit side
-      const memberShareCredit = account.id === 'SHARE_CAP' ? totalMemberShareCapital : 0;
       const totalDebit = openingDebit + transactionDebit;
-      const totalCredit = openingCredit + transactionCredit + memberShareCredit;
+      const totalCredit = openingCredit + transactionCredit;
       return { account, openingDebit, openingCredit, transactionDebit, transactionCredit, totalDebit, totalCredit, netBalance: totalDebit - totalCredit };
     });
-  }, [accounts, activeVouchers, members]);
+  }, [accounts, activeVouchers]);
 
   const getMemberLedger = useCallback((memberId: string): MemberLedgerEntry[] => {
     const member = members.find(m => m.id === memberId);
     if (!member) return [];
 
+    // Only show Share Capital related vouchers (exclude ADM_FEE and others)
     const memberVouchers = activeVouchers
-      .filter(v => v.memberId === memberId)
+      .filter(v => v.memberId === memberId && (v.creditAccountId === 'SHARE_CAP' || v.debitAccountId === 'SHARE_CAP'))
       .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
 
-    let balance = member.shareCapital;
+    const hasShareCapVoucher = memberVouchers.some(v => v.creditAccountId === 'SHARE_CAP');
+    // If a proper voucher exists, start at 0 (voucher covers it). Otherwise show OB row.
+    let balance = hasShareCapVoucher ? 0 : (member.shareCapital || 0);
     const result: MemberLedgerEntry[] = [];
 
-    // Opening balance row (share capital at time of joining)
-    result.push({
-      id: 'ob',
-      date: member.joinDate,
-      voucherNo: 'OB',
-      particulars: 'Opening Share Capital',
-      credit: member.shareCapital,
-      debit: 0,
-      balance,
-    });
+    // Show Opening Balance row only if no proper voucher exists (backward compatibility)
+    if (!hasShareCapVoucher && (member.shareCapital || 0) > 0) {
+      result.push({
+        id: 'ob',
+        date: member.joinDate,
+        voucherNo: 'OB',
+        particulars: 'Opening Share Capital',
+        credit: member.shareCapital,
+        debit: 0,
+        balance,
+      });
+    }
 
     memberVouchers.forEach(v => {
-      const isCredit = v.creditAccountId === 'SHARE_CAP' || v.type === 'receipt';
+      const isCredit = v.creditAccountId === 'SHARE_CAP';
       const credit = isCredit ? v.amount : 0;
       const debit = !isCredit ? v.amount : 0;
       balance = balance + credit - debit;
@@ -593,15 +650,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const expenseItems = tb
       .filter(b => b.account.type === 'expense')
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }));
-    // Admission fee from members → treated as income in P&L
-    const totalAdmissionFee = members.reduce((s, m) => s + (m.admissionFee || 0), 0);
-    if (totalAdmissionFee > 0) {
-      incomeItems.push({ name: 'Admission Fee', nameHi: 'प्रवेश शुल्क', amount: totalAdmissionFee });
-    }
     const totalIncome = incomeItems.reduce((s, i) => s + i.amount, 0);
     const totalExpenses = expenseItems.reduce((s, i) => s + i.amount, 0);
     return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit: totalIncome - totalExpenses };
-  }, [getTrialBalance, members]);
+  }, [getTrialBalance]);
 
   // ── Inventory ──────────────────────────────────────────────────────────────
   const addStockItem = useCallback((data: Omit<StockItem, 'id' | 'itemCode'>): StockItem => {
