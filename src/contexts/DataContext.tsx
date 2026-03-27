@@ -154,12 +154,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ]);
 
         if (vErr) console.warn('Vouchers query error:', vErr.message);
+        // Load vouchers — safe first, auto-migration separate
+        if (vData && vData.length > 0) { setVouchersState(vData); storage.setVouchers(vData); }
+        else if (!vErr) setVouchersState([]);
         if (mData && mData.length > 0) { setMembersState(mData); storage.setMembers(mData); }
         else setMembersState([]);
 
         // Ensure ADM_FEE account exists for this society
         const baseAccts: LedgerAccount[] = aData && aData.length > 0 ? [...aData] : [...storage.getAccounts()];
-        if (!baseAccts.some(a => a.id === 'ADM_FEE')) {
+        if (!baseAccts.some((a: LedgerAccount) => a.id === 'ADM_FEE')) {
           const admFeeAcc: LedgerAccount = { id: 'ADM_FEE', name: 'Admission Fee Income', nameHi: 'प्रवेश शुल्क आय', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: true };
           baseAccts.push(admFeeAcc);
           supabase.from('accounts').upsert({ ...admFeeAcc, society_id: sid }).then(({ error }) => { if (error) console.warn('ADM_FEE account sync error:', error.message); });
@@ -167,24 +170,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setAccountsState(baseAccts);
         storage.setAccounts(baseAccts);
 
-        // Auto-create missing member vouchers (Share Capital & Admission Fee) for proper double-entry
-        const loadedVouchers: Voucher[] = !vErr && vData ? vData : [];
-        const fyStr = (socData && socData.length > 0 ? socData[0] : society).financialYear;
-        const autoVouchers: Voucher[] = [];
-        for (const member of (mData || [])) {
-          const mv = loadedVouchers.filter(v => v.memberId === member.id && !v.isDeleted);
-          if (!mv.some(v => v.creditAccountId === 'SHARE_CAP') && (member.shareCapital || 0) > 0) {
-            autoVouchers.push({ id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', fyStr), type: 'receipt', date: member.joinDate, debitAccountId: 'CASH', creditAccountId: 'SHARE_CAP', amount: member.shareCapital, narration: `Share Capital received from ${member.name}`, memberId: member.id, createdAt: new Date().toISOString() });
+        // Auto-create missing member vouchers — wrapped in try-catch so it never breaks main data load
+        try {
+          const existingVouchers: Voucher[] = vData || [];
+          const fyStr: string = (socData && socData.length > 0 ? socData[0] : society).financialYear || '2024-25';
+          const autoVouchers: Voucher[] = [];
+          for (const member of (mData || [])) {
+            const mv = existingVouchers.filter(v => v.memberId === member.id && !v.isDeleted);
+            if (!mv.some(v => v.creditAccountId === 'SHARE_CAP') && (member.shareCapital || 0) > 0) {
+              autoVouchers.push({ id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', fyStr), type: 'receipt', date: member.joinDate || new Date().toISOString().split('T')[0], debitAccountId: 'CASH', creditAccountId: 'SHARE_CAP', amount: Number(member.shareCapital), narration: `Share Capital received from ${member.name}`, memberId: member.id, createdAt: new Date().toISOString() });
+            }
+            if (!mv.some(v => v.creditAccountId === 'ADM_FEE') && (member.admissionFee || 0) > 0) {
+              autoVouchers.push({ id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', fyStr), type: 'receipt', date: member.joinDate || new Date().toISOString().split('T')[0], debitAccountId: 'CASH', creditAccountId: 'ADM_FEE', amount: Number(member.admissionFee), narration: `Admission Fee received from ${member.name}`, memberId: member.id, createdAt: new Date().toISOString() });
+            }
           }
-          if (!mv.some(v => v.creditAccountId === 'ADM_FEE') && (member.admissionFee || 0) > 0) {
-            autoVouchers.push({ id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', fyStr), type: 'receipt', date: member.joinDate, debitAccountId: 'CASH', creditAccountId: 'ADM_FEE', amount: member.admissionFee, narration: `Admission Fee received from ${member.name}`, memberId: member.id, createdAt: new Date().toISOString() });
+          if (autoVouchers.length > 0) {
+            const allVouchers = [...existingVouchers, ...autoVouchers];
+            setVouchersState(allVouchers);
+            storage.setVouchers(allVouchers);
+            for (const v of autoVouchers) {
+              supabase.from('vouchers').upsert({ ...v, society_id: sid }).then(({ error }) => { if (error) console.warn('Auto member voucher sync error:', error.message); });
+            }
           }
-        }
-        const finalVouchers = [...loadedVouchers, ...autoVouchers];
-        setVouchersState(finalVouchers);
-        storage.setVouchers(finalVouchers);
-        for (const v of autoVouchers) {
-          supabase.from('vouchers').upsert({ ...v, society_id: sid }).then(({ error }) => { if (error) console.warn('Auto member voucher sync error:', error.message); });
+        } catch (migErr) {
+          console.warn('Auto member voucher migration error (non-fatal):', migErr);
         }
         setLoansState(lData || []);
         setAssetsState(asData || []);
