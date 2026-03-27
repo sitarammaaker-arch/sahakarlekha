@@ -9,7 +9,7 @@ import type {
   Employee, SalaryRecord, PaymentMode,
 } from '@/types';
 import * as storage from '@/lib/storage';
-import { ACCOUNT_IDS } from '@/lib/storage';
+import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 
 interface DataContextType {
@@ -161,8 +161,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (mData && mData.length > 0) { setMembersState(mData); storage.setMembers(mData); }
         else setMembersState([]);
 
-        // Load accounts from Supabase; fall back to localStorage (CMS template) only if none exist
-        const baseAccts: LedgerAccount[] = aData && aData.length > 0 ? [...aData] : [...storage.getAccounts()];
+        // Load accounts from Supabase; fall back to CMS template (never stale localStorage) if none exist
+        const baseAccts: LedgerAccount[] = aData && aData.length > 0 ? [...aData] : [...CMS_SOCIETY_ACCOUNTS];
         setAccountsState(baseAccts);
         storage.setAccounts(baseAccts);
 

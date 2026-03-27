@@ -70,7 +70,8 @@ create table if not exists society_settings (
   phone text,
   email text,
   "previousFinancialYear" text,
-  "previousYearBalances" jsonb default '{}'
+  "previousYearBalances" jsonb default '{}',
+  "societyType" text default 'marketing_processing'
 );
 
 -- 2. Accounts (Ledger Heads)
@@ -82,7 +83,9 @@ create table if not exists accounts (
   type text not null,
   "openingBalance" numeric default 0,
   "openingBalanceType" text default 'debit',
-  "isSystem" boolean default false
+  "isSystem" boolean default false,
+  "parentId" text,
+  "isGroup" boolean default false
 );
 
 -- 3. Members
