@@ -24,11 +24,12 @@ import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, Chec
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { VoucherType } from '@/types';
+import { getNextVoucherNo } from '@/lib/storage';
 
 const Vouchers: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { accounts, members, vouchers, addVoucher, updateVoucher, cancelVoucher, restoreVoucher } = useData();
+  const { accounts, members, vouchers, society, addVoucher, updateVoucher, cancelVoucher, restoreVoucher } = useData();
   const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'entry' | 'list'>('entry');
@@ -39,6 +40,7 @@ const Vouchers: React.FC = () => {
   const [amount, setAmount] = useState('');
   const [narration, setNarration] = useState('');
   const [linkedMemberId, setLinkedMemberId] = useState('');
+  const [voucherNoInput, setVoucherNoInput] = useState('');
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [showCancelled, setShowCancelled] = useState(false);
@@ -118,6 +120,11 @@ const Vouchers: React.FC = () => {
       toast({ title: language === 'hi' ? 'डेबिट और क्रेडिट खाता अलग होना चाहिए' : 'Debit and Credit accounts must be different', variant: 'destructive' });
       return;
     }
+    const customNo = voucherNoInput.trim();
+    if (customNo && vouchers.some(v => !v.isDeleted && v.voucherNo === customNo)) {
+      toast({ title: language === 'hi' ? 'यह वाउचर नंबर पहले से मौजूद है' : 'Voucher number already exists', variant: 'destructive' });
+      return;
+    }
     const v = addVoucher({
       type: voucherType,
       date: voucherDate,
@@ -127,6 +134,7 @@ const Vouchers: React.FC = () => {
       narration,
       memberId: linkedMemberId || undefined,
       createdBy: user?.name || 'System',
+      voucherNo: customNo || undefined,
     });
     setSavedVoucherNo(v.voucherNo);
     toast({ title: language === 'hi' ? 'वाउचर सहेजा गया' : 'Voucher saved', description: `${v.voucherNo}` });
@@ -139,6 +147,7 @@ const Vouchers: React.FC = () => {
     setAmount('');
     setNarration('');
     setLinkedMemberId('');
+    setVoucherNoInput('');
     setSavedVoucherNo(null);
   };
 
@@ -215,8 +224,14 @@ const Vouchers: React.FC = () => {
                       <p className="text-sm text-white/80">{currentVoucher.description}</p>
                     </div>
                   </div>
-                  <div className="text-right text-white/80 text-sm">
-                    {language === 'hi' ? 'वाउचर नं. स्वतः उत्पन्न होगा' : 'Voucher No. auto-generated'}
+                  <div className="text-right">
+                    <p className="text-white/60 text-xs mb-1">{language === 'hi' ? 'वाउचर नं.' : 'Voucher No.'}</p>
+                    <Input
+                      value={voucherNoInput}
+                      onChange={e => setVoucherNoInput(e.target.value)}
+                      placeholder={getNextVoucherNo(voucherType, society.financialYear, vouchers)}
+                      className="h-8 w-36 text-sm bg-white/20 border-white/30 text-white placeholder:text-white/50 text-right"
+                    />
                   </div>
                 </div>
 

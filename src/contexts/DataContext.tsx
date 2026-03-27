@@ -20,7 +20,7 @@ interface DataContextType {
   loans: Loan[];
   assets: Asset[];
 
-  addVoucher: (data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>) => Voucher;
+  addVoucher: (data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }) => Voucher;
   updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId'>>) => void;
   cancelVoucher: (id: string, reason: string, deletedBy: string) => void;
   restoreVoucher: (id: string) => void;
@@ -174,10 +174,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           for (const member of (mData || [])) {
             const mv = existingVouchers.filter(v => v.memberId === member.id && !v.isDeleted);
             if (!mv.some(v => v.creditAccountId === ACCOUNT_IDS.SHARE_CAP) && (member.shareCapital || 0) > 0) {
-              autoVouchers.push({ id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', fyStr), type: 'receipt', date: member.joinDate || new Date().toISOString().split('T')[0], debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: Number(member.shareCapital), narration: `Share Capital received from ${member.name}`, memberId: member.id, createdAt: new Date().toISOString() });
+              const allSoFar = [...existingVouchers, ...autoVouchers];
+              autoVouchers.push({ id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', fyStr, allSoFar), type: 'receipt', date: member.joinDate || new Date().toISOString().split('T')[0], debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: Number(member.shareCapital), narration: `Share Capital received from ${member.name}`, memberId: member.id, createdAt: new Date().toISOString() });
             }
             if (!mv.some(v => v.creditAccountId === ACCOUNT_IDS.ADM_FEE) && (member.admissionFee || 0) > 0) {
-              autoVouchers.push({ id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', fyStr), type: 'receipt', date: member.joinDate || new Date().toISOString().split('T')[0], debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: Number(member.admissionFee), narration: `Admission Fee received from ${member.name}`, memberId: member.id, createdAt: new Date().toISOString() });
+              const allSoFar = [...existingVouchers, ...autoVouchers];
+              autoVouchers.push({ id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', fyStr, allSoFar), type: 'receipt', date: member.joinDate || new Date().toISOString().split('T')[0], debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: Number(member.admissionFee), narration: `Admission Fee received from ${member.name}`, memberId: member.id, createdAt: new Date().toISOString() });
             }
           }
           if (autoVouchers.length > 0) {
@@ -220,8 +222,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     loadFromSupabase();
   }, [user?.societyId]);
 
-  const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>): Voucher => {
-    const voucherNo = storage.getNextVoucherNo(data.type, society.financialYear);
+  const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }): Voucher => {
+    const voucherNo = data.voucherNo?.trim() || storage.getNextVoucherNo(data.type, society.financialYear, vouchersRef.current);
     const newVoucher: Voucher = {
       ...data,
       id: crypto.randomUUID(),
@@ -311,13 +313,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('members').upsert(withSoc(newMember)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     // Auto-create Receipt vouchers for Share Capital and Admission Fee
     if ((newMember.shareCapital || 0) > 0) {
-      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: newMember.shareCapital, narration: `Share Capital received from ${newMember.name}`, memberId: newMember.id, createdAt: new Date().toISOString() };
-      setVouchersState(prev => { const updated = [...prev, v]; storage.setVouchers(updated); return updated; });
+      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: newMember.shareCapital, narration: `Share Capital received from ${newMember.name}`, memberId: newMember.id, createdAt: new Date().toISOString() };
+      setVouchersState(prev => { const updated = [...prev, v]; storage.setVouchers(updated); vouchersRef.current = updated; return updated; });
       supabase.from('vouchers').upsert(withSoc(v)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     }
     if ((newMember.admissionFee || 0) > 0) {
-      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: newMember.admissionFee!, narration: `Admission Fee received from ${newMember.name}`, memberId: newMember.id, createdAt: new Date().toISOString() };
-      setVouchersState(prev => { const updated = [...prev, v]; storage.setVouchers(updated); return updated; });
+      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: newMember.admissionFee!, narration: `Admission Fee received from ${newMember.name}`, memberId: newMember.id, createdAt: new Date().toISOString() };
+      setVouchersState(prev => { const updated = [...prev, v]; storage.setVouchers(updated); vouchersRef.current = updated; return updated; });
       supabase.from('vouchers').upsert(withSoc(v)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     }
     return newMember;
@@ -720,13 +722,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (data.paymentMode !== 'credit') {
       const debitAcc = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : ACCOUNT_IDS.BANK;
       const v = { type: 'receipt' as const, date: data.date, debitAccountId: debitAcc, creditAccountId: '3403', amount: data.netAmount, narration: `Sale: ${data.customerName} - ${saleNo}`, memberId: undefined, createdBy: data.createdBy };
-      const voucherNo = storage.getNextVoucherNo('receipt', society.financialYear);
+      const voucherNo = storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current);
       const newV = { ...v, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
       setVouchersState(prev => { const updated = [...prev, newV]; storage.setVouchers(updated); return updated; });
       supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       voucherId = newV.id;
     } else {
-      const voucherNo = storage.getNextVoucherNo('journal', society.financialYear);
+      const voucherNo = storage.getNextVoucherNo('journal', society.financialYear, vouchersRef.current);
       const newV = { type: 'journal' as const, date: data.date, debitAccountId: 'DEBTORS', creditAccountId: '3403', amount: data.netAmount, narration: `Credit Sale: ${data.customerName} - ${saleNo}`, memberId: undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
       setVouchersState(prev => { const updated = [...prev, newV]; storage.setVouchers(updated); return updated; });
       supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
@@ -772,13 +774,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     let voucherId: string | undefined;
     if (data.paymentMode !== 'credit') {
       const creditAcc = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : ACCOUNT_IDS.BANK;
-      const voucherNo = storage.getNextVoucherNo('payment', society.financialYear);
+      const voucherNo = storage.getNextVoucherNo('payment', society.financialYear, vouchersRef.current);
       const newV = { type: 'payment' as const, date: data.date, debitAccountId: '3403', creditAccountId: creditAcc, amount: data.netAmount, narration: `Purchase: ${data.supplierName} - ${purchaseNo}`, memberId: undefined as undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
       setVouchersState(prev => { const updated = [...prev, newV]; storage.setVouchers(updated); return updated; });
       supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       voucherId = newV.id;
     } else {
-      const voucherNo = storage.getNextVoucherNo('journal', society.financialYear);
+      const voucherNo = storage.getNextVoucherNo('journal', society.financialYear, vouchersRef.current);
       const newV = { type: 'journal' as const, date: data.date, debitAccountId: '3403', creditAccountId: 'CREDITORS', amount: data.netAmount, narration: `Credit Purchase: ${data.supplierName} - ${purchaseNo}`, memberId: undefined as undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
       setVouchersState(prev => { const updated = [...prev, newV]; storage.setVouchers(updated); return updated; });
       supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
@@ -862,7 +864,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (data.isPaid && !r.isPaid && !r.voucherId) {
           const emp = employees.find(e => e.id === r.employeeId);
           const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : ACCOUNT_IDS.BANK;
-          const voucherNo = storage.getNextVoucherNo('payment', society.financialYear);
+          const voucherNo = storage.getNextVoucherNo('payment', society.financialYear, vouchersRef.current);
           const newV = { type: 'payment' as const, date: merged.paidDate || new Date().toISOString().split('T')[0], debitAccountId: '5201', creditAccountId: creditAcc, amount: merged.netSalary, narration: `Salary: ${emp?.name || ''} - ${r.month}`, memberId: undefined as undefined, createdBy: 'System', id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
           setVouchersState(v => { const upd = [...v, newV]; storage.setVouchers(upd); return upd; });
           supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });

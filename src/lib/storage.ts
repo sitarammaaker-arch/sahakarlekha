@@ -237,13 +237,20 @@ export const setSociety = (s: SocietySettings): void => set(KEYS.society, s);
 export const getCounters = (): VoucherCounters => get(KEYS.counters, { receipt: 0, payment: 0, journal: 0 });
 export const setCounters = (c: VoucherCounters): void => set(KEYS.counters, c);
 
-export const getNextVoucherNo = (type: 'receipt' | 'payment' | 'journal', financialYear: string): string => {
-  const counters = getCounters();
+export const getNextVoucherNo = (
+  type: 'receipt' | 'payment' | 'journal',
+  financialYear: string,
+  existingVouchers: { voucherNo?: string }[] = []
+): string => {
   const prefix = type === 'receipt' ? 'RV' : type === 'payment' ? 'PV' : 'JV';
   const yr = financialYear.replace('-', '/');
-  const nextNo = counters[type] + 1;
-  setCounters({ ...counters, [type]: nextNo });
-  return `${prefix}/${yr}/${String(nextNo).padStart(3, '0')}`;
+  const escapedYr = yr.replace('/', '\\/');
+  const pattern = new RegExp(`^${prefix}\\/${escapedYr}\\/(\\d+)$`);
+  const nums = existingVouchers
+    .map(v => { const m = v.voucherNo?.match(pattern); return m ? parseInt(m[1], 10) : 0; })
+    .filter(n => n > 0);
+  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+  return `${prefix}/${yr}/${String(next).padStart(3, '0')}`;
 };
 
 export const getLoans = (): Loan[] => get(KEYS.loans, []);

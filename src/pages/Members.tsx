@@ -43,8 +43,8 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
   <form onSubmit={onSubmit} className="space-y-4">
     <div className="grid grid-cols-2 gap-4">
       <div className="space-y-2">
-        <Label>{t('memberId')} *</Label>
-        <Input value={form.memberId} onChange={e => setForm(f => ({ ...f, memberId: e.target.value }))} placeholder="M001" required />
+        <Label>{t('memberId')} <span className="text-xs text-muted-foreground">({language === 'hi' ? 'स्वचालित' : 'auto'})</span></Label>
+        <Input value={form.memberId} onChange={e => setForm(f => ({ ...f, memberId: e.target.value }))} placeholder="M001" />
       </div>
       <div className="space-y-2">
         <Label>{language === 'hi' ? 'शामिल होने की तिथि' : 'Join Date'}</Label>
@@ -123,17 +123,27 @@ const Members: React.FC = () => {
   const totalShareCapital = members.reduce((s, m) => s + m.shareCapital, 0);
   const activeMembers = members.filter(m => m.status === 'active').length;
 
+  const getNextMemberId = () => {
+    const nums = members
+      .map(m => parseInt(m.memberId.replace(/\D/g, ''), 10))
+      .filter(n => !isNaN(n) && n > 0);
+    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+    return `M${String(next).padStart(3, '0')}`;
+  };
+
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.memberId || !form.name || !form.phone) {
+    if (!form.name || !form.phone) {
       toast({ title: language === 'hi' ? 'कृपया आवश्यक फ़ील्ड भरें' : 'Please fill required fields', variant: 'destructive' });
       return;
     }
-    if (members.some(m => m.memberId === form.memberId)) {
+    const memberId = form.memberId.trim() || getNextMemberId();
+    if (members.some(m => m.memberId === memberId)) {
       toast({ title: language === 'hi' ? 'यह सदस्य ID पहले से मौजूद है' : 'Member ID already exists', variant: 'destructive' });
       return;
     }
-    addMember({ ...form, shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0 });
+    Object.assign(form, { memberId });
+    addMember({ ...form, memberId, shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0 });
     toast({ title: language === 'hi' ? 'सदस्य जोड़ा गया' : 'Member added' });
     setForm(EMPTY_FORM);
     setIsAddOpen(false);
@@ -162,7 +172,7 @@ const Members: React.FC = () => {
           </h1>
           <p className="text-muted-foreground">{language === 'hi' ? 'समिति सदस्यों का प्रबंधन' : 'Manage society members'}</p>
         </div>
-        <Dialog open={isAddOpen} onOpenChange={(o) => { setIsAddOpen(o); if (!o) setForm(EMPTY_FORM); }}>
+        <Dialog open={isAddOpen} onOpenChange={(o) => { if (o) setForm({ ...EMPTY_FORM, memberId: getNextMemberId() }); else { setIsAddOpen(false); setForm(EMPTY_FORM); } setIsAddOpen(o); }}>
           <DialogTrigger asChild>
             <Button className="gap-2"><Plus className="h-4 w-4" />{language === 'hi' ? 'नया सदस्य' : 'New Member'}</Button>
           </DialogTrigger>
