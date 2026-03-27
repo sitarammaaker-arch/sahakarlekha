@@ -428,6 +428,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [accounts, activeVouchers]);
 
   const getTrialBalance = useCallback((): AccountBalance[] => {
+    // Share Capital from member records → injected into SHARE_CAP account (liability side)
+    const totalMemberShareCapital = members.reduce((s, m) => s + (m.shareCapital || 0), 0);
+
     return accounts.map(account => {
       const openingDebit = account.openingBalanceType === 'debit' ? account.openingBalance : 0;
       const openingCredit = account.openingBalanceType === 'credit' ? account.openingBalance : 0;
@@ -437,11 +440,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (v.debitAccountId === account.id) transactionDebit += v.amount;
         if (v.creditAccountId === account.id) transactionCredit += v.amount;
       });
+      // Inject total member share capital into SHARE_CAP account credit side
+      const memberShareCredit = account.id === 'SHARE_CAP' ? totalMemberShareCapital : 0;
       const totalDebit = openingDebit + transactionDebit;
-      const totalCredit = openingCredit + transactionCredit;
+      const totalCredit = openingCredit + transactionCredit + memberShareCredit;
       return { account, openingDebit, openingCredit, transactionDebit, transactionCredit, totalDebit, totalCredit, netBalance: totalDebit - totalCredit };
     });
-  }, [accounts, activeVouchers]);
+  }, [accounts, activeVouchers, members]);
 
   const getMemberLedger = useCallback((memberId: string): MemberLedgerEntry[] => {
     const member = members.find(m => m.id === memberId);
