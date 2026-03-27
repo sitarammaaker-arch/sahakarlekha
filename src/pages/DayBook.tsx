@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { ACCOUNT_IDS } from '@/lib/storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -99,8 +100,8 @@ const DayBook: React.FC = () => {
 
   // Pre-period opening balance: account OB + all vouchers BEFORE the filter start
   const { cashOB, bankOB } = useMemo(() => {
-    const cashAccOB = accounts.find(a => a.id === 'CASH')?.openingBalance || 0;
-    const bankAccOB = accounts.find(a => a.id === 'BANK')?.openingBalance || 0;
+    const cashAccOB = accounts.find(a => a.id === ACCOUNT_IDS.CASH)?.openingBalance || 0;
+    const bankAccOB = accounts.find(a => a.id === ACCOUNT_IDS.BANK)?.openingBalance || 0;
     // Vouchers BEFORE the first visible date (i.e. outside the current filter window)
     const firstDate = entries.length > 0 ? entries[0].date : null;
     let preCash = cashAccOB;
@@ -108,10 +109,10 @@ const DayBook: React.FC = () => {
     if (firstDate) {
       activeVouchers.forEach(v => {
         if (v.date >= firstDate) return; // only pre-period
-        if (v.debitAccountId === 'CASH') preCash += v.amount;
-        else if (v.creditAccountId === 'CASH') preCash -= v.amount;
-        if (v.debitAccountId === 'BANK') preBank += v.amount;
-        else if (v.creditAccountId === 'BANK') preBank -= v.amount;
+        if (v.debitAccountId === ACCOUNT_IDS.CASH) preCash += v.amount;
+        else if (v.creditAccountId === ACCOUNT_IDS.CASH) preCash -= v.amount;
+        if (v.debitAccountId === ACCOUNT_IDS.BANK) preBank += v.amount;
+        else if (v.creditAccountId === ACCOUNT_IDS.BANK) preBank -= v.amount;
       });
     }
     return { cashOB: preCash, bankOB: preBank };
@@ -124,10 +125,10 @@ const DayBook: React.FC = () => {
       const openCash = cash;
       const openBank = bank;
       group.items.forEach(v => {
-        if (v.debitAccountId === 'CASH') cash += v.amount;
-        else if (v.creditAccountId === 'CASH') cash -= v.amount;
-        if (v.debitAccountId === 'BANK') bank += v.amount;
-        else if (v.creditAccountId === 'BANK') bank -= v.amount;
+        if (v.debitAccountId === ACCOUNT_IDS.CASH) cash += v.amount;
+        else if (v.creditAccountId === ACCOUNT_IDS.CASH) cash -= v.amount;
+        if (v.debitAccountId === ACCOUNT_IDS.BANK) bank += v.amount;
+        else if (v.creditAccountId === ACCOUNT_IDS.BANK) bank -= v.amount;
       });
       return { date: group.date, openCash, openBank, closeCash: cash, closeBank: bank };
     });

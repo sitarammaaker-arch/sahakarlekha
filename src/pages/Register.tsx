@@ -8,6 +8,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Building2, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react';
+import { SOCIETY_TEMPLATES, CMS_SOCIETY_ACCOUNTS } from '@/lib/storage';
+import type { SocietyType } from '@/types';
+
+const SOCIETY_TYPES: { value: SocietyType; label: string; labelHi: string }[] = [
+  { value: 'marketing_processing', label: 'Marketing cum Processing Society', labelHi: 'विपणन एवं प्रसंस्करण समिति' },
+  { value: 'pacs',                 label: 'Primary Agricultural Credit Society (PACS)', labelHi: 'प्राथमिक कृषि ऋण समिति (PACS)' },
+  { value: 'consumer',             label: 'Consumer Cooperative Society', labelHi: 'उपभोक्ता सहकारी समिति' },
+  { value: 'labour',               label: 'Labour Cooperative Society', labelHi: 'श्रमिक सहकारी समिति' },
+  { value: 'other',                label: 'Other', labelHi: 'अन्य' },
+];
 
 const STATES = [
   { value: 'ap', label: 'Andhra Pradesh' },
@@ -57,6 +67,7 @@ const Register: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [financialYear, setFinancialYear] = useState('2024-25');
+  const [societyType, setSocietyType] = useState<SocietyType>('marketing_processing');
 
   // Admin fields
   const [adminName, setAdminName] = useState('');
@@ -66,7 +77,7 @@ const Register: React.FC = () => {
 
   const handleStep1 = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!societyName || !registrationNo || !district || !state) {
+    if (!societyName || !registrationNo || !district || !state || !societyType) {
       setError('Please fill all required fields');
       return;
     }
@@ -157,27 +168,18 @@ const Register: React.FC = () => {
         phone: phone || '',
         email: adminEmail,
         pinCode: '',
+        societyType: societyType,
       });
 
-      // 4. Insert default accounts so balances work from day one
+      // 4. Insert template accounts based on society type
       const sid = society.id;
-      await supabase.from('accounts').insert([
-        { id: 'CASH',       society_id: sid, name: 'Cash in Hand',            nameHi: 'हाथ में नकद',       type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true  },
-        { id: 'BANK',       society_id: sid, name: 'Bank - SBI',              nameHi: 'बैंक - एसबीआई',     type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true  },
-        { id: 'SHARE_CAP',  society_id: sid, name: 'Share Capital',           nameHi: 'अंश पूंजी',          type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: true  },
-        { id: 'MEM_DEP',    society_id: sid, name: 'Member Deposits',         nameHi: 'सदस्य जमा',          type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
-        { id: 'RES_FUND',   society_id: sid, name: 'Reserve Fund',            nameHi: 'आरक्षित निधि',        type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
-        { id: 'DEBTORS',    society_id: sid, name: 'Sundry Debtors',          nameHi: 'देनदार',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false },
-        { id: 'CREDITORS',  society_id: sid, name: 'Sundry Creditors',        nameHi: 'लेनदार',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
-        { id: 'COMM_INC',   society_id: sid, name: 'Commission Income',       nameHi: 'कमीशन आय',           type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
-        { id: 'INT_INC',    society_id: sid, name: 'Interest Income',         nameHi: 'ब्याज आय',           type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
-        { id: 'SAL_EXP',    society_id: sid, name: 'Salary Expense',          nameHi: 'वेतन व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false },
-        { id: 'RENT_EXP',   society_id: sid, name: 'Rent Expense',            nameHi: 'किराया व्यय',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false },
-        { id: 'OFF_EXP',    society_id: sid, name: 'Office Expenses',         nameHi: 'कार्यालय व्यय',        type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false },
-        { id: 'ELEC_EXP',   society_id: sid, name: 'Electricity Expense',     nameHi: 'बिजली व्यय',          type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false },
-        { id: 'STOCK',      society_id: sid, name: 'Stock in Trade',          nameHi: 'व्यापारिक स्टॉक',     type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false },
-        { id: 'SURPLUS_BF', society_id: sid, name: 'Surplus Brought Forward', nameHi: 'अग्रनीत अधिशेष',     type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
-      ]);
+      const templateAccounts = SOCIETY_TEMPLATES[societyType] ?? CMS_SOCIETY_ACCOUNTS;
+      // Insert in batches of 50 to avoid Supabase row limits
+      const BATCH = 50;
+      for (let i = 0; i < templateAccounts.length; i += BATCH) {
+        const batch = templateAccounts.slice(i, i + BATCH).map(a => ({ ...a, society_id: sid }));
+        await supabase.from('accounts').insert(batch);
+      }
 
       setSuccess(true);
     } catch {
@@ -351,6 +353,23 @@ const Register: React.FC = () => {
                     onChange={e => setAddress(e.target.value)}
                     placeholder="Full address"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Society Type <span className="text-destructive">*</span></Label>
+                  <Select value={societyType} onValueChange={v => setSocietyType(v as SocietyType)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select society type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SOCIETY_TYPES.map(t => (
+                        <SelectItem key={t.value} value={t.value}>
+                          <span>{t.label}</span>
+                          <span className="ml-1 text-xs text-muted-foreground">— {t.labelHi}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">

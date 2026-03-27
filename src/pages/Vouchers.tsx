@@ -477,7 +477,7 @@ const Vouchers: React.FC = () => {
               <Select value={editDebit} onValueChange={setEditDebit}>
                 <SelectTrigger className="h-9"><SelectValue placeholder={language === 'hi' ? 'खाता चुनें' : 'Select'} /></SelectTrigger>
                 <SelectContent>
-                  {accounts.map(a => <SelectItem key={a.id} value={a.id}>{language === 'hi' ? a.nameHi : a.name}</SelectItem>)}
+                  {accounts.filter(a => !a.isGroup).map(a => <SelectItem key={a.id} value={a.id}>{a.id} — {language === 'hi' ? (a.nameHi || a.name) : a.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -486,7 +486,7 @@ const Vouchers: React.FC = () => {
               <Select value={editCredit} onValueChange={setEditCredit}>
                 <SelectTrigger className="h-9"><SelectValue placeholder={language === 'hi' ? 'खाता चुनें' : 'Select'} /></SelectTrigger>
                 <SelectContent>
-                  {accounts.map(a => <SelectItem key={a.id} value={a.id}>{language === 'hi' ? a.nameHi : a.name}</SelectItem>)}
+                  {accounts.filter(a => !a.isGroup).map(a => <SelectItem key={a.id} value={a.id}>{a.id} — {language === 'hi' ? (a.nameHi || a.name) : a.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

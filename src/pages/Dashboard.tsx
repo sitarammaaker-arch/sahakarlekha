@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { ACCOUNT_IDS } from '@/lib/storage';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { QuickActions } from '@/components/dashboard/QuickActions';
 import { Wallet, Building2, Users, TrendingUp, TrendingDown } from 'lucide-react';
@@ -29,8 +30,8 @@ const Dashboard: React.FC = () => {
     return `₹${amount}`;
   };
 
-  const cashBalance = getAccountBalance('CASH');
-  const bankBalance = getAccountBalance('BANK');
+  const cashBalance = getAccountBalance(ACCOUNT_IDS.CASH);
+  const bankBalance = getAccountBalance(ACCOUNT_IDS.BANK);
   const { netProfit, incomeItems, expenseItems, totalIncome, totalExpenses } = getProfitLoss();
   const activeMembers = members.filter(m => m.status === 'active').length;
 

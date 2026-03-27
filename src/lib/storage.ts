@@ -26,24 +26,165 @@ const KEYS = {
   salaryCounter: 'sahayata_salary_counter',
 };
 
-export const DEFAULT_ACCOUNTS: LedgerAccount[] = [
-  { id: 'CASH', name: 'Cash in Hand', nameHi: 'हाथ में नकद', type: 'asset', openingBalance: 50000, openingBalanceType: 'debit', isSystem: true },
-  { id: 'BANK', name: 'Bank - SBI', nameHi: 'बैंक - एसबीआई', type: 'asset', openingBalance: 350000, openingBalanceType: 'debit', isSystem: true },
-  { id: 'DEBTORS', name: 'Sundry Debtors', nameHi: 'देनदार', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false },
-  { id: 'CREDITORS', name: 'Sundry Creditors', nameHi: 'लेनदार', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
-  { id: 'SHARE_CAP', name: 'Share Capital', nameHi: 'अंश पूंजी', type: 'liability', openingBalance: 200000, openingBalanceType: 'credit', isSystem: true },
-  { id: 'RES_FUND', name: 'Reserve Fund', nameHi: 'आरक्षित निधि', type: 'liability', openingBalance: 75000, openingBalanceType: 'credit', isSystem: false },
-  { id: 'MEM_DEP', name: 'Member Deposits', nameHi: 'सदस्य जमा', type: 'liability', openingBalance: 180000, openingBalanceType: 'credit', isSystem: false },
-  { id: 'ADM_FEE', name: 'Admission Fee Income', nameHi: 'प्रवेश शुल्क आय', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: true },
-  { id: 'COMM_INC', name: 'Commission Income', nameHi: 'कमीशन आय', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
-  { id: 'INT_INC', name: 'Interest Income', nameHi: 'ब्याज आय', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: false },
-  { id: 'SAL_EXP', name: 'Salary Expense', nameHi: 'वेतन व्यय', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false },
-  { id: 'RENT_EXP', name: 'Rent Expense', nameHi: 'किराया व्यय', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false },
-  { id: 'OFF_EXP', name: 'Office Expenses', nameHi: 'कार्यालय व्यय', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false },
-  { id: 'ELEC_EXP', name: 'Electricity Expense', nameHi: 'बिजली व्यय', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false },
-  { id: 'STOCK', name: 'Stock in Trade', nameHi: 'व्यापारिक स्टॉक', type: 'asset', openingBalance: 125000, openingBalanceType: 'debit', isSystem: false },
-  { id: 'SURPLUS_BF', name: 'Surplus Brought Forward', nameHi: 'अग्रनीत अधिशेष', type: 'liability', openingBalance: 70000, openingBalanceType: 'credit', isSystem: false },
+// ── Central account ID constants ─────────────────────────────────────────────
+// Use these everywhere instead of hardcoded strings so a template change
+// only needs updating here.
+export const ACCOUNT_IDS = {
+  CASH:      '3301',  // Cash in Hand
+  BANK:      '3302',  // Bank Accounts
+  SHARE_CAP: '1102',  // Individual Share Capital (member share capital)
+  ADM_FEE:   '4407',  // Admission Fee Income
+} as const;
+
+// ── CMSSociety (Marketing cum Processing Society) Chart of Accounts ──────────
+// 122 accounts from Ultimate_COA_V2.xlsx + Admission Fee (4407)
+// isGroup = true  → header/parent account, no direct transactions
+// isSystem = true → critical account, cannot be deleted
+export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
+  // ── Capital & Funds (Equity) ────────────────────────────────────────────
+  { id: '1000', name: 'Capital & Funds',            nameHi: 'पूंजी एवं निधियाँ',        type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true  },
+  { id: '1100', name: 'Share Capital',              nameHi: 'शेयर पूंजी',               type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true,  parentId: '1000' },
+  { id: '1101', name: 'Govt Share Capital',         nameHi: 'सरकारी शेयर पूंजी',        type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1100' },
+  { id: '1102', name: 'Individual Share Capital',   nameHi: 'व्यक्तिगत शेयर पूंजी',     type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: false, parentId: '1100' },
+  { id: '1103', name: 'PACS Share Capital',         nameHi: 'पैक्स शेयर पूंजी',         type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1100' },
+  { id: '1200', name: 'Reserves & Surplus',         nameHi: 'संचय एवं अधिशेष',          type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true,  parentId: '1000' },
+  { id: '1201', name: 'Reserve Fund',               nameHi: 'संचय निधि',                type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
+  { id: '1202', name: 'Building Fund',              nameHi: 'भवन निधि',                 type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
+  { id: '1203', name: 'Education Fund',             nameHi: 'शिक्षा निधि',               type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
+  { id: '1204', name: 'Risk Fund',                  nameHi: 'जोखिम निधि',               type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
+  { id: '1205', name: 'Bad Debt Fund',              nameHi: 'अशोध्य ऋण निधि',           type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
+  { id: '1206', name: 'Depreciation Fund',          nameHi: 'ह्रास निधि',               type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
+  { id: '1207', name: 'Welfare Fund',               nameHi: 'कल्याण निधि',              type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
+  { id: '1208', name: 'Retained Earnings',          nameHi: 'प्रतिधारित आय',            type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
+
+  // ── Liabilities ──────────────────────────────────────────────────────────
+  { id: '2000', name: 'Liabilities',                nameHi: 'दायित्व',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true  },
+  { id: '2100', name: 'Current Liabilities',        nameHi: 'चालू दायित्व',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '2000' },
+  { id: '2101', name: 'Sundry Creditors',           nameHi: 'विविध लेनदार',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
+  { id: '2102', name: 'Expenses Payable',           nameHi: 'देय व्यय',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
+  { id: '2103', name: 'Salary Payable',             nameHi: 'देय वेतन',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
+  { id: '2104', name: 'Dividend Payable',           nameHi: 'देय लाभांश',               type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
+  { id: '2105', name: 'MSP Payable to Farmers',     nameHi: 'किसानों को देय MSP',        type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
+  { id: '2106', name: 'Member Payable',             nameHi: 'सदस्य देय',                type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
+  { id: '2200', name: 'Statutory Liabilities',      nameHi: 'वैधानिक दायित्व',          type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '2000' },
+  { id: '2201', name: 'GST Payable',                nameHi: 'देय GST',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200' },
+  { id: '2202', name: 'TDS Payable',                nameHi: 'देय TDS',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200' },
+  { id: '2203', name: 'EPF Payable',                nameHi: 'देय EPF',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200' },
+  { id: '2204', name: 'ESI Payable',                nameHi: 'देय ESI',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200' },
+  { id: '2300', name: 'Loans',                      nameHi: 'ऋण',                       type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '2000' },
+  { id: '2301', name: 'Bank OD',                    nameHi: 'बैंक अधिविकर्ष',           type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2300' },
+  { id: '2302', name: 'Secured Loan',               nameHi: 'सुरक्षित ऋण',              type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2300' },
+  { id: '2303', name: 'Unsecured Loan',             nameHi: 'असुरक्षित ऋण',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2300' },
+
+  // ── Assets ───────────────────────────────────────────────────────────────
+  { id: '3000', name: 'Assets',                     nameHi: 'संपत्तियाँ',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: true  },
+  { id: '3100', name: 'Fixed Assets',               nameHi: 'स्थायी संपत्तियाँ',         type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '3000' },
+  { id: '3101', name: 'Land',                       nameHi: 'भूमि',                     type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3102', name: 'Building',                   nameHi: 'भवन',                      type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3103', name: 'Furniture',                  nameHi: 'फर्नीचर',                   type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3104', name: 'Vehicle',                    nameHi: 'वाहन',                     type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3105', name: 'Plant & Machinery',          nameHi: 'संयंत्र एवं मशीनरी',       type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3106', name: 'Office Equipment',           nameHi: 'कार्यालय उपकरण',           type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3200', name: 'Investments',                nameHi: 'निवेश',                    type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '3000' },
+  { id: '3201', name: 'Hafed Share',                nameHi: 'हैफेड शेयर',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3200' },
+  { id: '3202', name: 'IFFCO Share',                nameHi: 'इफको शेयर',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3200' },
+  { id: '3203', name: 'KRIBHCO Share',              nameHi: 'कृभको शेयर',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3200' },
+  { id: '3204', name: 'NCEL/NCOL Shares',           nameHi: 'NCEL/NCOL शेयर',           type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3200' },
+  { id: '3205', name: 'FDR',                        nameHi: 'सावधि जमा (FDR)',           type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3200' },
+  { id: '3206', name: 'Security Deposits',          nameHi: 'सुरक्षा जमा',              type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3200' },
+  { id: '3300', name: 'Current Assets',             nameHi: 'चालू संपत्तियाँ',           type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: true,  parentId: '3000' },
+  { id: '3301', name: 'Cash in Hand',               nameHi: 'हाथ में नकद',              type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: false, parentId: '3300' },
+  { id: '3302', name: 'Bank Accounts',              nameHi: 'बैंक खाते',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: false, parentId: '3300' },
+  { id: '3303', name: 'Sundry Debtors',             nameHi: 'विविध देनदार',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
+  { id: '3304', name: 'Loans & Advances',           nameHi: 'ऋण एवं अग्रिम',            type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
+  { id: '3305', name: 'Subsidy Receivable',         nameHi: 'प्राप्य अनुदान',            type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
+  { id: '3306', name: 'Rent Receivable',            nameHi: 'प्राप्य किराया',            type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
+  { id: '3307', name: 'TDS Receivable',             nameHi: 'प्राप्य TDS',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
+  { id: '3308', name: 'MSP Receivable',             nameHi: 'प्राप्य MSP',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
+  { id: '3309', name: 'Member Receivable',          nameHi: 'सदस्य प्राप्य',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
+  { id: '3400', name: 'Inventory',                  nameHi: 'माल-सूची',                 type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '3000' },
+  { id: '3401', name: 'Raw Material',               nameHi: 'कच्चा माल',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3400' },
+  { id: '3402', name: 'Finished Goods',             nameHi: 'तैयार माल',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3400' },
+  { id: '3403', name: 'Trading Goods',              nameHi: 'व्यापारिक माल',            type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3400' },
+  { id: '3404', name: 'Consumables',                nameHi: 'उपभोग्य सामग्री',           type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3400' },
+  { id: '3405', name: 'Work in Progress',           nameHi: 'निर्माणाधीन कार्य',         type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3400' },
+
+  // ── Income ───────────────────────────────────────────────────────────────
+  { id: '4000', name: 'Income',                     nameHi: 'आय',                       type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true  },
+  { id: '4100', name: 'Trading Income',             nameHi: 'व्यापारिक आय',             type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
+  { id: '4101', name: 'Fertilizer Sales',           nameHi: 'उर्वरक बिक्री',            type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100' },
+  { id: '4102', name: 'Seed Sales',                 nameHi: 'बीज बिक्री',               type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100' },
+  { id: '4103', name: 'Consumer Goods Sales',       nameHi: 'उपभोक्ता वस्तु बिक्री',    type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100' },
+  { id: '4200', name: 'Commission Income',          nameHi: 'कमीशन आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
+  { id: '4201', name: 'Dami Income',                nameHi: 'दामी आय',                  type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200' },
+  { id: '4202', name: 'Market Fee',                 nameHi: 'मंडी शुल्क आय',            type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200' },
+  { id: '4203', name: 'Labor Charges',              nameHi: 'श्रम प्रभार आय',           type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200' },
+  { id: '4204', name: 'HRDF',                       nameHi: 'HRDF आय',                  type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200' },
+  { id: '4205', name: 'Society Commission',         nameHi: 'समिति कमीशन',              type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200' },
+  { id: '4206', name: 'Procurement Commission',     nameHi: 'खरीद कमीशन',              type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200' },
+  { id: '4300', name: 'Scheme Income',              nameHi: 'योजना आय',                 type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
+  { id: '4301', name: 'Anganwadi',                  nameHi: 'आंगनवाड़ी आय',             type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4300' },
+  { id: '4302', name: 'MDM',                        nameHi: 'मध्याह्न भोजन आय',         type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4300' },
+  { id: '4303', name: 'Govt Subsidy',               nameHi: 'सरकारी अनुदान',            type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4300' },
+  { id: '4400', name: 'Other Income',               nameHi: 'अन्य आय',                  type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
+  { id: '4401', name: 'Rent',                       nameHi: 'किराया आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },
+  { id: '4402', name: 'Transport',                  nameHi: 'परिवहन आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },
+  { id: '4403', name: 'Interest',                   nameHi: 'ब्याज आय',                 type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },
+  { id: '4404', name: 'Dividend',                   nameHi: 'लाभांश आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },
+  { id: '4405', name: 'Misc',                       nameHi: 'विविध आय',                 type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },
+  { id: '4406', name: 'Patronage Rebate',           nameHi: 'संरक्षण छूट',              type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },
+  { id: '4407', name: 'Admission Fee',              nameHi: 'प्रवेश शुल्क आय',          type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: false, parentId: '4400' },
+
+  // ── Expenses ─────────────────────────────────────────────────────────────
+  { id: '5000', name: 'Expenses',                   nameHi: 'व्यय',                     type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: true  },
+  { id: '5100', name: 'Direct Expenses',            nameHi: 'प्रत्यक्ष व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
+  { id: '5101', name: 'Purchase',                   nameHi: 'क्रय',                     type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100' },
+  { id: '5102', name: 'Labor',                      nameHi: 'श्रम व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100' },
+  { id: '5103', name: 'Transport',                  nameHi: 'परिवहन व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100' },
+  { id: '5104', name: 'Market Charges',             nameHi: 'मंडी शुल्क व्यय',          type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100' },
+  { id: '5105', name: 'Trading Expense',            nameHi: 'व्यापारिक व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100' },
+  { id: '5106', name: 'Processing Expense',         nameHi: 'प्रसंस्करण व्यय',          type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100' },
+  { id: '5107', name: 'Packing',                    nameHi: 'पैकिंग व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100' },
+  { id: '5108', name: 'Wastage',                    nameHi: 'बर्बादी व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100' },
+  { id: '5200', name: 'Employee Expenses',          nameHi: 'कर्मचारी व्यय',            type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
+  { id: '5201', name: 'Salary',                     nameHi: 'वेतन',                     type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5200' },
+  { id: '5202', name: 'Wages',                      nameHi: 'मजदूरी',                   type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5200' },
+  { id: '5203', name: 'PF',                         nameHi: 'भविष्य निधि (PF)',          type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5200' },
+  { id: '5204', name: 'ESI',                        nameHi: 'कर्मचारी बीमा (ESI)',       type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5200' },
+  { id: '5205', name: 'Staff Welfare',              nameHi: 'कर्मचारी कल्याण',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5200' },
+  { id: '5300', name: 'Admin Expenses',             nameHi: 'प्रशासनिक व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
+  { id: '5301', name: 'Office',                     nameHi: 'कार्यालय व्यय',            type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5302', name: 'Electricity',                nameHi: 'बिजली व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5303', name: 'Printing',                   nameHi: 'मुद्रण व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5304', name: 'Telephone',                  nameHi: 'दूरभाष व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5305', name: 'Legal',                      nameHi: 'कानूनी व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5306', name: 'Audit',                      nameHi: 'लेखा परीक्षण व्यय',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5307', name: 'Software',                   nameHi: 'सॉफ्टवेयर व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5400', name: 'Operational Expenses',       nameHi: 'परिचालन व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
+  { id: '5401', name: 'Vehicle',                    nameHi: 'वाहन व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400' },
+  { id: '5402', name: 'Repair',                     nameHi: 'मरम्मत व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400' },
+  { id: '5403', name: 'Insurance',                  nameHi: 'बीमा व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400' },
+  { id: '5500', name: 'Depreciation',               nameHi: 'ह्रास',                    type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
+  { id: '5501', name: 'Building',                   nameHi: 'भवन ह्रास',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500' },
+  { id: '5502', name: 'Furniture',                  nameHi: 'फर्नीचर ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500' },
+  { id: '5503', name: 'Vehicle',                    nameHi: 'वाहन ह्रास',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500' },
+  { id: '5504', name: 'Plant',                      nameHi: 'संयंत्र ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500' },
+  { id: '5600', name: 'Statutory Expenses',         nameHi: 'वैधानिक व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
+  { id: '5601', name: 'GST',                        nameHi: 'GST व्यय',                 type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600' },
+  { id: '5602', name: 'Income Tax',                 nameHi: 'आयकर',                     type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600' },
+
+  // ── Suspense ─────────────────────────────────────────────────────────────
+  { id: '9999', name: 'Suspense Account',           nameHi: 'संदिग्ध खाता',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false },
 ];
+
+// Template map: societyType → accounts array
+export const SOCIETY_TEMPLATES: Record<string, LedgerAccount[]> = {
+  marketing_processing: CMS_SOCIETY_ACCOUNTS,
+  // Future: pacs: PACS_ACCOUNTS, consumer: CONSUMER_ACCOUNTS ...
+};
+
+// Fallback for societies that have no template (use CMS as default)
+export const DEFAULT_ACCOUNTS = CMS_SOCIETY_ACCOUNTS;
 
 export const DEFAULT_SOCIETY: SocietySettings = {
   name: 'Gram Seva Cooperative Marketing Society',
@@ -57,6 +198,7 @@ export const DEFAULT_SOCIETY: SocietySettings = {
   email: 'gramseva@example.com',
   financialYear: '2024-25',
   financialYearStart: '2024-04-01',
+  societyType: 'marketing_processing',
 };
 
 function get<T>(key: string, defaultValue: T): T {

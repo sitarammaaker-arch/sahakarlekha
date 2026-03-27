@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection } from '@/types';
+import { ACCOUNT_IDS } from '@/lib/storage';
 
 
 const fmt = (amount: number): string =>
@@ -662,15 +663,15 @@ export function generateDayBookPDF(
   });
 
   // Running cash only (Day Book = cash based)
-  const cashAccOB = accounts.find(a => a.id === 'CASH')?.openingBalance || 0;
+  const cashAccOB = accounts.find(a => a.id === ACCOUNT_IDS.CASH)?.openingBalance || 0;
   // Compute pre-period cash: OB + all vouchers before first entry date
   const firstDate = entries.length > 0 ? entries[0].date : null;
   let runCash = cashAccOB;
   if (firstDate) {
     entries.forEach(v => {
       if (v.date >= firstDate) return;
-      if (v.debitAccountId === 'CASH') runCash += v.amount;
-      else if (v.creditAccountId === 'CASH') runCash -= v.amount;
+      if (v.debitAccountId === ACCOUNT_IDS.CASH) runCash += v.amount;
+      else if (v.creditAccountId === ACCOUNT_IDS.CASH) runCash -= v.amount;
     });
   }
 
@@ -734,8 +735,8 @@ export function generateDayBookPDF(
 
     // Update running cash
     group.items.forEach(v => {
-      if (v.debitAccountId === 'CASH') runCash += v.amount;
-      else if (v.creditAccountId === 'CASH') runCash -= v.amount;
+      if (v.debitAccountId === ACCOUNT_IDS.CASH) runCash += v.amount;
+      else if (v.creditAccountId === ACCOUNT_IDS.CASH) runCash -= v.amount;
     });
 
     // Closing balance row

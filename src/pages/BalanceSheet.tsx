@@ -21,11 +21,14 @@ const BalanceSheet: React.FC = () => {
   const reserveFund = netProfit > 0 ? Math.round(netProfit * RESERVE_FUND_RATE) : 0;
   const distributableSurplus = netProfit > 0 ? netProfit - reserveFund : 0;
 
-  const assetBalances = trialBalance.filter(b => b.account.type === 'asset');
-  const liabilityBalances = trialBalance.filter(b => b.account.type === 'liability');
+  const assetBalances = trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup);
+  // Capital & Liabilities side = equity + liability accounts (both right-side of BS)
+  const equityBalances = trialBalance.filter(b => b.account.type === 'equity' && !b.account.isGroup);
+  const liabilityBalances = trialBalance.filter(b => b.account.type === 'liability' && !b.account.isGroup);
+  const capitalAndLiabilityBalances = [...equityBalances, ...liabilityBalances];
 
   const totalAssets = assetBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0);
-  const totalLiabilities = liabilityBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0)
+  const totalLiabilities = capitalAndLiabilityBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0)
     + netProfit; // surplus adds, deficit subtracts (negative value)
 
   const pyBalances = society.previousYearBalances || {};
@@ -44,7 +47,7 @@ const BalanceSheet: React.FC = () => {
           <p className="text-muted-foreground">{language === 'hi' ? 'तुलन पत्र - वित्तीय स्थिति विवरण' : 'Statement of Financial Position'}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateBalanceSheetPDF(assetBalances, liabilityBalances, netProfit, society, language, reserveFund)}>
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateBalanceSheetPDF(assetBalances, capitalAndLiabilityBalances, netProfit, society, language, reserveFund)}>
             <Download className="h-4 w-4" />PDF
           </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
@@ -77,7 +80,7 @@ const BalanceSheet: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {liabilityBalances.map(b => (
+                  {capitalAndLiabilityBalances.map(b => (
                     <TableRow key={b.account.id} className="hover:bg-muted/30">
                       <TableCell>{language === 'hi' ? b.account.nameHi : b.account.name}</TableCell>
                       {hasPY && <TableCell className="text-right text-muted-foreground">{getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—'}</TableCell>}

@@ -1,6 +1,6 @@
 export type VoucherType = 'receipt' | 'payment' | 'journal';
 export type UserRole = 'admin' | 'accountant' | 'viewer';
-export type AccountType = 'asset' | 'liability' | 'income' | 'expense';
+export type AccountType = 'asset' | 'liability' | 'income' | 'expense' | 'equity';
 export type MemberStatus = 'active' | 'inactive';
 
 export interface Voucher {
@@ -118,7 +118,11 @@ export interface LedgerAccount {
   openingBalance: number;
   openingBalanceType: 'debit' | 'credit';
   isSystem?: boolean;
+  parentId?: string;   // parent account code for hierarchy (e.g. '1100' → parent of '1101')
+  isGroup?: boolean;   // true = group/header account, cannot be used in vouchers directly
 }
+
+export type SocietyType = 'marketing_processing' | 'pacs' | 'consumer' | 'labour' | 'other';
 
 export interface SocietySettings {
   name: string;
@@ -132,6 +136,7 @@ export interface SocietySettings {
   email: string;
   financialYear: string;
   financialYearStart: string;
+  societyType?: SocietyType;
   previousFinancialYear?: string;
   previousYearBalances?: Record<string, number>; // accountId → amount (positive = debit, negative = credit)
 }

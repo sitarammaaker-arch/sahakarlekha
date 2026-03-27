@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { ACCOUNT_IDS } from '@/lib/storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,10 +29,10 @@ const BankBook: React.FC = () => {
   const [entryAmount, setEntryAmount] = useState('');
   const [entryNarration, setEntryNarration] = useState('');
 
-  const bankAccount = accounts.find(a => a.id === 'BANK');
+  const bankAccount = accounts.find(a => a.id === ACCOUNT_IDS.BANK);
   const openingBalance = bankAccount?.openingBalance || 0;
   const entries = getBankBookEntries();
-  const bankBalance = getAccountBalance('BANK');
+  const bankBalance = getAccountBalance(ACCOUNT_IDS.BANK);
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
@@ -39,7 +40,7 @@ const BankBook: React.FC = () => {
   const totalDeposits = entries.filter(e => e.type === 'deposit').reduce((s, e) => s + e.amount, 0);
   const totalWithdrawals = entries.filter(e => e.type === 'withdrawal').reduce((s, e) => s + e.amount, 0);
 
-  const nonBankAccounts = accounts.filter(a => a.id !== 'BANK' && a.id !== 'CASH');
+  const nonBankAccounts = accounts.filter(a => !a.isGroup && a.id !== ACCOUNT_IDS.BANK && a.id !== ACCOUNT_IDS.CASH);
 
   const handleAddEntry = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,8 +51,8 @@ const BankBook: React.FC = () => {
     addVoucher({
       type: entryType === 'deposit' ? 'receipt' : 'payment',
       date: entryDate,
-      debitAccountId: entryType === 'deposit' ? 'BANK' : otherAccount,
-      creditAccountId: entryType === 'deposit' ? otherAccount : 'BANK',
+      debitAccountId: entryType === 'deposit' ? ACCOUNT_IDS.BANK : otherAccount,
+      creditAccountId: entryType === 'deposit' ? otherAccount : ACCOUNT_IDS.BANK,
       amount: Number(entryAmount),
       narration: entryNarration,
       createdBy: user?.name || 'System',

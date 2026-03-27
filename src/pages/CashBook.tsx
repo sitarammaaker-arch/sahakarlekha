@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { ACCOUNT_IDS } from '@/lib/storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,7 +33,7 @@ const CashBook: React.FC = () => {
   const [entryAmount, setEntryAmount] = useState('');
   const [entryNarration, setEntryNarration] = useState('');
 
-  const openingBalance = accounts.find(a => a.id === 'CASH')?.openingBalance || 0;
+  const openingBalance = accounts.find(a => a.id === ACCOUNT_IDS.CASH)?.openingBalance || 0;
   const entries = getCashBookEntries(appliedFrom || undefined, appliedTo || undefined);
 
   const fmt = (amount: number) =>
@@ -40,9 +41,9 @@ const CashBook: React.FC = () => {
 
   const totalReceipts = entries.filter(e => e.type === 'receipt').reduce((s, e) => s + e.amount, 0);
   const totalPayments = entries.filter(e => e.type === 'payment').reduce((s, e) => s + e.amount, 0);
-  const closingBalance = getAccountBalance('CASH');
+  const closingBalance = getAccountBalance(ACCOUNT_IDS.CASH);
 
-  const nonCashAccounts = accounts.filter(a => a.id !== 'CASH' && a.id !== 'BANK');
+  const nonCashAccounts = accounts.filter(a => !a.isGroup && a.id !== ACCOUNT_IDS.CASH && a.id !== ACCOUNT_IDS.BANK);
 
   const handleAddEntry = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,8 +54,8 @@ const CashBook: React.FC = () => {
     addVoucher({
       type: entryType === 'receipt' ? 'receipt' : 'payment',
       date: entryDate,
-      debitAccountId: entryType === 'receipt' ? 'CASH' : otherAccount,
-      creditAccountId: entryType === 'receipt' ? otherAccount : 'CASH',
+      debitAccountId: entryType === 'receipt' ? ACCOUNT_IDS.CASH : otherAccount,
+      creditAccountId: entryType === 'receipt' ? otherAccount : ACCOUNT_IDS.CASH,
       amount: Number(entryAmount),
       narration: entryNarration,
       createdBy: user?.name || 'System',

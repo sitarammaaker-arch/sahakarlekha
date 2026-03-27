@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +17,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { ListTree, Pencil, Trash2, Plus, Search } from 'lucide-react';
+import { ListTree, Pencil, Trash2, Plus, Search, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { LedgerAccount } from '@/types';
@@ -33,112 +33,24 @@ const EMPTY_FORM = {
 };
 
 const TYPE_OPTIONS: { value: AccountType; label: string; labelHi: string }[] = [
-  { value: 'asset', label: 'Asset', labelHi: 'संपत्ति' },
+  { value: 'equity',    label: 'Equity',    labelHi: 'पूंजी (Equity)' },
+  { value: 'asset',     label: 'Asset',     labelHi: 'संपत्ति' },
   { value: 'liability', label: 'Liability', labelHi: 'दायित्व' },
-  { value: 'income', label: 'Income', labelHi: 'आय' },
-  { value: 'expense', label: 'Expense', labelHi: 'व्यय' },
+  { value: 'income',    label: 'Income',    labelHi: 'आय' },
+  { value: 'expense',   label: 'Expense',   labelHi: 'व्यय' },
 ];
 
 const TYPE_BADGE_CLASS: Record<AccountType, string> = {
-  asset: 'bg-blue-100 text-blue-700 border-blue-200',
+  equity:    'bg-purple-100 text-purple-700 border-purple-200',
+  asset:     'bg-blue-100 text-blue-700 border-blue-200',
   liability: 'bg-orange-100 text-orange-700 border-orange-200',
-  income: 'bg-green-100 text-green-700 border-green-200',
-  expense: 'bg-red-100 text-red-700 border-red-200',
+  income:    'bg-green-100 text-green-700 border-green-200',
+  expense:   'bg-red-100 text-red-700 border-red-200',
 };
-
-interface AccountFormProps {
-  form: typeof EMPTY_FORM;
-  setForm: React.Dispatch<React.SetStateAction<typeof EMPTY_FORM>>;
-  onSubmit: (e: React.FormEvent) => void;
-  submitLabel: string;
-  onCancel: () => void;
-  hi: boolean;
-}
-
-const AccountForm: React.FC<AccountFormProps> = ({ form, setForm, onSubmit, submitLabel, onCancel, hi }) => (
-  <form onSubmit={onSubmit} className="space-y-4">
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div className="space-y-2">
-        <Label>
-          {hi ? 'नाम (अंग्रेजी)' : 'Name (English)'} <span className="text-destructive">*</span>
-        </Label>
-        <Input
-          value={form.name}
-          onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-          placeholder="e.g. Cash in Hand"
-          required
-        />
-      </div>
-      <div className="space-y-2">
-        <Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
-        <Input
-          value={form.nameHi}
-          onChange={e => setForm(f => ({ ...f, nameHi: e.target.value }))}
-          placeholder="जैसे नकद"
-        />
-      </div>
-    </div>
-    <div className="space-y-2">
-      <Label>
-        {hi ? 'खाता प्रकार' : 'Account Type'} <span className="text-destructive">*</span>
-      </Label>
-      <Select
-        value={form.type}
-        onValueChange={val => setForm(f => ({ ...f, type: val as AccountType }))}
-      >
-        <SelectTrigger>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {TYPE_OPTIONS.map(opt => (
-            <SelectItem key={opt.value} value={opt.value}>
-              {hi ? opt.labelHi : opt.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-    <div className="grid grid-cols-2 gap-4">
-      <div className="space-y-2">
-        <Label>{hi ? 'प्रारंभिक शेष' : 'Opening Balance'} (₹)</Label>
-        <Input
-          type="number"
-          min="0"
-          value={form.openingBalance}
-          onChange={e => setForm(f => ({ ...f, openingBalance: e.target.value }))}
-          placeholder="0"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label>{hi ? 'शेष प्रकार' : 'Balance Type'}</Label>
-        <Select
-          value={form.openingBalanceType}
-          onValueChange={val =>
-            setForm(f => ({ ...f, openingBalanceType: val as 'debit' | 'credit' }))
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="debit">{hi ? 'नाम (Dr)' : 'Debit (Dr)'}</SelectItem>
-            <SelectItem value="credit">{hi ? 'जमा (Cr)' : 'Credit (Cr)'}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
-    <div className="flex gap-2 justify-end pt-2">
-      <Button variant="outline" type="button" onClick={onCancel}>
-        {hi ? 'रद्द करें' : 'Cancel'}
-      </Button>
-      <Button type="submit">{submitLabel}</Button>
-    </div>
-  </form>
-);
 
 const LedgerHeads: React.FC = () => {
   const { language } = useLanguage();
-  const { accounts, addAccount, updateAccount, deleteAccount } = useData();
+  const { accounts, addAccount, updateAccount, deleteAccount, vouchers } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -155,26 +67,56 @@ const LedgerHeads: React.FC = () => {
   const fmtBalance = (amount: number, type: 'debit' | 'credit') =>
     `${fmt(amount)} ${type === 'debit' ? (hi ? 'ना.' : 'Dr') : (hi ? 'ज.' : 'Cr')}`;
 
-  const filtered = accounts.filter(acc => {
-    const matchSearch =
-      acc.name.toLowerCase().includes(search.toLowerCase()) ||
-      (acc.nameHi && acc.nameHi.includes(search));
-    const matchType = typeFilter === 'all' || acc.type === typeFilter;
-    return matchSearch && matchType;
-  });
+  // Compute depth for each account in the hierarchy
+  const depthMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    const computeDepth = (id: string, visited = new Set<string>()): number => {
+      if (id in map) return map[id];
+      if (visited.has(id)) return 0; // cycle guard
+      visited.add(id);
+      const acc = accounts.find(a => a.id === id);
+      if (!acc || !acc.parentId) { map[id] = 0; return 0; }
+      const d = computeDepth(acc.parentId, visited) + 1;
+      map[id] = d;
+      return d;
+    };
+    accounts.forEach(a => computeDepth(a.id));
+    return map;
+  }, [accounts]);
+
+  // Build display list — hierarchical when no filter, flat when searching/filtering
+  const displayList = useMemo(() => {
+    const isFiltering = search.trim() || typeFilter !== 'all';
+
+    if (isFiltering) {
+      return accounts
+        .filter(acc => {
+          const matchSearch = !search.trim() ||
+            acc.name.toLowerCase().includes(search.toLowerCase()) ||
+            (acc.nameHi && acc.nameHi.includes(search)) ||
+            acc.id.includes(search);
+          const matchType = typeFilter === 'all' || acc.type === typeFilter;
+          return matchSearch && matchType;
+        })
+        .map(acc => ({ acc, depth: 0 }));
+    }
+
+    // Sort by account code (numeric order)
+    return [...accounts]
+      .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }))
+      .map(acc => ({ acc, depth: depthMap[acc.id] ?? 0 }));
+  }, [accounts, search, typeFilter, depthMap]);
 
   // Summary counts
-  const totalCount = accounts.length;
-  const assetCount = accounts.filter(a => a.type === 'asset').length;
+  const leafAccounts = accounts.filter(a => !a.isGroup);
+  const equityCount    = accounts.filter(a => a.type === 'equity').length;
+  const assetCount     = accounts.filter(a => a.type === 'asset').length;
   const liabilityCount = accounts.filter(a => a.type === 'liability').length;
-  const incomeExpenseCount = accounts.filter(a => a.type === 'income' || a.type === 'expense').length;
+  const incExpCount    = accounts.filter(a => a.type === 'income' || a.type === 'expense').length;
 
   const resetForm = () => setForm(EMPTY_FORM);
 
-  const openAdd = () => {
-    resetForm();
-    setIsAddOpen(true);
-  };
+  const openAdd = () => { resetForm(); setIsAddOpen(true); };
 
   const openEdit = (acc: LedgerAccount) => {
     setEditAccount(acc);
@@ -190,10 +132,7 @@ const LedgerHeads: React.FC = () => {
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim() || !form.type) {
-      toast({
-        title: hi ? 'कृपया आवश्यक फ़ील्ड भरें' : 'Please fill required fields',
-        variant: 'destructive',
-      });
+      toast({ title: hi ? 'कृपया आवश्यक फ़ील्ड भरें' : 'Please fill required fields', variant: 'destructive' });
       return;
     }
     addAccount({
@@ -212,16 +151,12 @@ const LedgerHeads: React.FC = () => {
     e.preventDefault();
     if (!editAccount) return;
     if (!form.name.trim()) {
-      toast({
-        title: hi ? 'नाम आवश्यक है' : 'Name is required',
-        variant: 'destructive',
-      });
+      toast({ title: hi ? 'नाम आवश्यक है' : 'Name is required', variant: 'destructive' });
       return;
     }
     updateAccount(editAccount.id, {
       name: form.name.trim(),
       nameHi: form.nameHi.trim(),
-      type: form.type,
       openingBalance: Number(form.openingBalance) || 0,
       openingBalanceType: form.openingBalanceType,
     });
@@ -234,10 +169,22 @@ const LedgerHeads: React.FC = () => {
     if (!deleteId) return;
     const acc = accounts.find(a => a.id === deleteId);
     if (acc?.isSystem) {
-      toast({
-        title: hi ? 'सिस्टम खाता हटाया नहीं जा सकता' : 'Cannot delete system account',
-        variant: 'destructive',
-      });
+      toast({ title: hi ? 'सिस्टम खाता हटाया नहीं जा सकता' : 'Cannot delete system account', variant: 'destructive' });
+      setDeleteId(null);
+      return;
+    }
+    if (acc?.isGroup) {
+      const hasChildren = accounts.some(a => a.parentId === deleteId);
+      if (hasChildren) {
+        toast({ title: hi ? 'पहले इस खाते के उप-खाते हटाएं' : 'Delete child accounts first', variant: 'destructive' });
+        setDeleteId(null);
+        return;
+      }
+    }
+    // Check if account is used in any voucher
+    const usedInVoucher = vouchers.some(v => v.debitAccountId === deleteId || v.creditAccountId === deleteId);
+    if (usedInVoucher) {
+      toast({ title: hi ? 'यह खाता वाउचर में उपयोग में है' : 'Account is used in vouchers, cannot delete', variant: 'destructive' });
       setDeleteId(null);
       return;
     }
@@ -261,7 +208,7 @@ const LedgerHeads: React.FC = () => {
             {hi ? 'खाता शीर्ष प्रबंधन' : 'Ledger Head Management'}
           </h1>
           <p className="text-muted-foreground text-sm">
-            {hi ? 'लेखा खातों का प्रबंधन करें' : 'Manage ledger accounts / खाता शीर्ष प्रबंधन'}
+            {hi ? 'लेखा खातों का पदानुक्रम प्रबंधन' : 'Hierarchical chart of accounts'}
           </p>
         </div>
         <Button className="gap-2 w-fit" onClick={openAdd}>
@@ -272,15 +219,15 @@ const LedgerHeads: React.FC = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="bg-primary/10 border-primary/20">
+        <Card className="bg-purple-50 border-purple-200">
           <CardContent className="pt-5">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                <ListTree className="h-5 w-5 text-primary" />
+              <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                <ListTree className="h-5 w-5 text-purple-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">{hi ? 'कुल खाते' : 'Total Accounts'}</p>
-                <p className="text-2xl font-bold">{totalCount}</p>
+                <p className="text-xs text-muted-foreground">{hi ? 'पूंजी (Equity)' : 'Equity'}</p>
+                <p className="text-2xl font-bold text-purple-700">{equityCount}</p>
               </div>
             </div>
           </CardContent>
@@ -319,7 +266,7 @@ const LedgerHeads: React.FC = () => {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">{hi ? 'आय + व्यय' : 'Income + Expense'}</p>
-                <p className="text-2xl font-bold text-green-700">{incomeExpenseCount}</p>
+                <p className="text-2xl font-bold text-green-700">{incExpCount}</p>
               </div>
             </div>
           </CardContent>
@@ -333,16 +280,13 @@ const LedgerHeads: React.FC = () => {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder={hi ? 'नाम से खोजें...' : 'Search by name...'}
+                placeholder={hi ? 'नाम या कोड से खोजें...' : 'Search by name or code...'}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="pl-10"
               />
             </div>
-            <Select
-              value={typeFilter}
-              onValueChange={val => setTypeFilter(val as 'all' | AccountType)}
-            >
+            <Select value={typeFilter} onValueChange={val => setTypeFilter(val as 'all' | AccountType)}>
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder={hi ? 'प्रकार चुनें' : 'Filter by type'} />
               </SelectTrigger>
@@ -359,18 +303,18 @@ const LedgerHeads: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Table */}
+      {/* Accounts Table */}
       <Card className="shadow-card">
         <CardHeader>
           <CardTitle className="text-lg">
-            {hi ? 'खाता शीर्ष सूची' : 'Ledger Accounts List'}
+            {hi ? 'खाता शीर्ष सूची' : 'Chart of Accounts'}
             <span className="ml-2 text-sm font-normal text-muted-foreground">
-              ({filtered.length} {hi ? 'खाते' : 'accounts'})
+              ({displayList.length} / {accounts.length} {hi ? 'खाते' : 'accounts'} · {leafAccounts.length} {hi ? 'लेनयोग्य' : 'ledger'})
             </span>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {filtered.length === 0 ? (
+          {displayList.length === 0 ? (
             <p className="text-center text-muted-foreground py-12">
               {hi ? 'कोई डेटा नहीं' : 'No data available'}
             </p>
@@ -379,14 +323,12 @@ const LedgerHeads: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
+                    <TableHead className="font-semibold w-20">{hi ? 'कोड' : 'Code'}</TableHead>
                     <TableHead className="font-semibold">{hi ? 'नाम' : 'Name'}</TableHead>
-                    <TableHead className="font-semibold">{hi ? 'हिंदी नाम' : 'Hindi Name'}</TableHead>
+                    <TableHead className="font-semibold hidden md:table-cell">{hi ? 'हिंदी नाम' : 'Hindi Name'}</TableHead>
                     <TableHead className="font-semibold">{hi ? 'प्रकार' : 'Type'}</TableHead>
-                    <TableHead className="font-semibold text-right">
-                      {hi ? 'प्रारंभिक शेष' : 'Opening Balance'}
-                    </TableHead>
-                    <TableHead className="font-semibold text-center">
-                      {hi ? 'सिस्टम' : 'System'}
+                    <TableHead className="font-semibold text-right hidden sm:table-cell">
+                      {hi ? 'प्रा. शेष' : 'Opening Bal.'}
                     </TableHead>
                     <TableHead className="font-semibold text-center">
                       {hi ? 'क्रियाएं' : 'Actions'}
@@ -394,33 +336,40 @@ const LedgerHeads: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map(acc => (
-                    <TableRow key={acc.id} className="hover:bg-muted/30">
-                      <TableCell className="font-medium">{acc.name}</TableCell>
-                      <TableCell className="text-muted-foreground">
+                  {displayList.map(({ acc, depth }) => (
+                    <TableRow
+                      key={acc.id}
+                      className={cn(
+                        'hover:bg-muted/30',
+                        acc.isGroup && 'bg-muted/20 font-semibold',
+                      )}
+                    >
+                      <TableCell className="font-mono text-xs text-muted-foreground">{acc.id}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 16}px` }}>
+                          {acc.isGroup && <FolderOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                          <span className={cn(acc.isGroup ? 'font-semibold' : 'font-medium')}>
+                            {acc.name}
+                          </span>
+                          {acc.isSystem && (
+                            <Badge variant="secondary" className="text-xs ml-1 px-1 py-0">
+                              {hi ? 'सिस्टम' : 'Sys'}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground hidden md:table-cell">
                         {acc.nameHi || '—'}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={cn('text-xs', TYPE_BADGE_CLASS[acc.type])}
-                        >
+                        <Badge variant="outline" className={cn('text-xs', TYPE_BADGE_CLASS[acc.type])}>
                           {getTypeLabel(acc.type)}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right font-semibold">
-                        {acc.openingBalance
+                      <TableCell className="text-right font-semibold hidden sm:table-cell">
+                        {!acc.isGroup && acc.openingBalance
                           ? fmtBalance(acc.openingBalance, acc.openingBalanceType ?? 'debit')
-                          : '—'}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {acc.isSystem ? (
-                          <Badge variant="secondary" className="text-xs">
-                            {hi ? 'सिस्टम' : 'System'}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
+                          : <span className="text-muted-foreground text-xs">—</span>}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-1">
@@ -433,15 +382,17 @@ const LedgerHeads: React.FC = () => {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => setDeleteId(acc.id)}
-                            title={hi ? 'हटाएं' : 'Delete'}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {!acc.isSystem && !acc.isGroup && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => setDeleteId(acc.id)}
+                              title={hi ? 'हटाएं' : 'Delete'}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -454,13 +405,7 @@ const LedgerHeads: React.FC = () => {
       </Card>
 
       {/* Add Dialog */}
-      <Dialog
-        open={isAddOpen}
-        onOpenChange={o => {
-          setIsAddOpen(o);
-          if (!o) resetForm();
-        }}
-      >
+      <Dialog open={isAddOpen} onOpenChange={o => { setIsAddOpen(o); if (!o) resetForm(); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{hi ? 'नया खाता शीर्ष जोड़ें' : 'Add New Ledger Account'}</DialogTitle>
@@ -468,48 +413,96 @@ const LedgerHeads: React.FC = () => {
               {hi ? 'नए खाते का विवरण भरें' : 'Fill in the details for the new account'}
             </DialogDescription>
           </DialogHeader>
-          <AccountForm
-            form={form}
-            setForm={setForm}
-            hi={hi}
-            onSubmit={handleAdd}
-            submitLabel={hi ? 'सहेजें' : 'Save'}
-            onCancel={() => {
-              setIsAddOpen(false);
-              resetForm();
-            }}
-          />
+          <form onSubmit={handleAdd} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{hi ? 'नाम (अंग्रेजी)' : 'Name (English)'} <span className="text-destructive">*</span></Label>
+                <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Cash in Hand" required />
+              </div>
+              <div className="space-y-2">
+                <Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
+                <Input value={form.nameHi} onChange={e => setForm(f => ({ ...f, nameHi: e.target.value }))} placeholder="जैसे नकद" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>{hi ? 'खाता प्रकार' : 'Account Type'} <span className="text-destructive">*</span></Label>
+              <Select value={form.type} onValueChange={val => setForm(f => ({ ...f, type: val as AccountType }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TYPE_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{hi ? opt.labelHi : opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{hi ? 'प्रारंभिक शेष' : 'Opening Balance'} (₹)</Label>
+                <Input type="number" min="0" value={form.openingBalance} onChange={e => setForm(f => ({ ...f, openingBalance: e.target.value }))} placeholder="0" />
+              </div>
+              <div className="space-y-2">
+                <Label>{hi ? 'शेष प्रकार' : 'Balance Type'}</Label>
+                <Select value={form.openingBalanceType} onValueChange={val => setForm(f => ({ ...f, openingBalanceType: val as 'debit' | 'credit' }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="debit">{hi ? 'नाम (Dr)' : 'Debit (Dr)'}</SelectItem>
+                    <SelectItem value="credit">{hi ? 'जमा (Cr)' : 'Credit (Cr)'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" type="button" onClick={() => { setIsAddOpen(false); resetForm(); }}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
+              <Button type="submit">{hi ? 'सहेजें' : 'Save'}</Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Dialog */}
-      <Dialog
-        open={!!editAccount}
-        onOpenChange={o => {
-          if (!o) {
-            setEditAccount(null);
-            resetForm();
-          }
-        }}
-      >
+      {/* Edit Dialog — name/nameHi/openingBalance editable; type locked for group/system */}
+      <Dialog open={!!editAccount} onOpenChange={o => { if (!o) { setEditAccount(null); resetForm(); } }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{hi ? 'खाता संपादित करें' : 'Edit Ledger Account'}</DialogTitle>
+            <DialogTitle>{hi ? 'खाता संपादित करें' : 'Edit Account'} — <span className="font-mono text-sm">{editAccount?.id}</span></DialogTitle>
             <DialogDescription>
-              {hi ? 'खाते का विवरण अपडेट करें' : 'Update account details'}
+              {hi ? 'नाम और प्रारंभिक शेष बदला जा सकता है' : 'You can edit name and opening balance'}
             </DialogDescription>
           </DialogHeader>
-          <AccountForm
-            form={form}
-            setForm={setForm}
-            hi={hi}
-            onSubmit={handleEdit}
-            submitLabel={hi ? 'अपडेट करें' : 'Update'}
-            onCancel={() => {
-              setEditAccount(null);
-              resetForm();
-            }}
-          />
+          <form onSubmit={handleEdit} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{hi ? 'नाम (अंग्रेजी)' : 'Name (English)'} <span className="text-destructive">*</span></Label>
+                <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+              </div>
+              <div className="space-y-2">
+                <Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
+                <Input value={form.nameHi} onChange={e => setForm(f => ({ ...f, nameHi: e.target.value }))} />
+              </div>
+            </div>
+            {/* Opening balance — only for leaf (non-group) accounts */}
+            {!editAccount?.isGroup && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{hi ? 'प्रारंभिक शेष' : 'Opening Balance'} (₹)</Label>
+                  <Input type="number" min="0" value={form.openingBalance} onChange={e => setForm(f => ({ ...f, openingBalance: e.target.value }))} placeholder="0" />
+                </div>
+                <div className="space-y-2">
+                  <Label>{hi ? 'शेष प्रकार' : 'Balance Type'}</Label>
+                  <Select value={form.openingBalanceType} onValueChange={val => setForm(f => ({ ...f, openingBalanceType: val as 'debit' | 'credit' }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="debit">{hi ? 'नाम (Dr)' : 'Debit (Dr)'}</SelectItem>
+                      <SelectItem value="credit">{hi ? 'जमा (Cr)' : 'Credit (Cr)'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" type="button" onClick={() => { setEditAccount(null); resetForm(); }}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
+              <Button type="submit">{hi ? 'अपडेट करें' : 'Update'}</Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -517,21 +510,14 @@ const LedgerHeads: React.FC = () => {
       <AlertDialog open={!!deleteId} onOpenChange={o => { if (!o) setDeleteId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {hi ? 'क्या आप वाकई हटाना चाहते हैं?' : 'Are you sure you want to delete?'}
-            </AlertDialogTitle>
+            <AlertDialogTitle>{hi ? 'क्या आप वाकई हटाना चाहते हैं?' : 'Are you sure?'}</AlertDialogTitle>
             <AlertDialogDescription>
-              {hi
-                ? 'यह खाता स्थायी रूप से हटा दिया जाएगा। यह क्रिया पूर्ववत नहीं की जा सकती।'
-                : 'This account will be permanently deleted. This action cannot be undone.'}
+              {hi ? 'यह खाता स्थायी रूप से हटा दिया जाएगा।' : 'This account will be permanently deleted. This cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{hi ? 'रद्द करें' : 'Cancel'}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={handleDelete}
-            >
+            <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={handleDelete}>
               {hi ? 'हटाएं' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>

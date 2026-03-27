@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { ACCOUNT_IDS } from '@/lib/storage';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,8 +40,8 @@ const Reports: React.FC = () => {
   const { getProfitLoss, members, accounts, getAccountBalance } = useData();
 
   const { totalIncome, totalExpenses, netProfit } = getProfitLoss();
-  const cashBalance = getAccountBalance('CASH');
-  const bankBalance = getAccountBalance('BANK');
+  const cashBalance = getAccountBalance(ACCOUNT_IDS.CASH);
+  const bankBalance = getAccountBalance(ACCOUNT_IDS.BANK);
   const activeMembers = members.filter(m => m.status === 'active').length;
 
   const fmt = (n: number) =>
