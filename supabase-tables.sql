@@ -98,6 +98,8 @@ create table if not exists members (
   address text,
   phone text,
   "shareCapital" numeric default 0,
+  "admissionFee" numeric default 0,
+  "memberType" text default 'member',
   "joinDate" text,
   status text default 'active',
   "shareCertNo" text,
