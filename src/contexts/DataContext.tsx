@@ -206,7 +206,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSalaryRecordsState(srData || []);
         if (socData && socData.length > 0) { setSocietyState(socData[0]); storage.setSociety(socData[0]); }
       } catch (err) {
-        console.warn('Supabase load failed, using localStorage:', err);
+        console.warn('Supabase load failed, falling back to localStorage:', err);
+        // Properly restore from localStorage when Supabase is unavailable
+        const lsVouchers = storage.getVouchers();
+        const lsMembers = storage.getMembers();
+        const lsAccounts = storage.getAccounts();
+        if (lsVouchers.length > 0) setVouchersState(lsVouchers);
+        if (lsMembers.length > 0) setMembersState(lsMembers);
+        if (lsAccounts.length > 0) setAccountsState(lsAccounts);
+        setSocietyState(storage.getSociety());
+        setLoansState(storage.getLoans());
+        setAssetsState(storage.getAssets());
       } finally {
         setDbReady(true);
       }
