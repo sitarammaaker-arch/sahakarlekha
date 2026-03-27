@@ -230,6 +230,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       voucherNo,
       createdAt: new Date().toISOString(),
     };
+    // Update ref immediately so the next addVoucher call in the same tick sees this voucher
+    vouchersRef.current = [...vouchersRef.current, newVoucher];
     setVouchersState(prev => {
       const updated = [...prev, newVoucher];
       storage.setVouchers(updated);
@@ -314,12 +316,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Auto-create Receipt vouchers for Share Capital and Admission Fee
     if ((newMember.shareCapital || 0) > 0) {
       const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: newMember.shareCapital, narration: `Share Capital received from ${newMember.name}`, memberId: newMember.id, createdAt: new Date().toISOString() };
-      setVouchersState(prev => { const updated = [...prev, v]; storage.setVouchers(updated); vouchersRef.current = updated; return updated; });
+      vouchersRef.current = [...vouchersRef.current, v];
+      setVouchersState(prev => { const updated = [...prev, v]; storage.setVouchers(updated); return updated; });
       supabase.from('vouchers').upsert(withSoc(v)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     }
     if ((newMember.admissionFee || 0) > 0) {
       const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: newMember.admissionFee!, narration: `Admission Fee received from ${newMember.name}`, memberId: newMember.id, createdAt: new Date().toISOString() };
-      setVouchersState(prev => { const updated = [...prev, v]; storage.setVouchers(updated); vouchersRef.current = updated; return updated; });
+      vouchersRef.current = [...vouchersRef.current, v];
+      setVouchersState(prev => { const updated = [...prev, v]; storage.setVouchers(updated); return updated; });
       supabase.from('vouchers').upsert(withSoc(v)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     }
     return newMember;
