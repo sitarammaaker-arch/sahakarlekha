@@ -588,10 +588,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const expenseItems = tb
       .filter(b => b.account.type === 'expense')
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }));
+    // Admission fee from members → treated as income in P&L
+    const totalAdmissionFee = members.reduce((s, m) => s + (m.admissionFee || 0), 0);
+    if (totalAdmissionFee > 0) {
+      incomeItems.push({ name: 'Admission Fee', nameHi: 'प्रवेश शुल्क', amount: totalAdmissionFee });
+    }
     const totalIncome = incomeItems.reduce((s, i) => s + i.amount, 0);
     const totalExpenses = expenseItems.reduce((s, i) => s + i.amount, 0);
     return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit: totalIncome - totalExpenses };
-  }, [getTrialBalance]);
+  }, [getTrialBalance, members]);
 
   // ── Inventory ──────────────────────────────────────────────────────────────
   const addStockItem = useCallback((data: Omit<StockItem, 'id' | 'itemCode'>): StockItem => {

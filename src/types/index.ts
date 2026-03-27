@@ -51,6 +51,8 @@ export interface MemberLedgerEntry {
   balance: number;
 }
 
+export type MemberType = 'member' | 'nominal';
+
 export interface Member {
   id: string;
   memberId: string;
@@ -59,6 +61,8 @@ export interface Member {
   address: string;
   phone: string;
   shareCapital: number;
+  admissionFee: number;
+  memberType: MemberType;
   joinDate: string;
   status: MemberStatus;
   // Share Register fields

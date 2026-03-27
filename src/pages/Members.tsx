@@ -20,12 +20,14 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { MemberType } from '@/types';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { generateMemberPassbookPDF } from '@/lib/pdf';
 import type { Member, MemberStatus } from '@/types';
 
-const EMPTY_FORM = { memberId: '', name: '', fatherName: '', address: '', phone: '', shareCapital: '', joinDate: new Date().toISOString().split('T')[0], status: 'active' as MemberStatus };
+const EMPTY_FORM = { memberId: '', name: '', fatherName: '', address: '', phone: '', shareCapital: '', admissionFee: '', memberType: 'member' as MemberType, joinDate: new Date().toISOString().split('T')[0], status: 'active' as MemberStatus };
 
 interface MemberFormProps {
   form: typeof EMPTY_FORM;
@@ -67,8 +69,24 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
         <Input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="9876543210" required />
       </div>
       <div className="space-y-2">
+        <Label>{language === 'hi' ? 'सदस्यता प्रकार' : 'Member Type'}</Label>
+        <Select value={form.memberType} onValueChange={v => setForm(f => ({ ...f, memberType: v as MemberType }))}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="member">{language === 'hi' ? 'सदस्य' : 'Member'}</SelectItem>
+            <SelectItem value="nominal">{language === 'hi' ? 'नॉमिनल सदस्य' : 'Nominal Member'}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+    <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-2">
         <Label>{t('shareCapital')} (₹)</Label>
         <Input type="number" value={form.shareCapital} onChange={e => setForm(f => ({ ...f, shareCapital: e.target.value }))} placeholder="10000" min="0" />
+      </div>
+      <div className="space-y-2">
+        <Label>{language === 'hi' ? 'प्रवेश शुल्क (₹)' : 'Admission Fee (₹)'}</Label>
+        <Input type="number" value={form.admissionFee} onChange={e => setForm(f => ({ ...f, admissionFee: e.target.value }))} placeholder="0" min="0" />
       </div>
     </div>
     <div className="flex gap-2 justify-end">
@@ -115,7 +133,7 @@ const Members: React.FC = () => {
       toast({ title: language === 'hi' ? 'यह सदस्य ID पहले से मौजूद है' : 'Member ID already exists', variant: 'destructive' });
       return;
     }
-    addMember({ ...form, shareCapital: Number(form.shareCapital) || 0 });
+    addMember({ ...form, shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0 });
     toast({ title: language === 'hi' ? 'सदस्य जोड़ा गया' : 'Member added' });
     setForm(EMPTY_FORM);
     setIsAddOpen(false);
@@ -124,14 +142,14 @@ const Members: React.FC = () => {
   const handleEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editMember) return;
-    updateMember(editMember.id, { ...form, shareCapital: Number(form.shareCapital) || 0 });
+    updateMember(editMember.id, { ...form, shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0 });
     toast({ title: language === 'hi' ? 'सदस्य अपडेट किया गया' : 'Member updated' });
     setEditMember(null);
   };
 
   const openEdit = (m: Member) => {
     setEditMember(m);
-    setForm({ memberId: m.memberId, name: m.name, fatherName: m.fatherName, address: m.address, phone: m.phone, shareCapital: String(m.shareCapital), joinDate: m.joinDate, status: m.status });
+    setForm({ memberId: m.memberId, name: m.name, fatherName: m.fatherName, address: m.address, phone: m.phone, shareCapital: String(m.shareCapital), admissionFee: String(m.admissionFee || 0), memberType: m.memberType || 'member', joinDate: m.joinDate, status: m.status });
   };
 
   return (
@@ -214,7 +232,9 @@ const Members: React.FC = () => {
                     <TableHead className="font-semibold">{t('memberId')}</TableHead>
                     <TableHead className="font-semibold">{t('memberName')}</TableHead>
                     <TableHead className="font-semibold">{t('phone')}</TableHead>
+                    <TableHead className="font-semibold text-center">{language === 'hi' ? 'प्रकार' : 'Type'}</TableHead>
                     <TableHead className="font-semibold text-right">{t('shareCapital')}</TableHead>
+                    <TableHead className="font-semibold text-right">{language === 'hi' ? 'प्रवेश शुल्क' : 'Admission Fee'}</TableHead>
                     <TableHead className="font-semibold text-center">{language === 'hi' ? 'स्थिति' : 'Status'}</TableHead>
                     <TableHead className="font-semibold text-center">{language === 'hi' ? 'क्रियाएं' : 'Actions'}</TableHead>
                   </TableRow>
@@ -237,7 +257,13 @@ const Members: React.FC = () => {
                       <TableCell>
                         <div className="flex items-center gap-1 text-sm"><Phone className="h-3 w-3 text-muted-foreground" />{member.phone}</div>
                       </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className={member.memberType === 'nominal' ? 'border-amber-500 text-amber-600' : 'border-primary text-primary'}>
+                          {member.memberType === 'nominal' ? (language === 'hi' ? 'नॉमिनल' : 'Nominal') : (language === 'hi' ? 'सदस्य' : 'Member')}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right font-semibold">{fmt(member.shareCapital)}</TableCell>
+                      <TableCell className="text-right">{fmt(member.admissionFee || 0)}</TableCell>
                       <TableCell className="text-center">
                         <Badge variant={member.status === 'active' ? 'default' : 'secondary'} className={member.status === 'active' ? 'bg-success' : ''}>
                           {member.status === 'active' ? (language === 'hi' ? 'सक्रिय' : 'Active') : (language === 'hi' ? 'निष्क्रिय' : 'Inactive')}
@@ -297,7 +323,9 @@ const Members: React.FC = () => {
                 [language === 'hi' ? 'पिता/पति' : 'Father/Husband', viewMember.fatherName],
                 [t('phone'), viewMember.phone],
                 [t('address'), viewMember.address],
+                [language === 'hi' ? 'सदस्यता प्रकार' : 'Member Type', viewMember.memberType === 'nominal' ? (language === 'hi' ? 'नॉमिनल सदस्य' : 'Nominal Member') : (language === 'hi' ? 'सदस्य' : 'Member')],
                 [t('shareCapital'), fmt(viewMember.shareCapital)],
+                [language === 'hi' ? 'प्रवेश शुल्क' : 'Admission Fee', fmt(viewMember.admissionFee || 0)],
                 [language === 'hi' ? 'शामिल तिथि' : 'Join Date', new Date(viewMember.joinDate).toLocaleDateString('hi-IN')],
                 [language === 'hi' ? 'स्थिति' : 'Status', viewMember.status === 'active' ? (language === 'hi' ? 'सक्रिय' : 'Active') : (language === 'hi' ? 'निष्क्रिय' : 'Inactive')],
               ].map(([label, value]) => (
