@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ShoppingCart, Download, Printer, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { generateTradingAccountPDF } from '@/lib/pdf';
 
 const TradingAccount: React.FC = () => {
   const { language } = useLanguage();
@@ -45,6 +46,25 @@ const TradingAccount: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => generateTradingAccountPDF(
+              {
+                salesItems:        salesItems.map(i => ({ name: i.name, amount: i.amount })),
+                closingStockItems: closingStockItems.map(i => ({ name: i.name, amount: i.amount })),
+                openingStockItems: openingStockItems.map(i => ({ name: i.name, amount: i.amount })),
+                purchaseItems:     purchaseItems.map(i => ({ name: i.name, amount: i.amount })),
+                directExpItems:    directExpItems.map(i => ({ name: i.name, amount: i.amount })),
+                totalSales, totalClosingStock, totalOpeningStock, totalPurchases, totalDirectExp,
+                grossProfit,
+              },
+              society
+            )}
+          >
+            <Download className="h-4 w-4" />PDF
+          </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />{hi ? 'प्रिंट' : 'Print'}
           </Button>

@@ -797,3 +797,108 @@ export function generateDayBookPDF(
 
   doc.save(`day-book-${society.financialYear}.pdf`);
 }
+
+export function generateTradingAccountPDF(
+  data: {
+    salesItems:        { name: string; amount: number }[];
+    closingStockItems: { name: string; amount: number }[];
+    openingStockItems: { name: string; amount: number }[];
+    purchaseItems:     { name: string; amount: number }[];
+    directExpItems:    { name: string; amount: number }[];
+    totalSales: number; totalClosingStock: number;
+    totalOpeningStock: number; totalPurchases: number; totalDirectExp: number;
+    grossProfit: number;
+  },
+  society: SocietySettings
+) {
+  const doc = new jsPDF('landscape');
+  const { startY, font } = addHeader(doc, 'Trading Account', society, `Financial Year: ${society.financialYear}`);
+
+  const isProfit  = data.grossProfit >= 0;
+  const grandTotal = Math.abs(data.grossProfit) +
+    (isProfit
+      ? data.totalOpeningStock + data.totalPurchases + data.totalDirectExp
+      : data.totalSales + data.totalClosingStock);
+
+  // ── Dr side (left) ────────────────────────────────────────────────────────
+  const drBody: (string | { content: string; styles: object })[][] = [];
+
+  if (data.openingStockItems.length > 0) {
+    drBody.push([{ content: 'Opening Stock', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, '']);
+    data.openingStockItems.forEach(i => drBody.push([`  ${i.name}`, fmt(i.amount)]));
+    drBody.push([{ content: 'Total Opening Stock', styles: { fontStyle: 'bold' } }, fmt(data.totalOpeningStock)]);
+  }
+
+  if (data.purchaseItems.length > 0) {
+    drBody.push([{ content: 'Purchases', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, '']);
+    data.purchaseItems.forEach(i => drBody.push([`  ${i.name}`, fmt(i.amount)]));
+  }
+
+  if (data.directExpItems.length > 0) {
+    drBody.push([{ content: 'Direct Expenses', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, '']);
+    data.directExpItems.forEach(i => drBody.push([`  ${i.name}`, fmt(i.amount)]));
+  }
+
+  if (isProfit && data.grossProfit > 0) {
+    drBody.push([{ content: 'Gross Profit (to I&E Account)', styles: { fontStyle: 'bold', textColor: [25, 135, 84] } }, fmt(data.grossProfit)]);
+  }
+
+  // ── Cr side (right) ───────────────────────────────────────────────────────
+  const crBody: (string | { content: string; styles: object })[][] = [];
+
+  if (data.salesItems.length > 0) {
+    crBody.push([{ content: 'Sales (Trading Income)', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, '']);
+    data.salesItems.forEach(i => crBody.push([`  ${i.name}`, fmt(i.amount)]));
+    crBody.push([{ content: 'Total Sales', styles: { fontStyle: 'bold' } }, fmt(data.totalSales)]);
+  }
+
+  if (data.closingStockItems.length > 0) {
+    crBody.push([{ content: 'Closing Stock', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, '']);
+    data.closingStockItems.forEach(i => crBody.push([`  ${i.name}`, fmt(i.amount)]));
+    crBody.push([{ content: 'Total Closing Stock', styles: { fontStyle: 'bold' } }, fmt(data.totalClosingStock)]);
+  }
+
+  if (!isProfit) {
+    crBody.push([{ content: 'Gross Loss (to I&E Account)', styles: { fontStyle: 'bold', textColor: [220, 53, 69] } }, fmt(Math.abs(data.grossProfit))]);
+  }
+
+  // Render Dr table (left half)
+  autoTable(doc, {
+    startY,
+    margin: { left: 15, right: 155 },
+    head: [['Debit (Dr)', 'Amount']],
+    body: drBody.length > 0 ? drBody : [['No entries', '']],
+    foot: [['Grand Total', fmt(grandTotal)]],
+    styles: { fontSize: 8, cellPadding: 2, font },
+    headStyles: { fillColor: [220, 53, 69], textColor: 255, fontStyle: 'bold' },
+    footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    columnStyles: { 1: { halign: 'right', cellWidth: 30 } },
+  });
+
+  // Render Cr table (right half)
+  autoTable(doc, {
+    startY,
+    margin: { left: 151, right: 15 },
+    head: [['Credit (Cr)', 'Amount']],
+    body: crBody.length > 0 ? crBody : [['No entries', '']],
+    foot: [['Grand Total', fmt(grandTotal)]],
+    styles: { fontSize: 8, cellPadding: 2, font },
+    headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
+    footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    columnStyles: { 1: { halign: 'right', cellWidth: 30 } },
+  });
+
+  // Signature row
+  const finalY = (doc as any).lastAutoTable.finalY + 15;
+  const pageW  = doc.internal.pageSize.width;
+  const labels = ['Accountant', 'Secretary', 'Chairman'];
+  const sigXs  = [pageW * 0.2, pageW * 0.5, pageW * 0.8];
+  doc.setFontSize(9);
+  doc.setFont(font, 'normal');
+  labels.forEach((lbl, i) => {
+    doc.line(sigXs[i] - 25, finalY, sigXs[i] + 25, finalY);
+    doc.text(lbl, sigXs[i], finalY + 5, { align: 'center' });
+  });
+
+  doc.save(`trading-account-${society.financialYear}.pdf`);
+}
