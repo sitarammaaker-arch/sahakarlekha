@@ -37,6 +37,7 @@ export const translations: Translations = {
   reserveFund: { hi: 'संचय निधि आवंटन', en: 'Reserve Fund' },
   profitDistribution: { hi: 'लाभ वितरण', en: 'Profit Distribution' },
   loanInterest: { hi: 'ऋण ब्याज गणना', en: 'Loan Interest' },
+  compoundVoucher: { hi: 'संयुक्त वाउचर', en: 'Compound Voucher' },
   gstSummary: { hi: 'GST सारांश', en: 'GST Summary' },
   operations: { hi: 'संचालन', en: 'Operations' },
   ledgerHeads: { hi: 'खाता शीर्ष', en: 'Ledger Heads' },

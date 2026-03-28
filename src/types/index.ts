@@ -38,6 +38,8 @@ export interface Voucher {
   // Bank reconciliation
   isCleared?: boolean;
   clearedDate?: string;
+  // Compound voucher grouping — multiple rows share same groupId
+  groupId?: string;
 }
 
 export type ObjectionStatus = 'pending' | 'partial' | 'rectified';
