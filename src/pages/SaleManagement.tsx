@@ -66,6 +66,9 @@ const SaleManagement: React.FC = () => {
   const [customerPhone, setCustomerPhone] = useState('');
   const [items, setItems] = useState<SaleItem[]>([EMPTY_ITEM()]);
   const [discount, setDiscount] = useState<number>(0);
+  const [cgstPct, setCgstPct] = useState<number>(0);
+  const [sgstPct, setSgstPct] = useState<number>(0);
+  const [igstPct, setIgstPct] = useState<number>(0);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
   const [narration, setNarration] = useState('');
   const [savedSaleNo, setSavedSaleNo] = useState<string | null>(null);
@@ -81,8 +84,13 @@ const SaleManagement: React.FC = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // ── Derived totals ────────────────────────────────────────────────────────
-  const totalAmount = items.reduce((s, i) => s + i.amount, 0);
-  const netAmount = Math.max(0, totalAmount - discount);
+  const totalAmount  = items.reduce((s, i) => s + i.amount, 0);
+  const netAmount    = Math.max(0, totalAmount - discount);
+  const cgstAmount   = Math.round(netAmount * (cgstPct / 100) * 100) / 100;
+  const sgstAmount   = Math.round(netAmount * (sgstPct / 100) * 100) / 100;
+  const igstAmount   = Math.round(netAmount * (igstPct / 100) * 100) / 100;
+  const taxAmount    = cgstAmount + sgstAmount + igstAmount;
+  const grandTotal   = netAmount + taxAmount;
 
   // ── Item row helpers ──────────────────────────────────────────────────────
   const updateItem = (index: number, patch: Partial<SaleItem>) => {
@@ -144,6 +152,9 @@ const SaleManagement: React.FC = () => {
         totalAmount,
         discount,
         netAmount,
+        cgstPct, sgstPct, igstPct,
+        cgstAmount, sgstAmount, igstAmount,
+        taxAmount, grandTotal,
         paymentMode,
         narration: narration.trim(),
         createdBy: user?.name ?? 'Unknown',
@@ -163,6 +174,7 @@ const SaleManagement: React.FC = () => {
       setCustomerPhone('');
       setItems([EMPTY_ITEM()]);
       setDiscount(0);
+      setCgstPct(0); setSgstPct(0); setIgstPct(0);
       setPaymentMode('cash');
       setNarration('');
     } catch {
@@ -398,27 +410,48 @@ const SaleManagement: React.FC = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
-                  {language === 'hi' ? 'राशि विवरण' : 'Amount Summary'}
+                  {language === 'hi' ? 'राशि एवं GST विवरण' : 'Amount & GST'}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between text-sm">
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex justify-between">
                   <span>{language === 'hi' ? 'उपयोग कुल' : 'Subtotal'}</span>
                   <span>{fmt(totalAmount)}</span>
                 </div>
-                <div className="flex items-center justify-between text-sm gap-4">
+                <div className="flex items-center justify-between gap-4">
                   <span>{language === 'hi' ? 'छूट (₹)' : 'Discount (₹)'}</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={discount}
-                    onChange={e => setDiscount(Math.max(0, Number(e.target.value)))}
-                    className="w-32 h-8 text-right"
-                  />
+                  <Input type="number" min={0} value={discount} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="w-28 h-7 text-right" />
                 </div>
-                <div className="flex justify-between font-bold text-base border-t pt-2">
-                  <span>{language === 'hi' ? 'शुद्ध राशि' : 'Net Amount'}</span>
+                <div className="flex justify-between font-medium border-t pt-1">
+                  <span>{language === 'hi' ? 'कर योग्य राशि' : 'Taxable Amount'}</span>
                   <span>{fmt(netAmount)}</span>
+                </div>
+                <div className="border-t pt-1 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">CGST %</span>
+                    <Input type="number" min={0} max={14} step={0.5} value={cgstPct} onChange={e => setCgstPct(Math.max(0, Number(e.target.value)))} className="w-20 h-7 text-right" />
+                    <span className="w-24 text-right text-blue-600">{cgstAmount > 0 ? fmt(cgstAmount) : '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">SGST %</span>
+                    <Input type="number" min={0} max={14} step={0.5} value={sgstPct} onChange={e => setSgstPct(Math.max(0, Number(e.target.value)))} className="w-20 h-7 text-right" />
+                    <span className="w-24 text-right text-blue-600">{sgstAmount > 0 ? fmt(sgstAmount) : '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">IGST %</span>
+                    <Input type="number" min={0} max={28} step={0.5} value={igstPct} onChange={e => setIgstPct(Math.max(0, Number(e.target.value)))} className="w-20 h-7 text-right" />
+                    <span className="w-24 text-right text-blue-600">{igstAmount > 0 ? fmt(igstAmount) : '—'}</span>
+                  </div>
+                </div>
+                {taxAmount > 0 && (
+                  <div className="flex justify-between text-xs text-muted-foreground border-t pt-1">
+                    <span>{language === 'hi' ? 'कुल GST' : 'Total GST'}</span>
+                    <span className="text-blue-600">{fmt(taxAmount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-base border-t pt-2">
+                  <span>{language === 'hi' ? 'कुल देय राशि' : 'Grand Total'}</span>
+                  <span className="text-green-700">{fmt(grandTotal)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -679,18 +712,48 @@ const SaleManagement: React.FC = () => {
                 </TableBody>
               </Table>
 
-              <div className="space-y-1 text-sm text-right border-t pt-2">
+              <div className="space-y-1 text-sm border-t pt-2">
                 <div className="flex justify-between">
-                  <span>{language === 'hi' ? 'उपयोग कुल' : 'Subtotal'}</span>
+                  <span className="text-gray-500">{language === 'hi' ? 'उपयोग कुल' : 'Subtotal'}</span>
                   <span>{fmt(viewSale.totalAmount)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>{language === 'hi' ? 'छूट' : 'Discount'}</span>
-                  <span className="text-red-600">- {fmt(viewSale.discount)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-base border-t pt-1">
-                  <span>{language === 'hi' ? 'शुद्ध राशि' : 'Net Amount'}</span>
+                {viewSale.discount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">{language === 'hi' ? 'छूट' : 'Discount'}</span>
+                    <span className="text-red-600">- {fmt(viewSale.discount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-medium border-t pt-1">
+                  <span>{language === 'hi' ? 'कर योग्य राशि' : 'Taxable Amount'}</span>
                   <span>{fmt(viewSale.netAmount)}</span>
+                </div>
+                {(viewSale.cgstAmount > 0) && (
+                  <div className="flex justify-between text-blue-600">
+                    <span>CGST ({viewSale.cgstPct}%)</span>
+                    <span>{fmt(viewSale.cgstAmount)}</span>
+                  </div>
+                )}
+                {(viewSale.sgstAmount > 0) && (
+                  <div className="flex justify-between text-blue-600">
+                    <span>SGST ({viewSale.sgstPct}%)</span>
+                    <span>{fmt(viewSale.sgstAmount)}</span>
+                  </div>
+                )}
+                {(viewSale.igstAmount > 0) && (
+                  <div className="flex justify-between text-blue-600">
+                    <span>IGST ({viewSale.igstPct}%)</span>
+                    <span>{fmt(viewSale.igstAmount)}</span>
+                  </div>
+                )}
+                {(viewSale.taxAmount > 0) && (
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>{language === 'hi' ? 'कुल GST' : 'Total GST'}</span>
+                    <span className="text-blue-600">{fmt(viewSale.taxAmount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-base border-t pt-2">
+                  <span>{language === 'hi' ? 'कुल देय राशि' : 'Grand Total'}</span>
+                  <span className="text-green-700">{fmt(viewSale.grandTotal ?? viewSale.netAmount)}</span>
                 </div>
               </div>
             </div>

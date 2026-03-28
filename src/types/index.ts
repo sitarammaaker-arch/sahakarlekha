@@ -3,6 +3,19 @@ export type UserRole = 'admin' | 'accountant' | 'viewer';
 export type AccountType = 'asset' | 'liability' | 'income' | 'expense' | 'equity';
 export type MemberStatus = 'active' | 'inactive';
 
+export interface VoucherEditSnapshot {
+  editedAt: string;
+  editedBy: string;
+  before: {
+    type?: VoucherType;
+    date?: string;
+    debitAccountId?: string;
+    creditAccountId?: string;
+    amount?: number;
+    narration?: string;
+  };
+}
+
 export interface Voucher {
   id: string;
   voucherNo: string;
@@ -20,6 +33,8 @@ export interface Voucher {
   deletedAt?: string;
   deletedBy?: string;
   deletedReason?: string;
+  // Edit audit trail
+  editHistory?: VoucherEditSnapshot[];
 }
 
 export type ObjectionStatus = 'pending' | 'partial' | 'rectified';
@@ -245,10 +260,20 @@ export interface Sale {
   items: SaleItem[];
   totalAmount: number;
   discount: number;
-  netAmount: number;
+  netAmount: number;       // taxable amount (after discount, before GST)
+  // GST fields
+  cgstPct: number;
+  sgstPct: number;
+  igstPct: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  taxAmount: number;       // cgst + sgst + igst
+  grandTotal: number;      // netAmount + taxAmount
   paymentMode: PaymentMode;
   customerId?: string; // linked registered customer
   voucherId?: string;
+  gstVoucherIds?: string[]; // auto-created GST output journal IDs
   narration: string;
   createdAt: string;
   createdBy: string;
