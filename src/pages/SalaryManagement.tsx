@@ -21,9 +21,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { BadgeDollarSign, UserPlus, Pencil, Trash2, Search, CheckCircle, Users, AlertTriangle } from 'lucide-react';
+import { BadgeDollarSign, UserPlus, Pencil, Trash2, Search, CheckCircle, Users, AlertTriangle, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Employee, SalaryRecord, PaymentMode } from '@/types';
+import { generateSalarySlipPDF } from '@/lib/pdf';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -873,6 +874,18 @@ const SalaryManagement: React.FC = () => {
                                   <CheckCircle className="h-4 w-4" />
                                 </Button>
                               )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-100"
+                                title={hi ? 'वेतन स्लिप डाउनलोड करें' : 'Download salary slip'}
+                                onClick={() => {
+                                  const emp = employees.find(e => e.id === record.employeeId);
+                                  if (emp) generateSalarySlipPDF(record, emp, society);
+                                }}
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="icon"

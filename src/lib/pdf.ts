@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection } from '@/types';
+import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord } from '@/types';
 import { ACCOUNT_IDS } from '@/lib/storage';
 
 
@@ -907,4 +907,99 @@ export function generateTradingAccountPDF(
   });
 
   doc.save(`trading-account-${society.financialYear}.pdf`);
+}
+
+export function generateSalarySlipPDF(
+  record: SalaryRecord,
+  employee: Employee,
+  society: SocietySettings
+): void {
+  const doc = new jsPDF({ orientation: 'portrait', format: 'a5' });
+  const font = setupFont(doc);
+  const pageW = doc.internal.pageSize.width;
+  const cx = pageW / 2;
+
+  // ── Header ──────────────────────────────────────────────────────────────
+  doc.setFontSize(13);
+  doc.setFont(font, 'bold');
+  doc.text(society.name, cx, 14, { align: 'center' });
+  doc.setFontSize(8);
+  doc.setFont(font, 'normal');
+  doc.text(`Reg. No: ${society.registrationNo}  |  ${society.address}`, cx, 20, { align: 'center' });
+  doc.setFontSize(11);
+  doc.setFont(font, 'bold');
+  doc.text('SALARY SLIP', cx, 28, { align: 'center' });
+  doc.setDrawColor(41, 82, 163);
+  doc.setLineWidth(0.5);
+  doc.line(10, 31, pageW - 10, 31);
+
+  // ── Slip meta ────────────────────────────────────────────────────────────
+  const [yr, mo] = record.month.split('-');
+  const monthName = new Date(Number(yr), Number(mo) - 1, 1)
+    .toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+
+  doc.setFontSize(8);
+  doc.setFont(font, 'normal');
+  doc.text(`Slip No: ${record.slipNo}`, 12, 37);
+  doc.text(`Month: ${monthName}`, cx, 37, { align: 'center' });
+  doc.text(`Date: ${record.isPaid && record.paidDate ? fmtDate(record.paidDate) : fmtDate(record.createdAt)}`, pageW - 12, 37, { align: 'right' });
+
+  // ── Employee details box ─────────────────────────────────────────────────
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.rect(10, 40, pageW - 20, 22);
+
+  doc.setFont(font, 'bold');
+  doc.setFontSize(8);
+  doc.text('Employee Details', 13, 46);
+  doc.setFont(font, 'normal');
+  doc.text(`Emp No : ${employee.empNo}`, 13, 52);
+  doc.text(`Name   : ${employee.name}`, 13, 57);
+  doc.text(`Designation: ${employee.designation}`, cx + 5, 52);
+  doc.text(`Join Date  : ${fmtDate(employee.joinDate)}`, cx + 5, 57);
+
+  // ── Earnings & Deductions table ──────────────────────────────────────────
+  autoTable(doc, {
+    startY: 66,
+    head: [['Earnings', 'Amount (Rs.)', 'Deductions', 'Amount (Rs.)']],
+    body: [
+      ['Basic Salary',   fmt(record.basicSalary), 'Deductions', fmt(record.deductions)],
+      ['Allowances',     fmt(record.allowances),  '',           ''],
+      ['Gross Salary',   fmt(record.basicSalary + record.allowances), '', ''],
+    ],
+    foot: [['Net Salary Payable', '', '', fmt(record.netSalary)]],
+    styles: { fontSize: 8, cellPadding: 2, font },
+    headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+    footStyles: { fillColor: [240, 248, 240], textColor: [0, 100, 0], fontStyle: 'bold' },
+    columnStyles: { 1: { halign: 'right' }, 3: { halign: 'right' } },
+  });
+
+  // ── Payment info ─────────────────────────────────────────────────────────
+  const afterTableY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
+  doc.setFontSize(8);
+  doc.setFont(font, 'normal');
+  const payMode = { cash: 'Cash', bank: 'Bank Transfer', credit: 'Credit' }[record.paymentMode] ?? record.paymentMode;
+  doc.text(`Payment Mode: ${payMode}`, 12, afterTableY);
+  const statusText = record.isPaid
+    ? `Status: PAID${record.paidDate ? '  on ' + fmtDate(record.paidDate) : ''}`
+    : 'Status: PENDING';
+  doc.setFont(font, 'bold');
+  doc.text(statusText, pageW - 12, afterTableY, { align: 'right' });
+  if (employee.bankAccount) {
+    doc.setFont(font, 'normal');
+    doc.text(`Bank A/c: ${employee.bankAccount}`, 12, afterTableY + 5);
+  }
+
+  // ── Signature block ──────────────────────────────────────────────────────
+  const sigY = afterTableY + 22;
+  doc.setDrawColor(150, 150, 150);
+  doc.setLineWidth(0.3);
+  doc.line(15, sigY, 55, sigY);
+  doc.line(pageW - 55, sigY, pageW - 15, sigY);
+  doc.setFont(font, 'normal');
+  doc.setFontSize(7);
+  doc.text('Employee Signature', 35, sigY + 4, { align: 'center' });
+  doc.text('Authorized Signatory', pageW - 35, sigY + 4, { align: 'center' });
+
+  doc.save(`salary-slip-${employee.empNo}-${record.month}.pdf`);
 }
