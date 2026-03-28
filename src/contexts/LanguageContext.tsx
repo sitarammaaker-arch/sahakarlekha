@@ -41,6 +41,7 @@ export const translations: Translations = {
   voucherApproval: { hi: 'वाउचर अनुमोदन', en: 'Voucher Approval' },
   meetingRegister: { hi: 'AGM / बैठक रजिस्टर', en: 'Meeting Register' },
   nominationRegister: { hi: 'नामांकन रजिस्टर', en: 'Nomination Register' },
+  form1MemberList: { hi: 'प्रपत्र 1 — सदस्य सूची', en: 'Form 1 — Member List' },
   gstSummary: { hi: 'GST सारांश', en: 'GST Summary' },
   operations: { hi: 'संचालन', en: 'Operations' },
   ledgerHeads: { hi: 'खाता शीर्ष', en: 'Ledger Heads' },
