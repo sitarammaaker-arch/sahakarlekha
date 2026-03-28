@@ -883,6 +883,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       voucherId = newV.id;
     }
+    // ── Auto-create GST journal entry (Dr GST Input / Cr Supplier or Cash/Bank) ──
+    const taxVoucherIds: string[] = [];
+    if ((data.taxAmount || 0) > 0) {
+      const supplierAccountId = data.supplierId ? suppliers.find(s => s.id === data.supplierId)?.accountId || '2101' : '2101';
+      const gstCrAcc = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : data.paymentMode === 'bank' ? ACCOUNT_IDS.BANK : supplierAccountId;
+      const gstVoucherNo = storage.getNextVoucherNo('journal', society.financialYear, vouchersRef.current);
+      const gstV = { type: 'journal' as const, date: data.date, debitAccountId: '3310', creditAccountId: gstCrAcc, amount: data.taxAmount!, narration: `GST ITC on Purchase: ${data.supplierName} - ${purchaseNo} (CGST:${data.cgstAmount||0} + SGST:${data.sgstAmount||0} + IGST:${data.igstAmount||0})`, memberId: undefined as undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo: gstVoucherNo, createdAt: new Date().toISOString() };
+      vouchersRef.current = [...vouchersRef.current, gstV];
+      setVouchersState(prev => { const updated = [...prev, gstV]; storage.setVouchers(updated); return updated; });
+      supabase.from('vouchers').upsert(withSoc(gstV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+      taxVoucherIds.push(gstV.id);
+    }
+    // ── Auto-create TDS journal entry (Dr Supplier / Cr TDS Payable) ─────────
+    if ((data.tdsAmount || 0) > 0) {
+      const supplierAccountId = data.supplierId ? suppliers.find(s => s.id === data.supplierId)?.accountId || '2101' : '2101';
+      const tdsVoucherNo = storage.getNextVoucherNo('journal', society.financialYear, vouchersRef.current);
+      const tdsV = { type: 'journal' as const, date: data.date, debitAccountId: supplierAccountId, creditAccountId: '2202', amount: data.tdsAmount!, narration: `TDS deducted on Purchase: ${data.supplierName} - ${purchaseNo} (${data.tdsPct||0}%)`, memberId: undefined as undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo: tdsVoucherNo, createdAt: new Date().toISOString() };
+      vouchersRef.current = [...vouchersRef.current, tdsV];
+      setVouchersState(prev => { const updated = [...prev, tdsV]; storage.setVouchers(updated); return updated; });
+      supabase.from('vouchers').upsert(withSoc(tdsV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+      taxVoucherIds.push(tdsV.id);
+    }
     // Increase stock & add movements, update purchaseRate
     data.items.forEach(item => {
       setStockItemsState(prev => { const updated = prev.map(i => i.id === item.itemId ? { ...i, currentStock: i.currentStock + item.qty, purchaseRate: item.rate } : i); storage.setStockItems(updated); return updated; });
@@ -890,7 +912,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setStockMovementsState(prev => { const updated = [...prev, mv]; storage.setStockMovements(updated); return updated; });
       supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     });
-    const purchase: Purchase = { ...data, id: crypto.randomUUID(), purchaseNo, voucherId, createdAt: new Date().toISOString() };
+    const purchase: Purchase = { ...data, id: crypto.randomUUID(), purchaseNo, voucherId, taxVoucherIds: taxVoucherIds.length > 0 ? taxVoucherIds : undefined, createdAt: new Date().toISOString() };
     setPurchasesState(prev => { const updated = [...prev, purchase]; storage.setPurchases(updated); return updated; });
     supabase.from('purchases').upsert(withSoc(purchase)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return purchase;

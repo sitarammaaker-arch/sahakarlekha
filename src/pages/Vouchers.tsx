@@ -26,6 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { VoucherType } from '@/types';
 import { getNextVoucherNo, VOUCHER_TEMPLATES, ACCOUNT_IDS } from '@/lib/storage';
 import type { LedgerAccount } from '@/types';
+import { validateVoucher } from '@/lib/validation';
 
 type EntryMode = 'aasan' | 'expert';
 
@@ -140,10 +141,14 @@ const Vouchers: React.FC = () => {
   };
 
   const handleEditSave = () => {
-    if (!editId || !editDebit || !editCredit || !editAmount || Number(editAmount) <= 0) return;
-    if (editDebit === editCredit) {
-      toast({ title: language === 'hi' ? 'डेबिट और क्रेडिट खाता अलग होना चाहिए' : 'Debit and Credit accounts must be different', variant: 'destructive' });
+    if (!editId) return;
+    const eResult = validateVoucher(editDebit, editCredit, editAmount, editDate, accounts, society);
+    if (!eResult.valid) {
+      toast({ title: eResult.errors[0], variant: 'destructive' });
       return;
+    }
+    if (eResult.warnings.length > 0) {
+      toast({ title: language === 'hi' ? 'चेतावनी' : 'Warning', description: eResult.warnings[0] });
     }
     updateVoucher(editId, {
       type: editType,
@@ -216,13 +221,14 @@ const Vouchers: React.FC = () => {
       handleClear();
       return;
     }
-    if (!debitAccount || !creditAccount || !amount || Number(amount) <= 0) {
-      toast({ title: language === 'hi' ? 'कृपया सभी फ़ील्ड भरें' : 'Please fill all fields', variant: 'destructive' });
+    // ── Double-entry validation (5 rules) ────────────────────────────────────
+    const vResult = validateVoucher(debitAccount, creditAccount, amount, voucherDate, accounts, society);
+    if (!vResult.valid) {
+      toast({ title: vResult.errors[0], variant: 'destructive' });
       return;
     }
-    if (debitAccount === creditAccount) {
-      toast({ title: language === 'hi' ? 'डेबिट और क्रेडिट खाता अलग होना चाहिए' : 'Debit and Credit accounts must be different', variant: 'destructive' });
-      return;
+    if (vResult.warnings.length > 0) {
+      toast({ title: language === 'hi' ? 'चेतावनी' : 'Warning', description: vResult.warnings[0] });
     }
     const customNo = voucherNoInput.trim();
     if (customNo && vouchers.some(v => !v.isDeleted && v.voucherNo === customNo)) {

@@ -66,6 +66,11 @@ const PurchaseManagement: React.FC = () => {
   const [supplierPhone, setSupplierPhone] = useState('');
   const [items, setItems] = useState<PurchaseItem[]>([EMPTY_ITEM()]);
   const [discount, setDiscount] = useState<number>(0);
+  // GST / TDS rates (%)
+  const [cgstPct, setCgstPct] = useState<number>(0);
+  const [sgstPct, setSgstPct] = useState<number>(0);
+  const [igstPct, setIgstPct] = useState<number>(0);
+  const [tdsPct, setTdsPct] = useState<number>(0);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
   const [narration, setNarration] = useState('');
   const [savedPurchaseNo, setSavedPurchaseNo] = useState<string | null>(null);
@@ -82,7 +87,13 @@ const PurchaseManagement: React.FC = () => {
 
   // ── Derived totals ────────────────────────────────────────────────────────
   const totalAmount = items.reduce((s, i) => s + i.amount, 0);
-  const netAmount = Math.max(0, totalAmount - discount);
+  const netAmount   = Math.max(0, totalAmount - discount); // taxable amount
+  const cgstAmount  = +(netAmount * cgstPct / 100).toFixed(2);
+  const sgstAmount  = +(netAmount * sgstPct / 100).toFixed(2);
+  const igstAmount  = +(netAmount * igstPct / 100).toFixed(2);
+  const taxAmount   = cgstAmount + sgstAmount + igstAmount;
+  const tdsAmount   = +(netAmount * tdsPct / 100).toFixed(2);
+  const grandTotal  = +(netAmount + taxAmount - tdsAmount).toFixed(2);
 
   // ── Item row helpers ──────────────────────────────────────────────────────
   const updateItem = (index: number, patch: Partial<PurchaseItem>) => {
@@ -144,6 +155,9 @@ const PurchaseManagement: React.FC = () => {
         totalAmount,
         discount,
         netAmount,
+        cgstPct, sgstPct, igstPct, tdsPct,
+        cgstAmount, sgstAmount, igstAmount, tdsAmount,
+        taxAmount, grandTotal,
         paymentMode,
         narration: narration.trim(),
         createdBy: user?.name ?? 'Unknown',
@@ -163,6 +177,7 @@ const PurchaseManagement: React.FC = () => {
       setSupplierPhone('');
       setItems([EMPTY_ITEM()]);
       setDiscount(0);
+      setCgstPct(0); setSgstPct(0); setIgstPct(0); setTdsPct(0);
       setPaymentMode('cash');
       setNarration('');
     } catch {
@@ -394,28 +409,84 @@ const PurchaseManagement: React.FC = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
-                  {language === 'hi' ? 'राशि विवरण' : 'Amount Summary'}
+                  {language === 'hi' ? 'राशि व कर विवरण' : 'Amount & Tax Summary'}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span>{language === 'hi' ? 'उपयोग कुल' : 'Subtotal'}</span>
+              <CardContent className="space-y-2 text-sm">
+                {/* Subtotal */}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{language === 'hi' ? 'उपयोग कुल' : 'Subtotal'}</span>
                   <span>{fmt(totalAmount)}</span>
                 </div>
-                <div className="flex items-center justify-between text-sm gap-4">
-                  <span>{language === 'hi' ? 'छूट (₹)' : 'Discount (₹)'}</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={discount}
-                    onChange={e => setDiscount(Math.max(0, Number(e.target.value)))}
-                    className="w-32 h-8 text-right"
-                  />
+                {/* Discount */}
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-muted-foreground">{language === 'hi' ? 'छूट (₹)' : 'Discount (₹)'}</span>
+                  <Input type="number" min={0} value={discount} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="w-28 h-7 text-right text-sm" />
                 </div>
-                <div className="flex justify-between font-bold text-base border-t pt-2">
-                  <span>{language === 'hi' ? 'शुद्ध राशि' : 'Net Amount'}</span>
-                  <span>{fmt(netAmount)}</span>
+                {/* Taxable */}
+                <div className="flex justify-between border-t pt-1">
+                  <span className="font-medium">{language === 'hi' ? 'कर योग्य राशि' : 'Taxable Amount'}</span>
+                  <span className="font-medium">{fmt(netAmount)}</span>
                 </div>
+
+                {/* GST Section */}
+                <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 space-y-2 mt-1">
+                  <p className="font-semibold text-blue-700 dark:text-blue-300 text-xs uppercase tracking-wide">GST (Input Tax Credit)</p>
+                  {/* CGST */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="w-20">CGST %</span>
+                    <Input type="number" min={0} max={28} step={0.5} value={cgstPct} onChange={e => setCgstPct(Math.max(0, Number(e.target.value)))} className="w-20 h-7 text-right text-sm" />
+                    <span className="w-24 text-right text-muted-foreground">{fmt(cgstAmount)}</span>
+                  </div>
+                  {/* SGST */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="w-20">SGST %</span>
+                    <Input type="number" min={0} max={28} step={0.5} value={sgstPct} onChange={e => setSgstPct(Math.max(0, Number(e.target.value)))} className="w-20 h-7 text-right text-sm" />
+                    <span className="w-24 text-right text-muted-foreground">{fmt(sgstAmount)}</span>
+                  </div>
+                  {/* IGST */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="w-20">IGST %</span>
+                    <Input type="number" min={0} max={28} step={0.5} value={igstPct} onChange={e => setIgstPct(Math.max(0, Number(e.target.value)))} className="w-20 h-7 text-right text-sm" />
+                    <span className="w-24 text-right text-muted-foreground">{fmt(igstAmount)}</span>
+                  </div>
+                  {taxAmount > 0 && (
+                    <div className="flex justify-between border-t border-blue-200 pt-1 font-medium text-blue-700 dark:text-blue-300">
+                      <span>{language === 'hi' ? 'कुल GST' : 'Total GST'}</span>
+                      <span>{fmt(taxAmount)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* TDS Section */}
+                <div className="bg-orange-50 dark:bg-orange-950/30 rounded-lg p-3 space-y-2">
+                  <p className="font-semibold text-orange-700 dark:text-orange-300 text-xs uppercase tracking-wide">TDS {language === 'hi' ? 'कटौती' : 'Deduction'}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="w-20">TDS %</span>
+                    <Input type="number" min={0} max={30} step={0.1} value={tdsPct} onChange={e => setTdsPct(Math.max(0, Number(e.target.value)))} className="w-20 h-7 text-right text-sm" />
+                    <span className="w-24 text-right text-destructive font-medium">{tdsAmount > 0 ? `(${fmt(tdsAmount)})` : '—'}</span>
+                  </div>
+                </div>
+
+                {/* Grand Total */}
+                <div className="flex justify-between font-bold text-base border-t-2 pt-2 text-primary">
+                  <span>{language === 'hi' ? 'कुल देय राशि' : 'Grand Total'}</span>
+                  <span>{fmt(grandTotal)}</span>
+                </div>
+                {taxAmount > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'hi'
+                      ? `* GST के लिए अलग जर्नल प्रविष्टि स्वतः बनेगी (Dr GST Input / Cr ${supplierName || 'आपूर्तिकर्ता'})`
+                      : `* Separate journal entry will be auto-created for GST (Dr GST Input / Cr ${supplierName || 'Supplier'})`}
+                  </p>
+                )}
+                {tdsAmount > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'hi'
+                      ? `* TDS के लिए अलग जर्नल प्रविष्टि स्वतः बनेगी (Dr ${supplierName || 'आपूर्तिकर्ता'} / Cr TDS देय)`
+                      : `* Separate journal entry will be auto-created for TDS (Dr ${supplierName || 'Supplier'} / Cr TDS Payable)`}
+                  </p>
+                )}
               </CardContent>
             </Card>
 

@@ -271,10 +271,22 @@ export interface Purchase {
   items: PurchaseItem[];
   totalAmount: number;
   discount: number;
-  netAmount: number;
+  netAmount: number;       // taxable amount (after discount, before GST)
+  // GST / TDS fields
+  cgstPct: number;
+  sgstPct: number;
+  igstPct: number;
+  tdsPct: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  tdsAmount: number;
+  taxAmount: number;       // cgst + sgst + igst
+  grandTotal: number;      // netAmount + taxAmount - tdsAmount
   paymentMode: PaymentMode;
-  supplierId?: string; // linked registered supplier
+  supplierId?: string;     // linked registered supplier
   voucherId?: string;
+  taxVoucherIds?: string[]; // auto-created GST/TDS journal voucher IDs
   narration: string;
   createdAt: string;
   createdBy: string;
