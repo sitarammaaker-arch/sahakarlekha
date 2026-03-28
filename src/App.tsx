@@ -43,6 +43,7 @@ import LoanInterest from "./pages/LoanInterest";
 import CompoundVoucher from "./pages/CompoundVoucher";
 import VoucherApproval from "./pages/VoucherApproval";
 import MeetingRegister from "./pages/MeetingRegister";
+import NominationRegister from "./pages/NominationRegister";
 import GstSummary from "./pages/GstSummary";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
@@ -118,6 +119,7 @@ const AppRoutes = () => {
       <Route path="/compound-voucher" element={<ProtectedRoute><CompoundVoucher /></ProtectedRoute>} />
       <Route path="/voucher-approval" element={<ProtectedRoute><VoucherApproval /></ProtectedRoute>} />
       <Route path="/meeting-register" element={<ProtectedRoute><MeetingRegister /></ProtectedRoute>} />
+      <Route path="/nomination-register" element={<ProtectedRoute><NominationRegister /></ProtectedRoute>} />
       <Route path="/gst-summary" element={<ProtectedRoute><GstSummary /></ProtectedRoute>} />
 
       {/* Catch-all */}

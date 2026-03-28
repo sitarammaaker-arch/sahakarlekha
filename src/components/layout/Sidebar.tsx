@@ -67,6 +67,7 @@ const registerNavItems: NavItem[] = [
   { key: 'assetRegister', icon: Package, path: '/asset-register' },
   { key: 'auditRegister', icon: ShieldCheck, path: '/audit-register' },
   { key: 'meetingRegister', icon: Users2, path: '/meeting-register' },
+  { key: 'nominationRegister', icon: UserCheck, path: '/nomination-register' },
   { key: 'reserveFund', icon: Shield, path: '/reserve-fund', roles: ['admin', 'accountant'] },
   { key: 'profitDistribution', icon: Coins, path: '/profit-distribution', roles: ['admin', 'accountant'] },
   { key: 'deletedVouchers', icon: Trash2, path: '/deleted-vouchers', roles: ['admin'] },
