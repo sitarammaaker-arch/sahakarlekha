@@ -245,6 +245,7 @@ export interface Sale {
   discount: number;
   netAmount: number;
   paymentMode: PaymentMode;
+  customerId?: string; // linked registered customer
   voucherId?: string;
   narration: string;
   createdAt: string;
@@ -272,10 +273,36 @@ export interface Purchase {
   discount: number;
   netAmount: number;
   paymentMode: PaymentMode;
+  supplierId?: string; // linked registered supplier
   voucherId?: string;
   narration: string;
   createdAt: string;
   createdBy: string;
+}
+
+// ── Supplier ──────────────────────────────────────────────────────────────────
+export interface Supplier {
+  id: string;
+  supplierCode: string;
+  name: string;
+  address?: string;
+  gstNo?: string;
+  phone?: string;
+  accountId: string; // sub-ledger under Sundry Creditors (2101)
+  isActive: boolean;
+  createdAt: string;
+}
+
+// ── Customer ──────────────────────────────────────────────────────────────────
+export interface Customer {
+  id: string;
+  customerCode: string;
+  name: string;
+  address?: string;
+  phone?: string;
+  accountId: string; // sub-ledger under Sundry Debtors (3303)
+  isActive: boolean;
+  createdAt: string;
 }
 
 // ── Salary ────────────────────────────────────────────────────────────────────

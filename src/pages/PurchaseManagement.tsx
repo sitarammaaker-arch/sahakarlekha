@@ -56,11 +56,12 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const PurchaseManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { purchases, stockItems, addPurchase, deletePurchase, society } = useData();
+  const { purchases, stockItems, suppliers, addPurchase, deletePurchase, society } = useData();
   const { toast } = useToast();
 
   // ── New Purchase form state ───────────────────────────────────────────────
   const [purchaseDate, setPurchaseDate] = useState(TODAY);
+  const [supplierId, setSupplierId] = useState('');
   const [supplierName, setSupplierName] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
   const [items, setItems] = useState<PurchaseItem[]>([EMPTY_ITEM()]);
@@ -119,7 +120,7 @@ const PurchaseManagement: React.FC = () => {
   const handleSave = () => {
     if (!supplierName.trim()) {
       toast({
-        title: language === 'hi' ? 'कृपया आपूर्तिकर्ता का नाम दर्ज करें' : 'Please enter supplier name',
+        title: language === 'hi' ? 'कृपया आपूर्तिकर्ता चुनें' : 'Please select a supplier',
         variant: 'destructive',
       });
       return;
@@ -138,6 +139,7 @@ const PurchaseManagement: React.FC = () => {
         date: purchaseDate,
         supplierName: supplierName.trim(),
         supplierPhone: supplierPhone.trim() || undefined,
+        supplierId: supplierId || undefined,
         items: validItems,
         totalAmount,
         discount,
@@ -156,6 +158,7 @@ const PurchaseManagement: React.FC = () => {
 
       // Reset form
       setPurchaseDate(TODAY);
+      setSupplierId('');
       setSupplierName('');
       setSupplierPhone('');
       setItems([EMPTY_ITEM()]);
@@ -257,21 +260,40 @@ const PurchaseManagement: React.FC = () => {
               </div>
               <div className="space-y-1">
                 <Label>
-                  {language === 'hi' ? 'आपूर्तिकर्ता का नाम' : 'Supplier Name'}
+                  {language === 'hi' ? 'आपूर्तिकर्ता' : 'Supplier'}
                   <span className="text-red-500 ml-1">*</span>
                 </Label>
-                <Input
-                  value={supplierName}
-                  onChange={e => setSupplierName(e.target.value)}
-                  placeholder={language === 'hi' ? 'आपूर्तिकर्ता का नाम' : 'Supplier name'}
-                />
+                <Select
+                  value={supplierId}
+                  onValueChange={val => {
+                    setSupplierId(val);
+                    const sup = suppliers.find(s => s.id === val);
+                    setSupplierName(sup?.name || '');
+                    setSupplierPhone(sup?.phone || '');
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'hi' ? 'आपूर्तिकर्ता चुनें' : 'Select supplier'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {suppliers.filter(s => s.isActive).map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                    {suppliers.filter(s => s.isActive).length === 0 && (
+                      <SelectItem value="__none__" disabled>
+                        {language === 'hi' ? 'कोई आपूर्तिकर्ता नहीं — पहले जोड़ें' : 'No suppliers — add first'}
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
-                <Label>{language === 'hi' ? 'फोन (वैकल्पिक)' : 'Phone (Optional)'}</Label>
+                <Label>{language === 'hi' ? 'फोन' : 'Phone'}</Label>
                 <Input
                   value={supplierPhone}
-                  onChange={e => setSupplierPhone(e.target.value)}
-                  placeholder={language === 'hi' ? 'फोन नंबर' : 'Phone number'}
+                  readOnly
+                  placeholder={language === 'hi' ? 'स्वतः भरेगा' : 'Auto-filled'}
+                  className="bg-muted/50"
                 />
               </div>
             </CardContent>

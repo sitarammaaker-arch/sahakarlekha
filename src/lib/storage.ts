@@ -1,4 +1,4 @@
-import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType } from '@/types';
+import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer } from '@/types';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
 export interface VoucherTemplate {
@@ -57,6 +57,10 @@ const KEYS = {
   empCounter: 'sahayata_emp_counter',
   salaryRecords: 'sahayata_salary_records',
   salaryCounter: 'sahayata_salary_counter',
+  suppliers: 'sahayata_suppliers',
+  supplierCounter: 'sahayata_supplier_counter',
+  customers: 'sahayata_customers',
+  customerCounter: 'sahayata_customer_counter',
 };
 
 // ── Central account ID constants ─────────────────────────────────────────────
@@ -427,4 +431,22 @@ export const getNextSalarySlipNo = (financialYear: string): string => {
   const current = get<number>(KEYS.salaryCounter, 0) + 1;
   set(KEYS.salaryCounter, current);
   return `SAL/${financialYear}/${String(current).padStart(3, '0')}`;
+};
+
+// ── Suppliers ─────────────────────────────────────────────────────────────────
+export const getSuppliers = (): Supplier[] => get(KEYS.suppliers, []);
+export const setSuppliers = (s: Supplier[]): void => set(KEYS.suppliers, s);
+export const getNextSupplierCode = (): string => {
+  const current = get<number>(KEYS.supplierCounter, 0) + 1;
+  set(KEYS.supplierCounter, current);
+  return `SUP/${String(current).padStart(3, '0')}`;
+};
+
+// ── Customers ─────────────────────────────────────────────────────────────────
+export const getCustomers = (): Customer[] => get(KEYS.customers, []);
+export const setCustomers = (c: Customer[]): void => set(KEYS.customers, c);
+export const getNextCustomerCode = (): string => {
+  const current = get<number>(KEYS.customerCounter, 0) + 1;
+  set(KEYS.customerCounter, current);
+  return `CUS/${String(current).padStart(3, '0')}`;
 };

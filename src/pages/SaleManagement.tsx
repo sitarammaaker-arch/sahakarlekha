@@ -56,11 +56,12 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const SaleManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { sales, stockItems, addSale, deleteSale, society } = useData();
+  const { sales, stockItems, customers, addSale, deleteSale, society } = useData();
   const { toast } = useToast();
 
   // ── New Sale form state ───────────────────────────────────────────────────
   const [saleDate, setSaleDate] = useState(TODAY);
+  const [customerId, setCustomerId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [items, setItems] = useState<SaleItem[]>([EMPTY_ITEM()]);
@@ -119,7 +120,7 @@ const SaleManagement: React.FC = () => {
   const handleSave = () => {
     if (!customerName.trim()) {
       toast({
-        title: language === 'hi' ? 'कृपया ग्राहक का नाम दर्ज करें' : 'Please enter customer name',
+        title: language === 'hi' ? 'कृपया ग्राहक चुनें' : 'Please select a customer',
         variant: 'destructive',
       });
       return;
@@ -138,6 +139,7 @@ const SaleManagement: React.FC = () => {
         date: saleDate,
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim() || undefined,
+        customerId: customerId || undefined,
         items: validItems,
         totalAmount,
         discount,
@@ -156,6 +158,7 @@ const SaleManagement: React.FC = () => {
 
       // Reset form
       setSaleDate(TODAY);
+      setCustomerId('');
       setCustomerName('');
       setCustomerPhone('');
       setItems([EMPTY_ITEM()]);
@@ -257,21 +260,44 @@ const SaleManagement: React.FC = () => {
               </div>
               <div className="space-y-1">
                 <Label>
-                  {language === 'hi' ? 'ग्राहक का नाम' : 'Customer Name'}
+                  {language === 'hi' ? 'ग्राहक' : 'Customer'}
                   <span className="text-red-500 ml-1">*</span>
                 </Label>
-                <Input
-                  value={customerName}
-                  onChange={e => setCustomerName(e.target.value)}
-                  placeholder={language === 'hi' ? 'ग्राहक का नाम' : 'Customer name'}
-                />
+                <Select
+                  value={customerId || (customerName === 'Cash' ? '__cash__' : '')}
+                  onValueChange={val => {
+                    if (val === '__cash__') {
+                      setCustomerId('');
+                      setCustomerName('Cash');
+                      setCustomerPhone('');
+                    } else {
+                      const cus = customers.find(c => c.id === val);
+                      setCustomerId(val);
+                      setCustomerName(cus?.name || '');
+                      setCustomerPhone(cus?.phone || '');
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'hi' ? 'ग्राहक चुनें' : 'Select customer'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__cash__">
+                      {language === 'hi' ? '💵 नकद ग्राहक' : '💵 Cash Customer'}
+                    </SelectItem>
+                    {customers.filter(c => c.isActive).map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
-                <Label>{language === 'hi' ? 'फोन (वैकल्पिक)' : 'Phone (Optional)'}</Label>
+                <Label>{language === 'hi' ? 'फोन' : 'Phone'}</Label>
                 <Input
                   value={customerPhone}
-                  onChange={e => setCustomerPhone(e.target.value)}
-                  placeholder={language === 'hi' ? 'फोन नंबर' : 'Phone number'}
+                  readOnly
+                  placeholder={language === 'hi' ? 'स्वतः भरेगा' : 'Auto-filled'}
+                  className="bg-muted/50"
                 />
               </div>
             </CardContent>

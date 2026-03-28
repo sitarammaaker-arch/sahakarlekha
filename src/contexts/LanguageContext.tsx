@@ -38,6 +38,8 @@ export const translations: Translations = {
   sales: { hi: 'बिक्री', en: 'Sales' },
   purchases: { hi: 'खरीद', en: 'Purchases' },
   salary: { hi: 'वेतन', en: 'Salary' },
+  suppliers: { hi: 'आपूर्तिकर्ता', en: 'Suppliers' },
+  customers: { hi: 'ग्राहक', en: 'Customers' },
   
   // Common actions
   save: { hi: 'सहेजें', en: 'Save' },

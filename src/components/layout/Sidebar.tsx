@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Wallet, Building2, FileText, BookOpen, Users,
   Scale, TrendingUp, FileSpreadsheet, BarChart3, Settings, LogOut,
   ChevronLeft, ChevronRight, ArrowLeftRight, BookMarked, Landmark, Package, ShieldCheck, CalendarDays,
-  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign,
+  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, Truck, UserCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,8 @@ const mainNavItems: NavItem[] = [
 const operationsNavItems: NavItem[] = [
   { key: 'ledgerHeads', icon: ListTree, path: '/ledger-heads' },
   { key: 'inventory', icon: Boxes, path: '/inventory' },
+  { key: 'suppliers', icon: Truck, path: '/suppliers' },
+  { key: 'customers', icon: UserCheck, path: '/customers' },
   { key: 'sales', icon: ShoppingCart, path: '/sales' },
   { key: 'purchases', icon: PackagePlus, path: '/purchases' },
   { key: 'salary', icon: BadgeDollarSign, path: '/salary' },

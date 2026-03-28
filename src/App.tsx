@@ -33,6 +33,8 @@ import Inventory from "./pages/Inventory";
 import SaleManagement from "./pages/SaleManagement";
 import PurchaseManagement from "./pages/PurchaseManagement";
 import SalaryManagement from "./pages/SalaryManagement";
+import Suppliers from "./pages/Suppliers";
+import Customers from "./pages/Customers";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 
@@ -97,6 +99,8 @@ const AppRoutes = () => {
       <Route path="/sales" element={<ProtectedRoute><SaleManagement /></ProtectedRoute>} />
       <Route path="/purchases" element={<ProtectedRoute><PurchaseManagement /></ProtectedRoute>} />
       <Route path="/salary" element={<ProtectedRoute><SalaryManagement /></ProtectedRoute>} />
+      <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
+      <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
 
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />

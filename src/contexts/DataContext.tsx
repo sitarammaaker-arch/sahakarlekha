@@ -7,6 +7,7 @@ import type {
   StockItem, StockMovement,
   Sale, Purchase,
   Employee, SalaryRecord, PaymentMode,
+  Supplier, Customer,
 } from '@/types';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS } from '@/lib/storage';
@@ -63,6 +64,18 @@ interface DataContextType {
   purchases: Purchase[];
   addPurchase: (data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>) => Purchase;
   deletePurchase: (id: string) => void;
+
+  // Suppliers
+  suppliers: Supplier[];
+  addSupplier: (data: Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'createdAt'>) => Supplier;
+  updateSupplier: (id: string, data: Partial<Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'createdAt'>>) => void;
+  deleteSupplier: (id: string) => void;
+
+  // Customers
+  customers: Customer[];
+  addCustomer: (data: Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'createdAt'>) => Customer;
+  updateCustomer: (id: string, data: Partial<Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'createdAt'>>) => void;
+  deleteCustomer: (id: string) => void;
 
   // Employees & Salary
   employees: Employee[];
@@ -127,6 +140,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [purchases, setPurchasesState] = useState<Purchase[]>(() => storage.getPurchases());
   const [employees, setEmployeesState] = useState<Employee[]>(() => storage.getEmployees());
   const [salaryRecords, setSalaryRecordsState] = useState<SalaryRecord[]>(() => storage.getSalaryRecords());
+  const [suppliers, setSuppliersState] = useState<Supplier[]>(() => storage.getSuppliers());
+  const [customers, setCustomersState] = useState<Customer[]>(() => storage.getCustomers());
 
   const [dbReady, setDbReady] = useState(false);
 
@@ -139,6 +154,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
+    setSuppliersState([]); setCustomersState([]);
 
     const loadFromSupabase = async () => {
       try {
@@ -147,7 +163,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           { data: lData }, { data: asData }, { data: aoData },
           { data: siData }, { data: smData }, { data: slData },
           { data: puData }, { data: emData }, { data: srData },
-          { data: socData },
+          { data: socData }, { data: supData }, { data: cusData },
         ] = await Promise.all([
           supabase.from('vouchers').select('*').eq('society_id', sid).order('createdAt'),
           supabase.from('members').select('*').eq('society_id', sid),
@@ -162,6 +178,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           supabase.from('employees').select('*').eq('society_id', sid),
           supabase.from('salary_records').select('*').eq('society_id', sid).order('createdAt'),
           supabase.from('society_settings').select('*').eq('society_id', sid).limit(1),
+          supabase.from('suppliers').select('*').eq('society_id', sid),
+          supabase.from('customers').select('*').eq('society_id', sid),
         ]);
 
         if (vErr) console.warn('Vouchers query error:', vErr.message);
@@ -222,6 +240,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setPurchasesState(puData || []);
         setEmployeesState(emData || []);
         setSalaryRecordsState(srData || []);
+        if (supData && supData.length > 0) { setSuppliersState(supData); storage.setSuppliers(supData); } else setSuppliersState(storage.getSuppliers());
+        if (cusData && cusData.length > 0) { setCustomersState(cusData); storage.setCustomers(cusData); } else setCustomersState(storage.getCustomers());
         if (socData && socData.length > 0) { setSocietyState(socData[0]); storage.setSociety(socData[0]); }
       } catch (err) {
         console.warn('Supabase load failed, falling back to localStorage:', err);
@@ -803,8 +823,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       voucherId = newV.id;
     } else {
+      const customerAccountId = data.customerId ? customers.find(c => c.id === data.customerId)?.accountId || '3303' : '3303';
       const voucherNo = storage.getNextVoucherNo('journal', society.financialYear, vouchersRef.current);
-      const newV = { type: 'journal' as const, date: data.date, debitAccountId: 'DEBTORS', creditAccountId: '3403', amount: data.netAmount, narration: `Credit Sale: ${data.customerName} - ${saleNo}`, memberId: undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
+      const newV = { type: 'journal' as const, date: data.date, debitAccountId: customerAccountId, creditAccountId: '4101', amount: data.netAmount, narration: `Credit Sale: ${data.customerName} - ${saleNo}`, memberId: undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
       setVouchersState(prev => { const updated = [...prev, newV]; storage.setVouchers(updated); return updated; });
       supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       voucherId = newV.id;
@@ -820,7 +841,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setSalesState(prev => { const updated = [...prev, sale]; storage.setSales(updated); return updated; });
     supabase.from('sales').upsert(withSoc(sale)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return sale;
-  }, [society.financialYear]);
+  }, [society.financialYear, customers]);
 
   const deleteSale = useCallback((id: string) => {
     setSalesState(prev => {
@@ -855,8 +876,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       voucherId = newV.id;
     } else {
+      const supplierAccountId = data.supplierId ? suppliers.find(s => s.id === data.supplierId)?.accountId || '2101' : '2101';
       const voucherNo = storage.getNextVoucherNo('journal', society.financialYear, vouchersRef.current);
-      const newV = { type: 'journal' as const, date: data.date, debitAccountId: '3403', creditAccountId: 'CREDITORS', amount: data.netAmount, narration: `Credit Purchase: ${data.supplierName} - ${purchaseNo}`, memberId: undefined as undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
+      const newV = { type: 'journal' as const, date: data.date, debitAccountId: '5101', creditAccountId: supplierAccountId, amount: data.netAmount, narration: `Credit Purchase: ${data.supplierName} - ${purchaseNo}`, memberId: undefined as undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
       setVouchersState(prev => { const updated = [...prev, newV]; storage.setVouchers(updated); return updated; });
       supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       voucherId = newV.id;
@@ -872,7 +894,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setPurchasesState(prev => { const updated = [...prev, purchase]; storage.setPurchases(updated); return updated; });
     supabase.from('purchases').upsert(withSoc(purchase)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return purchase;
-  }, [society.financialYear]);
+  }, [society.financialYear, suppliers]);
 
   const deletePurchase = useCallback((id: string) => {
     setPurchasesState(prev => {
@@ -961,10 +983,120 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('salary_records').delete().eq('id', id).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
   }, []);
 
+  // ── Suppliers ──────────────────────────────────────────────────────────────
+  const addSupplier = useCallback((data: Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'createdAt'>): Supplier => {
+    const accountId = crypto.randomUUID();
+    // Auto-create ledger account under Sundry Creditors (2101)
+    const newAccount: LedgerAccount = {
+      id: accountId,
+      name: data.name,
+      nameHi: data.name,
+      type: 'liability',
+      openingBalance: 0,
+      openingBalanceType: 'credit',
+      isSystem: false,
+      isGroup: false,
+      parentId: '2101',
+    };
+    setAccountsState(prev => { const updated = [...prev, newAccount]; storage.setAccounts(updated); return updated; });
+    supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+
+    const supplier: Supplier = { ...data, id: crypto.randomUUID(), supplierCode: storage.getNextSupplierCode(), accountId, createdAt: new Date().toISOString() };
+    setSuppliersState(prev => { const updated = [...prev, supplier]; storage.setSuppliers(updated); return updated; });
+    supabase.from('suppliers').upsert(withSoc(supplier)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    return supplier;
+  }, []);
+
+  const updateSupplier = useCallback((id: string, data: Partial<Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'createdAt'>>) => {
+    let updated: Supplier | undefined;
+    setSuppliersState(prev => {
+      const arr = prev.map(s => s.id === id ? { ...s, ...data } : s);
+      updated = arr.find(s => s.id === id);
+      storage.setSuppliers(arr);
+      return arr;
+    });
+    // Sync name change to linked account
+    if (data.name) {
+      setAccountsState(prev => {
+        const sup = suppliers.find(s => s.id === id);
+        if (!sup) return prev;
+        const arr = prev.map(a => a.id === sup.accountId ? { ...a, name: data.name!, nameHi: data.name! } : a);
+        storage.setAccounts(arr);
+        return arr;
+      });
+    }
+    if (updated) supabase.from('suppliers').upsert(withSoc(updated)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+  }, [suppliers]);
+
+  const deleteSupplier = useCallback((id: string) => {
+    const sup = suppliers.find(s => s.id === id);
+    setSuppliersState(prev => { const arr = prev.filter(s => s.id !== id); storage.setSuppliers(arr); return arr; });
+    supabase.from('suppliers').delete().eq('id', id).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    if (sup?.accountId) {
+      setAccountsState(prev => { const arr = prev.filter(a => a.id !== sup.accountId); storage.setAccounts(arr); return arr; });
+      supabase.from('accounts').delete().eq('id', sup.accountId).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    }
+  }, [suppliers]);
+
+  // ── Customers ──────────────────────────────────────────────────────────────
+  const addCustomer = useCallback((data: Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'createdAt'>): Customer => {
+    const accountId = crypto.randomUUID();
+    // Auto-create ledger account under Sundry Debtors (3303)
+    const newAccount: LedgerAccount = {
+      id: accountId,
+      name: data.name,
+      nameHi: data.name,
+      type: 'asset',
+      openingBalance: 0,
+      openingBalanceType: 'debit',
+      isSystem: false,
+      isGroup: false,
+      parentId: '3303',
+    };
+    setAccountsState(prev => { const updated = [...prev, newAccount]; storage.setAccounts(updated); return updated; });
+    supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+
+    const customer: Customer = { ...data, id: crypto.randomUUID(), customerCode: storage.getNextCustomerCode(), accountId, createdAt: new Date().toISOString() };
+    setCustomersState(prev => { const updated = [...prev, customer]; storage.setCustomers(updated); return updated; });
+    supabase.from('customers').upsert(withSoc(customer)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    return customer;
+  }, []);
+
+  const updateCustomer = useCallback((id: string, data: Partial<Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'createdAt'>>) => {
+    let updated: Customer | undefined;
+    setCustomersState(prev => {
+      const arr = prev.map(c => c.id === id ? { ...c, ...data } : c);
+      updated = arr.find(c => c.id === id);
+      storage.setCustomers(arr);
+      return arr;
+    });
+    if (data.name) {
+      setAccountsState(prev => {
+        const cus = customers.find(c => c.id === id);
+        if (!cus) return prev;
+        const arr = prev.map(a => a.id === cus.accountId ? { ...a, name: data.name!, nameHi: data.name! } : a);
+        storage.setAccounts(arr);
+        return arr;
+      });
+    }
+    if (updated) supabase.from('customers').upsert(withSoc(updated)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+  }, [customers]);
+
+  const deleteCustomer = useCallback((id: string) => {
+    const cus = customers.find(c => c.id === id);
+    setCustomersState(prev => { const arr = prev.filter(c => c.id !== id); storage.setCustomers(arr); return arr; });
+    supabase.from('customers').delete().eq('id', id).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    if (cus?.accountId) {
+      setAccountsState(prev => { const arr = prev.filter(a => a.id !== cus.accountId); storage.setAccounts(arr); return arr; });
+      supabase.from('accounts').delete().eq('id', cus.accountId).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    }
+  }, [customers]);
+
   return (
     <DataContext.Provider value={{
       vouchers, members, accounts, society, loans, assets, auditObjections,
       stockItems, stockMovements, sales, purchases, employees, salaryRecords,
+      suppliers, customers,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher,
       addMember, updateMember, deleteMember,
       addAccount, updateAccount, deleteAccount, updateSociety,
@@ -976,6 +1108,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addPurchase, deletePurchase,
       addEmployee, updateEmployee, deleteEmployee,
       addSalaryRecord, updateSalaryRecord, deleteSalaryRecord,
+      addSupplier, updateSupplier, deleteSupplier,
+      addCustomer, updateCustomer, deleteCustomer,
       getAccountBalance, getCashBookEntries, getBankBookEntries,
       getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments,
     }}>
