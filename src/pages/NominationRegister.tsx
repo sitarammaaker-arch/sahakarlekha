@@ -22,7 +22,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { UserHeart, Download, Search, Pencil, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Heart, Download, Search, Pencil, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Member } from '@/types';
 import jsPDF from 'jspdf';
@@ -128,7 +128,7 @@ const NominationRegister: React.FC = () => {
       {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="p-2 bg-pink-100 rounded-lg">
-          <UserHeart className="h-6 w-6 text-pink-700" />
+          <Heart className="h-6 w-6 text-pink-700" />
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
