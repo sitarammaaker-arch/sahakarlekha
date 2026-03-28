@@ -1,4 +1,37 @@
-import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord } from '@/types';
+import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType } from '@/types';
+
+// ── Voucher Template ──────────────────────────────────────────────────────────
+export interface VoucherTemplate {
+  id: string;
+  label: string;       // English
+  labelHi: string;     // Hindi
+  icon: string;        // emoji
+  type: VoucherType;
+  debitAccountId: string;
+  creditAccountId: string;
+  category: 'receipt' | 'payment';
+}
+
+// 15 common cooperative society transactions
+export const VOUCHER_TEMPLATES: VoucherTemplate[] = [
+  // ── Receipt (Paisa Aaya) ──────────────────────────────────────────────────
+  { id: 'share_cap',   label: 'Member Share Capital',  labelHi: 'सदस्य शेयर पूंजी',    icon: '👤', type: 'receipt', debitAccountId: '3301', creditAccountId: '1102', category: 'receipt' },
+  { id: 'adm_fee',     label: 'Admission Fee',         labelHi: 'प्रवेश शुल्क',         icon: '🎟️', type: 'receipt', debitAccountId: '3301', creditAccountId: '4407', category: 'receipt' },
+  { id: 'fert_sale',   label: 'Fertilizer/Seed Sale',  labelHi: 'उर्वरक/बीज बिक्री',   icon: '🌾', type: 'receipt', debitAccountId: '3301', creditAccountId: '4101', category: 'receipt' },
+  { id: 'commission',  label: 'Commission Received',   labelHi: 'कमीशन/दामी आई',        icon: '💰', type: 'receipt', debitAccountId: '3301', creditAccountId: '4201', category: 'receipt' },
+  { id: 'rent_in',     label: 'Rent Received',         labelHi: 'किराया मिला',           icon: '🏠', type: 'receipt', debitAccountId: '3301', creditAccountId: '4401', category: 'receipt' },
+  { id: 'interest_in', label: 'Interest Received',     labelHi: 'ब्याज मिला',            icon: '📈', type: 'receipt', debitAccountId: '3301', creditAccountId: '4403', category: 'receipt' },
+  { id: 'bank_wd',     label: 'Cash from Bank',        labelHi: 'बैंक से नकद निकाला',   icon: '🏦', type: 'receipt', debitAccountId: '3301', creditAccountId: '3302', category: 'receipt' },
+  // ── Payment (Paisa Gaya) ──────────────────────────────────────────────────
+  { id: 'salary',      label: 'Salary Paid',           labelHi: 'वेतन दिया',             icon: '👨‍💼', type: 'payment', debitAccountId: '5201', creditAccountId: '3301', category: 'payment' },
+  { id: 'wages',       label: 'Wages Paid',            labelHi: 'मजदूरी दी',             icon: '🔨', type: 'payment', debitAccountId: '5202', creditAccountId: '3301', category: 'payment' },
+  { id: 'electricity', label: 'Electricity Bill',      labelHi: 'बिजली का बिल',          icon: '⚡', type: 'payment', debitAccountId: '5302', creditAccountId: '3301', category: 'payment' },
+  { id: 'telephone',   label: 'Telephone Bill',        labelHi: 'फोन का बिल',            icon: '📞', type: 'payment', debitAccountId: '5304', creditAccountId: '3301', category: 'payment' },
+  { id: 'repair',      label: 'Repair Expense',        labelHi: 'मरम्मत खर्च',           icon: '🔧', type: 'payment', debitAccountId: '5402', creditAccountId: '3301', category: 'payment' },
+  { id: 'purchase',    label: 'Cash Purchase',         labelHi: 'नकद खरीदी',             icon: '🛒', type: 'payment', debitAccountId: '5101', creditAccountId: '3301', category: 'payment' },
+  { id: 'bank_dep',    label: 'Cash to Bank',          labelHi: 'बैंक में नकद जमा',      icon: '🏦', type: 'payment', debitAccountId: '3302', creditAccountId: '3301', category: 'payment' },
+  { id: 'audit_fee',   label: 'Audit Fee',             labelHi: 'लेखा परीक्षण शुल्क',    icon: '📋', type: 'payment', debitAccountId: '5306', creditAccountId: '3301', category: 'payment' },
+];
 
 const KEYS = {
   vouchers: 'sahayata_vouchers',

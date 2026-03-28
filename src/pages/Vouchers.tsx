@@ -20,11 +20,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, CheckCircle, RotateCcw, EyeOff, Eye, Pencil } from 'lucide-react';
+import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, CheckCircle, RotateCcw, EyeOff, Eye, Pencil, Zap, Settings2, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { VoucherType } from '@/types';
-import { getNextVoucherNo } from '@/lib/storage';
+import { getNextVoucherNo, VOUCHER_TEMPLATES } from '@/lib/storage';
+
+type EntryMode = 'aasan' | 'expert';
 
 const Vouchers: React.FC = () => {
   const { t, language } = useLanguage();
@@ -33,6 +35,18 @@ const Vouchers: React.FC = () => {
   const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'entry' | 'list'>('entry');
+  const [entryMode, setEntryMode] = useState<EntryMode>(() => {
+    return (localStorage.getItem('sahayata_entry_mode') as EntryMode) || 'aasan';
+  });
+  const [selectedTemplate, setSelectedTemplate] = useState<typeof VOUCHER_TEMPLATES[0] | null>(null);
+
+  const switchMode = (mode: EntryMode) => {
+    setEntryMode(mode);
+    localStorage.setItem('sahayata_entry_mode', mode);
+    setSelectedTemplate(null);
+    handleClear();
+  };
+
   const [voucherType, setVoucherType] = useState<VoucherType>('receipt');
   const [voucherDate, setVoucherDate] = useState(new Date().toISOString().split('T')[0]);
   const [debitAccount, setDebitAccount] = useState('');
@@ -175,7 +189,34 @@ const Vouchers: React.FC = () => {
             {language === 'hi' ? 'वाउचर प्रविष्टि प्रणाली' : 'Voucher Entry System'}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {/* Mode Toggle */}
+          <div className="flex rounded-lg border overflow-hidden">
+            <button
+              onClick={() => switchMode('aasan')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors',
+                entryMode === 'aasan'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background text-muted-foreground hover:bg-muted'
+              )}
+            >
+              <Zap className="h-3.5 w-3.5" />
+              {language === 'hi' ? 'आसान' : 'Easy'}
+            </button>
+            <button
+              onClick={() => switchMode('expert')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors border-l',
+                entryMode === 'expert'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background text-muted-foreground hover:bg-muted'
+              )}
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+              {language === 'hi' ? 'विशेषज्ञ' : 'Expert'}
+            </button>
+          </div>
           <Button variant={activeTab === 'entry' ? 'default' : 'outline'} onClick={() => setActiveTab('entry')}>
             {language === 'hi' ? 'नई प्रविष्टि' : 'New Entry'}
           </Button>
@@ -196,6 +237,172 @@ const Vouchers: React.FC = () => {
             </div>
           )}
 
+          {/* ── AASAN MODE ── */}
+          {entryMode === 'aasan' && (
+            <div className="space-y-4">
+              {!selectedTemplate ? (
+                /* Template selection grid */
+                <div className="space-y-4">
+                  {/* Receipt templates */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                      <ArrowDownLeft className="h-4 w-4 text-success" />
+                      {language === 'hi' ? 'पैसा आया (रसीद)' : 'Money Received (Receipt)'}
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {VOUCHER_TEMPLATES.filter(t => t.category === 'receipt').map(tmpl => (
+                        <button
+                          key={tmpl.id}
+                          onClick={() => {
+                            setSelectedTemplate(tmpl);
+                            setVoucherType(tmpl.type);
+                            setDebitAccount(tmpl.debitAccountId);
+                            setCreditAccount(tmpl.creditAccountId);
+                            setSavedVoucherNo(null);
+                          }}
+                          className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent bg-success/5 hover:border-success/40 hover:bg-success/10 transition-all text-center"
+                        >
+                          <span className="text-3xl">{tmpl.icon}</span>
+                          <span className="text-sm font-medium text-foreground leading-tight">
+                            {language === 'hi' ? tmpl.labelHi : tmpl.label}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Payment templates */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                      <ArrowUpRight className="h-4 w-4 text-destructive" />
+                      {language === 'hi' ? 'पैसा गया (भुगतान)' : 'Money Paid (Payment)'}
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {VOUCHER_TEMPLATES.filter(t => t.category === 'payment').map(tmpl => (
+                        <button
+                          key={tmpl.id}
+                          onClick={() => {
+                            setSelectedTemplate(tmpl);
+                            setVoucherType(tmpl.type);
+                            setDebitAccount(tmpl.debitAccountId);
+                            setCreditAccount(tmpl.creditAccountId);
+                            setSavedVoucherNo(null);
+                          }}
+                          className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent bg-destructive/5 hover:border-destructive/30 hover:bg-destructive/10 transition-all text-center"
+                        >
+                          <span className="text-3xl">{tmpl.icon}</span>
+                          <span className="text-sm font-medium text-foreground leading-tight">
+                            {language === 'hi' ? tmpl.labelHi : tmpl.label}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Simplified entry form after template selected */
+                <Card className="shadow-card">
+                  <div className={cn('p-4 rounded-t-lg flex items-center justify-between text-white', selectedTemplate.category === 'receipt' ? 'bg-success' : 'bg-destructive')}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">{selectedTemplate.icon}</span>
+                      <div>
+                        <h2 className="font-bold text-lg">
+                          {language === 'hi' ? selectedTemplate.labelHi : selectedTemplate.label}
+                        </h2>
+                        <p className="text-sm text-white/80">
+                          {(() => {
+                            const dr = accounts.find(a => a.id === selectedTemplate.debitAccountId);
+                            const cr = accounts.find(a => a.id === selectedTemplate.creditAccountId);
+                            return `Dr: ${language === 'hi' ? dr?.nameHi : dr?.name} / Cr: ${language === 'hi' ? cr?.nameHi : cr?.name}`;
+                          })()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <p className="text-white/60 text-xs mb-1">{language === 'hi' ? 'वाउचर नं.' : 'Voucher No.'}</p>
+                        <Input
+                          value={voucherNoInput}
+                          onChange={e => setVoucherNoInput(e.target.value)}
+                          placeholder={getNextVoucherNo(selectedTemplate.type, society.financialYear, vouchers)}
+                          className="h-8 w-36 text-sm bg-white/20 border-white/30 text-white placeholder:text-white/50 text-right"
+                        />
+                      </div>
+                      <button
+                        onClick={() => { setSelectedTemplate(null); handleClear(); }}
+                        className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 transition-colors ml-2"
+                        title={language === 'hi' ? 'वापस जाएं' : 'Go back'}
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <CardContent className="pt-6">
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-base font-semibold">{t('date')}</Label>
+                          <Input type="date" value={voucherDate} onChange={(e) => setVoucherDate(e.target.value)} className="h-12 text-lg" required />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-base font-semibold">{t('amount')} (₹)</Label>
+                          <Input
+                            type="number"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            placeholder="0"
+                            min="1"
+                            className="h-12 text-2xl font-bold text-center"
+                            required
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-base font-semibold">{t('narration')} ({language === 'hi' ? 'वैकल्पिक' : 'Optional'})</Label>
+                        <Input
+                          value={narration}
+                          onChange={(e) => setNarration(e.target.value)}
+                          placeholder={language === 'hi' ? 'विवरण...' : 'Details...'}
+                          className="h-11"
+                        />
+                      </div>
+                      {members.length > 0 && (
+                        <div className="space-y-2">
+                          <Label className="text-base font-semibold">
+                            {language === 'hi' ? 'सदस्य से लिंक करें (वैकल्पिक)' : 'Link to Member (Optional)'}
+                          </Label>
+                          <Select value={linkedMemberId || '__none__'} onValueChange={v => setLinkedMemberId(v === '__none__' ? '' : v)}>
+                            <SelectTrigger className="h-11">
+                              <SelectValue placeholder={language === 'hi' ? 'कोई सदस्य नहीं' : 'No member linked'} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">{language === 'hi' ? 'कोई नहीं' : 'None'}</SelectItem>
+                              {members.map(m => (
+                                <SelectItem key={m.id} value={m.id}>{m.memberId} — {m.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      <div className="flex gap-3 pt-2 border-t">
+                        <Button type="submit" size="lg" className="flex-1 h-12 text-lg gap-2">
+                          <Save className="h-5 w-5" />
+                          {t('save')}
+                        </Button>
+                        <Button type="button" variant="outline" size="lg" className="gap-2" onClick={() => { setSelectedTemplate(null); handleClear(); }}>
+                          <X className="h-5 w-5" />
+                          {language === 'hi' ? 'रद्द' : 'Cancel'}
+                        </Button>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* ── EXPERT MODE ── */}
+          {entryMode === 'expert' && (
           <Tabs value={voucherType} onValueChange={(v) => { setVoucherType(v as VoucherType); setSavedVoucherNo(null); }}>
             <TabsList className="grid w-full grid-cols-3 max-w-md">
               <TabsTrigger value="receipt" className="gap-2">
@@ -359,6 +566,7 @@ const Vouchers: React.FC = () => {
               </Card>
             </TabsContent>
           </Tabs>
+          )}
         </>
       )}
 
