@@ -45,6 +45,7 @@ import VoucherApproval from "./pages/VoucherApproval";
 import MeetingRegister from "./pages/MeetingRegister";
 import NominationRegister from "./pages/NominationRegister";
 import Form1MemberList from "./pages/Form1MemberList";
+import AuditCertificate from "./pages/AuditCertificate";
 import GstSummary from "./pages/GstSummary";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
@@ -122,6 +123,7 @@ const AppRoutes = () => {
       <Route path="/meeting-register" element={<ProtectedRoute><MeetingRegister /></ProtectedRoute>} />
       <Route path="/nomination-register" element={<ProtectedRoute><NominationRegister /></ProtectedRoute>} />
       <Route path="/form1-member-list" element={<ProtectedRoute><Form1MemberList /></ProtectedRoute>} />
+      <Route path="/audit-certificate" element={<ProtectedRoute><AuditCertificate /></ProtectedRoute>} />
       <Route path="/gst-summary" element={<ProtectedRoute><GstSummary /></ProtectedRoute>} />
 
       {/* Catch-all */}

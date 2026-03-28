@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Wallet, Building2, FileText, BookOpen, Users,
   Scale, TrendingUp, FileSpreadsheet, BarChart3, Settings, LogOut,
   ChevronLeft, ChevronRight, ArrowLeftRight, BookMarked, Landmark, Package, ShieldCheck, CalendarDays,
-  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, Truck, UserCheck, Trash2, CheckCircle2, Shield, Percent, Coins, Layers, Users2, ClipboardList,
+  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, Truck, UserCheck, Trash2, CheckCircle2, Shield, Percent, Coins, Layers, Users2, ClipboardList, FileCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -69,6 +69,7 @@ const registerNavItems: NavItem[] = [
   { key: 'meetingRegister', icon: Users2, path: '/meeting-register' },
   { key: 'nominationRegister', icon: UserCheck, path: '/nomination-register' },
   { key: 'form1MemberList', icon: ClipboardList, path: '/form1-member-list' },
+  { key: 'auditCertificate', icon: FileCheck, path: '/audit-certificate', roles: ['admin', 'accountant'] },
   { key: 'reserveFund', icon: Shield, path: '/reserve-fund', roles: ['admin', 'accountant'] },
   { key: 'profitDistribution', icon: Coins, path: '/profit-distribution', roles: ['admin', 'accountant'] },
   { key: 'deletedVouchers', icon: Trash2, path: '/deleted-vouchers', roles: ['admin'] },
