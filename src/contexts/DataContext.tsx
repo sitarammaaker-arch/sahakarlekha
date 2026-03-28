@@ -162,9 +162,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         else setMembersState([]);
 
         // Load accounts from Supabase; fall back to CMS template (never stale localStorage) if none exist
-        const baseAccts: LedgerAccount[] = aData && aData.length > 0 ? [...aData] : [...CMS_SOCIETY_ACCOUNTS];
+        const rawAccts: LedgerAccount[] = aData && aData.length > 0 ? [...aData] : [...CMS_SOCIETY_ACCOUNTS];
+        const { accounts: baseAccts, changed: acctsMigrated } = storage.migrateAccounts(rawAccts);
         setAccountsState(baseAccts);
         storage.setAccounts(baseAccts);
+        // Sync migrated accounts back to Supabase if anything changed
+        if (acctsMigrated) {
+          supabase.from('accounts').delete().eq('society_id', sid).then(() => {
+            const rows = baseAccts.map(a => ({ ...a, society_id: sid }));
+            supabase.from('accounts').insert(rows).then(({ error }) => {
+              if (error) console.warn('Account migration sync error:', error.message);
+            });
+          });
+        }
 
         // Auto-create missing member vouchers — wrapped in try-catch so it never breaks main data load
         try {
@@ -211,7 +221,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const lsAccounts = storage.getAccounts();
         if (lsVouchers.length > 0) setVouchersState(lsVouchers);
         if (lsMembers.length > 0) setMembersState(lsMembers);
-        if (lsAccounts.length > 0) setAccountsState(lsAccounts);
+        if (lsAccounts.length > 0) {
+          const { accounts: migratedAccts } = storage.migrateAccounts(lsAccounts);
+          setAccountsState(migratedAccts);
+          storage.setAccounts(migratedAccts);
+        }
         setSocietyState(storage.getSociety());
         setLoansState(storage.getLoans());
         setAssetsState(storage.getAssets());

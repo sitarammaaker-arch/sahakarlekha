@@ -66,11 +66,11 @@ export const ACCOUNT_IDS = {
   CASH:      '3301',  // Cash in Hand
   BANK:      '3302',  // Bank Accounts
   SHARE_CAP: '1102',  // Individual Share Capital (member share capital)
-  ADM_FEE:   '4407',  // Admission Fee Income
+  ADM_FEE:   '4407',  // Admission Fee (Capital Receipt — Balance Sheet)
 } as const;
 
 // ── CMSSociety (Marketing cum Processing Society) Chart of Accounts ──────────
-// 122 accounts from Ultimate_COA_V2.xlsx + Admission Fee (4407)
+// 136 accounts — verified against ICAI NCE GN 2023 + Haryana Cooperative Societies Act 1984
 // isGroup = true  → header/parent account, no direct transactions
 // isSystem = true → critical account, cannot be deleted
 export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
@@ -81,14 +81,14 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '1102', name: 'Individual Share Capital',   nameHi: 'व्यक्तिगत शेयर पूंजी',     type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: false, parentId: '1100' },
   { id: '1103', name: 'PACS Share Capital',         nameHi: 'पैक्स शेयर पूंजी',         type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1100' },
   { id: '1200', name: 'Reserves & Surplus',         nameHi: 'संचय एवं अधिशेष',          type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true,  parentId: '1000' },
-  { id: '1201', name: 'Reserve Fund',               nameHi: 'संचय निधि',                type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
+  { id: '1201', name: 'Statutory Reserve Fund',      nameHi: 'वैधानिक संचय निधि',        type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
   { id: '1202', name: 'Building Fund',              nameHi: 'भवन निधि',                 type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
   { id: '1203', name: 'Education Fund',             nameHi: 'शिक्षा निधि',               type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
   { id: '1204', name: 'Risk Fund',                  nameHi: 'जोखिम निधि',               type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
   { id: '1205', name: 'Bad Debt Fund',              nameHi: 'अशोध्य ऋण निधि',           type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
   { id: '1206', name: 'Depreciation Fund',          nameHi: 'ह्रास निधि',               type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
   { id: '1207', name: 'Welfare Fund',               nameHi: 'कल्याण निधि',              type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
-  { id: '1208', name: 'Retained Earnings',          nameHi: 'प्रतिधारित आय',            type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
+  { id: '1208', name: 'Net Surplus / (Deficit)',     nameHi: 'शुद्ध अधिशेष / (घाटा)',    type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200' },
 
   // ── Liabilities ──────────────────────────────────────────────────────────
   { id: '2000', name: 'Liabilities',                nameHi: 'दायित्व',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true  },
@@ -99,11 +99,13 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '2104', name: 'Dividend Payable',           nameHi: 'देय लाभांश',               type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
   { id: '2105', name: 'MSP Payable to Farmers',     nameHi: 'किसानों को देय MSP',        type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
   { id: '2106', name: 'Member Payable',             nameHi: 'सदस्य देय',                type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
+  { id: '2107', name: 'Member Deposits',            nameHi: 'सदस्य जमाराशि',            type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
   { id: '2200', name: 'Statutory Liabilities',      nameHi: 'वैधानिक दायित्व',          type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '2000' },
   { id: '2201', name: 'GST Payable',                nameHi: 'देय GST',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200' },
   { id: '2202', name: 'TDS Payable',                nameHi: 'देय TDS',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200' },
   { id: '2203', name: 'EPF Payable',                nameHi: 'देय EPF',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200' },
   { id: '2204', name: 'ESI Payable',                nameHi: 'देय ESI',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200' },
+  { id: '2205', name: 'HRDF Payable',               nameHi: 'देय HRDF',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200' },
   { id: '2300', name: 'Loans',                      nameHi: 'ऋण',                       type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '2000' },
   { id: '2301', name: 'Bank OD',                    nameHi: 'बैंक अधिविकर्ष',           type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2300' },
   { id: '2302', name: 'Secured Loan',               nameHi: 'सुरक्षित ऋण',              type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2300' },
@@ -118,6 +120,11 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '3104', name: 'Vehicle',                    nameHi: 'वाहन',                     type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100' },
   { id: '3105', name: 'Plant & Machinery',          nameHi: 'संयंत्र एवं मशीनरी',       type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100' },
   { id: '3106', name: 'Office Equipment',           nameHi: 'कार्यालय उपकरण',           type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3108', name: 'Accum. Dep. - Building',     nameHi: 'संचित ह्रास - भवन',         type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3109', name: 'Accum. Dep. - Furniture',    nameHi: 'संचित ह्रास - फर्नीचर',     type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3110', name: 'Accum. Dep. - Vehicle',      nameHi: 'संचित ह्रास - वाहन',        type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3111', name: 'Accum. Dep. - Plant',        nameHi: 'संचित ह्रास - संयंत्र',     type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3112', name: 'Accum. Dep. - Office Equip', nameHi: 'संचित ह्रास - उपकरण',       type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100' },
   { id: '3200', name: 'Investments',                nameHi: 'निवेश',                    type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '3000' },
   { id: '3201', name: 'Hafed Share',                nameHi: 'हैफेड शेयर',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3200' },
   { id: '3202', name: 'IFFCO Share',                nameHi: 'इफको शेयर',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3200' },
@@ -135,6 +142,8 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '3307', name: 'TDS Receivable',             nameHi: 'प्राप्य TDS',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
   { id: '3308', name: 'MSP Receivable',             nameHi: 'प्राप्य MSP',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
   { id: '3309', name: 'Member Receivable',          nameHi: 'सदस्य प्राप्य',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
+  { id: '3310', name: 'GST Input Credit (ITC)',     nameHi: 'GST इनपुट क्रेडिट (ITC)',   type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
+  { id: '3311', name: 'Prepaid Expenses',           nameHi: 'अग्रिम व्यय',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
   { id: '3400', name: 'Inventory',                  nameHi: 'माल-सूची',                 type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '3000' },
   { id: '3401', name: 'Raw Material',               nameHi: 'कच्चा माल',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3400' },
   { id: '3402', name: 'Finished Goods',             nameHi: 'तैयार माल',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3400' },
@@ -165,8 +174,8 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '4403', name: 'Interest',                   nameHi: 'ब्याज आय',                 type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },
   { id: '4404', name: 'Dividend',                   nameHi: 'लाभांश आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },
   { id: '4405', name: 'Misc',                       nameHi: 'विविध आय',                 type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },
-  { id: '4406', name: 'Patronage Rebate',           nameHi: 'संरक्षण छूट',              type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },
-  { id: '4407', name: 'Admission Fee',              nameHi: 'प्रवेश शुल्क आय',          type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: false, parentId: '4400' },
+  { id: '4406', name: 'Patronage Rebate',           nameHi: 'संरक्षण छूट',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400' },
+  { id: '4407', name: 'Admission Fee',              nameHi: 'प्रवेश शुल्क (पूंजी)',     type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: false, parentId: '1200' },
 
   // ── Expenses ─────────────────────────────────────────────────────────────
   { id: '5000', name: 'Expenses',                   nameHi: 'व्यय',                     type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: true  },
@@ -193,6 +202,10 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5305', name: 'Legal',                      nameHi: 'कानूनी व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
   { id: '5306', name: 'Audit',                      nameHi: 'लेखा परीक्षण व्यय',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
   { id: '5307', name: 'Software',                   nameHi: 'सॉफ्टवेयर व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5308', name: 'Rent',                       nameHi: 'किराया व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5309', name: 'Travelling Expenses',        nameHi: 'यात्रा व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5310', name: 'Meeting / AGM Expenses',     nameHi: 'बैठक / AGM व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5311', name: 'Education Fund Contribution',nameHi: 'शिक्षा निधि अंशदान',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
   { id: '5400', name: 'Operational Expenses',       nameHi: 'परिचालन व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
   { id: '5401', name: 'Vehicle',                    nameHi: 'वाहन व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400' },
   { id: '5402', name: 'Repair',                     nameHi: 'मरम्मत व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400' },
@@ -204,7 +217,7 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5504', name: 'Plant',                      nameHi: 'संयंत्र ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500' },
   { id: '5600', name: 'Statutory Expenses',         nameHi: 'वैधानिक व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
   { id: '5601', name: 'GST',                        nameHi: 'GST व्यय',                 type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600' },
-  { id: '5602', name: 'Income Tax',                 nameHi: 'आयकर',                     type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600' },
+  { id: '5602', name: 'Professional Tax / Local Levies', nameHi: 'व्यावसायिक कर / स्थानीय शुल्क', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '5600' },
 
   // ── Suspense ─────────────────────────────────────────────────────────────
   { id: '9999', name: 'Suspense Account',           nameHi: 'संदिग्ध खाता',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false },
@@ -218,6 +231,56 @@ export const SOCIETY_TEMPLATES: Record<string, LedgerAccount[]> = {
 
 // Fallback for societies that have no template (use CMS as default)
 export const DEFAULT_ACCOUNTS = CMS_SOCIETY_ACCOUNTS;
+
+// ── Account Migration (v2 → v3) ───────────────────────────────────────────────
+// Applies to existing societies: renames, reclassifies, and adds missing accounts
+// Idempotent — safe to run on every app load
+const ACCOUNT_PATCHES: Record<string, Partial<LedgerAccount>> = {
+  '1201': { name: 'Statutory Reserve Fund',         nameHi: 'वैधानिक संचय निधि' },
+  '1208': { name: 'Net Surplus / (Deficit)',          nameHi: 'शुद्ध अधिशेष / (घाटा)' },
+  '4406': { type: 'expense', openingBalanceType: 'debit',  parentId: '5400' },
+  '4407': { type: 'equity',  openingBalanceType: 'credit', parentId: '1200', nameHi: 'प्रवेश शुल्क (पूंजी)' },
+  '5602': { name: 'Professional Tax / Local Levies', nameHi: 'व्यावसायिक कर / स्थानीय शुल्क' },
+};
+
+const ACCOUNTS_TO_ADD: LedgerAccount[] = [
+  { id: '2107', name: 'Member Deposits',            nameHi: 'सदस्य जमाराशि',            type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
+  { id: '2205', name: 'HRDF Payable',               nameHi: 'देय HRDF',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200' },
+  { id: '3108', name: 'Accum. Dep. - Building',     nameHi: 'संचित ह्रास - भवन',         type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3109', name: 'Accum. Dep. - Furniture',    nameHi: 'संचित ह्रास - फर्नीचर',     type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3110', name: 'Accum. Dep. - Vehicle',      nameHi: 'संचित ह्रास - वाहन',        type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3111', name: 'Accum. Dep. - Plant',        nameHi: 'संचित ह्रास - संयंत्र',     type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3112', name: 'Accum. Dep. - Office Equip', nameHi: 'संचित ह्रास - उपकरण',       type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100' },
+  { id: '3310', name: 'GST Input Credit (ITC)',     nameHi: 'GST इनपुट क्रेडिट (ITC)',   type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
+  { id: '3311', name: 'Prepaid Expenses',           nameHi: 'अग्रिम व्यय',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
+  { id: '5308', name: 'Rent',                       nameHi: 'किराया व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5309', name: 'Travelling Expenses',        nameHi: 'यात्रा व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5310', name: 'Meeting / AGM Expenses',     nameHi: 'बैठक / AGM व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5311', name: 'Education Fund Contribution',nameHi: 'शिक्षा निधि अंशदान',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+];
+
+export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAccount[]; changed: boolean } {
+  let changed = false;
+
+  // Step 1: Apply patches to existing accounts
+  const patched = existing.map(acc => {
+    const patch = ACCOUNT_PATCHES[acc.id];
+    if (!patch) return acc;
+    changed = true;
+    return { ...acc, ...patch } as LedgerAccount;
+  });
+
+  // Step 2: Add missing accounts (skip if already present)
+  const existingIds = new Set(patched.map(a => a.id));
+  for (const newAcc of ACCOUNTS_TO_ADD) {
+    if (!existingIds.has(newAcc.id)) {
+      patched.push(newAcc);
+      changed = true;
+    }
+  }
+
+  return { accounts: patched, changed };
+}
 
 export const DEFAULT_SOCIETY: SocietySettings = {
   name: 'Gram Seva Cooperative Marketing Society',
