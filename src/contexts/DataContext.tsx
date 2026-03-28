@@ -113,7 +113,10 @@ interface DataContextType {
     totalSales: number; totalClosingStock: number;
     totalOpeningStock: number; totalPurchases: number; totalDirectExp: number;
     grossProfit: number;
+    physicalClosingStock: number;    // computed from stockItems, used when no ledger closing stock
+    closingStockPosted: boolean;     // true if a closing stock journal exists for current FY
   };
+  postClosingStock: (fy?: string) => { posted: boolean; amount: number; alreadyPosted: boolean };
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -808,6 +811,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const getTradingAccount = useCallback(() => {
     const tb = getTrialBalance();
+    const fy = society.financialYear;
 
     // Cr side: Sales / Trading Income (parentId '4100')
     const salesItems = tb
@@ -815,11 +819,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: Math.abs(b.netBalance) }))
       .filter(i => i.amount > 0);
 
-    // Cr side: Closing Stock = current net debit balance of inventory accounts (parentId '3400')
-    const closingStockItems = tb
+    // Cr side: Closing Stock from ledger (net debit balance of inventory accounts under parentId '3400')
+    const ledgerClosingItems = tb
       .filter(b => b.account.parentId === '3400')
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: Math.max(0, b.netBalance) }))
       .filter(i => i.amount > 0);
+
+    // Physical closing stock from stockItems (currentStock × purchaseRate)
+    const physicalClosingStock = stockItems
+      .filter(s => s.isActive && s.currentStock > 0)
+      .reduce((sum, s) => sum + s.currentStock * s.purchaseRate, 0);
+
+    // Check if closing stock journal has been posted for this FY
+    const closingStockPosted = activeVouchers.some(v =>
+      v.debitAccountId === '3403' &&
+      v.creditAccountId === '5101' &&
+      v.narration.includes(fy)
+    );
+
+    // Use ledger closing stock if journals are posted; otherwise use physical stock as synthetic item
+    const closingStockItems = ledgerClosingItems.length > 0
+      ? ledgerClosingItems
+      : physicalClosingStock > 0
+        ? [{ name: 'Closing Stock (Physical)', nameHi: 'समापन माल (भौतिक)', amount: physicalClosingStock }]
+        : [];
 
     // Dr side: Opening Stock = opening debit balances of inventory accounts
     const openingStockItems = tb
@@ -847,11 +870,40 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const crTotal   = totalSales + totalClosingStock;
     const drTotal   = totalOpeningStock + totalPurchases + totalDirectExp;
-    const grossProfit = crTotal - drTotal; // positive = profit, negative = loss
+    const grossProfit = crTotal - drTotal;
 
     return { salesItems, closingStockItems, openingStockItems, purchaseItems, directExpItems,
-      totalSales, totalClosingStock, totalOpeningStock, totalPurchases, totalDirectExp, grossProfit };
-  }, [getTrialBalance]);
+      totalSales, totalClosingStock, totalOpeningStock, totalPurchases, totalDirectExp, grossProfit,
+      physicalClosingStock, closingStockPosted };
+  }, [getTrialBalance, stockItems, activeVouchers, society.financialYear]);
+
+  const postClosingStock = useCallback((fy?: string): { posted: boolean; amount: number; alreadyPosted: boolean } => {
+    const currentFY = fy ?? society.financialYear;
+    // Check if already posted
+    const alreadyPosted = activeVouchers.some(v =>
+      v.debitAccountId === '3403' &&
+      v.creditAccountId === '5101' &&
+      v.narration.includes(currentFY)
+    );
+    if (alreadyPosted) return { posted: false, amount: 0, alreadyPosted: true };
+
+    const amount = stockItems
+      .filter(s => s.isActive && s.currentStock > 0)
+      .reduce((sum, s) => sum + s.currentStock * s.purchaseRate, 0);
+
+    if (amount <= 0) return { posted: false, amount: 0, alreadyPosted: false };
+
+    addVoucher({
+      type: 'journal',
+      date: new Date().toISOString().split('T')[0],
+      debitAccountId: '3403',   // Trading Goods inventory
+      creditAccountId: '5101',  // Purchase (reduces net purchase cost)
+      amount,
+      narration: `Closing Stock at year end — FY ${currentFY}`,
+      createdBy: user?.name ?? 'System',
+    });
+    return { posted: true, amount, alreadyPosted: false };
+  }, [stockItems, activeVouchers, society.financialYear, addVoucher, user?.name]);
 
   const getProfitLoss = useCallback(() => {
     const tb = getTrialBalance();
@@ -1292,7 +1344,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addSupplier, updateSupplier, deleteSupplier,
       addCustomer, updateCustomer, deleteCustomer,
       getAccountBalance, getCashBookEntries, getBankBookEntries,
-      getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments,
+      getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments, postClosingStock,
     }}>
       {children}
     </DataContext.Provider>

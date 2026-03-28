@@ -4,13 +4,15 @@ import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ShoppingCart, Download, Printer, TrendingUp, TrendingDown } from 'lucide-react';
+import { ShoppingCart, Download, Printer, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateTradingAccountPDF } from '@/lib/pdf';
+import { useToast } from '@/hooks/use-toast';
 
 const TradingAccount: React.FC = () => {
   const { language } = useLanguage();
-  const { getTradingAccount, society } = useData();
+  const { getTradingAccount, postClosingStock, society } = useData();
+  const { toast } = useToast();
 
   const hi = language === 'hi';
 
@@ -22,8 +24,19 @@ const TradingAccount: React.FC = () => {
     openingStockItems, purchaseItems, directExpItems,
     totalSales, totalClosingStock,
     totalOpeningStock, totalPurchases, totalDirectExp,
-    grossProfit,
+    grossProfit, physicalClosingStock, closingStockPosted,
   } = getTradingAccount();
+
+  const handlePostClosingStock = () => {
+    const result = postClosingStock();
+    if (result.alreadyPosted) {
+      toast({ title: hi ? 'समापन माल पहले से पोस्ट है' : 'Closing stock already posted' });
+    } else if (result.posted) {
+      toast({ title: hi ? `समापन माल जर्नल पोस्ट: ${fmt(result.amount)}` : `Closing stock posted: ${fmt(result.amount)}` });
+    } else {
+      toast({ title: hi ? 'माल भंडार शून्य है' : 'Stock inventory is zero', variant: 'destructive' });
+    }
+  };
 
   const isProfit   = grossProfit >= 0;
   const crTotal    = totalSales + totalClosingStock + (isProfit ? 0 : Math.abs(grossProfit));
@@ -45,7 +58,24 @@ const TradingAccount: React.FC = () => {
               : `For the Financial Year ${society.financialYear}`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {physicalClosingStock > 0 && !closingStockPosted && (
+            <Button
+              size="sm"
+              className="gap-2 bg-amber-600 hover:bg-amber-700"
+              onClick={handlePostClosingStock}
+              title={hi ? 'समापन माल जर्नल पोस्ट करें (Dr 3403 / Cr 5101)' : 'Post closing stock journal (Dr 3403 / Cr 5101)'}
+            >
+              <AlertTriangle className="h-4 w-4" />
+              {hi ? `समापन माल पोस्ट करें (${fmt(physicalClosingStock)})` : `Post Closing Stock (${fmt(physicalClosingStock)})`}
+            </Button>
+          )}
+          {closingStockPosted && (
+            <span className="flex items-center gap-1 text-xs text-green-700 font-medium px-2">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {hi ? 'समापन माल पोस्ट है' : 'Closing stock posted'}
+            </span>
+          )}
           <Button
             variant="outline"
             size="sm"
