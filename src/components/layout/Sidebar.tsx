@@ -34,6 +34,7 @@ const mainNavItems: NavItem[] = [
   { key: 'bankReconciliation', icon: CheckCircle2, path: '/bank-reconciliation' },
   { key: 'vouchers', icon: FileText, path: '/vouchers' },
   { key: 'compoundVoucher', icon: Layers, path: '/compound-voucher', roles: ['admin', 'accountant'] },
+  { key: 'voucherApproval', icon: CheckCircle2, path: '/voucher-approval', roles: ['admin'] },
   { key: 'dayBook', icon: CalendarDays, path: '/day-book' },
   { key: 'ledger', icon: BookOpen, path: '/ledger' },
   { key: 'members', icon: Users, path: '/members' },

@@ -40,6 +40,11 @@ export interface Voucher {
   clearedDate?: string;
   // Compound voucher grouping — multiple rows share same groupId
   groupId?: string;
+  // Maker-Checker approval workflow
+  approvalStatus?: 'pending' | 'approved' | 'rejected';
+  approvalRemarks?: string;
+  approvedBy?: string;
+  approvedAt?: string;
 }
 
 export type ObjectionStatus = 'pending' | 'partial' | 'rectified';

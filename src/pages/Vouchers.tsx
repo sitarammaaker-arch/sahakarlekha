@@ -90,6 +90,7 @@ const Vouchers: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const { accounts, members, vouchers, society, addVoucher, updateVoucher, cancelVoucher, restoreVoucher } = useData();
+  const [submitForApproval, setSubmitForApproval] = useState(false);
   const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'entry' | 'list'>('entry');
@@ -215,6 +216,7 @@ const Vouchers: React.FC = () => {
         narration,
         createdBy: user?.name || 'System',
         voucherNo: customNo || undefined,
+        approvalStatus: submitForApproval ? 'pending' : undefined,
       });
       setSavedVoucherNo(v.voucherNo);
       toast({ title: language === 'hi' ? 'कोंट्रा वाउचर सहेजा गया' : 'Contra Voucher saved', description: v.voucherNo });
@@ -245,6 +247,7 @@ const Vouchers: React.FC = () => {
       memberId: linkedMemberId || undefined,
       createdBy: user?.name || 'System',
       voucherNo: customNo || undefined,
+      approvalStatus: submitForApproval ? 'pending' : undefined,
     });
     setSavedVoucherNo(v.voucherNo);
     toast({ title: language === 'hi' ? 'वाउचर सहेजा गया' : 'Voucher saved', description: `${v.voucherNo}` });
@@ -488,10 +491,22 @@ const Vouchers: React.FC = () => {
                           </Select>
                         </div>
                       )}
+                      <div className="flex items-center gap-2 pb-2">
+                        <input
+                          type="checkbox"
+                          id="approvalChk1"
+                          checked={submitForApproval}
+                          onChange={e => setSubmitForApproval(e.target.checked)}
+                          className="h-4 w-4 cursor-pointer"
+                        />
+                        <label htmlFor="approvalChk1" className="text-sm text-gray-600 cursor-pointer">
+                          {language === 'hi' ? 'अनुमोदन हेतु भेजें (Maker-Checker)' : 'Submit for Approval (Maker-Checker)'}
+                        </label>
+                      </div>
                       <div className="flex gap-3 pt-2 border-t">
                         <Button type="submit" size="lg" className="flex-1 h-12 text-lg gap-2">
                           <Save className="h-5 w-5" />
-                          {t('save')}
+                          {submitForApproval ? (language === 'hi' ? 'अनुमोदन हेतु भेजें' : 'Submit for Approval') : t('save')}
                         </Button>
                         <Button type="button" variant="outline" size="lg" className="gap-2" onClick={() => { setSelectedTemplate(null); handleClear(); }}>
                           <X className="h-5 w-5" />
@@ -689,10 +704,22 @@ const Vouchers: React.FC = () => {
                       </div>
                     )}
 
+                    <div className="flex items-center gap-2 pb-2">
+                      <input
+                        type="checkbox"
+                        id="approvalChk2"
+                        checked={submitForApproval}
+                        onChange={e => setSubmitForApproval(e.target.checked)}
+                        className="h-4 w-4 cursor-pointer"
+                      />
+                      <label htmlFor="approvalChk2" className="text-sm text-gray-600 cursor-pointer">
+                        {language === 'hi' ? 'अनुमोदन हेतु भेजें (Maker-Checker)' : 'Submit for Approval (Maker-Checker)'}
+                      </label>
+                    </div>
                     <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
                       <Button type="submit" size="lg" className="flex-1 h-12 text-lg gap-2">
                         <Save className="h-5 w-5" />
-                        {t('save')}
+                        {submitForApproval ? (language === 'hi' ? 'अनुमोदन हेतु भेजें' : 'Submit for Approval') : t('save')}
                       </Button>
                       <Button type="button" variant="outline" size="lg" className="gap-2" onClick={handleClear}>
                         <X className="h-5 w-5" />

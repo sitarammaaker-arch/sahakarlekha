@@ -28,6 +28,8 @@ interface DataContextType {
   restoreVoucher: (id: string) => void;
   clearVoucher: (id: string, clearedDate?: string) => void;
   unclearVoucher: (id: string) => void;
+  approveVoucher: (id: string, approvedBy: string) => void;
+  rejectVoucher: (id: string, rejectedBy: string, reason: string) => void;
   auditObjections: AuditObjection[];
   addAuditObjection: (data: Omit<AuditObjection, 'id' | 'objectionNo' | 'createdAt'>) => AuditObjection;
   updateAuditObjection: (id: string, data: Partial<AuditObjection>) => void;
@@ -359,6 +361,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const uncleared = { ...current, isCleared: false, clearedDate: undefined };
     setVouchersState(prev => { const updated = prev.map(v => v.id === id ? uncleared : v); storage.setVouchers(updated); return updated; });
     supabase.from('vouchers').upsert(withSoc(uncleared)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+  }, []);
+
+  const approveVoucher = useCallback((id: string, approvedBy: string) => {
+    const current = vouchersRef.current.find(v => v.id === id);
+    if (!current) return;
+    const updated = { ...current, approvalStatus: 'approved' as const, approvedBy, approvedAt: new Date().toISOString() };
+    setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); storage.setVouchers(u); return u; });
+    supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+  }, []);
+
+  const rejectVoucher = useCallback((id: string, rejectedBy: string, reason: string) => {
+    const current = vouchersRef.current.find(v => v.id === id);
+    if (!current) return;
+    const updated = { ...current, approvalStatus: 'rejected' as const, approvalRemarks: reason, approvedBy: rejectedBy, approvedAt: new Date().toISOString() };
+    setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); storage.setVouchers(u); return u; });
+    supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
   }, []);
 
   const addAuditObjection = useCallback((data: Omit<AuditObjection, 'id' | 'objectionNo' | 'createdAt'>): AuditObjection => {
@@ -1362,7 +1380,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       vouchers, members, accounts, society, loans, assets, auditObjections,
       stockItems, stockMovements, sales, purchases, employees, salaryRecords,
       suppliers, customers,
-      addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher,
+      addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember,
       addAccount, updateAccount, deleteAccount, updateSociety,
       addLoan, updateLoan, deleteLoan,
