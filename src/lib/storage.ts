@@ -219,6 +219,7 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5502', name: 'Furniture',                  nameHi: 'फर्नीचर ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500' },
   { id: '5503', name: 'Vehicle',                    nameHi: 'वाहन ह्रास',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500' },
   { id: '5504', name: 'Plant',                      nameHi: 'संयंत्र ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500' },
+  { id: '5505', name: 'Computer / Office Equip',    nameHi: 'कंप्यूटर / उपकरण ह्रास',   type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500' },
   { id: '5600', name: 'Statutory Expenses',         nameHi: 'वैधानिक व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
   { id: '5601', name: 'GST',                        nameHi: 'GST व्यय',                 type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600' },
   { id: '5602', name: 'Professional Tax / Local Levies', nameHi: 'व्यावसायिक कर / स्थानीय शुल्क', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '5600' },
@@ -261,6 +262,7 @@ const ACCOUNTS_TO_ADD: LedgerAccount[] = [
   { id: '5309', name: 'Travelling Expenses',        nameHi: 'यात्रा व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
   { id: '5310', name: 'Meeting / AGM Expenses',     nameHi: 'बैठक / AGM व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
   { id: '5311', name: 'Education Fund Contribution',nameHi: 'शिक्षा निधि अंशदान',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300' },
+  { id: '5505', name: 'Computer / Office Equip',    nameHi: 'कंप्यूटर / उपकरण ह्रास',   type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500' },
 ];
 
 export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAccount[]; changed: boolean } {

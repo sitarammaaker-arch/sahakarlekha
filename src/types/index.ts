@@ -105,6 +105,8 @@ export interface Asset {
   purchaseDate: string;
   cost: number;
   depreciationRate: number;
+  depreciationMethod?: 'SLM' | 'WDV';
+  depreciationPostedFY?: string[]; // FYs where journal entry has been posted
   location: string;
   description: string;
   status: AssetStatus;

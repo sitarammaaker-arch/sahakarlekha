@@ -12,6 +12,7 @@ import type {
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
+import { calcDepForFY, DEP_ACCOUNTS, parseFY } from '@/lib/depreciation';
 
 interface DataContextType {
   vouchers: Voucher[];
@@ -46,6 +47,7 @@ interface DataContextType {
   addAsset: (data: Omit<Asset, 'id' | 'assetNo'>) => Asset;
   updateAsset: (id: string, data: Partial<Asset>) => void;
   deleteAsset: (id: string) => void;
+  postDepreciation: (fy?: string) => { posted: number; skipped: number };
 
   // Inventory
   stockItems: StockItem[];
@@ -663,6 +665,66 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('assets').delete().eq('id', id).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
   }, []);
 
+  // ── Depreciation Posting ───────────────────────────────────────────────────
+  // Posts one journal entry per active depreciable asset for the given FY.
+  // Skips assets already posted, with zero rate, Land category, or disposed.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const postDepreciation = useCallback((fy?: string): { posted: number; skipped: number } => {
+    const targetFY  = fy || society.financialYear;
+    const fyDates   = parseFY(targetFY);
+    if (!fyDates) return { posted: 0, skipped: 0 };
+
+    const depDate   = fyDates.end; // last day of FY
+    const createdBy = user?.name || 'System';
+
+    const currentAccounts = accounts;
+    const currentVouchers = vouchersRef.current.filter(v => !v.isDeleted);
+
+    let posted = 0, skipped = 0;
+
+    for (const asset of assets) {
+      if (asset.status !== 'active' || !asset.depreciationRate || asset.depreciationRate <= 0) { skipped++; continue; }
+      const depAcc = DEP_ACCOUNTS[asset.category];
+      if (!depAcc) { skipped++; continue; } // Land or unknown
+      if (asset.depreciationPostedFY?.includes(targetFY)) { skipped++; continue; }
+
+      // Accumulated depreciation posted so far (for WDV book value)
+      const accumAcc = currentAccounts.find(a => a.id === depAcc.accumId);
+      let priorAccumDep = 0;
+      if (accumAcc) {
+        let bal = accumAcc.openingBalanceType === 'debit' ? accumAcc.openingBalance : -accumAcc.openingBalance;
+        currentVouchers.forEach(v => {
+          if (v.debitAccountId  === depAcc.accumId) bal += v.amount;
+          if (v.creditAccountId === depAcc.accumId) bal -= v.amount;
+        });
+        priorAccumDep = -bal; // credit-balance accounts return negative; flip to positive
+      }
+
+      const depAmount = calcDepForFY(asset, targetFY, priorAccumDep);
+      if (depAmount <= 0) { skipped++; continue; }
+
+      addVoucher({
+        type: 'journal',
+        date: depDate,
+        debitAccountId:  depAcc.expenseId,
+        creditAccountId: depAcc.accumId,
+        amount: depAmount,
+        narration: `Depreciation: ${asset.name} (${asset.assetNo}) FY ${targetFY}`,
+        createdBy,
+      });
+
+      // Mark FY as posted on the asset record
+      updateAsset(asset.id, {
+        depreciationPostedFY: [...(asset.depreciationPostedFY ?? []), targetFY],
+      });
+
+      posted++;
+    }
+
+    return { posted, skipped };
+  // addVoucher and updateAsset are stable callbacks; assets/accounts/society/user are state
+  }, [assets, accounts, society, user, addVoucher, updateAsset]); // eslint-disable-line
+
   const getReceiptsPayments = useCallback((): ReceiptsPaymentsData => {
     const cashAccount = accounts.find(a => a.id === ACCOUNT_IDS.CASH);
     const bankAccount = accounts.find(a => a.id === ACCOUNT_IDS.BANK);
@@ -1123,7 +1185,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addMember, updateMember, deleteMember,
       addAccount, updateAccount, deleteAccount, updateSociety,
       addLoan, updateLoan, deleteLoan,
-      addAsset, updateAsset, deleteAsset,
+      addAsset, updateAsset, deleteAsset, postDepreciation,
       addAuditObjection, updateAuditObjection, deleteAuditObjection,
       addStockItem, updateStockItem, deleteStockItem, addStockMovement,
       addSale, deleteSale,

@@ -10,11 +10,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Download, Search, Edit, Trash2, Package } from 'lucide-react';
+import { Plus, Download, Search, Edit, Trash2, Package, RefreshCw, CheckCircle } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { generateAssetRegisterPDF } from '@/lib/pdf';
 import type { Asset, AssetCategory, AssetStatus } from '@/types';
+import { calcSLMDepreciation, calcWDVDepreciation, DEP_ACCOUNTS } from '@/lib/depreciation';
 
 const CATEGORIES: AssetCategory[] = ['Land', 'Building', 'Furniture', 'Equipment', 'Vehicle', 'Computer', 'Other'];
 
@@ -24,6 +25,7 @@ const EMPTY_FORM = {
   purchaseDate: new Date().toISOString().split('T')[0],
   cost: '',
   depreciationRate: '',
+  depreciationMethod: 'SLM' as 'SLM' | 'WDV',
   location: '',
   description: '',
   status: 'active' as AssetStatus,
@@ -66,8 +68,18 @@ const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCa
         <Input type="number" min="0" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} placeholder="25000" />
       </div>
       <div className="space-y-1">
-        <Label>{hi ? 'ह्रास दर (% SLM)' : 'Dep. Rate (% SLM)'}</Label>
+        <Label>{hi ? 'ह्रास दर (%)' : 'Dep. Rate (%)'}</Label>
         <Input type="number" step="0.01" min="0" max="100" value={form.depreciationRate} onChange={e => setForm(f => ({ ...f, depreciationRate: e.target.value }))} placeholder="10" />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'ह्रास पद्धति' : 'Dep. Method'}</Label>
+        <Select value={form.depreciationMethod} onValueChange={v => setForm(f => ({ ...f, depreciationMethod: v as 'SLM' | 'WDV' }))}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="SLM">SLM {hi ? '(सीधी रेखा)' : '(Straight Line)'}</SelectItem>
+            <SelectItem value="WDV">WDV {hi ? '(घटती शेष)' : '(Written Down Value)'}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div className="space-y-1">
         <Label>{hi ? 'स्थिति' : 'Status'}</Label>
@@ -93,7 +105,7 @@ const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCa
 
 const AssetRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { assets, addAsset, updateAsset, deleteAsset, society } = useData();
+  const { assets, addAsset, updateAsset, deleteAsset, postDepreciation, society } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -103,19 +115,57 @@ const AssetRegister: React.FC = () => {
   const [editAsset, setEditAsset] = useState<Asset | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [isPosting, setIsPosting] = useState(false);
+
+  const currentFY = society.financialYear;
 
   const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
 
-  // Straight-line depreciation: calculate accumulated depreciation
-  const calcBookValue = (asset: Asset): number => {
-    if (!asset.purchaseDate || !asset.depreciationRate) return asset.cost;
+  // Accumulated depreciation across all FYs up to and including currentFY
+  const calcAccumDep = (asset: Asset): number => {
+    if (!asset.depreciationRate || !DEP_ACCOUNTS[asset.category]) return 0;
+    const fyParts = currentFY.split('-');
+    if (fyParts.length !== 2) return 0;
+    const fyStartYear = parseInt(fyParts[0]);
     const purchaseYear = new Date(asset.purchaseDate).getFullYear();
-    // Use current financial year end (March 31 of current/next year)
-    const now = new Date();
-    const yearEnd = now.getMonth() >= 3 ? new Date(now.getFullYear(), 2, 31) : new Date(now.getFullYear() - 1, 2, 31);
-    const yearsElapsed = Math.max(0, (yearEnd.getTime() - new Date(asset.purchaseDate).getTime()) / (365.25 * 24 * 3600 * 1000));
-    const depreciation = asset.cost * (asset.depreciationRate / 100) * yearsElapsed;
-    return Math.max(0, asset.cost - depreciation);
+    const purchaseMonth = new Date(asset.purchaseDate).getMonth(); // 0-indexed
+    // Earliest FY is the one containing the purchase date
+    const firstFYStart = purchaseMonth >= 3 ? purchaseYear : purchaseYear - 1;
+    let totalDep = 0;
+    for (let yr = firstFYStart; yr <= fyStartYear; yr++) {
+      const fy = `${yr}-${String(yr + 1).slice(-2)}`;
+      const dep = asset.depreciationMethod === 'WDV'
+        ? calcWDVDepreciation(asset, fy, totalDep)
+        : calcSLMDepreciation(asset, fy);
+      totalDep += dep;
+      if (totalDep >= asset.cost) { totalDep = asset.cost; break; }
+    }
+    return Math.round(totalDep * 100) / 100;
+  };
+
+  const calcBookValue = (asset: Asset): number => Math.max(0, asset.cost - calcAccumDep(asset));
+
+  // Depreciation for the current financial year only
+  const calcCurrentFYDep = (asset: Asset): number => {
+    if (!asset.depreciationRate || !DEP_ACCOUNTS[asset.category]) return 0;
+    const fyParts = currentFY.split('-');
+    if (fyParts.length !== 2) return 0;
+    const fyStartYear = parseInt(fyParts[0]);
+    // Prior FYs accumulated dep (WDV needs this)
+    let priorDep = 0;
+    if (asset.depreciationMethod === 'WDV') {
+      const purchaseYear = new Date(asset.purchaseDate).getFullYear();
+      const purchaseMonth = new Date(asset.purchaseDate).getMonth();
+      const firstFYStart = purchaseMonth >= 3 ? purchaseYear : purchaseYear - 1;
+      for (let yr = firstFYStart; yr < fyStartYear; yr++) {
+        const fy = `${yr}-${String(yr + 1).slice(-2)}`;
+        priorDep += calcWDVDepreciation(asset, fy, priorDep);
+        if (priorDep >= asset.cost) { priorDep = asset.cost; break; }
+      }
+    }
+    return asset.depreciationMethod === 'WDV'
+      ? calcWDVDepreciation(asset, currentFY, priorDep)
+      : calcSLMDepreciation(asset, currentFY);
   };
 
   const filtered = assets.filter(a => {
@@ -129,6 +179,19 @@ const AssetRegister: React.FC = () => {
   const totalDepreciation = totalCost - totalBookValue;
   const activeCount = assets.filter(a => a.status === 'active').length;
 
+  const handlePostDepreciation = () => {
+    setIsPosting(true);
+    setTimeout(() => {
+      const result = postDepreciation();
+      setIsPosting(false);
+      if (result.posted === 0) {
+        toast({ title: hi ? 'कोई ह्रास नहीं जोड़ा गया' : 'No depreciation posted', description: hi ? `${result.skipped} संपत्तियां छोड़ी गईं (पहले से पोस्ट/शून्य दर/भूमि)` : `${result.skipped} assets skipped (already posted / zero rate / Land)` });
+      } else {
+        toast({ title: hi ? `ह्रास पोस्ट हुआ — ${result.posted} संपत्तियां` : `Depreciation posted — ${result.posted} asset(s)`, description: hi ? `वित्तीय वर्ष ${currentFY} के लिए जर्नल प्रविष्टियां बनाई गईं` : `Journal entries created for FY ${currentFY}` });
+      }
+    }, 100);
+  };
+
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.cost || !form.purchaseDate) {
@@ -141,6 +204,7 @@ const AssetRegister: React.FC = () => {
       purchaseDate: form.purchaseDate,
       cost: Number(form.cost),
       depreciationRate: Number(form.depreciationRate) || 0,
+      depreciationMethod: form.depreciationMethod,
       location: form.location,
       description: form.description,
       status: form.status,
@@ -159,6 +223,7 @@ const AssetRegister: React.FC = () => {
       purchaseDate: form.purchaseDate,
       cost: Number(form.cost),
       depreciationRate: Number(form.depreciationRate) || 0,
+      depreciationMethod: form.depreciationMethod,
       location: form.location,
       description: form.description,
       status: form.status,
@@ -175,6 +240,7 @@ const AssetRegister: React.FC = () => {
       purchaseDate: a.purchaseDate,
       cost: String(a.cost),
       depreciationRate: String(a.depreciationRate),
+      depreciationMethod: a.depreciationMethod ?? 'SLM',
       location: a.location,
       description: a.description,
       status: a.status,
@@ -202,9 +268,13 @@ const AssetRegister: React.FC = () => {
           </h1>
           <p className="text-muted-foreground">{hi ? 'स्थायी संपत्तियां एवं ह्रास का विवरण (SLM पद्धति)' : 'Fixed assets & depreciation record (SLM method)'}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2" onClick={() => generateAssetRegisterPDF(assets, society)}>
             <Download className="h-4 w-4" />PDF
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2 text-amber-700 border-amber-400 hover:bg-amber-50" onClick={handlePostDepreciation} disabled={isPosting}>
+            <RefreshCw className={`h-4 w-4 ${isPosting ? 'animate-spin' : ''}`} />
+            {hi ? `ह्रास पोस्ट करें (${currentFY})` : `Post Dep. (${currentFY})`}
           </Button>
           <Button size="sm" className="gap-2" onClick={() => { setForm(EMPTY_FORM); setIsAddOpen(true); }}>
             <Plus className="h-4 w-4" />{hi ? 'नई संपत्ति' : 'Add Asset'}
@@ -264,10 +334,11 @@ const AssetRegister: React.FC = () => {
                 <TableHead>{hi ? 'सं.' : 'No.'}</TableHead>
                 <TableHead>{hi ? 'संपत्ति' : 'Asset'}</TableHead>
                 <TableHead>{hi ? 'श्रेणी' : 'Category'}</TableHead>
-                <TableHead>{hi ? 'स्थान' : 'Location'}</TableHead>
+                <TableHead>{hi ? 'पद्धति' : 'Method'}</TableHead>
                 <TableHead>{hi ? 'क्रय तिथि' : 'Purchase Date'}</TableHead>
                 <TableHead className="text-right">{hi ? 'लागत' : 'Cost'}</TableHead>
                 <TableHead className="text-right">{hi ? 'ह्रास%' : 'Dep%'}</TableHead>
+                <TableHead className="text-right">{hi ? `${currentFY} ह्रास` : `${currentFY} Dep.`}</TableHead>
                 <TableHead className="text-right">{hi ? 'कुल ह्रास' : 'Acc. Dep.'}</TableHead>
                 <TableHead className="text-right">{hi ? 'पुस्तक मूल्य' : 'Book Value'}</TableHead>
                 <TableHead>{hi ? 'स्थिति' : 'Status'}</TableHead>
@@ -277,15 +348,17 @@ const AssetRegister: React.FC = () => {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={12} className="text-center text-muted-foreground py-10">
                     <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
                     {hi ? 'कोई संपत्ति नहीं मिली' : 'No assets found'}
                   </TableCell>
                 </TableRow>
               ) : (
                 filtered.map(a => {
-                  const bookValue = calcBookValue(a);
-                  const accDep = a.cost - bookValue;
+                  const accumDep   = calcAccumDep(a);
+                  const bookValue  = Math.max(0, a.cost - accumDep);
+                  const curFYDep   = calcCurrentFYDep(a);
+                  const isPostedFY = a.depreciationPostedFY?.includes(currentFY);
                   return (
                     <TableRow key={a.id} className="hover:bg-muted/30">
                       <TableCell className="font-mono text-sm">{a.assetNo}</TableCell>
@@ -294,11 +367,25 @@ const AssetRegister: React.FC = () => {
                         {a.description && <div className="text-xs text-muted-foreground">{a.description}</div>}
                       </TableCell>
                       <TableCell>{catLabel[a.category]}</TableCell>
-                      <TableCell className="text-muted-foreground">{a.location || '—'}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs font-mono">
+                          {a.depreciationMethod ?? 'SLM'}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-sm">{a.purchaseDate}</TableCell>
                       <TableCell className="text-right font-semibold">{fmt(a.cost)}</TableCell>
                       <TableCell className="text-right">{a.depreciationRate}%</TableCell>
-                      <TableCell className="text-right text-amber-600">{fmt(accDep)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {curFYDep > 0 ? (
+                            <>
+                              <span className={isPostedFY ? 'text-green-600 font-medium' : 'text-amber-600'}>{fmt(curFYDep)}</span>
+                              {isPostedFY && <CheckCircle className="h-3 w-3 text-green-600" />}
+                            </>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right text-amber-600">{fmt(accumDep)}</TableCell>
                       <TableCell className="text-right font-bold text-blue-600 dark:text-blue-400">{fmt(bookValue)}</TableCell>
                       <TableCell>
                         <Badge variant={a.status === 'active' ? 'default' : 'secondary'}>
@@ -320,7 +407,8 @@ const AssetRegister: React.FC = () => {
                   <TableCell colSpan={5}>{hi ? 'कुल' : 'Total'}</TableCell>
                   <TableCell className="text-right">{fmt(filtered.reduce((s, a) => s + a.cost, 0))}</TableCell>
                   <TableCell></TableCell>
-                  <TableCell className="text-right text-amber-600">{fmt(filtered.reduce((s, a) => s + (a.cost - calcBookValue(a)), 0))}</TableCell>
+                  <TableCell className="text-right text-amber-600">{fmt(filtered.reduce((s, a) => s + calcCurrentFYDep(a), 0))}</TableCell>
+                  <TableCell className="text-right text-amber-600">{fmt(filtered.reduce((s, a) => s + calcAccumDep(a), 0))}</TableCell>
                   <TableCell className="text-right text-blue-600">{fmt(filtered.reduce((s, a) => s + calcBookValue(a), 0))}</TableCell>
                   <TableCell colSpan={2}></TableCell>
                 </TableRow>
