@@ -27,11 +27,17 @@ const BalanceSheet: React.FC = () => {
   const liabilityBalances = trialBalance.filter(b => b.account.type === 'liability' && !b.account.isGroup);
   const capitalAndLiabilityBalances = [...equityBalances, ...liabilityBalances];
 
-  const totalAssets = assetBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0);
+  // For display: hide zero-balance accounts (previous year values also considered)
+  const pyBalancesRaw = society.previousYearBalances || {};
+  const visibleAssets = assetBalances.filter(b => b.netBalance !== 0 || (pyBalancesRaw[b.account.id] ?? 0) !== 0);
+  const visibleCapLiab = capitalAndLiabilityBalances.filter(b => b.netBalance !== 0 || (pyBalancesRaw[b.account.id] ?? 0) !== 0);
+
+  // Use signed netBalance: positive = Dr balance (normal), negative = Cr balance (abnormal/contra)
+  const totalAssets = assetBalances.reduce((s, b) => s + b.netBalance, 0);
   const totalLiabilities = capitalAndLiabilityBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0)
     + netProfit; // surplus adds, deficit subtracts (negative value)
 
-  const pyBalances = society.previousYearBalances || {};
+  const pyBalances = pyBalancesRaw;
   const pyYear = society.previousFinancialYear || '';
   const hasPY = pyYear && Object.keys(pyBalances).length > 0;
   const getPY = (accountId: string) => pyBalances[accountId] ?? 0;
@@ -80,7 +86,7 @@ const BalanceSheet: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {capitalAndLiabilityBalances.map(b => (
+                  {visibleCapLiab.map(b => (
                     <TableRow key={b.account.id} className="hover:bg-muted/30">
                       <TableCell>{language === 'hi' ? b.account.nameHi : b.account.name}</TableCell>
                       {hasPY && <TableCell className="text-right text-muted-foreground">{getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—'}</TableCell>}
@@ -137,11 +143,16 @@ const BalanceSheet: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {assetBalances.map(b => (
+                  {visibleAssets.map(b => (
                     <TableRow key={b.account.id} className="hover:bg-muted/30">
-                      <TableCell>{language === 'hi' ? b.account.nameHi : b.account.name}</TableCell>
+                      <TableCell>
+                        {language === 'hi' ? b.account.nameHi : b.account.name}
+                        {b.netBalance < 0 && <span className="ml-1 text-xs text-destructive">(Cr)</span>}
+                      </TableCell>
                       {hasPY && <TableCell className="text-right text-muted-foreground">{getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—'}</TableCell>}
-                      <TableCell className="text-right font-medium">{fmt(Math.abs(b.netBalance))}</TableCell>
+                      <TableCell className={`text-right font-medium ${b.netBalance < 0 ? 'text-destructive' : ''}`}>
+                        {b.netBalance < 0 ? `(${fmt(Math.abs(b.netBalance))})` : fmt(b.netBalance)}
+                      </TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="bg-primary/10 font-bold text-lg">

@@ -282,7 +282,7 @@ export function generateBalanceSheetPDF(
   const doc = new jsPDF('landscape');
   const { startY, font } = addHeader(doc, 'Balance Sheet', society, `As at 31st March 20${society.financialYear.split('-')[1]}`);
 
-  const totalAssets = assetBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0);
+  const totalAssets = assetBalances.reduce((s, b) => s + b.netBalance, 0);
   const totalLiabilities = liabilityBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0) + netProfit;
   const distributableSurplus = netProfit > 0 ? netProfit - reserveFund : 0;
   const pyBalances = society.previousYearBalances || {};
@@ -298,10 +298,12 @@ export function generateBalanceSheetPDF(
     : [['Assets', 'Amount']];
 
   const liabBody = [
-    ...liabilityBalances.map(b => hasPY
-      ? [b.account.name, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', fmt(Math.abs(b.netBalance))]
-      : [b.account.name, fmt(Math.abs(b.netBalance))]
-    ),
+    ...liabilityBalances
+      .filter(b => b.netBalance !== 0 || getPY(b.account.id) !== 0)
+      .map(b => hasPY
+        ? [b.account.name, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', fmt(Math.abs(b.netBalance))]
+        : [b.account.name, fmt(Math.abs(b.netBalance))]
+      ),
     ...(netProfit > 0 && reserveFund > 0
       ? [hasPY ? ['Statutory Reserve Fund 25%', '—', fmt(reserveFund)] : ['Statutory Reserve Fund — 25%', fmt(reserveFund)]]
       : []),
@@ -313,10 +315,14 @@ export function generateBalanceSheetPDF(
       : []),
   ];
 
-  const assetBody = assetBalances.map(b => hasPY
-    ? [b.account.name, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', fmt(Math.abs(b.netBalance))]
-    : [b.account.name, fmt(Math.abs(b.netBalance))]
-  );
+  const assetBody = assetBalances
+    .filter(b => b.netBalance !== 0 || getPY(b.account.id) !== 0)
+    .map(b => {
+      const display = b.netBalance < 0 ? `(${fmt(Math.abs(b.netBalance))})` : fmt(b.netBalance);
+      return hasPY
+        ? [b.netBalance < 0 ? `${b.account.name} (Cr)` : b.account.name, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', display]
+        : [b.netBalance < 0 ? `${b.account.name} (Cr)` : b.account.name, display];
+    });
 
   const pyLiabTotal = liabilityBalances.reduce((s, b) => s + getPY(b.account.id), 0);
   const pyAssetTotal = assetBalances.reduce((s, b) => s + getPY(b.account.id), 0);

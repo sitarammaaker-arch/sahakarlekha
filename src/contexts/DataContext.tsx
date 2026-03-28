@@ -737,10 +737,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getProfitLoss = useCallback(() => {
     const tb = getTrialBalance();
     const incomeItems = tb
-      .filter(b => b.account.type === 'income')
+      .filter(b => b.account.type === 'income' && b.netBalance !== 0)
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: Math.abs(b.netBalance) }));
     const expenseItems = tb
-      .filter(b => b.account.type === 'expense')
+      .filter(b => b.account.type === 'expense' && b.netBalance !== 0)
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }));
     const totalIncome = incomeItems.reduce((s, i) => s + i.amount, 0);
     const totalExpenses = expenseItems.reduce((s, i) => s + i.amount, 0);

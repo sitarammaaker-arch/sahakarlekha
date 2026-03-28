@@ -19,9 +19,11 @@ const TrialBalance: React.FC = () => {
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
 
-  const balances = getTrialBalance();
-  const totalDebit = balances.reduce((s, b) => s + b.totalDebit, 0);
-  const totalCredit = balances.reduce((s, b) => s + b.totalCredit, 0);
+  const allBalances = getTrialBalance();
+  // Hide accounts with no activity (both Dr and Cr are zero)
+  const balances = allBalances.filter(b => b.totalDebit > 0 || b.totalCredit > 0);
+  const totalDebit = allBalances.reduce((s, b) => s + b.totalDebit, 0);
+  const totalCredit = allBalances.reduce((s, b) => s + b.totalCredit, 0);
   const isBalanced = Math.abs(totalDebit - totalCredit) < 1;
 
   const typeBadge = (type: string) => {
