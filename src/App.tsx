@@ -42,6 +42,7 @@ import ProfitDistribution from "./pages/ProfitDistribution";
 import LoanInterest from "./pages/LoanInterest";
 import CompoundVoucher from "./pages/CompoundVoucher";
 import VoucherApproval from "./pages/VoucherApproval";
+import MeetingRegister from "./pages/MeetingRegister";
 import GstSummary from "./pages/GstSummary";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
@@ -116,6 +117,7 @@ const AppRoutes = () => {
       <Route path="/loan-interest" element={<ProtectedRoute><LoanInterest /></ProtectedRoute>} />
       <Route path="/compound-voucher" element={<ProtectedRoute><CompoundVoucher /></ProtectedRoute>} />
       <Route path="/voucher-approval" element={<ProtectedRoute><VoucherApproval /></ProtectedRoute>} />
+      <Route path="/meeting-register" element={<ProtectedRoute><MeetingRegister /></ProtectedRoute>} />
       <Route path="/gst-summary" element={<ProtectedRoute><GstSummary /></ProtectedRoute>} />
 
       {/* Catch-all */}

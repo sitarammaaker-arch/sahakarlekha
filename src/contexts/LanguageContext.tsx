@@ -39,6 +39,7 @@ export const translations: Translations = {
   loanInterest: { hi: 'ऋण ब्याज गणना', en: 'Loan Interest' },
   compoundVoucher: { hi: 'संयुक्त वाउचर', en: 'Compound Voucher' },
   voucherApproval: { hi: 'वाउचर अनुमोदन', en: 'Voucher Approval' },
+  meetingRegister: { hi: 'AGM / बैठक रजिस्टर', en: 'Meeting Register' },
   gstSummary: { hi: 'GST सारांश', en: 'GST Summary' },
   operations: { hi: 'संचालन', en: 'Operations' },
   ledgerHeads: { hi: 'खाता शीर्ष', en: 'Ledger Heads' },
