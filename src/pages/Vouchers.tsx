@@ -20,13 +20,70 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, CheckCircle, RotateCcw, EyeOff, Eye, Pencil, Zap, Settings2, ArrowLeft } from 'lucide-react';
+import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, CheckCircle, RotateCcw, EyeOff, Eye, Pencil, Zap, Settings2, ArrowLeft, ArrowLeftRight, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { VoucherType } from '@/types';
-import { getNextVoucherNo, VOUCHER_TEMPLATES } from '@/lib/storage';
+import { getNextVoucherNo, VOUCHER_TEMPLATES, ACCOUNT_IDS } from '@/lib/storage';
+import type { LedgerAccount } from '@/types';
 
 type EntryMode = 'aasan' | 'expert';
+
+// Searchable account combobox — type account name/id to filter
+const AccountSearch: React.FC<{
+  value: string;
+  onChange: (id: string) => void;
+  accounts: LedgerAccount[];
+  placeholder: string;
+  language: 'hi' | 'en';
+}> = ({ value, onChange, accounts, placeholder, language }) => {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const selected = accounts.find(a => a.id === value);
+  const filtered = query.trim()
+    ? accounts.filter(a =>
+        a.name.toLowerCase().includes(query.toLowerCase()) ||
+        a.nameHi.includes(query) ||
+        a.id.startsWith(query)
+      )
+    : accounts;
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input
+          value={open ? query : (selected ? `${selected.id} — ${language === 'hi' ? selected.nameHi : selected.name}` : '')}
+          onChange={e => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onChange(''); }}
+          onFocus={() => { setQuery(''); setOpen(true); }}
+          onBlur={() => setTimeout(() => setOpen(false), 160)}
+          placeholder={placeholder}
+          className="h-12 text-base pl-9"
+        />
+      </div>
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-xl max-h-52 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <p className="text-sm text-muted-foreground px-3 py-2">{language === 'hi' ? 'कोई खाता नहीं मिला' : 'No account found'}</p>
+          ) : filtered.slice(0, 25).map(a => (
+            <button
+              key={a.id}
+              type="button"
+              onMouseDown={() => { onChange(a.id); setOpen(false); setQuery(''); }}
+              className={cn(
+                'w-full text-left px-3 py-2.5 hover:bg-muted text-sm border-b last:border-0 flex items-center gap-3',
+                a.id === value && 'bg-primary/5 font-medium'
+              )}
+            >
+              <span className="font-mono text-xs text-muted-foreground w-10 shrink-0">{a.id}</span>
+              <span>{language === 'hi' ? a.nameHi : a.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Vouchers: React.FC = () => {
   const { t, language } = useLanguage();
@@ -48,6 +105,7 @@ const Vouchers: React.FC = () => {
   };
 
   const [voucherType, setVoucherType] = useState<VoucherType>('receipt');
+  const [contraDir, setContraDir] = useState<'cash_to_bank' | 'bank_to_cash'>('cash_to_bank');
   const [voucherDate, setVoucherDate] = useState(new Date().toISOString().split('T')[0]);
   const [debitAccount, setDebitAccount] = useState('');
   const [creditAccount, setCreditAccount] = useState('');
@@ -119,6 +177,12 @@ const Vouchers: React.FC = () => {
       label: language === 'hi' ? 'जर्नल वाउचर' : 'Journal Voucher',
       description: language === 'hi' ? 'समायोजन प्रविष्टि के लिए' : 'For adjustment entries',
     },
+    contra: {
+      icon: ArrowLeftRight,
+      bgColor: 'bg-purple-600',
+      label: language === 'hi' ? 'कोंट्रा वाउचर' : 'Contra Voucher',
+      description: language === 'hi' ? 'नकद ↔ बैंक हस्तांतरण के लिए' : 'For Cash ↔ Bank transfers',
+    },
   };
 
   const currentVoucher = voucherConfig[voucherType];
@@ -126,6 +190,32 @@ const Vouchers: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // For Contra: auto-set Dr/Cr based on direction
+    if (voucherType === 'contra') {
+      const drAcc = contraDir === 'cash_to_bank' ? ACCOUNT_IDS.BANK : ACCOUNT_IDS.CASH;
+      const crAcc = contraDir === 'cash_to_bank' ? ACCOUNT_IDS.CASH : ACCOUNT_IDS.BANK;
+      setDebitAccount(drAcc);
+      setCreditAccount(crAcc);
+      if (!amount || Number(amount) <= 0) {
+        toast({ title: language === 'hi' ? 'राशि दर्ज करें' : 'Enter amount', variant: 'destructive' });
+        return;
+      }
+      const customNo = voucherNoInput.trim();
+      const v = addVoucher({
+        type: 'contra',
+        date: voucherDate,
+        debitAccountId: drAcc,
+        creditAccountId: crAcc,
+        amount: Number(amount),
+        narration,
+        createdBy: user?.name || 'System',
+        voucherNo: customNo || undefined,
+      });
+      setSavedVoucherNo(v.voucherNo);
+      toast({ title: language === 'hi' ? 'कोंट्रा वाउचर सहेजा गया' : 'Contra Voucher saved', description: v.voucherNo });
+      handleClear();
+      return;
+    }
     if (!debitAccount || !creditAccount || !amount || Number(amount) <= 0) {
       toast({ title: language === 'hi' ? 'कृपया सभी फ़ील्ड भरें' : 'Please fill all fields', variant: 'destructive' });
       return;
@@ -174,7 +264,15 @@ const Vouchers: React.FC = () => {
   const typeBadgeClass = (type: VoucherType) => {
     if (type === 'receipt') return 'bg-success/20 text-success border-success/30';
     if (type === 'payment') return 'bg-destructive/20 text-destructive border-destructive/30';
+    if (type === 'contra') return 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-900/30 dark:text-purple-300';
     return 'bg-info/20 text-info border-info/30';
+  };
+
+  const typeLabel = (type: VoucherType) => {
+    if (type === 'receipt') return language === 'hi' ? 'रसीद' : 'Receipt';
+    if (type === 'payment') return language === 'hi' ? 'भुगतान' : 'Payment';
+    if (type === 'contra') return language === 'hi' ? 'कोंट्रा' : 'Contra';
+    return language === 'hi' ? 'जर्नल' : 'Journal';
   };
 
   return (
@@ -403,17 +501,21 @@ const Vouchers: React.FC = () => {
 
           {/* ── EXPERT MODE ── */}
           {entryMode === 'expert' && (
-          <Tabs value={voucherType} onValueChange={(v) => { setVoucherType(v as VoucherType); setSavedVoucherNo(null); }}>
-            <TabsList className="grid w-full grid-cols-3 max-w-md">
-              <TabsTrigger value="receipt" className="gap-2">
+          <Tabs value={voucherType} onValueChange={(v) => { setVoucherType(v as VoucherType); setSavedVoucherNo(null); handleClear(); }}>
+            <TabsList className="grid w-full grid-cols-4 max-w-xl">
+              <TabsTrigger value="receipt" className="gap-1.5">
                 <ArrowDownLeft className="h-4 w-4" />
                 {language === 'hi' ? 'रसीद' : 'Receipt'}
               </TabsTrigger>
-              <TabsTrigger value="payment" className="gap-2">
+              <TabsTrigger value="payment" className="gap-1.5">
                 <ArrowUpRight className="h-4 w-4" />
                 {language === 'hi' ? 'भुगतान' : 'Payment'}
               </TabsTrigger>
-              <TabsTrigger value="journal" className="gap-2">
+              <TabsTrigger value="contra" className="gap-1.5">
+                <ArrowLeftRight className="h-4 w-4" />
+                {language === 'hi' ? 'कोंट्रा' : 'Contra'}
+              </TabsTrigger>
+              <TabsTrigger value="journal" className="gap-1.5">
                 <RefreshCw className="h-4 w-4" />
                 {language === 'hi' ? 'जर्नल' : 'Journal'}
               </TabsTrigger>
@@ -457,44 +559,74 @@ const Vouchers: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Contra: direction picker */}
+                    {voucherType === 'contra' && (
+                      <div className="space-y-3">
+                        <Label className="text-base font-semibold">{language === 'hi' ? 'हस्तांतरण दिशा' : 'Transfer Direction'}</Label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setContraDir('cash_to_bank')}
+                            className={cn(
+                              'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center',
+                              contraDir === 'cash_to_bank'
+                                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                                : 'border-border hover:border-purple-300'
+                            )}
+                          >
+                            <span className="text-2xl">💵→🏦</span>
+                            <span className="text-sm font-semibold">{language === 'hi' ? 'नकद → बैंक में जमा' : 'Cash → Bank Deposit'}</span>
+                            <span className="text-xs text-muted-foreground">Dr: Bank / Cr: Cash</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setContraDir('bank_to_cash')}
+                            className={cn(
+                              'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center',
+                              contraDir === 'bank_to_cash'
+                                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                                : 'border-border hover:border-purple-300'
+                            )}
+                          >
+                            <span className="text-2xl">🏦→💵</span>
+                            <span className="text-sm font-semibold">{language === 'hi' ? 'बैंक से नकद निकाला' : 'Bank → Cash Withdrawal'}</span>
+                            <span className="text-xs text-muted-foreground">Dr: Cash / Cr: Bank</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Dr/Cr account search — hidden for Contra (auto-set) */}
+                    {voucherType !== 'contra' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <Label className="text-base font-semibold flex items-center gap-2">
                           <span className="text-destructive font-bold">Dr.</span>
                           {t('debit')} {language === 'hi' ? 'खाता' : 'Account'}
                         </Label>
-                        <Select value={debitAccount} onValueChange={setDebitAccount} required>
-                          <SelectTrigger className="h-12 text-base">
-                            <SelectValue placeholder={language === 'hi' ? 'खाता चुनें' : 'Select account'} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {accounts.filter(a => !a.isGroup).map(a => (
-                              <SelectItem key={a.id} value={a.id}>
-                                {a.id} — {language === 'hi' ? a.nameHi : a.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <AccountSearch
+                          value={debitAccount}
+                          onChange={setDebitAccount}
+                          accounts={accounts.filter(a => !a.isGroup)}
+                          placeholder={language === 'hi' ? 'नाम या कोड से खोजें...' : 'Search by name or code...'}
+                          language={language}
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label className="text-base font-semibold flex items-center gap-2">
                           <span className="text-success font-bold">Cr.</span>
                           {t('credit')} {language === 'hi' ? 'खाता' : 'Account'}
                         </Label>
-                        <Select value={creditAccount} onValueChange={setCreditAccount} required>
-                          <SelectTrigger className="h-12 text-base">
-                            <SelectValue placeholder={language === 'hi' ? 'खाता चुनें' : 'Select account'} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {accounts.filter(a => !a.isGroup).map(a => (
-                              <SelectItem key={a.id} value={a.id}>
-                                {a.id} — {language === 'hi' ? a.nameHi : a.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <AccountSearch
+                          value={creditAccount}
+                          onChange={setCreditAccount}
+                          accounts={accounts.filter(a => !a.isGroup)}
+                          placeholder={language === 'hi' ? 'नाम या कोड से खोजें...' : 'Search by name or code...'}
+                          language={language}
+                        />
                       </div>
                     </div>
+                    )}
 
                     <div className="space-y-2">
                       <Label className="text-base font-semibold">{t('amount')} (₹)</Label>
@@ -618,9 +750,7 @@ const Vouchers: React.FC = () => {
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className={typeBadgeClass(v.type)}>
-                              {v.type === 'receipt' ? (language === 'hi' ? 'रसीद' : 'Receipt')
-                                : v.type === 'payment' ? (language === 'hi' ? 'भुगतान' : 'Payment')
-                                : (language === 'hi' ? 'जर्नल' : 'Journal')}
+                              {typeLabel(v.type)}
                             </Badge>
                           </TableCell>
                           <TableCell className={cn('text-sm', cancelled && 'line-through')}>

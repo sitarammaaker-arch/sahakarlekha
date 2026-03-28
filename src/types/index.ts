@@ -1,4 +1,4 @@
-export type VoucherType = 'receipt' | 'payment' | 'journal';
+export type VoucherType = 'receipt' | 'payment' | 'journal' | 'contra';
 export type UserRole = 'admin' | 'accountant' | 'viewer';
 export type AccountType = 'asset' | 'liability' | 'income' | 'expense' | 'equity';
 export type MemberStatus = 'active' | 'inactive';

@@ -9,7 +9,7 @@ export interface VoucherTemplate {
   type: VoucherType;
   debitAccountId: string;
   creditAccountId: string;
-  category: 'receipt' | 'payment';
+  category: 'receipt' | 'payment' | 'contra';
 }
 
 // 15 common cooperative society transactions
@@ -334,11 +334,11 @@ export const getCounters = (): VoucherCounters => get(KEYS.counters, { receipt: 
 export const setCounters = (c: VoucherCounters): void => set(KEYS.counters, c);
 
 export const getNextVoucherNo = (
-  type: 'receipt' | 'payment' | 'journal',
+  type: 'receipt' | 'payment' | 'journal' | 'contra',
   financialYear: string,
   existingVouchers: { voucherNo?: string }[] = []
 ): string => {
-  const prefix = type === 'receipt' ? 'RV' : type === 'payment' ? 'PV' : 'JV';
+  const prefix = type === 'receipt' ? 'RV' : type === 'payment' ? 'PV' : type === 'contra' ? 'CV' : 'JV';
   const yr = financialYear.replace('-', '/');
   const escapedYr = yr.replace('/', '\\/');
   const pattern = new RegExp(`^${prefix}\\/${escapedYr}\\/(\\d+)$`);
