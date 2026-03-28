@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 const SocietySetup: React.FC = () => {
   const { t, language } = useLanguage();
   const { toast } = useToast();
-  const { society, updateSociety, accounts, updateAccount, addAccount, deleteAccount } = useData();
+  const { society, updateSociety, accounts, updateAccount, addAccount, deleteAccount, getAccountBalance } = useData();
 
   // Basic info form state
   const [form, setForm] = useState({
@@ -89,12 +89,25 @@ const SocietySetup: React.FC = () => {
 
   const handleSavePY = () => {
     const balances: Record<string, number> = {};
-    accounts.forEach(a => {
+    accounts.filter(a => !a.isGroup).forEach(a => {
       const val = parseFloat(pyForm[a.id] || '0');
       if (!isNaN(val) && val !== 0) balances[a.id] = val;
     });
     updateSociety({ previousFinancialYear: pyYear, previousYearBalances: balances });
     toast({ title: language === 'hi' ? 'सहेजा गया' : 'Saved', description: language === 'hi' ? 'पिछले वर्ष की शेष राशि सहेजी गई' : 'Previous year balances saved' });
+  };
+
+  const handleFillFromCurrentClosing = () => {
+    const filled: Record<string, string> = {};
+    accounts.filter(a => !a.isGroup).forEach(a => {
+      const bal = getAccountBalance(a.id);
+      if (bal !== 0) filled[a.id] = String(Math.round(Math.abs(bal) * 100) / 100);
+    });
+    setPyForm(prev => ({ ...prev, ...filled }));
+    toast({
+      title: language === 'hi' ? 'वर्तमान वर्ष शेष भरा गया' : 'Filled from current year closing',
+      description: language === 'hi' ? 'कृपया समीक्षा करें और सहेजें' : 'Please review and save',
+    });
   };
 
   const [showAddAccount, setShowAddAccount] = useState(false);
@@ -172,10 +185,12 @@ const SocietySetup: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const assetAccounts = accounts.filter(a => a.type === 'asset');
-  const liabilityAccounts = accounts.filter(a => a.type === 'liability');
-  const incomeAccounts = accounts.filter(a => a.type === 'income');
-  const expenseAccounts = accounts.filter(a => a.type === 'expense');
+  // Leaf accounts only (no group headers) for balance entry
+  const leafAccounts = accounts.filter(a => !a.isGroup);
+  const assetAccounts = leafAccounts.filter(a => a.type === 'asset');
+  const liabilityAccounts = leafAccounts.filter(a => a.type === 'liability');
+  const incomeAccounts = leafAccounts.filter(a => a.type === 'income');
+  const expenseAccounts = leafAccounts.filter(a => a.type === 'expense');
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -524,12 +539,26 @@ const SocietySetup: React.FC = () => {
         <TabsContent value="prevyear" className="mt-6">
           <Card className="shadow-card">
             <CardHeader>
-              <CardTitle>{language === 'hi' ? 'पिछले वर्ष की शेष राशि' : 'Previous Year Closing Balances'}</CardTitle>
-              <CardDescription>
-                {language === 'hi'
-                  ? 'तुलन पत्र में पिछले वर्ष के आंकड़े दर्ज करें (वैधानिक तुलनात्मक स्तंभ के लिए)'
-                  : 'Enter previous year closing figures for the Balance Sheet comparison column (statutory requirement)'}
-              </CardDescription>
+              <div className="flex items-start justify-between flex-wrap gap-2">
+                <div>
+                  <CardTitle>{language === 'hi' ? 'पिछले वर्ष की शेष राशि' : 'Previous Year Closing Balances'}</CardTitle>
+                  <CardDescription className="mt-1">
+                    {language === 'hi'
+                      ? 'तुलन पत्र में पिछले वर्ष के आंकड़े दर्ज करें (वैधानिक तुलनात्मक स्तंभ के लिए)'
+                      : 'Enter previous year closing figures for the Balance Sheet comparison column (statutory requirement)'}
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 text-blue-700 border-blue-300 hover:bg-blue-50"
+                  onClick={handleFillFromCurrentClosing}
+                  title={language === 'hi' ? 'वर्तमान वर्ष के समापन शेष से भरें' : 'Pre-fill from current year closing balances'}
+                >
+                  <History className="h-4 w-4" />
+                  {language === 'hi' ? 'वर्तमान शेष से भरें' : 'Fill from Current Closing'}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2 max-w-xs">
@@ -549,16 +578,28 @@ const SocietySetup: React.FC = () => {
               ].map(group => group.list.length > 0 && (
                 <div key={group.label}>
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">{group.label}</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {group.list.map(acc => (
                       <div key={acc.id} className="space-y-1">
-                        <Label className="text-sm">{language === 'hi' ? acc.nameHi : acc.name}</Label>
+                        <Label className="text-sm flex items-center gap-1.5">
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${
+                            acc.openingBalanceType === 'debit'
+                              ? 'bg-blue-50 text-blue-700'
+                              : 'bg-orange-50 text-orange-700'
+                          }`}>
+                            {acc.openingBalanceType === 'debit' ? 'Dr' : 'Cr'}
+                          </span>
+                          <span className="truncate">{language === 'hi' ? acc.nameHi : acc.name}</span>
+                          <span className="text-gray-400 text-xs ml-auto">#{acc.id}</span>
+                        </Label>
                         <Input
                           type="number"
+                          min={0}
+                          step={0.01}
                           placeholder="0"
                           value={pyForm[acc.id] ?? ''}
                           onChange={e => setPyForm(f => ({ ...f, [acc.id]: e.target.value }))}
-                          className="h-10"
+                          className="h-9"
                         />
                       </div>
                     ))}
