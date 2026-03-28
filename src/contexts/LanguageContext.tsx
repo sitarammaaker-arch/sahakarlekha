@@ -36,6 +36,7 @@ export const translations: Translations = {
   bankReconciliation: { hi: 'बैंक समाधान (BRS)', en: 'Bank Reconciliation' },
   reserveFund: { hi: 'संचय निधि आवंटन', en: 'Reserve Fund' },
   profitDistribution: { hi: 'लाभ वितरण', en: 'Profit Distribution' },
+  loanInterest: { hi: 'ऋण ब्याज गणना', en: 'Loan Interest' },
   gstSummary: { hi: 'GST सारांश', en: 'GST Summary' },
   operations: { hi: 'संचालन', en: 'Operations' },
   ledgerHeads: { hi: 'खाता शीर्ष', en: 'Ledger Heads' },

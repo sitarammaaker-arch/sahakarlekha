@@ -39,6 +39,7 @@ import DeletedVouchers from "./pages/DeletedVouchers";
 import BankReconciliation from "./pages/BankReconciliation";
 import ReserveFund from "./pages/ReserveFund";
 import ProfitDistribution from "./pages/ProfitDistribution";
+import LoanInterest from "./pages/LoanInterest";
 import GstSummary from "./pages/GstSummary";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
@@ -110,6 +111,7 @@ const AppRoutes = () => {
       <Route path="/bank-reconciliation" element={<ProtectedRoute><BankReconciliation /></ProtectedRoute>} />
       <Route path="/reserve-fund" element={<ProtectedRoute><ReserveFund /></ProtectedRoute>} />
       <Route path="/profit-distribution" element={<ProtectedRoute><ProfitDistribution /></ProtectedRoute>} />
+      <Route path="/loan-interest" element={<ProtectedRoute><LoanInterest /></ProtectedRoute>} />
       <Route path="/gst-summary" element={<ProtectedRoute><GstSummary /></ProtectedRoute>} />
 
       {/* Catch-all */}

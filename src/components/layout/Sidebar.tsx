@@ -61,6 +61,7 @@ const reportNavItems: NavItem[] = [
 const registerNavItems: NavItem[] = [
   { key: 'shareRegister', icon: BookMarked, path: '/share-register' },
   { key: 'loanRegister', icon: Landmark, path: '/loan-register' },
+  { key: 'loanInterest', icon: Percent, path: '/loan-interest', roles: ['admin', 'accountant'] },
   { key: 'assetRegister', icon: Package, path: '/asset-register' },
   { key: 'auditRegister', icon: ShieldCheck, path: '/audit-register' },
   { key: 'reserveFund', icon: Shield, path: '/reserve-fund', roles: ['admin', 'accountant'] },
