@@ -488,7 +488,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getCashBookEntries = useCallback((fromDate?: string, toDate?: string): CashBookEntry[] => {
     const cashAccount = accounts.find(a => a.id === ACCOUNT_IDS.CASH);
     if (!cashAccount) return [];
-    let runningBalance = cashAccount.openingBalance;
+    let runningBalance = cashAccount.openingBalanceType === 'debit'
+      ? cashAccount.openingBalance
+      : -cashAccount.openingBalance;
 
     const cashVouchers = activeVouchers
       .filter(v => v.debitAccountId === ACCOUNT_IDS.CASH || v.creditAccountId === ACCOUNT_IDS.CASH)
@@ -528,7 +530,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getBankBookEntries = useCallback((fromDate?: string, toDate?: string): BankBookEntry[] => {
     const bankAccount = accounts.find(a => a.id === ACCOUNT_IDS.BANK);
     if (!bankAccount) return [];
-    let runningBalance = bankAccount.openingBalance;
+    let runningBalance = bankAccount.openingBalanceType === 'debit'
+      ? bankAccount.openingBalance
+      : -bankAccount.openingBalance;
 
     const bankVouchers = activeVouchers
       .filter(v => v.debitAccountId === ACCOUNT_IDS.BANK || v.creditAccountId === ACCOUNT_IDS.BANK)

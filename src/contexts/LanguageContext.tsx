@@ -32,6 +32,7 @@ export const translations: Translations = {
   loanRegister: { hi: 'ऋण रजिस्टर', en: 'Loan Register' },
   assetRegister: { hi: 'संपत्ति रजिस्टर', en: 'Asset Register' },
   auditRegister: { hi: 'ऑडिट रजिस्टर', en: 'Audit Register' },
+  deletedVouchers: { hi: 'रद्द वाउचर', en: 'Deleted Vouchers' },
   operations: { hi: 'संचालन', en: 'Operations' },
   ledgerHeads: { hi: 'खाता शीर्ष', en: 'Ledger Heads' },
   inventory: { hi: 'माल भंडार', en: 'Inventory' },

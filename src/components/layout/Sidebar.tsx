@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Wallet, Building2, FileText, BookOpen, Users,
   Scale, TrendingUp, FileSpreadsheet, BarChart3, Settings, LogOut,
   ChevronLeft, ChevronRight, ArrowLeftRight, BookMarked, Landmark, Package, ShieldCheck, CalendarDays,
-  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, Truck, UserCheck,
+  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, Truck, UserCheck, Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -61,6 +61,7 @@ const registerNavItems: NavItem[] = [
   { key: 'loanRegister', icon: Landmark, path: '/loan-register' },
   { key: 'assetRegister', icon: Package, path: '/asset-register' },
   { key: 'auditRegister', icon: ShieldCheck, path: '/audit-register' },
+  { key: 'deletedVouchers', icon: Trash2, path: '/deleted-vouchers', roles: ['admin'] },
 ];
 
 const settingsNavItems: NavItem[] = [
