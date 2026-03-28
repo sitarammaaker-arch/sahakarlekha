@@ -355,6 +355,125 @@ do $$ begin
 end $$;
 
 
+-- ── STEP 6: New tables (suppliers, customers) ────────────────────────────────
+
+-- 14. Suppliers
+create table if not exists suppliers (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "supplierCode" text,
+  name text not null,
+  address text,
+  "gstNo" text,
+  phone text,
+  "accountId" text,        -- references accounts.id (app-level FK)
+  "isActive" boolean default true,
+  "createdAt" timestamp default now()
+);
+
+-- 15. Customers
+create table if not exists customers (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "customerCode" text,
+  name text not null,
+  address text,
+  "gstNo" text,
+  phone text,
+  "accountId" text,        -- references accounts.id (app-level FK)
+  "isActive" boolean default true,
+  "createdAt" timestamp default now()
+);
+
+alter table suppliers enable row level security;
+alter table customers enable row level security;
+
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='suppliers' and policyname='allow_all') then
+    create policy "allow_all" on suppliers for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='customers' and policyname='allow_all') then
+    create policy "allow_all" on customers for all using (true) with check (true);
+  end if;
+end $$;
+
+
+-- ── STEP 7: Add missing columns to existing tables (Phase 2/3 additions) ─────
+-- Run these on existing databases to bring schema up to date.
+
+-- Voucher: bank reconciliation + edit history fields
+alter table vouchers add column if not exists "isCleared" boolean default false;
+alter table vouchers add column if not exists "clearedDate" text;
+alter table vouchers add column if not exists "editHistory" jsonb default '[]';
+
+-- Sales: GST fields
+alter table sales add column if not exists "cgstPct" numeric default 0;
+alter table sales add column if not exists "sgstPct" numeric default 0;
+alter table sales add column if not exists "igstPct" numeric default 0;
+alter table sales add column if not exists "cgstAmount" numeric default 0;
+alter table sales add column if not exists "sgstAmount" numeric default 0;
+alter table sales add column if not exists "igstAmount" numeric default 0;
+alter table sales add column if not exists "taxAmount" numeric default 0;
+alter table sales add column if not exists "grandTotal" numeric default 0;
+alter table sales add column if not exists "customerId" text;
+alter table sales add column if not exists "gstVoucherIds" jsonb default '[]';
+
+-- Purchases: GST + TDS fields
+alter table purchases add column if not exists "cgstPct" numeric default 0;
+alter table purchases add column if not exists "sgstPct" numeric default 0;
+alter table purchases add column if not exists "igstPct" numeric default 0;
+alter table purchases add column if not exists "tdsPct" numeric default 0;
+alter table purchases add column if not exists "cgstAmount" numeric default 0;
+alter table purchases add column if not exists "sgstAmount" numeric default 0;
+alter table purchases add column if not exists "igstAmount" numeric default 0;
+alter table purchases add column if not exists "tdsAmount" numeric default 0;
+alter table purchases add column if not exists "taxAmount" numeric default 0;
+alter table purchases add column if not exists "grandTotal" numeric default 0;
+alter table purchases add column if not exists "supplierId" text;
+alter table purchases add column if not exists "taxVoucherIds" jsonb default '[]';
+
+-- Salary Records: allowances breakdown
+alter table salary_records add column if not exists "hraAllowance" numeric default 0;
+alter table salary_records add column if not exists "taAllowance" numeric default 0;
+alter table salary_records add column if not exists "daAllowance" numeric default 0;
+alter table salary_records add column if not exists "otherAllowances" numeric default 0;
+alter table salary_records add column if not exists "pfDeduction" numeric default 0;
+alter table salary_records add column if not exists "taxDeduction" numeric default 0;
+alter table salary_records add column if not exists "otherDeductions" numeric default 0;
+alter table salary_records add column if not exists "createdBy" text;
+alter table salary_records add column if not exists narration text;
+
+
+-- ── STEP 8: Performance indexes ───────────────────────────────────────────────
+create index if not exists idx_vouchers_society_date     on vouchers(society_id, date);
+create index if not exists idx_vouchers_society_type     on vouchers(society_id, type);
+create index if not exists idx_vouchers_debit_acc        on vouchers("debitAccountId");
+create index if not exists idx_vouchers_credit_acc       on vouchers("creditAccountId");
+create index if not exists idx_vouchers_is_deleted       on vouchers("isDeleted");
+create index if not exists idx_members_society           on members(society_id);
+create index if not exists idx_loans_member              on loans("memberId");
+create index if not exists idx_stock_movements_item      on stock_movements("itemId");
+create index if not exists idx_sales_society_date        on sales(society_id, date);
+create index if not exists idx_purchases_society_date    on purchases(society_id, date);
+create index if not exists idx_salary_records_employee   on salary_records("employeeId");
+
+
+-- ── STEP 9: App-level FK integrity notes ─────────────────────────────────────
+-- NOTE: Hard DB-level FKs are intentionally omitted because:
+-- 1. Account IDs are text (seeded from app, not auto-generated UUIDs)
+-- 2. Soft-delete pattern: records may reference logically-deleted entities
+-- 3. localStorage-first sync: FK violations possible during partial sync
+--
+-- App-level FK invariants enforced in DataContext.tsx:
+--   vouchers.debitAccountId   → accounts.id  (validated in addVoucher)
+--   vouchers.creditAccountId  → accounts.id  (validated in addVoucher)
+--   stock_movements.itemId    → stock_items.id (cascades on deleteStockItem)
+--   salary_records.employeeId → employees.id  (validated in addSalaryRecord)
+--   loans.memberId            → members.id    (validated in addLoan)
+--   suppliers.accountId       → accounts.id   (cascades on deleteSupplier)
+--   customers.accountId       → accounts.id   (cascades on deleteCustomer)
+
+
 -- ── MIGRATION: If you have existing tables with old snake_case columns ────────
 -- Run these ALTER statements to fix existing tables instead of dropping them.
 -- Only needed if you ran the OLD supabase-tables.sql before.

@@ -940,9 +940,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteStockItem = useCallback((id: string) => {
-    setStockItemsState(prev => { const updated = prev.filter(i => i.id !== id); storage.setStockItems(updated); return updated; });
-    supabase.from('stock_items').delete().eq('id', id).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-  }, []);
+    const today = new Date().toISOString().split('T')[0];
+    setStockItemsState(prev => {
+      const item = prev.find(i => i.id === id);
+      // If item has remaining stock, create a write-off journal to keep Trial Balance balanced
+      if (item && item.isActive && item.currentStock > 0) {
+        const amount = Math.round(item.currentStock * item.purchaseRate * 100) / 100;
+        if (amount > 0) {
+          // Dr 5101 (Purchases/Write-off expense) / Cr 3403 (Closing Stock asset) — reverses closing stock asset
+          addVoucher({
+            type: 'journal',
+            date: today,
+            debitAccountId: '5101',
+            creditAccountId: '3403',
+            amount,
+            narration: `Stock write-off on deletion: ${item.name} (${item.currentStock} ${item.unit} @ ₹${item.purchaseRate})`,
+            createdBy: user?.name ?? 'System',
+          });
+        }
+      }
+      // Soft-delete: mark inactive, zero out stock (preserve history)
+      const updated = prev.map(i => i.id === id ? { ...i, isActive: false, currentStock: 0 } : i);
+      storage.setStockItems(updated);
+      return updated;
+    });
+    // Also remove orphaned stock movements for this item
+    setStockMovementsState(prev => {
+      const updated = prev.filter(m => m.itemId !== id);
+      storage.setStockMovements(updated);
+      return updated;
+    });
+    supabase.from('stock_items').update({ isActive: false, currentStock: 0 }).eq('id', id)
+      .then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+    supabase.from('stock_movements').delete().eq('itemId', id)
+      .then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+  }, [addVoucher, user?.name]);
 
   const addStockMovement = useCallback((data: Omit<StockMovement, 'id' | 'createdAt'>) => {
     const movement: StockMovement = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };

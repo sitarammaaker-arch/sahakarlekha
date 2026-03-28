@@ -339,6 +339,9 @@ export const setSociety = (s: SocietySettings): void => set(KEYS.society, s);
 export const getCounters = (): VoucherCounters => get(KEYS.counters, { receipt: 0, payment: 0, journal: 0 });
 export const setCounters = (c: VoucherCounters): void => set(KEYS.counters, c);
 
+// Persistent per-type-per-FY counter key prefix (avoids race conditions + O(n) scans)
+const VCTR_PREFIX = 'sahayata_vctr_';
+
 export const getNextVoucherNo = (
   type: 'receipt' | 'payment' | 'journal' | 'contra',
   financialYear: string,
@@ -346,12 +349,23 @@ export const getNextVoucherNo = (
 ): string => {
   const prefix = type === 'receipt' ? 'RV' : type === 'payment' ? 'PV' : type === 'contra' ? 'CV' : 'JV';
   const yr = financialYear.replace('-', '/');
-  const escapedYr = yr.replace('/', '\\/');
-  const pattern = new RegExp(`^${prefix}\\/${escapedYr}\\/(\\d+)$`);
-  const nums = existingVouchers
-    .map(v => { const m = v.voucherNo?.match(pattern); return m ? parseInt(m[1], 10) : 0; })
-    .filter(n => n > 0);
-  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+  const ctrKey = `${VCTR_PREFIX}${type}_${financialYear}`;
+  const storedCtr = get<number | null>(ctrKey, null);
+
+  let next: number;
+  if (storedCtr === null) {
+    // First use for this type+FY — bootstrap from existing vouchers to avoid duplicates
+    const escapedYr = yr.replace('/', '\\/');
+    const pattern = new RegExp(`^${prefix}\\/${escapedYr}\\/(\\d+)$`);
+    const nums = existingVouchers
+      .map(v => { const m = v.voucherNo?.match(pattern); return m ? parseInt(m[1], 10) : 0; })
+      .filter(n => n > 0);
+    next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+  } else {
+    next = storedCtr + 1;
+  }
+
+  set(ctrKey, next);
   return `${prefix}/${yr}/${String(next).padStart(3, '0')}`;
 };
 
