@@ -36,6 +36,7 @@ import SalaryManagement from "./pages/SalaryManagement";
 import Suppliers from "./pages/Suppliers";
 import Customers from "./pages/Customers";
 import DeletedVouchers from "./pages/DeletedVouchers";
+import BankReconciliation from "./pages/BankReconciliation";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 
@@ -103,6 +104,7 @@ const AppRoutes = () => {
       <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
       <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
       <Route path="/deleted-vouchers" element={<ProtectedRoute><DeletedVouchers /></ProtectedRoute>} />
+      <Route path="/bank-reconciliation" element={<ProtectedRoute><BankReconciliation /></ProtectedRoute>} />
 
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />

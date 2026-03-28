@@ -26,6 +26,8 @@ interface DataContextType {
   updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId'>>) => void;
   cancelVoucher: (id: string, reason: string, deletedBy: string) => void;
   restoreVoucher: (id: string) => void;
+  clearVoucher: (id: string, clearedDate?: string) => void;
+  unclearVoucher: (id: string) => void;
   auditObjections: AuditObjection[];
   addAuditObjection: (data: Omit<AuditObjection, 'id' | 'objectionNo' | 'createdAt'>) => AuditObjection;
   updateAuditObjection: (id: string, data: Partial<AuditObjection>) => void;
@@ -338,6 +340,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return updated;
     });
     supabase.from('vouchers').upsert(withSoc(restoredVoucher)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+  }, []);
+
+  const clearVoucher = useCallback((id: string, clearedDate?: string) => {
+    const current = vouchersRef.current.find(v => v.id === id);
+    if (!current) return;
+    const cleared = { ...current, isCleared: true, clearedDate: clearedDate ?? new Date().toISOString().split('T')[0] };
+    setVouchersState(prev => { const updated = prev.map(v => v.id === id ? cleared : v); storage.setVouchers(updated); return updated; });
+    supabase.from('vouchers').upsert(withSoc(cleared)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+  }, []);
+
+  const unclearVoucher = useCallback((id: string) => {
+    const current = vouchersRef.current.find(v => v.id === id);
+    if (!current) return;
+    const uncleared = { ...current, isCleared: false, clearedDate: undefined };
+    setVouchersState(prev => { const updated = prev.map(v => v.id === id ? uncleared : v); storage.setVouchers(updated); return updated; });
+    supabase.from('vouchers').upsert(withSoc(uncleared)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
   }, []);
 
   const addAuditObjection = useCallback((data: Omit<AuditObjection, 'id' | 'objectionNo' | 'createdAt'>): AuditObjection => {
@@ -1260,7 +1278,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       vouchers, members, accounts, society, loans, assets, auditObjections,
       stockItems, stockMovements, sales, purchases, employees, salaryRecords,
       suppliers, customers,
-      addVoucher, updateVoucher, cancelVoucher, restoreVoucher,
+      addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher,
       addMember, updateMember, deleteMember,
       addAccount, updateAccount, deleteAccount, updateSociety,
       addLoan, updateLoan, deleteLoan,

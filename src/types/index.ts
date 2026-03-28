@@ -35,6 +35,9 @@ export interface Voucher {
   deletedReason?: string;
   // Edit audit trail
   editHistory?: VoucherEditSnapshot[];
+  // Bank reconciliation
+  isCleared?: boolean;
+  clearedDate?: string;
 }
 
 export type ObjectionStatus = 'pending' | 'partial' | 'rectified';

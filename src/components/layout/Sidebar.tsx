@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Wallet, Building2, FileText, BookOpen, Users,
   Scale, TrendingUp, FileSpreadsheet, BarChart3, Settings, LogOut,
   ChevronLeft, ChevronRight, ArrowLeftRight, BookMarked, Landmark, Package, ShieldCheck, CalendarDays,
-  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, Truck, UserCheck, Trash2,
+  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, Truck, UserCheck, Trash2, CheckCircle2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,7 @@ const mainNavItems: NavItem[] = [
   { key: 'dashboard', icon: LayoutDashboard, path: '/dashboard' },
   { key: 'cashBook', icon: Wallet, path: '/cash-book' },
   { key: 'bankBook', icon: Building2, path: '/bank-book' },
+  { key: 'bankReconciliation', icon: CheckCircle2, path: '/bank-reconciliation' },
   { key: 'vouchers', icon: FileText, path: '/vouchers' },
   { key: 'dayBook', icon: CalendarDays, path: '/day-book' },
   { key: 'ledger', icon: BookOpen, path: '/ledger' },
