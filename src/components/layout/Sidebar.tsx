@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Wallet, Building2, FileText, BookOpen, Users,
   Scale, TrendingUp, FileSpreadsheet, BarChart3, Settings, LogOut,
   ChevronLeft, ChevronRight, ArrowLeftRight, BookMarked, Landmark, Package, ShieldCheck, CalendarDays,
-  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, Truck, UserCheck, Trash2, CheckCircle2, Shield,
+  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, Truck, UserCheck, Trash2, CheckCircle2, Shield, Percent,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -55,6 +55,7 @@ const reportNavItems: NavItem[] = [
   { key: 'profitLoss', icon: TrendingUp, path: '/profit-loss' },
   { key: 'balanceSheet', icon: FileSpreadsheet, path: '/balance-sheet' },
   { key: 'reports', icon: BarChart3, path: '/reports' },
+  { key: 'gstSummary', icon: Percent, path: '/gst-summary' },
 ];
 
 const registerNavItems: NavItem[] = [

@@ -1003,3 +1003,172 @@ export function generateSalarySlipPDF(
 
   doc.save(`salary-slip-${employee.empNo}-${record.month}.pdf`);
 }
+
+// ── GST Summary PDF ───────────────────────────────────────────────────────────
+
+interface GstSlabRow {
+  rate: number;
+  taxableAmount: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  total: number;
+  count: number;
+}
+
+interface GstTotals {
+  taxable: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  tax: number;
+  grand: number;
+}
+
+interface GstSummaryPDFParams {
+  society: SocietySettings;
+  fromDate: string;
+  toDate: string;
+  outputByRate: GstSlabRow[];
+  outputTotals: GstTotals;
+  itcByRate: GstSlabRow[];
+  itcTotals: GstTotals;
+  netCgst: number;
+  netSgst: number;
+  netIgst: number;
+  netGst: number;
+  language: string;
+}
+
+export function generateGstSummaryPDF(params: GstSummaryPDFParams): void {
+  const { society, fromDate, toDate, outputByRate, outputTotals, itcByRate, itcTotals, netCgst, netSgst, netIgst, netGst } = params;
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const font = setupFont(doc);
+  const { startY } = addHeader(doc, 'GST Summary Report', society, `Period: ${fmtDate(fromDate)} to ${fmtDate(toDate)}`);
+
+  let y = startY + 4;
+
+  // ── Output Tax section ───────────────────────────────────────────────────
+  doc.setFontSize(10);
+  doc.setFont(font, 'bold');
+  doc.text('Part A — Output Tax (Sales)', 15, y);
+  y += 2;
+
+  const outRows = outputByRate.map(r => [
+    `${r.rate.toFixed(1)}%`,
+    String(r.count),
+    fmt(r.taxableAmount),
+    fmt(r.cgst),
+    fmt(r.sgst),
+    fmt(r.igst),
+    fmt(r.total),
+  ]);
+  outRows.push([
+    'Grand Total', String(outputByRate.reduce((s, r) => s + r.count, 0)),
+    fmt(outputTotals.taxable), fmt(outputTotals.cgst), fmt(outputTotals.sgst), fmt(outputTotals.igst), fmt(outputTotals.tax),
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    head: [['GST Rate', 'Bills', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Total GST']],
+    body: outRows,
+    styles: { fontSize: 8, font },
+    headStyles: { fillColor: [34, 197, 94], textColor: 255, fontStyle: 'bold' },
+    footStyles: { fillColor: [240, 240, 240], fontStyle: 'bold' },
+    columnStyles: {
+      2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
+      5: { halign: 'right' }, 6: { halign: 'right' },
+    },
+    didParseCell(data) {
+      if (data.row.index === outRows.length - 1) {
+        data.cell.styles.fillColor = [220, 252, 231];
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 8;
+
+  // ── ITC section ──────────────────────────────────────────────────────────
+  doc.setFontSize(10);
+  doc.setFont(font, 'bold');
+  doc.text('Part B — Input Tax Credit (Purchases)', 15, y);
+  y += 2;
+
+  const itcRows = itcByRate.map(r => [
+    `${r.rate.toFixed(1)}%`,
+    String(r.count),
+    fmt(r.taxableAmount),
+    fmt(r.cgst),
+    fmt(r.sgst),
+    fmt(r.igst),
+    fmt(r.total),
+  ]);
+  itcRows.push([
+    'Grand Total', String(itcByRate.reduce((s, r) => s + r.count, 0)),
+    fmt(itcTotals.taxable), fmt(itcTotals.cgst), fmt(itcTotals.sgst), fmt(itcTotals.igst), fmt(itcTotals.tax),
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    head: [['GST Rate', 'Bills', 'Taxable Value', 'CGST (ITC)', 'SGST (ITC)', 'IGST (ITC)', 'Total ITC']],
+    body: itcRows,
+    styles: { fontSize: 8, font },
+    headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+    columnStyles: {
+      2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
+      5: { halign: 'right' }, 6: { halign: 'right' },
+    },
+    didParseCell(data) {
+      if (data.row.index === itcRows.length - 1) {
+        data.cell.styles.fillColor = [219, 234, 254];
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 8;
+
+  // ── Net GST Statement ────────────────────────────────────────────────────
+  doc.setFontSize(10);
+  doc.setFont(font, 'bold');
+  doc.text('Part C — Net GST Liability Statement', 15, y);
+  y += 2;
+
+  const isPayable = netGst >= 0;
+  const netLabel = isPayable ? 'Net GST Payable' : 'Net GST Refundable';
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Particulars', 'CGST (Rs.)', 'SGST (Rs.)', 'IGST (Rs.)', 'Total GST (Rs.)']],
+    body: [
+      ['Output Tax (GST on Sales)', fmt(outputTotals.cgst), fmt(outputTotals.sgst), fmt(outputTotals.igst), fmt(outputTotals.tax)],
+      ['Less: Input Tax Credit', `(${fmt(itcTotals.cgst)})`, `(${fmt(itcTotals.sgst)})`, `(${fmt(itcTotals.igst)})`, `(${fmt(itcTotals.tax)})`],
+      [netLabel, fmt(Math.abs(netCgst)), fmt(Math.abs(netSgst)), fmt(Math.abs(netIgst)), fmt(Math.abs(netGst))],
+    ],
+    styles: { fontSize: 8, font },
+    headStyles: { fillColor: [100, 116, 139], textColor: 255, fontStyle: 'bold' },
+    columnStyles: {
+      1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
+    },
+    didParseCell(data) {
+      if (data.row.index === 2) {
+        data.cell.styles.fillColor = isPayable ? [254, 226, 226] : [237, 233, 254];
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.textColor = isPayable ? [185, 28, 28] : [109, 40, 217];
+      }
+    },
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 6;
+
+  // Footer note
+  doc.setFont(font, 'italic');
+  doc.setFontSize(7);
+  doc.setTextColor(120, 120, 120);
+  doc.text('Note: This report is for internal accounting purposes only. Verify with GSTN portal before filing returns.', 15, y);
+
+  const dateStr = new Date().toISOString().split('T')[0];
+  doc.save(`gst-summary-${fromDate}-to-${toDate}-${dateStr}.pdf`);
+}
