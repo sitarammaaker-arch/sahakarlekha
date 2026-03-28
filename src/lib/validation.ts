@@ -1,4 +1,9 @@
-import type { LedgerAccount, SocietySettings } from '@/types';
+import type { LedgerAccount, SocietySettings, VoucherType } from '@/types';
+
+// Cash and Bank account IDs — same as ACCOUNT_IDS in storage.ts
+const CASH_ID = '3301';
+const BANK_ID = '3302';
+const CASH_BANK = [CASH_ID, BANK_ID];
 
 export interface VoucherValidationResult {
   valid: boolean;
@@ -7,13 +12,18 @@ export interface VoucherValidationResult {
 }
 
 /**
- * Double-entry validation engine — 5 rules
+ * Double-entry validation engine — 6 rules
  *
  * Rule 1: Debit account must exist and not be a group account
  * Rule 2: Credit account must exist, not be a group account, and differ from debit
  * Rule 3: Opening balance direction (checked separately in SocietySetup)
  * Rule 4: Amount must be > 0
  * Rule 5: Date should be within the current financial year (soft warning)
+ * Rule 6: Voucher type must match account side (Tally-style consistency)
+ *   Receipt  → Dr must be Cash or Bank
+ *   Payment  → Cr must be Cash or Bank
+ *   Contra   → both Dr and Cr must be Cash or Bank
+ *   Journal  → no restriction
  */
 export function validateVoucher(
   debitAccountId: string,
@@ -22,6 +32,7 @@ export function validateVoucher(
   date: string,
   accounts: LedgerAccount[],
   society: SocietySettings,
+  voucherType?: VoucherType,
 ): VoucherValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -72,6 +83,30 @@ export function validateVoucher(
     errors.push(
       'डेबिट और क्रेडिट खाता एक नहीं हो सकते / Debit and Credit accounts must be different'
     );
+  }
+
+  // ── Rule 6: Voucher type ↔ account consistency ────────────────────────────
+  if (voucherType && debitAccountId && creditAccountId) {
+    if (voucherType === 'receipt' && !CASH_BANK.includes(debitAccountId)) {
+      const drAcc = accounts.find(a => a.id === debitAccountId);
+      errors.push(
+        `रसीद वाउचर में डेबिट खाता "हाथ में नकद" या "बैंक खाते" होना चाहिए / Receipt voucher: Debit must be Cash or Bank (got "${drAcc?.name || debitAccountId}")`
+      );
+    }
+    if (voucherType === 'payment' && !CASH_BANK.includes(creditAccountId)) {
+      const crAcc = accounts.find(a => a.id === creditAccountId);
+      errors.push(
+        `भुगतान वाउचर में क्रेडिट खाता "हाथ में नकद" या "बैंक खाते" होना चाहिए / Payment voucher: Credit must be Cash or Bank (got "${crAcc?.name || creditAccountId}")`
+      );
+    }
+    if (voucherType === 'contra') {
+      if (!CASH_BANK.includes(debitAccountId)) {
+        errors.push('कोंट्रा वाउचर में डेबिट खाता Cash या Bank होना चाहिए / Contra: Debit must be Cash or Bank');
+      }
+      if (!CASH_BANK.includes(creditAccountId)) {
+        errors.push('कोंट्रा वाउचर में क्रेडिट खाता Cash या Bank होना चाहिए / Contra: Credit must be Cash or Bank');
+      }
+    }
   }
 
   // ── Rule 5: Date within financial year (soft warning) ────────────────────

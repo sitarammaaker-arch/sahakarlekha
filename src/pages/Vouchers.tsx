@@ -142,7 +142,7 @@ const Vouchers: React.FC = () => {
 
   const handleEditSave = () => {
     if (!editId) return;
-    const eResult = validateVoucher(editDebit, editCredit, editAmount, editDate, accounts, society);
+    const eResult = validateVoucher(editDebit, editCredit, editAmount, editDate, accounts, society, editType);
     if (!eResult.valid) {
       toast({ title: eResult.errors[0], variant: 'destructive' });
       return;
@@ -221,8 +221,8 @@ const Vouchers: React.FC = () => {
       handleClear();
       return;
     }
-    // ── Double-entry validation (5 rules) ────────────────────────────────────
-    const vResult = validateVoucher(debitAccount, creditAccount, amount, voucherDate, accounts, society);
+    // ── Double-entry validation (6 rules) ────────────────────────────────────
+    const vResult = validateVoucher(debitAccount, creditAccount, amount, voucherDate, accounts, society, voucherType);
     if (!vResult.valid) {
       toast({ title: vResult.errors[0], variant: 'destructive' });
       return;
