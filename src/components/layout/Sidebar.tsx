@@ -48,6 +48,7 @@ const operationsNavItems: NavItem[] = [
 const reportNavItems: NavItem[] = [
   { key: 'trialBalance', icon: Scale, path: '/trial-balance' },
   { key: 'receiptsPayments', icon: ArrowLeftRight, path: '/receipts-payments' },
+  { key: 'tradingAccount', icon: ShoppingCart, path: '/trading-account' },
   { key: 'profitLoss', icon: TrendingUp, path: '/profit-loss' },
   { key: 'balanceSheet', icon: FileSpreadsheet, path: '/balance-sheet' },
   { key: 'reports', icon: BarChart3, path: '/reports' },

@@ -20,6 +20,7 @@ export const translations: Translations = {
   ledger: { hi: 'खाता बही', en: 'Ledger' },
   members: { hi: 'सदस्य', en: 'Members' },
   trialBalance: { hi: 'तलपट', en: 'Trial Balance' },
+  tradingAccount: { hi: 'व्यापार खाता', en: 'Trading Account' },
   profitLoss: { hi: 'आय-व्यय', en: 'Income & Expenditure' },
   receiptsPayments: { hi: 'प्राप्ति-भुगतान', en: 'Receipts & Payments' },
   balanceSheet: { hi: 'तुलन पत्र', en: 'Balance Sheet' },

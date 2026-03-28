@@ -87,6 +87,16 @@ interface DataContextType {
     netProfit: number;
   };
   getReceiptsPayments: () => ReceiptsPaymentsData;
+  getTradingAccount: () => {
+    salesItems:        { name: string; nameHi: string; amount: number }[];
+    closingStockItems: { name: string; nameHi: string; amount: number }[];
+    openingStockItems: { name: string; nameHi: string; amount: number }[];
+    purchaseItems:     { name: string; nameHi: string; amount: number }[];
+    directExpItems:    { name: string; nameHi: string; amount: number }[];
+    totalSales: number; totalClosingStock: number;
+    totalOpeningStock: number; totalPurchases: number; totalDirectExp: number;
+    grossProfit: number;
+  };
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -677,6 +687,53 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [accounts, vouchers, getAccountBalance]);
 
+  const getTradingAccount = useCallback(() => {
+    const tb = getTrialBalance();
+
+    // Cr side: Sales / Trading Income (parentId '4100')
+    const salesItems = tb
+      .filter(b => b.account.parentId === '4100')
+      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: Math.abs(b.netBalance) }))
+      .filter(i => i.amount > 0);
+
+    // Cr side: Closing Stock = current net debit balance of inventory accounts (parentId '3400')
+    const closingStockItems = tb
+      .filter(b => b.account.parentId === '3400')
+      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: Math.max(0, b.netBalance) }))
+      .filter(i => i.amount > 0);
+
+    // Dr side: Opening Stock = opening debit balances of inventory accounts
+    const openingStockItems = tb
+      .filter(b => b.account.parentId === '3400')
+      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.openingDebit }))
+      .filter(i => i.amount > 0);
+
+    // Dr side: Purchases (account 5101)
+    const purchaseItems = tb
+      .filter(b => b.account.id === '5101')
+      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }))
+      .filter(i => i.amount > 0);
+
+    // Dr side: Direct Expenses (parentId '5100', excluding 5101 Purchase)
+    const directExpItems = tb
+      .filter(b => b.account.parentId === '5100' && b.account.id !== '5101')
+      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }))
+      .filter(i => i.amount > 0);
+
+    const totalSales        = salesItems.reduce((s, i) => s + i.amount, 0);
+    const totalClosingStock = closingStockItems.reduce((s, i) => s + i.amount, 0);
+    const totalOpeningStock = openingStockItems.reduce((s, i) => s + i.amount, 0);
+    const totalPurchases    = purchaseItems.reduce((s, i) => s + i.amount, 0);
+    const totalDirectExp    = directExpItems.reduce((s, i) => s + i.amount, 0);
+
+    const crTotal   = totalSales + totalClosingStock;
+    const drTotal   = totalOpeningStock + totalPurchases + totalDirectExp;
+    const grossProfit = crTotal - drTotal; // positive = profit, negative = loss
+
+    return { salesItems, closingStockItems, openingStockItems, purchaseItems, directExpItems,
+      totalSales, totalClosingStock, totalOpeningStock, totalPurchases, totalDirectExp, grossProfit };
+  }, [getTrialBalance]);
+
   const getProfitLoss = useCallback(() => {
     const tb = getTrialBalance();
     const incomeItems = tb
@@ -920,7 +977,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addEmployee, updateEmployee, deleteEmployee,
       addSalaryRecord, updateSalaryRecord, deleteSalaryRecord,
       getAccountBalance, getCashBookEntries, getBankBookEntries,
-      getTrialBalance, getProfitLoss, getMemberLedger, getReceiptsPayments,
+      getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments,
     }}>
       {children}
     </DataContext.Provider>
