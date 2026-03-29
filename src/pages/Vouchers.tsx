@@ -88,7 +88,8 @@ const AccountSearch: React.FC<{
 
 const Vouchers: React.FC = () => {
   const { t, language } = useLanguage();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
+  const canEdit = hasPermission(['admin', 'accountant']);
   const { accounts, members, vouchers, society, addVoucher, updateVoucher, cancelVoucher, restoreVoucher } = useData();
   const [submitForApproval, setSubmitForApproval] = useState(false);
   const { toast } = useToast();
@@ -800,14 +801,14 @@ const Vouchers: React.FC = () => {
                           </TableCell>
                           <TableCell className="text-center">
                             <div className="flex items-center justify-center gap-1">
-                              {!cancelled && (
+                              {canEdit && !cancelled && (
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10"
                                   title={language === 'hi' ? 'संपादित करें' : 'Edit'}
                                   onClick={() => openEdit(v)}>
                                   <Pencil className="h-4 w-4" />
                                 </Button>
                               )}
-                              {cancelled ? (
+                              {canEdit && (cancelled ? (
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700" title={language === 'hi' ? 'पुनर्स्थापित करें' : 'Restore'}
                                   onClick={() => restoreVoucher(v.id)}>
                                   <RotateCcw className="h-4 w-4" />
@@ -817,7 +818,7 @@ const Vouchers: React.FC = () => {
                                   onClick={() => { setCancelId(v.id); setCancelReason(''); }}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
-                              )}
+                              ))}
                             </div>
                           </TableCell>
                         </TableRow>

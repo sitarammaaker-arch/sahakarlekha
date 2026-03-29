@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -98,7 +99,9 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
 
 const Members: React.FC = () => {
   const { t, language } = useLanguage();
+  const { hasPermission } = useAuth();
   const { members, addMember, updateMember, deleteMember, getMemberLedger, society } = useData();
+  const canEdit = hasPermission(['admin', 'accountant']);
   const { toast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -235,7 +238,7 @@ const Members: React.FC = () => {
           {filteredMembers.length === 0 ? (
             <p className="text-center text-muted-foreground py-12">{t('noData')}</p>
           ) : (
-            <div className="rounded-lg border overflow-hidden">
+            <div className="rounded-lg border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
@@ -287,12 +290,16 @@ const Members: React.FC = () => {
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" onClick={() => setLedgerMember(member)}>
                             <BookOpen className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(member)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(member.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {canEdit && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(member)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {canEdit && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(member.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -413,7 +420,7 @@ const Members: React.FC = () => {
                 </div>
 
                 {/* Ledger Table */}
-                <div className="mt-4 rounded-lg border overflow-hidden">
+                <div className="mt-4 rounded-lg border overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/50">

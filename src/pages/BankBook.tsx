@@ -218,7 +218,7 @@ const BankBook: React.FC = () => {
           <CardTitle className="text-lg">{language === 'hi' ? 'बैंक बही विवरण' : 'Bank Book Details'}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-lg border overflow-hidden">
+          <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">

@@ -125,7 +125,7 @@ const LineTable: React.FC<{
     : 'bg-green-50 text-green-800 border-green-200';
 
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="border rounded-lg overflow-x-auto">
       <div className={cn('px-3 py-2 text-sm font-semibold border-b flex items-center justify-between', headerClass)}>
         <span>
           {isDebit
@@ -136,7 +136,7 @@ const LineTable: React.FC<{
       </div>
       <Table>
         <TableHeader>
-          <TableRow className="bg-gray-50">
+          <TableRow className="bg-muted/50">
             <TableHead className="w-8">#</TableHead>
             <TableHead className="min-w-52">{hi ? 'खाता' : 'Account'}</TableHead>
             <TableHead className="w-32 text-right">{hi ? 'राशि (₹)' : 'Amount (₹)'}</TableHead>

@@ -319,7 +319,7 @@ const LedgerHeads: React.FC = () => {
               {hi ? 'कोई डेटा नहीं' : 'No data available'}
             </p>
           ) : (
-            <div className="rounded-lg border overflow-hidden">
+            <div className="rounded-lg border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">

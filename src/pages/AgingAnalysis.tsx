@@ -172,7 +172,7 @@ const AgingTable: React.FC<{
     <div className="overflow-x-auto">
       <Table className="text-xs">
         <TableHeader>
-          <TableRow className="bg-gray-50">
+          <TableRow className="bg-muted/50">
             <TableHead className="w-8">#</TableHead>
             <TableHead>{hi ? 'नाम' : 'Name'}</TableHead>
             <TableHead>{hi ? 'कोड' : 'Code'}</TableHead>

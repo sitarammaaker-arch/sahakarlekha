@@ -187,7 +187,6 @@ const DayBook: React.FC = () => {
     <>
       <style>{`
         @media print {
-          .no-print { display: none !important; }
           .day-group { break-inside: avoid; }
           body { font-size: 11px; }
         }
@@ -195,7 +194,7 @@ const DayBook: React.FC = () => {
 
       <div className="space-y-4 animate-fade-in">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 no-print">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 print:hidden">
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <BookOpen className="h-7 w-7 text-primary" />
@@ -222,7 +221,7 @@ const DayBook: React.FC = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 no-print">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:hidden">
           <Card className="bg-success/10 border-success/20">
             <CardContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground">{language === 'hi' ? 'कुल रसीद' : 'Total Receipts'}</p>
@@ -335,7 +334,7 @@ const DayBook: React.FC = () => {
                           <TableHead className="font-semibold text-xs">{language === 'hi' ? 'विवरण (Particulars)' : 'Particulars'}</TableHead>
                           <TableHead className="font-semibold text-xs text-right w-32">{language === 'hi' ? 'नाम (Dr) ₹' : 'Debit (₹)'}</TableHead>
                           <TableHead className="font-semibold text-xs text-right w-32">{language === 'hi' ? 'जमा (Cr) ₹' : 'Credit (₹)'}</TableHead>
-                          <TableHead className="font-semibold text-xs text-center w-10 no-print">{language === 'hi' ? 'संपादन' : 'Edit'}</TableHead>
+                          <TableHead className="font-semibold text-xs text-center w-10 print:hidden">{language === 'hi' ? 'संपादन' : 'Edit'}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -359,7 +358,7 @@ const DayBook: React.FC = () => {
                                 {fmt(v.amount)}
                               </TableCell>
                               <TableCell className="text-right text-muted-foreground align-top pt-2 pb-0">—</TableCell>
-                              <TableCell className="text-center no-print align-middle" rowSpan={2}>
+                              <TableCell className="text-center print:hidden align-middle" rowSpan={2}>
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -426,7 +425,7 @@ const DayBook: React.FC = () => {
             })}
 
             {/* Grand Total */}
-            <div className="flex items-center justify-between bg-primary/10 border border-primary/30 rounded-lg px-5 py-3 no-print">
+            <div className="flex items-center justify-between bg-primary/10 border border-primary/30 rounded-lg px-5 py-3 print:hidden">
               <span className="font-bold text-primary">
                 {language === 'hi' ? 'कुल योग (सभी दिन)' : 'Grand Total (All Days)'}
               </span>

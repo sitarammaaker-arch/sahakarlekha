@@ -16,7 +16,17 @@
       "Bash(python -c \":*)",
       "Bash(pip install:*)",
       "Bash(grep -rn \"parentId.*find\\\\|find.*parentId\\\\|parent.*hierarchy\\\\|hierarchy.*parent\" /c/Users/yashm/Downloads/sahayata-accounts-main/sahayata-accounts-main/src --include=*.ts --include=*.tsx)",
-      "Bash(ls \"C:\\\\Users\\\\yashm\\\\.claude\\\\projects\\\\C--Users-yashm-Downloads-sahayata-accounts-main-sahayata-accounts-main\\\\memory\"\" 2>/dev/null || echo \"memory dir empty \")"
+      "Bash(ls \"C:\\\\Users\\\\yashm\\\\.claude\\\\projects\\\\C--Users-yashm-Downloads-sahayata-accounts-main-sahayata-accounts-main\\\\memory\"\" 2>/dev/null || echo \"memory dir empty \")",
+      "Bash(ls /c/Users/yashm/Downloads/sahayata-accounts-main/sahayata-accounts-main/src/pages/*.tsx)",
+      "Bash(grep -r \"Card.*CardHeader.*CardTitle\" /c/Users/yashm/Downloads/sahayata-accounts-main/sahayata-accounts-main/src/pages/*.tsx)",
+      "Bash(done)",
+      "Bash(grep -l \"h1.*text-2xl\\\\|h1.*font-bold\" src/pages/*.tsx)",
+      "Bash(grep -l \"Download\\\\|PDF\\\\|CSV\\\\|Excel\" src/pages/*.tsx)",
+      "Bash(grep -c \"overflow-x-auto\\\\|overflow-hidden\" src/pages/*.tsx)",
+      "Bash(grep -v \":0$\")",
+      "Bash(grep -r \"className.*hidden\\\\|className.*opacity-0\\\\|display.*none\\\\|visibility.*hidden\" src/pages/*.tsx)",
+      "Bash(grep -r \"size=\"\"icon\"\"\" src/pages/*.tsx)",
+      "Bash(grep -r \"Button.*size=\"\"icon\"\"\" src/pages/*.tsx)"
     ]
   }
 }

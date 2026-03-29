@@ -131,7 +131,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] sm:w-72">
                 <DropdownMenuLabel className="flex items-center justify-between">
                   <span>{language === 'hi' ? 'सूचनाएं' : 'Notifications'}</span>
                   {totalNotifications > 0 && (
