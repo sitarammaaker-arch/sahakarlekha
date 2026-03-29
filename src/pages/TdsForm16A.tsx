@@ -39,7 +39,7 @@ export default function TdsForm16A() {
   const [deductorName, setDeductorName] = useState(society.name);
   const [deductorPan, setDeductorPan] = useState('');
   const [deductorTan, setDeductorTan] = useState('');
-  const [filterSupplier, setFilterSupplier] = useState('');
+  const [filterSupplier, setFilterSupplier] = useState('__all__');
 
   const { from, to } = fyBounds(selectedFY);
 
@@ -73,7 +73,7 @@ export default function TdsForm16A() {
   }, [tdsEntries]);
 
   const uniqueSuppliers = Object.keys(supplierMap).sort();
-  const filtered = filterSupplier ? supplierMap[filterSupplier] || [] : tdsEntries;
+  const filtered = (filterSupplier && filterSupplier !== '__all__') ? supplierMap[filterSupplier] || [] : tdsEntries;
 
   const totalTds = filtered.reduce((s, e) => s + e.tdsAmount, 0);
   const totalGross = filtered.reduce((s, e) => s + e.grossAmount, 0);
@@ -215,7 +215,7 @@ export default function TdsForm16A() {
               <SelectValue placeholder={hi ? 'सभी आपूर्तिकर्ता' : 'All Suppliers'} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">{hi ? 'सभी' : 'All'}</SelectItem>
+              <SelectItem value="__all__">{hi ? 'सभी' : 'All'}</SelectItem>
               {uniqueSuppliers.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -273,7 +273,7 @@ export default function TdsForm16A() {
       </Card>
 
       {/* Detail entries */}
-      {filterSupplier && (
+      {filterSupplier && filterSupplier !== '__all__' && (
         <Card>
           <CardHeader><CardTitle className="text-base">{filterSupplier} — {hi ? 'लेनदेन विवरण' : 'Transaction Details'}</CardTitle></CardHeader>
           <CardContent className="p-0">
