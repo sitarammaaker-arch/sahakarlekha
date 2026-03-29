@@ -12,9 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Wallet, Calendar, Filter, Download, Printer, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { Plus, Wallet, Calendar, Filter, Download, Printer, ArrowDownLeft, ArrowUpRight, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateCashBookPDF } from '@/lib/pdf';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const CashBook: React.FC = () => {
   const { t, language } = useLanguage();
@@ -71,6 +72,43 @@ const CashBook: React.FC = () => {
     generateCashBookPDF(entries, society, openingBalance, language);
   };
 
+  const exportHeaders = ['Date', 'Voucher No.', 'Particulars', 'Receipt (Dr)', 'Payment (Cr)', 'Balance'];
+
+  const buildExportRows = () => {
+    const rows: (string | number | null)[][] = [];
+    rows.push([
+      'Opening',
+      'OB',
+      'Opening Balance',
+      openingBalance,
+      null,
+      openingBalance,
+    ]);
+    let running = openingBalance;
+    entries.forEach(entry => {
+      if (entry.type === 'receipt') running += entry.amount;
+      else running -= entry.amount;
+      rows.push([
+        new Date(entry.date).toLocaleDateString('en-IN'),
+        entry.voucherNo,
+        entry.particulars,
+        entry.type === 'receipt' ? entry.amount : null,
+        entry.type === 'payment' ? entry.amount : null,
+        entry.runningBalance,
+      ]);
+    });
+    rows.push(['Total', '', '', totalReceipts, totalPayments, closingBalance]);
+    return rows;
+  };
+
+  const handleCSV = () => {
+    downloadCSV(exportHeaders, buildExportRows(), `cash-book-${society.financialYear}`);
+  };
+
+  const handleExcel = () => {
+    downloadExcelSingle(exportHeaders, buildExportRows(), `cash-book-${society.financialYear}`, 'Cash Book');
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -82,9 +120,17 @@ const CashBook: React.FC = () => {
           <p className="text-muted-foreground">{language === 'hi' ? 'दैनिक नकद लेनदेन का विवरण' : 'Daily cash transactions record'}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-2" onClick={handlePDF}>
-            <Download className="h-4 w-4" />PDF
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" size="sm" className="gap-2" onClick={handlePDF}>
+              <Download className="h-4 w-4" />PDF
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+              <FileSpreadsheet className="h-4 w-4" />Excel
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+              <FileSpreadsheet className="h-4 w-4" />CSV
+            </Button>
+          </div>
           <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />{t('print')}
           </Button>

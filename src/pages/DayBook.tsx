@@ -11,9 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { BookOpen, Download, Printer, Filter, Wallet, Pencil, Save, X } from 'lucide-react';
+import { BookOpen, Download, Printer, Filter, Wallet, Pencil, Save, X, FileSpreadsheet } from 'lucide-react';
 import { generateDayBookPDF } from '@/lib/pdf';
 import { useToast } from '@/hooks/use-toast';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import type { VoucherType } from '@/types';
 
 const DayBook: React.FC = () => {
@@ -157,6 +158,26 @@ const DayBook: React.FC = () => {
   const handlePDF = () => generateDayBookPDF(entries, accounts, society, fromDate, toDate, language);
   const handlePrint = () => window.print();
 
+  const exportHeaders = ['Date', 'Voucher No.', 'Debit Account', 'Credit Account', 'Amount', 'Narration'];
+
+  const buildExportRows = () =>
+    entries.map(v => [
+      new Date(v.date).toLocaleDateString('en-IN'),
+      v.voucherNo,
+      getAccountName(v.debitAccountId),
+      getAccountName(v.creditAccountId),
+      v.amount,
+      v.narration || '',
+    ]);
+
+  const handleCSV = () => {
+    downloadCSV(exportHeaders, buildExportRows(), `day-book-${fromDate}-to-${toDate}`);
+  };
+
+  const handleExcel = () => {
+    downloadExcelSingle(exportHeaders, buildExportRows(), `day-book-${fromDate}-to-${toDate}`, 'Day Book');
+  };
+
   const fmtDate = (d: string) => new Date(d).toLocaleDateString(
     language === 'hi' ? 'hi-IN' : 'en-IN',
     { day: '2-digit', month: 'long', year: 'numeric', weekday: 'long' }
@@ -184,9 +205,15 @@ const DayBook: React.FC = () => {
               {language === 'hi' ? 'सभी लेनदेन का दिनवार विवरण' : 'Day-wise chronological record of all transactions'}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" size="sm" className="gap-2" onClick={handlePDF}>
               <Download className="h-4 w-4" />PDF
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+              <FileSpreadsheet className="h-4 w-4" />Excel
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+              <FileSpreadsheet className="h-4 w-4" />CSV
             </Button>
             <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint}>
               <Printer className="h-4 w-4" />{language === 'hi' ? 'प्रिंट' : 'Print'}

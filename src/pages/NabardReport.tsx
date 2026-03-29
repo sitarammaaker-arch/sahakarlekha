@@ -10,9 +10,10 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Landmark, Download } from 'lucide-react';
+import { Landmark, Download, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcel } from '@/lib/exportUtils';
 import type { KccLoan } from '@/types';
 
 const fmt = (n: number) =>
@@ -149,6 +150,32 @@ const NabardReport: React.FC = () => {
     return { ownFunds, borrowedFunds, total: ownFunds + borrowedFunds };
   }, [accounts, vouchers]);
 
+  // ── CSV / Excel Export ───────────────────────────────────────────────────────
+  const npaHeaders = ['Classification', 'No. of Accounts', 'Outstanding Amount (₹)', 'Overdue Amount (₹)'];
+  const loanSummaryHeaders = ['Particulars', 'Amount (₹)'];
+
+  const npaDataRows = () =>
+    npaData.map(r => [r.classification, r.accounts, fmt(r.outstanding), fmt(r.overdue)]);
+
+  const loanSummaryRows = () => [
+    ['Total Loans Disbursed', fmt(loanStats.disbursed)],
+    ['Total Outstanding', fmt(loanStats.outstanding)],
+    ['Total Overdue', fmt(loanStats.overdue)],
+    ['Total Recovered', fmt(loanStats.recovered)],
+    ['Recovery %', pct(loanStats.recoveryPct)],
+  ];
+
+  const handleCSV = () => {
+    downloadCSV(npaHeaders, npaDataRows(), 'nabard-report-npa');
+  };
+
+  const handleExcel = () => {
+    downloadExcel([
+      { name: 'NPA Classification', headers: npaHeaders, rows: npaDataRows() },
+      { name: 'Loan Summary', headers: loanSummaryHeaders, rows: loanSummaryRows() },
+    ], 'nabard-report');
+  };
+
   // ── PDF Export ───────────────────────────────────────────────────────────────
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -270,10 +297,18 @@ const NabardReport: React.FC = () => {
             </p>
           </div>
         </div>
-        <Button onClick={handleDownloadPDF} className="gap-2">
-          <Download className="h-4 w-4" />
-          {hi ? 'PDF डाउनलोड करें' : 'Download PDF'}
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={handleDownloadPDF} className="gap-2">
+            <Download className="h-4 w-4" />
+            {hi ? 'PDF डाउनलोड करें' : 'Download PDF'}
+          </Button>
+          <Button onClick={handleExcel} variant="outline" className="gap-2">
+            <FileSpreadsheet className="h-4 w-4" />Excel
+          </Button>
+          <Button onClick={handleCSV} variant="outline" className="gap-2">
+            <FileSpreadsheet className="h-4 w-4" />CSV
+          </Button>
+        </div>
       </div>
 
       {/* Society Info */}

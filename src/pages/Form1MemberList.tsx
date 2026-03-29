@@ -19,9 +19,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { ClipboardList, Download, Search, Printer } from 'lucide-react';
+import { ClipboardList, Download, Search, Printer, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const Form1MemberList: React.FC = () => {
   const { language } = useLanguage();
@@ -51,6 +52,31 @@ const Form1MemberList: React.FC = () => {
 
   const totalShareCapital = filtered.reduce((s, m) => s + (m.shareCapital || 0), 0);
   const totalShares       = filtered.reduce((s, m) => s + (m.shareCount  || 0), 0);
+
+  // ── CSV / Excel ────────────────────────────────────────────────────────────
+  const csvHeaders = ['S.No.', 'Member No.', 'Name', "Father's/Spouse Name", 'Address', 'Phone', 'Join Date', 'Type', 'Shares', 'Share Capital', 'Nominee', 'Relation', 'Status'];
+  const getCsvRows = () =>
+    filtered.map((m, i) => [
+      i + 1,
+      m.memberId,
+      m.name,
+      m.fatherName || '—',
+      m.address || '—',
+      m.phone || '—',
+      m.joinDate ? new Date(m.joinDate).toLocaleDateString('en-IN') : '—',
+      m.memberType === 'nominal' ? 'Nominal' : 'Regular',
+      m.shareCount ?? '—',
+      m.shareCapital || 0,
+      m.nomineeName || '—',
+      m.nomineeRelation || '—',
+      m.status === 'active' ? 'Active' : 'Inactive',
+    ]);
+
+  const handleCSV = () =>
+    downloadCSV(csvHeaders, getCsvRows(), 'form1-member-list');
+
+  const handleExcel = () =>
+    downloadExcelSingle(csvHeaders, getCsvRows(), 'form1-member-list', 'Member List');
 
   // ── PDF ────────────────────────────────────────────────────────────────────
   const handleDownloadPDF = () => {
@@ -148,7 +174,7 @@ const Form1MemberList: React.FC = () => {
             {' · '}{society.name}
           </p>
         </div>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint}>
             <Printer className="h-4 w-4" />
             {hi ? 'प्रिंट' : 'Print'}
@@ -156,6 +182,14 @@ const Form1MemberList: React.FC = () => {
           <Button size="sm" className="gap-2" onClick={handleDownloadPDF}>
             <Download className="h-4 w-4" />
             {hi ? 'PDF A3' : 'Download PDF (A3)'}
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+            <FileSpreadsheet className="h-4 w-4" />
+            CSV
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" />
+            Excel
           </Button>
         </div>
       </div>

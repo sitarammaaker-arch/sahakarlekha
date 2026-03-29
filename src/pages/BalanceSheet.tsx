@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { FileSpreadsheet, Download, Printer } from 'lucide-react';
 import { generateBalanceSheetPDF } from '@/lib/pdf';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const BalanceSheet: React.FC = () => {
   const { t, language } = useLanguage();
@@ -42,6 +43,27 @@ const BalanceSheet: React.FC = () => {
   const hasPY = pyYear && Object.keys(pyBalances).length > 0;
   const getPY = (accountId: string) => pyBalances[accountId] ?? 0;
 
+  const exportHeaders = ['Section', 'Particulars', 'Amount (₹)'];
+  const exportRows = (): (string | number)[][] => {
+    const rows: (string | number)[][] = [];
+    // Capital & Liabilities
+    visibleCapLiab.forEach(b => rows.push(['Capital & Liabilities', b.account.name, Math.abs(b.netBalance)]));
+    if (netProfit > 0) {
+      rows.push(['Capital & Liabilities', 'Statutory Reserve Fund — 25% (Current Year)', reserveFund]);
+      rows.push(['Capital & Liabilities', 'Distributable Surplus (Current Year)', distributableSurplus]);
+    } else if (netProfit < 0) {
+      rows.push(['Capital & Liabilities', 'Deficit (Current Year)', Math.abs(netProfit)]);
+    }
+    rows.push(['Capital & Liabilities', 'Total', totalLiabilities]);
+    // Assets
+    visibleAssets.forEach(b => rows.push(['Assets', b.account.name, b.netBalance]));
+    rows.push(['Assets', 'Total', totalAssets]);
+    return rows;
+  };
+
+  const handleCSV = () => downloadCSV(exportHeaders, exportRows(), `balance-sheet-${society.financialYear}`);
+  const handleExcel = () => downloadExcelSingle(exportHeaders, exportRows(), `balance-sheet-${society.financialYear}`, 'Balance Sheet');
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -52,9 +74,15 @@ const BalanceSheet: React.FC = () => {
           </h1>
           <p className="text-muted-foreground">{language === 'hi' ? 'तुलन पत्र - वित्तीय स्थिति विवरण' : 'Statement of Financial Position'}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2" onClick={() => generateBalanceSheetPDF(assetBalances, capitalAndLiabilityBalances, netProfit, society, language, reserveFund)}>
             <Download className="h-4 w-4" />PDF
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" />Excel
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+            <FileSpreadsheet className="h-4 w-4" />CSV
           </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />{t('print')}

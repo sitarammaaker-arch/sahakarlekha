@@ -12,9 +12,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Download, Vote, Trophy, Users } from 'lucide-react';
+import { Plus, Download, Vote, Trophy, Users, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const ELECTIONS_KEY = 'sahayata_elections';
 
@@ -121,6 +122,19 @@ export default function ElectionModule() {
     toast({ title: hi ? 'परिणाम दर्ज किया गया' : 'Results recorded' });
   };
 
+  const csvHeaders = ['No.', 'Title', 'Post', 'Date', 'Candidates', 'Winner', 'Status'];
+  const getCsvRows = () =>
+    elections.map(e => {
+      const winner = e.winnerId ? e.candidates.find(c => c.id === e.winnerId) : null;
+      return [e.electionNo, e.title, postLabel[e.post].en, e.electionDate, e.candidates.length, winner?.name || '—', e.status];
+    });
+
+  const handleCSV = () =>
+    downloadCSV(csvHeaders, getCsvRows(), 'election-module');
+
+  const handleExcel = () =>
+    downloadExcelSingle(csvHeaders, getCsvRows(), 'election-module', 'Elections');
+
   const handlePDF = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const w = doc.internal.pageSize.getWidth();
@@ -150,8 +164,10 @@ export default function ElectionModule() {
           <h1 className="text-2xl font-bold">{hi ? 'सहकारी चुनाव मॉड्यूल' : 'Cooperative Election Module'}</h1>
           <p className="text-muted-foreground text-sm">{hi ? 'बोर्ड चुनाव, मतदान और परिणाम प्रबंधन' : 'Board elections, voting and result management'}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={handlePDF}><Download className="h-4 w-4 mr-2" />PDF</Button>
+          <Button variant="outline" onClick={handleCSV}><FileSpreadsheet className="h-4 w-4 mr-2" />CSV</Button>
+          <Button variant="outline" onClick={handleExcel}><FileSpreadsheet className="h-4 w-4 mr-2" />Excel</Button>
           {user?.role === 'admin' && (
             <Button onClick={() => setShowDialog(true)}><Plus className="h-4 w-4 mr-2" />{hi ? 'नया चुनाव' : 'New Election'}</Button>
           )}

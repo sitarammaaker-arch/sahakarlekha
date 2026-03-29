@@ -4,9 +4,10 @@ import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, TrendingDown, Download, Printer, ArrowUp, ArrowDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, Download, Printer, ArrowUp, ArrowDown, FileSpreadsheet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateIncomeExpenditurePDF } from '@/lib/pdf';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const RESERVE_FUND_RATE = 0.25; // 25% mandatory under Haryana Cooperative Societies Act 1984, Sec 65
 
@@ -25,6 +26,25 @@ const ProfitLoss: React.FC = () => {
 
   const hi = language === 'hi';
 
+  const exportHeaders = ['Type', 'Account Name', 'Amount (₹)'];
+  const exportRows = (): (string | number)[][] => {
+    const rows: (string | number)[][] = [];
+    incomeItems.forEach(item => rows.push(['Income', item.name, item.amount]));
+    rows.push(['Income', 'Total Income', totalIncome]);
+    expenseItems.forEach(item => rows.push(['Expense', item.name, item.amount]));
+    if (isSurplus && netProfit > 0) {
+      rows.push(['Expense', 'Statutory Reserve Fund (25%)', reserveFund]);
+      rows.push(['Expense', 'Surplus (to Balance Sheet)', distributableSurplus]);
+    } else if (!isSurplus) {
+      rows.push(['Expense', 'Deficit (to Balance Sheet)', Math.abs(netProfit)]);
+    }
+    rows.push(['Expense', 'Total Expenditure', totalExpenses]);
+    return rows;
+  };
+
+  const handleCSV = () => downloadCSV(exportHeaders, exportRows(), `profit-loss-${society.financialYear}`);
+  const handleExcel = () => downloadExcelSingle(exportHeaders, exportRows(), `profit-loss-${society.financialYear}`, 'Income & Expenditure');
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -39,7 +59,7 @@ const ProfitLoss: React.FC = () => {
               : `For the Financial Year ${society.financialYear}`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button
             variant="outline"
             size="sm"
@@ -47,6 +67,12 @@ const ProfitLoss: React.FC = () => {
             onClick={() => generateIncomeExpenditurePDF(incomeItems, expenseItems, society, language, reserveFund)}
           >
             <Download className="h-4 w-4" />PDF
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" />Excel
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+            <FileSpreadsheet className="h-4 w-4" />CSV
           </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />{hi ? 'प्रिंट' : 'Print'}

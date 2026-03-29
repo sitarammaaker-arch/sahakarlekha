@@ -10,9 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Download, Plus, Edit2, CheckCircle2, TrendingUp, TrendingDown } from 'lucide-react';
+import { Download, Plus, Edit2, CheckCircle2, TrendingUp, TrendingDown, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { Budget, BudgetHead } from '@/types';
 
 const BUDGET_KEY = 'sahayata_budgets';
@@ -121,6 +122,27 @@ export default function BudgetModule() {
     toast({ title: hi ? 'बजट सहेजा गया' : 'Budget saved' });
   }, [budgets, selectedFY, user, hi, toast]);
 
+  const budgetHeaders = ['Code', 'Account', 'Budget (₹)', 'Actual (₹)', 'Variance (₹)', 'Var %', 'Status'];
+
+  const budgetDataRows = () =>
+    rows.map(r => [
+      r.account.code,
+      r.account.name,
+      r.budgeted,
+      r.actual,
+      r.actual - r.budgeted,
+      r.budgeted > 0 ? `${r.variancePct.toFixed(1)}%` : '—',
+      r.budgeted > 0 ? (r.favourable ? 'Favourable' : 'Adverse') : '—',
+    ]);
+
+  const handleCSV = () => {
+    downloadCSV(budgetHeaders, budgetDataRows(), 'budget-vs-actual');
+  };
+
+  const handleExcel = () => {
+    downloadExcelSingle(budgetHeaders, budgetDataRows(), 'budget-vs-actual', 'Budget vs Actual');
+  };
+
   const handlePDF = () => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const w = doc.internal.pageSize.getWidth();
@@ -173,9 +195,17 @@ export default function BudgetModule() {
           <p className="text-muted-foreground text-sm">{hi ? 'बजट बनाएं और वास्तविक व्यय से तुलना करें' : 'Create budget and compare with actual expenditure'}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handlePDF}>
-            <Download className="h-4 w-4 mr-2" />PDF
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" onClick={handlePDF}>
+              <Download className="h-4 w-4 mr-2" />PDF
+            </Button>
+            <Button variant="outline" onClick={handleExcel}>
+              <FileSpreadsheet className="h-4 w-4 mr-2" />Excel
+            </Button>
+            <Button variant="outline" onClick={handleCSV}>
+              <FileSpreadsheet className="h-4 w-4 mr-2" />CSV
+            </Button>
+          </div>
           {(user?.role === 'admin' || user?.role === 'accountant') && (
             <Button onClick={() => { setEditingBudget(currentBudget || null); setShowEditor(true); }}>
               <Plus className="h-4 w-4 mr-2" />

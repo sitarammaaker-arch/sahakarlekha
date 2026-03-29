@@ -12,9 +12,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollText, Download } from 'lucide-react';
+import { ScrollText, Download, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import type { KccLoan } from '@/types';
 
 const fmt = (n: number) =>
@@ -153,6 +154,57 @@ const FederationReport: React.FC = () => {
     const balance = netProfit - statutoryReserve - educationFund - dividendFund;
     return { netProfit, statutoryReserve, educationFund, dividendFund, balance };
   }, [getProfitLoss]);
+
+  // ── CSV / Excel Export ───────────────────────────────────────────────────────
+  const fedHeaders = ['Section', 'Particulars', 'Value'];
+
+  const fedDataRows = () => [
+    // Section 1
+    ['1. Society Particulars', 'Society Name', society.name],
+    ['1. Society Particulars', 'Registration No.', society.registrationNo || '—'],
+    ['1. Society Particulars', 'Financial Year', society.financialYear],
+    ['1. Society Particulars', 'Address', society.address || '—'],
+    ['1. Society Particulars', 'District', society.district || '—'],
+    ['1. Society Particulars', 'State', society.state || '—'],
+    // Section 2
+    ['2. Membership', 'Opening Members', membershipData.opening],
+    ['2. Membership', 'Joined', membershipData.joined],
+    ['2. Membership', 'Left', membershipData.left],
+    ['2. Membership', 'Closing Members', membershipData.closing],
+    // Section 3
+    ['3. Share Capital', 'Shares Issued', shareData.sharesIssued],
+    ['3. Share Capital', 'Paid-up Capital (₹)', fmt(shareData.paidUp)],
+    // Section 4
+    ['4. Deposits', 'Total Deposits (₹)', fmt(depositTotal)],
+    // Section 5
+    ['5. Loans', 'Loans Sanctioned (₹)', fmt(loanData.sanctioned)],
+    ['5. Loans', 'Loans Disbursed (₹)', fmt(loanData.disbursed)],
+    ['5. Loans', 'Loans Recovered (₹)', fmt(loanData.recovered)],
+    ['5. Loans', 'Loans Outstanding (₹)', fmt(loanData.outstanding)],
+    ['5. Loans', 'Overdue Amount (₹)', fmt(loanData.overdue)],
+    ['5. Loans', 'NPA Amount (₹)', fmt(loanData.npaAmt)],
+    ['5. Loans', 'NPA %', pct(loanData.npaPct)],
+    // Section 6
+    ['6. Working Capital', 'Own Funds (₹)', fmt(wcData.ownFunds)],
+    ['6. Working Capital', 'Borrowings (₹)', fmt(wcData.borrowings)],
+    ['6. Working Capital', 'Total Working Capital (₹)', fmt(wcData.total)],
+    // Section 7
+    ['7. P&L Appropriation', 'Net Profit / (Loss) (₹)', fmt(plData.netProfit)],
+    ['7. P&L Appropriation', 'Statutory Reserve @ 25% (₹)', fmt(plData.statutoryReserve)],
+    ['7. P&L Appropriation', 'Education Fund @ 1% (₹)', fmt(plData.educationFund)],
+    ['7. P&L Appropriation', 'Dividend Fund @ 15% (₹)', fmt(plData.dividendFund)],
+    ['7. P&L Appropriation', 'Balance carried forward (₹)', fmt(plData.balance)],
+    // Section 8
+    ['8. Audit Status', 'Audit Completion Date', auditDate || '(Pending)'],
+  ];
+
+  const handleCSV = () => {
+    downloadCSV(fedHeaders, fedDataRows(), 'federation-annual-return');
+  };
+
+  const handleExcel = () => {
+    downloadExcelSingle(fedHeaders, fedDataRows(), 'federation-annual-return', 'Annual Return');
+  };
 
   // ── PDF Export ───────────────────────────────────────────────────────────────
   const handleDownloadPDF = () => {
@@ -347,10 +399,18 @@ const FederationReport: React.FC = () => {
             </p>
           </div>
         </div>
-        <Button onClick={handleDownloadPDF} className="gap-2">
-          <Download className="h-4 w-4" />
-          {hi ? 'PDF डाउनलोड करें' : 'Download PDF'}
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={handleDownloadPDF} className="gap-2">
+            <Download className="h-4 w-4" />
+            {hi ? 'PDF डाउनलोड करें' : 'Download PDF'}
+          </Button>
+          <Button onClick={handleExcel} variant="outline" className="gap-2">
+            <FileSpreadsheet className="h-4 w-4" />Excel
+          </Button>
+          <Button onClick={handleCSV} variant="outline" className="gap-2">
+            <FileSpreadsheet className="h-4 w-4" />CSV
+          </Button>
+        </div>
       </div>
 
       {/* Section 1 — Society Particulars */}

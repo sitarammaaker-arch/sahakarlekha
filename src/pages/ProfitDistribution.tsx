@@ -14,10 +14,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Coins, CheckCircle2, AlertTriangle, Info, Download, Users } from 'lucide-react';
+import { Coins, CheckCircle2, AlertTriangle, Info, Download, Users, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 // ── Account IDs ─────────────────────────────────────────────────────────────
 const ACC_NET_SURPLUS   = '1208';
@@ -151,6 +152,17 @@ const ProfitDistribution: React.FC = () => {
     });
   };
 
+  // ── CSV / Excel ────────────────────────────────────────────────────────────
+  const csvHeaders = ['Member', 'Share Capital', 'Distribution %', 'Amount'];
+  const getCsvRows = () =>
+    memberDividends.map(m => [m.name, m.shareCapital || 0, dividendRatePct, m.dividend]);
+
+  const handleCSV = () =>
+    downloadCSV(csvHeaders, getCsvRows(), 'profit-distribution');
+
+  const handleExcel = () =>
+    downloadExcelSingle(csvHeaders, getCsvRows(), 'profit-distribution', 'Profit Distribution');
+
   // ── PDF ────────────────────────────────────────────────────────────────────
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -229,15 +241,20 @@ const ProfitDistribution: React.FC = () => {
           </h1>
           <p className="text-sm text-gray-500">{society.name} · {hi ? 'वित्तीय वर्ष' : 'FY'} {fy}</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="ml-auto gap-2"
-          onClick={handleDownloadPDF}
-        >
-          <Download className="h-4 w-4" />
-          {hi ? 'PDF डाउनलोड' : 'Download PDF'}
-        </Button>
+        <div className="ml-auto flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadPDF}>
+            <Download className="h-4 w-4" />
+            {hi ? 'PDF डाउनलोड' : 'Download PDF'}
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+            <FileSpreadsheet className="h-4 w-4" />
+            CSV
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" />
+            Excel
+          </Button>
+        </div>
       </div>
 
       {/* Info banner */}

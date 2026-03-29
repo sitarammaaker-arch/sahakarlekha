@@ -27,10 +27,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Users2, Plus, Download, Search, Pencil, Trash2 } from 'lucide-react';
+import { Users2, Plus, Download, Search, Pencil, Trash2, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type MeetingType   = 'AGM' | 'SGM' | 'Board' | 'Committee' | 'Other';
@@ -174,6 +175,26 @@ const MeetingRegister: React.FC = () => {
     toast({ title: hi ? 'बैठक हटाई गई' : 'Meeting deleted' });
   };
 
+  const csvHeaders = ['Meeting No.', 'Type', 'Date', 'Time', 'Venue', 'Attendees', 'Status', 'Agenda', 'Resolutions'];
+  const getCsvRows = () =>
+    filtered.map(m => [
+      m.meetingNo,
+      TYPE_LABELS[m.type].en,
+      new Date(m.date).toLocaleDateString('en-IN'),
+      m.time || '—',
+      m.venue,
+      m.attendees || '—',
+      m.status,
+      m.agenda || '—',
+      m.resolutions || '—',
+    ]);
+
+  const handleCSV = () =>
+    downloadCSV(csvHeaders, getCsvRows(), 'meeting-register');
+
+  const handleExcel = () =>
+    downloadExcelSingle(csvHeaders, getCsvRows(), 'meeting-register', 'Meetings');
+
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     let y = 14;
@@ -220,9 +241,15 @@ const MeetingRegister: React.FC = () => {
           </h1>
           <p className="text-sm text-gray-500">{society.name} · {hi ? 'वित्तीय वर्ष' : 'FY'} {society.financialYear}</p>
         </div>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadPDF}>
             <Download className="h-4 w-4" />PDF
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+            <FileSpreadsheet className="h-4 w-4" />CSV
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" />Excel
           </Button>
           <Button size="sm" className="gap-2" onClick={openAdd}>
             <Plus className="h-4 w-4" />

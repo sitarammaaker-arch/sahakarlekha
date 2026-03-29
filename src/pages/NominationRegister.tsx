@@ -22,11 +22,12 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Heart, Download, Search, Pencil, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Heart, Download, Search, Pencil, CheckCircle2, AlertTriangle, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Member } from '@/types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const RELATIONS = ['Son', 'Daughter', 'Spouse', 'Father', 'Mother', 'Brother', 'Sister', 'Other'];
 
@@ -85,6 +86,26 @@ const NominationRegister: React.FC = () => {
     setEditMember(null);
   };
 
+  // ── CSV / Excel ────────────────────────────────────────────────────────────
+  const csvHeaders = ['Member ID', 'Member Name', 'Phone', 'Share Capital', 'Nominee Name', 'Relation', 'Nominee Phone', 'Status'];
+  const getCsvRows = () =>
+    activeMembers.map(m => [
+      m.memberId,
+      m.name,
+      m.phone || '—',
+      m.shareCapital || 0,
+      m.nomineeName || '—',
+      m.nomineeRelation || '—',
+      m.nomineePhone || '—',
+      m.nomineeName ? 'Nominated' : 'Pending',
+    ]);
+
+  const handleCSV = () =>
+    downloadCSV(csvHeaders, getCsvRows(), 'nomination-register');
+
+  const handleExcel = () =>
+    downloadExcelSingle(csvHeaders, getCsvRows(), 'nomination-register', 'Nominations');
+
   // ── PDF ────────────────────────────────────────────────────────────────────
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -138,9 +159,17 @@ const NominationRegister: React.FC = () => {
             {society.name} · {hi ? 'वित्तीय वर्ष' : 'FY'} {society.financialYear}
           </p>
         </div>
-        <Button variant="outline" size="sm" className="ml-auto gap-2" onClick={handleDownloadPDF}>
-          <Download className="h-4 w-4" />PDF
-        </Button>
+        <div className="ml-auto flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadPDF}>
+            <Download className="h-4 w-4" />PDF
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+            <FileSpreadsheet className="h-4 w-4" />CSV
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" />Excel
+          </Button>
+        </div>
       </div>
 
       {/* Summary */}

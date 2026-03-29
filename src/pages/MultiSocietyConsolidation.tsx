@@ -19,9 +19,10 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import { Upload, Download, X, Building2, AlertTriangle, FileJson, RefreshCw } from 'lucide-react';
+import { Upload, Download, X, Building2, AlertTriangle, FileJson, RefreshCw, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcel } from '@/lib/exportUtils';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -185,6 +186,32 @@ function processBranchBackup(fileName: string, backup: BackupFile): BranchData {
   };
 }
 
+// ── CSV / Excel Export ──────────────────────────────────────────────────────────
+
+function buildExportData(branches: BranchData[]) {
+  const fmtNum = (n: number) => Math.round(n);
+  const totalOf = (key: keyof BranchData) =>
+    branches.reduce((s, b) => s + (b[key] as number), 0);
+
+  const finHeaders = ['Particulars', ...branches.map(b => b.societyName), 'Consolidated Total'];
+  const finRows: (string | number)[][] = [
+    ['Total Assets',      ...branches.map(b => fmtNum(b.totalAssets)),      fmtNum(totalOf('totalAssets'))],
+    ['Total Liabilities', ...branches.map(b => fmtNum(b.totalLiabilities)), fmtNum(totalOf('totalLiabilities'))],
+    ['Capital & Equity',  ...branches.map(b => fmtNum(b.totalEquity)),      fmtNum(totalOf('totalEquity'))],
+    ['Total Income',      ...branches.map(b => fmtNum(b.totalIncome)),       fmtNum(totalOf('totalIncome'))],
+    ['Total Expenditure', ...branches.map(b => fmtNum(b.totalExpenditure)),  fmtNum(totalOf('totalExpenditure'))],
+    ['Net Surplus',       ...branches.map(b => fmtNum(b.netSurplus)),        fmtNum(totalOf('netSurplus'))],
+  ];
+
+  const mlHeaders = ['Branch', 'Financial Year', 'Active Members', 'Total Share Capital', 'Loans Outstanding'];
+  const mlRows: (string | number)[][] = [
+    ...branches.map(b => [b.societyName, b.financialYear, b.activeMembers, fmtNum(b.totalShareCapital), fmtNum(b.loansOutstanding)]),
+    ['TOTAL', '—', branches.reduce((s, b) => s + b.activeMembers, 0), fmtNum(totalOf('totalShareCapital')), fmtNum(totalOf('loansOutstanding'))],
+  ];
+
+  return { finHeaders, finRows, mlHeaders, mlRows };
+}
+
 // ── PDF Export ─────────────────────────────────────────────────────────────────
 
 function exportConsolidatedPDF(branches: BranchData[]) {
@@ -291,6 +318,24 @@ const MultiSocietyConsolidation: React.FC = () => {
   const [branches, setBranches] = useState<BranchData[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+
+  const handleCSV = () => {
+    if (branches.length === 0) return;
+    const { finHeaders, finRows } = buildExportData(branches);
+    downloadCSV(finHeaders, finRows, 'multi-society-consolidation');
+  };
+
+  const handleExcel = () => {
+    if (branches.length === 0) return;
+    const { finHeaders, finRows, mlHeaders, mlRows } = buildExportData(branches);
+    downloadExcel(
+      [
+        { name: 'Financial Summary', headers: finHeaders, rows: finRows },
+        { name: 'Members & Loans',   headers: mlHeaders,  rows: mlRows  },
+      ],
+      'multi-society-consolidation'
+    );
+  };
 
   // ── Guard: admin only ──────────────────────────────────────────────────────
   if (user?.role !== 'admin') {
@@ -455,6 +500,14 @@ const MultiSocietyConsolidation: React.FC = () => {
               >
                 <Download className="h-4 w-4" />
                 {hi ? 'PDF निर्यात' : 'Export PDF'}
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+                <FileSpreadsheet className="h-4 w-4" />
+                CSV
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+                <FileSpreadsheet className="h-4 w-4" />
+                Excel
               </Button>
             </>
           )}

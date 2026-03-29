@@ -12,9 +12,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Download, Wheat, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Plus, Download, Wheat, AlertTriangle, CheckCircle2, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { KccLoan, CropSeasonType } from '@/types';
 
 const KCC_KEY = 'sahayata_kcc_loans';
@@ -156,6 +157,25 @@ export default function KccLoan() {
     toast({ title: hi ? 'चुकौती दर्ज की गई' : 'Repayment recorded' });
   }, [loans, hi, toast]);
 
+  const kccHeaders = ['Loan No.', 'Member', 'Crop', 'Season', 'Hectare', 'Sanctioned', 'Drawn', 'Repaid', 'Outstanding', 'Rate %', 'Due Date', 'Status'];
+
+  const kccDataRows = () =>
+    enrichedLoans.map(l => [
+      l.loanNo, l.memberName, l.cropName,
+      seasonLabel[l.cropSeason].en,
+      l.landAreaHectares.toFixed(2),
+      l.sanctionedAmount, l.drawnAmount, l.repaidAmount, l.outstandingAmount,
+      `${l.interestRate}%`, l.dueDate, l.status,
+    ]);
+
+  const handleCSV = () => {
+    downloadCSV(kccHeaders, kccDataRows(), 'kcc-loans');
+  };
+
+  const handleExcel = () => {
+    downloadExcelSingle(kccHeaders, kccDataRows(), 'kcc-loans', 'KCC Loans');
+  };
+
   const handlePDF = () => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const w = doc.internal.pageSize.getWidth();
@@ -212,7 +232,11 @@ export default function KccLoan() {
           <p className="text-muted-foreground text-sm">{hi ? 'किसान क्रेडिट कार्ड ऋण प्रबंधन (PACS)' : 'Kisan Credit Card Loan Management (PACS)'}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handlePDF}><Download className="h-4 w-4 mr-2" />PDF</Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" onClick={handlePDF}><Download className="h-4 w-4 mr-2" />PDF</Button>
+            <Button variant="outline" onClick={handleExcel}><FileSpreadsheet className="h-4 w-4 mr-2" />Excel</Button>
+            <Button variant="outline" onClick={handleCSV}><FileSpreadsheet className="h-4 w-4 mr-2" />CSV</Button>
+          </div>
           <Button onClick={() => { setForm(emptyForm); setErrors({}); setShowDialog(true); }}>
             <Plus className="h-4 w-4 mr-2" />{hi ? 'नया ऋण' : 'New Loan'}
           </Button>

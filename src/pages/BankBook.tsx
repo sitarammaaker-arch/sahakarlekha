@@ -12,9 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Building2, Download, Printer, CreditCard } from 'lucide-react';
+import { Plus, Building2, Download, Printer, CreditCard, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateBankBookPDF } from '@/lib/pdf';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const BankBook: React.FC = () => {
   const { t, language } = useLanguage();
@@ -41,6 +42,33 @@ const BankBook: React.FC = () => {
   const totalWithdrawals = entries.filter(e => e.type === 'withdrawal').reduce((s, e) => s + e.amount, 0);
 
   const nonBankAccounts = accounts.filter(a => !a.isGroup && a.id !== ACCOUNT_IDS.BANK && a.id !== ACCOUNT_IDS.CASH);
+
+  const exportHeaders = ['Date', 'Voucher No.', 'Particulars', 'Receipt (Dr)', 'Payment (Cr)', 'Balance'];
+
+  const buildExportRows = () => {
+    const rows: (string | number | null)[][] = [];
+    rows.push(['Opening', 'OB', 'Opening Balance', openingBalance, null, openingBalance]);
+    entries.forEach(entry => {
+      rows.push([
+        new Date(entry.date).toLocaleDateString('en-IN'),
+        entry.voucherNo,
+        entry.particulars,
+        entry.type === 'deposit' ? entry.amount : null,
+        entry.type === 'withdrawal' ? entry.amount : null,
+        entry.runningBalance,
+      ]);
+    });
+    rows.push(['Total', '', '', totalDeposits, totalWithdrawals, bankBalance]);
+    return rows;
+  };
+
+  const handleCSV = () => {
+    downloadCSV(exportHeaders, buildExportRows(), `bank-book-${society.financialYear}`);
+  };
+
+  const handleExcel = () => {
+    downloadExcelSingle(exportHeaders, buildExportRows(), `bank-book-${society.financialYear}`, 'Bank Book');
+  };
 
   const handleAddEntry = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,9 +103,17 @@ const BankBook: React.FC = () => {
           <p className="text-muted-foreground">{language === 'hi' ? 'बैंक खाता लेनदेन का विवरण' : 'Bank account transactions record'}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateBankBookPDF(entries, society, openingBalance, language)}>
-            <Download className="h-4 w-4" />PDF
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => generateBankBookPDF(entries, society, openingBalance, language)}>
+              <Download className="h-4 w-4" />PDF
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+              <FileSpreadsheet className="h-4 w-4" />Excel
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+              <FileSpreadsheet className="h-4 w-4" />CSV
+            </Button>
+          </div>
           <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />{t('print')}
           </Button>

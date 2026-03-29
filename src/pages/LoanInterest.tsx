@@ -23,10 +23,11 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Percent, CheckCircle2, Info, Download, Calculator } from 'lucide-react';
+import { Percent, CheckCircle2, Info, Download, Calculator, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 // ── Account IDs ───────────────────────────────────────────────────────────────
 const ACC_INTEREST_REC  = '3313'; // Member Loan Interest Receivable (asset)
@@ -183,6 +184,17 @@ const LoanInterest: React.FC = () => {
     });
   };
 
+  // ── CSV / Excel ────────────────────────────────────────────────────────────
+  const csvHeaders = ['Member', 'Loan Amount', 'Rate %', 'Period (days)', 'Interest'];
+  const getCsvRows = () =>
+    rows.map(r => [r.memberName, r.outstanding, r.ratePa, r.days, r.interest]);
+
+  const handleCSV = () =>
+    downloadCSV(csvHeaders, getCsvRows(), 'loan-interest');
+
+  const handleExcel = () =>
+    downloadExcelSingle(csvHeaders, getCsvRows(), 'loan-interest', 'Loan Interest');
+
   // ── PDF ────────────────────────────────────────────────────────────────────
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -240,10 +252,20 @@ const LoanInterest: React.FC = () => {
             {' · '}{activeLoans.length} {hi ? 'सक्रिय ऋण' : 'active loans'}
           </p>
         </div>
-        <Button variant="outline" size="sm" className="ml-auto gap-2" onClick={handleDownloadPDF}>
-          <Download className="h-4 w-4" />
-          {hi ? 'PDF' : 'Download PDF'}
-        </Button>
+        <div className="ml-auto flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadPDF}>
+            <Download className="h-4 w-4" />
+            {hi ? 'PDF' : 'Download PDF'}
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+            <FileSpreadsheet className="h-4 w-4" />
+            CSV
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" />
+            Excel
+          </Button>
+        </div>
       </div>
 
       {/* Info */}

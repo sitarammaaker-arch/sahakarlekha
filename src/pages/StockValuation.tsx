@@ -7,9 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Download, Package, TrendingUp } from 'lucide-react';
+import { Download, Package, TrendingUp, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { StockMovement, StockItem } from '@/types';
 
 const fmt = (n: number) =>
@@ -104,6 +105,30 @@ export default function StockValuation() {
   const totalValue = useMemo(() => rows.reduce((s, r) => s + r.value, 0), [rows]);
   const totalItems = rows.filter(r => r.qty > 0).length;
 
+  const stockHeaders = ['Sr.', 'Code', 'Item Name', 'HSN/SAC', 'Unit', 'GST %', 'Method', 'Qty', 'Rate (₹)', 'Value (₹)'];
+
+  const stockDataRows = () =>
+    rows.map((r, i) => [
+      i + 1,
+      r.item.itemCode,
+      r.item.name,
+      r.item.hsnCode || r.item.sacCode || '-',
+      r.item.unit,
+      r.item.gstRate != null ? `${r.item.gstRate}%` : '-',
+      r.method,
+      r.qty.toFixed(3),
+      r.avgRate.toFixed(2),
+      r.value.toFixed(2),
+    ]);
+
+  const handleCSV = () => {
+    downloadCSV(stockHeaders, stockDataRows(), 'stock-valuation');
+  };
+
+  const handleExcel = () => {
+    downloadExcelSingle(stockHeaders, stockDataRows(), 'stock-valuation', 'Stock Valuation');
+  };
+
   const handlePDF = () => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const w = doc.internal.pageSize.getWidth();
@@ -157,10 +182,17 @@ export default function StockValuation() {
           <h1 className="text-2xl font-bold">{hi ? 'स्टॉक मूल्यांकन' : 'Stock Valuation'}</h1>
           <p className="text-muted-foreground text-sm">{hi ? 'FIFO / भारित औसत विधि से स्टॉक का मूल्य' : 'Inventory value using FIFO or Weighted Average method'}</p>
         </div>
-        <Button onClick={handlePDF} variant="outline">
-          <Download className="h-4 w-4 mr-2" />
-          PDF
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={handlePDF} variant="outline">
+            <Download className="h-4 w-4 mr-2" />PDF
+          </Button>
+          <Button onClick={handleExcel} variant="outline">
+            <FileSpreadsheet className="h-4 w-4 mr-2" />Excel
+          </Button>
+          <Button onClick={handleCSV} variant="outline">
+            <FileSpreadsheet className="h-4 w-4 mr-2" />CSV
+          </Button>
+        </div>
       </div>
 
       {/* Summary cards */}

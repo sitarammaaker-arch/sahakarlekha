@@ -19,9 +19,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { TrendingDown, TrendingUp, Download, Search, Info } from 'lucide-react';
+import { TrendingDown, TrendingUp, Download, Search, Info, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface AgingRow {
@@ -272,6 +273,28 @@ const AgingAnalysis: React.FC = () => {
   const totalAP = creditorRows.reduce((s, r) => s + r.totalOutstanding, 0);
   const netPosition = totalAR - totalAP;
 
+  // ── CSV / Excel export ─────────────────────────────────────────────────────
+  const agingHeaders = ['#', 'Name', 'Code', 'Phone', 'Total Outstanding', '0-30d', '31-60d', '61-90d', '91-180d', '>180d'];
+
+  const agingRowsFor = (rows: AgingRow[]) =>
+    rows.map((r, i) => [
+      i + 1, r.name, r.code, r.phone || '—',
+      Math.round(r.totalOutstanding),
+      Math.round(r.bucket0_30), Math.round(r.bucket31_60), Math.round(r.bucket61_90),
+      Math.round(r.bucket91_180), Math.round(r.bucketOver180),
+    ]);
+
+  const handleCSV = (mode: 'ar' | 'ap') => {
+    const rows = mode === 'ar' ? debtorRows : creditorRows;
+    downloadCSV(agingHeaders, agingRowsFor(rows), `aging-analysis-${mode}`);
+  };
+
+  const handleExcel = (mode: 'ar' | 'ap') => {
+    const rows = mode === 'ar' ? debtorRows : creditorRows;
+    const sheetName = mode === 'ar' ? 'AR Debtors' : 'AP Creditors';
+    downloadExcelSingle(agingHeaders, agingRowsFor(rows), 'aging-analysis', sheetName);
+  };
+
   // ── PDF export ─────────────────────────────────────────────────────────────
   const handleDownloadPDF = (mode: 'ar' | 'ap') => {
     const rows   = mode === 'ar' ? debtorRows : creditorRows;
@@ -409,9 +432,17 @@ const AgingAnalysis: React.FC = () => {
             <CardHeader className="py-3">
               <CardTitle className="text-base flex items-center justify-between">
                 <span className="text-blue-700">{hi ? 'सुंदरी देनदार — बकाया विश्लेषण' : 'Sundry Debtors — Aging Analysis'}</span>
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => handleDownloadPDF('ar')}>
-                  <Download className="h-3.5 w-3.5" />PDF
-                </Button>
+                <div className="flex gap-2 flex-wrap">
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => handleDownloadPDF('ar')}>
+                    <Download className="h-3.5 w-3.5" />PDF
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => handleExcel('ar')}>
+                    <FileSpreadsheet className="h-3.5 w-3.5" />Excel
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => handleCSV('ar')}>
+                    <FileSpreadsheet className="h-3.5 w-3.5" />CSV
+                  </Button>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -425,9 +456,17 @@ const AgingAnalysis: React.FC = () => {
             <CardHeader className="py-3">
               <CardTitle className="text-base flex items-center justify-between">
                 <span className="text-orange-700">{hi ? 'सुंदरी लेनदार — बकाया विश्लेषण' : 'Sundry Creditors — Aging Analysis'}</span>
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => handleDownloadPDF('ap')}>
-                  <Download className="h-3.5 w-3.5" />PDF
-                </Button>
+                <div className="flex gap-2 flex-wrap">
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => handleDownloadPDF('ap')}>
+                    <Download className="h-3.5 w-3.5" />PDF
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => handleExcel('ap')}>
+                    <FileSpreadsheet className="h-3.5 w-3.5" />Excel
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => handleCSV('ap')}>
+                    <FileSpreadsheet className="h-3.5 w-3.5" />CSV
+                  </Button>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">

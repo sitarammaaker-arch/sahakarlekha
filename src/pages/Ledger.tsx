@@ -11,8 +11,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { BookOpen, Download, Calendar, FileText } from 'lucide-react';
+import { BookOpen, Download, Calendar, FileText, FileSpreadsheet } from 'lucide-react';
 import { generateLedgerPDF } from '@/lib/pdf';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 interface LedgerEntry {
   id: string;
@@ -135,6 +136,26 @@ const Ledger: React.FC = () => {
     generateLedgerPDF(pdfEntries, selectedAccount, society, 'en', fromDate, toDate);
   };
 
+  const exportHeaders = ['Date', 'Voucher No.', 'Particulars', 'Debit', 'Credit', 'Balance'];
+
+  const buildExportRows = () =>
+    entries.map(e => [
+      new Date(e.date).toLocaleDateString('en-IN'),
+      e.voucherNo,
+      e.particulars,
+      e.debit > 0 ? e.debit : null,
+      e.credit > 0 ? e.credit : null,
+      `${fmt(e.balance)} ${e.balanceType}`,
+    ]);
+
+  const handleCSV = () => {
+    downloadCSV(exportHeaders, buildExportRows(), `ledger-${selectedAccount?.name || 'account'}`);
+  };
+
+  const handleExcel = () => {
+    downloadExcelSingle(exportHeaders, buildExportRows(), `ledger-${selectedAccount?.name || 'account'}`, 'Ledger');
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -148,10 +169,17 @@ const Ledger: React.FC = () => {
             {language === 'hi' ? 'खाता बही - विस्तृत खाता विवरण' : 'General Ledger — Detailed Account Statement'}
           </p>
         </div>
-        <Button onClick={handlePDF} variant="outline" size="sm" className="gap-2" disabled={!selectedAccount}>
-          <Download className="h-4 w-4" />
-          PDF
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={handlePDF} variant="outline" size="sm" className="gap-2" disabled={!selectedAccount}>
+            <Download className="h-4 w-4" />PDF
+          </Button>
+          <Button onClick={handleExcel} variant="outline" size="sm" className="gap-2" disabled={!selectedAccount}>
+            <FileSpreadsheet className="h-4 w-4" />Excel
+          </Button>
+          <Button onClick={handleCSV} variant="outline" size="sm" className="gap-2" disabled={!selectedAccount}>
+            <FileSpreadsheet className="h-4 w-4" />CSV
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

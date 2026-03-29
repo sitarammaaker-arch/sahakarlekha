@@ -4,8 +4,9 @@ import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeftRight, Download, Printer } from 'lucide-react';
+import { ArrowLeftRight, Download, Printer, FileSpreadsheet } from 'lucide-react';
 import { generateReceiptsPaymentsPDF } from '@/lib/pdf';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const ReceiptsPayments: React.FC = () => {
   const { language } = useLanguage();
@@ -25,6 +26,23 @@ const ReceiptsPayments: React.FC = () => {
 
   const hi = language === 'hi';
 
+  const exportHeaders = ['Type', 'Particulars', 'Amount (₹)'];
+  const exportRows = (): (string | number)[][] => {
+    const rows: (string | number)[][] = [];
+    rows.push(['Receipt', 'Opening Balance — Cash in Hand', openingCash]);
+    rows.push(['Receipt', 'Opening Balance — Cash at Bank', openingBank]);
+    receipts.forEach(r => rows.push(['Receipt', r.accountName, r.amount]));
+    rows.push(['Receipt', 'Total Receipts (Dr)', drTotal]);
+    payments.forEach(p => rows.push(['Payment', p.accountName, p.amount]));
+    rows.push(['Payment', 'Closing Balance — Cash in Hand', closingCash]);
+    rows.push(['Payment', 'Closing Balance — Cash at Bank', closingBank]);
+    rows.push(['Payment', 'Total Payments (Cr)', crTotal]);
+    return rows;
+  };
+
+  const handleCSV = () => downloadCSV(exportHeaders, exportRows(), `receipts-payments-${society.financialYear}`);
+  const handleExcel = () => downloadExcelSingle(exportHeaders, exportRows(), `receipts-payments-${society.financialYear}`, 'Receipts & Payments');
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -39,9 +57,15 @@ const ReceiptsPayments: React.FC = () => {
               : `For the Financial Year ${society.financialYear}`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2" onClick={() => generateReceiptsPaymentsPDF(data, society)}>
             <Download className="h-4 w-4" />PDF
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" />Excel
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+            <FileSpreadsheet className="h-4 w-4" />CSV
           </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />{hi ? 'प्रिंट' : 'Print'}

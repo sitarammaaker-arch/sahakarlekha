@@ -7,9 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Download, FileText } from 'lucide-react';
+import { Download, FileText, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -77,6 +78,24 @@ export default function TdsForm16A() {
 
   const totalTds = filtered.reduce((s, e) => s + e.tdsAmount, 0);
   const totalGross = filtered.reduce((s, e) => s + e.grossAmount, 0);
+
+  const tdsHeaders = ['#', 'Date', 'Particulars', 'Gross Amount', 'TDS %', 'TDS Amount'];
+
+  const handleCSV = () => {
+    const rows = tdsEntries.map((e, i) => [
+      i + 1, e.date, `Purchase #${e.purchaseId.slice(-6)}`,
+      e.grossAmount, `${e.tdsPct}%`, e.tdsAmount,
+    ]);
+    downloadCSV(tdsHeaders, rows, 'tds-form-16a');
+  };
+
+  const handleExcel = () => {
+    const rows = tdsEntries.map((e, i) => [
+      i + 1, e.date, `Purchase #${e.purchaseId.slice(-6)}`,
+      e.grossAmount, `${e.tdsPct}%`, e.tdsAmount,
+    ]);
+    downloadExcelSingle(tdsHeaders, rows, 'tds-form-16a', 'TDS Form 16A');
+  };
 
   const handlePDF = (supplierName?: string) => {
     const entries = supplierName ? (supplierMap[supplierName] || []) : tdsEntries;
@@ -151,9 +170,17 @@ export default function TdsForm16A() {
           <h1 className="text-2xl font-bold">{hi ? 'TDS प्रमाणपत्र — Form 16A' : 'TDS Certificate — Form 16A'}</h1>
           <p className="text-muted-foreground text-sm">{hi ? 'स्रोत पर कर कटौती का विवरण और प्रमाण पत्र' : 'Tax Deducted at Source details and certificate'}</p>
         </div>
-        <Button onClick={() => handlePDF()} variant="outline">
-          <Download className="h-4 w-4 mr-2" />{hi ? 'सारांश PDF' : 'Summary PDF'}
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={() => handlePDF()} variant="outline">
+            <Download className="h-4 w-4 mr-2" />{hi ? 'सारांश PDF' : 'Summary PDF'}
+          </Button>
+          <Button onClick={handleExcel} variant="outline">
+            <FileSpreadsheet className="h-4 w-4 mr-2" />Excel
+          </Button>
+          <Button onClick={handleCSV} variant="outline">
+            <FileSpreadsheet className="h-4 w-4 mr-2" />CSV
+          </Button>
+        </div>
       </div>
 
       {/* Deductor details */}

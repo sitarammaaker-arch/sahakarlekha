@@ -7,9 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
-import { Scale, Download, Printer, CheckCircle, AlertTriangle, Calendar } from 'lucide-react';
+import { Scale, Download, Printer, CheckCircle, AlertTriangle, Calendar, FileSpreadsheet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateTrialBalancePDF } from '@/lib/pdf';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const TrialBalance: React.FC = () => {
   const { t, language } = useLanguage();
@@ -25,6 +26,18 @@ const TrialBalance: React.FC = () => {
   const totalDebit = allBalances.reduce((s, b) => s + b.totalDebit, 0);
   const totalCredit = allBalances.reduce((s, b) => s + b.totalCredit, 0);
   const isBalanced = Math.abs(totalDebit - totalCredit) < 1;
+
+  const exportHeaders = ['Account Code', 'Account Name', 'Type', 'Debit (Dr)', 'Credit (Cr)'];
+  const exportRows = () => balances.map(b => [
+    b.account.id,
+    b.account.name,
+    b.account.type,
+    b.totalDebit > 0 ? b.totalDebit : '',
+    b.totalCredit > 0 ? b.totalCredit : '',
+  ] as (string | number)[]);
+
+  const handleCSV = () => downloadCSV(exportHeaders, exportRows(), `trial-balance-${society.financialYear}`);
+  const handleExcel = () => downloadExcelSingle(exportHeaders, exportRows(), `trial-balance-${society.financialYear}`, 'Trial Balance');
 
   const typeBadge = (type: string) => {
     const cfg: Record<string, { label: string; labelHi: string; className: string }> = {
@@ -46,9 +59,15 @@ const TrialBalance: React.FC = () => {
           </h1>
           <p className="text-muted-foreground">{language === 'hi' ? 'खातों का तलपट' : 'Trial Balance of Accounts'}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2" onClick={() => generateTrialBalancePDF(balances, society, asOnDate, language)}>
             <Download className="h-4 w-4" />PDF
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" />Excel
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+            <FileSpreadsheet className="h-4 w-4" />CSV
           </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />{t('print')}

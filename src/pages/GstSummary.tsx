@@ -8,10 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Download, TrendingUp, TrendingDown, Percent, ClipboardList } from 'lucide-react';
+import { FileText, Download, TrendingUp, TrendingDown, Percent, ClipboardList, FileSpreadsheet } from 'lucide-react';
 import { generateGstSummaryPDF } from '@/lib/pdf';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { downloadCSV, downloadExcel } from '@/lib/exportUtils';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -275,6 +276,27 @@ export default function GstSummary() {
     ...itcByRate.map(r => r.rate),
   ])).sort((a, b) => a - b);
 
+  const gstHeaders = ['GST Rate %', 'Bills', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Total GST'];
+
+  const gstSlabRows = (data: GstSlabRow[]) =>
+    data.map(r => [
+      `${r.rate}%`, r.count,
+      r.taxableAmount.toFixed(2), r.cgst.toFixed(2),
+      r.sgst.toFixed(2), r.igst.toFixed(2), r.total.toFixed(2),
+    ]);
+
+  const handleCSV = () => {
+    const outputRows = gstSlabRows(outputByRate);
+    downloadCSV(gstHeaders, outputRows, 'gst-summary-output');
+  };
+
+  const handleExcel = () => {
+    downloadExcel([
+      { name: 'Output Tax', headers: gstHeaders, rows: gstSlabRows(outputByRate) },
+      { name: 'ITC', headers: gstHeaders, rows: gstSlabRows(itcByRate) },
+    ], 'gst-summary');
+  };
+
   const handleDownload = () => {
     generateGstSummaryPDF({
       society,
@@ -305,10 +327,18 @@ export default function GstSummary() {
             {hi ? 'आउटपुट टैक्स एवं इनपुट टैक्स क्रेडिट (ITC) सारांश' : 'Output Tax & Input Tax Credit (ITC) Summary'}
           </p>
         </div>
-        <Button onClick={handleDownload} className="gap-2">
-          <Download className="h-4 w-4" />
-          {hi ? 'PDF डाउनलोड' : 'Download PDF'}
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={handleDownload} className="gap-2">
+            <Download className="h-4 w-4" />
+            {hi ? 'PDF डाउनलोड' : 'Download PDF'}
+          </Button>
+          <Button onClick={handleExcel} variant="outline" className="gap-2">
+            <FileSpreadsheet className="h-4 w-4" />Excel
+          </Button>
+          <Button onClick={handleCSV} variant="outline" className="gap-2">
+            <FileSpreadsheet className="h-4 w-4" />CSV
+          </Button>
+        </div>
       </div>
 
       {/* Date filter */}

@@ -14,8 +14,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { FileCheck, Download, Printer, Info } from 'lucide-react';
+import { FileCheck, Download, Printer, Info, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -65,6 +66,32 @@ const AuditCertificate: React.FC = () => {
   // Cash book balance (manual override if needed)
   const [cashBookBal, setCashBookBal]     = useState(String(Math.max(0, Math.round(cashBalance * 100) / 100)));
   const [bankBookBal, setBankBookBal]     = useState(String(Math.max(0, Math.round(bankBalance * 100) / 100)));
+
+  // ── CSV / Excel ────────────────────────────────────────────────────────────
+  const csvHeaders = ['Particulars', 'Value'];
+  const getCsvRows = () => [
+    ['Society Name', society.name],
+    ['Registration No.', society.registrationNo || '—'],
+    ['Financial Year', fy],
+    ['Audit From', auditFrom || '—'],
+    ['Audit To', auditTo || '—'],
+    ['Total Income', totalIncome],
+    ['Total Expenditure', totalExpense],
+    [netProfit >= 0 ? 'Net Surplus' : 'Net Deficit', Math.abs(netProfit)],
+    ['Cash Balance', parseFloat(cashBookBal) || 0],
+    ['Bank Balance', parseFloat(bankBookBal) || 0],
+    ['Share Capital', shareCapital],
+    ['Active Members', totalMembersCount],
+    ['Audit Classification', `Class ${classif}`],
+    ['Auditor Name', auditorName || '—'],
+    ['Auditor Reg. No.', auditorRegNo || '—'],
+  ];
+
+  const handleCSV = () =>
+    downloadCSV(csvHeaders, getCsvRows(), 'audit-certificate');
+
+  const handleExcel = () =>
+    downloadExcelSingle(csvHeaders, getCsvRows(), 'audit-certificate', 'Audit Certificate');
 
   // ── PDF ────────────────────────────────────────────────────────────────────
   const handleDownloadPDF = () => {
@@ -186,7 +213,7 @@ const AuditCertificate: React.FC = () => {
             {society.name} · {hi ? 'वित्तीय वर्ष' : 'FY'} {fy}
           </p>
         </div>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />
             {hi ? 'प्रिंट' : 'Print'}
@@ -194,6 +221,14 @@ const AuditCertificate: React.FC = () => {
           <Button size="sm" className="gap-2 bg-teal-700 hover:bg-teal-800" onClick={handleDownloadPDF}>
             <Download className="h-4 w-4" />
             {hi ? 'PDF डाउनलोड' : 'Download PDF'}
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+            <FileSpreadsheet className="h-4 w-4" />
+            CSV
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" />
+            Excel
           </Button>
         </div>
       </div>
