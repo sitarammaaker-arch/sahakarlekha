@@ -51,23 +51,6 @@ const SocietySetup: React.FC = () => {
   const [pyForm, setPyForm] = useState<Record<string, string>>({});
   const [pyYear, setPyYear] = useState(society.previousFinancialYear || '');
 
-  // Sync basic info form when society loads from context (e.g. after Supabase fetch)
-  useEffect(() => {
-    setForm({
-      name: society.name,
-      nameHi: society.nameHi,
-      shortName: society.shortName || '',
-      shortNameHi: society.shortNameHi || '',
-      registrationNo: society.registrationNo,
-      address: society.address,
-      district: society.district,
-      state: society.state,
-      pinCode: society.pinCode,
-      phone: society.phone,
-      email: society.email,
-    });
-  }, [society.name, society.nameHi, society.shortName, society.shortNameHi, society.registrationNo]);
-
   useEffect(() => {
     const init: Record<string, string> = {};
     accounts.forEach(a => { init[a.id] = String(a.openingBalance); });

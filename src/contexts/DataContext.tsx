@@ -252,10 +252,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (supData && supData.length > 0) { setSuppliersState(supData); storage.setSuppliers(supData); } else setSuppliersState(storage.getSuppliers());
         if (cusData && cusData.length > 0) { setCustomersState(cusData); storage.setCustomers(cusData); } else setCustomersState(storage.getCustomers());
         if (socData && socData.length > 0) {
-          // Merge Supabase data WITH existing localStorage data so locally-added
-          // fields (shortName, shortNameHi, etc.) are not wiped by Supabase columns
+          // localStorage-first: existing local data takes precedence over Supabase
+          // so admin edits (name, shortName, etc.) are never overwritten by stale Supabase data
           const existing = storage.getSociety();
-          const merged = { ...existing, ...socData[0] };
+          const merged = { ...socData[0], ...existing };
           setSocietyState(merged);
           storage.setSociety(merged);
         }
