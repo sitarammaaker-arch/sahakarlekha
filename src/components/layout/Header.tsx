@@ -192,8 +192,8 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Help */}
-            <Button variant="ghost" size="icon">
+            {/* Help — hidden on mobile to prevent avatar overflow */}
+            <Button variant="ghost" size="icon" className="hidden sm:flex">
               <HelpCircle className="h-5 w-5" />
             </Button>
 
