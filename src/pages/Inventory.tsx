@@ -19,7 +19,8 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { Boxes, Plus, Pencil, Trash2, Search, PackageMinus, PackagePlus, ScanLine, X } from 'lucide-react';
+import { Boxes, Plus, Pencil, Trash2, Search, PackageMinus, PackagePlus, ScanLine, X, FileSpreadsheet, Download } from 'lucide-react';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { StockItem, StockMovement } from '@/types';
@@ -439,6 +440,17 @@ const Inventory: React.FC = () => {
     setIsAdjustOpen(false);
   };
 
+  const handleCSV = () => {
+    const headers = ['Item Code', 'Name', 'Name (Hindi)', 'Unit', 'Opening Stock', 'Current Stock', 'Purchase Rate', 'Sale Rate', 'Stock Value', 'Status', 'Barcode'];
+    const rows = filteredItems.map(i => [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, i.currentStock || 0, i.purchaseRate || 0, i.saleRate || 0, (i.currentStock || 0) * (i.purchaseRate || 0), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']);
+    downloadCSV(headers, rows, 'inventory.csv');
+  };
+  const handleExcel = () => {
+    const headers = ['Item Code', 'Name', 'Name (Hindi)', 'Unit', 'Opening Stock', 'Current Stock', 'Purchase Rate', 'Sale Rate', 'Stock Value', 'Status', 'Barcode'];
+    const rows = filteredItems.map(i => [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, i.currentStock || 0, i.purchaseRate || 0, i.saleRate || 0, (i.currentStock || 0) * (i.purchaseRate || 0), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']);
+    downloadExcelSingle(headers, rows, 'inventory.xlsx', 'Inventory');
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -569,12 +581,24 @@ const Inventory: React.FC = () => {
           {/* Items Table */}
           <Card className="shadow-card">
             <CardHeader>
-              <CardTitle className="text-lg">
-                {hi ? 'वस्तु सूची' : 'Item List'}
-                <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  ({filteredItems.length} {hi ? 'वस्तुएं' : 'items'})
-                </span>
-              </CardTitle>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <CardTitle className="text-lg">
+                  {hi ? 'वस्तु सूची' : 'Item List'}
+                  <span className="ml-2 text-sm font-normal text-muted-foreground">
+                    ({filteredItems.length} {hi ? 'वस्तुएं' : 'items'})
+                  </span>
+                </CardTitle>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="gap-1" onClick={handleExcel}>
+                    <FileSpreadsheet className="h-4 w-4" />
+                    Excel
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1" onClick={handleCSV}>
+                    <Download className="h-4 w-4" />
+                    CSV
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               {filteredItems.length === 0 ? (

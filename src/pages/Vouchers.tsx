@@ -20,7 +20,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, CheckCircle, RotateCcw, EyeOff, Eye, Pencil, Zap, Settings2, ArrowLeft, ArrowLeftRight, Search } from 'lucide-react';
+import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, CheckCircle, RotateCcw, EyeOff, Eye, Pencil, Zap, Settings2, ArrowLeft, ArrowLeftRight, Search, FileSpreadsheet, Download } from 'lucide-react';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { VoucherType } from '@/types';
@@ -285,6 +286,21 @@ const Vouchers: React.FC = () => {
     return language === 'hi' ? 'जर्नल' : 'Journal';
   };
 
+  const handleCSV = () => {
+    const getAccName = (id: string) => accounts.find(a => a.id === id)?.name || id;
+    const headers = ['Voucher No', 'Date', 'Type', 'Debit Account', 'Credit Account', 'Amount', 'Narration'];
+    const allVouchers = vouchers.filter(v => !v.isDeleted);
+    const rows = allVouchers.map(v => [v.voucherNo || '', v.date, v.type, getAccName(v.debitAccountId), getAccName(v.creditAccountId), v.amount, v.narration || '']);
+    downloadCSV(headers, rows, 'vouchers.csv');
+  };
+  const handleExcel = () => {
+    const getAccName = (id: string) => accounts.find(a => a.id === id)?.name || id;
+    const headers = ['Voucher No', 'Date', 'Type', 'Debit Account', 'Credit Account', 'Amount', 'Narration'];
+    const allVouchers = vouchers.filter(v => !v.isDeleted);
+    const rows = allVouchers.map(v => [v.voucherNo || '', v.date, v.type, getAccName(v.debitAccountId), getAccName(v.creditAccountId), v.amount, v.narration || '']);
+    downloadExcelSingle(headers, rows, 'vouchers.xlsx', 'Vouchers');
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -330,6 +346,14 @@ const Vouchers: React.FC = () => {
           </Button>
           <Button variant={activeTab === 'list' ? 'default' : 'outline'} onClick={() => setActiveTab('list')}>
             {language === 'hi' ? 'सूची' : 'List'} ({activeCount})
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleCSV} className="gap-1">
+            <Download className="h-4 w-4" />
+            CSV
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleExcel} className="gap-1">
+            <FileSpreadsheet className="h-4 w-4" />
+            Excel
           </Button>
         </div>
       </div>

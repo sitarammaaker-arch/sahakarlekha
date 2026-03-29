@@ -16,9 +16,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Truck, Plus, Pencil, Trash2, Search, IndianRupee } from 'lucide-react';
+import { Truck, Plus, Pencil, Trash2, Search, IndianRupee, FileSpreadsheet, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Supplier } from '@/types';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const fmt = (amount: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
@@ -48,6 +49,17 @@ const Suppliers: React.FC = () => {
       (s.phone || '').includes(search) ||
       (s.gstNo || '').toLowerCase().includes(search.toLowerCase())
     ), [suppliers, search]);
+
+  const handleCSV = () => {
+    const headers = ['Supplier Code', 'Name', 'Phone', 'GST No', 'Status'];
+    const rows = filtered.map(s => [s.supplierCode || '', s.name, s.phone || '', s.gstNo || '', s.isActive ? 'Active' : 'Inactive']);
+    downloadCSV(headers, rows, 'suppliers.csv');
+  };
+  const handleExcel = () => {
+    const headers = ['Supplier Code', 'Name', 'Phone', 'GST No', 'Status'];
+    const rows = filtered.map(s => [s.supplierCode || '', s.name, s.phone || '', s.gstNo || '', s.isActive ? 'Active' : 'Inactive']);
+    downloadExcelSingle(headers, rows, 'suppliers.xlsx', 'Suppliers');
+  };
 
   const openAdd = () => { setEditId(null); setForm(EMPTY_FORM()); setShowForm(true); };
   const openEdit = (s: Supplier) => {
@@ -90,10 +102,18 @@ const Suppliers: React.FC = () => {
             {language === 'hi' ? 'पंजीकृत आपूर्तिकर्ता प्रबंधन' : 'Manage registered suppliers'}
           </p>
         </div>
-        <Button onClick={openAdd} className="gap-2">
-          <Plus className="h-4 w-4" />
-          {language === 'hi' ? 'नया आपूर्तिकर्ता' : 'New Supplier'}
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" className="gap-1" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" /> Excel
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1" onClick={handleCSV}>
+            <Download className="h-4 w-4" /> CSV
+          </Button>
+          <Button onClick={openAdd} className="gap-2">
+            <Plus className="h-4 w-4" />
+            {language === 'hi' ? 'नया आपूर्तिकर्ता' : 'New Supplier'}
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}

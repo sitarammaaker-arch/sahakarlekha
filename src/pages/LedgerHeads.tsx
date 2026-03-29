@@ -17,10 +17,11 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { ListTree, Pencil, Trash2, Plus, Search, FolderOpen } from 'lucide-react';
+import { ListTree, Pencil, Trash2, Plus, Search, FolderOpen, FileSpreadsheet, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { LedgerAccount } from '@/types';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 type AccountType = LedgerAccount['type'];
 
@@ -113,6 +114,17 @@ const LedgerHeads: React.FC = () => {
   const assetCount     = accounts.filter(a => a.type === 'asset').length;
   const liabilityCount = accounts.filter(a => a.type === 'liability').length;
   const incExpCount    = accounts.filter(a => a.type === 'income' || a.type === 'expense').length;
+
+  const handleCSV = () => {
+    const headers = ['Name', 'Name (Hindi)', 'Type', 'Opening Balance', 'Balance Type', 'Group'];
+    const rows = displayList.map(({ acc }) => [acc.name, acc.nameHi || '', acc.type, acc.openingBalance || 0, acc.openingBalanceType || '', acc.isGroup ? 'Group' : 'Ledger']);
+    downloadCSV(headers, rows, 'ledger_heads.csv');
+  };
+  const handleExcel = () => {
+    const headers = ['Name', 'Name (Hindi)', 'Type', 'Opening Balance', 'Balance Type', 'Group'];
+    const rows = displayList.map(({ acc }) => [acc.name, acc.nameHi || '', acc.type, acc.openingBalance || 0, acc.openingBalanceType || '', acc.isGroup ? 'Group' : 'Ledger']);
+    downloadExcelSingle(headers, rows, 'ledger_heads.xlsx', 'Ledger Heads');
+  };
 
   const resetForm = () => setForm(EMPTY_FORM);
 
@@ -211,10 +223,18 @@ const LedgerHeads: React.FC = () => {
             {hi ? 'लेखा खातों का पदानुक्रम प्रबंधन' : 'Hierarchical chart of accounts'}
           </p>
         </div>
-        <Button className="gap-2 w-fit" onClick={openAdd}>
-          <Plus className="h-4 w-4" />
-          {hi ? 'नया खाता' : 'Add New'}
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" className="gap-1" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" /> Excel
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1" onClick={handleCSV}>
+            <Download className="h-4 w-4" /> CSV
+          </Button>
+          <Button className="gap-2 w-fit" onClick={openAdd}>
+            <Plus className="h-4 w-4" />
+            {hi ? 'नया खाता' : 'Add New'}
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}

@@ -19,7 +19,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckCircle2, XCircle, ClipboardList, Eye } from 'lucide-react';
+import { CheckCircle2, XCircle, ClipboardList, Eye, FileSpreadsheet, Download } from 'lucide-react';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { useToast } from '@/hooks/use-toast';
 
 const fmt = (n: number) =>
@@ -86,6 +87,17 @@ const VoucherApproval: React.FC = () => {
     setRejectReason('');
   };
 
+  const handleCSV = () => {
+    const headers = ['Voucher No', 'Date', 'Type', 'Debit Account', 'Credit Account', 'Amount', 'Status', 'Narration'];
+    const rows = filtered.map(v => [v.voucherNo || '', v.date, v.type, getAccName(v.debitAccountId), getAccName(v.creditAccountId), v.amount, v.approvalStatus || 'pending', v.narration || '']);
+    downloadCSV(headers, rows, 'voucher_approval.csv');
+  };
+  const handleExcel = () => {
+    const headers = ['Voucher No', 'Date', 'Type', 'Debit Account', 'Credit Account', 'Amount', 'Status', 'Narration'];
+    const rows = filtered.map(v => [v.voucherNo || '', v.date, v.type, getAccName(v.debitAccountId), getAccName(v.creditAccountId), v.amount, v.approvalStatus || 'pending', v.narration || '']);
+    downloadExcelSingle(headers, rows, 'voucher_approval.xlsx', 'Voucher Approval');
+  };
+
   // ────────────────────────────────────────────────────────────────────────────
   return (
     <div className="p-4 space-y-4">
@@ -101,6 +113,16 @@ const VoucherApproval: React.FC = () => {
           <p className="text-sm text-gray-500">
             {hi ? 'लम्बित वाउचरों की समीक्षा और स्वीकृति' : 'Review and approve pending vouchers'}
           </p>
+        </div>
+        <div className="ml-auto flex gap-2">
+          <Button size="sm" variant="outline" onClick={handleCSV} className="gap-1">
+            <Download className="h-4 w-4" />
+            CSV
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleExcel} className="gap-1">
+            <FileSpreadsheet className="h-4 w-4" />
+            Excel
+          </Button>
         </div>
       </div>
 

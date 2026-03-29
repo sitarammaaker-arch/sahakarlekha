@@ -21,7 +21,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { BadgeDollarSign, UserPlus, Pencil, Trash2, Search, CheckCircle, Users, AlertTriangle, Download } from 'lucide-react';
+import { BadgeDollarSign, UserPlus, Pencil, Trash2, Search, CheckCircle, Users, AlertTriangle, Download, FileSpreadsheet } from 'lucide-react';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { useToast } from '@/hooks/use-toast';
 import type { Employee, SalaryRecord, PaymentMode } from '@/types';
 import { generateSalarySlipPDF } from '@/lib/pdf';
@@ -372,6 +373,19 @@ const SalaryManagement: React.FC = () => {
     updateSalaryRecord(markPaidId, { isPaid: true, paidDate: markPaidDate, paymentMode: markPaidMode });
     toast({ title: hi ? 'भुगतान चिह्नित किया गया' : 'Marked as paid' });
     setMarkPaidId(null);
+  };
+
+  const handleSalaryCSV = () => {
+    const getEmpName = (id: string) => employees.find(e => e.id === id)?.name || id;
+    const headers = ['Slip No', 'Month', 'Employee', 'Net Salary', 'Payment Mode', 'Status'];
+    const rows = salaryRecords.map(r => [r.slipNo || '', r.month || '', getEmpName(r.employeeId), r.netSalary || 0, r.paymentMode || '', r.isPaid ? 'Paid' : 'Pending']);
+    downloadCSV(headers, rows, 'salary_history.csv');
+  };
+  const handleSalaryExcel = () => {
+    const getEmpName = (id: string) => employees.find(e => e.id === id)?.name || id;
+    const headers = ['Slip No', 'Month', 'Employee', 'Net Salary', 'Payment Mode', 'Status'];
+    const rows = salaryRecords.map(r => [r.slipNo || '', r.month || '', getEmpName(r.employeeId), r.netSalary || 0, r.paymentMode || '', r.isPaid ? 'Paid' : 'Pending']);
+    downloadExcelSingle(headers, rows, 'salary_history.xlsx', 'Salary History');
   };
 
   // ── render ────────────────────────────────────────────────────────────────
@@ -728,6 +742,22 @@ const SalaryManagement: React.FC = () => {
 
         {/* ══ TAB 3 – SALARY HISTORY ═══════════════════════════════════════ */}
         <TabsContent value="history" className="space-y-4 mt-4">
+          {/* History header with export */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-sm font-medium text-muted-foreground">
+              {hi ? 'वेतन इतिहास' : 'Salary History'}
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={handleSalaryCSV} className="gap-1">
+                <Download className="h-4 w-4" />
+                CSV
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleSalaryExcel} className="gap-1">
+                <FileSpreadsheet className="h-4 w-4" />
+                Excel
+              </Button>
+            </div>
+          </div>
           {/* Filters */}
           <Card>
             <CardContent className="pt-4 pb-4">

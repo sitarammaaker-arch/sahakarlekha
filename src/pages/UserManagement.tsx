@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Edit2, ShieldCheck, Users, Lock } from 'lucide-react';
+import { Plus, Edit2, ShieldCheck, Users, Lock, FileSpreadsheet, Download } from 'lucide-react';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { UserRole } from '@/types';
 
 const USERS_KEY = 'sahayata_app_users';
@@ -127,6 +128,17 @@ export default function UserManagement() {
     setShowDialog(true);
   };
 
+  const handleCSV = () => {
+    const headers = ['Name', 'Email', 'Role', 'Status', 'Created At'];
+    const rows = users.map(u => [u.name, u.email, u.role, u.isActive ? 'Active' : 'Inactive', u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN') : '']);
+    downloadCSV(headers, rows, 'users.csv');
+  };
+  const handleExcel = () => {
+    const headers = ['Name', 'Email', 'Role', 'Status', 'Created At'];
+    const rows = users.map(u => [u.name, u.email, u.role, u.isActive ? 'Active' : 'Inactive', u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN') : '']);
+    downloadExcelSingle(headers, rows, 'users.xlsx', 'Users');
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -134,9 +146,19 @@ export default function UserManagement() {
           <h1 className="text-2xl font-bold">{hi ? 'उपयोगकर्ता प्रबंधन' : 'User Management'}</h1>
           <p className="text-muted-foreground text-sm">{hi ? 'उपयोगकर्ता बनाएं और भूमिकाएं निर्धारित करें' : 'Create users and assign roles'}</p>
         </div>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4 mr-2" />{hi ? 'नया उपयोगकर्ता' : 'New User'}
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" className="gap-1" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" />
+            Excel
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1" onClick={handleCSV}>
+            <Download className="h-4 w-4" />
+            CSV
+          </Button>
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4 mr-2" />{hi ? 'नया उपयोगकर्ता' : 'New User'}
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}

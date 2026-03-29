@@ -8,8 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Trash2 } from 'lucide-react';
+import { Trash2, FileSpreadsheet, Download } from 'lucide-react';
 import type { VoucherType } from '@/types';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const fmt = (amount: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
@@ -51,6 +52,19 @@ const DeletedVouchers: React.FC = () => {
       })
       .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''));
   }, [vouchers, filterFrom, filterTo, filterSearch]);
+
+  const handleCSV = () => {
+    const getAccName = (id: string) => accounts.find(a => a.id === id)?.name || id;
+    const headers = ['Voucher No', 'Type', 'Date', 'Debit Account', 'Credit Account', 'Amount', 'Narration', 'Deleted Reason', 'Deleted By', 'Deleted At'];
+    const rows = deletedVouchers.map(v => [v.voucherNo || '', v.type, v.date, getAccName(v.debitAccountId), getAccName(v.creditAccountId), v.amount, v.narration || '', v.deletedReason || '', v.deletedBy || '', v.deletedAt ? new Date(v.deletedAt).toLocaleDateString('en-IN') : '']);
+    downloadCSV(headers, rows, 'deleted_vouchers.csv');
+  };
+  const handleExcel = () => {
+    const getAccName = (id: string) => accounts.find(a => a.id === id)?.name || id;
+    const headers = ['Voucher No', 'Type', 'Date', 'Debit Account', 'Credit Account', 'Amount', 'Narration', 'Deleted Reason', 'Deleted By', 'Deleted At'];
+    const rows = deletedVouchers.map(v => [v.voucherNo || '', v.type, v.date, getAccName(v.debitAccountId), getAccName(v.creditAccountId), v.amount, v.narration || '', v.deletedReason || '', v.deletedBy || '', v.deletedAt ? new Date(v.deletedAt).toLocaleDateString('en-IN') : '']);
+    downloadExcelSingle(headers, rows, 'deleted_vouchers.xlsx', 'Deleted Vouchers');
+  };
 
   return (
     <div className="p-4 space-y-4">
@@ -105,9 +119,27 @@ const DeletedVouchers: React.FC = () => {
       {/* Table */}
       <Card>
         <CardHeader className="py-3">
-          <CardTitle className="text-base">
-            {language === 'hi' ? 'रद्द वाउचर सूची (Audit Trail)' : 'Deleted Vouchers List (Audit Trail)'}
-          </CardTitle>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-base">
+              {language === 'hi' ? 'रद्द वाउचर सूची (Audit Trail)' : 'Deleted Vouchers List (Audit Trail)'}
+            </CardTitle>
+            <div className="flex gap-2">
+              <button
+                onClick={handleCSV}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
+              >
+                <Download className="h-3.5 w-3.5" />
+                CSV
+              </button>
+              <button
+                onClick={handleExcel}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" />
+                Excel
+              </button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table>

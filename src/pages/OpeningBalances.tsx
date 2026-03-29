@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Save, RefreshCw, ArrowRight } from 'lucide-react';
+import { Save, RefreshCw, ArrowRight, FileSpreadsheet, Download } from 'lucide-react';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { LedgerAccount } from '@/types';
 
 const OB_KEY = 'sahayata_opening_balances';
@@ -52,6 +53,17 @@ export default function OpeningBalances() {
   const totalDebit = Object.values(balances).filter(e => e.type === 'debit').reduce((s, e) => s + e.amount, 0);
   const totalCredit = Object.values(balances).filter(e => e.type === 'credit').reduce((s, e) => s + e.amount, 0);
   const isBalanced = Math.abs(totalDebit - totalCredit) < 1;
+
+  const handleCSV = () => {
+    const headers = ['Account Name', 'Type', 'Opening Balance', 'Balance Type'];
+    const rows = filtered.map(a => [a.name, a.type, a.openingBalance || 0, a.openingBalanceType || 'debit']);
+    downloadCSV(headers, rows, 'opening_balances.csv');
+  };
+  const handleExcel = () => {
+    const headers = ['Account Name', 'Type', 'Opening Balance', 'Balance Type'];
+    const rows = filtered.map(a => [a.name, a.type, a.openingBalance || 0, a.openingBalanceType || 'debit']);
+    downloadExcelSingle(headers, rows, 'opening_balances.xlsx', 'Opening Balances');
+  };
 
   const handleSave = useCallback(() => {
     saveOpeningBalances(balances);
@@ -96,6 +108,12 @@ export default function OpeningBalances() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" className="gap-1" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" /> Excel
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1" onClick={handleCSV}>
+            <Download className="h-4 w-4" /> CSV
+          </Button>
           {user?.role === 'admin' && (
             <>
               <Button variant="outline" onClick={handleCarryForward}>

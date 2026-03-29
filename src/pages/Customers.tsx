@@ -16,9 +16,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { UserCheck, Plus, Pencil, Trash2, Search, IndianRupee } from 'lucide-react';
+import { UserCheck, Plus, Pencil, Trash2, Search, IndianRupee, FileSpreadsheet, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Customer } from '@/types';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const fmt = (amount: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
@@ -46,6 +47,17 @@ const Customers: React.FC = () => {
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       (c.phone || '').includes(search)
     ), [customers, search]);
+
+  const handleCSV = () => {
+    const headers = ['Customer Code', 'Name', 'Phone', 'Address', 'Status'];
+    const rows = filtered.map(c => [c.customerCode || '', c.name, c.phone || '', c.address || '', c.isActive ? 'Active' : 'Inactive']);
+    downloadCSV(headers, rows, 'customers.csv');
+  };
+  const handleExcel = () => {
+    const headers = ['Customer Code', 'Name', 'Phone', 'Address', 'Status'];
+    const rows = filtered.map(c => [c.customerCode || '', c.name, c.phone || '', c.address || '', c.isActive ? 'Active' : 'Inactive']);
+    downloadExcelSingle(headers, rows, 'customers.xlsx', 'Customers');
+  };
 
   const openAdd = () => { setEditId(null); setForm(EMPTY_FORM()); setShowForm(true); };
   const openEdit = (c: Customer) => {
@@ -88,10 +100,18 @@ const Customers: React.FC = () => {
             {language === 'hi' ? 'पंजीकृत ग्राहक प्रबंधन' : 'Manage registered customers'}
           </p>
         </div>
-        <Button onClick={openAdd} className="gap-2">
-          <Plus className="h-4 w-4" />
-          {language === 'hi' ? 'नया ग्राहक' : 'New Customer'}
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" className="gap-1" onClick={handleExcel}>
+            <FileSpreadsheet className="h-4 w-4" /> Excel
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1" onClick={handleCSV}>
+            <Download className="h-4 w-4" /> CSV
+          </Button>
+          <Button onClick={openAdd} className="gap-2">
+            <Plus className="h-4 w-4" />
+            {language === 'hi' ? 'नया ग्राहक' : 'New Customer'}
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}

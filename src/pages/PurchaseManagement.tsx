@@ -22,7 +22,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { PackagePlus, Plus, Trash2, Eye, Search } from 'lucide-react';
+import { PackagePlus, Plus, Trash2, Eye, Search, FileSpreadsheet, Download } from 'lucide-react';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { PurchaseItem, PaymentMode } from '@/types';
@@ -206,6 +207,17 @@ const PurchaseManagement: React.FC = () => {
       return true;
     });
   }, [purchases, filterFrom, filterTo, filterSupplier, filterMode]);
+
+  const handleCSV = () => {
+    const headers = ['Purchase No', 'Date', 'Supplier', 'Phone', 'Items', 'Net Amount', 'Payment Mode'];
+    const rows = filteredPurchases.map(p => [p.purchaseNo || '', p.date, p.supplierName || '', p.supplierPhone || '', p.items?.length || 0, p.netAmount || 0, p.paymentMode || '']);
+    downloadCSV(headers, rows, 'purchases.csv');
+  };
+  const handleExcel = () => {
+    const headers = ['Purchase No', 'Date', 'Supplier', 'Phone', 'Items', 'Net Amount', 'Payment Mode'];
+    const rows = filteredPurchases.map(p => [p.purchaseNo || '', p.date, p.supplierName || '', p.supplierPhone || '', p.items?.length || 0, p.netAmount || 0, p.paymentMode || '']);
+    downloadExcelSingle(headers, rows, 'purchases.xlsx', 'Purchases');
+  };
 
   // ── Summary stats ─────────────────────────────────────────────────────────
   const totalCount = filteredPurchases.length;
@@ -605,6 +617,18 @@ const PurchaseManagement: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Export buttons */}
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="outline" className="gap-1" onClick={handleExcel}>
+              <FileSpreadsheet className="h-4 w-4" />
+              {language === 'hi' ? 'Excel' : 'Excel'}
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1" onClick={handleCSV}>
+              <Download className="h-4 w-4" />
+              CSV
+            </Button>
+          </div>
 
           {/* Table */}
           <Card>
