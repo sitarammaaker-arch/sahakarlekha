@@ -162,27 +162,27 @@ export default function KccLoan() {
     doc.setFontSize(14);
     doc.text(society.name, w / 2, 14, { align: 'center' });
     doc.setFontSize(11);
-    doc.text(hi ? 'किसान क्रेडिट कार्ड (KCC) ऋण रजिस्टर' : 'Kisan Credit Card (KCC) Loan Register', w / 2, 21, { align: 'center' });
+    doc.text('Kisan Credit Card (KCC) Loan Register', w / 2, 21, { align: 'center' });
 
     autoTable(doc, {
       startY: 28,
       head: [[
-        hi ? 'ऋण सं.' : 'Loan No.',
-        hi ? 'सदस्य' : 'Member',
-        hi ? 'फसल' : 'Crop',
-        hi ? 'मौसम' : 'Season',
-        hi ? 'हेक्टेयर' : 'Hectare',
-        hi ? 'स्वीकृत' : 'Sanctioned',
-        hi ? 'आहरित' : 'Drawn',
-        hi ? 'चुकाया' : 'Repaid',
-        hi ? 'बकाया' : 'Outstanding',
-        hi ? 'दर %' : 'Rate %',
-        hi ? 'देय तिथि' : 'Due Date',
-        hi ? 'स्थिति' : 'Status',
+        'Loan No.',
+        'Member',
+        'Crop',
+        'Season',
+        'Hectare',
+        'Sanctioned',
+        'Drawn',
+        'Repaid',
+        'Outstanding',
+        'Rate %',
+        'Due Date',
+        'Status',
       ]],
       body: enrichedLoans.map(l => [
         l.loanNo, l.memberName, l.cropName,
-        hi ? seasonLabel[l.cropSeason].hi : seasonLabel[l.cropSeason].en,
+        seasonLabel[l.cropSeason].en,
         l.landAreaHectares.toFixed(2),
         l.sanctionedAmount.toFixed(0),
         l.drawnAmount.toFixed(0),

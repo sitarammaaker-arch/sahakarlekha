@@ -128,7 +128,7 @@ export default function BudgetModule() {
     doc.setFontSize(13);
     doc.text(society.name, w / 2, 14, { align: 'center' });
     doc.setFontSize(11);
-    doc.text(`${hi ? 'बजट बनाम वास्तविक' : 'Budget vs Actual'} — ${selectedFY}`, w / 2, 21, { align: 'center' });
+    doc.text(`Budget vs Actual — ${selectedFY}`, w / 2, 21, { align: 'center' });
 
     const buildBody = (data: typeof rows) =>
       data.map(r => [
@@ -137,27 +137,27 @@ export default function BudgetModule() {
         r.budgeted.toFixed(2),
         r.actual.toFixed(2),
         `${r.variancePct.toFixed(1)}%`,
-        r.favourale ? (hi ? 'अनुकूल' : 'Fav') : (hi ? 'प्रतिकूल' : 'Adv'),
+        r.favourale ? 'Fav' : 'Adv',
       ]);
 
     doc.setFontSize(10);
-    doc.text(hi ? 'आय' : 'Income', 14, 30);
+    doc.text('Income', 14, 30);
     autoTable(doc, {
       startY: 33,
-      head: [[hi ? 'कोड' : 'Code', hi ? 'खाता' : 'Account', hi ? 'बजट' : 'Budget', hi ? 'वास्तविक' : 'Actual', hi ? 'अंतर %' : 'Var %', hi ? 'स्थिति' : 'Status']],
+      head: [['Code', 'Account', 'Budget', 'Actual', 'Var %', 'Status']],
       body: buildBody(incomeRows),
-      foot: [['', hi ? 'कुल' : 'Total', totalBudgetIncome.toFixed(2), totalActualIncome.toFixed(2), '', '']],
+      foot: [['', 'Total', totalBudgetIncome.toFixed(2), totalActualIncome.toFixed(2), '', '']],
       styles: { fontSize: 8 },
       headStyles: { fillColor: [39, 174, 96] },
     });
 
     const y2 = (doc as any).lastAutoTable.finalY + 6;
-    doc.text(hi ? 'व्यय' : 'Expenses', 14, y2);
+    doc.text('Expenses', 14, y2);
     autoTable(doc, {
       startY: y2 + 3,
-      head: [[hi ? 'कोड' : 'Code', hi ? 'खाता' : 'Account', hi ? 'बजट' : 'Budget', hi ? 'वास्तविक' : 'Actual', hi ? 'अंतर %' : 'Var %', hi ? 'स्थिति' : 'Status']],
+      head: [['Code', 'Account', 'Budget', 'Actual', 'Var %', 'Status']],
       body: buildBody(expenseRows),
-      foot: [['', hi ? 'कुल' : 'Total', totalBudgetExpense.toFixed(2), totalActualExpense.toFixed(2), '', '']],
+      foot: [['', 'Total', totalBudgetExpense.toFixed(2), totalActualExpense.toFixed(2), '', '']],
       styles: { fontSize: 8 },
       headStyles: { fillColor: [192, 57, 43] },
     });

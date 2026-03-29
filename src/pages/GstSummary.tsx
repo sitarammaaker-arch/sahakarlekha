@@ -8,8 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Download, TrendingUp, TrendingDown, Percent } from 'lucide-react';
+import { FileText, Download, TrendingUp, TrendingDown, Percent, ClipboardList } from 'lucide-react';
 import { generateGstSummaryPDF } from '@/lib/pdf';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -118,6 +120,154 @@ export default function GstSummary() {
   const netSgst = outputTotals.sgst - itcTotals.sgst;
   const netIgst = outputTotals.igst - itcTotals.igst;
   const netGst  = outputTotals.tax  - itcTotals.tax;
+
+  // ── GSTR-1: HSN Summary (from sale items with hsnCode) ────────────────────
+  const hsnSummary = useMemo(() => {
+    const map = new Map<string, { hsn: string; description: string; uqc: string; totalQty: number; taxableValue: number; igst: number; cgst: number; sgst: number }>();
+    for (const s of activeSales) {
+      for (const item of s.items) {
+        const hsn = (item as any).hsnCode || 'N/A';
+        const key = hsn;
+        const existing = map.get(key) ?? { hsn, description: item.itemName, uqc: item.unit || 'NOS', totalQty: 0, taxableValue: 0, igst: 0, cgst: 0, sgst: 0 };
+        existing.totalQty += item.qty;
+        const ratio = s.netAmount > 0 ? (item.qty * item.rate) / s.netAmount : 0;
+        existing.taxableValue += item.qty * item.rate;
+        existing.igst += s.igstAmount * ratio;
+        existing.cgst += s.cgstAmount * ratio;
+        existing.sgst += s.sgstAmount * ratio;
+        map.set(key, existing);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.hsn.localeCompare(b.hsn));
+  }, [activeSales]);
+
+  // ── GSTR-1: B2CS (B2C small — all consumer sales grouped by rate + state) ─
+  const b2csSummary = useMemo(() => {
+    const map = new Map<number, { rate: number; taxableValue: number; igst: number; cgst: number; sgst: number; count: number }>();
+    for (const s of activeSales) {
+      const rate = s.cgstPct + s.sgstPct + s.igstPct;
+      const existing = map.get(rate) ?? { rate, taxableValue: 0, igst: 0, cgst: 0, sgst: 0, count: 0 };
+      existing.taxableValue += s.netAmount;
+      existing.igst += s.igstAmount;
+      existing.cgst += s.cgstAmount;
+      existing.sgst += s.sgstAmount;
+      existing.count++;
+      map.set(rate, existing);
+    }
+    return Array.from(map.values()).sort((a, b) => a.rate - b.rate);
+  }, [activeSales]);
+
+  // ── GSTR-3B: Table 3.1 outward supplies ────────────────────────────────────
+  const outwardTaxable = { taxable: outputTotals.taxable, igst: outputTotals.igst, cgst: outputTotals.cgst, sgst: outputTotals.sgst };
+  const outwardNil = useMemo(() => {
+    const s = activeSales.filter(s => s.taxAmount === 0);
+    return { taxable: s.reduce((a, r) => a + r.netAmount, 0), igst: 0, cgst: 0, sgst: 0 };
+  }, [activeSales]);
+
+  // ── GSTR-3B: Table 4 ITC ───────────────────────────────────────────────────
+  const itcAvailable = { taxable: itcTotals.taxable, igst: itcTotals.igst, cgst: itcTotals.cgst, sgst: itcTotals.sgst };
+
+  // GSTR-3B JSON export
+  const handleGstr3bJson = () => {
+    const payload = {
+      gstin: society.gstNo || 'GSTIN_NOT_SET',
+      ret_period: fromDate.slice(0, 7).replace('-', ''),
+      sup_details: {
+        osup_det: { txval: outwardTaxable.taxable, iamt: outwardTaxable.igst, camt: outwardTaxable.cgst, samt: outwardTaxable.sgst, csamt: 0 },
+        osup_zero: { txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0 },
+        osup_nil_exmp: { txval: outwardNil.taxable, iamt: 0, camt: 0, samt: 0, csamt: 0 },
+        isup_rev: { txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0 },
+        osup_nongst: { txval: 0 },
+      },
+      itc_elg: {
+        itc_avl: [
+          { ty: 'IMPG', iamt: 0, camt: 0, samt: 0, csamt: 0 },
+          { ty: 'IMPS', iamt: 0, camt: 0, samt: 0, csamt: 0 },
+          { ty: 'ISRC', iamt: 0, camt: 0, samt: 0, csamt: 0 },
+          { ty: 'ISD', iamt: 0, camt: 0, samt: 0, csamt: 0 },
+          { ty: 'OTH', iamt: itcAvailable.igst, camt: itcAvailable.cgst, samt: itcAvailable.sgst, csamt: 0 },
+        ],
+        itc_rev: [
+          { ty: 'RUL_42_43', iamt: 0, camt: 0, samt: 0, csamt: 0 },
+          { ty: 'OTH', iamt: 0, camt: 0, samt: 0, csamt: 0 },
+        ],
+      },
+      intr_ltfee: { intr_details: { iamt: 0, camt: 0, samt: 0, csamt: 0 } },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `GSTR3B_${society.gstNo || 'society'}_${fromDate.slice(0,7)}.json`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  // GSTR-3B PDF
+  const handleGstr3bPdf = () => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const w = doc.internal.pageSize.getWidth();
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('FORM GSTR-3B', w / 2, 14, { align: 'center' });
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+    doc.text(`[See rule 61(5)]`, w / 2, 20, { align: 'center' });
+    doc.text(`GSTIN: ${society.gstNo || 'N/A'}  |  ${society.name}  |  Period: ${fromDate} to ${toDate}`, w / 2, 26, { align: 'center' });
+
+    autoTable(doc, {
+      startY: 34,
+      head: [['3.1', 'Nature of Supplies', 'Total Taxable Value', 'IGST', 'CGST', 'SGST', 'Cess']],
+      body: [
+        ['(a)', 'Outward taxable supplies (other than zero rated, nil, exempted)', outwardTaxable.taxable.toFixed(2), outwardTaxable.igst.toFixed(2), outwardTaxable.cgst.toFixed(2), outwardTaxable.sgst.toFixed(2), '0.00'],
+        ['(b)', 'Outward taxable supplies (zero rated)', '0.00', '0.00', '0.00', '0.00', '0.00'],
+        ['(c)', 'Other outward supplies (Nil rated, exempted)', outwardNil.taxable.toFixed(2), '0.00', '0.00', '0.00', '0.00'],
+        ['(d)', 'Inward supplies (liable to reverse charge)', '0.00', '0.00', '0.00', '0.00', '0.00'],
+        ['(e)', 'Non-GST outward supplies', '0.00', '', '', '', ''],
+      ],
+      styles: { fontSize: 7, cellPadding: 1.5 },
+      headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+      columnStyles: { 0: { cellWidth: 8 }, 1: { cellWidth: 65 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } },
+    });
+
+    const y2 = (doc as any).lastAutoTable.finalY + 6;
+    autoTable(doc, {
+      startY: y2,
+      head: [['4', 'Eligible ITC', 'IGST', 'CGST', 'SGST', 'Cess']],
+      body: [
+        ['(A)(v)', 'ITC Available — All other ITC (purchases)', itcAvailable.igst.toFixed(2), itcAvailable.cgst.toFixed(2), itcAvailable.sgst.toFixed(2), '0.00'],
+        ['(B)', 'ITC Reversed', '0.00', '0.00', '0.00', '0.00'],
+        ['(C)', 'Net ITC Available [(A)-(B)]', itcAvailable.igst.toFixed(2), itcAvailable.cgst.toFixed(2), itcAvailable.sgst.toFixed(2), '0.00'],
+      ],
+      styles: { fontSize: 7, cellPadding: 1.5 },
+      headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+      columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 75 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+    });
+
+    const y3 = (doc as any).lastAutoTable.finalY + 6;
+    autoTable(doc, {
+      startY: y3,
+      head: [['5', 'Values of exempt, nil-rated and non-GST inward supplies', 'Inter-State', 'Intra-State']],
+      body: [
+        ['(a)', 'From a supplier under composition scheme, exempt & nil rated supply', '0.00', '0.00'],
+        ['(b)', 'Non-GST supply', '0.00', '0.00'],
+      ],
+      styles: { fontSize: 7, cellPadding: 1.5 },
+      headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+    });
+
+    const y4 = (doc as any).lastAutoTable.finalY + 6;
+    autoTable(doc, {
+      startY: y4,
+      head: [['6.1', 'Payment of Tax', 'IGST', 'CGST', 'SGST', 'Cess']],
+      body: [
+        ['Tax payable', 'Total Tax Payable (Output)', outwardTaxable.igst.toFixed(2), outwardTaxable.cgst.toFixed(2), outwardTaxable.sgst.toFixed(2), '0.00'],
+        ['Less ITC', 'Input Tax Credit Utilised', itcAvailable.igst.toFixed(2), itcAvailable.cgst.toFixed(2), itcAvailable.sgst.toFixed(2), '0.00'],
+        ['Net', 'Tax to be paid in Cash', Math.max(0, netIgst).toFixed(2), Math.max(0, netCgst).toFixed(2), Math.max(0, netSgst).toFixed(2), '0.00'],
+      ],
+      styles: { fontSize: 7, cellPadding: 1.5 },
+      headStyles: { fillColor: [21, 128, 61], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+      columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+    });
+
+    doc.save(`GSTR3B_${society.gstNo || 'society'}_${fromDate.slice(0, 7)}.pdf`);
+  };
 
   // ── Rate slab summary table ───────────────────────────────────────────────
   const allRates = Array.from(new Set([
@@ -242,7 +392,7 @@ export default function GstSummary() {
 
       {/* Main tabs */}
       <Tabs defaultValue="output">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="output">
             {hi ? 'आउटपुट टैक्स (बिक्री)' : 'Output Tax (Sales)'}
           </TabsTrigger>
@@ -252,6 +402,8 @@ export default function GstSummary() {
           <TabsTrigger value="net">
             {hi ? 'शुद्ध GST विवरण' : 'Net GST Statement'}
           </TabsTrigger>
+          <TabsTrigger value="gstr1">GSTR-1</TabsTrigger>
+          <TabsTrigger value="gstr3b">GSTR-3B</TabsTrigger>
         </TabsList>
 
         {/* Output Tax tab */}
@@ -488,6 +640,270 @@ export default function GstSummary() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+        {/* GSTR-1 tab */}
+        <TabsContent value="gstr1">
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4 text-orange-600" />
+                  {hi ? 'GSTR-1 — B2C सारांश (उपभोक्ता बिक्री)' : 'GSTR-1 — B2CS Summary (Consumer Sales)'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground mb-3">
+                  {hi ? 'नोट: GSTIN-युक्त खरीदारों का डेटा उपलब्ध नहीं है, इसलिए सभी बिक्री B2CS (Small) में दिखाई गई हैं।'
+                      : 'Note: Customer GSTIN not stored, so all sales shown as B2CS (Small Consumer).'}
+                </p>
+                {b2csSummary.length === 0 ? (
+                  <p className="text-muted-foreground text-sm text-center py-6">{hi ? 'कोई बिक्री नहीं' : 'No sales in period'}</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{hi ? 'GST दर' : 'GST Rate'}</TableHead>
+                        <TableHead>{hi ? 'बिल' : 'Bills'}</TableHead>
+                        <TableHead className="text-right">{hi ? 'कर योग्य मूल्य' : 'Taxable Value'}</TableHead>
+                        <TableHead className="text-right">IGST</TableHead>
+                        <TableHead className="text-right">CGST</TableHead>
+                        <TableHead className="text-right">SGST</TableHead>
+                        <TableHead className="text-right">{hi ? 'कुल GST' : 'Total GST'}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {b2csSummary.map(r => (
+                        <TableRow key={r.rate}>
+                          <TableCell><Badge variant="outline" className="font-mono">{pct(r.rate)}</Badge></TableCell>
+                          <TableCell>{r.count}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(r.taxableValue)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(r.igst)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(r.cgst)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(r.sgst)}</TableCell>
+                          <TableCell className="text-right font-mono font-semibold">{fmt(r.igst + r.cgst + r.sgst)}</TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="font-bold bg-muted/50">
+                        <TableCell colSpan={2}>{hi ? 'कुल' : 'Total'}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(b2csSummary.reduce((s, r) => s + r.taxableValue, 0))}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(b2csSummary.reduce((s, r) => s + r.igst, 0))}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(b2csSummary.reduce((s, r) => s + r.cgst, 0))}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(b2csSummary.reduce((s, r) => s + r.sgst, 0))}</TableCell>
+                        <TableCell className="text-right font-mono text-green-700">{fmt(outputTotals.tax)}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">{hi ? 'HSN / SAC सारांश' : 'HSN / SAC Summary'}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {hsnSummary.length === 0 ? (
+                  <p className="text-muted-foreground text-sm text-center py-6">{hi ? 'कोई HSN डेटा नहीं' : 'No HSN data in items'}</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>HSN/SAC</TableHead>
+                        <TableHead>{hi ? 'विवरण' : 'Description'}</TableHead>
+                        <TableHead>UQC</TableHead>
+                        <TableHead className="text-right">{hi ? 'मात्रा' : 'Qty'}</TableHead>
+                        <TableHead className="text-right">{hi ? 'कर योग्य मूल्य' : 'Taxable Value'}</TableHead>
+                        <TableHead className="text-right">IGST</TableHead>
+                        <TableHead className="text-right">CGST</TableHead>
+                        <TableHead className="text-right">SGST</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {hsnSummary.map(h => (
+                        <TableRow key={h.hsn}>
+                          <TableCell className="font-mono font-medium">{h.hsn}</TableCell>
+                          <TableCell className="text-sm">{h.description}</TableCell>
+                          <TableCell className="text-xs">{h.uqc}</TableCell>
+                          <TableCell className="text-right font-mono">{h.totalQty.toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(h.taxableValue)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(h.igst)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(h.cgst)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(h.sgst)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">{hi ? 'दस्तावेज़ सारांश' : 'Document Summary'}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{hi ? 'दस्तावेज़ प्रकार' : 'Document Type'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'कुल जारी' : 'Total Issued'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'रद्द' : 'Cancelled'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'शुद्ध जारी' : 'Net Issued'}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell>{hi ? 'कर चालान' : 'Invoices for outward supply'}</TableCell>
+                      <TableCell className="text-right font-mono">{activeSales.length}</TableCell>
+                      <TableCell className="text-right font-mono">0</TableCell>
+                      <TableCell className="text-right font-mono font-semibold">{activeSales.length}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* GSTR-3B tab */}
+        <TabsContent value="gstr3b">
+          <div className="space-y-4">
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" size="sm" onClick={handleGstr3bPdf}>
+                <Download className="h-4 w-4 mr-2" />PDF
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleGstr3bJson}>
+                <FileText className="h-4 w-4 mr-2" />JSON (GST Portal)
+              </Button>
+            </div>
+
+            {/* 3.1 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-bold">
+                  {hi ? 'सारणी 3.1 — बाह्य आपूर्ति एवं आवक आपूर्ति (रिवर्स चार्ज)' : 'Table 3.1 — Outward Supplies & Inward Supplies liable to Reverse Charge'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-blue-50">
+                      <TableHead className="w-8">#</TableHead>
+                      <TableHead>{hi ? 'आपूर्ति की प्रकृति' : 'Nature of Supplies'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'कर योग्य मूल्य' : 'Total Taxable Value'}</TableHead>
+                      <TableHead className="text-right">IGST (₹)</TableHead>
+                      <TableHead className="text-right">CGST (₹)</TableHead>
+                      <TableHead className="text-right">SGST (₹)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[
+                      { key: '(a)', label: hi ? 'कर योग्य बाह्य आपूर्ति (शून्य दर, nil, मुक्त को छोड़कर)' : 'Outward taxable supplies (other than zero rated, nil rated and exempted)', data: outwardTaxable },
+                      { key: '(b)', label: hi ? 'बाह्य कर योग्य आपूर्ति (शून्य दर)' : 'Outward taxable supplies (zero rated)', data: { taxable: 0, igst: 0, cgst: 0, sgst: 0 } },
+                      { key: '(c)', label: hi ? 'अन्य बाह्य आपूर्ति (Nil/मुक्त)' : 'Other outward supplies (Nil rated, exempted)', data: outwardNil },
+                      { key: '(d)', label: hi ? 'आवक आपूर्ति (रिवर्स चार्ज)' : 'Inward supplies (liable to reverse charge)', data: { taxable: 0, igst: 0, cgst: 0, sgst: 0 } },
+                      { key: '(e)', label: hi ? 'गैर-GST बाह्य आपूर्ति' : 'Non-GST outward supplies', data: { taxable: 0, igst: 0, cgst: 0, sgst: 0 } },
+                    ].map(row => (
+                      <TableRow key={row.key}>
+                        <TableCell className="font-mono text-xs font-medium">{row.key}</TableCell>
+                        <TableCell className="text-sm">{row.label}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(row.data.taxable)}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(row.data.igst)}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(row.data.cgst)}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(row.data.sgst)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* 4 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-bold">
+                  {hi ? 'सारणी 4 — पात्र इनपुट टैक्स क्रेडिट' : 'Table 4 — Eligible ITC'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-blue-50">
+                      <TableHead className="w-12">#</TableHead>
+                      <TableHead>{hi ? 'विवरण' : 'Details'}</TableHead>
+                      <TableHead className="text-right">IGST (₹)</TableHead>
+                      <TableHead className="text-right">CGST (₹)</TableHead>
+                      <TableHead className="text-right">SGST (₹)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell className="font-mono text-xs">(A)(v)</TableCell>
+                      <TableCell className="text-sm">{hi ? 'उपलब्ध ITC — सभी अन्य ITC (खरीद)' : 'ITC Available — All other ITC (purchases)'}</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">{fmt(itcAvailable.igst)}</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">{fmt(itcAvailable.cgst)}</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">{fmt(itcAvailable.sgst)}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-mono text-xs">(B)</TableCell>
+                      <TableCell className="text-sm">{hi ? 'ITC उलटाई' : 'ITC Reversed'}</TableCell>
+                      <TableCell className="text-right font-mono">—</TableCell>
+                      <TableCell className="text-right font-mono">—</TableCell>
+                      <TableCell className="text-right font-mono">—</TableCell>
+                    </TableRow>
+                    <TableRow className="bg-muted/50 font-semibold">
+                      <TableCell className="font-mono text-xs">(C)</TableCell>
+                      <TableCell className="text-sm">{hi ? 'शुद्ध उपलब्ध ITC [(A)-(B)]' : 'Net ITC Available [(A)-(B)]'}</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">{fmt(itcAvailable.igst)}</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">{fmt(itcAvailable.cgst)}</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">{fmt(itcAvailable.sgst)}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* 6.1 Payment */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-bold">
+                  {hi ? 'सारणी 6.1 — कर का भुगतान' : 'Table 6.1 — Payment of Tax'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-green-50">
+                      <TableHead>{hi ? 'विवरण' : 'Description'}</TableHead>
+                      <TableHead className="text-right">IGST (₹)</TableHead>
+                      <TableHead className="text-right">CGST (₹)</TableHead>
+                      <TableHead className="text-right">SGST (₹)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell>{hi ? 'देय कर (आउटपुट)' : 'Tax Payable (Output)'}</TableCell>
+                      <TableCell className="text-right font-mono">{fmt(outputTotals.igst)}</TableCell>
+                      <TableCell className="text-right font-mono">{fmt(outputTotals.cgst)}</TableCell>
+                      <TableCell className="text-right font-mono">{fmt(outputTotals.sgst)}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>{hi ? 'ITC से समायोजित' : 'Adjusted from ITC'}</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">({fmt(itcAvailable.igst)})</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">({fmt(itcAvailable.cgst)})</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">({fmt(itcAvailable.sgst)})</TableCell>
+                    </TableRow>
+                    <TableRow className="bg-muted/50 font-bold">
+                      <TableCell>{hi ? 'नकद में देय कर' : 'Tax to be paid in Cash'}</TableCell>
+                      <TableCell className={`text-right font-mono ${netIgst > 0 ? 'text-red-700' : 'text-green-700'}`}>{fmt(Math.max(0, netIgst))}</TableCell>
+                      <TableCell className={`text-right font-mono ${netCgst > 0 ? 'text-red-700' : 'text-green-700'}`}>{fmt(Math.max(0, netCgst))}</TableCell>
+                      <TableCell className={`text-right font-mono ${netSgst > 0 ? 'text-red-700' : 'text-green-700'}`}>{fmt(Math.max(0, netSgst))}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

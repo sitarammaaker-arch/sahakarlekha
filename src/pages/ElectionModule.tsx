@@ -125,13 +125,13 @@ export default function ElectionModule() {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const w = doc.internal.pageSize.getWidth();
     doc.setFontSize(14); doc.text(society.name, w / 2, 14, { align: 'center' });
-    doc.setFontSize(11); doc.text(hi ? 'सहकारी समिति चुनाव रजिस्टर' : 'Cooperative Society Election Register', w / 2, 21, { align: 'center' });
+    doc.setFontSize(11); doc.text('Cooperative Society Election Register', w / 2, 21, { align: 'center' });
     autoTable(doc, {
       startY: 28,
-      head: [[hi ? 'सं.' : 'No.', hi ? 'शीर्षक' : 'Title', hi ? 'पद' : 'Post', hi ? 'तिथि' : 'Date', hi ? 'उम्मीदवार' : 'Candidates', hi ? 'विजेता' : 'Winner', hi ? 'स्थिति' : 'Status']],
+      head: [['No.', 'Title', 'Post', 'Date', 'Candidates', 'Winner', 'Status']],
       body: elections.map(e => {
         const winner = e.winnerId ? e.candidates.find(c => c.id === e.winnerId) : null;
-        return [e.electionNo, e.title, hi ? postLabel[e.post].hi : postLabel[e.post].en, e.electionDate, e.candidates.length, winner?.name || '—', e.status];
+        return [e.electionNo, e.title, postLabel[e.post].en, e.electionDate, e.candidates.length, winner?.name || '—', e.status];
       }),
       styles: { fontSize: 8 },
       headStyles: { fillColor: [52, 73, 94] },

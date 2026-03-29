@@ -111,23 +111,23 @@ export default function StockValuation() {
     doc.setFontSize(14);
     doc.text(society.name, w / 2, 14, { align: 'center' });
     doc.setFontSize(11);
-    doc.text(hi ? 'स्टॉक मूल्यांकन रिपोर्ट' : 'Stock Valuation Report', w / 2, 20, { align: 'center' });
+    doc.text('Stock Valuation Report', w / 2, 20, { align: 'center' });
     doc.setFontSize(9);
-    doc.text(`${hi ? 'विधि' : 'Method'}: ${method === 'fifo' ? 'FIFO' : hi ? 'भारित औसत' : 'Weighted Average'}`, w / 2, 26, { align: 'center' });
+    doc.text(`Method: ${method === 'fifo' ? 'FIFO' : 'Weighted Average'}`, w / 2, 26, { align: 'center' });
 
     autoTable(doc, {
       startY: 32,
       head: [[
-        hi ? 'क्र.' : 'Sr.',
-        hi ? 'कोड' : 'Code',
-        hi ? 'वस्तु का नाम' : 'Item Name',
-        hi ? 'HSN/SAC' : 'HSN/SAC',
-        hi ? 'इकाई' : 'Unit',
-        hi ? 'GST %' : 'GST %',
-        hi ? 'विधि' : 'Method',
-        hi ? 'मात्रा' : 'Qty',
-        hi ? 'दर (₹)' : 'Rate (₹)',
-        hi ? 'मूल्य (₹)' : 'Value (₹)',
+        'Sr.',
+        'Code',
+        'Item Name',
+        'HSN/SAC',
+        'Unit',
+        'GST %',
+        'Method',
+        'Qty',
+        'Rate (₹)',
+        'Value (₹)',
       ]],
       body: rows.map((r, i) => [
         i + 1,
@@ -141,7 +141,7 @@ export default function StockValuation() {
         r.avgRate.toFixed(2),
         r.value.toFixed(2),
       ]),
-      foot: [['', '', hi ? 'कुल' : 'Total', '', '', '', '', '', '', totalValue.toFixed(2)]],
+      foot: [['', '', 'Total', '', '', '', '', '', '', totalValue.toFixed(2)]],
       styles: { fontSize: 8 },
       headStyles: { fillColor: [41, 128, 185] },
       footStyles: { fillColor: [236, 240, 241], fontStyle: 'bold' },

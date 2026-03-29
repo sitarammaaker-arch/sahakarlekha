@@ -89,44 +89,44 @@ export default function TdsForm16A() {
     doc.setFontSize(14);
     doc.text('FORM 16A', w / 2, 14, { align: 'center' });
     doc.setFontSize(10);
-    doc.text(hi ? 'स्रोत पर कर कटौती का प्रमाण पत्र (TDS)' : 'Certificate of Tax Deducted at Source (TDS)', w / 2, 21, { align: 'center' });
-    doc.text(`[${hi ? 'आयकर अधिनियम, 1961 की धारा 203 के अंतर्गत' : 'Under Section 203 of Income Tax Act, 1961'}]`, w / 2, 27, { align: 'center' });
+    doc.text('Certificate of Tax Deducted at Source (TDS)', w / 2, 21, { align: 'center' });
+    doc.text(`[Under Section 203 of Income Tax Act, 1961]`, w / 2, 27, { align: 'center' });
 
     doc.line(14, 30, w - 14, 30);
 
     // Deductor Info
     doc.setFontSize(9);
-    doc.text(`${hi ? 'कटौतीकर्ता का नाम' : 'Name of Deductor'}: ${deductorName}`, 14, 36);
+    doc.text(`Name of Deductor: ${deductorName}`, 14, 36);
     doc.text(`TAN: ${deductorTan || '____________'}   PAN: ${deductorPan || '____________'}`, 14, 42);
-    doc.text(`${hi ? 'वित्तीय वर्ष' : 'Financial Year'}: ${selectedFY}`, 14, 48);
+    doc.text(`Financial Year: ${selectedFY}`, 14, 48);
 
     if (supplierName) {
       const totalDedGross = entries.reduce((s, e) => s + e.grossAmount, 0);
       const totalDedTds = entries.reduce((s, e) => s + e.tdsAmount, 0);
       doc.line(14, 51, w - 14, 51);
-      doc.text(`${hi ? 'कटौती प्राप्तकर्ता' : 'Deductee'}: ${supplierName}`, 14, 57);
-      doc.text(`${hi ? 'कुल भुगतान' : 'Total Payment'}: ${fmt(totalDedGross)}   ${hi ? 'कुल TDS' : 'Total TDS'}: ${fmt(totalDedTds)}`, 14, 63);
+      doc.text(`Deductee: ${supplierName}`, 14, 57);
+      doc.text(`Total Payment: ${fmt(totalDedGross)}   Total TDS: ${fmt(totalDedTds)}`, 14, 63);
 
       autoTable(doc, {
         startY: 68,
-        head: [['#', hi ? 'तिथि' : 'Date', hi ? 'विवरण' : 'Particulars', hi ? 'सकल राशि' : 'Gross Amount', 'TDS %', 'TDS']],
+        head: [['#', 'Date', 'Particulars', 'Gross Amount', 'TDS %', 'TDS']],
         body: entries.map((e, i) => [i + 1, e.date, `Purchase #${e.purchaseId.slice(-6)}`, e.grossAmount.toFixed(2), `${e.tdsPct}%`, e.tdsAmount.toFixed(2)]),
-        foot: [['', '', hi ? 'कुल' : 'Total', totalDedGross.toFixed(2), '', totalDedTds.toFixed(2)]],
+        foot: [['', '', 'Total', totalDedGross.toFixed(2), '', totalDedTds.toFixed(2)]],
         styles: { fontSize: 8 },
         headStyles: { fillColor: [41, 128, 185] },
         footStyles: { fontStyle: 'bold' },
       });
 
       const finalY = (doc as any).lastAutoTable.finalY + 15;
-      doc.text(hi ? 'कटौतीकर्ता का हस्ताक्षर' : 'Signature of Deductor', 14, finalY + 10);
+      doc.text('Signature of Deductor', 14, finalY + 10);
       doc.text('__________________________', 14, finalY + 16);
       doc.text(deductorName, 14, finalY + 22);
-      doc.text(`${hi ? 'पद' : 'Designation'}: _______________________`, 14, finalY + 28);
+      doc.text(`Designation: _______________________`, 14, finalY + 28);
     } else {
       // Summary for all suppliers
       autoTable(doc, {
         startY: 55,
-        head: [['#', hi ? 'आपूर्तिकर्ता' : 'Supplier', hi ? 'लेनदेन' : 'Transactions', hi ? 'सकल भुगतान' : 'Gross Amount', 'TDS %', hi ? 'TDS राशि' : 'TDS Amount']],
+        head: [['#', 'Supplier', 'Transactions', 'Gross Amount', 'TDS %', 'TDS Amount']],
         body: uniqueSuppliers.map((s, i) => {
           const es = supplierMap[s];
           const gross = es.reduce((x, e) => x + e.grossAmount, 0);
@@ -134,7 +134,7 @@ export default function TdsForm16A() {
           const avgPct = gross > 0 ? (tds / gross) * 100 : 0;
           return [i + 1, s, es.length, gross.toFixed(2), `${avgPct.toFixed(1)}%`, tds.toFixed(2)];
         }),
-        foot: [['', hi ? 'कुल' : 'Total', tdsEntries.length, totalGross.toFixed(2), '', totalTds.toFixed(2)]],
+        foot: [['', 'Total', tdsEntries.length, totalGross.toFixed(2), '', totalTds.toFixed(2)]],
         styles: { fontSize: 8 },
         headStyles: { fillColor: [41, 128, 185] },
         footStyles: { fontStyle: 'bold' },

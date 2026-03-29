@@ -15,27 +15,39 @@ import { cn } from '@/lib/utils';
 import { ACCOUNT_IDS } from '@/lib/storage';
 import { useToast } from '@/hooks/use-toast';
 
-// ── CSV Import helpers ────────────────────────────────────────────────────────
+import * as XLSX from 'xlsx';
+
+// ── CSV/Excel Import helpers ──────────────────────────────────────────────────
 interface CsvRow { date: string; description: string; debit: number; credit: number; balance: number }
+
+function normalizeBankRows(rows: any[]): CsvRow[] {
+  return rows.map(row => {
+    // Support both array and object rows (xlsx can return either)
+    const cols = Array.isArray(row) ? row : Object.values(row);
+    const [dateRaw, description = '', debitRaw = 0, creditRaw = 0, balRaw = 0] = cols;
+    const dateParsed = new Date(dateRaw);
+    if (isNaN(dateParsed.getTime())) return null;
+    const date = dateParsed.toISOString().split('T')[0];
+    const debit = parseFloat(String(debitRaw).replace(/,/g, '')) || 0;
+    const credit = parseFloat(String(creditRaw).replace(/,/g, '')) || 0;
+    const balance = parseFloat(String(balRaw).replace(/,/g, '')) || 0;
+    return { date, description: String(description), debit, credit, balance };
+  }).filter(Boolean) as CsvRow[];
+}
 
 function parseBankCsv(text: string): CsvRow[] {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  const rows: CsvRow[] = [];
-  // Skip header line (first line)
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g, '').trim());
-    if (cols.length < 4) continue;
-    // Expected columns: Date, Description, Debit, Credit[, Balance]
-    const [dateRaw, description, debitRaw, creditRaw, balRaw] = cols;
-    const dateParsed = new Date(dateRaw);
-    if (isNaN(dateParsed.getTime())) continue;
-    const date = dateParsed.toISOString().split('T')[0];
-    const debit = parseFloat(debitRaw.replace(/,/g, '')) || 0;
-    const credit = parseFloat(creditRaw.replace(/,/g, '')) || 0;
-    const balance = parseFloat((balRaw || '0').replace(/,/g, '')) || 0;
-    rows.push({ date, description, debit, credit, balance });
-  }
-  return rows;
+  const dataRows = lines.slice(1).map(line =>
+    line.split(',').map(c => c.replace(/^"|"$/g, '').trim())
+  ).filter(cols => cols.length >= 4);
+  return normalizeBankRows(dataRows);
+}
+
+function parseBankExcel(buffer: ArrayBuffer): CsvRow[] {
+  const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  return normalizeBankRows(rows.slice(1)); // skip header row
 }
 
 const fmt = (amount: number) =>
@@ -146,27 +158,25 @@ const BankReconciliation: React.FC = () => {
         <CardHeader className="py-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Upload className="h-4 w-4" />
-            {language === 'hi' ? 'बैंक स्टेटमेंट CSV आयात' : 'Import Bank Statement CSV'}
+            {language === 'hi' ? 'बैंक स्टेटमेंट CSV / Excel आयात' : 'Import Bank Statement (CSV / Excel)'}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-muted-foreground">
             {language === 'hi'
-              ? 'CSV फ़ॉर्मेट: Date, Description, Debit, Credit, Balance (हेडर सहित)'
-              : 'CSV format: Date, Description, Debit, Credit, Balance (with header row)'}
+              ? 'CSV / Excel फ़ॉर्मेट: Date, Description, Debit, Credit, Balance (हेडर सहित)'
+              : 'CSV / Excel format: Date, Description, Debit, Credit, Balance (with header row)'}
           </p>
           <div className="flex items-center gap-3">
             <input
-              type="file" accept=".csv"
+              type="file" accept=".csv,.xlsx,.xls"
               className="text-sm"
               onChange={e => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                const reader = new FileReader();
-                reader.onload = ev => {
-                  const rows = parseBankCsv(ev.target?.result as string);
+                const isExcel = file.name.match(/\.xlsx?$/i);
+                const processRows = (rows: CsvRow[]) => {
                   setCsvRows(rows);
-                  // Auto-match: find vouchers matching date+amount and mark cleared
                   let matched = 0;
                   rows.forEach(row => {
                     const amt = row.credit > 0 ? row.credit : row.debit;
@@ -184,7 +194,14 @@ const BankReconciliation: React.FC = () => {
                     ? `${rows.length} पंक्तियाँ आयात हुईं, ${matched} वाउचर स्वतः मिलान हुए`
                     : `${rows.length} rows imported, ${matched} vouchers auto-matched` });
                 };
-                reader.readAsText(file);
+                const reader = new FileReader();
+                if (isExcel) {
+                  reader.onload = ev => processRows(parseBankExcel(ev.target?.result as ArrayBuffer));
+                  reader.readAsArrayBuffer(file);
+                } else {
+                  reader.onload = ev => processRows(parseBankCsv(ev.target?.result as string));
+                  reader.readAsText(file);
+                }
               }}
             />
             {csvRows.length > 0 && (
