@@ -72,11 +72,19 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
             <Button variant="ghost" size="icon" className="md:hidden" onClick={onMobileMenuToggle}>
               <Menu className="h-5 w-5" />
             </Button>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">
-                {language === 'hi' ? society.nameHi : society.name}
+            <div className="min-w-0">
+              {/* Mobile: show shortName (truncated), Desktop: show full name */}
+              <h1 className="text-base md:text-xl font-bold text-foreground leading-tight">
+                <span className="block md:hidden truncate max-w-[180px]">
+                  {language === 'hi'
+                    ? (society.shortNameHi || society.shortName || society.nameHi)
+                    : (society.shortName || society.shortNameHi || society.name)}
+                </span>
+                <span className="hidden md:block truncate max-w-xs lg:max-w-sm">
+                  {language === 'hi' ? society.nameHi : society.name}
+                </span>
               </h1>
-              <p className="text-xs text-muted-foreground hidden sm:block">
+              <p className="text-xs text-muted-foreground hidden sm:block truncate max-w-xs">
                 {language === 'hi' ? 'पंजीकरण संख्या' : 'Reg. No'}: {society.registrationNo} | {language === 'hi' ? 'वित्तीय वर्ष' : 'FY'}: {society.financialYear}
               </p>
             </div>

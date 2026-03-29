@@ -154,6 +154,8 @@ export type SocietyType = 'marketing_processing' | 'pacs' | 'consumer' | 'labour
 export interface SocietySettings {
   name: string;
   nameHi: string;
+  shortName?: string;     // Short name for header display (mobile)
+  shortNameHi?: string;  // Short name in Hindi
   registrationNo: string;
   address: string;
   district: string;

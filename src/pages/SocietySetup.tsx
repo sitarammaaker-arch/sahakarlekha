@@ -27,6 +27,8 @@ const SocietySetup: React.FC = () => {
   const [form, setForm] = useState({
     name: society.name,
     nameHi: society.nameHi,
+    shortName: society.shortName || '',
+    shortNameHi: society.shortNameHi || '',
     registrationNo: society.registrationNo,
     address: society.address,
     district: society.district,
@@ -259,6 +261,39 @@ const SocietySetup: React.FC = () => {
                   />
                 </div>
               </div>
+
+              {/* Short Name for mobile header display */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>
+                    {language === 'hi' ? 'संक्षिप्त नाम (हिंदी) — मोबाइल हेडर' : 'Short Name (Hindi) — Mobile Header'}
+                    <span className="ml-1 text-xs text-muted-foreground">{language === 'hi' ? '(वैकल्पिक)' : '(optional)'}</span>
+                  </Label>
+                  <Input
+                    value={form.shortNameHi}
+                    onChange={e => setForm(f => ({ ...f, shortNameHi: e.target.value }))}
+                    placeholder={language === 'hi' ? 'जैसे: सीएमएस रानियाँ' : 'e.g. CMS Rania'}
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>
+                    {language === 'hi' ? 'संक्षिप्त नाम (English) — मोबाइल हेडर' : 'Short Name (English) — Mobile Header'}
+                    <span className="ml-1 text-xs text-muted-foreground">{language === 'hi' ? '(वैकल्पिक)' : '(optional)'}</span>
+                  </Label>
+                  <Input
+                    value={form.shortName}
+                    onChange={e => setForm(f => ({ ...f, shortName: e.target.value }))}
+                    placeholder={language === 'hi' ? 'जैसे: CMS Rania' : 'e.g. CMS Rania'}
+                    className="h-11"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-2">
+                {language === 'hi'
+                  ? '💡 संक्षिप्त नाम मोबाइल header में दिखेगा। PDF/रिपोर्ट में पूरा नाम ही दिखेगा। खाली रहने पर पूरा नाम truncate होकर दिखेगा।'
+                  : '💡 Short name appears in mobile header. Full name is used in PDFs/reports. If blank, full name is shown truncated.'}
+              </p>
 
               <div className="space-y-2">
                 <Label>{t('registrationNo')} *</Label>
