@@ -251,7 +251,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSalaryRecordsState(srData || []);
         if (supData && supData.length > 0) { setSuppliersState(supData); storage.setSuppliers(supData); } else setSuppliersState(storage.getSuppliers());
         if (cusData && cusData.length > 0) { setCustomersState(cusData); storage.setCustomers(cusData); } else setCustomersState(storage.getCustomers());
-        if (socData && socData.length > 0) { setSocietyState(socData[0]); storage.setSociety(socData[0]); }
+        if (socData && socData.length > 0) {
+          // Merge Supabase data WITH existing localStorage data so locally-added
+          // fields (shortName, shortNameHi, etc.) are not wiped by Supabase columns
+          const existing = storage.getSociety();
+          const merged = { ...existing, ...socData[0] };
+          setSocietyState(merged);
+          storage.setSociety(merged);
+        }
       } catch (err) {
         console.warn('Supabase load failed, falling back to localStorage:', err);
         // Properly restore from localStorage when Supabase is unavailable
