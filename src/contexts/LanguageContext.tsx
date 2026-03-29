@@ -43,6 +43,7 @@ export const translations: Translations = {
   nominationRegister: { hi: 'नामांकन रजिस्टर', en: 'Nomination Register' },
   form1MemberList: { hi: 'प्रपत्र 1 — सदस्य सूची', en: 'Form 1 — Member List' },
   auditCertificate: { hi: 'ऑडिट प्रमाणपत्र', en: 'Audit Certificate' },
+  backupRestore: { hi: 'बैकअप / रीस्टोर', en: 'Backup & Restore' },
   gstSummary: { hi: 'GST सारांश', en: 'GST Summary' },
   operations: { hi: 'संचालन', en: 'Operations' },
   ledgerHeads: { hi: 'खाता शीर्ष', en: 'Ledger Heads' },

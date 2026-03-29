@@ -46,6 +46,7 @@ import MeetingRegister from "./pages/MeetingRegister";
 import NominationRegister from "./pages/NominationRegister";
 import Form1MemberList from "./pages/Form1MemberList";
 import AuditCertificate from "./pages/AuditCertificate";
+import BackupRestore from "./pages/BackupRestore";
 import GstSummary from "./pages/GstSummary";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
@@ -124,6 +125,7 @@ const AppRoutes = () => {
       <Route path="/nomination-register" element={<ProtectedRoute><NominationRegister /></ProtectedRoute>} />
       <Route path="/form1-member-list" element={<ProtectedRoute><Form1MemberList /></ProtectedRoute>} />
       <Route path="/audit-certificate" element={<ProtectedRoute><AuditCertificate /></ProtectedRoute>} />
+      <Route path="/backup-restore" element={<ProtectedRoute><BackupRestore /></ProtectedRoute>} />
       <Route path="/gst-summary" element={<ProtectedRoute><GstSummary /></ProtectedRoute>} />
 
       {/* Catch-all */}
