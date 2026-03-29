@@ -252,22 +252,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (supData && supData.length > 0) { setSuppliersState(supData); storage.setSuppliers(supData); } else setSuppliersState(storage.getSuppliers());
         if (cusData && cusData.length > 0) { setCustomersState(cusData); storage.setCustomers(cusData); } else setCustomersState(storage.getCustomers());
         if (socData && socData.length > 0) {
-          const existing = storage.getSociety();
-          // If localStorage has real customized data (non-default registrationNo), it wins.
-          // If localStorage has default/empty data (incognito / fresh install), Supabase wins.
-          const isLocalDefault =
-            !existing.registrationNo ||
-            existing.registrationNo === 'COOP/2024/12345';
-          if (isLocalDefault) {
-            // Incognito / fresh install: use Supabase data
-            setSocietyState(socData[0]);
-            storage.setSociety(socData[0]);
-          } else {
-            // Real customized localStorage data takes precedence
-            const merged = { ...socData[0], ...existing };
-            setSocietyState(merged);
-            storage.setSociety(merged);
-          }
+          // Supabase is the single source of truth for society settings.
+          // All devices always load from Supabase — save once, sync everywhere.
+          // localStorage is only used as offline fallback (when Supabase is unreachable).
+          setSocietyState(socData[0]);
+          storage.setSociety(socData[0]);
         }
       } catch (err) {
         console.warn('Supabase load failed, falling back to localStorage:', err);
