@@ -91,7 +91,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
           </div>
 
           {/* Right side */}
-          <div className="flex items-center gap-2 mr-1 md:mr-0">
+          <div className="flex items-center gap-1 md:gap-2 pr-1 md:pr-0">
             {/* Search Button */}
             <Button
               variant="outline"
@@ -105,9 +105,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
                 Ctrl K
               </kbd>
             </Button>
-            <Button variant="ghost" size="icon" className="sm:hidden" onClick={() => setSearchOpen(true)}>
-              <Search className="h-5 w-5" />
-            </Button>
+            {/* Search icon hidden on mobile — use sidebar nav or Ctrl+K on desktop */}
 
             {/* Language Toggle */}
             <DropdownMenu>
@@ -200,7 +198,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
             {/* User Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="gap-2 pl-2 pr-3">
+                <Button variant="ghost" className="gap-2 pl-2 pr-1 md:pr-3">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                       {user ? getInitials(user.name) : 'U'}
