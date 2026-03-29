@@ -91,6 +91,7 @@ const settingsNavItems: NavItem[] = [
   { key: 'userManagement', icon: UserCog, path: '/user-management', roles: ['admin'] },
   { key: 'backupRestore', icon: DatabaseBackup, path: '/backup-restore', roles: ['admin'] },
   { key: 'multiSocietyConsolidation', icon: Building2, path: '/multi-society-consolidation', roles: ['admin'] },
+  { key: 'universalImporter', icon: FileSpreadsheet, path: '/universal-importer', roles: ['admin'] },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpen, onMobileClose }) => {

@@ -61,6 +61,7 @@ import Register from "./pages/Register";
 import MultiSocietyConsolidation from "./pages/MultiSocietyConsolidation";
 import NabardReport from "./pages/NabardReport";
 import FederationReport from "./pages/FederationReport";
+import UniversalImporter from "./pages/UniversalImporter";
 import NotFound from "./pages/NotFound";
 
 import { preloadHindiFont } from '@/lib/fontLoader';
@@ -151,6 +152,7 @@ const AppRoutes = () => {
       <Route path="/multi-society-consolidation" element={<ProtectedRoute><MultiSocietyConsolidation /></ProtectedRoute>} />
       <Route path="/nabard-report" element={<ProtectedRoute><NabardReport /></ProtectedRoute>} />
       <Route path="/federation-report" element={<ProtectedRoute><FederationReport /></ProtectedRoute>} />
+      <Route path="/universal-importer" element={<ProtectedRoute><UniversalImporter /></ProtectedRoute>} />
 
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />
