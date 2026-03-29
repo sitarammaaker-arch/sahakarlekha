@@ -232,6 +232,55 @@ export interface StockItem {
   purchaseRate: number;
   saleRate: number;
   isActive: boolean;
+  // Tax classification
+  hsnCode?: string;       // HSN code for goods
+  sacCode?: string;       // SAC code for services
+  gstRate?: number;       // default GST rate % (e.g. 5, 12, 18)
+  valuationMethod?: 'fifo' | 'weighted_avg'; // inventory valuation
+}
+
+// ── Budget ─────────────────────────────────────────────────────────────────────
+export interface BudgetHead {
+  accountId: string;
+  accountName: string;
+  budgetAmount: number;
+}
+
+export interface Budget {
+  id: string;
+  financialYear: string;
+  heads: BudgetHead[];
+  approvedBy?: string;
+  approvedAt?: string;
+  remarks?: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+// ── KCC Crop Loan ──────────────────────────────────────────────────────────────
+export type CropSeasonType = 'kharif' | 'rabi' | 'zaid';
+export type KccLoanStatus = 'active' | 'repaid' | 'overdue';
+
+export interface KccLoan {
+  id: string;
+  loanNo: string;
+  memberId: string;
+  memberName: string;
+  cropName: string;
+  cropSeason: CropSeasonType;
+  landAreaHectares: number;
+  sanctionedAmount: number;
+  drawnAmount: number;
+  repaidAmount: number;
+  outstandingAmount: number;
+  interestRate: number;
+  disbursementDate: string;
+  dueDate: string;
+  status: KccLoanStatus;
+  voucherId?: string;
+  narration: string;
+  createdAt: string;
+  createdBy: string;
 }
 
 export type StockMovementType = 'purchase' | 'sale' | 'adjustment';

@@ -49,6 +49,12 @@ import AuditCertificate from "./pages/AuditCertificate";
 import BackupRestore from "./pages/BackupRestore";
 import GstSummary from "./pages/GstSummary";
 import AgingAnalysis from "./pages/AgingAnalysis";
+import StockValuation from "./pages/StockValuation";
+import BudgetModule from "./pages/BudgetModule";
+import TdsForm16A from "./pages/TdsForm16A";
+import UserManagement from "./pages/UserManagement";
+import EWayBill from "./pages/EWayBill";
+import KccLoan from "./pages/KccLoan";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 
@@ -129,6 +135,12 @@ const AppRoutes = () => {
       <Route path="/backup-restore" element={<ProtectedRoute><BackupRestore /></ProtectedRoute>} />
       <Route path="/gst-summary" element={<ProtectedRoute><GstSummary /></ProtectedRoute>} />
       <Route path="/aging-analysis" element={<ProtectedRoute><AgingAnalysis /></ProtectedRoute>} />
+      <Route path="/stock-valuation" element={<ProtectedRoute><StockValuation /></ProtectedRoute>} />
+      <Route path="/budget-module" element={<ProtectedRoute><BudgetModule /></ProtectedRoute>} />
+      <Route path="/tds-form16a" element={<ProtectedRoute><TdsForm16A /></ProtectedRoute>} />
+      <Route path="/user-management" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+      <Route path="/eway-bill" element={<ProtectedRoute><EWayBill /></ProtectedRoute>} />
+      <Route path="/kcc-loan" element={<ProtectedRoute><KccLoan /></ProtectedRoute>} />
 
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />

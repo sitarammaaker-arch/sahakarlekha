@@ -7,6 +7,7 @@ import {
   Scale, TrendingUp, FileSpreadsheet, BarChart3, Settings, LogOut,
   ChevronLeft, ChevronRight, ArrowLeftRight, BookMarked, Landmark, Package, ShieldCheck, CalendarDays,
   ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, Truck, UserCheck, Trash2, CheckCircle2, Shield, Percent, Coins, Layers, Users2, ClipboardList, FileCheck, DatabaseBackup, TrendingDown,
+  Warehouse, PiggyBank, Receipt, UserCog, FileJson, Wheat,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,10 @@ const reportNavItems: NavItem[] = [
   { key: 'reports', icon: BarChart3, path: '/reports' },
   { key: 'gstSummary', icon: Percent, path: '/gst-summary' },
   { key: 'agingAnalysis', icon: TrendingDown, path: '/aging-analysis' },
+  { key: 'tdsForm16A', icon: Receipt, path: '/tds-form16a' },
+  { key: 'stockValuation', icon: Warehouse, path: '/stock-valuation' },
+  { key: 'budgetModule', icon: PiggyBank, path: '/budget-module' },
+  { key: 'eWayBill', icon: FileJson, path: '/eway-bill' },
 ];
 
 const registerNavItems: NavItem[] = [
@@ -74,10 +79,12 @@ const registerNavItems: NavItem[] = [
   { key: 'reserveFund', icon: Shield, path: '/reserve-fund', roles: ['admin', 'accountant'] },
   { key: 'profitDistribution', icon: Coins, path: '/profit-distribution', roles: ['admin', 'accountant'] },
   { key: 'deletedVouchers', icon: Trash2, path: '/deleted-vouchers', roles: ['admin'] },
+  { key: 'kccLoan', icon: Wheat, path: '/kcc-loan' },
 ];
 
 const settingsNavItems: NavItem[] = [
   { key: 'societySetup', icon: Settings, path: '/society-setup', roles: ['admin'] },
+  { key: 'userManagement', icon: UserCog, path: '/user-management', roles: ['admin'] },
   { key: 'backupRestore', icon: DatabaseBackup, path: '/backup-restore', roles: ['admin'] },
 ];
 

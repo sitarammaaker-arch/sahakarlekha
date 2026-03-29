@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback } from 'react';
 import { getAuthSession, setAuthSession } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
+
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes of inactivity
 
 export type UserRole = 'admin' | 'accountant' | 'viewer';
 
@@ -65,6 +67,31 @@ function restoreSession(): User | null {
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => restoreSession());
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const doLogout = useCallback(() => {
+    setUser(null);
+    setAuthSession(null);
+  }, []);
+
+  const resetTimer = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(doLogout, SESSION_TIMEOUT_MS);
+  }, [doLogout]);
+
+  useEffect(() => {
+    if (!user) {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      return;
+    }
+    const events = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'];
+    events.forEach(e => window.addEventListener(e, resetTimer, { passive: true }));
+    resetTimer();
+    return () => {
+      events.forEach(e => window.removeEventListener(e, resetTimer));
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [user, resetTimer]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     // 1. Try Supabase society_users first
@@ -110,10 +137,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return false;
   };
 
-  const logout = () => {
-    setUser(null);
-    setAuthSession(null);
-  };
+  const logout = doLogout;
 
   const hasPermission = (requiredRole: UserRole | UserRole[]): boolean => {
     if (!user) return false;
