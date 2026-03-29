@@ -252,16 +252,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (supData && supData.length > 0) { setSuppliersState(supData); storage.setSuppliers(supData); } else setSuppliersState(storage.getSuppliers());
         if (cusData && cusData.length > 0) { setCustomersState(cusData); storage.setCustomers(cusData); } else setCustomersState(storage.getCustomers());
         if (socData && socData.length > 0) {
-          // When user is authenticated via Supabase Auth, Supabase is authoritative.
-          // When not authenticated (incognito / offline), localStorage wins as fallback.
-          const { data: { user: authUser } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
-          if (authUser) {
-            // Authenticated: Supabase data is primary (fixes incognito always showing defaults)
+          const existing = storage.getSociety();
+          // If localStorage has real customized data (non-default registrationNo), it wins.
+          // If localStorage has default/empty data (incognito / fresh install), Supabase wins.
+          const isLocalDefault =
+            !existing.registrationNo ||
+            existing.registrationNo === 'COOP/2024/12345';
+          if (isLocalDefault) {
+            // Incognito / fresh install: use Supabase data
             setSocietyState(socData[0]);
             storage.setSociety(socData[0]);
           } else {
-            // Not authenticated via Supabase Auth: merge with localStorage-first
-            const existing = storage.getSociety();
+            // Real customized localStorage data takes precedence
             const merged = { ...socData[0], ...existing };
             setSocietyState(merged);
             storage.setSociety(merged);
