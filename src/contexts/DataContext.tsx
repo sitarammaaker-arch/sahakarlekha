@@ -252,12 +252,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (supData && supData.length > 0) { setSuppliersState(supData); storage.setSuppliers(supData); } else setSuppliersState(storage.getSuppliers());
         if (cusData && cusData.length > 0) { setCustomersState(cusData); storage.setCustomers(cusData); } else setCustomersState(storage.getCustomers());
         if (socData && socData.length > 0) {
-          // localStorage-first: existing local data takes precedence over Supabase
-          // so admin edits (name, shortName, etc.) are never overwritten by stale Supabase data
-          const existing = storage.getSociety();
-          const merged = { ...socData[0], ...existing };
-          setSocietyState(merged);
-          storage.setSociety(merged);
+          // When user is authenticated via Supabase Auth, Supabase is authoritative.
+          // When not authenticated (incognito / offline), localStorage wins as fallback.
+          const { data: { user: authUser } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+          if (authUser) {
+            // Authenticated: Supabase data is primary (fixes incognito always showing defaults)
+            setSocietyState(socData[0]);
+            storage.setSociety(socData[0]);
+          } else {
+            // Not authenticated via Supabase Auth: merge with localStorage-first
+            const existing = storage.getSociety();
+            const merged = { ...socData[0], ...existing };
+            setSocietyState(merged);
+            storage.setSociety(merged);
+          }
         }
       } catch (err) {
         console.warn('Supabase load failed, falling back to localStorage:', err);

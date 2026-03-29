@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,8 +11,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Edit2, ShieldCheck, Users, Lock, FileSpreadsheet, Download } from 'lucide-react';
+import {
+  Plus, Edit2, ShieldCheck, Users, Lock, FileSpreadsheet, Download,
+  RefreshCw, Eye, EyeOff,
+} from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { UserRole } from '@/types';
 
@@ -24,27 +29,30 @@ interface AppUser {
   password: string;
   role: UserRole;
   isActive: boolean;
+  society_id?: string;
   createdAt: string;
 }
 
-function getUsers(): AppUser[] {
+function getCachedUsers(): AppUser[] {
   try { return JSON.parse(localStorage.getItem(USERS_KEY) || '[]'); } catch { return []; }
 }
-function saveUsers(u: AppUser[]) { localStorage.setItem(USERS_KEY, JSON.stringify(u)); }
+function cacheUsers(u: AppUser[]) { localStorage.setItem(USERS_KEY, JSON.stringify(u)); }
 
-const roleColor: Record<UserRole, string> = {
+const roleColor: Record<string, string> = {
   admin: 'bg-red-100 text-red-800',
   accountant: 'bg-blue-100 text-blue-800',
   viewer: 'bg-gray-100 text-gray-700',
+  auditor: 'bg-purple-100 text-purple-800',
 };
 
-const roleLabel: Record<UserRole, { hi: string; en: string }> = {
+const roleLabel: Record<string, { hi: string; en: string }> = {
   admin: { hi: 'व्यवस्थापक', en: 'Admin' },
   accountant: { hi: 'लेखाकार', en: 'Accountant' },
   viewer: { hi: 'दर्शक', en: 'Viewer' },
+  auditor: { hi: 'CA / लेखा परीक्षक', en: 'CA / Auditor' },
 };
 
-const empty: Omit<AppUser, 'id' | 'createdAt'> = {
+const empty: Omit<AppUser, 'id' | 'createdAt' | 'society_id'> = {
   name: '', email: '', password: '', role: 'viewer', isActive: true,
 };
 
@@ -54,12 +62,47 @@ export default function UserManagement() {
   const { toast } = useToast();
   const hi = language === 'hi';
 
-  const [users, setUsers] = useState<AppUser[]>(getUsers);
+  const [users, setUsers] = useState<AppUser[]>(getCachedUsers);
+  const [loading, setLoading] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
   const [editing, setEditing] = useState<AppUser | null>(null);
-  const [form, setForm] = useState<Omit<AppUser, 'id' | 'createdAt'>>(empty);
+  const [form, setForm] = useState<Omit<AppUser, 'id' | 'createdAt' | 'society_id'>>(empty);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saveError, setSaveError] = useState('');
+
+  // Load users from Supabase (primary) with localStorage fallback
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('society_users')
+        .select('id, name, email, role, is_active, society_id, created_at, password')
+        .order('created_at', { ascending: true });
+
+      if (!error && data && data.length > 0) {
+        const mapped: AppUser[] = data.map(u => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          password: u.password || '',
+          role: u.role as UserRole,
+          isActive: u.is_active,
+          society_id: u.society_id,
+          createdAt: u.created_at,
+        }));
+        setUsers(mapped);
+        cacheUsers(mapped);
+      }
+      // If Supabase returns empty or errors, keep localStorage cache
+    } catch {
+      // Offline — use cached data
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadUsers(); }, [loadUsers]);
 
   if (currentUser?.role !== 'admin') {
     return (
@@ -75,47 +118,107 @@ export default function UserManagement() {
     if (!form.name.trim()) e.name = hi ? 'नाम आवश्यक है' : 'Name required';
     if (!form.email.trim() || !form.email.includes('@')) e.email = hi ? 'मान्य ईमेल दर्ज करें' : 'Valid email required';
     if (!editing && !form.password.trim()) e.password = hi ? 'पासवर्ड आवश्यक है' : 'Password required';
-    if (!editing && form.password && form.password.length < 6) e.password = hi ? 'कम से कम 6 अक्षर' : 'Min 6 characters';
-    // Check duplicate email (excluding current editing)
+    if (form.password && form.password.length < 6) e.password = hi ? 'कम से कम 6 अक्षर' : 'Min 6 characters';
     const dup = users.find(u => u.email === form.email && u.id !== editing?.id);
     if (dup) e.email = hi ? 'यह ईमेल पहले से है' : 'Email already exists';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
-    let updated: AppUser[];
-    if (editing) {
-      updated = users.map(u =>
-        u.id === editing.id
-          ? { ...u, name: form.name, email: form.email, role: form.role, isActive: form.isActive, ...(form.password ? { password: form.password } : {}) }
-          : u
-      );
-    } else {
-      const newUser: AppUser = {
-        id: `usr_${Date.now()}`,
-        ...form,
-        createdAt: new Date().toISOString(),
-      };
-      updated = [...users, newUser];
+    setSaveError('');
+
+    const societyId = currentUser?.societyId || 'SOC001';
+
+    try {
+      if (editing) {
+        // Update existing user
+        const updateData: Record<string, unknown> = {
+          name: form.name,
+          email: form.email,
+          role: form.role,
+          is_active: form.isActive,
+        };
+        if (form.password) updateData.password = form.password;
+
+        const { error } = await supabase
+          .from('society_users')
+          .update(updateData)
+          .eq('id', editing.id);
+
+        if (error) throw error;
+
+        const updated = users.map(u =>
+          u.id === editing.id
+            ? { ...u, name: form.name, email: form.email, role: form.role, isActive: form.isActive, ...(form.password ? { password: form.password } : {}) }
+            : u
+        );
+        setUsers(updated);
+        cacheUsers(updated);
+      } else {
+        // Create new user
+        const newId = `usr_${Date.now()}`;
+        const { data, error } = await supabase
+          .from('society_users')
+          .insert({
+            id: newId,
+            name: form.name,
+            email: form.email,
+            password: form.password,
+            role: form.role,
+            is_active: form.isActive,
+            society_id: societyId,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        const newUser: AppUser = {
+          id: data?.id || newId,
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          role: form.role,
+          isActive: form.isActive,
+          society_id: societyId,
+          createdAt: data?.created_at || new Date().toISOString(),
+        };
+        const updated = [...users, newUser];
+        setUsers(updated);
+        cacheUsers(updated);
+      }
+
+      setShowDialog(false);
+      toast({
+        title: editing
+          ? (hi ? 'उपयोगकर्ता अपडेट हुआ' : 'User updated')
+          : (hi ? 'उपयोगकर्ता जोड़ा गया' : 'User added'),
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSaveError(hi ? `त्रुटि: ${msg}` : `Error: ${msg}`);
     }
-    saveUsers(updated);
-    setUsers(updated);
-    setShowDialog(false);
-    toast({ title: editing ? (hi ? 'उपयोगकर्ता अपडेट हुआ' : 'User updated') : (hi ? 'उपयोगकर्ता जोड़ा गया' : 'User added') });
   };
 
-  const toggleActive = (id: string) => {
-    const updated = users.map(u => u.id === id ? { ...u, isActive: !u.isActive } : u);
-    saveUsers(updated);
+  const toggleActive = async (id: string) => {
+    const u = users.find(x => x.id === id);
+    if (!u) return;
+    const newVal = !u.isActive;
+    try {
+      await supabase.from('society_users').update({ is_active: newVal }).eq('id', id);
+    } catch { /* offline — update locally anyway */ }
+    const updated = users.map(x => x.id === id ? { ...x, isActive: newVal } : x);
     setUsers(updated);
+    cacheUsers(updated);
   };
 
   const openNew = () => {
     setEditing(null);
     setForm(empty);
     setErrors({});
+    setSaveError('');
     setShowPassword(false);
     setShowDialog(true);
   };
@@ -124,6 +227,7 @@ export default function UserManagement() {
     setEditing(u);
     setForm({ name: u.name, email: u.email, password: '', role: u.role, isActive: u.isActive });
     setErrors({});
+    setSaveError('');
     setShowPassword(false);
     setShowDialog(true);
   };
@@ -147,6 +251,10 @@ export default function UserManagement() {
           <p className="text-muted-foreground text-sm">{hi ? 'उपयोगकर्ता बनाएं और भूमिकाएं निर्धारित करें' : 'Create users and assign roles'}</p>
         </div>
         <div className="flex gap-2">
+          <Button size="sm" variant="outline" className="gap-1" onClick={loadUsers} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            {hi ? 'रीफ्रेश' : 'Refresh'}
+          </Button>
           <Button size="sm" variant="outline" className="gap-1" onClick={handleExcel}>
             <FileSpreadsheet className="h-4 w-4" />
             Excel
@@ -179,62 +287,67 @@ export default function UserManagement() {
 
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{hi ? 'नाम' : 'Name'}</TableHead>
-                <TableHead>{hi ? 'ईमेल' : 'Email'}</TableHead>
-                <TableHead>{hi ? 'भूमिका' : 'Role'}</TableHead>
-                <TableHead className="text-center">{hi ? 'स्थिति' : 'Status'}</TableHead>
-                <TableHead>{hi ? 'बनाया' : 'Created'}</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.length === 0 ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-12">
-                    <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                    {hi ? 'कोई उपयोगकर्ता नहीं। नया बनाएं।' : 'No users yet. Create one to get started.'}
-                  </TableCell>
+                  <TableHead>{hi ? 'नाम' : 'Name'}</TableHead>
+                  <TableHead>{hi ? 'ईमेल' : 'Email'}</TableHead>
+                  <TableHead>{hi ? 'भूमिका' : 'Role'}</TableHead>
+                  <TableHead className="text-center">{hi ? 'स्थिति' : 'Status'}</TableHead>
+                  <TableHead>{hi ? 'बनाया' : 'Created'}</TableHead>
+                  <TableHead />
                 </TableRow>
-              ) : users.map(u => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-medium">{u.name}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
-                  <TableCell>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${roleColor[u.role]}`}>
-                      {hi ? roleLabel[u.role].hi : roleLabel[u.role].en}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Switch
-                      checked={u.isActive}
-                      onCheckedChange={() => toggleActive(u.id)}
-                    />
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {new Date(u.createdAt).toLocaleDateString('hi-IN')}
-                  </TableCell>
-                  <TableCell>
-                    <Button size="sm" variant="ghost" onClick={() => openEdit(u)}>
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {users.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-12">
+                      <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      {hi ? 'कोई उपयोगकर्ता नहीं। नया बनाएं।' : 'No users yet. Create one to get started.'}
+                    </TableCell>
+                  </TableRow>
+                ) : users.map(u => (
+                  <TableRow key={u.id}>
+                    <TableCell className="font-medium">{u.name}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
+                    <TableCell>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${roleColor[u.role] || 'bg-gray-100'}`}>
+                        {hi ? (roleLabel[u.role]?.hi || u.role) : (roleLabel[u.role]?.en || u.role)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Switch
+                        checked={u.isActive}
+                        onCheckedChange={() => toggleActive(u.id)}
+                      />
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {u.createdAt ? new Date(u.createdAt).toLocaleDateString('hi-IN') : '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Button size="sm" variant="ghost" onClick={() => openEdit(u)}>
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
-      <Card className="border-amber-200 bg-amber-50">
+      {/* Info note */}
+      <Card className="border-blue-200 bg-blue-50">
         <CardContent className="pt-4">
-          <p className="text-sm text-amber-800 flex items-center gap-2">
-            <Lock className="h-4 w-4" />
-            {hi
-              ? 'नोट: यहाँ बनाए गए उपयोगकर्ता localStorage में संग्रहीत हैं। Supabase से लॉगिन के लिए society_users तालिका में जोड़ें।'
-              : 'Note: Users created here are stored in localStorage. For Supabase-based login, add them to the society_users table.'}
+          <p className="text-sm text-blue-800 flex items-start gap-2">
+            <Lock className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>
+              {hi
+                ? 'यहाँ बनाए गए उपयोगकर्ता Supabase society_users तालिका में सहेजे जाते हैं और तुरंत लॉगिन कर सकते हैं। Supabase Auth (ईमेल reset) के लिए उन्हें Dashboard → Authentication में भी जोड़ें।'
+                : 'Users created here are saved to the Supabase society_users table and can log in immediately. For email-based password reset, also add them in Dashboard → Authentication.'}
+            </span>
           </p>
         </CardContent>
       </Card>
@@ -246,6 +359,11 @@ export default function UserManagement() {
             <DialogTitle>{editing ? (hi ? 'उपयोगकर्ता संपादित करें' : 'Edit User') : (hi ? 'नया उपयोगकर्ता' : 'New User')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {saveError && (
+              <Alert variant="destructive">
+                <AlertDescription>{saveError}</AlertDescription>
+              </Alert>
+            )}
             <div>
               <Label>{hi ? 'पूरा नाम' : 'Full Name'} *</Label>
               <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
@@ -257,15 +375,26 @@ export default function UserManagement() {
               {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email}</p>}
             </div>
             <div>
-              <Label>{editing ? (hi ? 'नया पासवर्ड (खाली = बदलाव नहीं)' : 'New Password (blank = no change)') : (hi ? 'पासवर्ड' : 'Password')} {!editing && '*'}</Label>
-              <Input
-                type={showPassword ? 'text' : 'password'}
-                value={form.password}
-                onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-              />
-              <button type="button" className="text-xs text-muted-foreground mt-1" onClick={() => setShowPassword(p => !p)}>
-                {showPassword ? (hi ? 'छुपाएं' : 'Hide') : (hi ? 'दिखाएं' : 'Show')}
-              </button>
+              <Label>
+                {editing
+                  ? (hi ? 'नया पासवर्ड (खाली = बदलाव नहीं)' : 'New Password (blank = no change)')
+                  : (hi ? 'पासवर्ड' : 'Password')}{!editing && ' *'}
+              </Label>
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  value={form.password}
+                  onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowPassword(p => !p)}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
             </div>
             <div>

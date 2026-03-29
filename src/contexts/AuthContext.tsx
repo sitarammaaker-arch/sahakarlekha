@@ -20,11 +20,12 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   hasPermission: (requiredRole: UserRole | UserRole[]) => boolean;
+  sendPasswordReset: (email: string) => Promise<{ success: boolean; isEmailSent: boolean }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Demo users as fallback
+// Demo users as fallback when Supabase is unreachable
 const demoUsers: { email: string; password: string; user: User }[] = [
   {
     email: 'admin@society.com',
@@ -48,6 +49,16 @@ const demoUsers: { email: string; password: string; user: User }[] = [
   },
 ];
 
+function buildUser(data: { id: string; name: string; email: string; role: string; society_id: string }): User {
+  return {
+    id: data.id,
+    name: data.name,
+    email: data.email,
+    role: data.role as UserRole,
+    societyId: data.society_id,
+  };
+}
+
 function restoreSession(): User | null {
   const session = getAuthSession();
   if (!session) return null;
@@ -56,7 +67,7 @@ function restoreSession(): User | null {
   const found = demoUsers.find(u => u.user.email === session.email);
   if (found) return found.user;
 
-  // Restore from stored session (Supabase user)
+  // Restore from stored session
   if (session.email && session.name && session.role && session.societyId) {
     return {
       id: session.email,
@@ -84,6 +95,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     timeoutRef.current = setTimeout(doLogout, SESSION_TIMEOUT_MS);
   }, [doLogout]);
 
+  // Restore Supabase Auth session on mount
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user?.email) {
+        try {
+          const { data } = await supabase
+            .from('society_users')
+            .select('id, name, email, role, society_id, is_active')
+            .eq('email', session.user.email)
+            .eq('is_active', true)
+            .maybeSingle();
+
+          if (data) {
+            const u = buildUser(data);
+            setUser(u);
+            setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId });
+          }
+        } catch {
+          // Supabase unreachable — keep localStorage session
+        }
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        doLogout();
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [doLogout]);
+
   useEffect(() => {
     if (!user) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -99,7 +141,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user, resetTimer]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    // 1. Try Supabase society_users first
+    // 1. Try Supabase Auth (signInWithPassword — JWT based)
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      if (!authError && authData.user) {
+        const { data: userData } = await supabase
+          .from('society_users')
+          .select('id, name, email, role, society_id, is_active')
+          .eq('email', email)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (userData) {
+          const u = buildUser(userData);
+          setUser(u);
+          setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId });
+          return true;
+        }
+      }
+    } catch {
+      // Supabase unreachable — fall through
+    }
+
+    // 2. Fallback: old plain-text password check (transition period — for users not yet in Supabase Auth)
     try {
       const { data, error } = await supabase
         .from('society_users')
@@ -110,13 +174,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .maybeSingle();
 
       if (!error && data) {
-        const u: User = {
-          id: data.id,
-          name: data.name,
-          email: data.email,
-          role: data.role as UserRole,
-          societyId: data.society_id,
-        };
+        const u = buildUser(data);
         setUser(u);
         setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId });
         return true;
@@ -125,7 +183,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Supabase unreachable — fall through to demo users
     }
 
-    // 2. Fallback: demo users
+    // 3. Demo users (offline / local dev fallback)
     await new Promise(resolve => setTimeout(resolve, 400));
     const found = demoUsers.find(u => u.email === email && u.password === password);
     if (found) {
@@ -142,7 +200,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return false;
   };
 
-  const logout = doLogout;
+  const logout = useCallback(async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // ignore — still clear local session
+    }
+    doLogout();
+  }, [doLogout]);
+
+  /**
+   * Send password reset email.
+   * Returns isEmailSent=true if Supabase Auth sent the email,
+   * isEmailSent=false if the user isn't in Supabase Auth yet (contact admin path).
+   */
+  const sendPasswordReset = async (email: string): Promise<{ success: boolean; isEmailSent: boolean }> => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (!error) {
+        return { success: true, isEmailSent: true };
+      }
+    } catch {
+      // Supabase unreachable
+    }
+    return { success: false, isEmailSent: false };
+  };
 
   const hasPermission = (requiredRole: UserRole | UserRole[]): boolean => {
     if (!user) return false;
@@ -154,7 +238,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout, hasPermission }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout, hasPermission, sendPasswordReset }}>
       {children}
     </AuthContext.Provider>
   );

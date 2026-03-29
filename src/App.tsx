@@ -62,6 +62,7 @@ import MultiSocietyConsolidation from "./pages/MultiSocietyConsolidation";
 import NabardReport from "./pages/NabardReport";
 import FederationReport from "./pages/FederationReport";
 import UniversalImporter from "./pages/UniversalImporter";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 import { preloadHindiFont } from '@/lib/fontLoader';
@@ -99,6 +100,7 @@ const AppRoutes = () => {
       {/* Public Routes */}
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       
       {/* Protected Routes */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

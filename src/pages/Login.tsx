@@ -14,7 +14,7 @@ import { Building2, Lock, Mail, Eye, EyeOff, Languages, AlertCircle, KeyRound, H
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, sendPasswordReset } = useAuth();
   const { language, setLanguage, t } = useLanguage();
 
   const [email, setEmail] = useState('');
@@ -27,6 +27,8 @@ const Login: React.FC = () => {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [fpEmail, setFpEmail] = useState('');
   const [fpSubmitted, setFpSubmitted] = useState(false);
+  const [fpEmailSent, setFpEmailSent] = useState(false);
+  const [fpLoading, setFpLoading] = useState(false);
 
   // Forgot ID modal
   const [showForgotId, setShowForgotId] = useState(false);
@@ -52,10 +54,14 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleForgotPasswordSubmit = (e: React.FormEvent) => {
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fpEmail.trim()) return;
+    setFpLoading(true);
+    const result = await sendPasswordReset(fpEmail.trim());
+    setFpEmailSent(result.isEmailSent);
     setFpSubmitted(true);
+    setFpLoading(false);
   };
 
   const handleForgotIdSubmit = (e: React.FormEvent) => {
@@ -228,7 +234,7 @@ const Login: React.FC = () => {
       </div>
 
       {/* ── Forgot Password Modal ── */}
-      <Dialog open={showForgotPassword} onOpenChange={(open) => { setShowForgotPassword(open); setFpSubmitted(false); }}>
+      <Dialog open={showForgotPassword} onOpenChange={(open) => { setShowForgotPassword(open); setFpSubmitted(false); setFpEmailSent(false); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -258,28 +264,52 @@ const Login: React.FC = () => {
                   />
                 </div>
               </div>
-              <Button type="submit" className="w-full">
-                {language === 'hi' ? 'अनुरोध भेजें' : 'Submit Request'}
+              <Button type="submit" className="w-full" disabled={fpLoading}>
+                {fpLoading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    {language === 'hi' ? 'भेज रहे हैं...' : 'Sending...'}
+                  </span>
+                ) : (language === 'hi' ? 'अनुरोध भेजें' : 'Submit Request')}
               </Button>
             </form>
           ) : (
             <div className="pt-2 space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 space-y-2">
-                <div className="flex items-center gap-2 font-semibold">
-                  <ShieldCheck className="h-4 w-4 text-blue-600" />
-                  {language === 'hi' ? 'अनुरोध प्राप्त हुआ' : 'Request Received'}
+              {fpEmailSent ? (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800 space-y-2">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <ShieldCheck className="h-4 w-4 text-green-600" />
+                    {language === 'hi' ? 'ईमेल भेज दिया गया!' : 'Email Sent!'}
+                  </div>
+                  <p>
+                    {language === 'hi'
+                      ? `"${fpEmail}" पर पासवर्ड reset लिंक भेजा गया है।`
+                      : `A password reset link has been sent to "${fpEmail}".`}
+                  </p>
+                  <p className="font-medium">
+                    {language === 'hi'
+                      ? 'अपना ईमेल inbox (और spam folder) चेक करें।'
+                      : 'Please check your email inbox (and spam folder).'}
+                  </p>
                 </div>
-                <p>
-                  {language === 'hi'
-                    ? `"${fpEmail}" के लिए पासवर्ड reset अनुरोध दर्ज किया गया।`
-                    : `Password reset request noted for "${fpEmail}".`}
-                </p>
-                <p className="font-medium">
-                  {language === 'hi'
-                    ? 'कृपया अपनी समिति के Admin से संपर्क करें। Admin, User Management में जाकर आपका पासवर्ड reset कर सकते हैं।'
-                    : 'Please contact your society Admin. The Admin can reset your password from the User Management page.'}
-                </p>
-              </div>
+              ) : (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 space-y-2">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <ShieldCheck className="h-4 w-4 text-blue-600" />
+                    {language === 'hi' ? 'अनुरोध प्राप्त हुआ' : 'Request Received'}
+                  </div>
+                  <p>
+                    {language === 'hi'
+                      ? `"${fpEmail}" के लिए पासवर्ड reset अनुरोध दर्ज किया गया।`
+                      : `Password reset request noted for "${fpEmail}".`}
+                  </p>
+                  <p className="font-medium">
+                    {language === 'hi'
+                      ? 'कृपया अपनी समिति के Admin से संपर्क करें। Admin, User Management में जाकर आपका पासवर्ड reset कर सकते हैं।'
+                      : 'Please contact your society Admin. The Admin can reset your password from the User Management page.'}
+                  </p>
+                </div>
+              )}
               <Button variant="outline" className="w-full" onClick={() => setShowForgotPassword(false)}>
                 {language === 'hi' ? 'बंद करें' : 'Close'}
               </Button>
