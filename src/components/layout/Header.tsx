@@ -91,7 +91,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
           </div>
 
           {/* Right side */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mr-1 md:mr-0">
             {/* Search Button */}
             <Button
               variant="outline"

@@ -1,6 +1,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { LucideIcon } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface StatCardProps {
   title: string;
@@ -32,6 +33,8 @@ export const StatCard: React.FC<StatCardProps> = ({
   variant,
   className,
 }) => {
+  const { language } = useLanguage();
+
   return (
     <div
       className={cn(
@@ -53,7 +56,7 @@ export const StatCard: React.FC<StatCardProps> = ({
             <Icon className="h-6 w-6" />
           </div>
         </div>
-        
+
         {trend && (
           <div className="mt-4 flex items-center gap-2">
             <span
@@ -64,11 +67,13 @@ export const StatCard: React.FC<StatCardProps> = ({
             >
               {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%
             </span>
-            <span className="text-xs text-white/60">पिछले माह से</span>
+            <span className="text-xs text-white/60">
+              {language === 'hi' ? 'पिछले माह से' : 'from last month'}
+            </span>
           </div>
         )}
       </div>
-      
+
       {/* Decorative element */}
       <div className="absolute -bottom-6 -right-6 h-32 w-32 rounded-full bg-white/10" />
     </div>

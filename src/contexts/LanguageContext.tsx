@@ -154,7 +154,14 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<Language>('hi');
+  const [language, setLanguageState] = useState<Language>(() => {
+    try { return (localStorage.getItem('sahayata_language') as Language) || 'hi'; } catch { return 'hi'; }
+  });
+
+  const setLanguage = (lang: Language) => {
+    setLanguageState(lang);
+    try { localStorage.setItem('sahayata_language', lang); } catch {}
+  };
 
   const t = (key: string): string => {
     if (translations[key]) {
