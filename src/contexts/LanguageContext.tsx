@@ -45,6 +45,7 @@ export const translations: Translations = {
   auditCertificate: { hi: 'ऑडिट प्रमाणपत्र', en: 'Audit Certificate' },
   backupRestore: { hi: 'बैकअप / रीस्टोर', en: 'Backup & Restore' },
   gstSummary: { hi: 'GST सारांश', en: 'GST Summary' },
+  agingAnalysis: { hi: 'AR/AP बकाया विश्लेषण', en: 'Aging Analysis' },
   operations: { hi: 'संचालन', en: 'Operations' },
   ledgerHeads: { hi: 'खाता शीर्ष', en: 'Ledger Heads' },
   inventory: { hi: 'माल भंडार', en: 'Inventory' },
