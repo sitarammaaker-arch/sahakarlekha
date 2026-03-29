@@ -10,9 +10,33 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Building2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Building2, CheckCircle2, AlertCircle, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ACCOUNT_IDS } from '@/lib/storage';
+import { useToast } from '@/hooks/use-toast';
+
+// ── CSV Import helpers ────────────────────────────────────────────────────────
+interface CsvRow { date: string; description: string; debit: number; credit: number; balance: number }
+
+function parseBankCsv(text: string): CsvRow[] {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const rows: CsvRow[] = [];
+  // Skip header line (first line)
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g, '').trim());
+    if (cols.length < 4) continue;
+    // Expected columns: Date, Description, Debit, Credit[, Balance]
+    const [dateRaw, description, debitRaw, creditRaw, balRaw] = cols;
+    const dateParsed = new Date(dateRaw);
+    if (isNaN(dateParsed.getTime())) continue;
+    const date = dateParsed.toISOString().split('T')[0];
+    const debit = parseFloat(debitRaw.replace(/,/g, '')) || 0;
+    const credit = parseFloat(creditRaw.replace(/,/g, '')) || 0;
+    const balance = parseFloat((balRaw || '0').replace(/,/g, '')) || 0;
+    rows.push({ date, description, debit, credit, balance });
+  }
+  return rows;
+}
 
 const fmt = (amount: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
@@ -22,9 +46,12 @@ const TODAY = new Date().toISOString().split('T')[0];
 const BankReconciliation: React.FC = () => {
   const { language } = useLanguage();
   const { vouchers, accounts, society, getAccountBalance, clearVoucher, unclearVoucher } = useData();
+  const { toast } = useToast();
 
   const [asOfDate, setAsOfDate] = useState(TODAY);
   const [statementBalance, setStatementBalance] = useState<number | ''>('');
+  const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
+  const [autoMatched, setAutoMatched] = useState(0);
 
   const bankAccount = accounts.find(a => a.id === ACCOUNT_IDS.BANK);
 
@@ -111,6 +138,87 @@ const BankReconciliation: React.FC = () => {
               />
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* CSV Import */}
+      <Card>
+        <CardHeader className="py-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Upload className="h-4 w-4" />
+            {language === 'hi' ? 'बैंक स्टेटमेंट CSV आयात' : 'Import Bank Statement CSV'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            {language === 'hi'
+              ? 'CSV फ़ॉर्मेट: Date, Description, Debit, Credit, Balance (हेडर सहित)'
+              : 'CSV format: Date, Description, Debit, Credit, Balance (with header row)'}
+          </p>
+          <div className="flex items-center gap-3">
+            <input
+              type="file" accept=".csv"
+              className="text-sm"
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = ev => {
+                  const rows = parseBankCsv(ev.target?.result as string);
+                  setCsvRows(rows);
+                  // Auto-match: find vouchers matching date+amount and mark cleared
+                  let matched = 0;
+                  rows.forEach(row => {
+                    const amt = row.credit > 0 ? row.credit : row.debit;
+                    const isDeposit = row.credit > 0;
+                    const match = vouchers.find(v =>
+                      !v.isDeleted && !v.isCleared &&
+                      v.date === row.date &&
+                      Math.abs(v.amount - amt) < 1 &&
+                      (isDeposit ? v.debitAccountId === ACCOUNT_IDS.BANK : v.creditAccountId === ACCOUNT_IDS.BANK)
+                    );
+                    if (match) { clearVoucher(match.id); matched++; }
+                  });
+                  setAutoMatched(matched);
+                  toast({ title: language === 'hi'
+                    ? `${rows.length} पंक्तियाँ आयात हुईं, ${matched} वाउचर स्वतः मिलान हुए`
+                    : `${rows.length} rows imported, ${matched} vouchers auto-matched` });
+                };
+                reader.readAsText(file);
+              }}
+            />
+            {csvRows.length > 0 && (
+              <span className="text-sm text-green-700 font-medium">
+                {csvRows.length} {language === 'hi' ? 'पंक्तियाँ' : 'rows'} · {autoMatched} {language === 'hi' ? 'मिलान' : 'matched'}
+              </span>
+            )}
+          </div>
+          {csvRows.length > 0 && (
+            <div className="overflow-x-auto max-h-48 border rounded">
+              <table className="w-full text-xs">
+                <thead className="bg-muted sticky top-0">
+                  <tr>
+                    <th className="p-1 text-left">{language === 'hi' ? 'तिथि' : 'Date'}</th>
+                    <th className="p-1 text-left">{language === 'hi' ? 'विवरण' : 'Description'}</th>
+                    <th className="p-1 text-right">{language === 'hi' ? 'डेबिट' : 'Debit'}</th>
+                    <th className="p-1 text-right">{language === 'hi' ? 'क्रेडिट' : 'Credit'}</th>
+                    <th className="p-1 text-right">{language === 'hi' ? 'शेष' : 'Balance'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {csvRows.slice(0, 20).map((r, i) => (
+                    <tr key={i} className="border-t">
+                      <td className="p-1">{r.date}</td>
+                      <td className="p-1 truncate max-w-[120px]">{r.description}</td>
+                      <td className="p-1 text-right font-mono">{r.debit > 0 ? r.debit.toFixed(2) : ''}</td>
+                      <td className="p-1 text-right font-mono">{r.credit > 0 ? r.credit.toFixed(2) : ''}</td>
+                      <td className="p-1 text-right font-mono">{r.balance > 0 ? r.balance.toFixed(2) : ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 

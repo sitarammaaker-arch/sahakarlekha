@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes of inactivity
 
-export type UserRole = 'admin' | 'accountant' | 'viewer';
+export type UserRole = 'admin' | 'accountant' | 'viewer' | 'auditor';
 
 interface User {
   id: string;
@@ -40,6 +40,11 @@ const demoUsers: { email: string; password: string; user: User }[] = [
     email: 'viewer@society.com',
     password: 'view123',
     user: { id: '3', name: 'मोहन लाल', email: 'viewer@society.com', role: 'viewer', societyId: 'SOC001' },
+  },
+  {
+    email: 'auditor@society.com',
+    password: 'audit123',
+    user: { id: '4', name: 'CA रमेश शर्मा', email: 'auditor@society.com', role: 'auditor', societyId: 'SOC001' },
   },
 ];
 
@@ -142,8 +147,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const hasPermission = (requiredRole: UserRole | UserRole[]): boolean => {
     if (!user) return false;
     if (user.role === 'admin') return true;
+    // auditor has same access as viewer (read-only)
+    const effectiveRole = user.role === 'auditor' ? 'viewer' : user.role;
     const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
-    return roles.includes(user.role);
+    return roles.includes(effectiveRole as UserRole) || roles.includes(user.role);
   };
 
   return (

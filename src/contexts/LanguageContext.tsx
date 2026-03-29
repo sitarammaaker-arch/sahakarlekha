@@ -52,6 +52,8 @@ export const translations: Translations = {
   userManagement: { hi: 'उपयोगकर्ता प्रबंधन', en: 'User Management' },
   eWayBill: { hi: 'e-Way Bill', en: 'e-Way Bill' },
   kccLoan: { hi: 'KCC / फसल ऋण', en: 'KCC / Crop Loan' },
+  electionModule: { hi: 'सहकारी चुनाव', en: 'Election Module' },
+  openingBalances: { hi: 'प्रारंभिक शेष / CF', en: 'Opening Balances / CF' },
   operations: { hi: 'संचालन', en: 'Operations' },
   ledgerHeads: { hi: 'खाता शीर्ष', en: 'Ledger Heads' },
   inventory: { hi: 'माल भंडार', en: 'Inventory' },
@@ -125,6 +127,7 @@ export const translations: Translations = {
   admin: { hi: 'व्यवस्थापक', en: 'Admin' },
   accountant: { hi: 'लेखाकार', en: 'Accountant' },
   viewer: { hi: 'दर्शक', en: 'Viewer' },
+  auditor: { hi: 'CA / लेखा परीक्षक', en: 'CA / Auditor' },
   
   // Messages
   successSaved: { hi: 'सफलतापूर्वक सहेजा गया', en: 'Saved successfully' },

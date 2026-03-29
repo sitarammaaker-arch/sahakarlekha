@@ -7,7 +7,7 @@ import {
   Scale, TrendingUp, FileSpreadsheet, BarChart3, Settings, LogOut,
   ChevronLeft, ChevronRight, ArrowLeftRight, BookMarked, Landmark, Package, ShieldCheck, CalendarDays,
   ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, Truck, UserCheck, Trash2, CheckCircle2, Shield, Percent, Coins, Layers, Users2, ClipboardList, FileCheck, DatabaseBackup, TrendingDown,
-  Warehouse, PiggyBank, Receipt, UserCog, FileJson, Wheat,
+  Warehouse, PiggyBank, Receipt, UserCog, FileJson, Wheat, Vote, BookOpenCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -80,10 +80,12 @@ const registerNavItems: NavItem[] = [
   { key: 'profitDistribution', icon: Coins, path: '/profit-distribution', roles: ['admin', 'accountant'] },
   { key: 'deletedVouchers', icon: Trash2, path: '/deleted-vouchers', roles: ['admin'] },
   { key: 'kccLoan', icon: Wheat, path: '/kcc-loan' },
+  { key: 'electionModule', icon: Vote, path: '/election-module' },
 ];
 
 const settingsNavItems: NavItem[] = [
   { key: 'societySetup', icon: Settings, path: '/society-setup', roles: ['admin'] },
+  { key: 'openingBalances', icon: BookOpenCheck, path: '/opening-balances', roles: ['admin'] },
   { key: 'userManagement', icon: UserCog, path: '/user-management', roles: ['admin'] },
   { key: 'backupRestore', icon: DatabaseBackup, path: '/backup-restore', roles: ['admin'] },
 ];

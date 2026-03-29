@@ -254,6 +254,7 @@ export default function UserManagement() {
                   <SelectItem value="admin">{hi ? 'व्यवस्थापक' : 'Admin'}</SelectItem>
                   <SelectItem value="accountant">{hi ? 'लेखाकार' : 'Accountant'}</SelectItem>
                   <SelectItem value="viewer">{hi ? 'दर्शक' : 'Viewer'}</SelectItem>
+                  <SelectItem value="auditor">{hi ? 'CA / लेखा परीक्षक' : 'CA / Auditor'}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

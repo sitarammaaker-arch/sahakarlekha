@@ -55,6 +55,8 @@ import TdsForm16A from "./pages/TdsForm16A";
 import UserManagement from "./pages/UserManagement";
 import EWayBill from "./pages/EWayBill";
 import KccLoan from "./pages/KccLoan";
+import ElectionModule from "./pages/ElectionModule";
+import OpeningBalances from "./pages/OpeningBalances";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 
@@ -141,6 +143,8 @@ const AppRoutes = () => {
       <Route path="/user-management" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
       <Route path="/eway-bill" element={<ProtectedRoute><EWayBill /></ProtectedRoute>} />
       <Route path="/kcc-loan" element={<ProtectedRoute><KccLoan /></ProtectedRoute>} />
+      <Route path="/election-module" element={<ProtectedRoute><ElectionModule /></ProtectedRoute>} />
+      <Route path="/opening-balances" element={<ProtectedRoute><OpeningBalances /></ProtectedRoute>} />
 
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />
