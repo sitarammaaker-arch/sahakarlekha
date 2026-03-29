@@ -237,6 +237,7 @@ export interface StockItem {
   sacCode?: string;       // SAC code for services
   gstRate?: number;       // default GST rate % (e.g. 5, 12, 18)
   valuationMethod?: 'fifo' | 'weighted_avg'; // inventory valuation
+  barcodeValue?: string;  // EAN-13 / QR / Code128 barcode
 }
 
 // ── Budget ─────────────────────────────────────────────────────────────────────

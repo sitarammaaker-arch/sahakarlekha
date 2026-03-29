@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { Boxes, Plus, Pencil, Trash2, Search, PackageMinus, PackagePlus } from 'lucide-react';
+import { Boxes, Plus, Pencil, Trash2, Search, PackageMinus, PackagePlus, ScanLine, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { StockItem, StockMovement } from '@/types';
@@ -55,6 +55,7 @@ const EMPTY_ITEM_FORM = {
   purchaseRate: '',
   saleRate: '',
   isActive: true,
+  barcodeValue: '',
 };
 
 const EMPTY_ADJUSTMENT_FORM = {
@@ -153,6 +154,14 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
         />
       </div>
     </div>
+    <div className="space-y-2">
+      <Label>{hi ? 'बारकोड / EAN' : 'Barcode / EAN'}</Label>
+      <Input
+        value={itemForm.barcodeValue}
+        onChange={e => setItemForm(f => ({ ...f, barcodeValue: e.target.value }))}
+        placeholder="e.g. 8901234567890"
+      />
+    </div>
     <div className="flex items-center gap-3">
       <Switch
         id="item-active"
@@ -169,6 +178,74 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
     </div>
   </form>
 );
+
+// ─── Barcode scan modal ────────────────────────────────────────────────────────
+interface BarcodeScanModalProps {
+  open: boolean;
+  onClose: () => void;
+  onDetected: (code: string) => void;
+  hi: boolean;
+}
+const BarcodeScanModal: React.FC<BarcodeScanModalProps> = ({ open, onClose, onDetected, hi }) => {
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const streamRef = React.useRef<MediaStream | null>(null);
+  const rafRef = React.useRef<number>(0);
+  const [supported] = React.useState(() => 'BarcodeDetector' in window);
+  const [error, setError] = React.useState('');
+
+  React.useEffect(() => {
+    if (!open || !supported) return;
+    let detector: any;
+    (async () => {
+      try {
+        detector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'qr_code', 'upc_a', 'upc_e', 'code_39'] });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        streamRef.current = stream;
+        if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+        const scan = async () => {
+          if (!videoRef.current) return;
+          try {
+            const results = await detector.detect(videoRef.current);
+            if (results.length > 0) { onDetected(results[0].rawValue); return; }
+          } catch { /* ignore frame errors */ }
+          rafRef.current = requestAnimationFrame(scan);
+        };
+        rafRef.current = requestAnimationFrame(scan);
+      } catch (e: any) { setError(e.message || 'Camera error'); }
+    })();
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      streamRef.current?.getTracks().forEach(t => t.stop());
+    };
+  }, [open, supported, onDetected]);
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl w-full max-w-sm overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <span className="font-semibold text-sm flex items-center gap-2">
+            <ScanLine className="h-4 w-4" />
+            {hi ? 'बारकोड स्कैन करें' : 'Scan Barcode'}
+          </span>
+          <button onClick={onClose}><X className="h-4 w-4" /></button>
+        </div>
+        <div className="p-4">
+          {!supported ? (
+            <p className="text-sm text-red-600">{hi ? 'यह ब्राउज़र बारकोड स्कैनिंग का समर्थन नहीं करता। Chrome 83+ उपयोग करें।' : 'BarcodeDetector not supported. Use Chrome 83+ or Edge.'}</p>
+          ) : error ? (
+            <p className="text-sm text-red-600">{error}</p>
+          ) : (
+            <>
+              <video ref={videoRef} className="w-full rounded aspect-video bg-black object-cover" muted playsInline />
+              <p className="text-xs text-muted-foreground mt-2 text-center">{hi ? 'कैमरे को बारकोड पर रखें' : 'Point camera at barcode to scan'}</p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
@@ -188,6 +265,7 @@ const Inventory: React.FC = () => {
   // Item tab state
   const [itemSearch, setItemSearch] = useState('');
   const [unitFilter, setUnitFilter] = useState<'all' | UnitKey>('all');
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [isItemAddOpen, setIsItemAddOpen] = useState(false);
   const [editItem, setEditItem] = useState<StockItem | null>(null);
@@ -220,7 +298,8 @@ const Inventory: React.FC = () => {
     const matchSearch =
       item.name.toLowerCase().includes(itemSearch.toLowerCase()) ||
       (item.nameHi && item.nameHi.includes(itemSearch)) ||
-      item.itemCode.toLowerCase().includes(itemSearch.toLowerCase());
+      item.itemCode.toLowerCase().includes(itemSearch.toLowerCase()) ||
+      (item.barcodeValue && item.barcodeValue.includes(itemSearch));
     const matchUnit = unitFilter === 'all' || item.unit === unitFilter;
     const matchActive = !showActiveOnly || item.isActive;
     return matchSearch && matchUnit && matchActive;
@@ -290,6 +369,7 @@ const Inventory: React.FC = () => {
       purchaseRate: Number(itemForm.purchaseRate) || 0,
       saleRate: Number(itemForm.saleRate) || 0,
       isActive: itemForm.isActive,
+      ...(itemForm.barcodeValue.trim() ? { barcodeValue: itemForm.barcodeValue.trim() } : {}),
     });
     toast({ title: hi ? 'वस्तु जोड़ी गई' : 'Item added successfully' });
     resetItemForm();
@@ -314,6 +394,7 @@ const Inventory: React.FC = () => {
       purchaseRate: Number(itemForm.purchaseRate) || 0,
       saleRate: Number(itemForm.saleRate) || 0,
       isActive: itemForm.isActive,
+      barcodeValue: itemForm.barcodeValue.trim() || undefined,
     });
     toast({ title: hi ? 'वस्तु अपडेट की गई' : 'Item updated successfully' });
     setEditItem(null);
@@ -437,14 +518,19 @@ const Inventory: React.FC = () => {
           <Card>
             <CardContent className="pt-5">
               <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-                <div className="relative flex-1">
+                <div className="relative flex-1 flex gap-2">
+                  <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder={hi ? 'नाम या कोड से खोजें...' : 'Search by name or code...'}
+                    placeholder={hi ? 'नाम, कोड या बारकोड से खोजें...' : 'Search by name, code or barcode...'}
                     value={itemSearch}
                     onChange={e => setItemSearch(e.target.value)}
                     className="pl-10"
                   />
+                  </div>
+                  <Button variant="outline" size="icon" title={hi ? 'बारकोड स्कैन करें' : 'Scan Barcode'} onClick={() => setShowBarcodeScanner(true)}>
+                    <ScanLine className="h-4 w-4" />
+                  </Button>
                 </div>
                 <Select
                   value={unitFilter}
@@ -917,6 +1003,18 @@ const Inventory: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Barcode scanner modal */}
+      <BarcodeScanModal
+        open={showBarcodeScanner}
+        hi={hi}
+        onClose={() => setShowBarcodeScanner(false)}
+        onDetected={code => {
+          setShowBarcodeScanner(false);
+          setItemSearch(code);
+          toast({ title: hi ? `बारकोड मिला: ${code}` : `Barcode detected: ${code}` });
+        }}
+      />
     </div>
   );
 };

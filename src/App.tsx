@@ -58,6 +58,9 @@ import KccLoan from "./pages/KccLoan";
 import ElectionModule from "./pages/ElectionModule";
 import OpeningBalances from "./pages/OpeningBalances";
 import Register from "./pages/Register";
+import MultiSocietyConsolidation from "./pages/MultiSocietyConsolidation";
+import NabardReport from "./pages/NabardReport";
+import FederationReport from "./pages/FederationReport";
 import NotFound from "./pages/NotFound";
 
 import { preloadHindiFont } from '@/lib/fontLoader';
@@ -145,6 +148,9 @@ const AppRoutes = () => {
       <Route path="/kcc-loan" element={<ProtectedRoute><KccLoan /></ProtectedRoute>} />
       <Route path="/election-module" element={<ProtectedRoute><ElectionModule /></ProtectedRoute>} />
       <Route path="/opening-balances" element={<ProtectedRoute><OpeningBalances /></ProtectedRoute>} />
+      <Route path="/multi-society-consolidation" element={<ProtectedRoute><MultiSocietyConsolidation /></ProtectedRoute>} />
+      <Route path="/nabard-report" element={<ProtectedRoute><NabardReport /></ProtectedRoute>} />
+      <Route path="/federation-report" element={<ProtectedRoute><FederationReport /></ProtectedRoute>} />
 
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />

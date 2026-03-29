@@ -7,7 +7,7 @@ import {
   Scale, TrendingUp, FileSpreadsheet, BarChart3, Settings, LogOut,
   ChevronLeft, ChevronRight, ArrowLeftRight, BookMarked, Landmark, Package, ShieldCheck, CalendarDays,
   ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, Truck, UserCheck, Trash2, CheckCircle2, Shield, Percent, Coins, Layers, Users2, ClipboardList, FileCheck, DatabaseBackup, TrendingDown,
-  Warehouse, PiggyBank, Receipt, UserCog, FileJson, Wheat, Vote, BookOpenCheck,
+  Warehouse, PiggyBank, Receipt, UserCog, FileJson, Wheat, Vote, BookOpenCheck, ScrollText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -64,6 +64,8 @@ const reportNavItems: NavItem[] = [
   { key: 'stockValuation', icon: Warehouse, path: '/stock-valuation' },
   { key: 'budgetModule', icon: PiggyBank, path: '/budget-module' },
   { key: 'eWayBill', icon: FileJson, path: '/eway-bill' },
+  { key: 'nabardReport', icon: Landmark, path: '/nabard-report' },
+  { key: 'federationReport', icon: ScrollText, path: '/federation-report' },
 ];
 
 const registerNavItems: NavItem[] = [
@@ -88,6 +90,7 @@ const settingsNavItems: NavItem[] = [
   { key: 'openingBalances', icon: BookOpenCheck, path: '/opening-balances', roles: ['admin'] },
   { key: 'userManagement', icon: UserCog, path: '/user-management', roles: ['admin'] },
   { key: 'backupRestore', icon: DatabaseBackup, path: '/backup-restore', roles: ['admin'] },
+  { key: 'multiSocietyConsolidation', icon: Building2, path: '/multi-society-consolidation', roles: ['admin'] },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpen, onMobileClose }) => {

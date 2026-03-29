@@ -14,7 +14,9 @@
       "Bash(node -e \":*)",
       "Read(//c/Users/yashm/Downloads/**)",
       "Bash(python -c \":*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(grep -rn \"parentId.*find\\\\|find.*parentId\\\\|parent.*hierarchy\\\\|hierarchy.*parent\" /c/Users/yashm/Downloads/sahayata-accounts-main/sahayata-accounts-main/src --include=*.ts --include=*.tsx)",
+      "Bash(ls \"C:\\\\Users\\\\yashm\\\\.claude\\\\projects\\\\C--Users-yashm-Downloads-sahayata-accounts-main-sahayata-accounts-main\\\\memory\"\" 2>/dev/null || echo \"memory dir empty \")"
     ]
   }
 }
