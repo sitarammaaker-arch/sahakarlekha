@@ -390,15 +390,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateAuditObjection = useCallback((id: string, data: Partial<AuditObjection>) => {
-    let updated_obj: AuditObjection | undefined;
     setAuditObjectionsState(prev => {
       const updated = prev.map(o => o.id === id ? { ...o, ...data } : o);
-      updated_obj = updated.find(o => o.id === id);
+      const updated_obj = updated.find(o => o.id === id);
+      if (updated_obj) supabase.from('audit_objections').upsert(updated_obj).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       return updated;
     });
-    if (updated_obj) {
-      supabase.from('audit_objections').upsert(updated_obj).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-    }
   }, []);
 
   const deleteAuditObjection = useCallback((id: string) => {
@@ -477,15 +474,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateAccount = useCallback((id: string, data: Partial<LedgerAccount>) => {
-    let updatedAccount: LedgerAccount | undefined;
     setAccountsState(prev => {
       const updated = prev.map(a => a.id === id ? { ...a, ...data } : a);
-      updatedAccount = updated.find(a => a.id === id);
+      const updatedAccount = updated.find(a => a.id === id);
+      if (updatedAccount) supabase.from('accounts').upsert(updatedAccount).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       return updated;
     });
-    if (updatedAccount) {
-      supabase.from('accounts').upsert(updatedAccount).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-    }
   }, []);
 
   const deleteAccount = useCallback((id: string) => {
@@ -674,15 +668,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.financialYear]);
 
   const updateLoan = useCallback((id: string, data: Partial<Loan>) => {
-    let updatedLoan: Loan | undefined;
     setLoansState(prev => {
       const updated = prev.map(l => l.id === id ? { ...l, ...data } : l);
-      updatedLoan = updated.find(l => l.id === id);
+      const updatedLoan = updated.find(l => l.id === id);
+      if (updatedLoan) supabase.from('loans').upsert(updatedLoan).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       return updated;
     });
-    if (updatedLoan) {
-      supabase.from('loans').upsert(updatedLoan).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-    }
   }, []);
 
   const deleteLoan = useCallback((id: string) => {
@@ -699,15 +690,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateAsset = useCallback((id: string, data: Partial<Asset>) => {
-    let updatedAsset: Asset | undefined;
     setAssetsState(prev => {
       const updated = prev.map(a => a.id === id ? { ...a, ...data } : a);
-      updatedAsset = updated.find(a => a.id === id);
+      const updatedAsset = updated.find(a => a.id === id);
+      if (updatedAsset) supabase.from('assets').upsert(updatedAsset).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       return updated;
     });
-    if (updatedAsset) {
-      supabase.from('assets').upsert(updatedAsset).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-    }
   }, []);
 
   const deleteAsset = useCallback((id: string) => {
@@ -937,15 +925,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateStockItem = useCallback((id: string, data: Partial<StockItem>) => {
-    let updatedItem: StockItem | undefined;
     setStockItemsState(prev => {
       const updated = prev.map(i => i.id === id ? { ...i, ...data } : i);
-      updatedItem = updated.find(i => i.id === id);
+      const updatedItem = updated.find(i => i.id === id);
+      if (updatedItem) supabase.from('stock_items').upsert(updatedItem).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       return updated;
     });
-    if (updatedItem) {
-      supabase.from('stock_items').upsert(updatedItem).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-    }
   }, []);
 
   const deleteStockItem = useCallback((id: string) => {
@@ -1193,15 +1178,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateEmployee = useCallback((id: string, data: Partial<Employee>) => {
-    let updatedEmp: Employee | undefined;
     setEmployeesState(prev => {
       const updated = prev.map(e => e.id === id ? { ...e, ...data } : e);
-      updatedEmp = updated.find(e => e.id === id);
+      const updatedEmp = updated.find(e => e.id === id);
+      if (updatedEmp) supabase.from('employees').upsert(updatedEmp).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
       return updated;
     });
-    if (updatedEmp) {
-      supabase.from('employees').upsert(updatedEmp).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-    }
   }, []);
 
   const deleteEmployee = useCallback((id: string) => {
