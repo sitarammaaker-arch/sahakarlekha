@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -288,12 +288,28 @@ const Inventory: React.FC = () => {
   const fmtDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-IN');
 
+  // Compute current stock from movements (openingStock + purchases - sales/adjustments)
+  // This is the authoritative quantity — same formula as Stock Valuation uses.
+  const computedStockMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const item of stockItems) {
+      let qty = item.openingStock || 0;
+      for (const m of stockMovements) {
+        if (m.itemId !== item.id) continue;
+        if (m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0)) qty += m.qty;
+        else qty -= Math.abs(m.qty);
+      }
+      map[item.id] = Math.max(0, qty);
+    }
+    return map;
+  }, [stockItems, stockMovements]);
+
   // Derived data
   const totalStockValue = stockItems.reduce(
-    (sum, item) => sum + (item.currentStock ?? 0) * (item.purchaseRate ?? 0),
+    (sum, item) => sum + (computedStockMap[item.id] ?? 0) * (item.purchaseRate ?? 0),
     0,
   );
-  const lowStockCount = stockItems.filter(item => (item.currentStock ?? 0) < 5).length;
+  const lowStockCount = stockItems.filter(item => (computedStockMap[item.id] ?? 0) < 5).length;
 
   const filteredItems = stockItems.filter(item => {
     const matchSearch =
@@ -442,12 +458,12 @@ const Inventory: React.FC = () => {
 
   const handleCSV = () => {
     const headers = ['Item Code', 'Name', 'Name (Hindi)', 'Unit', 'Opening Stock', 'Current Stock', 'Purchase Rate', 'Sale Rate', 'Stock Value', 'Status', 'Barcode'];
-    const rows = filteredItems.map(i => [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, i.currentStock || 0, i.purchaseRate || 0, i.saleRate || 0, (i.currentStock || 0) * (i.purchaseRate || 0), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']);
+    const rows = filteredItems.map(i => { const cs = computedStockMap[i.id] ?? 0; return [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, cs, i.purchaseRate || 0, i.saleRate || 0, cs * (i.purchaseRate || 0), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']; });
     downloadCSV(headers, rows, 'inventory.csv');
   };
   const handleExcel = () => {
     const headers = ['Item Code', 'Name', 'Name (Hindi)', 'Unit', 'Opening Stock', 'Current Stock', 'Purchase Rate', 'Sale Rate', 'Stock Value', 'Status', 'Barcode'];
-    const rows = filteredItems.map(i => [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, i.currentStock || 0, i.purchaseRate || 0, i.saleRate || 0, (i.currentStock || 0) * (i.purchaseRate || 0), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']);
+    const rows = filteredItems.map(i => { const cs = computedStockMap[i.id] ?? 0; return [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, cs, i.purchaseRate || 0, i.saleRate || 0, cs * (i.purchaseRate || 0), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']; });
     downloadExcelSingle(headers, rows, 'inventory.xlsx', 'Inventory');
   };
 
@@ -638,8 +654,9 @@ const Inventory: React.FC = () => {
                     </TableHeader>
                     <TableBody>
                       {filteredItems.map(item => {
-                        const stockValue = (item.currentStock ?? 0) * (item.purchaseRate ?? 0);
-                        const isLow = (item.currentStock ?? 0) < 5;
+                        const effectiveStock = computedStockMap[item.id] ?? 0;
+                        const stockValue = effectiveStock * (item.purchaseRate ?? 0);
+                        const isLow = effectiveStock < 5;
                         return (
                           <TableRow key={item.id} className="hover:bg-muted/30">
                             <TableCell>
@@ -666,7 +683,7 @@ const Inventory: React.FC = () => {
                                   isLow ? 'text-red-600' : 'text-foreground',
                                 )}
                               >
-                                {item.currentStock ?? 0}
+                                {effectiveStock}
                                 {isLow && (
                                   <span className="ml-1 text-xs text-red-500">
                                     {hi ? '(कम)' : '(Low)'}

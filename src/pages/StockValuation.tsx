@@ -20,9 +20,9 @@ const fmtQty = (n: number, unit: string) => `${n.toFixed(3)} ${unit}`;
 
 interface FifoLayer { qty: number; rate: number }
 
-function valueFifo(movements: StockMovement[]): { qty: number; value: number; avgRate: number } {
+function valueFifo(movements: StockMovement[], openingStock = 0, openingRate = 0): { qty: number; value: number; avgRate: number } {
   const sorted = [...movements].sort((a, b) => a.date.localeCompare(b.date));
-  const layers: FifoLayer[] = [];
+  const layers: FifoLayer[] = openingStock > 0 ? [{ qty: openingStock, rate: openingRate }] : [];
 
   for (const m of sorted) {
     if (m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0)) {
@@ -46,10 +46,10 @@ function valueFifo(movements: StockMovement[]): { qty: number; value: number; av
   return { qty: totalQty, value: totalValue, avgRate: totalQty > 0 ? totalValue / totalQty : 0 };
 }
 
-function valueWeightedAvg(movements: StockMovement[]): { qty: number; value: number; avgRate: number } {
+function valueWeightedAvg(movements: StockMovement[], openingStock = 0, openingRate = 0): { qty: number; value: number; avgRate: number } {
   const sorted = [...movements].sort((a, b) => a.date.localeCompare(b.date));
-  let runningQty = 0;
-  let runningValue = 0;
+  let runningQty = openingStock;
+  let runningValue = openingStock * openingRate;
 
   for (const m of sorted) {
     if (m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0)) {
@@ -91,7 +91,9 @@ export default function StockValuation() {
       const movs = stockMovements.filter(m => m.itemId === item.id);
       // Use item-level method if set, else use global selector
       const itemMethod = item.valuationMethod || method;
-      const result = itemMethod === 'fifo' ? valueFifo(movs) : valueWeightedAvg(movs);
+      const openingStock = item.openingStock || 0;
+      const openingRate = item.purchaseRate || 0;
+      const result = itemMethod === 'fifo' ? valueFifo(movs, openingStock, openingRate) : valueWeightedAvg(movs, openingStock, openingRate);
       return {
         item,
         qty: result.qty,

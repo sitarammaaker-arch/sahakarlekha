@@ -1004,12 +1004,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const movement: StockMovement = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     setStockMovementsState(prev => { const updated = [...prev, movement]; storage.setStockMovements(updated); return updated; });
     supabase.from('stock_movements').upsert(withSoc(movement)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-    // Update currentStock on the item
+    // Update currentStock on the item (localStorage + Supabase)
     setStockItemsState(prev => {
       const updated = prev.map(i => {
         if (i.id !== data.itemId) return i;
         const delta = data.type === 'purchase' || (data.type === 'adjustment' && data.qty > 0) ? data.qty : -Math.abs(data.qty);
-        return { ...i, currentStock: i.currentStock + delta };
+        const newStock = i.currentStock + delta;
+        supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) console.warn('Stock currentStock sync error:', error.message); });
+        return { ...i, currentStock: newStock };
       });
       storage.setStockItems(updated);
       return updated;
@@ -1067,7 +1069,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Reduce stock & add movements
     data.items.forEach(item => {
-      setStockItemsState(prev => { const updated = prev.map(i => i.id === item.itemId ? { ...i, currentStock: Math.max(0, i.currentStock - item.qty) } : i); storage.setStockItems(updated); return updated; });
+      setStockItemsState(prev => { const updated = prev.map(i => { if (i.id !== item.itemId) return i; const newStock = Math.max(0, i.currentStock - item.qty); supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) console.warn('Stock currentStock sync error:', error.message); }); return { ...i, currentStock: newStock }; }); storage.setStockItems(updated); return updated; });
       const mv: StockMovement = { id: crypto.randomUUID(), date: data.date, itemId: item.itemId, type: 'sale', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: saleNo, narration: `Sale to ${data.customerName}`, createdAt: new Date().toISOString() };
       setStockMovementsState(prev => { const updated = [...prev, mv]; storage.setStockMovements(updated); return updated; });
       supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
@@ -1102,7 +1104,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Reverse stock deductions
         sale.items.forEach(item => {
           setStockItemsState(s => {
-            const updated = s.map(i => i.id === item.itemId ? { ...i, currentStock: i.currentStock + item.qty } : i);
+            const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = i.currentStock + item.qty; supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) console.warn('Stock currentStock sync error:', error.message); }); return { ...i, currentStock: newStock }; });
             storage.setStockItems(updated);
             return updated;
           });
@@ -1158,7 +1160,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     // Increase stock & add movements, update purchaseRate
     data.items.forEach(item => {
-      setStockItemsState(prev => { const updated = prev.map(i => i.id === item.itemId ? { ...i, currentStock: i.currentStock + item.qty, purchaseRate: item.rate } : i); storage.setStockItems(updated); return updated; });
+      setStockItemsState(prev => { const updated = prev.map(i => { if (i.id !== item.itemId) return i; const newStock = i.currentStock + item.qty; supabase.from('stock_items').update({ currentStock: newStock, purchaseRate: item.rate }).eq('id', i.id).then(({ error }) => { if (error) console.warn('Stock currentStock sync error:', error.message); }); return { ...i, currentStock: newStock, purchaseRate: item.rate }; }); storage.setStockItems(updated); return updated; });
       const mv: StockMovement = { id: crypto.randomUUID(), date: data.date, itemId: item.itemId, type: 'purchase', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: purchaseNo, narration: `Purchase from ${data.supplierName}`, createdAt: new Date().toISOString() };
       setStockMovementsState(prev => { const updated = [...prev, mv]; storage.setStockMovements(updated); return updated; });
       supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
@@ -1193,7 +1195,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Reverse stock additions
         purchase.items.forEach(item => {
           setStockItemsState(s => {
-            const updated = s.map(i => i.id === item.itemId ? { ...i, currentStock: Math.max(0, i.currentStock - item.qty) } : i);
+            const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = Math.max(0, i.currentStock - item.qty); supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) console.warn('Stock currentStock sync error:', error.message); }); return { ...i, currentStock: newStock }; });
             storage.setStockItems(updated);
             return updated;
           });
