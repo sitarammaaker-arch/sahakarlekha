@@ -390,6 +390,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string) => {
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
+
+    // 🔒 Block deletion of vouchers linked to Purchase/Sale — must delete from their module
+    if (current.refType === 'purchase') {
+      toastRef.current({
+        title: 'Voucher delete nahi ho sakta',
+        description: 'Ye voucher Purchase Management se bana hai. Isko Purchase Management → Purchase List se delete karo — stock bhi sahi rahega.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (current.refType === 'sale') {
+      toastRef.current({
+        title: 'Voucher delete nahi ho sakta',
+        description: 'Ye voucher Sale Management se bana hai. Isko Sale Management → Sale List se delete karo — stock bhi sahi rahega.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const cancelledVoucher = { ...current, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy, deletedReason: reason };
     setVouchersState(prev => {
       const updated = prev.map(v => v.id === id ? cancelledVoucher : v);
@@ -1113,6 +1132,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const vType = data.paymentMode === 'credit' ? 'sale' : 'receipt';
+    const saleId = lid();
     const newVoucher = addVoucher({
       type: vType,
       date: data.date,
@@ -1122,6 +1142,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       amount: grandTotal,
       narration: data.narration || `Sale: ${data.customerName} — ${saleNo}`,
       createdBy: data.createdBy,
+      refType: 'sale',
+      refId: saleId,
     });
 
     // Stock movements
@@ -1141,7 +1163,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     });
 
-    const sale: Sale = { ...data, id: lid(), saleNo, voucherId: newVoucher.id, gstVoucherIds: undefined, createdAt: new Date().toISOString() };
+    const sale: Sale = { ...data, id: saleId, saleNo, voucherId: newVoucher.id, gstVoucherIds: undefined, createdAt: new Date().toISOString() };
     salesRef.current = [...salesRef.current, sale];
     setSalesState(prev => [...prev, sale]);
     supabase.from('sales').upsert(withSoc(sale)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
@@ -1222,6 +1244,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const vType = data.paymentMode === 'credit' ? 'purchase' : 'payment';
+    const purchaseId = lid();
     const newVoucher = addVoucher({
       type: vType,
       date: data.date,
@@ -1231,6 +1254,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       amount: grandTotal,
       narration: data.narration || `Purchase: ${data.supplierName} — ${purchaseNo}`,
       createdBy: data.createdBy,
+      refType: 'purchase',
+      refId: purchaseId,
     });
 
     // Stock movements
@@ -1250,7 +1275,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     });
 
-    const purchase: Purchase = { ...data, id: lid(), purchaseNo, voucherId: newVoucher.id, taxVoucherIds: undefined, createdAt: new Date().toISOString() };
+    const purchase: Purchase = { ...data, id: purchaseId, purchaseNo, voucherId: newVoucher.id, taxVoucherIds: undefined, createdAt: new Date().toISOString() };
     purchasesRef.current = [...purchasesRef.current, purchase];
     setPurchasesState(prev => [...prev, purchase]);
     supabase.from('purchases').upsert(withSoc(purchase)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });

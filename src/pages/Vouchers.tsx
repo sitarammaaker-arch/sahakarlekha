@@ -1076,6 +1076,27 @@ const Vouchers: React.FC = () => {
                 : 'This voucher will be marked as cancelled. It will be excluded from accounts but remain in audit records.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {/* Warning for purchase/sale linked vouchers */}
+          {cancelId && (() => {
+            const v = vouchers.find(x => x.id === cancelId);
+            if (v?.refType === 'purchase') return (
+              <div className="mx-4 mb-2 p-3 bg-orange-50 border border-orange-300 rounded text-sm text-orange-800">
+                ⚠️ <strong>{language === 'hi' ? 'चेतावनी:' : 'Warning:'}</strong>{' '}
+                {language === 'hi'
+                  ? 'यह वाउचर Purchase Management से बना है। इसे यहाँ रद्द करने पर stock नहीं घटेगा। Purchase Management से delete करें।'
+                  : 'This voucher was created by Purchase Management. Cancelling here will NOT reverse stock. Please delete from Purchase Management instead.'}
+              </div>
+            );
+            if (v?.refType === 'sale') return (
+              <div className="mx-4 mb-2 p-3 bg-orange-50 border border-orange-300 rounded text-sm text-orange-800">
+                ⚠️ <strong>{language === 'hi' ? 'चेतावनी:' : 'Warning:'}</strong>{' '}
+                {language === 'hi'
+                  ? 'यह वाउचर Sale Management से बना है। इसे यहाँ रद्द करने पर stock वापस नहीं आएगी। Sale Management से delete करें।'
+                  : 'This voucher was created by Sale Management. Cancelling here will NOT restore stock. Please delete from Sale Management instead.'}
+              </div>
+            );
+            return null;
+          })()}
           <div className="px-4 pb-2">
             <Label className="text-sm font-medium">{language === 'hi' ? 'रद्द करने का कारण *' : 'Cancellation Reason *'}</Label>
             <Textarea
