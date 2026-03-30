@@ -685,7 +685,7 @@ const SaleManagement: React.FC = () => {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                 <div>
                   <p className="text-gray-500">{language === 'hi' ? 'तिथि' : 'Date'}</p>
-                  <p className="font-medium">{new Date(viewSale.date).toLocaleDateString('hi-IN')}</p>
+                  <p className="font-medium">{new Date(viewSale.date + 'T00:00:00').toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
                 </div>
                 <div>
                   <p className="text-gray-500">{language === 'hi' ? 'ग्राहक' : 'Customer'}</p>

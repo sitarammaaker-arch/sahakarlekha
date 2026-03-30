@@ -719,7 +719,7 @@ const PurchaseManagement: React.FC = () => {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                 <div>
                   <p className="text-gray-500">{language === 'hi' ? 'तिथि' : 'Date'}</p>
-                  <p className="font-medium">{new Date(viewPurchase.date).toLocaleDateString('hi-IN')}</p>
+                  <p className="font-medium">{new Date(viewPurchase.date + 'T00:00:00').toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
                 </div>
                 <div>
                   <p className="text-gray-500">{language === 'hi' ? 'आपूर्तिकर्ता' : 'Supplier'}</p>
@@ -775,13 +775,61 @@ const PurchaseManagement: React.FC = () => {
                   <span>{language === 'hi' ? 'उपयोग कुल' : 'Subtotal'}</span>
                   <span>{fmt(viewPurchase.totalAmount)}</span>
                 </div>
+                {(viewPurchase.discount || 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span>{language === 'hi' ? 'छूट' : 'Discount'}</span>
+                    <span className="text-red-600">- {fmt(viewPurchase.discount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
-                  <span>{language === 'hi' ? 'छूट' : 'Discount'}</span>
-                  <span className="text-red-600">- {fmt(viewPurchase.discount)}</span>
+                  <span>{language === 'hi' ? 'कर योग्य राशि' : 'Taxable Amount'}</span>
+                  <span className="font-semibold">{fmt(viewPurchase.netAmount)}</span>
                 </div>
-                <div className="flex justify-between font-bold text-base border-t pt-1">
-                  <span>{language === 'hi' ? 'शुद्ध राशि' : 'Net Amount'}</span>
-                  <span>{fmt(viewPurchase.netAmount)}</span>
+                {/* GST Input Tax Credit */}
+                {((viewPurchase.cgstAmount || 0) > 0 || (viewPurchase.sgstAmount || 0) > 0 || (viewPurchase.igstAmount || 0) > 0) && (
+                  <div className="rounded-md bg-blue-50 border border-blue-200 p-2 space-y-1 text-left">
+                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-1">
+                      {language === 'hi' ? 'GST (इनपुट टैक्स क्रेडिट)' : 'GST (INPUT TAX CREDIT)'}
+                    </p>
+                    {(viewPurchase.cgstAmount || 0) > 0 && (
+                      <div className="flex justify-between text-blue-700">
+                        <span>CGST ({viewPurchase.cgstPct || 0}%)</span>
+                        <span>{fmt(viewPurchase.cgstAmount!)}</span>
+                      </div>
+                    )}
+                    {(viewPurchase.sgstAmount || 0) > 0 && (
+                      <div className="flex justify-between text-blue-700">
+                        <span>SGST ({viewPurchase.sgstPct || 0}%)</span>
+                        <span>{fmt(viewPurchase.sgstAmount!)}</span>
+                      </div>
+                    )}
+                    {(viewPurchase.igstAmount || 0) > 0 && (
+                      <div className="flex justify-between text-blue-700">
+                        <span>IGST ({viewPurchase.igstPct || 0}%)</span>
+                        <span>{fmt(viewPurchase.igstAmount!)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-semibold border-t border-blue-200 pt-1 text-blue-800">
+                      <span>{language === 'hi' ? 'कुल GST' : 'Total GST'}</span>
+                      <span>{fmt(viewPurchase.taxAmount || 0)}</span>
+                    </div>
+                  </div>
+                )}
+                {/* TDS Deduction */}
+                {(viewPurchase.tdsAmount || 0) > 0 && (
+                  <div className="rounded-md bg-orange-50 border border-orange-200 p-2 space-y-1 text-left">
+                    <p className="text-xs font-bold text-orange-700 uppercase tracking-wide mb-1">
+                      {language === 'hi' ? 'TDS कटौती' : 'TDS DEDUCTION'}
+                    </p>
+                    <div className="flex justify-between text-orange-700">
+                      <span>TDS ({viewPurchase.tdsPct || 0}%)</span>
+                      <span className="text-red-600">- {fmt(viewPurchase.tdsAmount!)}</span>
+                    </div>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-base border-t-2 pt-2">
+                  <span>{language === 'hi' ? 'कुल राशि (Grand Total)' : 'Grand Total'}</span>
+                  <span className="text-primary">{fmt(viewPurchase.grandTotal || viewPurchase.netAmount)}</span>
                 </div>
               </div>
             </div>
