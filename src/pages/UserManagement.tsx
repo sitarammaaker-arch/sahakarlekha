@@ -197,7 +197,8 @@ export default function UserManagement() {
           : (hi ? 'उपयोगकर्ता जोड़ा गया' : 'User added'),
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const e = err as { message?: string; details?: string; hint?: string; code?: string };
+      const msg = e?.message || e?.details || e?.hint || JSON.stringify(err);
       setSaveError(hi ? `त्रुटि: ${msg}` : `Error: ${msg}`);
     }
   };
