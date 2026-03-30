@@ -362,7 +362,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     vouchersRef.current = vouchersRef.current.map(v => v.id === id ? updatedVoucher : v);
     setVouchersState(prev => prev.map(v => v.id === id ? updatedVoucher : v));
-    supabase.from('vouchers').upsert(withSoc(updatedVoucher)).then(({ error }) => {
+    // Strip editHistory from main upsert — PostgREST schema cache may lag after column additions.
+    // editHistory is saved separately via .update() so it never blocks the primary save.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { editHistory: _eh, ...voucherForDb } = updatedVoucher;
+    supabase.from('vouchers').upsert(withSoc(voucherForDb)).then(({ error }) => {
       if (error) {
         console.error('Voucher save failed:', error.message);
         // Revert local state so UI matches what's actually in Supabase
@@ -373,6 +377,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           description: error.message,
           variant: 'destructive',
         });
+      } else if (updatedVoucher.editHistory && updatedVoucher.editHistory.length > 0) {
+        // Save editHistory separately once main save succeeds
+        supabase.from('vouchers')
+          .update({ editHistory: updatedVoucher.editHistory })
+          .eq('id', id)
+          .then(({ error: ehErr }) => { if (ehErr) console.warn('editHistory update:', ehErr.message); });
       }
     });
   }, []);
