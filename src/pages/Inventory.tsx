@@ -141,7 +141,6 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
           value={itemForm.purchaseRate}
           onChange={e => setItemForm(f => ({ ...f, purchaseRate: e.target.value }))}
           placeholder="0"
-          required
         />
       </div>
       <div className="space-y-2">
