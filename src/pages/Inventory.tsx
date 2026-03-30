@@ -78,7 +78,7 @@ interface ItemFormProps {
 }
 
 const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit, submitLabel, onCancel }) => (
-  <form onSubmit={onSubmit} className="space-y-4">
+  <form onSubmit={onSubmit} className="space-y-4" noValidate>
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div className="space-y-2">
         <Label>
