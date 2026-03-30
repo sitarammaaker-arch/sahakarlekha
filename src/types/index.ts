@@ -1,4 +1,12 @@
-export type VoucherType = 'receipt' | 'payment' | 'journal' | 'contra';
+export type VoucherType = 'receipt' | 'payment' | 'journal' | 'contra' | 'purchase' | 'sale' | 'debit_note' | 'credit_note';
+
+export interface VoucherLine {
+  id: string;
+  accountId: string;
+  type: 'Dr' | 'Cr';
+  amount: number;
+  narration?: string;
+}
 export type UserRole = 'admin' | 'accountant' | 'viewer';
 export type AccountType = 'asset' | 'liability' | 'income' | 'expense' | 'equity';
 export type MemberStatus = 'active' | 'inactive';
@@ -45,6 +53,10 @@ export interface Voucher {
   approvalRemarks?: string;
   approvedBy?: string;
   approvedAt?: string;
+  // Multi-line voucher support (Phase 1 — Path B)
+  lines?: VoucherLine[];
+  refType?: string;   // e.g. 'sale', 'purchase'
+  refId?: string;     // reference to parent sale/purchase id
 }
 
 export type ObjectionStatus = 'pending' | 'partial' | 'rectified';

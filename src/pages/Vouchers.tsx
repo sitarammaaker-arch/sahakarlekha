@@ -24,7 +24,8 @@ import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, Chec
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import type { VoucherType } from '@/types';
+import type { VoucherType, VoucherLine } from '@/types';
+import { Plus, Minus } from 'lucide-react';
 import { getNextVoucherNo, VOUCHER_TEMPLATES, ACCOUNT_IDS } from '@/lib/storage';
 import type { LedgerAccount } from '@/types';
 import { validateVoucher } from '@/lib/validation';
@@ -122,6 +123,23 @@ const Vouchers: React.FC = () => {
   const [showCancelled, setShowCancelled] = useState(false);
   const [savedVoucherNo, setSavedVoucherNo] = useState<string | null>(null);
 
+  // Multi-line expert mode state
+  type LineEntry = { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: string; narration: string };
+  const makeBlankLine = (type: 'Dr' | 'Cr'): LineEntry => ({ id: crypto.randomUUID(), accountId: '', type, amount: '', narration: '' });
+  const [lines, setLines] = useState<LineEntry[]>(() => [makeBlankLine('Dr'), makeBlankLine('Cr')]);
+
+  const drTotal = lines.filter(l => l.type === 'Dr').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  const crTotal = lines.filter(l => l.type === 'Cr').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  const lineDiff = Math.abs(drTotal - crTotal);
+  const linesBalanced = drTotal > 0 && crTotal > 0 && lineDiff < 0.001;
+
+  const handleAddLine = (type: 'Dr' | 'Cr') => setLines(prev => [...prev, makeBlankLine(type)]);
+  const handleRemoveLine = (id: string) => setLines(prev => prev.filter(l => l.id !== id));
+  const handleLineChange = (id: string, field: keyof LineEntry, value: string) =>
+    setLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
+
+  const handleClearLines = () => setLines([makeBlankLine('Dr'), makeBlankLine('Cr')]);
+
   // Edit state
   const [editId, setEditId] = useState<string | null>(null);
   const [editDate, setEditDate] = useState('');
@@ -196,6 +214,50 @@ const Vouchers: React.FC = () => {
   const currentVoucher = voucherConfig[voucherType];
   const VoucherIcon = currentVoucher.icon;
 
+  // Expert mode multi-line submit (called from handleExpertSubmit)
+  const handleExpertSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!linesBalanced) {
+      toast({ title: language === 'hi' ? 'डेबिट और क्रेडिट का योग बराबर होना चाहिए' : 'Debit and Credit totals must be equal', variant: 'destructive' });
+      return;
+    }
+    const emptyAcc = lines.find(l => !l.accountId || !(parseFloat(l.amount) > 0));
+    if (emptyAcc) {
+      toast({ title: language === 'hi' ? 'सभी पंक्तियों में खाता और राशि भरें' : 'All lines must have an account and amount', variant: 'destructive' });
+      return;
+    }
+    const customNo = voucherNoInput.trim();
+    if (customNo && vouchers.some(v => !v.isDeleted && v.voucherNo === customNo)) {
+      toast({ title: language === 'hi' ? 'यह वाउचर नंबर पहले से मौजूद है' : 'Voucher number already exists', variant: 'destructive' });
+      return;
+    }
+    const vLines: VoucherLine[] = lines.map(l => ({
+      id: l.id,
+      accountId: l.accountId,
+      type: l.type,
+      amount: parseFloat(l.amount),
+      narration: l.narration || undefined,
+    }));
+    const drAccId = lines.find(l => l.type === 'Dr')?.accountId || '';
+    const crAccId = lines.find(l => l.type === 'Cr')?.accountId || '';
+    const v = addVoucher({
+      type: voucherType,
+      date: voucherDate,
+      lines: vLines,
+      debitAccountId: drAccId,
+      creditAccountId: crAccId,
+      amount: drTotal,
+      narration,
+      memberId: linkedMemberId || undefined,
+      createdBy: user?.name || 'System',
+      voucherNo: customNo || undefined,
+      approvalStatus: submitForApproval ? 'pending' : undefined,
+    });
+    setSavedVoucherNo(v.voucherNo);
+    toast({ title: language === 'hi' ? 'वाउचर सहेजा गया' : 'Voucher saved', description: v.voucherNo });
+    handleClear();
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // For Contra: auto-set Dr/Cr based on direction
@@ -264,6 +326,7 @@ const Vouchers: React.FC = () => {
     setLinkedMemberId('');
     setVoucherNoInput('');
     setSavedVoucherNo(null);
+    handleClearLines();
   };
 
   const sortedVouchers = [...vouchers]
@@ -591,7 +654,7 @@ const Vouchers: React.FC = () => {
                 </div>
 
                 <CardContent className="pt-6">
-                  <form onSubmit={handleSubmit} className="space-y-6">
+                  <form onSubmit={voucherType === 'contra' ? handleSubmit : handleExpertSubmit} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label className="text-base font-semibold">{t('date')}</Label>
@@ -642,38 +705,106 @@ const Vouchers: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Dr/Cr account search — hidden for Contra (auto-set) */}
+                    {/* ── Multi-line entry table (hidden for Contra) ── */}
                     {voucherType !== 'contra' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label className="text-base font-semibold flex items-center gap-2">
-                          <span className="text-destructive font-bold">Dr.</span>
-                          {t('debit')} {language === 'hi' ? 'खाता' : 'Account'}
-                        </Label>
-                        <AccountSearch
-                          value={debitAccount}
-                          onChange={setDebitAccount}
-                          accounts={accounts.filter(a => !a.isGroup)}
-                          placeholder={language === 'hi' ? 'नाम या कोड से खोजें...' : 'Search by name or code...'}
-                          language={language}
-                        />
+                      <div className="space-y-3">
+                        <Label className="text-base font-semibold">{language === 'hi' ? 'नाम-जमा पंक्तियाँ' : 'Debit / Credit Lines'}</Label>
+                        <div className="rounded-lg border overflow-hidden">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/40">
+                                <TableHead className="w-8 text-xs">#</TableHead>
+                                <TableHead className="text-xs">{language === 'hi' ? 'खाता' : 'Account'}</TableHead>
+                                <TableHead className="w-20 text-xs">{language === 'hi' ? 'Dr/Cr' : 'Dr/Cr'}</TableHead>
+                                <TableHead className="w-32 text-xs">{language === 'hi' ? 'राशि (₹)' : 'Amount (₹)'}</TableHead>
+                                <TableHead className="text-xs">{language === 'hi' ? 'विवरण' : 'Narration'}</TableHead>
+                                <TableHead className="w-8"></TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {lines.map((line, idx) => (
+                                <TableRow key={line.id} className={line.type === 'Dr' ? 'bg-blue-50/30' : 'bg-green-50/30'}>
+                                  <TableCell className="text-xs text-muted-foreground py-2">{idx + 1}</TableCell>
+                                  <TableCell className="py-1">
+                                    <AccountSearch
+                                      value={line.accountId}
+                                      onChange={id => handleLineChange(line.id, 'accountId', id)}
+                                      accounts={accounts.filter(a => !a.isGroup)}
+                                      placeholder={language === 'hi' ? 'खाता खोजें...' : 'Search account...'}
+                                      language={language}
+                                    />
+                                  </TableCell>
+                                  <TableCell className="py-1">
+                                    <Select value={line.type} onValueChange={v => handleLineChange(line.id, 'type', v)}>
+                                      <SelectTrigger className="h-9 w-20">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="Dr"><span className="font-bold text-blue-700">Dr</span></SelectItem>
+                                        <SelectItem value="Cr"><span className="font-bold text-green-700">Cr</span></SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                  <TableCell className="py-1">
+                                    <Input
+                                      type="number"
+                                      value={line.amount}
+                                      onChange={e => handleLineChange(line.id, 'amount', e.target.value)}
+                                      placeholder="0"
+                                      min="0"
+                                      className="h-9 text-right font-mono"
+                                    />
+                                  </TableCell>
+                                  <TableCell className="py-1">
+                                    <Input
+                                      value={line.narration}
+                                      onChange={e => handleLineChange(line.id, 'narration', e.target.value)}
+                                      placeholder={language === 'hi' ? 'विवरण...' : 'Note...'}
+                                      className="h-9"
+                                    />
+                                  </TableCell>
+                                  <TableCell className="py-1">
+                                    {lines.length > 2 && (
+                                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveLine(line.id)}>
+                                        <Minus className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                        {/* Add line buttons */}
+                        <div className="flex gap-2">
+                          <Button type="button" variant="outline" size="sm" className="gap-1.5 text-blue-700 border-blue-300" onClick={() => handleAddLine('Dr')}>
+                            <Plus className="h-3.5 w-3.5" />
+                            {language === 'hi' ? 'डेबिट पंक्ति जोड़ें' : 'Add Dr Line'}
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" className="gap-1.5 text-green-700 border-green-300" onClick={() => handleAddLine('Cr')}>
+                            <Plus className="h-3.5 w-3.5" />
+                            {language === 'hi' ? 'क्रेडिट पंक्ति जोड़ें' : 'Add Cr Line'}
+                          </Button>
+                        </div>
+                        {/* Balance indicator */}
+                        <div className={cn(
+                          'flex items-center justify-between rounded-lg px-4 py-2.5 text-sm font-medium',
+                          linesBalanced ? 'bg-success/10 border border-success/30 text-success' : 'bg-amber-50 border border-amber-300 text-amber-700'
+                        )}>
+                          <div className="flex gap-4">
+                            <span>{language === 'hi' ? 'नाम (Dr)' : 'Dr'}: <strong>₹{drTotal.toLocaleString('hi-IN')}</strong></span>
+                            <span>{language === 'hi' ? 'जमा (Cr)' : 'Cr'}: <strong>₹{crTotal.toLocaleString('hi-IN')}</strong></span>
+                          </div>
+                          {linesBalanced
+                            ? <span className="flex items-center gap-1">{language === 'hi' ? 'संतुलित' : 'Balanced'} ✓</span>
+                            : <span>{language === 'hi' ? 'अंतर' : 'Diff'}: ₹{lineDiff.toLocaleString('hi-IN')}</span>
+                          }
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label className="text-base font-semibold flex items-center gap-2">
-                          <span className="text-success font-bold">Cr.</span>
-                          {t('credit')} {language === 'hi' ? 'खाता' : 'Account'}
-                        </Label>
-                        <AccountSearch
-                          value={creditAccount}
-                          onChange={setCreditAccount}
-                          accounts={accounts.filter(a => !a.isGroup)}
-                          placeholder={language === 'hi' ? 'नाम या कोड से खोजें...' : 'Search by name or code...'}
-                          language={language}
-                        />
-                      </div>
-                    </div>
                     )}
 
+                    {/* Contra still uses single amount */}
+                    {voucherType === 'contra' && (
                     <div className="space-y-2">
                       <Label className="text-base font-semibold">{t('amount')} (₹)</Label>
                       <Input
@@ -691,6 +822,7 @@ const Vouchers: React.FC = () => {
                         </p>
                       )}
                     </div>
+                    )}
 
                     <div className="space-y-2">
                       <Label className="text-base font-semibold">{t('narration')}</Label>
@@ -698,7 +830,7 @@ const Vouchers: React.FC = () => {
                         value={narration}
                         onChange={(e) => setNarration(e.target.value)}
                         placeholder={language === 'hi' ? 'लेनदेन का विवरण लिखें...' : 'Enter transaction details...'}
-                        className="min-h-24 text-base"
+                        className="min-h-20 text-base"
                       />
                     </div>
 
@@ -742,7 +874,7 @@ const Vouchers: React.FC = () => {
                       </label>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
-                      <Button type="submit" size="lg" className="flex-1 h-12 text-lg gap-2">
+                      <Button type="submit" size="lg" className="flex-1 h-12 text-lg gap-2" disabled={voucherType !== 'contra' && !linesBalanced}>
                         <Save className="h-5 w-5" />
                         {submitForApproval ? (language === 'hi' ? 'अनुमोदन हेतु भेजें' : 'Submit for Approval') : t('save')}
                       </Button>

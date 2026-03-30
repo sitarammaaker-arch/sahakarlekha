@@ -4,6 +4,26 @@
 -- Run in Supabase SQL Editor (fresh setup)
 -- =============================================
 
+-- ── FRESH RESET (Phase 1 migration) ─────────────────────────────────────────
+-- Uncomment ALL lines below ONLY if doing a complete fresh reset:
+-- drop table if exists salary_records cascade;
+-- drop table if exists employees cascade;
+-- drop table if exists purchases cascade;
+-- drop table if exists sales cascade;
+-- drop table if exists stock_movements cascade;
+-- drop table if exists stock_items cascade;
+-- drop table if exists audit_objections cascade;
+-- drop table if exists assets cascade;
+-- drop table if exists loans cascade;
+-- drop table if exists vouchers cascade;
+-- drop table if exists members cascade;
+-- drop table if exists accounts cascade;
+-- drop table if exists society_settings cascade;
+-- drop table if exists society_users cascade;
+-- drop table if exists societies cascade;
+-- drop table if exists suppliers cascade;
+-- drop table if exists customers cascade;
+
 -- ── STEP 1: Drop existing tables (if rebuilding fresh) ───────────────────────
 -- Uncomment these lines only if you want to start fresh:
 -- drop table if exists salary_records cascade;
@@ -431,6 +451,11 @@ alter table purchases add column if not exists "taxAmount" numeric default 0;
 alter table purchases add column if not exists "grandTotal" numeric default 0;
 alter table purchases add column if not exists "supplierId" text;
 alter table purchases add column if not exists "taxVoucherIds" jsonb default '[]';
+
+-- Vouchers: multi-line support (Phase 1 - Path B)
+alter table vouchers add column if not exists lines jsonb default '[]';
+alter table vouchers add column if not exists "refType" text;
+alter table vouchers add column if not exists "refId" text;
 
 -- Salary Records: allowances breakdown
 alter table salary_records add column if not exists "hraAllowance" numeric default 0;

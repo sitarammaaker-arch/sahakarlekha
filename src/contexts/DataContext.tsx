@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import type {
-  Voucher, VoucherEditSnapshot, Member, LedgerAccount, SocietySettings,
+  Voucher, VoucherEditSnapshot, VoucherLine, Member, LedgerAccount, SocietySettings,
   AccountBalance, CashBookEntry, BankBookEntry, MemberLedgerEntry, ReceiptsPaymentsData,
   Loan, Asset, AuditObjection,
   StockItem, StockMovement,
@@ -9,6 +9,7 @@ import type {
   Employee, SalaryRecord, PaymentMode,
   Supplier, Customer,
 } from '@/types';
+import { getVoucherLines } from '@/lib/voucherUtils';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
@@ -23,7 +24,7 @@ interface DataContextType {
   assets: Asset[];
 
   addVoucher: (data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }) => Voucher;
-  updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId'>>) => void;
+  updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => void;
   cancelVoucher: (id: string, reason: string, deletedBy: string) => void;
   restoreVoucher: (id: string) => void;
   clearVoucher: (id: string, clearedDate?: string) => void;
@@ -282,24 +283,43 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user?.societyId]);
 
   const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }): Voucher => {
+    const lid = () => crypto.randomUUID();
+    // Build lines if not provided (legacy single Dr/Cr mode)
+    let lines: VoucherLine[] | undefined = data.lines;
+    if (!lines || lines.length === 0) {
+      if (data.debitAccountId && data.creditAccountId && (data.amount || 0) > 0) {
+        lines = [
+          { id: lid(), accountId: data.debitAccountId, type: 'Dr', amount: data.amount! },
+          { id: lid(), accountId: data.creditAccountId, type: 'Cr', amount: data.amount! },
+        ];
+      }
+    }
+    // Compute legacy fields from lines (for backward compat with existing reports)
+    const drLines = (lines || []).filter(l => l.type === 'Dr');
+    const crLines = (lines || []).filter(l => l.type === 'Cr');
+    const debitAccountId = data.debitAccountId || drLines[0]?.accountId || '';
+    const creditAccountId = data.creditAccountId || crLines[0]?.accountId || '';
+    const amount = data.amount || drLines.reduce((s, l) => s + l.amount, 0);
+
     const voucherNo = data.voucherNo?.trim() || storage.getNextVoucherNo(data.type, society.financialYear, vouchersRef.current);
     const newVoucher: Voucher = {
       ...data,
-      id: crypto.randomUUID(),
+      id: lid(),
       voucherNo,
+      lines,
+      debitAccountId,
+      creditAccountId,
+      amount,
       createdAt: new Date().toISOString(),
     };
     // Update ref immediately so the next addVoucher call in the same tick sees this voucher
     vouchersRef.current = [...vouchersRef.current, newVoucher];
-    setVouchersState(prev => {
-      const updated = [...prev, newVoucher];
-      return updated;
-    });
+    setVouchersState(prev => [...prev, newVoucher]);
     supabase.from('vouchers').upsert(withSoc(newVoucher)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return newVoucher;
   }, [society.financialYear]);
 
-  const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId'>>) => {
+  const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => {
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
     // Capture edit audit snapshot — only track the fields that actually changed
@@ -506,8 +526,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!account) return 0;
     let balance = account.openingBalanceType === 'debit' ? account.openingBalance : -account.openingBalance;
     activeVouchers.forEach(v => {
-      if (v.debitAccountId === accountId) balance += v.amount;
-      if (v.creditAccountId === accountId) balance -= v.amount;
+      getVoucherLines(v).forEach(l => {
+        if (l.accountId === accountId) balance += l.type === 'Dr' ? l.amount : -l.amount;
+      });
     });
     return balance;
   }, [accounts, activeVouchers]);
@@ -520,38 +541,42 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       : -cashAccount.openingBalance;
 
     const cashVouchers = activeVouchers
-      .filter(v => v.debitAccountId === ACCOUNT_IDS.CASH || v.creditAccountId === ACCOUNT_IDS.CASH)
+      .filter(v => getVoucherLines(v).some(l => l.accountId === ACCOUNT_IDS.CASH))
       .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
 
     if (fromDate) {
       cashVouchers.filter(v => v.date < fromDate).forEach(v => {
-        if (v.debitAccountId === ACCOUNT_IDS.CASH) runningBalance += v.amount;
-        else runningBalance -= v.amount;
+        getVoucherLines(v).filter(l => l.accountId === ACCOUNT_IDS.CASH).forEach(l => {
+          runningBalance += l.type === 'Dr' ? l.amount : -l.amount;
+        });
       });
     }
 
-    return cashVouchers
+    const result: CashBookEntry[] = [];
+    cashVouchers
       .filter(v => {
         if (fromDate && v.date < fromDate) return false;
         if (toDate && v.date > toDate) return false;
         return true;
       })
-      .map(v => {
-        const isReceipt = v.debitAccountId === ACCOUNT_IDS.CASH;
-        if (isReceipt) runningBalance += v.amount;
-        else runningBalance -= v.amount;
-        const otherId = isReceipt ? v.creditAccountId : v.debitAccountId;
-        const otherAcc = accounts.find(a => a.id === otherId);
-        return {
-          id: v.id,
-          date: v.date,
-          voucherNo: v.voucherNo,
-          particulars: v.narration || otherAcc?.nameHi || otherAcc?.name || '',
-          type: isReceipt ? 'receipt' : 'payment',
-          amount: v.amount,
-          runningBalance,
-        };
+      .forEach(v => {
+        const cashLines = getVoucherLines(v).filter(l => l.accountId === ACCOUNT_IDS.CASH);
+        cashLines.forEach(l => {
+          runningBalance += l.type === 'Dr' ? l.amount : -l.amount;
+          const otherLines = getVoucherLines(v).filter(ol => ol.accountId !== ACCOUNT_IDS.CASH);
+          const otherAcc = accounts.find(a => a.id === otherLines[0]?.accountId);
+          result.push({
+            id: v.id,
+            date: v.date,
+            voucherNo: v.voucherNo,
+            particulars: v.narration || otherAcc?.name || '',
+            type: l.type === 'Dr' ? 'receipt' : 'payment',
+            amount: l.amount,
+            runningBalance,
+          });
+        });
       });
+    return result;
   }, [accounts, activeVouchers]);
 
   const getBankBookEntries = useCallback((fromDate?: string, toDate?: string): BankBookEntry[] => {
@@ -562,38 +587,42 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       : -bankAccount.openingBalance;
 
     const bankVouchers = activeVouchers
-      .filter(v => v.debitAccountId === ACCOUNT_IDS.BANK || v.creditAccountId === ACCOUNT_IDS.BANK)
+      .filter(v => getVoucherLines(v).some(l => l.accountId === ACCOUNT_IDS.BANK))
       .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
 
     if (fromDate) {
       bankVouchers.filter(v => v.date < fromDate).forEach(v => {
-        if (v.debitAccountId === ACCOUNT_IDS.BANK) runningBalance += v.amount;
-        else runningBalance -= v.amount;
+        getVoucherLines(v).filter(l => l.accountId === ACCOUNT_IDS.BANK).forEach(l => {
+          runningBalance += l.type === 'Dr' ? l.amount : -l.amount;
+        });
       });
     }
 
-    return bankVouchers
+    const result: BankBookEntry[] = [];
+    bankVouchers
       .filter(v => {
         if (fromDate && v.date < fromDate) return false;
         if (toDate && v.date > toDate) return false;
         return true;
       })
-      .map(v => {
-        const isDeposit = v.debitAccountId === ACCOUNT_IDS.BANK;
-        if (isDeposit) runningBalance += v.amount;
-        else runningBalance -= v.amount;
-        const otherId = isDeposit ? v.creditAccountId : v.debitAccountId;
-        const otherAcc = accounts.find(a => a.id === otherId);
-        return {
-          id: v.id,
-          date: v.date,
-          voucherNo: v.voucherNo,
-          particulars: v.narration || otherAcc?.nameHi || otherAcc?.name || '',
-          type: isDeposit ? 'deposit' : 'withdrawal',
-          amount: v.amount,
-          runningBalance,
-        };
+      .forEach(v => {
+        const bankLines = getVoucherLines(v).filter(l => l.accountId === ACCOUNT_IDS.BANK);
+        bankLines.forEach(l => {
+          runningBalance += l.type === 'Dr' ? l.amount : -l.amount;
+          const otherLines = getVoucherLines(v).filter(ol => ol.accountId !== ACCOUNT_IDS.BANK);
+          const otherAcc = accounts.find(a => a.id === otherLines[0]?.accountId);
+          result.push({
+            id: v.id,
+            date: v.date,
+            voucherNo: v.voucherNo,
+            particulars: v.narration || otherAcc?.name || '',
+            type: l.type === 'Dr' ? 'deposit' : 'withdrawal',
+            amount: l.amount,
+            runningBalance,
+          });
+        });
       });
+    return result;
   }, [accounts, activeVouchers]);
 
   const getTrialBalance = useCallback((): AccountBalance[] => {
@@ -604,8 +633,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       let transactionDebit = 0;
       let transactionCredit = 0;
       activeVouchers.forEach(v => {
-        if (v.debitAccountId === account.id) transactionDebit += v.amount;
-        if (v.creditAccountId === account.id) transactionCredit += v.amount;
+        getVoucherLines(v).forEach(l => {
+          if (l.accountId === account.id) {
+            if (l.type === 'Dr') transactionDebit += l.amount;
+            else transactionCredit += l.amount;
+          }
+        });
       });
       const totalDebit = openingDebit + transactionDebit;
       const totalCredit = openingCredit + transactionCredit;
@@ -997,64 +1030,63 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ── Sales ──────────────────────────────────────────────────────────────────
   const addSale = useCallback((data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>): Sale => {
     const saleNo = storage.getNextSaleNo(society.financialYear);
-    const grandTotal = data.grandTotal ?? data.netAmount; // fallback if not provided
-    let voucherId: string | undefined;
+    const grandTotal = data.grandTotal ?? data.netAmount;
+    const lid = () => crypto.randomUUID();
 
-    // Main receipt/journal voucher — Dr Cash/Bank/Debtor, Cr Sales (4101) for grandTotal
-    if (data.paymentMode !== 'credit') {
-      const debitAcc = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : ACCOUNT_IDS.BANK;
-      const voucherNo = storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current);
-      const newV = { type: 'receipt' as const, date: data.date, debitAccountId: debitAcc, creditAccountId: '4101', amount: grandTotal, narration: data.narration || `Sale: ${data.customerName} - ${saleNo}`, memberId: undefined as undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
-      vouchersRef.current = [...vouchersRef.current, newV];
-      setVouchersState(prev => { const updated = [...prev, newV]; return updated; });
-      supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-      voucherId = newV.id;
-    } else {
-      const customerAccountId = data.customerId ? customers.find(c => c.id === data.customerId)?.accountId || '3303' : '3303';
-      const voucherNo = storage.getNextVoucherNo('journal', society.financialYear, vouchersRef.current);
-      const newV = { type: 'journal' as const, date: data.date, debitAccountId: customerAccountId, creditAccountId: '4101', amount: grandTotal, narration: data.narration || `Credit Sale: ${data.customerName} - ${saleNo}`, memberId: undefined as undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
-      vouchersRef.current = [...vouchersRef.current, newV];
-      setVouchersState(prev => { const updated = [...prev, newV]; return updated; });
-      supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-      voucherId = newV.id;
+    // Build multi-line sale voucher (ONE voucher covers everything)
+    const lines: VoucherLine[] = [];
+
+    // Dr: Cash / Bank / Debtor for grand total
+    const debitAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
+      : data.paymentMode === 'bank' ? ACCOUNT_IDS.BANK
+      : (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303');
+    lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
+
+    // Cr: Sales A/c (4101) for net amount (excluding GST)
+    const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0));
+    if (netAmt > 0) {
+      lines.push({ id: lid(), accountId: '4101', type: 'Cr', amount: netAmt });
     }
 
-    // ── Auto-create Output GST journal (Dr Sales / Cr GST Output 2201) ────────
-    // This reclassifies the tax portion: Sales A/c net = grandTotal - taxAmount = netAmount ✓
-    const gstVoucherIds: string[] = [];
+    // Cr: GST Output Payable (2201) for tax amount
     if ((data.taxAmount ?? 0) > 0) {
-      const gstVoucherNo = storage.getNextVoucherNo('journal', society.financialYear, vouchersRef.current);
-      const gstV = {
-        type: 'journal' as const,
-        date: data.date,
-        debitAccountId: '4101',   // Dr Sales (reduce by tax portion)
-        creditAccountId: '2201',  // Cr GST Output Payable
-        amount: data.taxAmount!,
-        narration: `Output GST on Sale ${saleNo} (CGST:${data.cgstAmount||0} + SGST:${data.sgstAmount||0} + IGST:${data.igstAmount||0})`,
-        memberId: undefined as undefined,
-        createdBy: data.createdBy,
-        id: crypto.randomUUID(),
-        voucherNo: gstVoucherNo,
-        createdAt: new Date().toISOString(),
-      };
-      vouchersRef.current = [...vouchersRef.current, gstV];
-      setVouchersState(prev => { const updated = [...prev, gstV]; return updated; });
-      supabase.from('vouchers').upsert(withSoc(gstV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-      gstVoucherIds.push(gstV.id);
+      lines.push({ id: lid(), accountId: '2201', type: 'Cr', amount: data.taxAmount!, narration: `GST: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
     }
 
-    // Reduce stock & add movements
+    const vType = data.paymentMode === 'credit' ? 'sale' : 'receipt';
+    const newVoucher = addVoucher({
+      type: vType,
+      date: data.date,
+      lines,
+      debitAccountId: debitAccId,
+      creditAccountId: '4101',
+      amount: grandTotal,
+      narration: data.narration || `Sale: ${data.customerName} — ${saleNo}`,
+      createdBy: data.createdBy,
+    });
+
+    // Stock movements
     data.items.forEach(item => {
-      setStockItemsState(prev => { const updated = prev.map(i => { if (i.id !== item.itemId) return i; const newStock = Math.max(0, i.currentStock - item.qty); supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) console.warn('Stock currentStock sync error:', error.message); }); return { ...i, currentStock: newStock }; }); return updated; });
-      const mv: StockMovement = { id: crypto.randomUUID(), date: data.date, itemId: item.itemId, type: 'sale', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: saleNo, narration: `Sale to ${data.customerName}`, createdAt: new Date().toISOString() };
-      setStockMovementsState(prev => { const updated = [...prev, mv]; return updated; });
+      setStockItemsState(prev => {
+        const updated = prev.map(i => {
+          if (i.id !== item.itemId) return i;
+          const newStock = Math.max(0, i.currentStock - item.qty);
+          supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id)
+            .then(({ error }) => { if (error) console.warn('Stock sync error:', error.message); });
+          return { ...i, currentStock: newStock };
+        });
+        return updated;
+      });
+      const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'sale', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: saleNo, narration: `Sale to ${data.customerName}`, createdAt: new Date().toISOString() };
+      setStockMovementsState(prev => [...prev, mv]);
       supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     });
-    const sale: Sale = { ...data, id: crypto.randomUUID(), saleNo, voucherId, gstVoucherIds: gstVoucherIds.length > 0 ? gstVoucherIds : undefined, createdAt: new Date().toISOString() };
-    setSalesState(prev => { const updated = [...prev, sale]; return updated; });
+
+    const sale: Sale = { ...data, id: lid(), saleNo, voucherId: newVoucher.id, gstVoucherIds: undefined, createdAt: new Date().toISOString() };
+    setSalesState(prev => [...prev, sale]);
     supabase.from('sales').upsert(withSoc(sale)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return sale;
-  }, [society.financialYear, customers]);
+  }, [society.financialYear, customers, addVoucher]);
 
   const deleteSale = useCallback((id: string) => {
     setSalesState(prev => {
@@ -1093,56 +1125,72 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ── Purchases ──────────────────────────────────────────────────────────────
   const addPurchase = useCallback((data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>): Purchase => {
     const purchaseNo = storage.getNextPurchaseNo(society.financialYear);
-    let voucherId: string | undefined;
-    if (data.paymentMode !== 'credit') {
-      const creditAcc = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : ACCOUNT_IDS.BANK;
-      const voucherNo = storage.getNextVoucherNo('payment', society.financialYear, vouchersRef.current);
-      const newV = { type: 'payment' as const, date: data.date, debitAccountId: '3403', creditAccountId: creditAcc, amount: data.netAmount, narration: `Purchase: ${data.supplierName} - ${purchaseNo}`, memberId: undefined as undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
-      setVouchersState(prev => { const updated = [...prev, newV]; return updated; });
-      supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-      voucherId = newV.id;
-    } else {
-      const supplierAccountId = data.supplierId ? suppliers.find(s => s.id === data.supplierId)?.accountId || '2101' : '2101';
-      const voucherNo = storage.getNextVoucherNo('journal', society.financialYear, vouchersRef.current);
-      const newV = { type: 'journal' as const, date: data.date, debitAccountId: '5101', creditAccountId: supplierAccountId, amount: data.netAmount, narration: `Credit Purchase: ${data.supplierName} - ${purchaseNo}`, memberId: undefined as undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
-      setVouchersState(prev => { const updated = [...prev, newV]; return updated; });
-      supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-      voucherId = newV.id;
+    const grandTotal = data.grandTotal ?? data.netAmount;
+    const lid = () => crypto.randomUUID();
+
+    // Build multi-line purchase voucher
+    const lines: VoucherLine[] = [];
+    const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || '2101') : '2101';
+    const creditAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
+      : data.paymentMode === 'bank' ? ACCOUNT_IDS.BANK
+      : supplierAccId;
+
+    // Dr: Purchases (5101) for net amount
+    const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0) + (data.tdsAmount || 0));
+    if (netAmt > 0) {
+      lines.push({ id: lid(), accountId: '5101', type: 'Dr', amount: netAmt });
     }
-    // ── Auto-create GST journal entry (Dr GST Input / Cr Supplier or Cash/Bank) ──
-    const taxVoucherIds: string[] = [];
-    if ((data.taxAmount || 0) > 0) {
-      const supplierAccountId = data.supplierId ? suppliers.find(s => s.id === data.supplierId)?.accountId || '2101' : '2101';
-      const gstCrAcc = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : data.paymentMode === 'bank' ? ACCOUNT_IDS.BANK : supplierAccountId;
-      const gstVoucherNo = storage.getNextVoucherNo('journal', society.financialYear, vouchersRef.current);
-      const gstV = { type: 'journal' as const, date: data.date, debitAccountId: '3310', creditAccountId: gstCrAcc, amount: data.taxAmount!, narration: `GST ITC on Purchase: ${data.supplierName} - ${purchaseNo} (CGST:${data.cgstAmount||0} + SGST:${data.sgstAmount||0} + IGST:${data.igstAmount||0})`, memberId: undefined as undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo: gstVoucherNo, createdAt: new Date().toISOString() };
-      vouchersRef.current = [...vouchersRef.current, gstV];
-      setVouchersState(prev => { const updated = [...prev, gstV]; return updated; });
-      supabase.from('vouchers').upsert(withSoc(gstV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-      taxVoucherIds.push(gstV.id);
+
+    // Dr: GST Input Credit (3310) for tax amount
+    if ((data.taxAmount ?? 0) > 0) {
+      lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: data.taxAmount!, narration: `GST ITC: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
     }
-    // ── Auto-create TDS journal entry (Dr Supplier / Cr TDS Payable) ─────────
-    if ((data.tdsAmount || 0) > 0) {
-      const supplierAccountId = data.supplierId ? suppliers.find(s => s.id === data.supplierId)?.accountId || '2101' : '2101';
-      const tdsVoucherNo = storage.getNextVoucherNo('journal', society.financialYear, vouchersRef.current);
-      const tdsV = { type: 'journal' as const, date: data.date, debitAccountId: supplierAccountId, creditAccountId: '2202', amount: data.tdsAmount!, narration: `TDS deducted on Purchase: ${data.supplierName} - ${purchaseNo} (${data.tdsPct||0}%)`, memberId: undefined as undefined, createdBy: data.createdBy, id: crypto.randomUUID(), voucherNo: tdsVoucherNo, createdAt: new Date().toISOString() };
-      vouchersRef.current = [...vouchersRef.current, tdsV];
-      setVouchersState(prev => { const updated = [...prev, tdsV]; return updated; });
-      supabase.from('vouchers').upsert(withSoc(tdsV)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-      taxVoucherIds.push(tdsV.id);
+
+    // Cr: Cash / Bank / Supplier for net payable (grandTotal - tdsAmount)
+    const netPayable = grandTotal - (data.tdsAmount || 0);
+    if (netPayable > 0) {
+      lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: netPayable });
     }
-    // Increase stock & add movements, update purchaseRate
+
+    // Cr: TDS Payable (2202) for TDS amount
+    if ((data.tdsAmount ?? 0) > 0) {
+      lines.push({ id: lid(), accountId: '2202', type: 'Cr', amount: data.tdsAmount!, narration: `TDS ${data.tdsPct||0}%` });
+    }
+
+    const vType = data.paymentMode === 'credit' ? 'purchase' : 'payment';
+    const newVoucher = addVoucher({
+      type: vType,
+      date: data.date,
+      lines,
+      debitAccountId: '5101',
+      creditAccountId: creditAccId,
+      amount: grandTotal,
+      narration: data.narration || `Purchase: ${data.supplierName} — ${purchaseNo}`,
+      createdBy: data.createdBy,
+    });
+
+    // Stock movements
     data.items.forEach(item => {
-      setStockItemsState(prev => { const updated = prev.map(i => { if (i.id !== item.itemId) return i; const newStock = i.currentStock + item.qty; supabase.from('stock_items').update({ currentStock: newStock, purchaseRate: item.rate }).eq('id', i.id).then(({ error }) => { if (error) console.warn('Stock currentStock sync error:', error.message); }); return { ...i, currentStock: newStock, purchaseRate: item.rate }; }); return updated; });
-      const mv: StockMovement = { id: crypto.randomUUID(), date: data.date, itemId: item.itemId, type: 'purchase', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: purchaseNo, narration: `Purchase from ${data.supplierName}`, createdAt: new Date().toISOString() };
-      setStockMovementsState(prev => { const updated = [...prev, mv]; return updated; });
+      setStockItemsState(prev => {
+        const updated = prev.map(i => {
+          if (i.id !== item.itemId) return i;
+          const newStock = i.currentStock + item.qty;
+          supabase.from('stock_items').update({ currentStock: newStock, purchaseRate: item.rate }).eq('id', i.id)
+            .then(({ error }) => { if (error) console.warn('Stock sync error:', error.message); });
+          return { ...i, currentStock: newStock, purchaseRate: item.rate };
+        });
+        return updated;
+      });
+      const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'purchase', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: purchaseNo, narration: `Purchase from ${data.supplierName}`, createdAt: new Date().toISOString() };
+      setStockMovementsState(prev => [...prev, mv]);
       supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     });
-    const purchase: Purchase = { ...data, id: crypto.randomUUID(), purchaseNo, voucherId, taxVoucherIds: taxVoucherIds.length > 0 ? taxVoucherIds : undefined, createdAt: new Date().toISOString() };
-    setPurchasesState(prev => { const updated = [...prev, purchase]; return updated; });
+
+    const purchase: Purchase = { ...data, id: lid(), purchaseNo, voucherId: newVoucher.id, taxVoucherIds: undefined, createdAt: new Date().toISOString() };
+    setPurchasesState(prev => [...prev, purchase]);
     supabase.from('purchases').upsert(withSoc(purchase)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return purchase;
-  }, [society.financialYear, suppliers]);
+  }, [society.financialYear, suppliers, addVoucher]);
 
   const deletePurchase = useCallback((id: string) => {
     setPurchasesState(prev => {

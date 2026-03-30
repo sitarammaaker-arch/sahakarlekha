@@ -16,6 +16,7 @@ import { generateDayBookPDF } from '@/lib/pdf';
 import { useToast } from '@/hooks/use-toast';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import type { VoucherType } from '@/types';
+import { getVoucherLines } from '@/lib/voucherUtils';
 
 const DayBook: React.FC = () => {
   const { language } = useLanguage();
@@ -110,10 +111,10 @@ const DayBook: React.FC = () => {
     if (firstDate) {
       activeVouchers.forEach(v => {
         if (v.date >= firstDate) return; // only pre-period
-        if (v.debitAccountId === ACCOUNT_IDS.CASH) preCash += v.amount;
-        else if (v.creditAccountId === ACCOUNT_IDS.CASH) preCash -= v.amount;
-        if (v.debitAccountId === ACCOUNT_IDS.BANK) preBank += v.amount;
-        else if (v.creditAccountId === ACCOUNT_IDS.BANK) preBank -= v.amount;
+        getVoucherLines(v).forEach(l => {
+          if (l.accountId === ACCOUNT_IDS.CASH) preCash += l.type === 'Dr' ? l.amount : -l.amount;
+          if (l.accountId === ACCOUNT_IDS.BANK) preBank += l.type === 'Dr' ? l.amount : -l.amount;
+        });
       });
     }
     return { cashOB: preCash, bankOB: preBank };
@@ -126,10 +127,10 @@ const DayBook: React.FC = () => {
       const openCash = cash;
       const openBank = bank;
       group.items.forEach(v => {
-        if (v.debitAccountId === ACCOUNT_IDS.CASH) cash += v.amount;
-        else if (v.creditAccountId === ACCOUNT_IDS.CASH) cash -= v.amount;
-        if (v.debitAccountId === ACCOUNT_IDS.BANK) bank += v.amount;
-        else if (v.creditAccountId === ACCOUNT_IDS.BANK) bank -= v.amount;
+        getVoucherLines(v).forEach(l => {
+          if (l.accountId === ACCOUNT_IDS.CASH) cash += l.type === 'Dr' ? l.amount : -l.amount;
+          if (l.accountId === ACCOUNT_IDS.BANK) bank += l.type === 'Dr' ? l.amount : -l.amount;
+        });
       });
       return { date: group.date, openCash, openBank, closeCash: cash, closeBank: bank };
     });
@@ -144,6 +145,11 @@ const DayBook: React.FC = () => {
   const typeLabel = (type: string) => {
     if (type === 'receipt') return language === 'hi' ? 'रसीद' : 'Receipt';
     if (type === 'payment') return language === 'hi' ? 'भुगतान' : 'Payment';
+    if (type === 'contra') return language === 'hi' ? 'कोंट्रा' : 'Contra';
+    if (type === 'sale') return language === 'hi' ? 'बिक्री' : 'Sale';
+    if (type === 'purchase') return language === 'hi' ? 'खरीद' : 'Purchase';
+    if (type === 'debit_note') return language === 'hi' ? 'डेबिट नोट' : 'Debit Note';
+    if (type === 'credit_note') return language === 'hi' ? 'क्रेडिट नोट' : 'Credit Note';
     return language === 'hi' ? 'जर्नल' : 'Journal';
   };
 
@@ -338,7 +344,56 @@ const DayBook: React.FC = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {group.items.map((v, i) => (
+                        {group.items.map((v, i) => {
+                          const vLines = getVoucherLines(v);
+                          const isMulti = vLines.length > 2;
+
+                          if (isMulti) {
+                            return (
+                              <React.Fragment key={v.id}>
+                                {vLines.map((line, li) => (
+                                  <TableRow key={line.id} className={line.type === 'Dr' ? 'hover:bg-blue-50/30' : 'hover:bg-green-50/30'}>
+                                    {li === 0 && (
+                                      <TableCell rowSpan={vLines.length + 1} className="align-top pt-2">
+                                        <div className="text-xs text-muted-foreground">{fmtDate(v.date)}</div>
+                                        <Badge variant="outline" className={`mt-1 text-xs ${typeBadgeClass(v.type)}`}>
+                                          {typeLabel(v.type)}
+                                        </Badge>
+                                        <div className="font-mono text-xs mt-1 text-muted-foreground">#{i + 1} {v.voucherNo}</div>
+                                      </TableCell>
+                                    )}
+                                    <TableCell>
+                                      <span className="font-semibold text-sm">{getAccountName(line.accountId)}</span>
+                                      <span className={`ml-2 text-xs font-bold border rounded px-1 py-0.5 ${line.type === 'Dr' ? 'text-blue-600 border-blue-300' : 'text-green-600 border-green-300'}`}>{line.type}</span>
+                                      {line.narration && <p className="text-xs text-muted-foreground italic mt-0.5">{line.narration}</p>}
+                                    </TableCell>
+                                    <TableCell className="text-right font-bold text-blue-700 text-sm">
+                                      {line.type === 'Dr' ? fmt(line.amount) : '—'}
+                                    </TableCell>
+                                    <TableCell className="text-right font-bold text-green-700 text-sm">
+                                      {line.type === 'Cr' ? fmt(line.amount) : '—'}
+                                    </TableCell>
+                                    {li === 0 && (
+                                      <TableCell rowSpan={vLines.length} className="text-center print:hidden align-middle">
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10" title={language === 'hi' ? 'संपादित करें' : 'Edit'} onClick={() => openEdit(v)}>
+                                          <Pencil className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </TableCell>
+                                    )}
+                                  </TableRow>
+                                ))}
+                                {/* Narration row */}
+                                <TableRow className="bg-muted/10">
+                                  <TableCell colSpan={3} className="text-xs text-muted-foreground italic py-1">
+                                    {v.narration}
+                                  </TableCell>
+                                </TableRow>
+                              </React.Fragment>
+                            );
+                          }
+
+                          // Legacy 2-line display
+                          return (
                           <React.Fragment key={v.id}>
                             {/* Debit Row */}
                             <TableRow className="border-b-0 hover:bg-blue-50/30">
@@ -395,7 +450,8 @@ const DayBook: React.FC = () => {
                               </TableCell>
                             </TableRow>
                           </React.Fragment>
-                        ))}
+                          );
+                        })}
                         {/* Day Total */}
                         <TableRow className="bg-primary/5 border-t-2 border-primary/30">
                           <TableCell colSpan={2} className="text-right font-bold text-primary text-xs py-2">

@@ -26,7 +26,8 @@
       "Bash(grep -v \":0$\")",
       "Bash(grep -r \"className.*hidden\\\\|className.*opacity-0\\\\|display.*none\\\\|visibility.*hidden\" src/pages/*.tsx)",
       "Bash(grep -r \"size=\"\"icon\"\"\" src/pages/*.tsx)",
-      "Bash(grep -r \"Button.*size=\"\"icon\"\"\" src/pages/*.tsx)"
+      "Bash(grep -r \"Button.*size=\"\"icon\"\"\" src/pages/*.tsx)",
+      "Bash(npm run:*)"
     ]
   }
 }
