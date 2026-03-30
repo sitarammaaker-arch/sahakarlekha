@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import type {
   Voucher, VoucherEditSnapshot, VoucherLine, Member, LedgerAccount, SocietySettings,
   AccountBalance, CashBookEntry, BankBookEntry, MemberLedgerEntry, ReceiptsPaymentsData,
@@ -126,6 +127,9 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const toastRef = useRef(toast);
+  useEffect(() => { toastRef.current = toast; }, [toast]);
   const societyIdRef = useRef(user?.societyId || 'SOC001');
   // Keep ref updated when user changes
   useEffect(() => { societyIdRef.current = user?.societyId || 'SOC001'; }, [user?.societyId]);
@@ -356,11 +360,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ? [...(current.editHistory ?? []), snapshot]
         : current.editHistory,
     };
-    setVouchersState(prev => {
-      const updated = prev.map(v => v.id === id ? updatedVoucher : v);
-      return updated;
+    vouchersRef.current = vouchersRef.current.map(v => v.id === id ? updatedVoucher : v);
+    setVouchersState(prev => prev.map(v => v.id === id ? updatedVoucher : v));
+    supabase.from('vouchers').upsert(withSoc(updatedVoucher)).then(({ error }) => {
+      if (error) {
+        console.error('Voucher save failed:', error.message);
+        // Revert local state so UI matches what's actually in Supabase
+        vouchersRef.current = vouchersRef.current.map(v => v.id === id ? current : v);
+        setVouchersState(prev => prev.map(v => v.id === id ? current : v));
+        toastRef.current({
+          title: 'Save failed — voucher not updated',
+          description: error.message,
+          variant: 'destructive',
+        });
+      }
     });
-    supabase.from('vouchers').upsert(withSoc(updatedVoucher)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
   }, []);
 
   const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string) => {

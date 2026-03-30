@@ -457,6 +457,13 @@ alter table vouchers add column if not exists lines jsonb default '[]';
 alter table vouchers add column if not exists "refType" text;
 alter table vouchers add column if not exists "refId" text;
 
+-- Vouchers: approval workflow + compound grouping columns
+alter table vouchers add column if not exists "groupId" text;
+alter table vouchers add column if not exists "approvalStatus" text default 'approved';
+alter table vouchers add column if not exists "approvalRemarks" text;
+alter table vouchers add column if not exists "approvedBy" text;
+alter table vouchers add column if not exists "approvedAt" text;
+
 -- Salary Records: allowances breakdown
 alter table salary_records add column if not exists "hraAllowance" numeric default 0;
 alter table salary_records add column if not exists "taAllowance" numeric default 0;
