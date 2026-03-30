@@ -12,10 +12,8 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
+import type { EntityLink } from '@/types';
 import { Truck, Plus, Pencil, Trash2, Search, IndianRupee, FileSpreadsheet, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Supplier } from '@/types';
@@ -34,14 +32,14 @@ const EMPTY_FORM = (): Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'cre
 
 const Suppliers: React.FC = () => {
   const { language } = useLanguage();
-  const { suppliers, addSupplier, updateSupplier, deleteSupplier, getAccountBalance } = useData();
+  const { suppliers, addSupplier, updateSupplier, deleteSupplier, getAccountBalance, getEntityLinks } = useData();
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM());
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
 
   const filtered = useMemo(() =>
     suppliers.filter(s =>
@@ -83,11 +81,9 @@ const Suppliers: React.FC = () => {
     setShowForm(false);
   };
 
-  const handleDelete = () => {
-    if (!deleteId) return;
-    deleteSupplier(deleteId);
-    setDeleteId(null);
-    toast({ title: language === 'hi' ? 'आपूर्तिकर्ता हटाया गया' : 'Supplier deleted' });
+  const handleDeleteClick = (s: Supplier) => {
+    const links = getEntityLinks('supplier', s.id);
+    setDeleteGuard({ open: true, id: s.id, name: `${s.name}${s.supplierCode ? ` (${s.supplierCode})` : ''}`, links });
   };
 
   return (
@@ -203,7 +199,7 @@ const Suppliers: React.FC = () => {
                             <Button variant="ghost" size="icon" onClick={() => openEdit(s)}>
                               <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(s.id)}>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeleteClick(s)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -263,25 +259,20 @@ const Suppliers: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirm */}
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{language === 'hi' ? 'आपूर्तिकर्ता हटाएं?' : 'Delete Supplier?'}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {language === 'hi'
-                ? 'यह आपूर्तिकर्ता और उनका खाता स्थायी रूप से हट जाएगा।'
-                : 'This supplier and their linked ledger account will be permanently deleted.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{language === 'hi' ? 'रद्द करें' : 'Cancel'}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {language === 'hi' ? 'हटाएं' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete Guard */}
+      <LinkedDeleteDialog
+        open={deleteGuard.open}
+        onOpenChange={o => setDeleteGuard(g => ({ ...g, open: o }))}
+        entityName={deleteGuard.name}
+        links={deleteGuard.links}
+        language={language as 'hi' | 'en'}
+        onConfirmDelete={() => {
+          if (deleteGuard.id) {
+            deleteSupplier(deleteGuard.id);
+            toast({ title: language === 'hi' ? 'आपूर्तिकर्ता हटाया गया' : 'Supplier deleted' });
+          }
+        }}
+      />
     </div>
   );
 };

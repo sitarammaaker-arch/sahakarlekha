@@ -449,3 +449,14 @@ export interface SalaryRecord {
   paidDate?: string;
   createdAt: string;
 }
+
+// ── Linked Delete Guard ────────────────────────────────────────────────────────
+export interface EntityLink {
+  module: string;        // "Vouchers", "Loans", "Sales" etc.
+  count: number;
+  labelHi: string;       // "18 वाउचर"
+  labelEn: string;       // "18 Vouchers"
+  instructionHi: string; // "Vouchers page pe in vouchers ko pehle cancel karo"
+  instructionEn: string;
+  blocking: boolean;     // true = must handle before delete
+}

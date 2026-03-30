@@ -15,10 +15,8 @@ import {
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
+import type { EntityLink } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -101,7 +99,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
 const Members: React.FC = () => {
   const { t, language } = useLanguage();
   const { hasPermission } = useAuth();
-  const { members, addMember, updateMember, deleteMember, getMemberLedger, society } = useData();
+  const { members, addMember, updateMember, deleteMember, getMemberLedger, society, getEntityLinks } = useData();
   const canEdit = hasPermission(['admin', 'accountant']);
   const { toast } = useToast();
 
@@ -109,7 +107,12 @@ const Members: React.FC = () => {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editMember, setEditMember] = useState<Member | null>(null);
   const [viewMember, setViewMember] = useState<Member | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
+
+  const handleDeleteClick = (member: Member) => {
+    const links = getEntityLinks('member', member.id);
+    setDeleteGuard({ open: true, id: member.id, name: `${member.name} (${member.memberId})`, links });
+  };
   const [ledgerMember, setLedgerMember] = useState<Member | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
 
@@ -297,7 +300,7 @@ const Members: React.FC = () => {
                             </Button>
                           )}
                           {canEdit && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(member.id)}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteClick(member)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           )}
@@ -467,21 +470,20 @@ const Members: React.FC = () => {
         </SheetContent>
       </Sheet>
 
-      {/* Delete Confirm */}
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('confirmDelete')}</AlertDialogTitle>
-            <AlertDialogDescription>{language === 'hi' ? 'यह सदस्य स्थायी रूप से हटा दिया जाएगा।' : 'This member will be permanently deleted.'}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={() => { if (deleteId) { deleteMember(deleteId); setDeleteId(null); toast({ title: language === 'hi' ? 'सदस्य हटाया गया' : 'Member deleted' }); } }}>
-              {t('delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete Guard */}
+      <LinkedDeleteDialog
+        open={deleteGuard.open}
+        onOpenChange={o => setDeleteGuard(g => ({ ...g, open: o }))}
+        entityName={deleteGuard.name}
+        links={deleteGuard.links}
+        language={language as 'hi' | 'en'}
+        onConfirmDelete={() => {
+          if (deleteGuard.id) {
+            deleteMember(deleteGuard.id);
+            toast({ title: language === 'hi' ? 'सदस्य हटाया गया' : 'Member deleted' });
+          }
+        }}
+      />
     </div>
   );
 };

@@ -25,7 +25,8 @@ import { BadgeDollarSign, UserPlus, Pencil, Trash2, Search, CheckCircle, Users, 
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { useToast } from '@/hooks/use-toast';
-import type { Employee, SalaryRecord, PaymentMode } from '@/types';
+import type { Employee, SalaryRecord, PaymentMode, EntityLink } from '@/types';
+import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import { generateSalarySlipPDF } from '@/lib/pdf';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -177,6 +178,7 @@ const SalaryManagement: React.FC = () => {
     updateSalaryRecord,
     deleteSalaryRecord,
     society,
+    getEntityLinks,
   } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -187,7 +189,12 @@ const SalaryManagement: React.FC = () => {
   const [empStatusFilter, setEmpStatusFilter] = useState('all');
   const [isAddEmpOpen, setIsAddEmpOpen] = useState(false);
   const [editEmp, setEditEmp] = useState<Employee | null>(null);
-  const [deleteEmpId, setDeleteEmpId] = useState<string | null>(null);
+  const [deleteEmpGuard, setDeleteEmpGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
+
+  const handleDeleteEmpClick = (emp: Employee) => {
+    const links = getEntityLinks('employee', emp.id);
+    setDeleteEmpGuard({ open: true, id: emp.id, name: `${emp.name} (${emp.empNo})`, links });
+  };
   const [empForm, setEmpForm] = useState(EMPTY_EMP_FORM);
 
   // ── Tab 2 – Salary Processing state ─────────────────────────────────────
@@ -562,7 +569,7 @@ const SalaryManagement: React.FC = () => {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => setDeleteEmpId(emp.id)}
+                              onClick={() => handleDeleteEmpClick(emp)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -991,34 +998,20 @@ const SalaryManagement: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete Employee AlertDialog ───────────────────────────────────── */}
-      <AlertDialog open={!!deleteEmpId} onOpenChange={o => !o && setDeleteEmpId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{hi ? 'कर्मचारी हटाएं?' : 'Delete employee?'}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {hi
-                ? 'यह कर्मचारी स्थायी रूप से हटा दिया जाएगा। यह क्रिया वापस नहीं की जा सकती।'
-                : 'This employee will be permanently deleted. This action cannot be undone.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{hi ? 'रद्द' : 'Cancel'}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={() => {
-                if (deleteEmpId) {
-                  deleteEmployee(deleteEmpId);
-                  setDeleteEmpId(null);
-                  toast({ title: hi ? 'कर्मचारी हटाया गया' : 'Employee deleted' });
-                }
-              }}
-            >
-              {hi ? 'हटाएं' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* ── Delete Employee Guard ─────────────────────────────────────────── */}
+      <LinkedDeleteDialog
+        open={deleteEmpGuard.open}
+        onOpenChange={o => setDeleteEmpGuard(g => ({ ...g, open: o }))}
+        entityName={deleteEmpGuard.name}
+        links={deleteEmpGuard.links}
+        language={hi ? 'hi' : 'en'}
+        onConfirmDelete={() => {
+          if (deleteEmpGuard.id) {
+            deleteEmployee(deleteEmpGuard.id);
+            toast({ title: hi ? 'कर्मचारी हटाया गया' : 'Employee deleted' });
+          }
+        }}
+      />
 
       {/* ── Mark Paid Dialog ─────────────────────────────────────────────── */}
       <Dialog open={!!markPaidId} onOpenChange={o => !o && setMarkPaidId(null)}>

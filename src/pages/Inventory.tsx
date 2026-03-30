@@ -10,10 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
+import type { EntityLink } from '@/types';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -259,6 +257,7 @@ const Inventory: React.FC = () => {
     updateStockItem,
     deleteStockItem,
     addStockMovement,
+    getEntityLinks,
   } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -271,7 +270,7 @@ const Inventory: React.FC = () => {
   const [isItemAddOpen, setIsItemAddOpen] = useState(false);
   const [editItem, setEditItem] = useState<StockItem | null>(null);
   const editItemRef = useRef<StockItem | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
   const [itemForm, setItemForm] = useState(EMPTY_ITEM_FORM);
   const itemFormRef = useRef(EMPTY_ITEM_FORM);
   const setItemFormWithRef = useCallback((updater: typeof EMPTY_ITEM_FORM | ((prev: typeof EMPTY_ITEM_FORM) => typeof EMPTY_ITEM_FORM)) => {
@@ -424,11 +423,9 @@ const Inventory: React.FC = () => {
     resetItemForm();
   }, [updateStockItem, toast, hi]);
 
-  const handleDeleteItem = () => {
-    if (!deleteId) return;
-    deleteStockItem(deleteId);
-    toast({ title: hi ? 'वस्तु हटाई गई' : 'Item deleted' });
-    setDeleteId(null);
+  const handleDeleteItemClick = (item: StockItem) => {
+    const links = getEntityLinks('stockItem', item.id);
+    setDeleteGuard({ open: true, id: item.id, name: `${item.name} (${item.itemCode})`, links });
   };
 
   // Adjustment handler
@@ -738,7 +735,7 @@ const Inventory: React.FC = () => {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => setDeleteId(item.id)}
+                                  onClick={() => handleDeleteItemClick(item)}
                                   title={hi ? 'हटाएं' : 'Delete'}
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -1037,30 +1034,20 @@ const Inventory: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete AlertDialog */}
-      <AlertDialog open={!!deleteId} onOpenChange={o => { if (!o) setDeleteId(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {hi ? 'क्या आप वाकई हटाना चाहते हैं?' : 'Are you sure you want to delete?'}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {hi
-                ? 'यह वस्तु स्थायी रूप से हटा दी जाएगी। यह क्रिया पूर्ववत नहीं की जा सकती।'
-                : 'This item will be permanently deleted. This action cannot be undone.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{hi ? 'रद्द करें' : 'Cancel'}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={handleDeleteItem}
-            >
-              {hi ? 'हटाएं' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete Guard */}
+      <LinkedDeleteDialog
+        open={deleteGuard.open}
+        onOpenChange={o => setDeleteGuard(g => ({ ...g, open: o }))}
+        entityName={deleteGuard.name}
+        links={deleteGuard.links}
+        language={hi ? 'hi' : 'en'}
+        onConfirmDelete={() => {
+          if (deleteGuard.id) {
+            deleteStockItem(deleteGuard.id);
+            toast({ title: hi ? 'वस्तु हटाई गई' : 'Item deleted' });
+          }
+        }}
+      />
 
       {/* Barcode scanner modal */}
       <BarcodeScanModal

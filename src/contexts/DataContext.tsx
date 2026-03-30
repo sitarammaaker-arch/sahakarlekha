@@ -9,6 +9,7 @@ import type {
   Sale, Purchase,
   Employee, SalaryRecord, PaymentMode,
   Supplier, Customer,
+  EntityLink,
 } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import * as storage from '@/lib/storage';
@@ -121,6 +122,7 @@ interface DataContextType {
     closingStockPosted: boolean;     // true if a closing stock journal exists for current FY
   };
   postClosingStock: (fy?: string) => { posted: boolean; amount: number; alreadyPosted: boolean };
+  getEntityLinks: (entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan', id: string) => EntityLink[];
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -1502,6 +1504,130 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [customers]);
 
+  const getEntityLinks = useCallback((entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan', id: string): EntityLink[] => {
+    const links: EntityLink[] = [];
+    const activeVouchers = vouchersRef.current.filter(v => !v.isDeleted);
+
+    if (entityType === 'member') {
+      const vCount = activeVouchers.filter(v => v.memberId === id).length;
+      if (vCount > 0) links.push({
+        module: 'Vouchers', count: vCount,
+        labelHi: `${vCount} वाउचर`, labelEn: `${vCount} Voucher(s)`,
+        instructionHi: 'Vouchers page pe jao → in vouchers ko pehle cancel karo',
+        instructionEn: 'Go to Vouchers page → cancel these vouchers first',
+        blocking: true,
+      });
+      const lCount = loansRef.current.filter(l => l.memberId === id).length;
+      if (lCount > 0) links.push({
+        module: 'Loans', count: lCount,
+        labelHi: `${lCount} ऋण`, labelEn: `${lCount} Loan(s)`,
+        instructionHi: 'Loan Register pe jao → pehle ye loans delete karo',
+        instructionEn: 'Go to Loan Register → delete these loans first',
+        blocking: true,
+      });
+    }
+
+    if (entityType === 'customer') {
+      const sCount = salesRef.current.filter(s => s.customerId === id).length;
+      if (sCount > 0) links.push({
+        module: 'Sales', count: sCount,
+        labelHi: `${sCount} बिक्री`, labelEn: `${sCount} Sale(s)`,
+        instructionHi: 'Sale Management pe jao → pehle ye sales delete karo',
+        instructionEn: 'Go to Sale Management → delete these sales first',
+        blocking: true,
+      });
+    }
+
+    if (entityType === 'supplier') {
+      const pCount = purchasesRef.current.filter(p => p.supplierId === id).length;
+      if (pCount > 0) links.push({
+        module: 'Purchases', count: pCount,
+        labelHi: `${pCount} खरीद`, labelEn: `${pCount} Purchase(s)`,
+        instructionHi: 'Purchase Management pe jao → pehle ye purchases delete karo',
+        instructionEn: 'Go to Purchase Management → delete these purchases first',
+        blocking: true,
+      });
+    }
+
+    if (entityType === 'stockItem') {
+      const mvCount = stockMovements.filter(m => m.itemId === id).length;
+      if (mvCount > 0) links.push({
+        module: 'Stock Movements', count: mvCount,
+        labelHi: `${mvCount} स्टॉक मूवमेंट`, labelEn: `${mvCount} Stock Movement(s)`,
+        instructionHi: 'Is item ki stock movements hain (purchases/sales). Pehle linked purchases aur sales delete karo.',
+        instructionEn: 'This item has stock movements (purchases/sales). Delete linked purchases and sales first.',
+        blocking: true,
+      });
+      const pCount = purchasesRef.current.filter(p => p.items.some(i => i.itemId === id)).length;
+      if (pCount > 0) links.push({
+        module: 'Purchases', count: pCount,
+        labelHi: `${pCount} खरीद में शामिल`, labelEn: `${pCount} Purchase(s) contain this item`,
+        instructionHi: 'Purchase Management pe jao → ye purchases delete karo',
+        instructionEn: 'Go to Purchase Management → delete these purchases',
+        blocking: true,
+      });
+      const sCount = salesRef.current.filter(s => s.items.some(i => i.itemId === id)).length;
+      if (sCount > 0) links.push({
+        module: 'Sales', count: sCount,
+        labelHi: `${sCount} बिक्री में शामिल`, labelEn: `${sCount} Sale(s) contain this item`,
+        instructionHi: 'Sale Management pe jao → ye sales delete karo',
+        instructionEn: 'Go to Sale Management → delete these sales',
+        blocking: true,
+      });
+    }
+
+    if (entityType === 'employee') {
+      const srCount = salaryRecordsRef.current.filter(r => r.employeeId === id).length;
+      if (srCount > 0) links.push({
+        module: 'Salary Records', count: srCount,
+        labelHi: `${srCount} वेतन रिकॉर्ड`, labelEn: `${srCount} Salary Record(s)`,
+        instructionHi: 'Salary Management pe jao → is employee ke salary records pehle delete karo',
+        instructionEn: 'Go to Salary Management → delete this employee\'s salary records first',
+        blocking: true,
+      });
+    }
+
+    if (entityType === 'account') {
+      const vCount = activeVouchers.filter(v => v.debitAccountId === id || v.creditAccountId === id).length;
+      if (vCount > 0) links.push({
+        module: 'Vouchers', count: vCount,
+        labelHi: `${vCount} वाउचर में use ho raha hai`, labelEn: `Used in ${vCount} Voucher(s)`,
+        instructionHi: 'Vouchers page pe jao → pehle in vouchers ko cancel karo',
+        instructionEn: 'Go to Vouchers page → cancel these vouchers first',
+        blocking: true,
+      });
+      const supLinked = suppliersRef.current.find(s => s.accountId === id);
+      if (supLinked) links.push({
+        module: 'Supplier', count: 1,
+        labelHi: `Supplier "${supLinked.name}" ka account hai`, labelEn: `This is Supplier "${supLinked.name}"'s account`,
+        instructionHi: 'Suppliers page pe jao → pehle supplier delete karo',
+        instructionEn: 'Go to Suppliers page → delete the supplier first',
+        blocking: true,
+      });
+      const cusLinked = customersRef.current.find(c => c.accountId === id);
+      if (cusLinked) links.push({
+        module: 'Customer', count: 1,
+        labelHi: `Customer "${cusLinked.name}" ka account hai`, labelEn: `This is Customer "${cusLinked.name}"'s account`,
+        instructionHi: 'Customers page pe jao → pehle customer delete karo',
+        instructionEn: 'Go to Customers page → delete the customer first',
+        blocking: true,
+      });
+    }
+
+    if (entityType === 'loan') {
+      const vCount = activeVouchers.filter(v => v.narration?.includes(loansRef.current.find(l => l.id === id)?.loanNo || '____NOMATCH____')).length;
+      if (vCount > 0) links.push({
+        module: 'Vouchers', count: vCount,
+        labelHi: `${vCount} वाउचर linked`, labelEn: `${vCount} linked Voucher(s)`,
+        instructionHi: 'Vouchers page pe jao → pehle in vouchers ko cancel karo',
+        instructionEn: 'Go to Vouchers → cancel linked vouchers first',
+        blocking: false,
+      });
+    }
+
+    return links;
+  }, [stockMovements]); // eslint-disable-line
+
   return (
     <DataContext.Provider value={{
       vouchers, members, accounts, society, loans, assets, auditObjections,
@@ -1522,6 +1648,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addCustomer, updateCustomer, deleteCustomer,
       getAccountBalance, getCashBookEntries, getBankBookEntries,
       getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments, postClosingStock,
+      getEntityLinks,
     }}>
       {children}
     </DataContext.Provider>

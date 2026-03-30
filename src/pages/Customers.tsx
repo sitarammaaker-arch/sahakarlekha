@@ -12,10 +12,8 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
+import type { EntityLink } from '@/types';
 import { UserCheck, Plus, Pencil, Trash2, Search, IndianRupee, FileSpreadsheet, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Customer } from '@/types';
@@ -33,14 +31,14 @@ const EMPTY_FORM = (): Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'cre
 
 const Customers: React.FC = () => {
   const { language } = useLanguage();
-  const { customers, addCustomer, updateCustomer, deleteCustomer, getAccountBalance } = useData();
+  const { customers, addCustomer, updateCustomer, deleteCustomer, getAccountBalance, getEntityLinks } = useData();
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM());
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
 
   const filtered = useMemo(() =>
     customers.filter(c =>
@@ -81,11 +79,9 @@ const Customers: React.FC = () => {
     setShowForm(false);
   };
 
-  const handleDelete = () => {
-    if (!deleteId) return;
-    deleteCustomer(deleteId);
-    setDeleteId(null);
-    toast({ title: language === 'hi' ? 'ग्राहक हटाया गया' : 'Customer deleted' });
+  const handleDeleteClick = (c: { id: string; name: string; customerCode?: string }) => {
+    const links = getEntityLinks('customer', c.id);
+    setDeleteGuard({ open: true, id: c.id, name: `${c.name}${c.customerCode ? ` (${c.customerCode})` : ''}`, links });
   };
 
   return (
@@ -201,7 +197,7 @@ const Customers: React.FC = () => {
                             <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>
                               <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(c.id)}>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeleteClick(c)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -255,25 +251,20 @@ const Customers: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirm */}
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{language === 'hi' ? 'ग्राहक हटाएं?' : 'Delete Customer?'}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {language === 'hi'
-                ? 'यह ग्राहक और उनका खाता स्थायी रूप से हट जाएगा।'
-                : 'This customer and their linked ledger account will be permanently deleted.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{language === 'hi' ? 'रद्द करें' : 'Cancel'}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {language === 'hi' ? 'हटाएं' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete Guard */}
+      <LinkedDeleteDialog
+        open={deleteGuard.open}
+        onOpenChange={o => setDeleteGuard(g => ({ ...g, open: o }))}
+        entityName={deleteGuard.name}
+        links={deleteGuard.links}
+        language={language as 'hi' | 'en'}
+        onConfirmDelete={() => {
+          if (deleteGuard.id) {
+            deleteCustomer(deleteGuard.id);
+            toast({ title: language === 'hi' ? 'ग्राहक हटाया गया' : 'Customer deleted' });
+          }
+        }}
+      />
     </div>
   );
 };

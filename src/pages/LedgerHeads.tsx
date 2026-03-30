@@ -10,10 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
+import type { EntityLink } from '@/types';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -51,7 +49,7 @@ const TYPE_BADGE_CLASS: Record<AccountType, string> = {
 
 const LedgerHeads: React.FC = () => {
   const { language } = useLanguage();
-  const { accounts, addAccount, updateAccount, deleteAccount, vouchers } = useData();
+  const { accounts, addAccount, updateAccount, deleteAccount, getEntityLinks } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -59,7 +57,7 @@ const LedgerHeads: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<'all' | AccountType>('all');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editAccount, setEditAccount] = useState<LedgerAccount | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
   const [form, setForm] = useState(EMPTY_FORM);
 
   const fmt = (amount: number) =>
@@ -177,32 +175,20 @@ const LedgerHeads: React.FC = () => {
     resetForm();
   };
 
-  const handleDelete = () => {
-    if (!deleteId) return;
-    const acc = accounts.find(a => a.id === deleteId);
-    if (acc?.isSystem) {
+  const handleDeleteClick = (acc: LedgerAccount) => {
+    if (acc.isSystem) {
       toast({ title: hi ? 'सिस्टम खाता हटाया नहीं जा सकता' : 'Cannot delete system account', variant: 'destructive' });
-      setDeleteId(null);
       return;
     }
-    if (acc?.isGroup) {
-      const hasChildren = accounts.some(a => a.parentId === deleteId);
+    if (acc.isGroup) {
+      const hasChildren = accounts.some(a => a.parentId === acc.id);
       if (hasChildren) {
         toast({ title: hi ? 'पहले इस खाते के उप-खाते हटाएं' : 'Delete child accounts first', variant: 'destructive' });
-        setDeleteId(null);
         return;
       }
     }
-    // Check if account is used in any voucher
-    const usedInVoucher = vouchers.some(v => v.debitAccountId === deleteId || v.creditAccountId === deleteId);
-    if (usedInVoucher) {
-      toast({ title: hi ? 'यह खाता वाउचर में उपयोग में है' : 'Account is used in vouchers, cannot delete', variant: 'destructive' });
-      setDeleteId(null);
-      return;
-    }
-    deleteAccount(deleteId);
-    toast({ title: hi ? 'खाता हटाया गया' : 'Account deleted' });
-    setDeleteId(null);
+    const links = getEntityLinks('account', acc.id);
+    setDeleteGuard({ open: true, id: acc.id, name: acc.name, links });
   };
 
   const getTypeLabel = (type: AccountType) => {
@@ -407,7 +393,7 @@ const LedgerHeads: React.FC = () => {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => setDeleteId(acc.id)}
+                              onClick={() => handleDeleteClick(acc)}
                               title={hi ? 'हटाएं' : 'Delete'}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -526,23 +512,20 @@ const LedgerHeads: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete AlertDialog */}
-      <AlertDialog open={!!deleteId} onOpenChange={o => { if (!o) setDeleteId(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{hi ? 'क्या आप वाकई हटाना चाहते हैं?' : 'Are you sure?'}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {hi ? 'यह खाता स्थायी रूप से हटा दिया जाएगा।' : 'This account will be permanently deleted. This cannot be undone.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{hi ? 'रद्द करें' : 'Cancel'}</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={handleDelete}>
-              {hi ? 'हटाएं' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete Guard */}
+      <LinkedDeleteDialog
+        open={deleteGuard.open}
+        onOpenChange={o => setDeleteGuard(g => ({ ...g, open: o }))}
+        entityName={deleteGuard.name}
+        links={deleteGuard.links}
+        language={hi ? 'hi' : 'en'}
+        onConfirmDelete={() => {
+          if (deleteGuard.id) {
+            deleteAccount(deleteGuard.id);
+            toast({ title: hi ? 'खाता हटाया गया' : 'Account deleted' });
+          }
+        }}
+      />
     </div>
   );
 };
