@@ -918,10 +918,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ── Inventory ──────────────────────────────────────────────────────────────
   const addStockItem = useCallback((data: Omit<StockItem, 'id' | 'itemCode'>): StockItem => {
-    const item: StockItem = { ...data, id: crypto.randomUUID(), itemCode: storage.getNextItemCode() };
-    setStockItemsState(prev => { const updated = [...prev, item]; return updated; });
-    supabase.from('stock_items').upsert(withSoc(item)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
-    return item;
+    // Derive next item code from existing items (not localStorage counter) to prevent duplicates
+    let newItem: StockItem;
+    setStockItemsState(prev => {
+      const maxNum = prev.reduce((max, i) => {
+        const m = i.itemCode?.match(/ITM\/(\d+)/);
+        return m ? Math.max(max, parseInt(m[1])) : max;
+      }, 0);
+      const itemCode = `ITM/${String(maxNum + 1).padStart(3, '0')}`;
+      newItem = { ...data, id: crypto.randomUUID(), itemCode };
+      supabase.from('stock_items').upsert(withSoc(newItem)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
+      return [...prev, newItem];
+    });
+    return newItem!;
   }, []);
 
   const updateStockItem = useCallback((id: string, data: Partial<StockItem>) => {

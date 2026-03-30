@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -70,7 +70,7 @@ const EMPTY_ADJUSTMENT_FORM = {
 
 interface ItemFormProps {
   itemForm: typeof EMPTY_ITEM_FORM;
-  setItemForm: React.Dispatch<React.SetStateAction<typeof EMPTY_ITEM_FORM>>;
+  setItemForm: (v: typeof EMPTY_ITEM_FORM | ((prev: typeof EMPTY_ITEM_FORM) => typeof EMPTY_ITEM_FORM)) => void;
   hi: boolean;
   onSubmit: () => void;
   submitLabel: string;
@@ -269,8 +269,17 @@ const Inventory: React.FC = () => {
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [isItemAddOpen, setIsItemAddOpen] = useState(false);
   const [editItem, setEditItem] = useState<StockItem | null>(null);
+  const editItemRef = useRef<StockItem | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [itemForm, setItemForm] = useState(EMPTY_ITEM_FORM);
+  const itemFormRef = useRef(EMPTY_ITEM_FORM);
+  const setItemFormWithRef = useCallback((updater: typeof EMPTY_ITEM_FORM | ((prev: typeof EMPTY_ITEM_FORM) => typeof EMPTY_ITEM_FORM)) => {
+    setItemForm(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      itemFormRef.current = next;
+      return next;
+    });
+  }, []);
 
   // Movement tab state
   const [movDateFrom, setMovDateFrom] = useState('');
@@ -347,7 +356,7 @@ const Inventory: React.FC = () => {
   };
 
   // Item CRUD handlers
-  const resetItemForm = () => setItemForm(EMPTY_ITEM_FORM);
+  const resetItemForm = () => { itemFormRef.current = EMPTY_ITEM_FORM; setItemForm(EMPTY_ITEM_FORM); };
 
   const openAddItem = () => {
     resetItemForm();
@@ -355,8 +364,9 @@ const Inventory: React.FC = () => {
   };
 
   const openEditItem = (item: StockItem) => {
+    editItemRef.current = item;
     setEditItem(item);
-    setItemForm({
+    setItemFormWithRef({
       name: item.name,
       nameHi: item.nameHi || '',
       unit: (item.unit as UnitKey) || 'kg',
@@ -391,29 +401,29 @@ const Inventory: React.FC = () => {
     setIsItemAddOpen(false);
   };
 
-  const handleEditItem = () => {
-    if (!editItem) return;
-    if (!itemForm.name.trim()) {
-      toast({
-        title: hi ? 'नाम आवश्यक है' : 'Name is required',
-        variant: 'destructive',
-      });
+  const handleEditItem = useCallback(() => {
+    const item = editItemRef.current;
+    if (!item) { console.warn('handleEditItem: no editItem in ref'); return; }
+    if (!itemFormRef.current.name.trim()) {
+      toast({ title: hi ? 'नाम आवश्यक है' : 'Name is required', variant: 'destructive' });
       return;
     }
-    updateStockItem(editItem.id, {
-      name: itemForm.name.trim(),
-      nameHi: itemForm.nameHi.trim(),
-      unit: itemForm.unit,
-      openingStock: Number(itemForm.openingStock) || 0,
-      purchaseRate: Number(itemForm.purchaseRate) || 0,
-      saleRate: Number(itemForm.saleRate) || 0,
-      isActive: itemForm.isActive,
-      barcodeValue: itemForm.barcodeValue.trim() || undefined,
+    const f = itemFormRef.current;
+    updateStockItem(item.id, {
+      name: f.name.trim(),
+      nameHi: f.nameHi.trim(),
+      unit: f.unit,
+      openingStock: Number(f.openingStock) || 0,
+      purchaseRate: Number(f.purchaseRate) || 0,
+      saleRate: Number(f.saleRate) || 0,
+      isActive: f.isActive,
+      barcodeValue: f.barcodeValue.trim() || undefined,
     });
     toast({ title: hi ? 'वस्तु अपडेट की गई' : 'Item updated successfully' });
+    editItemRef.current = null;
     setEditItem(null);
     resetItemForm();
-  };
+  }, [updateStockItem, toast, hi]);
 
   const handleDeleteItem = () => {
     if (!deleteId) return;
@@ -900,7 +910,7 @@ const Inventory: React.FC = () => {
           </DialogHeader>
           <ItemForm
             itemForm={itemForm}
-            setItemForm={setItemForm}
+            setItemForm={setItemFormWithRef}
             hi={hi}
             onSubmit={handleAddItem}
             submitLabel={hi ? 'सहेजें' : 'Save'}
@@ -931,7 +941,7 @@ const Inventory: React.FC = () => {
           </DialogHeader>
           <ItemForm
             itemForm={itemForm}
-            setItemForm={setItemForm}
+            setItemForm={setItemFormWithRef}
             hi={hi}
             onSubmit={handleEditItem}
             submitLabel={hi ? 'अपडेट करें' : 'Update'}
