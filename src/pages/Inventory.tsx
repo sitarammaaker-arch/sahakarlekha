@@ -72,13 +72,13 @@ interface ItemFormProps {
   itemForm: typeof EMPTY_ITEM_FORM;
   setItemForm: React.Dispatch<React.SetStateAction<typeof EMPTY_ITEM_FORM>>;
   hi: boolean;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: () => void;
   submitLabel: string;
   onCancel: () => void;
 }
 
 const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit, submitLabel, onCancel }) => (
-  <form onSubmit={onSubmit} className="space-y-4" noValidate>
+  <form onSubmit={e => e.preventDefault()} className="space-y-4">
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div className="space-y-2">
         <Label>
@@ -174,7 +174,7 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
       <Button variant="outline" type="button" onClick={onCancel}>
         {hi ? 'रद्द करें' : 'Cancel'}
       </Button>
-      <Button type="submit">{submitLabel}</Button>
+      <Button type="button" onClick={onSubmit}>{submitLabel}</Button>
     </div>
   </form>
 );
@@ -367,9 +367,8 @@ const Inventory: React.FC = () => {
     });
   };
 
-  const handleAddItem = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!itemForm.name.trim() || !itemForm.unit || !itemForm.purchaseRate) {
+  const handleAddItem = () => {
+    if (!itemForm.name.trim() || !itemForm.unit) {
       toast({
         title: hi ? 'कृपया आवश्यक फ़ील्ड भरें' : 'Please fill required fields',
         variant: 'destructive',
@@ -392,8 +391,7 @@ const Inventory: React.FC = () => {
     setIsItemAddOpen(false);
   };
 
-  const handleEditItem = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleEditItem = () => {
     if (!editItem) return;
     if (!itemForm.name.trim()) {
       toast({
