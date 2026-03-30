@@ -24,6 +24,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { PackagePlus, Plus, Trash2, Eye, Search, FileSpreadsheet, Download } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { PurchaseItem, PaymentMode } from '@/types';
@@ -659,7 +660,7 @@ const PurchaseManagement: React.FC = () => {
                       .map(purchase => (
                         <TableRow key={purchase.id}>
                           <TableCell className="font-mono text-sm">{purchase.purchaseNo}</TableCell>
-                          <TableCell>{new Date(purchase.date).toLocaleDateString('hi-IN')}</TableCell>
+                          <TableCell>{fmtDate(purchase.date)}</TableCell>
                           <TableCell>
                             <div>{purchase.supplierName}</div>
                             {purchase.supplierPhone && (
@@ -719,7 +720,7 @@ const PurchaseManagement: React.FC = () => {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                 <div>
                   <p className="text-gray-500">{language === 'hi' ? 'तिथि' : 'Date'}</p>
-                  <p className="font-medium">{new Date(viewPurchase.date + 'T00:00:00').toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
+                  <p className="font-medium">{fmtDate(viewPurchase.date)}</p>
                 </div>
                 <div>
                   <p className="text-gray-500">{language === 'hi' ? 'आपूर्तिकर्ता' : 'Supplier'}</p>

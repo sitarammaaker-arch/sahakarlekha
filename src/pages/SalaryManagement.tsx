@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { BadgeDollarSign, UserPlus, Pencil, Trash2, Search, CheckCircle, Users, AlertTriangle, Download, FileSpreadsheet } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { fmtDate } from '@/lib/dateUtils';
 import { useToast } from '@/hooks/use-toast';
 import type { Employee, SalaryRecord, PaymentMode } from '@/types';
 import { generateSalarySlipPDF } from '@/lib/pdf';
@@ -535,7 +536,7 @@ const SalaryManagement: React.FC = () => {
                         </TableCell>
                         <TableCell className="text-sm">{emp.designation}</TableCell>
                         <TableCell className="text-sm">
-                          {new Date(emp.joinDate).toLocaleDateString('hi-IN')}
+                          {fmtDate(emp.joinDate)}
                         </TableCell>
                         <TableCell className="text-right font-semibold">{fmt(emp.basicSalary)}</TableCell>
                         <TableCell className="text-center">

@@ -14,6 +14,7 @@ import { Building2, CheckCircle2, AlertCircle, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ACCOUNT_IDS } from '@/lib/storage';
 import { useToast } from '@/hooks/use-toast';
+import { fmtDate } from '@/lib/dateUtils';
 
 import * as XLSX from 'xlsx';
 
@@ -338,7 +339,7 @@ const BankReconciliation: React.FC = () => {
                         title={language === 'hi' ? 'क्लियर करें' : 'Mark as cleared'}
                       />
                     </TableCell>
-                    <TableCell className="text-sm">{new Date(v.date).toLocaleDateString('hi-IN')}</TableCell>
+                    <TableCell className="text-sm">{fmtDate(v.date)}</TableCell>
                     <TableCell className="font-mono text-sm">{v.voucherNo}</TableCell>
                     <TableCell className="text-sm">
                       {v.narration || getAccountName(v.creditAccountId)}
@@ -397,7 +398,7 @@ const BankReconciliation: React.FC = () => {
                         title={language === 'hi' ? 'क्लियर करें' : 'Mark as cleared'}
                       />
                     </TableCell>
-                    <TableCell className="text-sm">{new Date(v.date).toLocaleDateString('hi-IN')}</TableCell>
+                    <TableCell className="text-sm">{fmtDate(v.date)}</TableCell>
                     <TableCell className="font-mono text-sm">{v.voucherNo}</TableCell>
                     <TableCell className="text-sm">
                       {v.narration || getAccountName(v.debitAccountId)}
@@ -455,7 +456,7 @@ const BankReconciliation: React.FC = () => {
                           title={language === 'hi' ? 'अनक्लियर करें' : 'Mark as uncleared'}
                         />
                       </TableCell>
-                      <TableCell className="text-sm">{new Date(v.date).toLocaleDateString('hi-IN')}</TableCell>
+                      <TableCell className="text-sm">{fmtDate(v.date)}</TableCell>
                       <TableCell className="font-mono text-sm">{v.voucherNo}</TableCell>
                       <TableCell className="text-sm">
                         {v.narration || getAccountName(isDeposit ? v.creditAccountId : v.debitAccountId)}

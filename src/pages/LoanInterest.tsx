@@ -28,6 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { fmtDate } from '@/lib/dateUtils';
 
 // ── Account IDs ───────────────────────────────────────────────────────────────
 const ACC_INTEREST_REC  = '3313'; // Member Loan Interest Receivable (asset)
@@ -36,8 +37,6 @@ const ACC_INTEREST_INC  = '4408'; // Interest on Member Loans (income)
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
-const fmtDate = (d: string) => (d ? new Date(d).toLocaleDateString('hi-IN') : '—');
-
 // ── Simple interest helper ────────────────────────────────────────────────────
 const calcInterest = (principal: number, ratePa: number, days: number): number =>
   Math.round(((principal * ratePa * days) / (365 * 100)) * 100) / 100;
@@ -45,8 +44,8 @@ const calcInterest = (principal: number, ratePa: number, days: number): number =
 // ── Period label ─────────────────────────────────────────────────────────────
 const getPeriodLabel = (mode: 'monthly' | 'quarterly' | 'annual', fromDate: string, toDate: string, hi: boolean): string => {
   if (!fromDate || !toDate) return '';
-  const from = new Date(fromDate).toLocaleDateString('hi-IN');
-  const to   = new Date(toDate).toLocaleDateString('hi-IN');
+  const from = fmtDate(fromDate);
+  const to   = fmtDate(toDate);
   const labels: Record<string, { hi: string; en: string }> = {
     monthly:   { hi: 'मासिक ब्याज',   en: 'Monthly Interest'   },
     quarterly: { hi: 'त्रैमासिक ब्याज', en: 'Quarterly Interest' },

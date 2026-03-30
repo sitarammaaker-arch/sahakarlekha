@@ -21,6 +21,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { CheckCircle2, XCircle, ClipboardList, Eye, FileSpreadsheet, Download } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { fmtDate } from '@/lib/dateUtils';
 import { useToast } from '@/hooks/use-toast';
 
 const fmt = (n: number) =>
@@ -189,7 +190,7 @@ const VoucherApproval: React.FC = () => {
                 {filtered.map(v => (
                   <TableRow key={v.id}>
                     <TableCell className="font-mono text-sm font-medium">{v.voucherNo}</TableCell>
-                    <TableCell className="text-sm">{new Date(v.date).toLocaleDateString('hi-IN')}</TableCell>
+                    <TableCell className="text-sm">{fmtDate(v.date)}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-xs">
                         {VOUCHER_TYPE_LABELS[v.type]?.[hi ? 'hi' : 'en'] ?? v.type}
@@ -260,7 +261,7 @@ const VoucherApproval: React.FC = () => {
           {detailVoucher && (
             <div className="space-y-3 text-sm">
               <Row label={hi ? 'प्रकार' : 'Type'} value={VOUCHER_TYPE_LABELS[detailVoucher.type]?.[hi ? 'hi' : 'en'] ?? detailVoucher.type} />
-              <Row label={hi ? 'तिथि' : 'Date'} value={new Date(detailVoucher.date).toLocaleDateString('hi-IN')} />
+              <Row label={hi ? 'तिथि' : 'Date'} value={fmtDate(detailVoucher.date)} />
               <Row label={hi ? 'राशि' : 'Amount'} value={fmt(detailVoucher.amount)} />
               <Row label={hi ? 'डेबिट' : 'Debit'} value={getAccName(detailVoucher.debitAccountId)} />
               <Row label={hi ? 'क्रेडिट' : 'Credit'} value={getAccName(detailVoucher.creditAccountId)} />

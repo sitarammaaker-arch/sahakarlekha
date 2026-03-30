@@ -11,6 +11,7 @@ import {
 import { Trash2, FileSpreadsheet, Download } from 'lucide-react';
 import type { VoucherType } from '@/types';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { fmtDate, fmtDateTime } from '@/lib/dateUtils';
 
 const fmt = (amount: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
@@ -56,13 +57,13 @@ const DeletedVouchers: React.FC = () => {
   const handleCSV = () => {
     const getAccName = (id: string) => accounts.find(a => a.id === id)?.name || id;
     const headers = ['Voucher No', 'Type', 'Date', 'Debit Account', 'Credit Account', 'Amount', 'Narration', 'Deleted Reason', 'Deleted By', 'Deleted At'];
-    const rows = deletedVouchers.map(v => [v.voucherNo || '', v.type, v.date, getAccName(v.debitAccountId), getAccName(v.creditAccountId), v.amount, v.narration || '', v.deletedReason || '', v.deletedBy || '', v.deletedAt ? new Date(v.deletedAt).toLocaleDateString('en-IN') : '']);
+    const rows = deletedVouchers.map(v => [v.voucherNo || '', v.type, v.date, getAccName(v.debitAccountId), getAccName(v.creditAccountId), v.amount, v.narration || '', v.deletedReason || '', v.deletedBy || '', v.deletedAt ? fmtDateTime(v.deletedAt) : '']);
     downloadCSV(headers, rows, 'deleted_vouchers.csv');
   };
   const handleExcel = () => {
     const getAccName = (id: string) => accounts.find(a => a.id === id)?.name || id;
     const headers = ['Voucher No', 'Type', 'Date', 'Debit Account', 'Credit Account', 'Amount', 'Narration', 'Deleted Reason', 'Deleted By', 'Deleted At'];
-    const rows = deletedVouchers.map(v => [v.voucherNo || '', v.type, v.date, getAccName(v.debitAccountId), getAccName(v.creditAccountId), v.amount, v.narration || '', v.deletedReason || '', v.deletedBy || '', v.deletedAt ? new Date(v.deletedAt).toLocaleDateString('en-IN') : '']);
+    const rows = deletedVouchers.map(v => [v.voucherNo || '', v.type, v.date, getAccName(v.debitAccountId), getAccName(v.creditAccountId), v.amount, v.narration || '', v.deletedReason || '', v.deletedBy || '', v.deletedAt ? fmtDateTime(v.deletedAt) : '']);
     downloadExcelSingle(headers, rows, 'deleted_vouchers.xlsx', 'Deleted Vouchers');
   };
 
@@ -178,7 +179,7 @@ const DeletedVouchers: React.FC = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-gray-500">
-                        {new Date(v.date).toLocaleDateString('hi-IN')}
+                        {fmtDate(v.date)}
                       </TableCell>
                       <TableCell className="text-sm">{accountName(v.debitAccountId)}</TableCell>
                       <TableCell className="text-sm">{accountName(v.creditAccountId)}</TableCell>

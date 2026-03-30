@@ -14,6 +14,7 @@ import {
 import { BookOpen, Download, Calendar, FileText, FileSpreadsheet } from 'lucide-react';
 import { generateLedgerPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { fmtDate } from '@/lib/dateUtils';
 
 interface LedgerEntry {
   id: string;
@@ -140,7 +141,7 @@ const Ledger: React.FC = () => {
 
   const buildExportRows = () =>
     entries.map(e => [
-      new Date(e.date).toLocaleDateString('en-IN'),
+      fmtDate(e.date),
       e.voucherNo,
       e.particulars,
       e.debit > 0 ? e.debit : null,
@@ -303,7 +304,7 @@ const Ledger: React.FC = () => {
                         className={idx === 0 ? 'bg-blue-50/60 font-medium' : 'hover:bg-muted/30'}
                       >
                         <TableCell className="text-sm whitespace-nowrap">
-                          {new Date(entry.date).toLocaleDateString('en-IN')}
+                          {fmtDate(entry.date)}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="font-mono text-xs">

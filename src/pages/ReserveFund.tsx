@@ -13,6 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Shield, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
+import { fmtDate } from '@/lib/dateUtils';
 import { useToast } from '@/hooks/use-toast';
 
 const fmt = (amount: number) =>
@@ -262,7 +263,7 @@ const ReserveFund: React.FC = () => {
                 {[existingReserveVoucher, existingEduVoucher].filter(Boolean).map(v => v && (
                   <TableRow key={v.id}>
                     <TableCell className="font-mono text-sm">{v.voucherNo}</TableCell>
-                    <TableCell className="text-sm">{new Date(v.date).toLocaleDateString('hi-IN')}</TableCell>
+                    <TableCell className="text-sm">{fmtDate(v.date)}</TableCell>
                     <TableCell className="text-sm">{v.narration}</TableCell>
                     <TableCell className="text-right font-semibold">{fmt(v.amount)}</TableCell>
                   </TableRow>

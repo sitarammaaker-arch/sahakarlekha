@@ -32,6 +32,7 @@ import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { fmtDate } from '@/lib/dateUtils';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type MeetingType   = 'AGM' | 'SGM' | 'Board' | 'Committee' | 'Other';
@@ -180,7 +181,7 @@ const MeetingRegister: React.FC = () => {
     filtered.map(m => [
       m.meetingNo,
       TYPE_LABELS[m.type].en,
-      new Date(m.date).toLocaleDateString('en-IN'),
+      fmtDate(m.date),
       m.time || '—',
       m.venue,
       m.attendees || '—',
@@ -210,7 +211,7 @@ const MeetingRegister: React.FC = () => {
         i + 1,
         m.meetingNo,
         TYPE_LABELS[m.type].en,
-        new Date(m.date).toLocaleDateString('en-IN'),
+        fmtDate(m.date),
         m.venue,
         m.attendees || '—',
         m.status,
@@ -318,7 +319,7 @@ const MeetingRegister: React.FC = () => {
                         {TYPE_LABELS[m.type][hi ? 'hi' : 'en']}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm">{new Date(m.date).toLocaleDateString('hi-IN')}</TableCell>
+                    <TableCell className="text-sm">{fmtDate(m.date)}</TableCell>
                     <TableCell className="text-sm">{m.time || '—'}</TableCell>
                     <TableCell className="text-sm max-w-36 truncate">{m.venue}</TableCell>
                     <TableCell className="text-right text-sm">{m.attendees || '—'}</TableCell>

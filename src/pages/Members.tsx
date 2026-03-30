@@ -26,6 +26,7 @@ import type { MemberType } from '@/types';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { generateMemberPassbookPDF } from '@/lib/pdf';
+import { fmtDate } from '@/lib/dateUtils';
 import type { Member, MemberStatus } from '@/types';
 
 const EMPTY_FORM = { memberId: '', name: '', fatherName: '', address: '', phone: '', shareCapital: '', admissionFee: '', memberType: 'member' as MemberType, joinDate: new Date().toISOString().split('T')[0], status: 'active' as MemberStatus };
@@ -343,7 +344,7 @@ const Members: React.FC = () => {
                 [language === 'hi' ? 'सदस्यता प्रकार' : 'Member Type', viewMember.memberType === 'nominal' ? (language === 'hi' ? 'नॉमिनल सदस्य' : 'Nominal Member') : (language === 'hi' ? 'सदस्य' : 'Member')],
                 [t('shareCapital'), fmt(viewMember.shareCapital)],
                 [language === 'hi' ? 'प्रवेश शुल्क' : 'Admission Fee', fmt(viewMember.admissionFee || 0)],
-                [language === 'hi' ? 'शामिल तिथि' : 'Join Date', new Date(viewMember.joinDate).toLocaleDateString('hi-IN')],
+                [language === 'hi' ? 'शामिल तिथि' : 'Join Date', fmtDate(viewMember.joinDate)],
                 [language === 'hi' ? 'स्थिति' : 'Status', viewMember.status === 'active' ? (language === 'hi' ? 'सक्रिय' : 'Active') : (language === 'hi' ? 'निष्क्रिय' : 'Inactive')],
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between border-b pb-2">
@@ -397,7 +398,7 @@ const Members: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">{language === 'hi' ? 'शामिल तिथि' : 'Join Date'}:</span>
-                    <span>{new Date(ledgerMember.joinDate).toLocaleDateString('en-IN')}</span>
+                    <span>{fmtDate(ledgerMember.joinDate)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">{language === 'hi' ? 'शेष' : 'Balance'}:</span>
@@ -436,7 +437,7 @@ const Members: React.FC = () => {
                       {entries.map((entry, idx) => (
                         <TableRow key={entry.id} className={idx === 0 ? 'bg-blue-50/60 font-medium' : 'hover:bg-muted/30'}>
                           <TableCell className="text-xs whitespace-nowrap">
-                            {new Date(entry.date).toLocaleDateString('en-IN')}
+                            {fmtDate(entry.date)}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className="font-mono text-xs">{entry.voucherNo}</Badge>

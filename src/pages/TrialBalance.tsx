@@ -11,6 +11,7 @@ import { Scale, Download, Printer, CheckCircle, AlertTriangle, Calendar, FileSpr
 import { cn } from '@/lib/utils';
 import { generateTrialBalancePDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { fmtDate } from '@/lib/dateUtils';
 
 const TrialBalance: React.FC = () => {
   const { t, language } = useLanguage();
@@ -108,7 +109,7 @@ const TrialBalance: React.FC = () => {
           <div className="text-center">
             <CardTitle className="text-xl">{language === 'hi' ? 'तलपट' : 'Trial Balance'}</CardTitle>
             <p className="text-sm text-muted-foreground mt-1">{language === 'hi' ? society.nameHi : society.name}</p>
-            <p className="text-sm text-muted-foreground">{language === 'hi' ? 'दिनांक' : 'As on'}: {new Date(asOnDate).toLocaleDateString('hi-IN')}</p>
+            <p className="text-sm text-muted-foreground">{language === 'hi' ? 'दिनांक' : 'As on'}: {fmtDate(asOnDate)}</p>
           </div>
         </CardHeader>
         <CardContent className="pt-0">

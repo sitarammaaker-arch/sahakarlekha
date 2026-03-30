@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FileCheck, Download, Printer, Info, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { fmtDate } from '@/lib/dateUtils';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -124,7 +125,7 @@ const AuditCertificate: React.FC = () => {
     line(`Address:            ${society.address || '—'}`);
     line(`District:           ${society.district || '—'}, State: ${society.state || '—'}`);
     line(`Financial Year:     ${fy}  (${auditFrom || '—'} to ${auditTo || '—'})`);
-    line(`Audit Date:         ${new Date(auditDate).toLocaleDateString('en-IN')}`);
+    line(`Audit Date:         ${fmtDate(auditDate)}`);
     space();
 
     hline();
@@ -191,7 +192,7 @@ const AuditCertificate: React.FC = () => {
     if (auditorRegNo) doc.text(`Reg. No.: ${auditorRegNo}`, marginL, y);
     y += 5;
     if (auditorAddress) { const s = doc.splitTextToSize(`Address: ${auditorAddress}`, 80); doc.text(s, marginL, y); y += s.length * 5; }
-    doc.text(`Date: ${new Date(auditDate).toLocaleDateString('en-IN')}`, marginL, y);
+    doc.text(`Date: ${fmtDate(auditDate)}`, marginL, y);
     doc.text(`Place: ${society.district || '—'}`, marginL + 50, y);
 
     doc.save(`audit-certificate-${fy}.pdf`);
@@ -341,7 +342,7 @@ const AuditCertificate: React.FC = () => {
               {hi ? 'ऑडिटर:' : 'Auditor:'} {auditorName || '________________'}
               {auditorRegNo ? ` | Reg: ${auditorRegNo}` : ''}
             </span>
-            <span>{hi ? 'ऑडिट तिथि:' : 'Date:'} {auditDate ? new Date(auditDate).toLocaleDateString('en-IN') : '—'}</span>
+            <span>{hi ? 'ऑडिट तिथि:' : 'Date:'} {auditDate ? fmtDate(auditDate) : '—'}</span>
           </div>
         </CardContent>
       </Card>

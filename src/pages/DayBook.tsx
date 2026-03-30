@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import type { VoucherType } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { fmtDate as fmtDateShort, fmtDateLong } from '@/lib/dateUtils';
 
 const DayBook: React.FC = () => {
   const { language } = useLanguage();
@@ -168,7 +169,7 @@ const DayBook: React.FC = () => {
 
   const buildExportRows = () =>
     entries.map(v => [
-      new Date(v.date).toLocaleDateString('en-IN'),
+      fmtDateShort(v.date),
       v.voucherNo,
       getAccountName(v.debitAccountId),
       getAccountName(v.creditAccountId),
@@ -184,10 +185,7 @@ const DayBook: React.FC = () => {
     downloadExcelSingle(exportHeaders, buildExportRows(), `day-book-${fromDate}-to-${toDate}`, 'Day Book');
   };
 
-  const fmtDate = (d: string) => new Date(d).toLocaleDateString(
-    language === 'hi' ? 'hi-IN' : 'en-IN',
-    { day: '2-digit', month: 'long', year: 'numeric', weekday: 'long' }
-  );
+  const fmtDate = (d: string) => fmtDateLong(d, language === 'hi' ? 'hi' : 'en');
 
   return (
     <>

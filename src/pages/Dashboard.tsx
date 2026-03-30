@@ -6,6 +6,7 @@ import { StatCard } from '@/components/dashboard/StatCard';
 import { QuickActions } from '@/components/dashboard/QuickActions';
 import { Wallet, Building2, Users, TrendingUp, TrendingDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { fmtDate } from '@/lib/dateUtils';
 import { Badge } from '@/components/ui/badge';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -317,7 +318,7 @@ const Dashboard: React.FC = () => {
                         <Badge variant="outline" className={typeBadgeClass(v.type)}>{typeLabel(v.type)}</Badge>
                         <div>
                           <p className="font-medium text-sm font-mono">{v.voucherNo}</p>
-                          <p className="text-xs text-muted-foreground">{new Date(v.date).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}</p>
+                          <p className="text-xs text-muted-foreground">{fmtDate(v.date)}</p>
                         </div>
                       </div>
                       <div className="text-right">

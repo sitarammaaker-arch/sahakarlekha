@@ -23,6 +23,7 @@ import { ClipboardList, Download, Search, Printer, FileSpreadsheet } from 'lucid
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { fmtDate } from '@/lib/dateUtils';
 
 const Form1MemberList: React.FC = () => {
   const { language } = useLanguage();
@@ -63,7 +64,7 @@ const Form1MemberList: React.FC = () => {
       m.fatherName || '—',
       m.address || '—',
       m.phone || '—',
-      m.joinDate ? new Date(m.joinDate).toLocaleDateString('en-IN') : '—',
+      m.joinDate ? fmtDate(m.joinDate) : '—',
       m.memberType === 'nominal' ? 'Nominal' : 'Regular',
       m.shareCount ?? '—',
       m.shareCapital || 0,
@@ -116,7 +117,7 @@ const Form1MemberList: React.FC = () => {
         m.fatherName || '—',
         m.address    || '—',
         m.phone      || '—',
-        m.joinDate   ? new Date(m.joinDate).toLocaleDateString('en-IN') : '—',
+        m.joinDate   ? fmtDate(m.joinDate) : '—',
         m.memberType === 'nominal' ? 'Nominal' : 'Regular',
         m.shareCount ?? '—',
         (m.shareCapital || 0).toLocaleString('en-IN'),
@@ -283,7 +284,7 @@ const Form1MemberList: React.FC = () => {
                   <TableCell>{m.fatherName || '—'}</TableCell>
                   <TableCell className="max-w-36 truncate">{m.address || '—'}</TableCell>
                   <TableCell>{m.phone || '—'}</TableCell>
-                  <TableCell>{m.joinDate ? new Date(m.joinDate).toLocaleDateString('hi-IN') : '—'}</TableCell>
+                  <TableCell>{m.joinDate ? fmtDate(m.joinDate) : '—'}</TableCell>
                   <TableCell className="text-right">{m.shareCount ?? '—'}</TableCell>
                   <TableCell className="text-right">₹{(m.shareCapital || 0).toLocaleString('hi-IN')}</TableCell>
                   <TableCell>

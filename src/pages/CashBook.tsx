@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Plus, Wallet, Calendar, Filter, Download, Printer, ArrowDownLeft, ArrowUpRight, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateCashBookPDF } from '@/lib/pdf';
+import { fmtDate } from '@/lib/dateUtils';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const CashBook: React.FC = () => {
@@ -89,7 +90,7 @@ const CashBook: React.FC = () => {
       if (entry.type === 'receipt') running += entry.amount;
       else running -= entry.amount;
       rows.push([
-        new Date(entry.date).toLocaleDateString('en-IN'),
+        fmtDate(entry.date),
         entry.voucherNo,
         entry.particulars,
         entry.type === 'receipt' ? entry.amount : null,
@@ -276,7 +277,7 @@ const CashBook: React.FC = () => {
                 </TableRow>
                 {entries.map(entry => (
                   <TableRow key={entry.id} className="hover:bg-muted/30">
-                    <TableCell className="font-medium">{new Date(entry.date).toLocaleDateString('hi-IN')}</TableCell>
+                    <TableCell className="font-medium">{fmtDate(entry.date)}</TableCell>
                     <TableCell><Badge variant="outline" className="font-mono text-xs">{entry.voucherNo}</Badge></TableCell>
                     <TableCell>{entry.particulars}</TableCell>
                     <TableCell className="text-right">

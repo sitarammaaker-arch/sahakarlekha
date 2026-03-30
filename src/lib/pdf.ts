@@ -2,14 +2,11 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord } from '@/types';
 import { ACCOUNT_IDS } from '@/lib/storage';
+import { fmtDate } from '@/lib/dateUtils';
 
 
 const fmt = (amount: number): string =>
   'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(amount);
-
-const fmtDate = (dateStr: string): string => {
-  try { return new Date(dateStr).toLocaleDateString('en-IN'); } catch { return dateStr; }
-};
 
 /** All PDFs use English only — helvetica font always. */
 function setupFont(_doc: jsPDF): string {

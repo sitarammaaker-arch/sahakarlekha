@@ -21,6 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Boxes, Plus, Pencil, Trash2, Search, PackageMinus, PackagePlus, ScanLine, X, FileSpreadsheet, Download, RotateCcw } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { StockItem, StockMovement } from '@/types';
@@ -293,8 +294,6 @@ const Inventory: React.FC = () => {
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
 
-  const fmtDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString('en-IN');
 
   // Compute current stock from movements (openingStock + purchases - sales/adjustments)
   // This is the authoritative quantity — same formula as Stock Valuation uses.

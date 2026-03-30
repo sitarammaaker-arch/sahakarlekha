@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fmtDate } from '@/lib/dateUtils';
 
 interface Voucher {
   id: string;
@@ -75,12 +76,7 @@ export const RecentVouchers: React.FC = () => {
     }).format(amount);
   };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('hi-IN', {
-      day: '2-digit',
-      month: 'short',
-    });
-  };
+  const formatDate = (dateStr: string) => fmtDate(dateStr);
 
   return (
     <Card className="shadow-card">

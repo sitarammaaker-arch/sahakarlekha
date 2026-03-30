@@ -29,6 +29,7 @@ import { Plus, Minus } from 'lucide-react';
 import { getNextVoucherNo, VOUCHER_TEMPLATES, ACCOUNT_IDS } from '@/lib/storage';
 import type { LedgerAccount } from '@/types';
 import { validateVoucher } from '@/lib/validation';
+import { fmtDate } from '@/lib/dateUtils';
 
 type EntryMode = 'aasan' | 'expert';
 
@@ -936,7 +937,7 @@ const Vouchers: React.FC = () => {
                             {cancelled && <Badge variant="destructive" className="ml-1 text-xs py-0">{language === 'hi' ? 'रद्द' : 'Cancelled'}</Badge>}
                           </TableCell>
                           <TableCell className={cn('font-medium', cancelled && 'line-through')}>
-                            {new Date(v.date).toLocaleDateString('hi-IN')}
+                            {fmtDate(v.date)}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className={typeBadgeClass(v.type)}>

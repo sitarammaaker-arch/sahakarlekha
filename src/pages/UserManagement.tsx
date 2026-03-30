@@ -18,6 +18,7 @@ import {
   RefreshCw, Eye, EyeOff,
 } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { fmtDateTime } from '@/lib/dateUtils';
 import { UserRole } from '@/types';
 
 const USERS_KEY = 'sahayata_app_users';
@@ -235,12 +236,12 @@ export default function UserManagement() {
 
   const handleCSV = () => {
     const headers = ['Name', 'Email', 'Role', 'Status', 'Created At'];
-    const rows = users.map(u => [u.name, u.email, u.role, u.isActive ? 'Active' : 'Inactive', u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN') : '']);
+    const rows = users.map(u => [u.name, u.email, u.role, u.isActive ? 'Active' : 'Inactive', u.createdAt ? fmtDateTime(u.createdAt) : '']);
     downloadCSV(headers, rows, 'users.csv');
   };
   const handleExcel = () => {
     const headers = ['Name', 'Email', 'Role', 'Status', 'Created At'];
-    const rows = users.map(u => [u.name, u.email, u.role, u.isActive ? 'Active' : 'Inactive', u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN') : '']);
+    const rows = users.map(u => [u.name, u.email, u.role, u.isActive ? 'Active' : 'Inactive', u.createdAt ? fmtDateTime(u.createdAt) : '']);
     downloadExcelSingle(headers, rows, 'users.xlsx', 'Users');
   };
 
@@ -324,7 +325,7 @@ export default function UserManagement() {
                       />
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {u.createdAt ? new Date(u.createdAt).toLocaleDateString('hi-IN') : '—'}
+                      {u.createdAt ? fmtDateTime(u.createdAt) : '—'}
                     </TableCell>
                     <TableCell>
                       <Button size="sm" variant="ghost" onClick={() => openEdit(u)}>

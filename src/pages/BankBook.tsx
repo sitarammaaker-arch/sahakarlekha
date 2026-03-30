@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Plus, Building2, Download, Printer, CreditCard, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateBankBookPDF } from '@/lib/pdf';
+import { fmtDate } from '@/lib/dateUtils';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const BankBook: React.FC = () => {
@@ -50,7 +51,7 @@ const BankBook: React.FC = () => {
     rows.push(['Opening', 'OB', 'Opening Balance', openingBalance, null, openingBalance]);
     entries.forEach(entry => {
       rows.push([
-        new Date(entry.date).toLocaleDateString('en-IN'),
+        fmtDate(entry.date),
         entry.voucherNo,
         entry.particulars,
         entry.type === 'deposit' ? entry.amount : null,
@@ -241,7 +242,7 @@ const BankBook: React.FC = () => {
                 </TableRow>
                 {entries.map(entry => (
                   <TableRow key={entry.id} className="hover:bg-muted/30">
-                    <TableCell className="font-medium">{new Date(entry.date).toLocaleDateString('hi-IN')}</TableCell>
+                    <TableCell className="font-medium">{fmtDate(entry.date)}</TableCell>
                     <TableCell><Badge variant="outline" className="font-mono text-xs">{entry.voucherNo}</Badge></TableCell>
                     <TableCell>{entry.particulars}</TableCell>
                     <TableCell className="text-right">
