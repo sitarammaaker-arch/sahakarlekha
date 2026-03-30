@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { Boxes, Plus, Pencil, Trash2, Search, PackageMinus, PackagePlus, ScanLine, X, FileSpreadsheet, Download } from 'lucide-react';
+import { Boxes, Plus, Pencil, Trash2, Search, PackageMinus, PackagePlus, ScanLine, X, FileSpreadsheet, Download, RotateCcw } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -708,6 +708,17 @@ const Inventory: React.FC = () => {
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center justify-center gap-1">
+                                {!item.isActive && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                    onClick={() => { updateStockItem(item.id, { isActive: true }); toast({ title: hi ? 'वस्तु सक्रिय की गई' : 'Item reactivated' }); }}
+                                    title={hi ? 'पुनः सक्रिय करें' : 'Reactivate'}
+                                  >
+                                    <RotateCcw className="h-4 w-4" />
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="icon"
