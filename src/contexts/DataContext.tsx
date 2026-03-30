@@ -142,16 +142,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [accounts, setAccountsState] = useState<LedgerAccount[]>(() => storage.getAccounts());
   const [society, setSocietyState] = useState<SocietySettings>(() => storage.getSociety());
   const [loans, setLoansState] = useState<Loan[]>(() => storage.getLoans());
+  const loansRef = useRef<Loan[]>(loans);
+  useEffect(() => { loansRef.current = loans; }, [loans]);
   const [assets, setAssetsState] = useState<Asset[]>(() => storage.getAssets());
+  const assetsRef = useRef<Asset[]>(assets);
+  useEffect(() => { assetsRef.current = assets; }, [assets]);
   const [auditObjections, setAuditObjectionsState] = useState<AuditObjection[]>(() => storage.getAuditObjections());
+  const auditObjectionsRef = useRef<AuditObjection[]>(auditObjections);
+  useEffect(() => { auditObjectionsRef.current = auditObjections; }, [auditObjections]);
   const [stockItems, setStockItemsState] = useState<StockItem[]>(() => storage.getStockItems());
   const [stockMovements, setStockMovementsState] = useState<StockMovement[]>(() => storage.getStockMovements());
   const [sales, setSalesState] = useState<Sale[]>(() => storage.getSales());
+  const salesRef = useRef<Sale[]>(sales);
+  useEffect(() => { salesRef.current = sales; }, [sales]);
   const [purchases, setPurchasesState] = useState<Purchase[]>(() => storage.getPurchases());
+  const purchasesRef = useRef<Purchase[]>(purchases);
+  useEffect(() => { purchasesRef.current = purchases; }, [purchases]);
   const [employees, setEmployeesState] = useState<Employee[]>(() => storage.getEmployees());
+  const employeesRef = useRef<Employee[]>(employees);
+  useEffect(() => { employeesRef.current = employees; }, [employees]);
   const [salaryRecords, setSalaryRecordsState] = useState<SalaryRecord[]>(() => storage.getSalaryRecords());
+  const salaryRecordsRef = useRef<SalaryRecord[]>(salaryRecords);
+  useEffect(() => { salaryRecordsRef.current = salaryRecords; }, [salaryRecords]);
   const [suppliers, setSuppliersState] = useState<Supplier[]>(() => storage.getSuppliers());
+  const suppliersRef = useRef<Supplier[]>(suppliers);
+  useEffect(() => { suppliersRef.current = suppliers; }, [suppliers]);
   const [customers, setCustomersState] = useState<Customer[]>(() => storage.getCustomers());
+  const customersRef = useRef<Customer[]>(customers);
+  useEffect(() => { customersRef.current = customers; }, [customers]);
 
   const [dbReady, setDbReady] = useState(false);
 
@@ -402,8 +420,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const addAuditObjection = useCallback((data: Omit<AuditObjection, 'id' | 'objectionNo' | 'createdAt'>): AuditObjection => {
-    const objectionNo = storage.getNextObjectionNo(data.auditYear);
+    const maxNum = auditObjectionsRef.current.filter(o => o.objectionNo?.includes(data.auditYear)).reduce((max, o) => {
+      const m = o.objectionNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0);
+    const objectionNo = `AUD/${data.auditYear}/${String(maxNum + 1).padStart(3, '0')}`;
     const newObj: AuditObjection = { ...data, id: crypto.randomUUID(), objectionNo, createdAt: new Date().toISOString() };
+    auditObjectionsRef.current = [...auditObjectionsRef.current, newObj];
     setAuditObjectionsState(prev => { const updated = [...prev, newObj]; return updated; });
     supabase.from('audit_objections').upsert(withSoc(newObj)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return newObj;
@@ -693,8 +715,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [members, activeVouchers]);
 
   const addLoan = useCallback((data: Omit<Loan, 'id' | 'loanNo' | 'createdAt'>): Loan => {
-    const loanNo = storage.getNextLoanNo(society.financialYear);
+    const fy = society.financialYear;
+    const maxNum = loansRef.current.filter(l => l.loanNo?.includes(fy)).reduce((max, l) => {
+      const m = l.loanNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0);
+    const loanNo = `L/${fy}/${String(maxNum + 1).padStart(3, '0')}`;
     const newLoan: Loan = { ...data, id: crypto.randomUUID(), loanNo, createdAt: new Date().toISOString() };
+    loansRef.current = [...loansRef.current, newLoan];
     setLoansState(prev => { const updated = [...prev, newLoan]; return updated; });
     supabase.from('loans').upsert(withSoc(newLoan)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return newLoan;
@@ -715,8 +742,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const addAsset = useCallback((data: Omit<Asset, 'id' | 'assetNo'>): Asset => {
-    const assetNo = storage.getNextAssetNo();
+    const maxNum = assetsRef.current.reduce((max, a) => {
+      const m = a.assetNo?.match(/AST\/(\d+)/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0);
+    const assetNo = `AST/${String(maxNum + 1).padStart(4, '0')}`;
     const newAsset: Asset = { ...data, id: crypto.randomUUID(), assetNo };
+    assetsRef.current = [...assetsRef.current, newAsset];
     setAssetsState(prev => { const updated = [...prev, newAsset]; return updated; });
     supabase.from('assets').upsert(withSoc(newAsset)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return newAsset;
@@ -1029,7 +1060,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ── Sales ──────────────────────────────────────────────────────────────────
   const addSale = useCallback((data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>): Sale => {
-    const saleNo = storage.getNextSaleNo(society.financialYear);
+    const fy = society.financialYear;
+    const maxSaleNum = salesRef.current.filter(s => s.saleNo?.includes(fy)).reduce((max, s) => {
+      const m = s.saleNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0);
+    const saleNo = `SL/${fy}/${String(maxSaleNum + 1).padStart(3, '0')}`;
     const grandTotal = data.grandTotal ?? data.netAmount;
     const lid = () => crypto.randomUUID();
 
@@ -1083,6 +1118,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     const sale: Sale = { ...data, id: lid(), saleNo, voucherId: newVoucher.id, gstVoucherIds: undefined, createdAt: new Date().toISOString() };
+    salesRef.current = [...salesRef.current, sale];
     setSalesState(prev => [...prev, sale]);
     supabase.from('sales').upsert(withSoc(sale)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return sale;
@@ -1124,7 +1160,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ── Purchases ──────────────────────────────────────────────────────────────
   const addPurchase = useCallback((data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>): Purchase => {
-    const purchaseNo = storage.getNextPurchaseNo(society.financialYear);
+    const fy = society.financialYear;
+    const maxPurNum = purchasesRef.current.filter(p => p.purchaseNo?.includes(fy)).reduce((max, p) => {
+      const m = p.purchaseNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0);
+    const purchaseNo = `PUR/${fy}/${String(maxPurNum + 1).padStart(3, '0')}`;
     const grandTotal = data.grandTotal ?? data.netAmount;
     const lid = () => crypto.randomUUID();
 
@@ -1187,6 +1227,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     const purchase: Purchase = { ...data, id: lid(), purchaseNo, voucherId: newVoucher.id, taxVoucherIds: undefined, createdAt: new Date().toISOString() };
+    purchasesRef.current = [...purchasesRef.current, purchase];
     setPurchasesState(prev => [...prev, purchase]);
     supabase.from('purchases').upsert(withSoc(purchase)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return purchase;
@@ -1228,7 +1269,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ── Employees ──────────────────────────────────────────────────────────────
   const addEmployee = useCallback((data: Omit<Employee, 'id' | 'empNo'>): Employee => {
-    const emp: Employee = { ...data, id: crypto.randomUUID(), empNo: storage.getNextEmpNo() };
+    const maxEmpNum = employeesRef.current.reduce((max, e) => {
+      const m = e.empNo?.match(/EMP\/(\d+)/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0);
+    const empNo = `EMP/${String(maxEmpNum + 1).padStart(3, '0')}`;
+    const emp: Employee = { ...data, id: crypto.randomUUID(), empNo };
+    employeesRef.current = [...employeesRef.current, emp];
     setEmployeesState(prev => { const updated = [...prev, emp]; return updated; });
     supabase.from('employees').upsert(withSoc(emp)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return emp;
@@ -1250,8 +1296,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ── Salary Records ─────────────────────────────────────────────────────────
   const addSalaryRecord = useCallback((data: Omit<SalaryRecord, 'id' | 'slipNo' | 'createdAt'>): SalaryRecord => {
-    const slipNo = storage.getNextSalarySlipNo(society.financialYear);
+    const fy = society.financialYear;
+    const maxSlipNum = salaryRecordsRef.current.filter(r => r.slipNo?.includes(fy)).reduce((max, r) => {
+      const m = r.slipNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0);
+    const slipNo = `SAL/${fy}/${String(maxSlipNum + 1).padStart(3, '0')}`;
     const record: SalaryRecord = { ...data, id: crypto.randomUUID(), slipNo, createdAt: new Date().toISOString() };
+    salaryRecordsRef.current = [...salaryRecordsRef.current, record];
     setSalaryRecordsState(prev => { const updated = [...prev, record]; return updated; });
     supabase.from('salary_records').upsert(withSoc(record)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return record;
@@ -1305,7 +1356,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAccountsState(prev => { const updated = [...prev, newAccount]; return updated; });
     supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
 
-    const supplier: Supplier = { ...data, id: crypto.randomUUID(), supplierCode: storage.getNextSupplierCode(), accountId, createdAt: new Date().toISOString() };
+    const maxSupNum = suppliersRef.current.reduce((max, s) => {
+      const m = s.supplierCode?.match(/SUP\/(\d+)/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0);
+    const supplierCode = `SUP/${String(maxSupNum + 1).padStart(3, '0')}`;
+    const supplier: Supplier = { ...data, id: crypto.randomUUID(), supplierCode, accountId, createdAt: new Date().toISOString() };
+    suppliersRef.current = [...suppliersRef.current, supplier];
     setSuppliersState(prev => { const updated = [...prev, supplier]; return updated; });
     supabase.from('suppliers').upsert(withSoc(supplier)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return supplier;
@@ -1358,7 +1414,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAccountsState(prev => { const updated = [...prev, newAccount]; return updated; });
     supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
 
-    const customer: Customer = { ...data, id: crypto.randomUUID(), customerCode: storage.getNextCustomerCode(), accountId, createdAt: new Date().toISOString() };
+    const maxCusNum = customersRef.current.reduce((max, c) => {
+      const m = c.customerCode?.match(/CUS\/(\d+)/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0);
+    const customerCode = `CUS/${String(maxCusNum + 1).padStart(3, '0')}`;
+    const customer: Customer = { ...data, id: crypto.randomUUID(), customerCode, accountId, createdAt: new Date().toISOString() };
+    customersRef.current = [...customersRef.current, customer];
     setCustomersState(prev => { const updated = [...prev, customer]; return updated; });
     supabase.from('customers').upsert(withSoc(customer)).then(({ error }) => { if (error) console.warn('Supabase sync error:', error.message); });
     return customer;
