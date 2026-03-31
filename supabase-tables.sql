@@ -240,12 +240,24 @@ create table if not exists sales (
   date text,
   "customerName" text,
   "customerPhone" text,
+  "customerId" text,
   items jsonb default '[]',
   "totalAmount" numeric,
   discount numeric default 0,
   "netAmount" numeric,
+  "cgstPct" numeric default 0,
+  "sgstPct" numeric default 0,
+  "igstPct" numeric default 0,
+  "tdsPct" numeric default 0,
+  "cgstAmount" numeric default 0,
+  "sgstAmount" numeric default 0,
+  "igstAmount" numeric default 0,
+  "tdsAmount" numeric default 0,
+  "taxAmount" numeric default 0,
+  "grandTotal" numeric default 0,
   "paymentMode" text,
   "voucherId" text,
+  "gstVoucherIds" jsonb default '[]',
   narration text,
   "createdAt" timestamp default now(),
   "createdBy" text
@@ -259,12 +271,24 @@ create table if not exists purchases (
   date text,
   "supplierName" text,
   "supplierPhone" text,
+  "supplierId" text,
   items jsonb default '[]',
   "totalAmount" numeric,
   discount numeric default 0,
   "netAmount" numeric,
+  "cgstPct" numeric default 0,
+  "sgstPct" numeric default 0,
+  "igstPct" numeric default 0,
+  "tdsPct" numeric default 0,
+  "cgstAmount" numeric default 0,
+  "sgstAmount" numeric default 0,
+  "igstAmount" numeric default 0,
+  "tdsAmount" numeric default 0,
+  "taxAmount" numeric default 0,
+  "grandTotal" numeric default 0,
   "paymentMode" text,
   "voucherId" text,
+  "taxVoucherIds" jsonb default '[]',
   narration text,
   "createdAt" timestamp default now(),
   "createdBy" text
@@ -488,6 +512,47 @@ create index if not exists idx_stock_movements_item      on stock_movements("ite
 create index if not exists idx_sales_society_date        on sales(society_id, date);
 create index if not exists idx_purchases_society_date    on purchases(society_id, date);
 create index if not exists idx_salary_records_employee   on salary_records("employeeId");
+
+-- 14. Suppliers
+create table if not exists suppliers (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "supplierCode" text,
+  name text,
+  address text,
+  "gstNo" text,
+  phone text,
+  "accountId" text,
+  "isActive" boolean default true,
+  "createdAt" timestamp default now()
+);
+alter table suppliers enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='suppliers' and policyname='allow_all') then
+    create policy "allow_all" on suppliers for all using (true) with check (true);
+  end if;
+end $$;
+create index if not exists idx_suppliers_society on suppliers(society_id);
+
+-- 15. Customers
+create table if not exists customers (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "customerCode" text,
+  name text,
+  address text,
+  phone text,
+  "accountId" text,
+  "isActive" boolean default true,
+  "createdAt" timestamp default now()
+);
+alter table customers enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='customers' and policyname='allow_all') then
+    create policy "allow_all" on customers for all using (true) with check (true);
+  end if;
+end $$;
+create index if not exists idx_customers_society on customers(society_id);
 
 
 -- ── STEP 9: App-level FK integrity notes ─────────────────────────────────────

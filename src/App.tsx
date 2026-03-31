@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { DataProvider } from "@/contexts/DataContext";
+import { DataProvider, useData } from "@/contexts/DataContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 
 // Pages
@@ -75,11 +75,23 @@ preloadHindiFont();
 // Protected Route wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
-  
+  const { isLoading } = useData();
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-  
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">डेटा लोड हो रहा है...</p>
+        </div>
+      </div>
+    );
+  }
+
   return <MainLayout>{children}</MainLayout>;
 };
 

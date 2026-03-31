@@ -151,7 +151,15 @@ const Vouchers: React.FC = () => {
   const [editNarration, setEditNarration] = useState('');
   const [editMemberId, setEditMemberId] = useState('');
 
-  const openEdit = (v: { id: string; date: string; type: VoucherType; debitAccountId: string; creditAccountId: string; amount: number; narration?: string; memberId?: string }) => {
+  const openEdit = (v: { id: string; date: string; type: VoucherType; debitAccountId: string; creditAccountId: string; amount: number; narration?: string; memberId?: string; refType?: string }) => {
+    if (v.refType === 'purchase') {
+      toast({ title: language === 'hi' ? 'वाउचर यहाँ से edit नहीं होगा' : 'Cannot edit here', description: language === 'hi' ? 'Purchase Management से edit करें' : 'Edit from Purchase Management', variant: 'destructive' });
+      return;
+    }
+    if (v.refType === 'sale') {
+      toast({ title: language === 'hi' ? 'वाउचर यहाँ से edit नहीं होगा' : 'Cannot edit here', description: language === 'hi' ? 'Sale Management से edit करें' : 'Edit from Sale Management', variant: 'destructive' });
+      return;
+    }
     setEditId(v.id);
     setEditDate(v.date);
     setEditType(v.type);
