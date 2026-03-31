@@ -198,7 +198,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Supabase unreachable — fall through
     }
 
-    // 2. Fallback: old plain-text password check (transition period — for users not yet in Supabase Auth)
+    // 2. Direct platform_admins password check (super admin login)
+    try {
+      const { data: adminData } = await supabase
+        .from('platform_admins')
+        .select('email, name, password')
+        .eq('email', email)
+        .eq('password', password)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (adminData) {
+        const u: User = {
+          id: email,
+          name: adminData.name || email.split('@')[0],
+          email,
+          role: 'admin',
+          societyId: 'PLATFORM',
+        };
+        setUser(u);
+        setIsSuperAdmin(true);
+        setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId });
+        return true;
+      }
+    } catch {
+      // Supabase unreachable — fall through
+    }
+
+    // 3. Fallback: old plain-text password check (transition period — for users not yet in Supabase Auth)
     try {
       const { data, error } = await supabase
         .from('society_users')
@@ -219,7 +246,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Supabase unreachable — fall through to demo users
     }
 
-    // 3. Demo users (offline / local dev fallback)
+    // 4. Demo users (offline / local dev fallback)
     await new Promise(resolve => setTimeout(resolve, 400));
     const found = demoUsers.find(u => u.email === email && u.password === password);
     if (found) {
