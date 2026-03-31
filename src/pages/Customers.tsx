@@ -24,6 +24,7 @@ const fmt = (amount: number) =>
 
 const EMPTY_FORM = (): Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'createdAt'> => ({
   name: '',
+  nameHi: '',
   address: '',
   phone: '',
   isActive: true,
@@ -60,7 +61,7 @@ const Customers: React.FC = () => {
   const openAdd = () => { setEditId(null); setForm(EMPTY_FORM()); setShowForm(true); };
   const openEdit = (c: Customer) => {
     setEditId(c.id);
-    setForm({ name: c.name, address: c.address || '', phone: c.phone || '', isActive: c.isActive });
+    setForm({ name: c.name, nameHi: c.nameHi || '', address: c.address || '', phone: c.phone || '', isActive: c.isActive });
     setShowForm(true);
   };
 
@@ -223,9 +224,15 @@ const Customers: React.FC = () => {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <div className="space-y-1">
-              <Label>{language === 'hi' ? 'नाम *' : 'Name *'}</Label>
-              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={language === 'hi' ? 'ग्राहक का नाम' : 'Customer name'} />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>{language === 'hi' ? 'नाम (English) *' : 'Name (English) *'}</Label>
+                <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Customer name" />
+              </div>
+              <div className="space-y-1">
+                <Label>{language === 'hi' ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
+                <Input value={form.nameHi || ''} onChange={e => setForm(f => ({ ...f, nameHi: e.target.value }))} placeholder="ग्राहक का नाम" />
+              </div>
             </div>
             <div className="space-y-1">
               <Label>{language === 'hi' ? 'पता' : 'Address'}</Label>

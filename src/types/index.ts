@@ -398,6 +398,7 @@ export interface Supplier {
   id: string;
   supplierCode: string;
   name: string;
+  nameHi?: string;
   address?: string;
   gstNo?: string;
   phone?: string;
@@ -411,6 +412,7 @@ export interface Customer {
   id: string;
   customerCode: string;
   name: string;
+  nameHi?: string;
   address?: string;
   phone?: string;
   accountId: string; // sub-ledger under Sundry Debtors (3303)

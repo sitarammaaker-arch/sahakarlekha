@@ -1432,7 +1432,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const newAccount: LedgerAccount = {
       id: accountId,
       name: data.name,
-      nameHi: data.name,
+      nameHi: data.nameHi || data.name,
       type: 'liability',
       openingBalance: 0,
       openingBalanceType: 'credit',
@@ -1462,11 +1462,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return arr;
     });
     // Sync name change to linked account
-    if (data.name) {
+    if (data.name || data.nameHi) {
       setAccountsState(prev => {
         const sup = suppliers.find(s => s.id === id);
         if (!sup) return prev;
-        const arr = prev.map(a => a.id === sup.accountId ? { ...a, name: data.name!, nameHi: data.name! } : a);
+        const arr = prev.map(a => a.id === sup.accountId ? { ...a, name: data.name ?? a.name, nameHi: data.nameHi ?? data.name ?? a.nameHi } : a);
         return arr;
       });
     }
@@ -1490,7 +1490,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const newAccount: LedgerAccount = {
       id: accountId,
       name: data.name,
-      nameHi: data.name,
+      nameHi: data.nameHi || data.name,
       type: 'asset',
       openingBalance: 0,
       openingBalanceType: 'debit',
@@ -1519,11 +1519,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       updated = arr.find(c => c.id === id);
       return arr;
     });
-    if (data.name) {
+    if (data.name || data.nameHi) {
       setAccountsState(prev => {
         const cus = customers.find(c => c.id === id);
         if (!cus) return prev;
-        const arr = prev.map(a => a.id === cus.accountId ? { ...a, name: data.name!, nameHi: data.name! } : a);
+        const arr = prev.map(a => a.id === cus.accountId ? { ...a, name: data.name ?? a.name, nameHi: data.nameHi ?? data.name ?? a.nameHi } : a);
         return arr;
       });
     }

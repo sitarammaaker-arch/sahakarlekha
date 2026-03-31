@@ -533,6 +533,7 @@ do $$ begin
   end if;
 end $$;
 create index if not exists idx_suppliers_society on suppliers(society_id);
+alter table suppliers add column if not exists "nameHi" text;
 
 -- 15. Customers
 create table if not exists customers (
@@ -553,6 +554,7 @@ do $$ begin
   end if;
 end $$;
 create index if not exists idx_customers_society on customers(society_id);
+alter table customers add column if not exists "nameHi" text;
 
 
 -- ── STEP 9: App-level FK integrity notes ─────────────────────────────────────
