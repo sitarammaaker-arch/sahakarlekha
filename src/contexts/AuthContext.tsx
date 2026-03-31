@@ -177,6 +177,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           checkSuperAdmin(u.email).then(setIsSuperAdmin);
           return true;
         }
+
+        // Super admin may not be in society_users — check platform_admins
+        const isSA = await checkSuperAdmin(email);
+        if (isSA) {
+          const u: User = {
+            id: authData.user.id,
+            name: authData.user.user_metadata?.name || email.split('@')[0],
+            email,
+            role: 'admin',
+            societyId: 'PLATFORM',
+          };
+          setUser(u);
+          setIsSuperAdmin(true);
+          setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId });
+          return true;
+        }
       }
     } catch {
       // Supabase unreachable — fall through
