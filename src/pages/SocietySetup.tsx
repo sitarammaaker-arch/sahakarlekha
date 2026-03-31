@@ -36,6 +36,7 @@ const SocietySetup: React.FC = () => {
     pinCode: society.pinCode,
     phone: society.phone,
     email: society.email,
+    societyType: society.societyType || 'marketing_processing',
   });
 
   // Financial year form state
@@ -295,13 +296,31 @@ const SocietySetup: React.FC = () => {
                   : '💡 Short name appears in mobile header. Full name is used in PDFs/reports. If blank, full name is shown truncated.'}
               </p>
 
-              <div className="space-y-2">
-                <Label>{t('registrationNo')} *</Label>
-                <Input
-                  value={form.registrationNo}
-                  onChange={e => setForm(f => ({ ...f, registrationNo: e.target.value }))}
-                  className="h-11"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>{t('registrationNo')} *</Label>
+                  <Input
+                    value={form.registrationNo}
+                    onChange={e => setForm(f => ({ ...f, registrationNo: e.target.value }))}
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{language === 'hi' ? 'समिति का प्रकार' : 'Society Type'}</Label>
+                  <Select
+                    value={form.societyType}
+                    onValueChange={v => setForm(f => ({ ...f, societyType: v }))}
+                  >
+                    <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="marketing_processing">{language === 'hi' ? 'विपणन एवं प्रसंस्करण समिति (CMS)' : 'Marketing & Processing Society (CMS)'}</SelectItem>
+                      <SelectItem value="pacs">{language === 'hi' ? 'प्राथमिक कृषि ऋण समिति (PACS)' : 'Primary Agricultural Credit Society (PACS)'}</SelectItem>
+                      <SelectItem value="consumer">{language === 'hi' ? 'उपभोक्ता सहकारी समिति' : 'Consumer Cooperative Society'}</SelectItem>
+                      <SelectItem value="labour">{language === 'hi' ? 'श्रम सहकारी समिति' : 'Labour Cooperative Society'}</SelectItem>
+                      <SelectItem value="other">{language === 'hi' ? 'अन्य सहकारी समिति' : 'Other Cooperative Society'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="space-y-2">

@@ -10,6 +10,7 @@ import type {
   Employee, SalaryRecord, PaymentMode,
   Supplier, Customer,
   KccLoan,
+  VoucherEntry,
   EntityLink,
 } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
@@ -285,6 +286,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSuppliersState(supData || []);
         setCustomersState(cusData || []);
         setKccLoansState(kccData || []);
+
+        // ── One-time voucher_entries migration ──────────────────────────────
+        // For any existing voucher that has no entries in voucher_entries yet,
+        // build and upsert rows so the relational table is always in sync.
+        try {
+          const { data: existingEntries } = await supabase
+            .from('voucher_entries').select('voucherId').eq('society_id', sid);
+          const migratedIds = new Set((existingEntries || []).map((e: { voucherId: string }) => e.voucherId));
+          const allVouchers: Voucher[] = vData || [];
+          const toMigrate = allVouchers.filter(v => !v.isDeleted && !migratedIds.has(v.id));
+          if (toMigrate.length > 0) {
+            const rows = toMigrate.flatMap(v =>
+              getVoucherLines(v).map(l => ({
+                id: `${v.id}-${l.id}`,
+                voucherId: v.id,
+                accountId: l.accountId,
+                dr: l.type === 'Dr' ? l.amount : 0,
+                cr: l.type === 'Cr' ? l.amount : 0,
+                narration: l.narration,
+                society_id: sid,
+              }))
+            );
+            // Batch upsert in chunks of 500 to avoid payload limits
+            for (let i = 0; i < rows.length; i += 500) {
+              const chunk = rows.slice(i, i + 500);
+              supabase.from('voucher_entries').upsert(chunk).then(({ error }) => {
+                if (error) console.warn('voucher_entries migration error:', error.message);
+              });
+            }
+            console.log(`voucher_entries: migrated ${toMigrate.length} vouchers (${rows.length} entries)`);
+          }
+        } catch (migErr) {
+          console.warn('voucher_entries migration non-fatal error:', migErr);
+        }
+
         if (socData && socData.length > 0) {
           // Supabase is the single source of truth for society settings.
           // All devices always load from Supabase — save once, sync everywhere.
@@ -314,6 +350,36 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     loadFromSupabase();
   }, [user?.societyId]);
+
+  // ── voucher_entries helpers ───────────────────────────────────────────────
+  // Build VoucherEntry rows from a Voucher (one row per Dr/Cr leg).
+  const buildEntries = (v: Voucher, sid: string): VoucherEntry[] =>
+    getVoucherLines(v).map(l => ({
+      id: `${v.id}-${l.id}`,
+      voucherId: v.id,
+      accountId: l.accountId,
+      dr: l.type === 'Dr' ? l.amount : 0,
+      cr: l.type === 'Cr' ? l.amount : 0,
+      narration: l.narration,
+      societyId: sid,
+    }));
+
+  // Write (upsert) entries for a voucher — fire-and-forget, non-blocking.
+  const syncEntries = (v: Voucher) => {
+    const sid = societyIdRef.current;
+    const rows = buildEntries(v, sid).map(e => ({ ...e, society_id: sid }));
+    if (rows.length === 0) return;
+    supabase.from('voucher_entries').upsert(rows).then(({ error }) => {
+      if (error) console.warn('voucher_entries sync error:', error.message);
+    });
+  };
+
+  // Delete entries for a voucher (on cancel).
+  const deleteEntries = (voucherId: string) => {
+    supabase.from('voucher_entries').delete().eq('voucherId', voucherId).then(({ error }) => {
+      if (error) console.warn('voucher_entries delete error:', error.message);
+    });
+  };
 
   const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }): Voucher => {
     const lid = () => crypto.randomUUID();
@@ -348,7 +414,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Update ref immediately so the next addVoucher call in the same tick sees this voucher
     vouchersRef.current = [...vouchersRef.current, newVoucher];
     setVouchersState(prev => [...prev, newVoucher]);
-    supabase.from('vouchers').upsert(withSoc(newVoucher)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('vouchers').upsert(withSoc(newVoucher)).then(({ error }) => {
+      if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
+      else syncEntries(newVoucher);
+    });
     return newVoucher;
   }, [society.financialYear]);
 
@@ -388,12 +457,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           description: error.message,
           variant: 'destructive',
         });
-      } else if (updatedVoucher.editHistory && updatedVoucher.editHistory.length > 0) {
-        // Save editHistory separately once main save succeeds
-        supabase.from('vouchers')
-          .update({ editHistory: updatedVoucher.editHistory })
-          .eq('id', id)
-          .then(({ error: ehErr }) => { if (ehErr) console.warn('editHistory update:', ehErr.message); });
+      } else {
+        syncEntries(updatedVoucher);
+        if (updatedVoucher.editHistory && updatedVoucher.editHistory.length > 0) {
+          // Save editHistory separately once main save succeeds
+          supabase.from('vouchers')
+            .update({ editHistory: updatedVoucher.editHistory })
+            .eq('id', id)
+            .then(({ error: ehErr }) => { if (ehErr) console.warn('editHistory update:', ehErr.message); });
+        }
       }
     });
   }, []);
@@ -425,7 +497,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = prev.map(v => v.id === id ? cancelledVoucher : v);
       return updated;
     });
-    supabase.from('vouchers').upsert(withSoc(cancelledVoucher)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('vouchers').upsert(withSoc(cancelledVoucher)).then(({ error }) => {
+      if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
+      else deleteEntries(id); // remove from voucher_entries so cancelled voucher has no SQL-visible impact
+    });
   }, []);
 
   const restoreVoucher = useCallback((id: string) => {

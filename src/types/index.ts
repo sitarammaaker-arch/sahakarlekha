@@ -149,16 +149,36 @@ export interface Asset {
   status: AssetStatus;
 }
 
+export type AccountSubtype =
+  | 'share_capital' | 'reserve' | 'surplus'
+  | 'fixed_asset' | 'accumulated_dep' | 'investment' | 'current_asset' | 'inventory' | 'cash_bank'
+  | 'long_term_loan' | 'current_liability' | 'statutory_liability' | 'deposit'
+  | 'trading_income' | 'commission_income' | 'scheme_income' | 'other_income'
+  | 'direct_expense' | 'employee_expense' | 'admin_expense' | 'operational_expense' | 'depreciation_expense' | 'statutory_expense'
+  | 'suspense';
+
 export interface LedgerAccount {
   id: string;
   name: string;
   nameHi: string;
   type: AccountType;
+  subtype?: AccountSubtype;
   openingBalance: number;
   openingBalanceType: 'debit' | 'credit';
   isSystem?: boolean;
   parentId?: string;   // parent account code for hierarchy (e.g. '1100' → parent of '1101')
   isGroup?: boolean;   // true = group/header account, cannot be used in vouchers directly
+}
+
+// Separate row in voucher_entries table — one row per Dr/Cr leg
+export interface VoucherEntry {
+  id: string;
+  voucherId: string;
+  accountId: string;
+  dr: number;   // debit amount (0 if credit side)
+  cr: number;   // credit amount (0 if debit side)
+  narration?: string;
+  societyId?: string;
 }
 
 export type SocietyType = 'marketing_processing' | 'pacs' | 'consumer' | 'labour' | 'other';

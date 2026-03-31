@@ -741,4 +741,34 @@ create index if not exists idx_hsn_master_society on hsn_master(society_id);
 
 -- Add gstNo to customers table
 alter table customers add column if not exists "gstNo" text;
+
+-- ── STEP 12: voucher_entries — proper relational double-entry ledger ──────────
+-- Each voucher gets N rows here (one per Dr/Cr leg).
+-- App calculations still run in JS via getVoucherLines(); this table enables
+-- SQL-level queries, future Supabase RPCs, and proper relational auditing.
+
+create table if not exists voucher_entries (
+  id text primary key,
+  "voucherId" text not null references vouchers(id) on delete cascade,
+  "accountId" text not null,
+  dr numeric not null default 0,
+  cr numeric not null default 0,
+  narration text,
+  society_id text not null default 'SOC001'
+);
+alter table voucher_entries enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='voucher_entries' and policyname='allow_all') then
+    create policy "allow_all" on voucher_entries for all using (true) with check (true);
+  end if;
+end $$;
+create index if not exists idx_ve_voucher on voucher_entries("voucherId");
+create index if not exists idx_ve_account on voucher_entries("accountId");
+create index if not exists idx_ve_society on voucher_entries(society_id);
+
+-- ── STEP 13: subtype column on accounts ─────────────────────────────────────
+alter table accounts add column if not exists subtype text;
+
+-- ── STEP 14: societyType on society_settings ────────────────────────────────
+alter table society_settings add column if not exists "societyType" text default 'marketing_processing';
 -- alter table salary_records    add column if not exists society_id text default 'SOC001';
