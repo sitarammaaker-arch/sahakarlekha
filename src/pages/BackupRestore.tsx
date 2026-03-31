@@ -21,7 +21,7 @@ const BackupRestore: React.FC = () => {
     society, vouchers, members, accounts, loans, assets,
     auditObjections, stockItems, stockMovements,
     sales, purchases, suppliers, customers,
-    employees, salaryRecords,
+    employees, salaryRecords, kccLoans,
   } = useData();
   const { toast } = useToast();
 
@@ -44,6 +44,7 @@ const BackupRestore: React.FC = () => {
     stockItems: stockItems.length,
     employees: employees.length,
     salaryRecords: salaryRecords.length,
+    kccLoans: kccLoans.length,
     auditObjections: auditObjections.length,
   };
 
@@ -71,6 +72,7 @@ const BackupRestore: React.FC = () => {
         customers,
         employees,
         salaryRecords,
+        kccLoans,
       },
       stats,
     };
@@ -107,6 +109,7 @@ const BackupRestore: React.FC = () => {
     { key: 'stockItems',     hi: 'स्टॉक आइटम',      en: 'Stock Items',    color: 'text-amber-700' },
     { key: 'employees',      hi: 'कर्मचारी',         en: 'Employees',      color: 'text-red-700' },
     { key: 'salaryRecords',  hi: 'वेतन रिकॉर्ड',    en: 'Salary Records', color: 'text-red-600' },
+    { key: 'kccLoans',       hi: 'KCC ऋण',           en: 'KCC Loans',      color: 'text-yellow-700' },
     { key: 'auditObjections',hi: 'ऑडिट आपत्तियाँ', en: 'Audit Items',    color: 'text-slate-700' },
   ];
 

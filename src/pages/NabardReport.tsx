@@ -14,7 +14,6 @@ import { Landmark, Download, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcel } from '@/lib/exportUtils';
-import type { KccLoan } from '@/types';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -36,20 +35,11 @@ interface NpaRow {
 
 const NabardReport: React.FC = () => {
   const { language } = useLanguage();
-  const { society, accounts, loans, members, vouchers } = useData();
+  const { society, accounts, loans, members, vouchers, kccLoans } = useData();
   const hi = language === 'hi';
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
-  // ── Read KCC loans from localStorage ────────────────────────────────────────
-  const kccLoans: KccLoan[] = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem('sahayata_kcc_loans') || '[]');
-    } catch {
-      return [];
-    }
-  }, []);
 
   // ── Section A: KCC NPA Classification ───────────────────────────────────────
   const npaData = useMemo((): NpaRow[] => {

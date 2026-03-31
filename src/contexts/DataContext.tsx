@@ -9,6 +9,7 @@ import type {
   Sale, Purchase,
   Employee, SalaryRecord, PaymentMode,
   Supplier, Customer,
+  KccLoan,
   EntityLink,
 } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
@@ -96,6 +97,8 @@ interface DataContextType {
   updateSalaryRecord: (id: string, data: Partial<SalaryRecord>) => void;
   deleteSalaryRecord: (id: string) => void;
 
+  kccLoans: KccLoan[];
+
   getAccountBalance: (accountId: string) => number;
   getCashBookEntries: (fromDate?: string, toDate?: string) => CashBookEntry[];
   getBankBookEntries: (fromDate?: string, toDate?: string) => BankBookEntry[];
@@ -177,6 +180,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [customers, setCustomersState] = useState<Customer[]>([]);
   const customersRef = useRef<Customer[]>(customers);
   useEffect(() => { customersRef.current = customers; }, [customers]);
+  const [kccLoans, setKccLoansState] = useState<KccLoan[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
 
@@ -200,6 +204,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           { data: siData }, { data: smData }, { data: slData },
           { data: puData }, { data: emData }, { data: srData },
           { data: socData }, { data: supData }, { data: cusData },
+          { data: kccData },
         ] = await Promise.all([
           supabase.from('vouchers').select('*').eq('society_id', sid).order('createdAt'),
           supabase.from('members').select('*').eq('society_id', sid),
@@ -216,6 +221,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           supabase.from('society_settings').select('*').eq('society_id', sid).limit(1),
           supabase.from('suppliers').select('*').eq('society_id', sid),
           supabase.from('customers').select('*').eq('society_id', sid),
+          supabase.from('kcc_loans').select('*').eq('society_id', sid),
         ]);
 
         if (vErr) console.warn('Vouchers query error:', vErr.message);
@@ -278,6 +284,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSalaryRecordsState(srData || []);
         setSuppliersState(supData || []);
         setCustomersState(cusData || []);
+        setKccLoansState(kccData || []);
         if (socData && socData.length > 0) {
           // Supabase is the single source of truth for society settings.
           // All devices always load from Supabase — save once, sync everywhere.
@@ -1668,7 +1675,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     <DataContext.Provider value={{
       vouchers, members, accounts, society, loans, assets, auditObjections,
       stockItems, stockMovements, sales, purchases, employees, salaryRecords,
-      suppliers, customers,
+      suppliers, customers, kccLoans,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember,
       addAccount, updateAccount, deleteAccount, updateSociety,

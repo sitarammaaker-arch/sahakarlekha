@@ -16,7 +16,6 @@ import { ScrollText, Download, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import type { KccLoan } from '@/types';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -34,22 +33,13 @@ const fyStart = (fy: string): Date => {
 
 const FederationReport: React.FC = () => {
   const { language } = useLanguage();
-  const { society, accounts, loans, members, vouchers, getProfitLoss } = useData();
+  const { society, accounts, loans, members, vouchers, getProfitLoss, kccLoans } = useData();
   const hi = language === 'hi';
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   // ── Editable field: audit completion date ──────────────────────────────────
   const [auditDate, setAuditDate] = useState('');
-
-  // ── KCC loans ───────────────────────────────────────────────────────────────
-  const kccLoans: KccLoan[] = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem('sahayata_kcc_loans') || '[]');
-    } catch {
-      return [];
-    }
-  }, []);
 
   // ── Account balance helper ───────────────────────────────────────────────────
   const getBalance = (id: string) => {
