@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -16,8 +16,7 @@ import { Plus, Download, Vote, Trophy, Users, FileSpreadsheet } from 'lucide-rea
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-
-const ELECTIONS_KEY = 'sahayata_elections';
+import { supabase } from '@/lib/supabase';
 
 type ElectionStatus = 'upcoming' | 'ongoing' | 'completed';
 type PostType = 'president' | 'vice_president' | 'secretary' | 'treasurer' | 'director' | 'other';
@@ -46,11 +45,6 @@ interface Election {
   createdBy: string;
 }
 
-function getElections(): Election[] {
-  try { return JSON.parse(localStorage.getItem(ELECTIONS_KEY) || '[]'); } catch { return []; }
-}
-function saveElections(e: Election[]) { localStorage.setItem(ELECTIONS_KEY, JSON.stringify(e)); }
-
 const postLabel: Record<PostType, { hi: string; en: string }> = {
   president:       { hi: 'अध्यक्ष',          en: 'President' },
   vice_president:  { hi: 'उपाध्यक्ष',         en: 'Vice President' },
@@ -72,21 +66,40 @@ export default function ElectionModule() {
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
+  const societyId = user?.societyId || 'SOC001';
 
-  const [elections, setElections] = useState<Election[]>(getElections);
+  const [elections, setElections] = useState<Election[]>([]);
   const [showDialog, setShowDialog] = useState(false);
   const [showVoteDialog, setShowVoteDialog] = useState<Election | null>(null);
   const [form, setForm] = useState({ title: '', post: 'director' as PostType, electionDate: '', nominationDeadline: '', totalVoters: '', remarks: '' });
   const [candidates, setCandidates] = useState<{ name: string; memberId: string }[]>([{ name: '', memberId: '' }]);
 
+  // Load from Supabase
+  useEffect(() => {
+    if (!societyId) return;
+    supabase
+      .from('elections')
+      .select('*')
+      .eq('society_id', societyId)
+      .order('electionDate', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) { console.error('Elections load error:', error.message); return; }
+        const parsed = (data || []).map((e: any) => ({
+          ...e,
+          candidates: Array.isArray(e.candidates) ? e.candidates : [],
+        })) as Election[];
+        setElections(parsed);
+      });
+  }, [societyId]);
+
   const activeMembers = useMemo(() => members.filter(m => m.status === 'active'), [members]);
   const nextNo = () => `ELECT-${new Date().getFullYear()}-${String(elections.length + 1).padStart(3, '0')}`;
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!form.title || !form.electionDate) return;
     const now = new Date().toISOString().split('T')[0];
     const status: ElectionStatus = form.electionDate > now ? 'upcoming' : form.electionDate === now ? 'ongoing' : 'completed';
-    const election: Election = {
+    const election: Election & { society_id: string } = {
       id: `elec_${Date.now()}`,
       electionNo: nextNo(),
       title: form.title,
@@ -100,24 +113,29 @@ export default function ElectionModule() {
       remarks: form.remarks,
       createdAt: new Date().toISOString(),
       createdBy: user?.name || '',
+      society_id: societyId,
     };
-    const updated = [election, ...elections];
-    saveElections(updated);
-    setElections(updated);
+
+    const { error } = await supabase.from('elections').insert(election);
+    if (error) {
+      toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+    }
+    setElections(prev => [election, ...prev]);
     setShowDialog(false);
     setForm({ title: '', post: 'director', electionDate: '', nominationDeadline: '', totalVoters: '', remarks: '' });
     setCandidates([{ name: '', memberId: '' }]);
     toast({ title: hi ? 'चुनाव दर्ज किया गया' : 'Election created' });
   };
 
-  const handleSaveVotes = (electionId: string, updatedCandidates: Candidate[], votesCast: number) => {
-    const updated = elections.map(e => {
-      if (e.id !== electionId) return e;
-      const winner = [...updatedCandidates].sort((a, b) => b.votes - a.votes)[0];
-      return { ...e, candidates: updatedCandidates, votesCast, status: 'completed' as ElectionStatus, winnerId: winner?.id };
-    });
-    saveElections(updated);
-    setElections(updated);
+  const handleSaveVotes = async (electionId: string, updatedCandidates: Candidate[], votesCast: number) => {
+    const winner = [...updatedCandidates].sort((a, b) => b.votes - a.votes)[0];
+    const updates = { candidates: updatedCandidates, votesCast, status: 'completed' as ElectionStatus, winnerId: winner?.id };
+
+    const { error } = await supabase.from('elections').update(updates).eq('id', electionId);
+    if (error) {
+      toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+    }
+    setElections(prev => prev.map(e => e.id !== electionId ? e : { ...e, ...updates }));
     setShowVoteDialog(null);
     toast({ title: hi ? 'परिणाम दर्ज किया गया' : 'Results recorded' });
   };
@@ -129,11 +147,8 @@ export default function ElectionModule() {
       return [e.electionNo, e.title, postLabel[e.post].en, e.electionDate, e.candidates.length, winner?.name || '—', e.status];
     });
 
-  const handleCSV = () =>
-    downloadCSV(csvHeaders, getCsvRows(), 'election-module');
-
-  const handleExcel = () =>
-    downloadExcelSingle(csvHeaders, getCsvRows(), 'election-module', 'Elections');
+  const handleCSV = () => downloadCSV(csvHeaders, getCsvRows(), 'election-module');
+  const handleExcel = () => downloadExcelSingle(csvHeaders, getCsvRows(), 'election-module', 'Elections');
 
   const handlePDF = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });

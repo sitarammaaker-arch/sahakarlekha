@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -15,13 +15,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { Budget, BudgetHead } from '@/types';
-
-const BUDGET_KEY = 'sahayata_budgets';
-
-function getBudgets(): Budget[] {
-  try { return JSON.parse(localStorage.getItem(BUDGET_KEY) || '[]'); } catch { return []; }
-}
-function saveBudgets(b: Budget[]) { localStorage.setItem(BUDGET_KEY, JSON.stringify(b)); }
+import { supabase } from '@/lib/supabase';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
@@ -38,25 +32,41 @@ export default function BudgetModule() {
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
+  const societyId = user?.societyId || 'SOC001';
 
-  const [budgets, setBudgets] = useState<Budget[]>(getBudgets);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
   const [selectedFY, setSelectedFY] = useState(society.financialYear);
   const [showEditor, setShowEditor] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
 
-  // ── Derive FY bounds ──────────────────────────────────────────────────────
+  // Load from Supabase
+  useEffect(() => {
+    if (!societyId) return;
+    supabase
+      .from('budgets')
+      .select('*')
+      .eq('society_id', societyId)
+      .then(({ data, error }) => {
+        if (error) { console.error('Budget load error:', error.message); return; }
+        // Parse heads from jsonb
+        const parsed = (data || []).map((b: any) => ({
+          ...b,
+          heads: Array.isArray(b.heads) ? b.heads : [],
+        })) as Budget[];
+        setBudgets(parsed);
+      });
+  }, [societyId]);
+
   function fyBounds(fy: string) {
     const [startYear] = fy.split('-').map(Number);
     return { from: `${startYear}-04-01`, to: `${startYear + 1}-03-31` };
   }
   const { from, to } = fyBounds(selectedFY);
 
-  // ── Income & Expense accounts ─────────────────────────────────────────────
   const incomeExpAccounts = useMemo(() =>
     accounts.filter(a => a.type === 'income' || a.type === 'expense'),
     [accounts]);
 
-  // ── Actual amounts from vouchers ──────────────────────────────────────────
   const actualMap = useMemo(() => {
     const map: Record<string, number> = {};
     const active = vouchers.filter(v => !v.isDeleted && v.date >= from && v.date <= to);
@@ -67,7 +77,6 @@ export default function BudgetModule() {
     return map;
   }, [vouchers, from, to]);
 
-  // ── Current FY budget ─────────────────────────────────────────────────────
   const currentBudget = useMemo(() =>
     budgets.find(b => b.financialYear === selectedFY),
     [budgets, selectedFY]);
@@ -78,7 +87,6 @@ export default function BudgetModule() {
     return map;
   }, [currentBudget]);
 
-  // ── Compute variance rows ─────────────────────────────────────────────────
   const rows = useMemo(() => {
     return incomeExpAccounts.map(a => {
       const budgeted = budgetMap[a.id] || 0;
@@ -96,16 +104,20 @@ export default function BudgetModule() {
   const totalBudgetExpense = expenseRows.reduce((s, r) => s + r.budgeted, 0);
   const totalActualExpense = expenseRows.reduce((s, r) => s + r.actual, 0);
 
-  // ── Save budget ───────────────────────────────────────────────────────────
-  const handleSaveBudget = useCallback((heads: BudgetHead[]) => {
+  const handleSaveBudget = useCallback(async (heads: BudgetHead[]) => {
     const existing = budgets.find(b => b.financialYear === selectedFY);
-    let updated: Budget[];
+
     if (existing) {
-      updated = budgets.map(b =>
-        b.financialYear === selectedFY ? { ...b, heads, approvedBy: user?.name, approvedAt: new Date().toISOString() } : b
-      );
+      const updated = { heads, approvedBy: user?.name, approvedAt: new Date().toISOString() };
+      const { error } = await supabase.from('budgets').update(updated).eq('id', existing.id);
+      if (error) {
+        toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+      }
+      setBudgets(prev => prev.map(b =>
+        b.financialYear === selectedFY ? { ...b, ...updated } : b
+      ));
     } else {
-      const newBudget: Budget = {
+      const newBudget: Budget & { society_id: string } = {
         id: `bgt_${Date.now()}`,
         financialYear: selectedFY,
         heads,
@@ -113,17 +125,20 @@ export default function BudgetModule() {
         approvedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         createdBy: user?.name || '',
+        society_id: societyId,
       };
-      updated = [...budgets, newBudget];
+      const { error } = await supabase.from('budgets').insert(newBudget);
+      if (error) {
+        toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+      }
+      setBudgets(prev => [...prev, newBudget]);
     }
-    saveBudgets(updated);
-    setBudgets(updated);
+
     setShowEditor(false);
     toast({ title: hi ? 'बजट सहेजा गया' : 'Budget saved' });
-  }, [budgets, selectedFY, user, hi, toast]);
+  }, [budgets, selectedFY, user, hi, toast, societyId]);
 
   const budgetHeaders = ['Code', 'Account', 'Budget (₹)', 'Actual (₹)', 'Variance (₹)', 'Var %', 'Status'];
-
   const budgetDataRows = () =>
     rows.map(r => [
       r.account.code,
@@ -135,18 +150,12 @@ export default function BudgetModule() {
       r.budgeted > 0 ? (r.favourable ? 'Favourable' : 'Adverse') : '—',
     ]);
 
-  const handleCSV = () => {
-    downloadCSV(budgetHeaders, budgetDataRows(), 'budget-vs-actual');
-  };
-
-  const handleExcel = () => {
-    downloadExcelSingle(budgetHeaders, budgetDataRows(), 'budget-vs-actual', 'Budget vs Actual');
-  };
+  const handleCSV = () => downloadCSV(budgetHeaders, budgetDataRows(), 'budget-vs-actual');
+  const handleExcel = () => downloadExcelSingle(budgetHeaders, budgetDataRows(), 'budget-vs-actual', 'Budget vs Actual');
 
   const handlePDF = () => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const w = doc.internal.pageSize.getWidth();
-
     doc.setFontSize(13);
     doc.text(society.name, w / 2, 14, { align: 'center' });
     doc.setFontSize(11);
@@ -159,7 +168,7 @@ export default function BudgetModule() {
         r.budgeted.toFixed(2),
         r.actual.toFixed(2),
         `${r.variancePct.toFixed(1)}%`,
-        r.favourale ? 'Fav' : 'Adv',
+        r.favourable ? 'Fav' : 'Adv',
       ]);
 
     doc.setFontSize(10);
@@ -196,15 +205,9 @@ export default function BudgetModule() {
         </div>
         <div className="flex gap-2">
           <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" onClick={handlePDF}>
-              <Download className="h-4 w-4 mr-2" />PDF
-            </Button>
-            <Button variant="outline" onClick={handleExcel}>
-              <FileSpreadsheet className="h-4 w-4 mr-2" />Excel
-            </Button>
-            <Button variant="outline" onClick={handleCSV}>
-              <FileSpreadsheet className="h-4 w-4 mr-2" />CSV
-            </Button>
+            <Button variant="outline" onClick={handlePDF}><Download className="h-4 w-4 mr-2" />PDF</Button>
+            <Button variant="outline" onClick={handleExcel}><FileSpreadsheet className="h-4 w-4 mr-2" />Excel</Button>
+            <Button variant="outline" onClick={handleCSV}><FileSpreadsheet className="h-4 w-4 mr-2" />CSV</Button>
           </div>
           {(user?.role === 'admin' || user?.role === 'accountant') && (
             <Button onClick={() => { setEditingBudget(currentBudget || null); setShowEditor(true); }}>
@@ -219,9 +222,7 @@ export default function BudgetModule() {
       <div className="flex items-center gap-3">
         <label className="text-sm font-medium">{hi ? 'वित्तीय वर्ष:' : 'Financial Year:'}</label>
         <Select value={selectedFY} onValueChange={setSelectedFY}>
-          <SelectTrigger className="w-32">
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
           <SelectContent>
             {['2022-23', '2023-24', '2024-25', '2025-26', '2026-27'].map(fy => (
               <SelectItem key={fy} value={fy}>{fy}</SelectItem>
@@ -255,27 +256,9 @@ export default function BudgetModule() {
         </CardContent></Card>
       </div>
 
-      {/* Income Table */}
-      <BudgetTable
-        title={hi ? 'आय' : 'Income'}
-        rows={incomeRows}
-        totalBudget={totalBudgetIncome}
-        totalActual={totalActualIncome}
-        hi={hi}
-        color="green"
-      />
+      <BudgetTable title={hi ? 'आय' : 'Income'} rows={incomeRows} totalBudget={totalBudgetIncome} totalActual={totalActualIncome} hi={hi} color="green" />
+      <BudgetTable title={hi ? 'व्यय' : 'Expenses'} rows={expenseRows} totalBudget={totalBudgetExpense} totalActual={totalActualExpense} hi={hi} color="red" />
 
-      {/* Expense Table */}
-      <BudgetTable
-        title={hi ? 'व्यय' : 'Expenses'}
-        rows={expenseRows}
-        totalBudget={totalBudgetExpense}
-        totalActual={totalActualExpense}
-        hi={hi}
-        color="red"
-      />
-
-      {/* Editor Dialog */}
       {showEditor && (
         <BudgetEditorDialog
           open={showEditor}

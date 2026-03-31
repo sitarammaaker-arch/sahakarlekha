@@ -261,7 +261,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setVouchersState(allVouchers);
             storage.setVouchers(allVouchers);
             for (const v of autoVouchers) {
-              supabase.from('vouchers').upsert({ ...v, society_id: sid }).then(({ error }) => { if (error) console.warn('Auto member voucher sync error:', error.message); });
+              supabase.from('vouchers').upsert({ ...v, society_id: sid }).then(({ error }) => { if (error) console.error('Auto member voucher sync error:', error.message); });
             }
           }
         } catch (migErr) {
@@ -1098,7 +1098,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (i.id !== data.itemId) return i;
         const delta = data.type === 'purchase' || (data.type === 'adjustment' && data.qty > 0) ? data.qty : -Math.abs(data.qty);
         const newStock = i.currentStock + delta;
-        supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) console.warn('Stock currentStock sync error:', error.message); });
+        supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { console.error('Stock currentStock sync error:', error.message); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } });
         return { ...i, currentStock: newStock };
       });
       return updated;
@@ -1157,7 +1157,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (i.id !== item.itemId) return i;
           const newStock = Math.max(0, i.currentStock - item.qty);
           supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id)
-            .then(({ error }) => { if (error) console.warn('Stock sync error:', error.message); });
+            .then(({ error }) => { if (error) { console.error('Stock sync error:', error.message); toastRef.current({ title: 'Stock save failed', description: error.message, variant: 'destructive' }); } });
           return { ...i, currentStock: newStock };
         });
         return updated;
@@ -1214,7 +1214,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Reverse stock deductions
         sale.items.forEach(item => {
           setStockItemsState(s => {
-            const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = i.currentStock + item.qty; supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) console.warn('Stock currentStock sync error:', error.message); }); return { ...i, currentStock: newStock }; });
+            const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = i.currentStock + item.qty; supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { console.error('Stock currentStock sync error:', error.message); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } }); return { ...i, currentStock: newStock }; });
             return updated;
           });
         });
@@ -1286,7 +1286,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (i.id !== item.itemId) return i;
           const newStock = i.currentStock + item.qty;
           supabase.from('stock_items').update({ currentStock: newStock, purchaseRate: item.rate }).eq('id', i.id)
-            .then(({ error }) => { if (error) console.warn('Stock sync error:', error.message); });
+            .then(({ error }) => { if (error) { console.error('Stock sync error:', error.message); toastRef.current({ title: 'Stock save failed', description: error.message, variant: 'destructive' }); } });
           return { ...i, currentStock: newStock, purchaseRate: item.rate };
         });
         return updated;
@@ -1343,7 +1343,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Reverse stock additions
         purchase.items.forEach(item => {
           setStockItemsState(s => {
-            const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = Math.max(0, i.currentStock - item.qty); supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) console.warn('Stock currentStock sync error:', error.message); }); return { ...i, currentStock: newStock }; });
+            const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = Math.max(0, i.currentStock - item.qty); supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { console.error('Stock currentStock sync error:', error.message); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } }); return { ...i, currentStock: newStock }; });
             return updated;
           });
         });

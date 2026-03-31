@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -17,13 +17,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { KccLoan, CropSeasonType } from '@/types';
-
-const KCC_KEY = 'sahayata_kcc_loans';
-
-function getKccLoans(): KccLoan[] {
-  try { return JSON.parse(localStorage.getItem(KCC_KEY) || '[]'); } catch { return []; }
-}
-function saveKccLoans(loans: KccLoan[]) { localStorage.setItem(KCC_KEY, JSON.stringify(loans)); }
+import { supabase } from '@/lib/supabase';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
@@ -52,18 +46,31 @@ export default function KccLoan() {
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
+  const societyId = user?.societyId || 'SOC001';
 
-  const [loans, setLoans] = useState<KccLoan[]>(getKccLoans);
+  const [loans, setLoans] = useState<KccLoan[]>([]);
   const [showDialog, setShowDialog] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Load from Supabase
+  useEffect(() => {
+    if (!societyId) return;
+    supabase
+      .from('kcc_loans')
+      .select('*')
+      .eq('society_id', societyId)
+      .order('createdAt', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) { console.error('KCC load error:', error.message); return; }
+        setLoans((data || []) as KccLoan[]);
+      });
+  }, [societyId]);
+
   const activeMembers = useMemo(() => members.filter(m => m.status === 'active'), [members]);
 
-  // Auto-generate loan number
   const nextLoanNo = () => `KCC-${new Date().getFullYear()}-${String(loans.length + 1).padStart(4, '0')}`;
 
-  // Status computation
   const computeStatus = (loan: KccLoan): 'active' | 'repaid' | 'overdue' => {
     if (loan.outstandingAmount <= 0) return 'repaid';
     if (new Date(loan.dueDate) < new Date()) return 'overdue';
@@ -92,7 +99,6 @@ export default function KccLoan() {
     const drawn = Number(form.drawnAmount) || sanctioned;
     const repaid = Number(form.repaidAmount) || 0;
 
-    // Find KCC loan account (short-term crop loan) or default to generic loan account
     const loanAccount = accounts.find(a =>
       a.code === '3313' || a.name.toLowerCase().includes('kcc') || a.name.toLowerCase().includes('crop loan')
     );
@@ -115,7 +121,7 @@ export default function KccLoan() {
       } catch { /* ignore voucher errors */ }
     }
 
-    const newLoan: KccLoan = {
+    const newLoan: KccLoan & { society_id: string } = {
       id: `kcc_${Date.now()}`,
       loanNo: nextLoanNo(),
       memberId: form.memberId,
@@ -135,25 +141,35 @@ export default function KccLoan() {
       narration: form.narration,
       createdAt: new Date().toISOString(),
       createdBy: user?.name || '',
+      society_id: societyId,
     };
 
-    const updated = [newLoan, ...loans];
-    saveKccLoans(updated);
-    setLoans(updated);
+    const { error } = await supabase.from('kcc_loans').insert(newLoan);
+    if (error) {
+      toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+    }
+    setLoans(prev => [newLoan, ...prev]);
     setShowDialog(false);
     setForm(emptyForm);
     toast({ title: hi ? 'KCC ऋण दर्ज किया गया' : 'KCC Loan recorded' });
-  }, [form, loans, accounts, user, hi]);
+  }, [form, loans, accounts, user, hi, societyId]);
 
-  const handleRepayment = useCallback((loanId: string, repayAmt: number) => {
-    const updated = loans.map(l => {
-      if (l.id !== loanId) return l;
-      const newRepaid = l.repaidAmount + repayAmt;
-      const newOutstanding = Math.max(0, l.outstandingAmount - repayAmt);
-      return { ...l, repaidAmount: newRepaid, outstandingAmount: newOutstanding };
-    });
-    saveKccLoans(updated);
-    setLoans(updated);
+  const handleRepayment = useCallback(async (loanId: string, repayAmt: number) => {
+    const loan = loans.find(l => l.id === loanId);
+    if (!loan) return;
+    const newRepaid = loan.repaidAmount + repayAmt;
+    const newOutstanding = Math.max(0, loan.outstandingAmount - repayAmt);
+
+    const { error } = await supabase
+      .from('kcc_loans')
+      .update({ repaidAmount: newRepaid, outstandingAmount: newOutstanding })
+      .eq('id', loanId);
+    if (error) {
+      toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+    }
+    setLoans(prev => prev.map(l =>
+      l.id !== loanId ? l : { ...l, repaidAmount: newRepaid, outstandingAmount: newOutstanding }
+    ));
     toast({ title: hi ? 'चुकौती दर्ज की गई' : 'Repayment recorded' });
   }, [loans, hi, toast]);
 
@@ -168,13 +184,8 @@ export default function KccLoan() {
       `${l.interestRate}%`, l.dueDate, l.status,
     ]);
 
-  const handleCSV = () => {
-    downloadCSV(kccHeaders, kccDataRows(), 'kcc-loans');
-  };
-
-  const handleExcel = () => {
-    downloadExcelSingle(kccHeaders, kccDataRows(), 'kcc-loans', 'KCC Loans');
-  };
+  const handleCSV = () => downloadCSV(kccHeaders, kccDataRows(), 'kcc-loans');
+  const handleExcel = () => downloadExcelSingle(kccHeaders, kccDataRows(), 'kcc-loans', 'KCC Loans');
 
   const handlePDF = () => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -186,20 +197,7 @@ export default function KccLoan() {
 
     autoTable(doc, {
       startY: 28,
-      head: [[
-        'Loan No.',
-        'Member',
-        'Crop',
-        'Season',
-        'Hectare',
-        'Sanctioned',
-        'Drawn',
-        'Repaid',
-        'Outstanding',
-        'Rate %',
-        'Due Date',
-        'Status',
-      ]],
+      head: [['Loan No.', 'Member', 'Crop', 'Season', 'Hectare', 'Sanctioned', 'Drawn', 'Repaid', 'Outstanding', 'Rate %', 'Due Date', 'Status']],
       body: enrichedLoans.map(l => [
         l.loanNo, l.memberName, l.cropName,
         seasonLabel[l.cropSeason].en,

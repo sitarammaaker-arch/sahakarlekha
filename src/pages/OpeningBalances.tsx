@@ -1,40 +1,49 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Save, RefreshCw, ArrowRight, FileSpreadsheet, Download } from 'lucide-react';
+import { Save, ArrowRight, FileSpreadsheet, Download } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { LedgerAccount } from '@/types';
-
-const OB_KEY = 'sahayata_opening_balances';
 
 interface ObEntry { accountId: string; amount: number; type: 'debit' | 'credit' }
-
-function getOpeningBalances(): Record<string, ObEntry> {
-  try { return JSON.parse(localStorage.getItem(OB_KEY) || '{}'); } catch { return {}; }
-}
-function saveOpeningBalances(ob: Record<string, ObEntry>) {
-  localStorage.setItem(OB_KEY, JSON.stringify(ob));
-}
 
 const fmt = (n: number) => n.toLocaleString('hi-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function OpeningBalances() {
-  const { accounts, vouchers, society } = useData();
+  const { accounts, vouchers, society, updateAccount } = useData();
   const { user } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
 
-  const [balances, setBalances] = useState<Record<string, ObEntry>>(getOpeningBalances);
+  // Initialize from accounts (Supabase-primary — openingBalance stored on account records)
+  const [balances, setBalances] = useState<Record<string, ObEntry>>({});
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    if (!initialized && accounts.length > 0) {
+      const init: Record<string, ObEntry> = {};
+      accounts.forEach(a => {
+        if ((a.openingBalance || 0) > 0) {
+          init[a.id] = {
+            accountId: a.id,
+            amount: a.openingBalance || 0,
+            type: (a.openingBalanceType as 'debit' | 'credit') || (a.type === 'asset' ? 'debit' : 'credit'),
+          };
+        }
+      });
+      setBalances(init);
+      setInitialized(true);
+    }
+  }, [accounts, initialized]);
+
   const [filterType, setFilterType] = useState<'all' | 'asset' | 'liability' | 'equity'>('all');
   const [showOnlyNonZero, setShowOnlyNonZero] = useState(false);
 
@@ -65,12 +74,22 @@ export default function OpeningBalances() {
     downloadExcelSingle(headers, rows, 'opening_balances.xlsx', 'Opening Balances');
   };
 
+  // Save: update each account's openingBalance in Supabase via DataContext
   const handleSave = useCallback(() => {
-    saveOpeningBalances(balances);
+    // Update accounts that have balances set
+    Object.values(balances).forEach(entry => {
+      updateAccount(entry.accountId, { openingBalance: entry.amount, openingBalanceType: entry.type });
+    });
+    // Zero out accounts that were cleared
+    balanceAccounts.forEach(a => {
+      if ((a.openingBalance || 0) > 0 && !balances[a.id]) {
+        updateAccount(a.id, { openingBalance: 0 });
+      }
+    });
     toast({ title: hi ? 'प्रारंभिक शेष सहेजा गया' : 'Opening balances saved' });
-  }, [balances, hi, toast]);
+  }, [balances, balanceAccounts, updateAccount, hi, toast]);
 
-  // Auto-carry forward: compute closing balance from vouchers and set as opening
+  // Carry forward: compute closing balance from vouchers and set as opening
   const handleCarryForward = useCallback(() => {
     const fyParts = society.financialYear.split('-');
     const endYear = parseInt(fyParts[0]) + 1;
@@ -108,28 +127,21 @@ export default function OpeningBalances() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" className="gap-1" onClick={handleExcel}>
-            <FileSpreadsheet className="h-4 w-4" /> Excel
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1" onClick={handleCSV}>
-            <Download className="h-4 w-4" /> CSV
-          </Button>
+          <Button variant="outline" size="sm" className="gap-1" onClick={handleExcel}><FileSpreadsheet className="h-4 w-4" /> Excel</Button>
+          <Button variant="outline" size="sm" className="gap-1" onClick={handleCSV}><Download className="h-4 w-4" /> CSV</Button>
           {user?.role === 'admin' && (
             <>
               <Button variant="outline" onClick={handleCarryForward}>
-                <ArrowRight className="h-4 w-4 mr-2" />
-                {hi ? 'Carry Forward' : 'Carry Forward (Auto)'}
+                <ArrowRight className="h-4 w-4 mr-2" />{hi ? 'Carry Forward' : 'Carry Forward (Auto)'}
               </Button>
               <Button onClick={handleSave}>
-                <Save className="h-4 w-4 mr-2" />
-                {hi ? 'सहेजें' : 'Save'}
+                <Save className="h-4 w-4 mr-2" />{hi ? 'सहेजें' : 'Save'}
               </Button>
             </>
           )}
         </div>
       </div>
 
-      {/* Trial balance check */}
       <div className="grid grid-cols-3 gap-4">
         <Card><CardContent className="pt-4">
           <p className="text-xs text-muted-foreground">{hi ? 'कुल डेबिट' : 'Total Debit'}</p>
@@ -147,9 +159,8 @@ export default function OpeningBalances() {
         </CardContent></Card>
       </div>
 
-      {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
-        <Select value={filterType} onValueChange={v => setFilterType(v as any)}>
+        <Select value={filterType} onValueChange={v => setFilterType(v as 'all' | 'asset' | 'liability' | 'equity')}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{hi ? 'सभी' : 'All'}</SelectItem>
@@ -183,7 +194,6 @@ export default function OpeningBalances() {
                   const entry = balances[acct.id];
                   const amt = entry?.amount || '';
                   const type = entry?.type || (acct.type === 'asset' ? 'debit' : 'credit');
-
                   return (
                     <TableRow key={acct.id}>
                       <TableCell className="font-mono text-xs">{acct.code}</TableCell>
@@ -203,8 +213,7 @@ export default function OpeningBalances() {
                         {user?.role === 'admin' ? (
                           <Input
                             type="number" min="0" step="0.01" className="w-36 text-right h-7 text-sm"
-                            value={amt}
-                            placeholder="0.00"
+                            value={amt} placeholder="0.00"
                             onChange={e => {
                               const v = parseFloat(e.target.value) || 0;
                               if (v === 0) {

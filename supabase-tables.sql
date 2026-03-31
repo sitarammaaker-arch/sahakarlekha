@@ -557,11 +557,140 @@ create index if not exists idx_customers_society on customers(society_id);
 alter table customers add column if not exists "nameHi" text;
 
 
--- ── STEP 9: App-level FK integrity notes ─────────────────────────────────────
+-- ── STEP 9: Standalone module tables (meeting_register, kcc_loans, budgets, eway_bills, elections) ─
+
+-- 16. Meeting Register
+create table if not exists meeting_register (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "meetingNo" text,
+  type text,
+  date text,
+  time text,
+  venue text,
+  agenda text,
+  attendees text,
+  resolutions text,
+  minutes text,
+  status text default 'scheduled',
+  "createdAt" text
+);
+alter table meeting_register enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='meeting_register' and policyname='allow_all') then
+    create policy "allow_all" on meeting_register for all using (true) with check (true);
+  end if;
+end $$;
+create index if not exists idx_meeting_register_society on meeting_register(society_id);
+
+-- 17. KCC Loans
+create table if not exists kcc_loans (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "loanNo" text,
+  "memberId" text,
+  "memberName" text,
+  "cropName" text,
+  "cropSeason" text,
+  "landAreaHectares" numeric default 0,
+  "sanctionedAmount" numeric default 0,
+  "drawnAmount" numeric default 0,
+  "repaidAmount" numeric default 0,
+  "outstandingAmount" numeric default 0,
+  "interestRate" numeric default 7,
+  "disbursementDate" text,
+  "dueDate" text,
+  status text default 'active',
+  "voucherId" text,
+  narration text,
+  "createdAt" text,
+  "createdBy" text
+);
+alter table kcc_loans enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='kcc_loans' and policyname='allow_all') then
+    create policy "allow_all" on kcc_loans for all using (true) with check (true);
+  end if;
+end $$;
+create index if not exists idx_kcc_loans_society on kcc_loans(society_id);
+
+-- 18. Budgets
+create table if not exists budgets (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "financialYear" text,
+  heads jsonb default '[]',
+  "approvedBy" text,
+  "approvedAt" text,
+  "createdAt" text,
+  "createdBy" text
+);
+alter table budgets enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='budgets' and policyname='allow_all') then
+    create policy "allow_all" on budgets for all using (true) with check (true);
+  end if;
+end $$;
+create index if not exists idx_budgets_society on budgets(society_id);
+
+-- 19. e-Way Bills
+create table if not exists eway_bills (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  type text,
+  "docNo" text,
+  date text,
+  "partyName" text,
+  "partyGst" text,
+  items jsonb default '[]',
+  "totalTaxable" numeric default 0,
+  "totalGst" numeric default 0,
+  "grandTotal" numeric default 0,
+  "transportMode" text,
+  "vehicleNo" text,
+  distance numeric default 0,
+  "ewbNo" text
+);
+alter table eway_bills enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='eway_bills' and policyname='allow_all') then
+    create policy "allow_all" on eway_bills for all using (true) with check (true);
+  end if;
+end $$;
+create index if not exists idx_eway_bills_society on eway_bills(society_id);
+
+-- 20. Elections
+create table if not exists elections (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "electionNo" text,
+  title text,
+  post text,
+  "electionDate" text,
+  "nominationDeadline" text,
+  status text default 'upcoming',
+  candidates jsonb default '[]',
+  "totalVoters" integer default 0,
+  "votesCast" integer default 0,
+  "winnerId" text,
+  remarks text,
+  "createdAt" text,
+  "createdBy" text
+);
+alter table elections enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='elections' and policyname='allow_all') then
+    create policy "allow_all" on elections for all using (true) with check (true);
+  end if;
+end $$;
+create index if not exists idx_elections_society on elections(society_id);
+
+
+-- ── STEP 10: App-level FK integrity notes ─────────────────────────────────────
 -- NOTE: Hard DB-level FKs are intentionally omitted because:
 -- 1. Account IDs are text (seeded from app, not auto-generated UUIDs)
 -- 2. Soft-delete pattern: records may reference logically-deleted entities
--- 3. localStorage-first sync: FK violations possible during partial sync
+-- 3. Supabase-primary sync: App validates FK integrity before inserting
 --
 -- App-level FK invariants enforced in DataContext.tsx:
 --   vouchers.debitAccountId   → accounts.id  (validated in addVoucher)

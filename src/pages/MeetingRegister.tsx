@@ -1,13 +1,10 @@
 /**
- * AGM / Meeting Register
- *
- * Track Annual General Meetings, Special General Meetings, and Board Meetings.
- * Stored in localStorage (same pattern as other registers).
- * Fields: meetingNo, type, date, venue, agenda, attendees count, resolutions, minutes, status.
+ * AGM / Meeting Register — Supabase-primary
  */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +30,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
+import { supabase } from '@/lib/supabase';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type MeetingType   = 'AGM' | 'SGM' | 'Board' | 'Committee' | 'Other';
@@ -46,20 +44,12 @@ interface Meeting {
   time: string;
   venue: string;
   agenda: string;
-  attendees: string;   // number as string
+  attendees: string;
   resolutions: string;
   minutes: string;
   status: MeetingStatus;
   createdAt: string;
 }
-
-const STORAGE_KEY = 'sahayata_meetings';
-
-const loadMeetings = (): Meeting[] => {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
-};
-const saveMeetings = (data: Meeting[]) =>
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
 const nextMeetingNo = (meetings: Meeting[], type: MeetingType): string => {
   const year = new Date().getFullYear();
@@ -100,16 +90,32 @@ const STATUS_COLORS: Record<MeetingStatus, string> = {
 const MeetingRegister: React.FC = () => {
   const { language } = useLanguage();
   const { society } = useData();
+  const { user } = useAuth();
   const { toast } = useToast();
 
   const hi = language === 'hi';
+  const societyId = user?.societyId || 'SOC001';
 
-  const [meetings, setMeetings] = useState<Meeting[]>(loadMeetings);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editId, setEditId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+
+  // Load from Supabase
+  useEffect(() => {
+    if (!societyId) return;
+    supabase
+      .from('meeting_register')
+      .select('*')
+      .eq('society_id', societyId)
+      .order('date', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) { console.error('Meeting load error:', error.message); return; }
+        setMeetings((data || []) as Meeting[]);
+      });
+  }, [societyId]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return meetings;
@@ -143,35 +149,49 @@ const MeetingRegister: React.FC = () => {
     setDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.date || !form.venue.trim()) {
       toast({ title: hi ? 'तिथि और स्थान आवश्यक हैं' : 'Date and venue are required', variant: 'destructive' });
       return;
     }
 
     if (editId) {
-      const updated = meetings.map(m => m.id === editId ? { ...m, ...form } : m);
-      setMeetings(updated); saveMeetings(updated);
+      const { error } = await supabase
+        .from('meeting_register')
+        .update({ ...form })
+        .eq('id', editId);
+      if (error) {
+        toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+      }
+      setMeetings(prev => prev.map(m => m.id === editId ? { ...m, ...form } : m));
       toast({ title: hi ? 'बैठक अपडेट की गई' : 'Meeting updated' });
     } else {
-      const newMeeting: Meeting = {
+      const newMeeting: Meeting & { society_id: string } = {
         id: crypto.randomUUID(),
         meetingNo: nextMeetingNo(meetings, form.type),
         ...form,
         createdAt: new Date().toISOString(),
+        society_id: societyId,
       };
-      const updated = [newMeeting, ...meetings];
-      setMeetings(updated); saveMeetings(updated);
+      const { error } = await supabase.from('meeting_register').insert(newMeeting);
+      if (error) {
+        toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+      }
+      setMeetings(prev => [newMeeting, ...prev]);
       toast({ title: hi ? 'बैठक जोड़ी गई' : 'Meeting added', description: newMeeting.meetingNo });
     }
 
     setDialogOpen(false);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteId) return;
-    const updated = meetings.filter(m => m.id !== deleteId);
-    setMeetings(updated); saveMeetings(updated);
+    const { error } = await supabase.from('meeting_register').delete().eq('id', deleteId);
+    if (error) {
+      toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
+      setDeleteId(null); return;
+    }
+    setMeetings(prev => prev.filter(m => m.id !== deleteId));
     setDeleteId(null);
     toast({ title: hi ? 'बैठक हटाई गई' : 'Meeting deleted' });
   };
@@ -190,11 +210,8 @@ const MeetingRegister: React.FC = () => {
       m.resolutions || '—',
     ]);
 
-  const handleCSV = () =>
-    downloadCSV(csvHeaders, getCsvRows(), 'meeting-register');
-
-  const handleExcel = () =>
-    downloadExcelSingle(csvHeaders, getCsvRows(), 'meeting-register', 'Meetings');
+  const handleCSV = () => downloadCSV(csvHeaders, getCsvRows(), 'meeting-register');
+  const handleExcel = () => downloadExcelSingle(csvHeaders, getCsvRows(), 'meeting-register', 'Meetings');
 
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -224,11 +241,9 @@ const MeetingRegister: React.FC = () => {
     doc.save(`meeting-register-${society.financialYear}.pdf`);
   };
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
   const heldCount = meetings.filter(m => m.status === 'held').length;
   const pendingCount = meetings.filter(m => m.status === 'scheduled').length;
 
-  // ────────────────────────────────────────────────────────────────────────────
   return (
     <div className="p-4 space-y-4">
       {/* Header */}

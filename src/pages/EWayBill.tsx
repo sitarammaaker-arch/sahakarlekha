@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Download, Truck, Copy, CheckCircle2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -31,22 +33,17 @@ interface EWayEntry {
   ewbNo: string;
 }
 
-const EWAYBILL_KEY = 'sahayata_ewaybills';
-
-function getEWayBills(): EWayEntry[] {
-  try { return JSON.parse(localStorage.getItem(EWAYBILL_KEY) || '[]'); } catch { return []; }
-}
-function saveEWayBills(e: EWayEntry[]) { localStorage.setItem(EWAYBILL_KEY, JSON.stringify(e)); }
-
 const transportModes = ['Road', 'Rail', 'Air', 'Ship'];
 
 export default function EWayBill() {
   const { sales, purchases, stockItems, society } = useData();
+  const { user } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
+  const societyId = user?.societyId || 'SOC001';
 
-  const [savedBills, setSavedBills] = useState<EWayEntry[]>(getEWayBills);
+  const [savedBills, setSavedBills] = useState<EWayEntry[]>([]);
   const [mode, setMode] = useState<'list' | 'generate'>('list');
   const [sourceType, setSourceType] = useState<'sale' | 'purchase'>('sale');
   const [selectedDoc, setSelectedDoc] = useState('');
@@ -54,6 +51,24 @@ export default function EWayBill() {
   const [vehicleNo, setVehicleNo] = useState('');
   const [distance, setDistance] = useState('');
   const [generatedJson, setGeneratedJson] = useState<string>('');
+
+  // Load from Supabase
+  useEffect(() => {
+    if (!societyId) return;
+    supabase
+      .from('eway_bills')
+      .select('*')
+      .eq('society_id', societyId)
+      .order('date', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) { console.error('EWayBill load error:', error.message); return; }
+        const parsed = (data || []).map((b: any) => ({
+          ...b,
+          items: Array.isArray(b.items) ? b.items : [],
+        })) as EWayEntry[];
+        setSavedBills(parsed);
+      });
+  }, [societyId]);
 
   const eligibleSales = useMemo(() =>
     sales.filter(s => !(s as any).isDeleted && s.grandTotal >= 50000),
@@ -65,7 +80,7 @@ export default function EWayBill() {
 
   const currentList = sourceType === 'sale' ? eligibleSales : eligiblePurchases;
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     const doc = sourceType === 'sale'
       ? sales.find(s => s.id === selectedDoc)
       : purchases.find(p => p.id === selectedDoc);
@@ -123,8 +138,7 @@ export default function EWayBill() {
     const jsonStr = JSON.stringify(payload, null, 2);
     setGeneratedJson(jsonStr);
 
-    // Save record
-    const entry: EWayEntry = {
+    const entry: EWayEntry & { society_id: string } = {
       id: `ewb_${Date.now()}`,
       type: sourceType,
       docNo: isSale ? s.saleNo : s.purchaseNo,
@@ -138,10 +152,15 @@ export default function EWayBill() {
       vehicleNo: vehicleNo.toUpperCase(),
       distance: parseInt(distance) || 0,
       ewbNo: '',
+      society_id: societyId,
     };
-    const updated = [entry, ...savedBills];
-    saveEWayBills(updated);
-    setSavedBills(updated);
+
+    const { error } = await supabase.from('eway_bills').insert(entry);
+    if (error) {
+      console.error('EWayBill save error:', error.message);
+    } else {
+      setSavedBills(prev => [entry, ...prev]);
+    }
   };
 
   const handleDownloadJson = () => {
