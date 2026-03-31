@@ -415,6 +415,7 @@ export interface Customer {
   nameHi?: string;
   address?: string;
   phone?: string;
+  gstNo?: string;
   accountId: string; // sub-ledger under Sundry Debtors (3303)
   isActive: boolean;
   createdAt: string;

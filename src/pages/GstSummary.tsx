@@ -28,7 +28,7 @@ function fyBounds(fy: string): { from: string; to: string } {
 }
 
 export default function GstSummary() {
-  const { sales, purchases, society } = useData();
+  const { sales, purchases, customers, society } = useData();
   const { language } = useLanguage();
 
   const { from: defaultFrom, to: defaultTo } = fyBounds(society.financialYear);
@@ -46,10 +46,12 @@ export default function GstSummary() {
     purchases.filter(p => !(p as any).isDeleted && p.date >= fromDate && p.date <= toDate),
     [purchases, fromDate, toDate]);
 
+  // Customer map for B2B lookup
+  const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
+
   // ── Output Tax (Sales) ─────────────────────────────────────────────────────
-  // Group by GST rate (cgstPct + sgstPct or igstPct)
   interface GstSlabRow {
-    rate: number;      // total GST rate e.g. 5, 12, 18, 28
+    rate: number;
     taxableAmount: number;
     cgst: number;
     sgst: number;
@@ -62,7 +64,7 @@ export default function GstSummary() {
     const map = new Map<number, GstSlabRow>();
     for (const s of activeSales) {
       const rate = s.cgstPct + s.sgstPct + s.igstPct;
-      if (rate === 0 && s.taxAmount === 0) continue; // exempt / nil-rated
+      if (rate === 0 && s.taxAmount === 0) continue;
       const existing = map.get(rate) ?? { rate, taxableAmount: 0, cgst: 0, sgst: 0, igst: 0, total: 0, count: 0 };
       existing.taxableAmount += s.netAmount;
       existing.cgst += s.cgstAmount;
@@ -75,7 +77,6 @@ export default function GstSummary() {
     return Array.from(map.values()).sort((a, b) => a.rate - b.rate);
   }, [activeSales]);
 
-  // Nil / exempt sales
   const nilSales = useMemo(() =>
     activeSales.filter(s => s.taxAmount === 0),
     [activeSales]);
@@ -122,30 +123,22 @@ export default function GstSummary() {
   const netIgst = outputTotals.igst - itcTotals.igst;
   const netGst  = outputTotals.tax  - itcTotals.tax;
 
-  // ── GSTR-1: HSN Summary (from sale items with hsnCode) ────────────────────
-  const hsnSummary = useMemo(() => {
-    const map = new Map<string, { hsn: string; description: string; uqc: string; totalQty: number; taxableValue: number; igst: number; cgst: number; sgst: number }>();
-    for (const s of activeSales) {
-      for (const item of s.items) {
-        const hsn = (item as any).hsnCode || 'N/A';
-        const key = hsn;
-        const existing = map.get(key) ?? { hsn, description: item.itemName, uqc: item.unit || 'NOS', totalQty: 0, taxableValue: 0, igst: 0, cgst: 0, sgst: 0 };
-        existing.totalQty += item.qty;
-        const ratio = s.netAmount > 0 ? (item.qty * item.rate) / s.netAmount : 0;
-        existing.taxableValue += item.qty * item.rate;
-        existing.igst += s.igstAmount * ratio;
-        existing.cgst += s.cgstAmount * ratio;
-        existing.sgst += s.sgstAmount * ratio;
-        map.set(key, existing);
-      }
-    }
-    return Array.from(map.values()).sort((a, b) => a.hsn.localeCompare(b.hsn));
-  }, [activeSales]);
+  // ── GSTR-1: B2B Sales (customer has gstNo) ───────────────────────────────
+  const b2bSales = useMemo(() =>
+    activeSales.filter(s => {
+      if (!s.customerId) return false;
+      const cust = customerMap.get(s.customerId);
+      return !!(cust?.gstNo);
+    }),
+    [activeSales, customerMap]);
 
-  // ── GSTR-1: B2CS (B2C small — all consumer sales grouped by rate + state) ─
+  // ── GSTR-1: B2CS Sales (all consumer sales not in B2B) ───────────────────
+  const b2bIds = useMemo(() => new Set(b2bSales.map(s => s.id)), [b2bSales]);
+
   const b2csSummary = useMemo(() => {
     const map = new Map<number, { rate: number; taxableValue: number; igst: number; cgst: number; sgst: number; count: number }>();
     for (const s of activeSales) {
+      if (b2bIds.has(s.id)) continue;
       const rate = s.cgstPct + s.sgstPct + s.igstPct;
       const existing = map.get(rate) ?? { rate, taxableValue: 0, igst: 0, cgst: 0, sgst: 0, count: 0 };
       existing.taxableValue += s.netAmount;
@@ -156,17 +149,92 @@ export default function GstSummary() {
       map.set(rate, existing);
     }
     return Array.from(map.values()).sort((a, b) => a.rate - b.rate);
+  }, [activeSales, b2bIds]);
+
+  // ── GSTR-1: HSN Summary (from sale items with hsnCode) ───────────────────
+  const hsnSummary = useMemo(() => {
+    const map = new Map<string, { hsn: string; description: string; uqc: string; totalQty: number; taxableValue: number; igst: number; cgst: number; sgst: number }>();
+    for (const s of activeSales) {
+      for (const item of s.items) {
+        const hsn = (item as any).hsnCode || 'N/A';
+        const existing = map.get(hsn) ?? { hsn, description: item.itemName, uqc: item.unit || 'NOS', totalQty: 0, taxableValue: 0, igst: 0, cgst: 0, sgst: 0 };
+        existing.totalQty += item.qty;
+        const ratio = s.netAmount > 0 ? (item.qty * item.rate) / s.netAmount : 0;
+        existing.taxableValue += item.qty * item.rate;
+        existing.igst += s.igstAmount * ratio;
+        existing.cgst += s.cgstAmount * ratio;
+        existing.sgst += s.sgstAmount * ratio;
+        map.set(hsn, existing);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.hsn.localeCompare(b.hsn));
   }, [activeSales]);
 
-  // ── GSTR-3B: Table 3.1 outward supplies ────────────────────────────────────
+  // ── GSTR-3B: Table 3.1 outward supplies ─────────────────────────────────
   const outwardTaxable = { taxable: outputTotals.taxable, igst: outputTotals.igst, cgst: outputTotals.cgst, sgst: outputTotals.sgst };
   const outwardNil = useMemo(() => {
     const s = activeSales.filter(s => s.taxAmount === 0);
     return { taxable: s.reduce((a, r) => a + r.netAmount, 0), igst: 0, cgst: 0, sgst: 0 };
   }, [activeSales]);
 
-  // ── GSTR-3B: Table 4 ITC ───────────────────────────────────────────────────
+  // ── GSTR-3B: Table 4 ITC ─────────────────────────────────────────────────
   const itcAvailable = { taxable: itcTotals.taxable, igst: itcTotals.igst, cgst: itcTotals.cgst, sgst: itcTotals.sgst };
+
+  // ── Reconciliation: month-wise comparison ─────────────────────────────────
+  const reconData = useMemo(() => {
+    const months = new Map<string, {
+      month: string;
+      outCgst: number; outSgst: number; outIgst: number; outTotal: number;
+      itcCgst: number; itcSgst: number; itcIgst: number; itcTotal: number;
+    }>();
+
+    for (const s of activeSales) {
+      const m = s.date.slice(0, 7);
+      const existing = months.get(m) ?? { month: m, outCgst: 0, outSgst: 0, outIgst: 0, outTotal: 0, itcCgst: 0, itcSgst: 0, itcIgst: 0, itcTotal: 0 };
+      existing.outCgst += s.cgstAmount;
+      existing.outSgst += s.sgstAmount;
+      existing.outIgst += s.igstAmount;
+      existing.outTotal += s.taxAmount;
+      months.set(m, existing);
+    }
+    for (const p of activePurchases) {
+      const m = p.date.slice(0, 7);
+      const existing = months.get(m) ?? { month: m, outCgst: 0, outSgst: 0, outIgst: 0, outTotal: 0, itcCgst: 0, itcSgst: 0, itcIgst: 0, itcTotal: 0 };
+      existing.itcCgst += p.cgstAmount;
+      existing.itcSgst += p.sgstAmount;
+      existing.itcIgst += p.igstAmount;
+      existing.itcTotal += p.taxAmount;
+      months.set(m, existing);
+    }
+    return Array.from(months.values()).sort((a, b) => a.month.localeCompare(b.month));
+  }, [activeSales, activePurchases]);
+
+  // ── Rate slab summary table ───────────────────────────────────────────────
+  const allRates = Array.from(new Set([
+    ...outputByRate.map(r => r.rate),
+    ...itcByRate.map(r => r.rate),
+  ])).sort((a, b) => a - b);
+
+  const gstHeaders = ['GST Rate %', 'Bills', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Total GST'];
+
+  const gstSlabRows = (data: GstSlabRow[]) =>
+    data.map(r => [
+      `${r.rate}%`, r.count,
+      r.taxableAmount.toFixed(2), r.cgst.toFixed(2),
+      r.sgst.toFixed(2), r.igst.toFixed(2), r.total.toFixed(2),
+    ]);
+
+  const handleCSV = () => {
+    const outputRows = gstSlabRows(outputByRate);
+    downloadCSV(gstHeaders, outputRows, 'gst-summary-output');
+  };
+
+  const handleExcel = () => {
+    downloadExcel([
+      { name: 'Output Tax', headers: gstHeaders, rows: gstSlabRows(outputByRate) },
+      { name: 'ITC', headers: gstHeaders, rows: gstSlabRows(itcByRate) },
+    ], 'gst-summary');
+  };
 
   // GSTR-3B JSON export
   const handleGstr3bJson = () => {
@@ -270,31 +338,130 @@ export default function GstSummary() {
     doc.save(`GSTR3B_${society.gstNo || 'society'}_${fromDate.slice(0, 7)}.pdf`);
   };
 
-  // ── Rate slab summary table ───────────────────────────────────────────────
-  const allRates = Array.from(new Set([
-    ...outputByRate.map(r => r.rate),
-    ...itcByRate.map(r => r.rate),
-  ])).sort((a, b) => a - b);
+  // GSTR-1 JSON export (NIC format)
+  const handleGstr1Json = () => {
+    const fp = fromDate.slice(5, 7) + fromDate.slice(0, 4); // MMYYYY
 
-  const gstHeaders = ['GST Rate %', 'Bills', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Total GST'];
+    // Group B2B by customer GSTIN
+    const b2bMap = new Map<string, typeof b2bSales>();
+    for (const s of b2bSales) {
+      const cust = s.customerId ? customerMap.get(s.customerId) : undefined;
+      const gstin = cust?.gstNo || 'URP';
+      const arr = b2bMap.get(gstin) ?? [];
+      arr.push(s);
+      b2bMap.set(gstin, arr);
+    }
 
-  const gstSlabRows = (data: GstSlabRow[]) =>
-    data.map(r => [
-      `${r.rate}%`, r.count,
-      r.taxableAmount.toFixed(2), r.cgst.toFixed(2),
-      r.sgst.toFixed(2), r.igst.toFixed(2), r.total.toFixed(2),
-    ]);
+    const b2bArr = Array.from(b2bMap.entries()).map(([ctin, invList]) => ({
+      ctin,
+      inv: invList.map(s => ({
+        inum: s.saleNo,
+        idt: s.date,
+        val: s.grandTotal,
+        pos: (society as any).stateCode || '09',
+        rchrg: 'N',
+        itms: [{
+          num: 1,
+          itm_det: {
+            rt: s.cgstPct + s.sgstPct + s.igstPct,
+            txval: s.netAmount,
+            iamt: s.igstAmount,
+            camt: s.cgstAmount,
+            samt: s.sgstAmount,
+            csamt: 0,
+          },
+        }],
+      })),
+    }));
 
-  const handleCSV = () => {
-    const outputRows = gstSlabRows(outputByRate);
-    downloadCSV(gstHeaders, outputRows, 'gst-summary-output');
+    const b2csArr = b2csSummary.map(r => ({
+      sply_ty: 'INTRA',
+      rt: r.rate,
+      typ: 'OE',
+      txval: r.taxableValue,
+      iamt: r.igst,
+      camt: r.cgst,
+      samt: r.sgst,
+      csamt: 0,
+    }));
+
+    const hsnArr = hsnSummary.map((h, i) => ({
+      num: i + 1,
+      hsn_sc: h.hsn === 'N/A' ? '' : h.hsn,
+      desc: h.description,
+      uqc: h.uqc,
+      qty: parseFloat(h.totalQty.toFixed(3)),
+      val: parseFloat(h.taxableValue.toFixed(2)),
+      txval: parseFloat(h.taxableValue.toFixed(2)),
+      iamt: parseFloat(h.igst.toFixed(2)),
+      camt: parseFloat(h.cgst.toFixed(2)),
+      samt: parseFloat(h.sgst.toFixed(2)),
+      csamt: 0,
+    }));
+
+    const payload = {
+      version: 'GST3.0.4',
+      hash: 'hash',
+      gstin: society.gstNo || 'GSTIN_NOT_SET',
+      fp,
+      b2b: b2bArr,
+      b2cs: b2csArr,
+      hsn: { data: hsnArr },
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `GSTR1_${society.gstNo || 'society'}_${fromDate.slice(0, 7)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
-  const handleExcel = () => {
-    downloadExcel([
-      { name: 'Output Tax', headers: gstHeaders, rows: gstSlabRows(outputByRate) },
-      { name: 'ITC', headers: gstHeaders, rows: gstSlabRows(itcByRate) },
-    ], 'gst-summary');
+  // GSTR-1 PDF
+  const handleGstr1Pdf = () => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const w = doc.internal.pageSize.getWidth();
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('FORM GSTR-1', w / 2, 14, { align: 'center' });
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+    doc.text(`GSTIN: ${society.gstNo || 'N/A'}  |  ${society.name}  |  Period: ${fromDate} to ${toDate}`, w / 2, 22, { align: 'center' });
+
+    // B2B table
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.text('4A, 4B, 4C — B2B Invoices', 14, 32);
+    if (b2bSales.length > 0) {
+      autoTable(doc, {
+        startY: 36,
+        head: [['Inv No', 'Date', 'Customer', 'GSTIN', 'Taxable', 'IGST', 'CGST', 'SGST', 'Total']],
+        body: b2bSales.map(s => {
+          const cust = s.customerId ? customerMap.get(s.customerId) : undefined;
+          return [s.saleNo, s.date, cust?.name || s.customerName, cust?.gstNo || '', s.netAmount.toFixed(2), s.igstAmount.toFixed(2), s.cgstAmount.toFixed(2), s.sgstAmount.toFixed(2), s.grandTotal.toFixed(2)];
+        }),
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+        columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' } },
+      });
+    } else {
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+      doc.text('No B2B invoices in this period.', 14, 38);
+    }
+
+    const y2 = b2bSales.length > 0 ? (doc as any).lastAutoTable.finalY + 8 : 44;
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.text('B2CS — Consumer Sales by Rate', 14, y2);
+    if (b2csSummary.length > 0) {
+      autoTable(doc, {
+        startY: y2 + 4,
+        head: [['Rate %', 'Count', 'Taxable Value', 'IGST', 'CGST', 'SGST']],
+        body: b2csSummary.map(r => [pct(r.rate), r.count, r.taxableValue.toFixed(2), r.igst.toFixed(2), r.cgst.toFixed(2), r.sgst.toFixed(2)]),
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [21, 128, 61], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+        columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+      });
+    }
+
+    doc.save(`GSTR1_${society.gstNo || 'society'}_${fromDate.slice(0, 7)}.pdf`);
   };
 
   const handleDownload = () => {
@@ -420,274 +587,332 @@ export default function GstSummary() {
         </Card>
       </div>
 
-      {/* Main tabs */}
-      <Tabs defaultValue="output">
+      {/* Main tabs — 4 tabs */}
+      <Tabs defaultValue="overview">
         <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="output">
-            {hi ? 'आउटपुट टैक्स (बिक्री)' : 'Output Tax (Sales)'}
-          </TabsTrigger>
-          <TabsTrigger value="itc">
-            {hi ? 'इनपुट टैक्स क्रेडिट (खरीद)' : 'Input Tax Credit (Purchases)'}
-          </TabsTrigger>
-          <TabsTrigger value="net">
-            {hi ? 'शुद्ध GST विवरण' : 'Net GST Statement'}
+          <TabsTrigger value="overview">
+            {hi ? 'GST अवलोकन' : 'GST Overview'}
           </TabsTrigger>
           <TabsTrigger value="gstr1">GSTR-1</TabsTrigger>
           <TabsTrigger value="gstr3b">GSTR-3B</TabsTrigger>
+          <TabsTrigger value="recon">
+            {hi ? 'माह-वार मिलान' : 'Reconciliation'}
+          </TabsTrigger>
         </TabsList>
 
-        {/* Output Tax tab */}
-        <TabsContent value="output">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-green-600" />
-                {hi ? 'GST आउटपुट — दर अनुसार सारांश' : 'GST Output — Summary by Rate'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {outputByRate.length === 0 ? (
-                <p className="text-muted-foreground text-sm text-center py-8">
-                  {hi ? 'इस अवधि में कोई GST युक्त बिक्री नहीं' : 'No taxable sales in this period'}
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{hi ? 'GST दर' : 'GST Rate'}</TableHead>
-                      <TableHead>{hi ? 'बिल संख्या' : 'Bills'}</TableHead>
-                      <TableHead className="text-right">{hi ? 'कर योग्य राशि' : 'Taxable Value'}</TableHead>
-                      <TableHead className="text-right">CGST</TableHead>
-                      <TableHead className="text-right">SGST</TableHead>
-                      <TableHead className="text-right">IGST</TableHead>
-                      <TableHead className="text-right">{hi ? 'कुल GST' : 'Total GST'}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {outputByRate.map(row => (
-                      <TableRow key={row.rate}>
-                        <TableCell>
-                          <Badge variant="outline" className="font-mono">{pct(row.rate)}</Badge>
-                        </TableCell>
-                        <TableCell>{row.count}</TableCell>
-                        <TableCell className="text-right font-mono">{fmt(row.taxableAmount)}</TableCell>
-                        <TableCell className="text-right font-mono">{fmt(row.cgst)}</TableCell>
-                        <TableCell className="text-right font-mono">{fmt(row.sgst)}</TableCell>
-                        <TableCell className="text-right font-mono">{fmt(row.igst)}</TableCell>
-                        <TableCell className="text-right font-mono font-semibold">{fmt(row.total)}</TableCell>
-                      </TableRow>
-                    ))}
-                    {nilSales.length > 0 && (
-                      <TableRow className="text-muted-foreground">
-                        <TableCell><Badge variant="secondary">{hi ? 'शून्य' : 'Nil/Exempt'}</Badge></TableCell>
-                        <TableCell>{nilSales.length}</TableCell>
-                        <TableCell className="text-right font-mono">{fmt(nilSales.reduce((s, r) => s + r.netAmount, 0))}</TableCell>
-                        <TableCell className="text-right">—</TableCell>
-                        <TableCell className="text-right">—</TableCell>
-                        <TableCell className="text-right">—</TableCell>
-                        <TableCell className="text-right">—</TableCell>
-                      </TableRow>
-                    )}
-                    {/* Totals row */}
-                    <TableRow className="font-bold bg-muted/50">
-                      <TableCell colSpan={2}>{hi ? 'कुल योग' : 'Grand Total'}</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(outputTotals.taxable)}</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(outputTotals.cgst)}</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(outputTotals.sgst)}</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(outputTotals.igst)}</TableCell>
-                      <TableCell className="text-right font-mono text-green-700">{fmt(outputTotals.tax)}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ITC tab */}
-        <TabsContent value="itc">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <TrendingDown className="h-4 w-4 text-blue-600" />
-                {hi ? 'इनपुट टैक्स क्रेडिट — दर अनुसार सारांश' : 'Input Tax Credit — Summary by Rate'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {itcByRate.length === 0 ? (
-                <p className="text-muted-foreground text-sm text-center py-8">
-                  {hi ? 'इस अवधि में कोई GST युक्त खरीद नहीं' : 'No taxable purchases in this period'}
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{hi ? 'GST दर' : 'GST Rate'}</TableHead>
-                      <TableHead>{hi ? 'बिल संख्या' : 'Bills'}</TableHead>
-                      <TableHead className="text-right">{hi ? 'कर योग्य राशि' : 'Taxable Value'}</TableHead>
-                      <TableHead className="text-right">CGST (ITC)</TableHead>
-                      <TableHead className="text-right">SGST (ITC)</TableHead>
-                      <TableHead className="text-right">IGST (ITC)</TableHead>
-                      <TableHead className="text-right">{hi ? 'कुल ITC' : 'Total ITC'}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {itcByRate.map(row => (
-                      <TableRow key={row.rate}>
-                        <TableCell>
-                          <Badge variant="outline" className="font-mono">{pct(row.rate)}</Badge>
-                        </TableCell>
-                        <TableCell>{row.count}</TableCell>
-                        <TableCell className="text-right font-mono">{fmt(row.taxableAmount)}</TableCell>
-                        <TableCell className="text-right font-mono">{fmt(row.cgst)}</TableCell>
-                        <TableCell className="text-right font-mono">{fmt(row.sgst)}</TableCell>
-                        <TableCell className="text-right font-mono">{fmt(row.igst)}</TableCell>
-                        <TableCell className="text-right font-mono font-semibold">{fmt(row.total)}</TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow className="font-bold bg-muted/50">
-                      <TableCell colSpan={2}>{hi ? 'कुल योग' : 'Grand Total'}</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(itcTotals.taxable)}</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(itcTotals.cgst)}</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(itcTotals.sgst)}</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(itcTotals.igst)}</TableCell>
-                      <TableCell className="text-right font-mono text-blue-700">{fmt(itcTotals.tax)}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Net GST Statement tab */}
-        <TabsContent value="net">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                {hi ? 'शुद्ध GST देयता विवरण' : 'Net GST Liability Statement'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{hi ? 'विवरण' : 'Particulars'}</TableHead>
-                      <TableHead className="text-right">CGST (₹)</TableHead>
-                      <TableHead className="text-right">SGST (₹)</TableHead>
-                      <TableHead className="text-right">IGST (₹)</TableHead>
-                      <TableHead className="text-right">{hi ? 'कुल GST (₹)' : 'Total GST (₹)'}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell className="font-medium text-green-700">
-                        {hi ? 'आउटपुट टैक्स (बिक्री पर GST)' : 'Output Tax (GST on Sales)'}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">{fmt(outputTotals.cgst)}</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(outputTotals.sgst)}</TableCell>
-                      <TableCell className="text-right font-mono">{fmt(outputTotals.igst)}</TableCell>
-                      <TableCell className="text-right font-mono font-semibold text-green-700">{fmt(outputTotals.tax)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-medium text-blue-700">
-                        {hi ? 'कम: इनपुट टैक्स क्रेडिट (खरीद पर GST)' : 'Less: Input Tax Credit (GST on Purchases)'}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">({fmt(itcTotals.cgst)})</TableCell>
-                      <TableCell className="text-right font-mono">({fmt(itcTotals.sgst)})</TableCell>
-                      <TableCell className="text-right font-mono">({fmt(itcTotals.igst)})</TableCell>
-                      <TableCell className="text-right font-mono font-semibold text-blue-700">({fmt(itcTotals.tax)})</TableCell>
-                    </TableRow>
-                    <TableRow className="border-t-2 bg-muted/50">
-                      <TableCell className="font-bold">
-                        {netGst >= 0
-                          ? (hi ? 'शुद्ध GST देय' : 'Net GST Payable')
-                          : (hi ? 'शुद्ध GST वापसी योग्य' : 'Net GST Refundable')}
-                      </TableCell>
-                      <TableCell className={`text-right font-mono font-bold ${netCgst >= 0 ? 'text-red-700' : 'text-purple-700'}`}>
-                        {fmt(Math.abs(netCgst))}
-                        <span className="text-xs ml-1">{netCgst >= 0 ? 'Dr' : 'Cr'}</span>
-                      </TableCell>
-                      <TableCell className={`text-right font-mono font-bold ${netSgst >= 0 ? 'text-red-700' : 'text-purple-700'}`}>
-                        {fmt(Math.abs(netSgst))}
-                        <span className="text-xs ml-1">{netSgst >= 0 ? 'Dr' : 'Cr'}</span>
-                      </TableCell>
-                      <TableCell className={`text-right font-mono font-bold ${netIgst >= 0 ? 'text-red-700' : 'text-purple-700'}`}>
-                        {fmt(Math.abs(netIgst))}
-                        <span className="text-xs ml-1">{netIgst >= 0 ? 'Dr' : 'Cr'}</span>
-                      </TableCell>
-                      <TableCell className={`text-right font-mono font-bold text-lg ${netGst >= 0 ? 'text-red-700' : 'text-purple-700'}`}>
-                        {fmt(Math.abs(netGst))}
-                        <Badge variant={netGst >= 0 ? 'destructive' : 'secondary'} className="ml-2 text-xs">
-                          {netGst >= 0 ? (hi ? 'देय' : 'Pay') : (hi ? 'वापसी' : 'Refund')}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-
-              {/* Rate-wise reconciliation */}
-              {allRates.length > 0 && (
-                <div className="mt-6">
-                  <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
-                    {hi ? 'दर-अनुसार विवरण' : 'Rate-wise Breakup'}
-                  </h3>
+        {/* ── TAB 1: Overview ─────────────────────────────────────────────── */}
+        <TabsContent value="overview">
+          <div className="space-y-4">
+            {/* Output Tax by rate */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-green-600" />
+                  {hi ? 'GST आउटपुट — दर अनुसार सारांश' : 'GST Output — Summary by Rate'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {outputByRate.length === 0 ? (
+                  <p className="text-muted-foreground text-sm text-center py-8">
+                    {hi ? 'इस अवधि में कोई GST युक्त बिक्री नहीं' : 'No taxable sales in this period'}
+                  </p>
+                ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{hi ? 'GST दर' : 'Rate'}</TableHead>
-                        <TableHead className="text-right">{hi ? 'बिक्री योग्य राशि' : 'Sales Taxable'}</TableHead>
-                        <TableHead className="text-right">{hi ? 'आउटपुट GST' : 'Output GST'}</TableHead>
-                        <TableHead className="text-right">{hi ? 'खरीद योग्य राशि' : 'Purchase Taxable'}</TableHead>
-                        <TableHead className="text-right">ITC</TableHead>
-                        <TableHead className="text-right">{hi ? 'शुद्ध देय' : 'Net Payable'}</TableHead>
+                        <TableHead>{hi ? 'GST दर' : 'GST Rate'}</TableHead>
+                        <TableHead>{hi ? 'बिल संख्या' : 'Bills'}</TableHead>
+                        <TableHead className="text-right">{hi ? 'कर योग्य राशि' : 'Taxable Value'}</TableHead>
+                        <TableHead className="text-right">CGST</TableHead>
+                        <TableHead className="text-right">SGST</TableHead>
+                        <TableHead className="text-right">IGST</TableHead>
+                        <TableHead className="text-right">{hi ? 'कुल GST' : 'Total GST'}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {allRates.map(rate => {
-                        const out = outputByRate.find(r => r.rate === rate);
-                        const itc = itcByRate.find(r => r.rate === rate);
-                        const net = (out?.total ?? 0) - (itc?.total ?? 0);
-                        return (
-                          <TableRow key={rate}>
-                            <TableCell><Badge variant="outline" className="font-mono">{pct(rate)}</Badge></TableCell>
-                            <TableCell className="text-right font-mono">{fmt(out?.taxableAmount ?? 0)}</TableCell>
-                            <TableCell className="text-right font-mono text-green-700">{fmt(out?.total ?? 0)}</TableCell>
-                            <TableCell className="text-right font-mono">{fmt(itc?.taxableAmount ?? 0)}</TableCell>
-                            <TableCell className="text-right font-mono text-blue-700">{fmt(itc?.total ?? 0)}</TableCell>
-                            <TableCell className={`text-right font-mono font-semibold ${net >= 0 ? 'text-red-600' : 'text-purple-600'}`}>
-                              {net >= 0 ? fmt(net) : `(${fmt(Math.abs(net))})`}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
+                      {outputByRate.map(row => (
+                        <TableRow key={row.rate}>
+                          <TableCell><Badge variant="outline" className="font-mono">{pct(row.rate)}</Badge></TableCell>
+                          <TableCell>{row.count}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(row.taxableAmount)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(row.cgst)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(row.sgst)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(row.igst)}</TableCell>
+                          <TableCell className="text-right font-mono font-semibold">{fmt(row.total)}</TableCell>
+                        </TableRow>
+                      ))}
+                      {nilSales.length > 0 && (
+                        <TableRow className="text-muted-foreground">
+                          <TableCell><Badge variant="secondary">{hi ? 'शून्य' : 'Nil/Exempt'}</Badge></TableCell>
+                          <TableCell>{nilSales.length}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(nilSales.reduce((s, r) => s + r.netAmount, 0))}</TableCell>
+                          <TableCell className="text-right">—</TableCell>
+                          <TableCell className="text-right">—</TableCell>
+                          <TableCell className="text-right">—</TableCell>
+                          <TableCell className="text-right">—</TableCell>
+                        </TableRow>
+                      )}
+                      <TableRow className="font-bold bg-muted/50">
+                        <TableCell colSpan={2}>{hi ? 'कुल योग' : 'Grand Total'}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(outputTotals.taxable)}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(outputTotals.cgst)}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(outputTotals.sgst)}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(outputTotals.igst)}</TableCell>
+                        <TableCell className="text-right font-mono text-green-700">{fmt(outputTotals.tax)}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* ITC by rate */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <TrendingDown className="h-4 w-4 text-blue-600" />
+                  {hi ? 'इनपुट टैक्स क्रेडिट — दर अनुसार सारांश' : 'Input Tax Credit — Summary by Rate'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {itcByRate.length === 0 ? (
+                  <p className="text-muted-foreground text-sm text-center py-8">
+                    {hi ? 'इस अवधि में कोई GST युक्त खरीद नहीं' : 'No taxable purchases in this period'}
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{hi ? 'GST दर' : 'GST Rate'}</TableHead>
+                        <TableHead>{hi ? 'बिल संख्या' : 'Bills'}</TableHead>
+                        <TableHead className="text-right">{hi ? 'कर योग्य राशि' : 'Taxable Value'}</TableHead>
+                        <TableHead className="text-right">CGST (ITC)</TableHead>
+                        <TableHead className="text-right">SGST (ITC)</TableHead>
+                        <TableHead className="text-right">IGST (ITC)</TableHead>
+                        <TableHead className="text-right">{hi ? 'कुल ITC' : 'Total ITC'}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {itcByRate.map(row => (
+                        <TableRow key={row.rate}>
+                          <TableCell><Badge variant="outline" className="font-mono">{pct(row.rate)}</Badge></TableCell>
+                          <TableCell>{row.count}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(row.taxableAmount)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(row.cgst)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(row.sgst)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(row.igst)}</TableCell>
+                          <TableCell className="text-right font-mono font-semibold">{fmt(row.total)}</TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="font-bold bg-muted/50">
+                        <TableCell colSpan={2}>{hi ? 'कुल योग' : 'Grand Total'}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(itcTotals.taxable)}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(itcTotals.cgst)}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(itcTotals.sgst)}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(itcTotals.igst)}</TableCell>
+                        <TableCell className="text-right font-mono text-blue-700">{fmt(itcTotals.tax)}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Net GST liability */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  {hi ? 'शुद्ध GST देयता विवरण' : 'Net GST Liability Statement'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{hi ? 'विवरण' : 'Particulars'}</TableHead>
+                        <TableHead className="text-right">CGST (₹)</TableHead>
+                        <TableHead className="text-right">SGST (₹)</TableHead>
+                        <TableHead className="text-right">IGST (₹)</TableHead>
+                        <TableHead className="text-right">{hi ? 'कुल GST (₹)' : 'Total GST (₹)'}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell className="font-medium text-green-700">
+                          {hi ? 'आउटपुट टैक्स (बिक्री पर GST)' : 'Output Tax (GST on Sales)'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">{fmt(outputTotals.cgst)}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(outputTotals.sgst)}</TableCell>
+                        <TableCell className="text-right font-mono">{fmt(outputTotals.igst)}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold text-green-700">{fmt(outputTotals.tax)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium text-blue-700">
+                          {hi ? 'कम: इनपुट टैक्स क्रेडिट (खरीद पर GST)' : 'Less: Input Tax Credit (GST on Purchases)'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">({fmt(itcTotals.cgst)})</TableCell>
+                        <TableCell className="text-right font-mono">({fmt(itcTotals.sgst)})</TableCell>
+                        <TableCell className="text-right font-mono">({fmt(itcTotals.igst)})</TableCell>
+                        <TableCell className="text-right font-mono font-semibold text-blue-700">({fmt(itcTotals.tax)})</TableCell>
+                      </TableRow>
+                      <TableRow className="border-t-2 bg-muted/50">
+                        <TableCell className="font-bold">
+                          {netGst >= 0
+                            ? (hi ? 'शुद्ध GST देय' : 'Net GST Payable')
+                            : (hi ? 'शुद्ध GST वापसी योग्य' : 'Net GST Refundable')}
+                        </TableCell>
+                        <TableCell className={`text-right font-mono font-bold ${netCgst >= 0 ? 'text-red-700' : 'text-purple-700'}`}>
+                          {fmt(Math.abs(netCgst))}<span className="text-xs ml-1">{netCgst >= 0 ? 'Dr' : 'Cr'}</span>
+                        </TableCell>
+                        <TableCell className={`text-right font-mono font-bold ${netSgst >= 0 ? 'text-red-700' : 'text-purple-700'}`}>
+                          {fmt(Math.abs(netSgst))}<span className="text-xs ml-1">{netSgst >= 0 ? 'Dr' : 'Cr'}</span>
+                        </TableCell>
+                        <TableCell className={`text-right font-mono font-bold ${netIgst >= 0 ? 'text-red-700' : 'text-purple-700'}`}>
+                          {fmt(Math.abs(netIgst))}<span className="text-xs ml-1">{netIgst >= 0 ? 'Dr' : 'Cr'}</span>
+                        </TableCell>
+                        <TableCell className={`text-right font-mono font-bold text-lg ${netGst >= 0 ? 'text-red-700' : 'text-purple-700'}`}>
+                          {fmt(Math.abs(netGst))}
+                          <Badge variant={netGst >= 0 ? 'destructive' : 'secondary'} className="ml-2 text-xs">
+                            {netGst >= 0 ? (hi ? 'देय' : 'Pay') : (hi ? 'वापसी' : 'Refund')}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
                     </TableBody>
                   </Table>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+
+                {/* Rate-wise breakup */}
+                {allRates.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
+                      {hi ? 'दर-अनुसार विवरण' : 'Rate-wise Breakup'}
+                    </h3>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{hi ? 'GST दर' : 'Rate'}</TableHead>
+                          <TableHead className="text-right">{hi ? 'बिक्री योग्य राशि' : 'Sales Taxable'}</TableHead>
+                          <TableHead className="text-right">{hi ? 'आउटपुट GST' : 'Output GST'}</TableHead>
+                          <TableHead className="text-right">{hi ? 'खरीद योग्य राशि' : 'Purchase Taxable'}</TableHead>
+                          <TableHead className="text-right">ITC</TableHead>
+                          <TableHead className="text-right">{hi ? 'शुद्ध देय' : 'Net Payable'}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {allRates.map(rate => {
+                          const out = outputByRate.find(r => r.rate === rate);
+                          const itc = itcByRate.find(r => r.rate === rate);
+                          const net = (out?.total ?? 0) - (itc?.total ?? 0);
+                          return (
+                            <TableRow key={rate}>
+                              <TableCell><Badge variant="outline" className="font-mono">{pct(rate)}</Badge></TableCell>
+                              <TableCell className="text-right font-mono">{fmt(out?.taxableAmount ?? 0)}</TableCell>
+                              <TableCell className="text-right font-mono text-green-700">{fmt(out?.total ?? 0)}</TableCell>
+                              <TableCell className="text-right font-mono">{fmt(itc?.taxableAmount ?? 0)}</TableCell>
+                              <TableCell className="text-right font-mono text-blue-700">{fmt(itc?.total ?? 0)}</TableCell>
+                              <TableCell className={`text-right font-mono font-semibold ${net >= 0 ? 'text-red-600' : 'text-purple-600'}`}>
+                                {net >= 0 ? fmt(net) : `(${fmt(Math.abs(net))})`}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
-        {/* GSTR-1 tab */}
+
+        {/* ── TAB 2: GSTR-1 ───────────────────────────────────────────────── */}
         <TabsContent value="gstr1">
           <div className="space-y-4">
+            {/* Action buttons */}
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" size="sm" onClick={handleGstr1Pdf}>
+                <Download className="h-4 w-4 mr-2" />{hi ? 'GSTR-1 PDF' : 'Download GSTR-1 PDF'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleGstr1Json}>
+                <FileText className="h-4 w-4 mr-2" />{hi ? 'GSTR-1 JSON (NIC)' : 'Download GSTR-1 JSON'}
+              </Button>
+            </div>
+
+            {/* B2B */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4 text-blue-600" />
+                  {hi ? 'B2B चालान (GSTIN-युक्त ग्राहक)' : 'B2B Invoices (Registered Customers)'}
+                  <Badge variant="secondary" className="ml-auto">{b2bSales.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {b2bSales.length === 0 ? (
+                  <p className="text-muted-foreground text-sm text-center py-6">
+                    {hi ? 'इस अवधि में कोई B2B बिक्री नहीं (ग्राहक में GST No. जोड़ें)' : 'No B2B sales in this period. Add GST No. to customer profiles.'}
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{hi ? 'चालान नंबर' : 'Inv No'}</TableHead>
+                          <TableHead>{hi ? 'तिथि' : 'Date'}</TableHead>
+                          <TableHead>{hi ? 'ग्राहक' : 'Customer'}</TableHead>
+                          <TableHead>GSTIN</TableHead>
+                          <TableHead className="text-right">{hi ? 'कर योग्य' : 'Taxable'}</TableHead>
+                          <TableHead className="text-right">IGST</TableHead>
+                          <TableHead className="text-right">CGST</TableHead>
+                          <TableHead className="text-right">SGST</TableHead>
+                          <TableHead className="text-right">{hi ? 'कुल' : 'Total'}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {b2bSales.map(s => {
+                          const cust = s.customerId ? customerMap.get(s.customerId) : undefined;
+                          return (
+                            <TableRow key={s.id}>
+                              <TableCell className="font-mono text-sm">{s.saleNo}</TableCell>
+                              <TableCell>{s.date}</TableCell>
+                              <TableCell>{cust?.name || s.customerName}</TableCell>
+                              <TableCell className="font-mono text-xs">{cust?.gstNo || '—'}</TableCell>
+                              <TableCell className="text-right font-mono">{fmt(s.netAmount)}</TableCell>
+                              <TableCell className="text-right font-mono">{fmt(s.igstAmount)}</TableCell>
+                              <TableCell className="text-right font-mono">{fmt(s.cgstAmount)}</TableCell>
+                              <TableCell className="text-right font-mono">{fmt(s.sgstAmount)}</TableCell>
+                              <TableCell className="text-right font-mono font-semibold">{fmt(s.grandTotal)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        <TableRow className="font-bold bg-muted/50">
+                          <TableCell colSpan={4}>{hi ? 'कुल योग' : 'Total'}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(b2bSales.reduce((s, r) => s + r.netAmount, 0))}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(b2bSales.reduce((s, r) => s + r.igstAmount, 0))}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(b2bSales.reduce((s, r) => s + r.cgstAmount, 0))}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(b2bSales.reduce((s, r) => s + r.sgstAmount, 0))}</TableCell>
+                          <TableCell className="text-right font-mono text-green-700">{fmt(b2bSales.reduce((s, r) => s + r.grandTotal, 0))}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* B2CS */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <ClipboardList className="h-4 w-4 text-orange-600" />
-                  {hi ? 'GSTR-1 — B2C सारांश (उपभोक्ता बिक्री)' : 'GSTR-1 — B2CS Summary (Consumer Sales)'}
+                  {hi ? 'B2CS — उपभोक्ता बिक्री (दर-अनुसार)' : 'B2CS — Consumer Sales (by Rate)'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-muted-foreground mb-3">
-                  {hi ? 'नोट: GSTIN-युक्त खरीदारों का डेटा उपलब्ध नहीं है, इसलिए सभी बिक्री B2CS (Small) में दिखाई गई हैं।'
-                      : 'Note: Customer GSTIN not stored, so all sales shown as B2CS (Small Consumer).'}
-                </p>
                 {b2csSummary.length === 0 ? (
-                  <p className="text-muted-foreground text-sm text-center py-6">{hi ? 'कोई बिक्री नहीं' : 'No sales in period'}</p>
+                  <p className="text-muted-foreground text-sm text-center py-6">{hi ? 'कोई B2C बिक्री नहीं' : 'No B2C sales in period'}</p>
                 ) : (
                   <Table>
                     <TableHeader>
@@ -719,7 +944,7 @@ export default function GstSummary() {
                         <TableCell className="text-right font-mono">{fmt(b2csSummary.reduce((s, r) => s + r.igst, 0))}</TableCell>
                         <TableCell className="text-right font-mono">{fmt(b2csSummary.reduce((s, r) => s + r.cgst, 0))}</TableCell>
                         <TableCell className="text-right font-mono">{fmt(b2csSummary.reduce((s, r) => s + r.sgst, 0))}</TableCell>
-                        <TableCell className="text-right font-mono text-green-700">{fmt(outputTotals.tax)}</TableCell>
+                        <TableCell className="text-right font-mono text-green-700">{fmt(b2csSummary.reduce((s, r) => s + r.igst + r.cgst + r.sgst, 0))}</TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>
@@ -727,6 +952,7 @@ export default function GstSummary() {
               </CardContent>
             </Card>
 
+            {/* HSN Summary */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">{hi ? 'HSN / SAC सारांश' : 'HSN / SAC Summary'}</CardTitle>
@@ -767,6 +993,7 @@ export default function GstSummary() {
               </CardContent>
             </Card>
 
+            {/* Document Summary */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">{hi ? 'दस्तावेज़ सारांश' : 'Document Summary'}</CardTitle>
@@ -795,7 +1022,7 @@ export default function GstSummary() {
           </div>
         </TabsContent>
 
-        {/* GSTR-3B tab */}
+        {/* ── TAB 3: GSTR-3B ──────────────────────────────────────────────── */}
         <TabsContent value="gstr3b">
           <div className="space-y-4">
             <div className="flex gap-2 flex-wrap">
@@ -934,6 +1161,84 @@ export default function GstSummary() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* ── TAB 4: Reconciliation ────────────────────────────────────────── */}
+        <TabsContent value="recon">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                {hi ? 'माह-वार GST मिलान' : 'Month-wise GST Reconciliation'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              {reconData.length === 0 ? (
+                <p className="text-muted-foreground text-sm text-center py-8">
+                  {hi ? 'इस अवधि में कोई डेटा नहीं' : 'No data in this period'}
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{hi ? 'माह' : 'Month'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'आउट CGST' : 'Out CGST'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'आउट SGST' : 'Out SGST'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'आउट IGST' : 'Out IGST'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'आउट कुल' : 'Out Total'}</TableHead>
+                      <TableHead className="text-right">ITC CGST</TableHead>
+                      <TableHead className="text-right">ITC SGST</TableHead>
+                      <TableHead className="text-right">ITC IGST</TableHead>
+                      <TableHead className="text-right">ITC {hi ? 'कुल' : 'Total'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'शुद्ध देय' : 'Net Payable'}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reconData.map(row => {
+                      const net = row.outTotal - row.itcTotal;
+                      return (
+                        <TableRow key={row.month}>
+                          <TableCell className="font-medium font-mono">{row.month}</TableCell>
+                          <TableCell className="text-right font-mono text-sm">{fmt(row.outCgst)}</TableCell>
+                          <TableCell className="text-right font-mono text-sm">{fmt(row.outSgst)}</TableCell>
+                          <TableCell className="text-right font-mono text-sm">{fmt(row.outIgst)}</TableCell>
+                          <TableCell className="text-right font-mono text-sm font-semibold text-green-700">{fmt(row.outTotal)}</TableCell>
+                          <TableCell className="text-right font-mono text-sm">{fmt(row.itcCgst)}</TableCell>
+                          <TableCell className="text-right font-mono text-sm">{fmt(row.itcSgst)}</TableCell>
+                          <TableCell className="text-right font-mono text-sm">{fmt(row.itcIgst)}</TableCell>
+                          <TableCell className="text-right font-mono text-sm font-semibold text-blue-700">{fmt(row.itcTotal)}</TableCell>
+                          <TableCell className={`text-right font-mono text-sm font-bold ${net >= 0 ? 'text-red-700' : 'text-green-700'}`}>
+                            {fmt(Math.abs(net))}
+                            <Badge variant={net >= 0 ? 'destructive' : 'secondary'} className="ml-1 text-xs">
+                              {net >= 0 ? (hi ? 'देय' : 'Pay') : (hi ? 'रिफंड' : 'Refund')}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {/* Totals row */}
+                    <TableRow className="font-bold bg-muted/50 border-t-2">
+                      <TableCell>{hi ? 'कुल योग' : 'Grand Total'}</TableCell>
+                      <TableCell className="text-right font-mono">{fmt(reconData.reduce((s, r) => s + r.outCgst, 0))}</TableCell>
+                      <TableCell className="text-right font-mono">{fmt(reconData.reduce((s, r) => s + r.outSgst, 0))}</TableCell>
+                      <TableCell className="text-right font-mono">{fmt(reconData.reduce((s, r) => s + r.outIgst, 0))}</TableCell>
+                      <TableCell className="text-right font-mono text-green-700">{fmt(reconData.reduce((s, r) => s + r.outTotal, 0))}</TableCell>
+                      <TableCell className="text-right font-mono">{fmt(reconData.reduce((s, r) => s + r.itcCgst, 0))}</TableCell>
+                      <TableCell className="text-right font-mono">{fmt(reconData.reduce((s, r) => s + r.itcSgst, 0))}</TableCell>
+                      <TableCell className="text-right font-mono">{fmt(reconData.reduce((s, r) => s + r.itcIgst, 0))}</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">{fmt(reconData.reduce((s, r) => s + r.itcTotal, 0))}</TableCell>
+                      <TableCell className={`text-right font-mono text-lg ${netGst >= 0 ? 'text-red-700' : 'text-green-700'}`}>
+                        {fmt(Math.abs(netGst))}
+                        <Badge variant={netGst >= 0 ? 'destructive' : 'secondary'} className="ml-1 text-xs">
+                          {netGst >= 0 ? (hi ? 'देय' : 'Pay') : (hi ? 'रिफंड' : 'Refund')}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

@@ -54,6 +54,7 @@ import BudgetModule from "./pages/BudgetModule";
 import TdsForm16A from "./pages/TdsForm16A";
 import UserManagement from "./pages/UserManagement";
 import EWayBill from "./pages/EWayBill";
+import HsnMaster from "./pages/HsnMaster";
 import KccLoan from "./pages/KccLoan";
 import ElectionModule from "./pages/ElectionModule";
 import OpeningBalances from "./pages/OpeningBalances";
@@ -154,6 +155,7 @@ const AppRoutes = () => {
       <Route path="/audit-certificate" element={<ProtectedRoute><AuditCertificate /></ProtectedRoute>} />
       <Route path="/backup-restore" element={<ProtectedRoute><BackupRestore /></ProtectedRoute>} />
       <Route path="/gst-summary" element={<ProtectedRoute><GstSummary /></ProtectedRoute>} />
+      <Route path="/hsn-master" element={<ProtectedRoute><HsnMaster /></ProtectedRoute>} />
       <Route path="/aging-analysis" element={<ProtectedRoute><AgingAnalysis /></ProtectedRoute>} />
       <Route path="/stock-valuation" element={<ProtectedRoute><StockValuation /></ProtectedRoute>} />
       <Route path="/budget-module" element={<ProtectedRoute><BudgetModule /></ProtectedRoute>} />

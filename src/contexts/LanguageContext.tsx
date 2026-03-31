@@ -53,6 +53,7 @@ export const translations: Translations = {
   tdsForm16A: { hi: 'TDS Form 16A', en: 'TDS Form 16A' },
   userManagement: { hi: 'उपयोगकर्ता प्रबंधन', en: 'User Management' },
   eWayBill: { hi: 'e-Way Bill', en: 'e-Way Bill' },
+  hsnMaster: { hi: 'HSN/SAC मास्टर', en: 'HSN/SAC Master' },
   kccLoan: { hi: 'KCC / फसल ऋण', en: 'KCC / Crop Loan' },
   electionModule: { hi: 'सहकारी चुनाव', en: 'Election Module' },
   openingBalances: { hi: 'प्रारंभिक शेष / CF', en: 'Opening Balances / CF' },

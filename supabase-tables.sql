@@ -718,4 +718,27 @@ create index if not exists idx_elections_society on elections(society_id);
 -- alter table sales             add column if not exists society_id text default 'SOC001';
 -- alter table purchases         add column if not exists society_id text default 'SOC001';
 -- alter table employees         add column if not exists society_id text default 'SOC001';
+
+
+-- ── STEP 11: HSN Master + Customer gstNo ──────────────────────────────────────
+create table if not exists hsn_master (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  code text not null,
+  description text,
+  type text default 'HSN',  -- HSN or SAC
+  "gstRate" numeric default 0,
+  cess numeric default 0,
+  "createdAt" text
+);
+alter table hsn_master enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='hsn_master' and policyname='allow_all') then
+    create policy "allow_all" on hsn_master for all using (true) with check (true);
+  end if;
+end $$;
+create index if not exists idx_hsn_master_society on hsn_master(society_id);
+
+-- Add gstNo to customers table
+alter table customers add column if not exists "gstNo" text;
 -- alter table salary_records    add column if not exists society_id text default 'SOC001';

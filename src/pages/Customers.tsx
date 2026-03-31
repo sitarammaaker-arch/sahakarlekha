@@ -27,6 +27,7 @@ const EMPTY_FORM = (): Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'cre
   nameHi: '',
   address: '',
   phone: '',
+  gstNo: '',
   isActive: true,
 });
 
@@ -48,20 +49,20 @@ const Customers: React.FC = () => {
     ), [customers, search]);
 
   const handleCSV = () => {
-    const headers = ['Customer Code', 'Name', 'Phone', 'Address', 'Status'];
-    const rows = filtered.map(c => [c.customerCode || '', c.name, c.phone || '', c.address || '', c.isActive ? 'Active' : 'Inactive']);
+    const headers = ['Customer Code', 'Name', 'Phone', 'GST No', 'Address', 'Status'];
+    const rows = filtered.map(c => [c.customerCode || '', c.name, c.phone || '', c.gstNo || '', c.address || '', c.isActive ? 'Active' : 'Inactive']);
     downloadCSV(headers, rows, 'customers.csv');
   };
   const handleExcel = () => {
-    const headers = ['Customer Code', 'Name', 'Phone', 'Address', 'Status'];
-    const rows = filtered.map(c => [c.customerCode || '', c.name, c.phone || '', c.address || '', c.isActive ? 'Active' : 'Inactive']);
+    const headers = ['Customer Code', 'Name', 'Phone', 'GST No', 'Address', 'Status'];
+    const rows = filtered.map(c => [c.customerCode || '', c.name, c.phone || '', c.gstNo || '', c.address || '', c.isActive ? 'Active' : 'Inactive']);
     downloadExcelSingle(headers, rows, 'customers.xlsx', 'Customers');
   };
 
   const openAdd = () => { setEditId(null); setForm(EMPTY_FORM()); setShowForm(true); };
   const openEdit = (c: Customer) => {
     setEditId(c.id);
-    setForm({ name: c.name, nameHi: c.nameHi || '', address: c.address || '', phone: c.phone || '', isActive: c.isActive });
+    setForm({ name: c.name, nameHi: c.nameHi || '', address: c.address || '', phone: c.phone || '', gstNo: c.gstNo || '', isActive: c.isActive });
     setShowForm(true);
   };
 
@@ -241,6 +242,10 @@ const Customers: React.FC = () => {
             <div className="space-y-1">
               <Label>{language === 'hi' ? 'फोन' : 'Phone'}</Label>
               <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="9XXXXXXXXX" />
+            </div>
+            <div className="space-y-1">
+              <Label>{language === 'hi' ? 'GST नंबर' : 'GST No.'}</Label>
+              <Input value={(form as any).gstNo || ''} onChange={e => setForm(f => ({ ...f, gstNo: e.target.value }))} placeholder="29XXXXX0000X1Z5" />
             </div>
             <div className="flex items-center gap-3">
               <input type="checkbox" id="cus-active" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="h-4 w-4" />

@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Download, Truck, Copy, CheckCircle2 } from 'lucide-react';
+import { Download, Truck, Copy, CheckCircle2, Hash } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 const fmt = (n: number) =>
@@ -45,6 +46,7 @@ export default function EWayBill() {
 
   const [savedBills, setSavedBills] = useState<EWayEntry[]>([]);
   const [mode, setMode] = useState<'list' | 'generate'>('list');
+  const [ewbDialog, setEwbDialog] = useState<{ open: boolean; billId: string; ewbNo: string }>({ open: false, billId: '', ewbNo: '' });
   const [sourceType, setSourceType] = useState<'sale' | 'purchase'>('sale');
   const [selectedDoc, setSelectedDoc] = useState('');
   const [transportMode, setTransportMode] = useState('Road');
@@ -178,6 +180,19 @@ export default function EWayBill() {
     toast({ title: hi ? 'JSON कॉपी हुआ' : 'JSON copied to clipboard' });
   };
 
+  const handleSaveEwbNo = async () => {
+    const { billId, ewbNo } = ewbDialog;
+    if (!ewbNo.trim()) return;
+    const { error } = await supabase.from('eway_bills').update({ ewbNo: ewbNo.trim() }).eq('id', billId);
+    if (error) {
+      toast({ title: hi ? 'त्रुटि हुई' : 'Error saving EWB No', variant: 'destructive' });
+      return;
+    }
+    setSavedBills(prev => prev.map(b => b.id === billId ? { ...b, ewbNo: ewbNo.trim() } : b));
+    toast({ title: hi ? 'EWB नंबर सहेजा गया' : 'EWB No saved' });
+    setEwbDialog({ open: false, billId: '', ewbNo: '' });
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -305,12 +320,13 @@ export default function EWayBill() {
                   <TableHead>{hi ? 'पार्टी' : 'Party'}</TableHead>
                   <TableHead className="text-right">{hi ? 'कुल' : 'Total'}</TableHead>
                   <TableHead>{hi ? 'वाहन' : 'Vehicle'}</TableHead>
+                  <TableHead>{hi ? 'EWB नंबर' : 'EWB No.'}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {savedBills.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                       {hi ? 'कोई e-Way Bill नहीं बनाया गया' : 'No e-Way Bills generated yet'}
                     </TableCell>
                   </TableRow>
@@ -326,6 +342,18 @@ export default function EWayBill() {
                     <TableCell>{b.partyName}</TableCell>
                     <TableCell className="text-right font-mono">{fmt(b.grandTotal)}</TableCell>
                     <TableCell className="font-mono text-xs">{b.vehicleNo || '—'}</TableCell>
+                    <TableCell>
+                      {b.ewbNo ? (
+                        <span className="flex items-center gap-1 text-green-700 font-mono text-sm font-medium">
+                          <CheckCircle2 className="h-3.5 w-3.5" />{b.ewbNo}
+                        </span>
+                      ) : (
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                          onClick={() => setEwbDialog({ open: true, billId: b.id, ewbNo: '' })}>
+                          <Hash className="h-3 w-3" />{hi ? 'दर्ज करें' : 'Enter'}
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -333,6 +361,34 @@ export default function EWayBill() {
           </CardContent>
         </Card>
       )}
+
+      {/* EWB No Dialog */}
+      <Dialog open={ewbDialog.open} onOpenChange={o => setEwbDialog(d => ({ ...d, open: o }))}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{hi ? 'EWB नंबर दर्ज करें' : 'Enter EWB Number'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1">
+              <Label>{hi ? 'e-Way Bill नंबर' : 'e-Way Bill No.'}</Label>
+              <Input
+                value={ewbDialog.ewbNo}
+                onChange={e => setEwbDialog(d => ({ ...d, ewbNo: e.target.value }))}
+                placeholder="e.g. 331200012345678"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setEwbDialog({ open: false, billId: '', ewbNo: '' })} className="flex-1">
+                {hi ? 'रद्द करें' : 'Cancel'}
+              </Button>
+              <Button onClick={handleSaveEwbNo} disabled={!ewbDialog.ewbNo.trim()} className="flex-1">
+                {hi ? 'सहेजें' : 'Save'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
