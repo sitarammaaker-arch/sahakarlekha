@@ -1303,7 +1303,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Two-step save — same pattern as editHistory fix for vouchers:
     // Step 1: upsert ONLY the original-table base columns (schema cache always knows these → never fails)
     // Step 2: update GST/TDS columns separately (added via ALTER TABLE — schema cache may lag)
-    const { cgstPct, sgstPct, igstPct, tdsPct, cgstAmount, sgstAmount, igstAmount, tdsAmount, taxAmount, grandTotal, supplierId, taxVoucherIds: _tv, ...purchaseBase } = purchase;
+    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, taxVoucherIds: _tv, ...purchaseBase } = purchase;
     supabase.from('purchases').upsert(withSoc(purchaseBase)).then(({ error }) => {
       if (error) {
         console.error('Purchase save failed:', error.message);
@@ -1312,7 +1312,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toastRef.current({ title: 'Purchase save nahi hua', description: error.message, variant: 'destructive' });
       } else {
         // Step 2: GST/TDS columns update (safe — if this fails, base record is already saved)
-        supabase.from('purchases').update({ cgstPct, sgstPct, igstPct, tdsPct, cgstAmount, sgstAmount, igstAmount, tdsAmount, taxAmount, grandTotal, supplierId })
+        supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId })
           .eq('id', purchase.id)
           .then(({ error: gstErr }) => { if (gstErr) console.warn('Purchase GST fields update:', gstErr.message); });
       }
