@@ -201,11 +201,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 2. Direct platform_admins password check (super admin login)
     try {
       const { data: adminData } = await supabase
-        .from('platform_admins')
-        .select('email, name, password')
-        .eq('email', email)
-        .eq('password', password)
-        .eq('is_active', true)
+        .rpc('verify_platform_admin', { p_email: email, p_password: password })
         .maybeSingle();
 
       if (adminData) {
