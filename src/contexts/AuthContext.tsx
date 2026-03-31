@@ -98,7 +98,10 @@ async function checkSuperAdmin(email: string): Promise<boolean> {
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => restoreSession());
-  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(() => {
+    const session = getAuthSession();
+    return session?.societyId === 'PLATFORM';
+  });
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const doLogout = useCallback(() => {
