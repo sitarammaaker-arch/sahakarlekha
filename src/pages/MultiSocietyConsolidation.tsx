@@ -4,9 +4,10 @@
  * Import up to 6 branch backup JSON files and view a consolidated
  * financial summary across all branches.
  */
-import React, { useRef, useState, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +20,7 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import { Upload, Download, X, Building2, AlertTriangle, FileJson, RefreshCw, FileSpreadsheet } from 'lucide-react';
+import { Upload, Download, X, Building2, AlertTriangle, FileJson, RefreshCw, FileSpreadsheet, Wifi, WifiOff } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcel } from '@/lib/exportUtils';
@@ -309,15 +310,57 @@ function exportConsolidatedPDF(branches: BranchData[]) {
 
 const MAX_BRANCHES = 6;
 
+// ── Live society row (from get_all_societies RPC) ─────────────────────────────
+interface LiveSociety {
+  society_id: string;
+  name: string;
+  societyType: string;
+  financialYear: string;
+  district: string;
+  state: string;
+  plan: string;
+  is_locked: boolean;
+  user_count?: number;
+}
+
+const SOCIETY_TYPE_SHORT: Record<string, string> = {
+  marketing_processing: 'CMS',
+  pacs: 'PACS',
+  consumer: 'Consumer',
+  labour: 'Labour',
+  other: 'Other',
+};
+
 const MultiSocietyConsolidation: React.FC = () => {
   const { language } = useLanguage();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const hi = language === 'hi';
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [branches, setBranches] = useState<BranchData[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+
+  // ── Live societies (super admin only) ─────────────────────────────────────
+  const [liveSocieties, setLiveSocieties] = useState<LiveSociety[]>([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    setLiveLoading(true);
+    Promise.all([
+      supabase.rpc('get_all_societies'),
+      supabase.rpc('get_society_user_counts'),
+    ]).then(([{ data: sData }, { data: uData }]) => {
+      const countMap: Record<string, number> = {};
+      (uData ?? []).forEach((r: { society_id: string; user_count: number }) => {
+        countMap[r.society_id] = Number(r.user_count);
+      });
+      setLiveSocieties(
+        (sData ?? []).map((s: LiveSociety) => ({ ...s, user_count: countMap[s.society_id] ?? 0 }))
+      );
+    }).finally(() => setLiveLoading(false));
+  }, [isSuperAdmin]);
 
   const handleCSV = () => {
     if (branches.length === 0) return;
@@ -513,6 +556,62 @@ const MultiSocietyConsolidation: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* ── Live Supabase Overview (Super Admin only) ────────────────────── */}
+      {isSuperAdmin && (
+        <Card className="border-purple-200 bg-purple-50">
+          <CardHeader className="py-3">
+            <CardTitle className="text-sm flex items-center gap-2 text-purple-800">
+              {liveLoading ? <WifiOff className="h-4 w-4 animate-pulse" /> : <Wifi className="h-4 w-4" />}
+              {hi ? 'Live — सभी पंजीकृत समितियाँ (Supabase)' : 'Live — All Registered Societies (Supabase)'}
+              <Badge className="bg-purple-200 text-purple-800 text-xs ml-auto">{liveSocieties.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-purple-200 bg-purple-100">
+                    {['Society', 'Type', 'FY', 'District', 'Users', 'Plan', 'Locked'].map(h => (
+                      <th key={h} className="px-3 py-2 text-left font-medium text-purple-700">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {liveLoading ? (
+                    <tr><td colSpan={7} className="px-3 py-4 text-center text-purple-500">Loading…</td></tr>
+                  ) : liveSocieties.length === 0 ? (
+                    <tr><td colSpan={7} className="px-3 py-4 text-center text-gray-400">No societies found</td></tr>
+                  ) : liveSocieties.map(s => (
+                    <tr key={s.society_id} className="border-b border-purple-100 hover:bg-purple-100/50">
+                      <td className="px-3 py-1.5 font-medium text-gray-800">{s.name}</td>
+                      <td className="px-3 py-1.5 text-gray-600">{SOCIETY_TYPE_SHORT[s.societyType] ?? s.societyType}</td>
+                      <td className="px-3 py-1.5 text-gray-600">{s.financialYear}</td>
+                      <td className="px-3 py-1.5 text-gray-600">{s.district}{s.state ? `, ${s.state.toUpperCase()}` : ''}</td>
+                      <td className="px-3 py-1.5 text-gray-600">{s.user_count ?? 0}</td>
+                      <td className="px-3 py-1.5">
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                          s.plan === 'active' ? 'bg-green-100 text-green-800' :
+                          s.plan === 'expired' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>{s.plan}</span>
+                      </td>
+                      <td className="px-3 py-1.5 text-center">
+                        {s.is_locked ? '🔒' : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-purple-500 p-3 border-t border-purple-200">
+              {hi
+                ? 'Full financial consolidation के लिए नीचे JSON backup files import करें।'
+                : 'For full financial consolidation, import JSON backup files below.'}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Error notices ────────────────────────────────────────────────── */}
       {errors.length > 0 && (

@@ -65,6 +65,8 @@ import FederationReport from "./pages/FederationReport";
 import UniversalImporter from "./pages/UniversalImporter";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
+import { SuperAdminRoute } from "@/components/SuperAdminRoute";
 
 import { preloadHindiFont } from '@/lib/fontLoader';
 
@@ -169,6 +171,9 @@ const AppRoutes = () => {
       <Route path="/nabard-report" element={<ProtectedRoute><NabardReport /></ProtectedRoute>} />
       <Route path="/federation-report" element={<ProtectedRoute><FederationReport /></ProtectedRoute>} />
       <Route path="/universal-importer" element={<ProtectedRoute><UniversalImporter /></ProtectedRoute>} />
+
+      {/* Super Admin (Platform Owner) */}
+      <Route path="/super-admin" element={<SuperAdminRoute><MainLayout><SuperAdminDashboard /></MainLayout></SuperAdminRoute>} />
 
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />

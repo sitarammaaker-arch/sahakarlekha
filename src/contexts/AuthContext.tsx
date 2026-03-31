@@ -17,6 +17,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  isSuperAdmin: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   hasPermission: (requiredRole: UserRole | UserRole[]) => boolean;
@@ -81,12 +82,28 @@ function restoreSession(): User | null {
   return null;
 }
 
+async function checkSuperAdmin(email: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from('platform_admins')
+      .select('email')
+      .eq('email', email)
+      .eq('is_active', true)
+      .maybeSingle();
+    return !!data;
+  } catch {
+    return false;
+  }
+}
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => restoreSession());
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const doLogout = useCallback(() => {
     setUser(null);
+    setIsSuperAdmin(false);
     setAuthSession(null);
   }, []);
 
@@ -111,6 +128,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const u = buildUser(data);
             setUser(u);
             setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId });
+            checkSuperAdmin(u.email).then(setIsSuperAdmin);
           }
         } catch {
           // Supabase unreachable — keep localStorage session
@@ -156,6 +174,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const u = buildUser(userData);
           setUser(u);
           setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId });
+          checkSuperAdmin(u.email).then(setIsSuperAdmin);
           return true;
         }
       }
@@ -177,6 +196,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const u = buildUser(data);
         setUser(u);
         setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId });
+        checkSuperAdmin(u.email).then(setIsSuperAdmin);
         return true;
       }
     } catch {
@@ -238,7 +258,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout, hasPermission, sendPasswordReset }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isSuperAdmin, login, logout, hasPermission, sendPasswordReset }}>
       {children}
     </AuthContext.Provider>
   );

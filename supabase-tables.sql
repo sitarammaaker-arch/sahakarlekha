@@ -772,3 +772,86 @@ alter table accounts add column if not exists subtype text;
 -- ── STEP 14: societyType on society_settings ────────────────────────────────
 alter table society_settings add column if not exists "societyType" text default 'marketing_processing';
 -- alter table salary_records    add column if not exists society_id text default 'SOC001';
+
+-- ── STEP 15: platform_admins — super admin table (cross-society access) ──────
+create table if not exists platform_admins (
+  id uuid default gen_random_uuid() primary key,
+  email text not null unique,
+  name text not null default 'Platform Admin',
+  is_active boolean not null default true,
+  created_at timestamptz default now()
+);
+-- No RLS — only accessible via service role / security definer functions
+-- Insert your super admin email (replace with actual email):
+-- insert into platform_admins (email, name) values ('superadmin@sahakarlekha.com', 'Super Admin')
+-- on conflict (email) do nothing;
+
+-- ── STEP 16: subscription fields on society_settings ─────────────────────────
+alter table society_settings add column if not exists plan text default 'trial';
+alter table society_settings add column if not exists trial_ends_at timestamptz default (now() + interval '30 days');
+alter table society_settings add column if not exists plan_expires_at timestamptz;
+alter table society_settings add column if not exists is_locked boolean default false;
+alter table society_settings add column if not exists subscription_notes text;
+alter table society_settings add column if not exists created_at timestamptz default now();
+
+-- ── STEP 17: get_all_societies() — SECURITY DEFINER bypasses RLS ─────────────
+-- Super admin calls this to see all societies regardless of society_id filter.
+create or replace function get_all_societies()
+returns table (
+  society_id        text,
+  name              text,
+  "nameHi"          text,
+  "registrationNo"  text,
+  district          text,
+  state             text,
+  "societyType"     text,
+  "financialYear"   text,
+  plan              text,
+  trial_ends_at     timestamptz,
+  plan_expires_at   timestamptz,
+  is_locked         boolean,
+  subscription_notes text,
+  created_at        timestamptz
+)
+language sql
+security definer
+as $$
+  select
+    society_id, name, "nameHi", "registrationNo", district, state,
+    "societyType", "financialYear", plan, trial_ends_at, plan_expires_at,
+    is_locked, subscription_notes, created_at
+  from society_settings
+  order by created_at desc;
+$$;
+
+-- ── STEP 18: get_society_user_counts() — user count per society ───────────────
+create or replace function get_society_user_counts()
+returns table (society_id text, user_count bigint)
+language sql
+security definer
+as $$
+  select society_id, count(*) as user_count
+  from society_users
+  where is_active = true
+  group by society_id;
+$$;
+
+-- ── STEP 19: update_society_subscription() — super admin updates plan ─────────
+create or replace function update_society_subscription(
+  p_society_id        text,
+  p_plan              text,
+  p_plan_expires_at   timestamptz,
+  p_is_locked         boolean,
+  p_notes             text
+)
+returns void
+language sql
+security definer
+as $$
+  update society_settings set
+    plan              = p_plan,
+    plan_expires_at   = p_plan_expires_at,
+    is_locked         = p_is_locked,
+    subscription_notes = p_notes
+  where society_id = p_society_id;
+$$;
