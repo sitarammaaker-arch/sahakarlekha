@@ -1,5 +1,4 @@
-import React, { useState, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -44,8 +43,6 @@ const AccountSearch: React.FC<{
 }> = ({ value, onChange, accounts, placeholder, language }) => {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
-  const inputRef = useRef<HTMLInputElement>(null);
   const selected = accounts.find(a => a.id === value);
   const filtered = query.trim()
     ? accounts.filter(a =>
@@ -55,32 +52,19 @@ const AccountSearch: React.FC<{
       )
     : accounts;
 
-  const openDropdown = () => {
-    if (inputRef.current) {
-      const rect = inputRef.current.getBoundingClientRect();
-      setDropPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width });
-    }
-    setQuery('');
-    setOpen(true);
-  };
-
   return (
     <div className="relative">
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
       <Input
-        ref={inputRef}
         value={open ? query : (selected ? `${selected.id} — ${language === 'hi' ? selected.nameHi : selected.name}` : '')}
         onChange={e => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onChange(''); }}
-        onFocus={openDropdown}
+        onFocus={() => { setQuery(''); setOpen(true); }}
         onBlur={() => setTimeout(() => setOpen(false), 160)}
         placeholder={placeholder}
         className="h-12 text-base pl-9"
       />
-      {open && typeof document !== 'undefined' && createPortal(
-        <div
-          style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999 }}
-          className="bg-background border rounded-lg shadow-xl max-h-52 overflow-y-auto"
-        >
+      {open && (
+        <div className="absolute z-[200] w-full mt-1 bg-background border rounded-lg shadow-xl max-h-52 overflow-y-auto">
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground px-3 py-2">{language === 'hi' ? 'कोई खाता नहीं मिला' : 'No account found'}</p>
           ) : filtered.slice(0, 25).map(a => (
@@ -97,8 +81,7 @@ const AccountSearch: React.FC<{
               <span>{language === 'hi' ? a.nameHi : a.name}</span>
             </button>
           ))}
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );
@@ -733,23 +716,23 @@ const Vouchers: React.FC = () => {
                     {voucherType !== 'contra' && (
                       <div className="space-y-3">
                         <Label className="text-base font-semibold">{language === 'hi' ? 'नाम-जमा पंक्तियाँ' : 'Debit / Credit Lines'}</Label>
-                        <div className="rounded-lg border">
-                          <Table>
-                            <TableHeader>
-                              <TableRow className="bg-muted/40">
-                                <TableHead className="w-8 text-xs">#</TableHead>
-                                <TableHead className="text-xs">{language === 'hi' ? 'खाता' : 'Account'}</TableHead>
-                                <TableHead className="w-20 text-xs">{language === 'hi' ? 'Dr/Cr' : 'Dr/Cr'}</TableHead>
-                                <TableHead className="w-32 text-xs">{language === 'hi' ? 'राशि (₹)' : 'Amount (₹)'}</TableHead>
-                                <TableHead className="text-xs">{language === 'hi' ? 'विवरण' : 'Narration'}</TableHead>
-                                <TableHead className="w-8"></TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
+                        <div className="rounded-lg border overflow-visible">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-muted/40 border-b">
+                                <th className="w-8 text-xs font-medium text-left px-3 py-2">#</th>
+                                <th className="text-xs font-medium text-left px-3 py-2">{language === 'hi' ? 'खाता' : 'Account'}</th>
+                                <th className="w-20 text-xs font-medium text-left px-3 py-2">Dr/Cr</th>
+                                <th className="w-32 text-xs font-medium text-left px-3 py-2">{language === 'hi' ? 'राशि (₹)' : 'Amount (₹)'}</th>
+                                <th className="text-xs font-medium text-left px-3 py-2">{language === 'hi' ? 'विवरण' : 'Narration'}</th>
+                                <th className="w-8"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
                               {lines.map((line, idx) => (
-                                <TableRow key={line.id} className={line.type === 'Dr' ? 'bg-blue-50/30' : 'bg-green-50/30'}>
-                                  <TableCell className="text-xs text-muted-foreground py-2">{idx + 1}</TableCell>
-                                  <TableCell className="py-1">
+                                <tr key={line.id} className={`border-b last:border-0 ${line.type === 'Dr' ? 'bg-blue-50/30' : 'bg-green-50/30'}`}>
+                                  <td className="text-xs text-muted-foreground py-2 px-3">{idx + 1}</td>
+                                  <td className="py-1 px-1 relative">
                                     <AccountSearch
                                       value={line.accountId}
                                       onChange={id => handleLineChange(line.id, 'accountId', id)}
@@ -757,8 +740,8 @@ const Vouchers: React.FC = () => {
                                       placeholder={language === 'hi' ? 'खाता खोजें...' : 'Search account...'}
                                       language={language}
                                     />
-                                  </TableCell>
-                                  <TableCell className="py-1">
+                                  </td>
+                                  <td className="py-1 px-1">
                                     <Select value={line.type} onValueChange={v => handleLineChange(line.id, 'type', v)}>
                                       <SelectTrigger className="h-9 w-20">
                                         <SelectValue />
@@ -768,8 +751,8 @@ const Vouchers: React.FC = () => {
                                         <SelectItem value="Cr"><span className="font-bold text-green-700">Cr</span></SelectItem>
                                       </SelectContent>
                                     </Select>
-                                  </TableCell>
-                                  <TableCell className="py-1">
+                                  </td>
+                                  <td className="py-1 px-1">
                                     <Input
                                       type="number"
                                       value={line.amount}
@@ -778,26 +761,26 @@ const Vouchers: React.FC = () => {
                                       min="0"
                                       className="h-9 text-right font-mono"
                                     />
-                                  </TableCell>
-                                  <TableCell className="py-1">
+                                  </td>
+                                  <td className="py-1 px-1">
                                     <Input
                                       value={line.narration}
                                       onChange={e => handleLineChange(line.id, 'narration', e.target.value)}
                                       placeholder={language === 'hi' ? 'विवरण...' : 'Note...'}
                                       className="h-9"
                                     />
-                                  </TableCell>
-                                  <TableCell className="py-1">
+                                  </td>
+                                  <td className="py-1 px-1">
                                     {lines.length > 2 && (
                                       <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveLine(line.id)}>
                                         <Minus className="h-3.5 w-3.5" />
                                       </Button>
                                     )}
-                                  </TableCell>
-                                </TableRow>
+                                  </td>
+                                </tr>
                               ))}
-                            </TableBody>
-                          </Table>
+                            </tbody>
+                          </table>
                         </div>
                         {/* Add line buttons */}
                         <div className="flex gap-2">
