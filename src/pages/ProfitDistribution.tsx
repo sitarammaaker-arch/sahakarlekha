@@ -120,10 +120,28 @@ const ProfitDistribution: React.FC = () => {
     return bal;
   };
 
+  // ── P3-1: Check if 25% Reserve Fund has been posted (Sec 65 compliance) ────
+  const reserveVoucher = usePosted(vouchers, ACC_NET_SURPLUS, ACC_RESERVE_FUND, fy);
+  const reservePosted = !!reserveVoucher;
+  const educationVoucher = usePosted(vouchers, ACC_NET_SURPLUS, ACC_EDUCATION, fy);
+  const educationPosted = !!educationVoucher;
+  const mandatoryAppropriationsDone = netProfit <= 0 || (reservePosted && educationPosted);
+
   // ── Post journals ──────────────────────────────────────────────────────────
-  const canPost = !divPosted && totalDividend > 0 || !bonusPosted && bonusAmount > 0;
+  const canPost = mandatoryAppropriationsDone && (!divPosted && totalDividend > 0 || !bonusPosted && bonusAmount > 0);
 
   const handlePost = () => {
+    // P3-1: Hard block — mandatory appropriations must be done first
+    if (netProfit > 0 && !mandatoryAppropriationsDone) {
+      toast({
+        title: hi ? 'अनिवार्य आवंटन पहले करें' : 'Mandatory Appropriations Required First',
+        description: hi
+          ? `सहकारी समिति अधिनियम धारा 65 के तहत, लाभांश वितरण से पहले 25% वैधानिक संचय निधि (₹${reserveAmt.toLocaleString('hi-IN')}) और 1% शिक्षा निधि का आवंटन अनिवार्य है। पहले "संचय निधि" पृष्ठ पर जाएं।`
+          : `Under Sec. 65 of the Cooperative Societies Act, you must first transfer 25% Statutory Reserve Fund (₹${reserveAmt.toLocaleString('en-IN')}) and 1% Education Fund before distributing profits. Please visit the Reserve Fund page first.`,
+        variant: 'destructive',
+      });
+      return;
+    }
     const today = new Date().toISOString().split('T')[0];
     let posted = 0;
 
@@ -281,6 +299,23 @@ const ProfitDistribution: React.FC = () => {
         <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {hi ? 'शुद्ध अधिशेष शून्य या ऋणात्मक है — वितरण संभव नहीं।' : 'Net surplus is zero or negative — distribution not applicable.'}
+        </div>
+      )}
+
+      {/* P3-1: Mandatory appropriation gate — block if reserve not posted */}
+      {netProfit > 0 && !mandatoryAppropriationsDone && (
+        <div className="flex items-start gap-3 p-4 bg-destructive/5 border-2 border-destructive rounded-lg text-sm">
+          <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold text-destructive">
+              {hi ? 'अनिवार्य आवंटन लंबित (धारा 65)' : 'Mandatory Appropriation Pending (Sec. 65)'}
+            </p>
+            <p className="text-destructive/80 mt-0.5">
+              {hi
+                ? `लाभांश वितरण से पहले निम्नलिखित अनिवार्य है: ${!reservePosted ? `25% वैधानिक संचय निधि (₹${reserveAmt.toLocaleString('hi-IN')})` : ''}${!reservePosted && !educationPosted ? ' तथा ' : ''}${!educationPosted ? `1% शिक्षा निधि` : ''}। कृपया पहले "संचय निधि" पृष्ठ पर जाएं।`
+                : `Before distributing profits, you must first post: ${!reservePosted ? `25% Statutory Reserve Fund (₹${reserveAmt.toLocaleString('en-IN')})` : ''}${!reservePosted && !educationPosted ? ' and ' : ''}${!educationPosted ? '1% Education Fund' : ''}. Please visit the Reserve Fund page first.`}
+            </p>
+          </div>
         </div>
       )}
 

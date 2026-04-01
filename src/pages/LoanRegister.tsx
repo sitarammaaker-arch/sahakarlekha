@@ -110,7 +110,7 @@ const LoanForm: React.FC<LoanFormProps> = ({ form, setForm, hi, members, onSubmi
 
 const LoanRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { members, loans, addLoan, updateLoan, deleteLoan, society } = useData();
+  const { members, loans, addLoan, updateLoan, deleteLoan, society, getTrialBalance } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -135,6 +135,21 @@ const LoanRegister: React.FC = () => {
   const totalOutstanding = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + (l.amount - l.repaidAmount), 0);
   const overdueCount = loans.filter(l => l.status === 'overdue').length;
   const activeCount = loans.filter(l => l.status === 'active').length;
+
+  // P3-2: Sec 32 compliance — total loans should not exceed 10× (share capital + reserves)
+  // Share Capital accounts: 1101–1103 (parentId 1100); Reserve accounts: parentId 1200
+  const sec32Limit = (() => {
+    const tb = getTrialBalance();
+    const shareCapital = tb
+      .filter(b => b.account.parentId === '1100' && !b.account.isGroup)
+      .reduce((s, b) => s + Math.abs(b.netBalance), 0);
+    const reserves = tb
+      .filter(b => b.account.parentId === '1200' && !b.account.isGroup)
+      .reduce((s, b) => s + Math.abs(b.netBalance), 0);
+    const base = shareCapital + reserves;
+    return { base, limit: base * 10, shareCapital, reserves };
+  })();
+  const sec32Breach = sec32Limit.base > 0 && totalOutstanding > sec32Limit.limit;
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -254,6 +269,33 @@ const LoanRegister: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* P3-2: Sec 32 compliance alert */}
+      {sec32Breach && (
+        <div className="flex items-start gap-3 p-4 rounded-lg border-2 border-destructive bg-destructive/5">
+          <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-destructive">
+              {hi ? 'धारा 32 उल्लंघन — ऋण सीमा पार' : 'Sec. 32 Breach — Loan Limit Exceeded'}
+            </p>
+            <p className="text-sm text-destructive/80 mt-0.5">
+              {hi
+                ? `बकाया ऋण (${fmt(totalOutstanding)}) शेयर पूंजी + संचय (${fmt(sec32Limit.base)}) के 10 गुना (${fmt(sec32Limit.limit)}) से अधिक है।`
+                : `Outstanding loans (${fmt(totalOutstanding)}) exceed 10× of Share Capital + Reserves (${fmt(sec32Limit.limit)}). Base: Share Capital ${fmt(sec32Limit.shareCapital)} + Reserves ${fmt(sec32Limit.reserves)}.`}
+            </p>
+          </div>
+        </div>
+      )}
+      {sec32Limit.base > 0 && !sec32Breach && totalOutstanding > sec32Limit.limit * 0.8 && (
+        <div className="flex items-start gap-3 p-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 text-sm">
+          <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+          <span className="text-amber-800 dark:text-amber-300">
+            {hi
+              ? `सावधान: बकाया ऋण (${fmt(totalOutstanding)}) धारा 32 की सीमा (${fmt(sec32Limit.limit)}) के 80% से अधिक हो गया है।`
+              : `Caution: Outstanding loans (${fmt(totalOutstanding)}) have crossed 80% of the Sec. 32 limit (${fmt(sec32Limit.limit)}).`}
+          </span>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">

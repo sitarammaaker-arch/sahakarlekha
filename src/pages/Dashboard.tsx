@@ -4,10 +4,11 @@ import { useData } from '@/contexts/DataContext';
 import { ACCOUNT_IDS } from '@/lib/storage';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { QuickActions } from '@/components/dashboard/QuickActions';
-import { Wallet, Building2, Users, TrendingUp, TrendingDown } from 'lucide-react';
+import { Wallet, Building2, Users, TrendingUp, TrendingDown, CheckCircle, XCircle, AlertTriangle, Lock, ShieldCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fmtDate } from '@/lib/dateUtils';
 import { Badge } from '@/components/ui/badge';
+import { getVoucherLines } from '@/lib/voucherUtils';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
@@ -20,7 +21,7 @@ const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b
 
 const Dashboard: React.FC = () => {
   const { t, language } = useLanguage();
-  const { getAccountBalance, members, vouchers, getProfitLoss, loans, society } = useData();
+  const { getAccountBalance, members, vouchers, getProfitLoss, loans, society, getTrialBalance, getTradingAccount } = useData();
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
@@ -35,6 +36,42 @@ const Dashboard: React.FC = () => {
   const bankBalance = getAccountBalance(ACCOUNT_IDS.BANK);
   const { netProfit, incomeItems, expenseItems, totalIncome, totalExpenses } = getProfitLoss();
   const activeMembers = members.filter(m => m.status === 'active').length;
+
+  // P3-3: Cooperative compliance checks
+  const complianceChecks = useMemo(() => {
+    const fy = society.financialYear;
+    const activeVouchers = vouchers.filter(v => !v.isDeleted);
+    const tb = getTrialBalance();
+    const { physicalClosingStock, closingStockPosted } = getTradingAccount();
+
+    // 1. Reserve Fund posted (Sec 65)
+    const reservePosted = activeVouchers.some(v =>
+      getVoucherLines(v).some(l => l.accountId === '1208' && l.type === 'Dr') &&
+      getVoucherLines(v).some(l => l.accountId === '1201' && l.type === 'Cr') &&
+      v.narration.includes(fy)
+    );
+
+    // 2. Balance Sheet tally
+    const totalAssets = tb.filter(b => b.account.type === 'asset' && !b.account.isGroup).reduce((s, b) => s + b.netBalance, 0);
+    const capLiab = tb.filter(b => (b.account.type === 'equity' || b.account.type === 'liability') && !b.account.isGroup);
+    const totalLiab = capLiab.reduce((s, b) => s + (-b.netBalance), 0) + netProfit;
+    const bsTallied = Math.abs(totalAssets - totalLiab) < 1;
+
+    // 3. Closing stock journalized
+    const stockOk = physicalClosingStock === 0 || closingStockPosted;
+
+    // 4. Sec 32 loan limit
+    const shareCapital = tb.filter(b => b.account.parentId === '1100' && !b.account.isGroup).reduce((s, b) => s + Math.abs(b.netBalance), 0);
+    const reserves = tb.filter(b => b.account.parentId === '1200' && !b.account.isGroup).reduce((s, b) => s + Math.abs(b.netBalance), 0);
+    const loanLimit = (shareCapital + reserves) * 10;
+    const totalOutstandingLoans = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + (l.amount - l.repaidAmount), 0);
+    const sec32Ok = loanLimit === 0 || totalOutstandingLoans <= loanLimit;
+
+    // 5. FY Lock status
+    const fyLocked = !!society.fyLocked;
+
+    return { reservePosted, bsTallied, stockOk, sec32Ok, fyLocked, netProfit };
+  }, [vouchers, getTrialBalance, getTradingAccount, loans, society, netProfit]);
 
   const recentVouchers = [...vouchers.filter(v => !v.isDeleted)]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -337,6 +374,66 @@ const Dashboard: React.FC = () => {
           <QuickActions />
         </div>
       </div>
+
+      {/* P3-3: Cooperative Compliance Status */}
+      <Card className="shadow-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-primary" />
+            {language === 'hi' ? 'सहकारी अनुपालन स्थिति' : 'Cooperative Compliance Status'}
+            <span className="text-xs font-normal text-muted-foreground ml-1">
+              {language === 'hi' ? `वित्त वर्ष ${society.financialYear}` : `FY ${society.financialYear}`}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            {[
+              {
+                label: language === 'hi' ? '25% संचय निधि (धारा 65)' : '25% Reserve Fund (Sec 65)',
+                ok: complianceChecks.netProfit <= 0 || complianceChecks.reservePosted,
+                na: complianceChecks.netProfit <= 0,
+              },
+              {
+                label: language === 'hi' ? 'तुलन पत्र संतुलित' : 'Balance Sheet Tallied',
+                ok: complianceChecks.bsTallied,
+                na: false,
+              },
+              {
+                label: language === 'hi' ? 'समापन माल जर्नल' : 'Closing Stock Journalized',
+                ok: complianceChecks.stockOk,
+                na: false,
+              },
+              {
+                label: language === 'hi' ? 'ऋण सीमा (धारा 32)' : 'Loan Limit (Sec 32)',
+                ok: complianceChecks.sec32Ok,
+                na: false,
+              },
+              {
+                label: language === 'hi' ? 'ऑडिट लॉक' : 'Audit FY Lock',
+                ok: complianceChecks.fyLocked,
+                na: false,
+                infoOnly: true,
+              },
+            ].map(({ label, ok, na, infoOnly }) => (
+              <div key={label} className={`flex items-start gap-2 p-3 rounded-lg border ${na ? 'bg-muted/30 border-muted' : ok ? 'bg-success/5 border-success/20' : 'bg-destructive/5 border-destructive/20'}`}>
+                {na ? (
+                  <Badge variant="outline" className="mt-0.5 text-xs shrink-0">N/A</Badge>
+                ) : ok ? (
+                  <CheckCircle className="h-4 w-4 text-success mt-0.5 shrink-0" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                )}
+                <span className={`text-xs font-medium ${na ? 'text-muted-foreground' : ok ? 'text-success' : 'text-destructive'}`}>
+                  {label}
+                  {infoOnly && ok && <span className="block font-normal text-muted-foreground">{language === 'hi' ? 'लॉक है' : 'Locked'}</span>}
+                  {infoOnly && !ok && <span className="block font-normal text-muted-foreground">{language === 'hi' ? 'अनलॉक' : 'Unlocked'}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
