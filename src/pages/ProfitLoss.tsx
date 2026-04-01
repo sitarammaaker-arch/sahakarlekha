@@ -4,7 +4,7 @@ import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, TrendingDown, Download, Printer, ArrowUp, ArrowDown, FileSpreadsheet } from 'lucide-react';
+import { TrendingUp, TrendingDown, Download, ArrowUp, ArrowDown, FileSpreadsheet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateIncomeExpenditurePDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
@@ -73,9 +73,6 @@ const ProfitLoss: React.FC = () => {
           </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
             <FileSpreadsheet className="h-4 w-4" />CSV
-          </Button>
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
-            <Printer className="h-4 w-4" />{hi ? 'प्रिंट' : 'Print'}
           </Button>
         </div>
       </div>

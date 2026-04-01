@@ -4,7 +4,7 @@ import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ShoppingCart, Download, Printer, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ShoppingCart, Download, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateTradingAccountPDF } from '@/lib/pdf';
 import { useToast } from '@/hooks/use-toast';
@@ -94,9 +94,6 @@ const TradingAccount: React.FC = () => {
             )}
           >
             <Download className="h-4 w-4" />PDF
-          </Button>
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
-            <Printer className="h-4 w-4" />{hi ? 'प्रिंट' : 'Print'}
           </Button>
         </div>
       </div>

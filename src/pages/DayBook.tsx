@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { BookOpen, Download, Printer, Filter, Wallet, Pencil, Save, X, FileSpreadsheet } from 'lucide-react';
+import { BookOpen, Download, Filter, Wallet, Pencil, Save, X, FileSpreadsheet } from 'lucide-react';
 import { generateDayBookPDF } from '@/lib/pdf';
 import { useToast } from '@/hooks/use-toast';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
@@ -163,7 +163,6 @@ const DayBook: React.FC = () => {
   const handleFilter = () => setFiltered(true);
   const handleReset = () => { setFromDate(fyStart); setToDate(today); setFiltered(false); };
   const handlePDF = () => generateDayBookPDF(entries, accounts, society, fromDate, toDate, language);
-  const handlePrint = () => window.print();
 
   const exportHeaders = ['Date', 'Voucher No.', 'Type', 'Account', 'Dr/Cr', 'Amount', 'Narration'];
 
@@ -226,9 +225,6 @@ const DayBook: React.FC = () => {
             </Button>
             <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
               <FileSpreadsheet className="h-4 w-4" />CSV
-            </Button>
-            <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint}>
-              <Printer className="h-4 w-4" />{language === 'hi' ? 'प्रिंट' : 'Print'}
             </Button>
           </div>
         </div>

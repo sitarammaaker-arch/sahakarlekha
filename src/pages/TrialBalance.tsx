@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
-import { Scale, Download, Printer, CheckCircle, AlertTriangle, Calendar, FileSpreadsheet } from 'lucide-react';
+import { Scale, Download, CheckCircle, AlertTriangle, Calendar, FileSpreadsheet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateTrialBalancePDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
@@ -70,9 +70,6 @@ const TrialBalance: React.FC = () => {
           </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
             <FileSpreadsheet className="h-4 w-4" />CSV
-          </Button>
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
-            <Printer className="h-4 w-4" />{t('print')}
           </Button>
         </div>
       </div>

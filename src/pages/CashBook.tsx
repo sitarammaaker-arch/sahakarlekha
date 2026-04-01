@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Wallet, Calendar, Filter, Download, Printer, ArrowDownLeft, ArrowUpRight, FileSpreadsheet } from 'lucide-react';
+import { Plus, Wallet, Calendar, Filter, Download, ArrowDownLeft, ArrowUpRight, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateCashBookPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
@@ -132,9 +132,6 @@ const CashBook: React.FC = () => {
               <FileSpreadsheet className="h-4 w-4" />CSV
             </Button>
           </div>
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
-            <Printer className="h-4 w-4" />{t('print')}
-          </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2"><Plus className="h-4 w-4" />{language === 'hi' ? 'नई प्रविष्टि' : 'New Entry'}</Button>

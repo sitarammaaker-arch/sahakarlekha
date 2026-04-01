@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { FileCheck, Download, Printer, Info, FileSpreadsheet } from 'lucide-react';
+import { FileCheck, Download, Info, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
@@ -219,10 +219,6 @@ const AuditCertificate: React.FC = () => {
           </p>
         </div>
         <div className="ml-auto flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
-            <Printer className="h-4 w-4" />
-            {hi ? 'प्रिंट' : 'Print'}
-          </Button>
           <Button size="sm" className="gap-2 bg-teal-700 hover:bg-teal-800" onClick={handleDownloadPDF}>
             <Download className="h-4 w-4" />
             {hi ? 'PDF डाउनलोड' : 'Download PDF'}

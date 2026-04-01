@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BookMarked, Download, Printer, Search, Edit, Users } from 'lucide-react';
+import { BookMarked, Download, Search, Edit, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateShareRegisterPDF } from '@/lib/pdf';
 import type { Member } from '@/types';
@@ -78,9 +78,6 @@ const ShareRegister: React.FC = () => {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="gap-2" onClick={() => generateShareRegisterPDF(members, society)}>
             <Download className="h-4 w-4" />PDF
-          </Button>
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
-            <Printer className="h-4 w-4" />{hi ? 'प्रिंट' : 'Print'}
           </Button>
         </div>
       </div>
