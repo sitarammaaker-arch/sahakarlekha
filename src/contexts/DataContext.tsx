@@ -103,7 +103,7 @@ interface DataContextType {
   getAccountBalance: (accountId: string) => number;
   getCashBookEntries: (fromDate?: string, toDate?: string) => CashBookEntry[];
   getBankBookEntries: (fromDate?: string, toDate?: string) => BankBookEntry[];
-  getTrialBalance: () => AccountBalance[];
+  getTrialBalance: (asOnDate?: string) => AccountBalance[];
   getMemberLedger: (memberId: string) => MemberLedgerEntry[];
   getProfitLoss: () => {
     incomeItems: { name: string; nameHi: string; amount: number }[];
@@ -776,14 +776,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return result;
   }, [accounts, activeVouchers]);
 
-  const getTrialBalance = useCallback((): AccountBalance[] => {
+  // BUG-03 FIX: Accept optional asOnDate to filter vouchers up to that date.
+  const getTrialBalance = useCallback((asOnDate?: string): AccountBalance[] => {
     // Exclude group/header accounts from Trial Balance — only leaf accounts have transactions
+    const vouchersToUse = asOnDate
+      ? activeVouchers.filter(v => v.date <= asOnDate)
+      : activeVouchers;
     return accounts.filter(a => !a.isGroup).map(account => {
       const openingDebit = account.openingBalanceType === 'debit' ? account.openingBalance : 0;
       const openingCredit = account.openingBalanceType === 'credit' ? account.openingBalance : 0;
       let transactionDebit = 0;
       let transactionCredit = 0;
-      activeVouchers.forEach(v => {
+      vouchersToUse.forEach(v => {
         getVoucherLines(v).forEach(l => {
           if (l.accountId === account.id) {
             if (l.type === 'Dr') transactionDebit += l.amount;
@@ -965,26 +969,36 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const receiptMap: Record<string, { name: string; amount: number }> = {};
     const paymentMap: Record<string, { name: string; amount: number }> = {};
 
+    // BUG-02 FIX: Use getVoucherLines() to handle multi-line Expert Mode vouchers.
+    // For each line touching Cash/Bank, find the "other" side accounts in the same voucher.
     activeVouchers.forEach(v => {
-      const isCashDebit = v.debitAccountId === ACCOUNT_IDS.CASH;
-      const isBankDebit = v.debitAccountId === ACCOUNT_IDS.BANK;
-      const isCashCredit = v.creditAccountId === ACCOUNT_IDS.CASH;
-      const isBankCredit = v.creditAccountId === ACCOUNT_IDS.BANK;
+      const lines = getVoucherLines(v);
+      lines.forEach(l => {
+        const isCashBank = l.accountId === ACCOUNT_IDS.CASH || l.accountId === ACCOUNT_IDS.BANK;
+        if (!isCashBank) return;
 
-      if (isCashDebit || isBankDebit) {
-        const otherId = v.creditAccountId;
-        const otherAcc = accounts.find(a => a.id === otherId);
-        const name = otherAcc?.name || otherId;
-        if (!receiptMap[otherId]) receiptMap[otherId] = { name, amount: 0 };
-        receiptMap[otherId].amount += v.amount;
-      }
-      if (isCashCredit || isBankCredit) {
-        const otherId = v.debitAccountId;
-        const otherAcc = accounts.find(a => a.id === otherId);
-        const name = otherAcc?.name || otherId;
-        if (!paymentMap[otherId]) paymentMap[otherId] = { name, amount: 0 };
-        paymentMap[otherId].amount += v.amount;
-      }
+        // Determine other-side lines (contra side)
+        const otherLines = lines.filter(ol => ol.type !== l.type);
+        if (otherLines.length === 0) return;
+
+        if (l.type === 'Dr') {
+          // Cash/Bank Dr = Receipt (money came in) — credit side is the source
+          otherLines.forEach(ol => {
+            const otherAcc = accounts.find(a => a.id === ol.accountId);
+            const name = otherAcc?.name || ol.accountId;
+            if (!receiptMap[ol.accountId]) receiptMap[ol.accountId] = { name, amount: 0 };
+            receiptMap[ol.accountId].amount += ol.amount;
+          });
+        } else {
+          // Cash/Bank Cr = Payment (money went out) — debit side is the destination
+          otherLines.forEach(ol => {
+            const otherAcc = accounts.find(a => a.id === ol.accountId);
+            const name = otherAcc?.name || ol.accountId;
+            if (!paymentMap[ol.accountId]) paymentMap[ol.accountId] = { name, amount: 0 };
+            paymentMap[ol.accountId].amount += ol.amount;
+          });
+        }
+      });
     });
 
     const closingCash = getAccountBalance(ACCOUNT_IDS.CASH);
@@ -1098,12 +1112,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const getProfitLoss = useCallback(() => {
     const tb = getTrialBalance();
+    // Income accounts are credit-nature: netBalance = debit - credit → normally negative → abs gives the income amount.
     const incomeItems = tb
       .filter(b => b.account.type === 'income' && b.netBalance !== 0)
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: Math.abs(b.netBalance) }));
+    // BUG-08 FIX: Expense accounts are debit-nature: netBalance normally positive.
+    // Use Math.abs() for safety in case of over-credit (unusual but possible refund scenario).
     const expenseItems = tb
       .filter(b => b.account.type === 'expense' && b.netBalance !== 0)
-      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }));
+      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: Math.abs(b.netBalance) }));
     const totalIncome = incomeItems.reduce((s, i) => s + i.amount, 0);
     const totalExpenses = expenseItems.reduce((s, i) => s + i.amount, 0);
     return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit: totalIncome - totalExpenses };

@@ -33,9 +33,13 @@ const BalanceSheet: React.FC = () => {
   const visibleAssets = assetBalances.filter(b => b.netBalance !== 0 || (pyBalancesRaw[b.account.id] ?? 0) !== 0);
   const visibleCapLiab = capitalAndLiabilityBalances.filter(b => b.netBalance !== 0 || (pyBalancesRaw[b.account.id] ?? 0) !== 0);
 
-  // Use signed netBalance: positive = Dr balance (normal), negative = Cr balance (abnormal/contra)
+  // BUG-04 FIX: Use -netBalance for equity/liability totals.
+  // netBalance = totalDebit - totalCredit.
+  // For credit-nature accounts (Share Capital, Reserves): netBalance is negative → -netBalance is positive (adds to equity side).
+  // For debit-nature contra-equity accounts (Dividend Distribution 1211): netBalance is positive → -netBalance is negative (reduces equity side).
+  // Math.abs() was wrong — it was adding contra-equity accounts instead of subtracting them.
   const totalAssets = assetBalances.reduce((s, b) => s + b.netBalance, 0);
-  const totalLiabilities = capitalAndLiabilityBalances.reduce((s, b) => s + Math.abs(b.netBalance), 0)
+  const totalLiabilities = capitalAndLiabilityBalances.reduce((s, b) => s + (-b.netBalance), 0)
     + netProfit; // surplus adds, deficit subtracts (negative value)
 
   const pyBalances = pyBalancesRaw;
@@ -47,7 +51,7 @@ const BalanceSheet: React.FC = () => {
   const exportRows = (): (string | number)[][] => {
     const rows: (string | number)[][] = [];
     // Capital & Liabilities
-    visibleCapLiab.forEach(b => rows.push(['Capital & Liabilities', b.account.name, Math.abs(b.netBalance)]));
+    visibleCapLiab.forEach(b => rows.push(['Capital & Liabilities', b.account.name, -b.netBalance]));
     if (netProfit > 0) {
       rows.push(['Capital & Liabilities', 'Statutory Reserve Fund — 25% (Current Year)', reserveFund]);
       rows.push(['Capital & Liabilities', 'Distributable Surplus (Current Year)', distributableSurplus]);
@@ -114,13 +118,22 @@ const BalanceSheet: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visibleCapLiab.map(b => (
+                  {visibleCapLiab.map(b => {
+                    // Contra-equity/liability: debit balance on credit-side account (e.g. Dividend Distribution)
+                    const isContra = b.netBalance > 0;
+                    return (
                     <TableRow key={b.account.id} className="hover:bg-muted/30">
-                      <TableCell>{language === 'hi' ? b.account.nameHi : b.account.name}</TableCell>
+                      <TableCell>
+                        {language === 'hi' ? b.account.nameHi : b.account.name}
+                        {isContra && <span className="ml-1 text-xs text-destructive">(Dr)</span>}
+                      </TableCell>
                       {hasPY && <TableCell className="text-right text-muted-foreground">{getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—'}</TableCell>}
-                      <TableCell className="text-right font-medium">{fmt(Math.abs(b.netBalance))}</TableCell>
+                      <TableCell className={`text-right font-medium ${isContra ? 'text-destructive' : ''}`}>
+                        {isContra ? `(${fmt(b.netBalance)})` : fmt(Math.abs(b.netBalance))}
+                      </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                   {netProfit > 0 && (
                     <>
                       <TableRow className="bg-amber-50 dark:bg-amber-900/20">

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { getVoucherLines } from '@/lib/voucherUtils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,16 +49,21 @@ const Ledger: React.FC = () => {
       ? selectedAccount.openingBalance
       : -selectedAccount.openingBalance;
 
+    // BUG-01 FIX: Use getVoucherLines() to support multi-line Expert Mode vouchers.
+    // A voucher touches this account if ANY of its lines has this accountId.
     const accountVouchers = vouchers
-      .filter(v => v.debitAccountId === selectedAccountId || v.creditAccountId === selectedAccountId)
+      .filter(v => !v.isDeleted && getVoucherLines(v).some(l => l.accountId === selectedAccountId))
       .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
 
     if (fromDate) {
       accountVouchers
         .filter(v => v.date < fromDate)
         .forEach(v => {
-          if (v.debitAccountId === selectedAccountId) runningBalance += v.amount;
-          else runningBalance -= v.amount;
+          getVoucherLines(v).forEach(l => {
+            if (l.accountId === selectedAccountId) {
+              runningBalance += l.type === 'Dr' ? l.amount : -l.amount;
+            }
+          });
         });
     }
 
@@ -81,24 +87,32 @@ const Ledger: React.FC = () => {
     });
 
     filtered.forEach(v => {
-      const otherAccId = v.debitAccountId === selectedAccountId ? v.creditAccountId : v.debitAccountId;
-      const otherAcc = accounts.find(a => a.id === otherAccId);
-      // Always use English name for PDF (lang='en'), Hindi for display
-      const otherName = lang === 'hi' ? (otherAcc?.nameHi || otherAcc?.name || '') : (otherAcc?.name || '');
-      const isDebit = v.debitAccountId === selectedAccountId;
+      const lines = getVoucherLines(v);
+      // For each line that touches this account, create a separate ledger row
+      lines.forEach((l, li) => {
+        if (l.accountId !== selectedAccountId) return;
+        const isDebit = l.type === 'Dr';
+        runningBalance += isDebit ? l.amount : -l.amount;
 
-      if (isDebit) runningBalance += v.amount;
-      else runningBalance -= v.amount;
+        // "Particulars" = narration + other account names in this voucher
+        const otherAccNames = lines
+          .filter(ol => ol.accountId !== selectedAccountId)
+          .map(ol => {
+            const acc = accounts.find(a => a.id === ol.accountId);
+            return lang === 'hi' ? (acc?.nameHi || acc?.name || ol.accountId) : (acc?.name || ol.accountId);
+          })
+          .join(', ');
 
-      result.push({
-        id: v.id,
-        date: v.date,
-        voucherNo: v.voucherNo,
-        particulars: v.narration ? `${v.narration} (${otherName})` : otherName,
-        debit: isDebit ? v.amount : 0,
-        credit: !isDebit ? v.amount : 0,
-        balance: Math.abs(runningBalance),
-        balanceType: runningBalance >= 0 ? 'Dr' : 'Cr',
+        result.push({
+          id: `${v.id}-${li}`,
+          date: v.date,
+          voucherNo: v.voucherNo,
+          particulars: v.narration ? `${v.narration} (${otherAccNames})` : otherAccNames,
+          debit: isDebit ? l.amount : 0,
+          credit: !isDebit ? l.amount : 0,
+          balance: Math.abs(runningBalance),
+          balanceType: runningBalance >= 0 ? 'Dr' : 'Cr',
+        });
       });
     });
 
@@ -122,12 +136,13 @@ const Ledger: React.FC = () => {
     return map[type] ?? { label: type, cls: '' };
   };
 
-  // Group accounts by type for selector
+  // BUG-06 FIX: Exclude group/header accounts — only leaf accounts can have transactions.
   const grouped = [
-    { label: language === 'hi' ? 'संपत्ति' : 'Assets',      items: accounts.filter(a => a.type === 'asset') },
-    { label: language === 'hi' ? 'देयता' : 'Liabilities',   items: accounts.filter(a => a.type === 'liability') },
-    { label: language === 'hi' ? 'आय' : 'Income',            items: accounts.filter(a => a.type === 'income') },
-    { label: language === 'hi' ? 'व्यय' : 'Expenses',       items: accounts.filter(a => a.type === 'expense') },
+    { label: language === 'hi' ? 'संपत्ति' : 'Assets',      items: accounts.filter(a => a.type === 'asset' && !a.isGroup) },
+    { label: language === 'hi' ? 'देयता' : 'Liabilities',   items: accounts.filter(a => a.type === 'liability' && !a.isGroup) },
+    { label: language === 'hi' ? 'पूंजी' : 'Equity',        items: accounts.filter(a => a.type === 'equity' && !a.isGroup) },
+    { label: language === 'hi' ? 'आय' : 'Income',            items: accounts.filter(a => a.type === 'income' && !a.isGroup) },
+    { label: language === 'hi' ? 'व्यय' : 'Expenses',       items: accounts.filter(a => a.type === 'expense' && !a.isGroup) },
   ];
 
   const handlePDF = () => {

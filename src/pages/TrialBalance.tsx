@@ -21,7 +21,8 @@ const TrialBalance: React.FC = () => {
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
 
-  const allBalances = getTrialBalance();
+  // BUG-03 FIX: Pass asOnDate so trial balance filters vouchers up to that date.
+  const allBalances = getTrialBalance(asOnDate);
   // Hide accounts with no activity (both Dr and Cr are zero)
   const balances = allBalances.filter(b => b.totalDebit > 0 || b.totalCredit > 0);
   const totalDebit = allBalances.reduce((s, b) => s + b.totalDebit, 0);
