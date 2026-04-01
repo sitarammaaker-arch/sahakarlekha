@@ -145,6 +145,16 @@ const LedgerHeads: React.FC = () => {
       toast({ title: hi ? 'कृपया आवश्यक फ़ील्ड भरें' : 'Please fill required fields', variant: 'destructive' });
       return;
     }
+    // P1-6: Enforce account name uniqueness (case-insensitive) before creating
+    const nameNorm = form.name.trim().toLowerCase();
+    if (accounts.some(a => a.name.toLowerCase() === nameNorm)) {
+      toast({
+        title: hi ? 'खाता नाम पहले से मौजूद है' : 'Account name already exists',
+        description: hi ? 'कृपया अलग नाम चुनें।' : 'Please choose a different name.',
+        variant: 'destructive',
+      });
+      return;
+    }
     addAccount({
       name: form.name.trim(),
       nameHi: form.nameHi.trim(),
@@ -162,6 +172,16 @@ const LedgerHeads: React.FC = () => {
     if (!editAccount) return;
     if (!form.name.trim()) {
       toast({ title: hi ? 'नाम आवश्यक है' : 'Name is required', variant: 'destructive' });
+      return;
+    }
+    // P1-6: Prevent rename to an existing name (excluding self)
+    const nameNorm = form.name.trim().toLowerCase();
+    if (accounts.some(a => a.id !== editAccount.id && a.name.toLowerCase() === nameNorm)) {
+      toast({
+        title: hi ? 'खाता नाम पहले से मौजूद है' : 'Account name already exists',
+        description: hi ? 'कृपया अलग नाम चुनें।' : 'Please choose a different name.',
+        variant: 'destructive',
+      });
       return;
     }
     updateAccount(editAccount.id, {

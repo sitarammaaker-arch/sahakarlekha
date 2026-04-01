@@ -4,19 +4,24 @@ import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FileSpreadsheet, Download } from 'lucide-react';
+import { FileSpreadsheet, Download, AlertTriangle } from 'lucide-react';
 import { generateBalanceSheetPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { useToast } from '@/hooks/use-toast';
 
 const BalanceSheet: React.FC = () => {
   const { t, language } = useLanguage();
-  const { getTrialBalance, getProfitLoss, society } = useData();
+  const { getTrialBalance, getProfitLoss, getTradingAccount, society } = useData();
+  const { toast } = useToast();
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
 
   const trialBalance = getTrialBalance();
   const { netProfit } = getProfitLoss();
+  const { physicalClosingStock, closingStockPosted } = getTradingAccount();
+  // P1-7: If physical closing stock exists but no journal posted, show as synthetic asset
+  const unpostedStock = !closingStockPosted && physicalClosingStock > 0 ? physicalClosingStock : 0;
 
   const RESERVE_FUND_RATE = 0.25;
   const reserveFund = netProfit > 0 ? Math.round(netProfit * RESERVE_FUND_RATE) : 0;
@@ -38,7 +43,7 @@ const BalanceSheet: React.FC = () => {
   // For credit-nature accounts (Share Capital, Reserves): netBalance is negative → -netBalance is positive (adds to equity side).
   // For debit-nature contra-equity accounts (Dividend Distribution 1211): netBalance is positive → -netBalance is negative (reduces equity side).
   // Math.abs() was wrong — it was adding contra-equity accounts instead of subtracting them.
-  const totalAssets = assetBalances.reduce((s, b) => s + b.netBalance, 0);
+  const totalAssets = assetBalances.reduce((s, b) => s + b.netBalance, 0) + unpostedStock;
   const totalLiabilities = capitalAndLiabilityBalances.reduce((s, b) => s + (-b.netBalance), 0)
     + netProfit; // surplus adds, deficit subtracts (negative value)
 
@@ -61,12 +66,29 @@ const BalanceSheet: React.FC = () => {
     rows.push(['Capital & Liabilities', 'Total', totalLiabilities]);
     // Assets
     visibleAssets.forEach(b => rows.push(['Assets', b.account.name, b.netBalance]));
+    if (unpostedStock > 0) rows.push(['Assets', 'Closing Stock (Physical — Not Yet Journalized)', unpostedStock]);
     rows.push(['Assets', 'Total', totalAssets]);
     return rows;
   };
 
   const handleCSV = () => downloadCSV(exportHeaders, exportRows(), `balance-sheet-${society.financialYear}`);
   const handleExcel = () => downloadExcelSingle(exportHeaders, exportRows(), `balance-sheet-${society.financialYear}`, 'Balance Sheet');
+
+  // P1-3: Block PDF if Balance Sheet is not balanced
+  const handlePDF = () => {
+    const diff = Math.abs(totalLiabilities - totalAssets);
+    if (diff >= 1) {
+      toast({
+        title: language === 'hi' ? 'तुलन पत्र असंतुलित है' : 'Balance Sheet is not balanced',
+        description: language === 'hi'
+          ? `संपत्तियां और देयताएं में ₹${diff.toFixed(0)} का अंतर है। PDF उत्पन्न करने से पहले इसे ठीक करें।`
+          : `Assets and Liabilities differ by ₹${diff.toFixed(0)}. Please fix the imbalance before generating the PDF.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    generateBalanceSheetPDF(assetBalances, capitalAndLiabilityBalances, netProfit, society, language, reserveFund);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -79,7 +101,7 @@ const BalanceSheet: React.FC = () => {
           <p className="text-muted-foreground">{language === 'hi' ? 'तुलन पत्र - वित्तीय स्थिति विवरण' : 'Statement of Financial Position'}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateBalanceSheetPDF(assetBalances, capitalAndLiabilityBalances, netProfit, society, language, reserveFund)}>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handlePDF}>
             <Download className="h-4 w-4" />PDF
           </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
@@ -90,6 +112,22 @@ const BalanceSheet: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {unpostedStock > 0 && (
+        <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700">
+          <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-amber-800 dark:text-amber-300">
+              {language === 'hi' ? 'समापन माल अभी जर्नल में दर्ज नहीं हुआ' : 'Closing Stock Not Yet Journalized'}
+            </p>
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              {language === 'hi'
+                ? `भौतिक समापन माल ₹${fmt(unpostedStock)} है परंतु लेखा प्रविष्टि नहीं हुई। Trading Account पर जाकर "Post Closing Stock" बटन दबाएं।`
+                : `Physical closing stock of ${fmt(unpostedStock)} exists but no journal entry has been posted. Go to Trading Account and click "Post Closing Stock" to record it.`}
+            </p>
+          </div>
+        </div>
+      )}
 
       <Card className="shadow-card">
         <CardHeader className="border-b text-center">
@@ -193,6 +231,16 @@ const BalanceSheet: React.FC = () => {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {unpostedStock > 0 && (
+                    <TableRow className="bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100">
+                      <TableCell className="text-amber-800 dark:text-amber-300 font-medium">
+                        {language === 'hi' ? 'समापन माल (भौतिक — जर्नल नहीं हुआ)' : 'Closing Stock (Physical — Not Yet Journalized)'}
+                        <span className="ml-2 text-xs text-amber-600">⚠</span>
+                      </TableCell>
+                      {hasPY && <TableCell className="text-right text-muted-foreground">—</TableCell>}
+                      <TableCell className="text-right font-medium text-amber-800 dark:text-amber-300">{fmt(unpostedStock)}</TableCell>
+                    </TableRow>
+                  )}
                   <TableRow className="bg-primary/10 font-bold text-lg">
                     <TableCell>{t('total')}</TableCell>
                     {hasPY && <TableCell className="text-right text-muted-foreground">{fmt(assetBalances.reduce((s, b) => s + getPY(b.account.id), 0))}</TableCell>}

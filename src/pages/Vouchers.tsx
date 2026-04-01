@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -92,9 +92,30 @@ const Vouchers: React.FC = () => {
   const { t, language } = useLanguage();
   const { user, hasPermission } = useAuth();
   const canEdit = hasPermission(['admin', 'accountant']);
-  const { accounts, members, vouchers, society, addVoucher, updateVoucher, cancelVoucher, restoreVoucher } = useData();
+  const { accounts, members, vouchers, society, addVoucher, updateVoucher, cancelVoucher, restoreVoucher, getTrialBalance } = useData();
   const [submitForApproval, setSubmitForApproval] = useState(false);
   const { toast } = useToast();
+
+  // P1-4: Alert when any expense account develops an abnormal credit balance after a voucher save.
+  // Uses a ref to track voucher count so the effect fires only when a new voucher is added (not on mount).
+  const prevVoucherCountRef = useRef(vouchers.filter(v => !v.isDeleted).length);
+  useEffect(() => {
+    const activeCount = vouchers.filter(v => !v.isDeleted).length;
+    if (activeCount <= prevVoucherCountRef.current) { prevVoucherCountRef.current = activeCount; return; }
+    prevVoucherCountRef.current = activeCount;
+    const tb = getTrialBalance();
+    const abnormal = tb.filter(b => b.account.type === 'expense' && b.netBalance < 0);
+    if (abnormal.length > 0) {
+      const names = abnormal.map(b => b.account.name).join(', ');
+      toast({
+        title: language === 'hi' ? 'असामान्य शेष राशि चेतावनी' : 'Abnormal Balance Warning',
+        description: language === 'hi'
+          ? `इन व्यय खातों में क्रेडिट शेष आ गया है: ${names}। कृपया जांचें।`
+          : `These expense accounts have an abnormal credit balance: ${names}. Please verify.`,
+        variant: 'destructive',
+      });
+    }
+  }, [vouchers]);
 
   const [activeTab, setActiveTab] = useState<'entry' | 'list'>('entry');
   const [entryMode, setEntryMode] = useState<EntryMode>(() => {

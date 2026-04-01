@@ -16,7 +16,12 @@ import { fmtDate } from '@/lib/dateUtils';
 const TrialBalance: React.FC = () => {
   const { t, language } = useLanguage();
   const { getTrialBalance, society } = useData();
-  const [asOnDate, setAsOnDate] = useState(new Date().toISOString().split('T')[0]);
+  // P1-5: Default to the last day of the selected FY (31 March), not today's date.
+  const fyEndDate = (() => {
+    const endYY = society.financialYear.split('-')[1];
+    return `20${endYY}-03-31`;
+  })();
+  const [asOnDate, setAsOnDate] = useState(fyEndDate);
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);

@@ -1035,10 +1035,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .filter(s => s.isActive && s.currentStock > 0)
       .reduce((sum, s) => sum + s.currentStock * s.purchaseRate, 0);
 
-    // Check if closing stock journal has been posted for this FY
+    // Check if closing stock journal has been posted for this FY — use getVoucherLines() (Rule 4)
     const closingStockPosted = activeVouchers.some(v =>
-      v.debitAccountId === '3403' &&
-      v.creditAccountId === '5101' &&
+      getVoucherLines(v).some(l => l.accountId === '3403' && l.type === 'Dr') &&
+      getVoucherLines(v).some(l => l.accountId === '5101' && l.type === 'Cr') &&
       v.narration.includes(fy)
     );
 
@@ -1084,10 +1084,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const postClosingStock = useCallback((fy?: string): { posted: boolean; amount: number; alreadyPosted: boolean } => {
     const currentFY = fy ?? society.financialYear;
-    // Check if already posted
+    // Check if already posted — use getVoucherLines() to support Expert Mode multi-line vouchers (Rule 4)
     const alreadyPosted = activeVouchers.some(v =>
-      v.debitAccountId === '3403' &&
-      v.creditAccountId === '5101' &&
+      getVoucherLines(v).some(l => l.accountId === '3403' && l.type === 'Dr') &&
+      getVoucherLines(v).some(l => l.accountId === '5101' && l.type === 'Cr') &&
       v.narration.includes(currentFY)
     );
     if (alreadyPosted) return { posted: false, amount: 0, alreadyPosted: true };
