@@ -3,13 +3,13 @@
  * Exports data from DataContext (loaded from Supabase) as JSON.
  * Restore from file is not supported in cloud mode.
  */
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { DatabaseBackup, Download, CheckCircle2, Info, Shield, Cloud } from 'lucide-react';
+import { DatabaseBackup, Download, Upload, CheckCircle2, Info, Shield, Cloud, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const BACKUP_VERSION = '3.0-supabase';
@@ -22,6 +22,7 @@ const BackupRestore: React.FC = () => {
     auditObjections, stockItems, stockMovements,
     sales, purchases, suppliers, customers,
     employees, salaryRecords, kccLoans,
+    addAccount, addMember,
   } = useData();
   const { toast } = useToast();
 
@@ -29,6 +30,15 @@ const BackupRestore: React.FC = () => {
   const [lastBackupTime, setLastBackupTime] = useState<string | null>(
     () => localStorage.getItem('sahayata_last_backup')
   );
+
+  // Restore state
+  const restoreFileRef = useRef<HTMLInputElement>(null);
+  const [restorePreview, setRestorePreview] = useState<{
+    societyName: string; createdAt: string; version: string;
+    counts: Record<string, number>;
+    data: Record<string, unknown[]>;
+  } | null>(null);
+  const [restoring, setRestoring] = useState(false);
 
   // ── Summary stats ─────────────────────────────────────────────────────────
   const stats = {
@@ -95,6 +105,87 @@ const BackupRestore: React.FC = () => {
       description: `${Object.values(stats).reduce((a, b) => a + b, 0)} ${hi ? 'रिकॉर्ड' : 'records'}`,
     });
   };
+
+  // ── Restore ───────────────────────────────────────────────────────────────
+  function handleRestoreFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const json = JSON.parse(ev.target?.result as string);
+        if (!json.data || !json.version) throw new Error('Invalid backup file');
+        const d = json.data;
+        setRestorePreview({
+          societyName: json.societyName || '—',
+          createdAt: json.createdAt || '—',
+          version: json.version,
+          counts: {
+            accounts: (d.accounts || []).length,
+            members: (d.members || []).length,
+            vouchers: (d.vouchers || []).length,
+            loans: (d.loans || []).length,
+            assets: (d.assets || []).length,
+          },
+          data: d,
+        });
+      } catch {
+        toast({ title: hi ? 'गलत फ़ाइल' : 'Invalid file', description: hi ? 'Valid Sahakarlekha backup JSON चुनें' : 'Please select a valid Sahakarlekha backup JSON file', variant: 'destructive' });
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+    e.target.value = '';
+  }
+
+  async function handleRestore() {
+    if (!restorePreview) return;
+    setRestoring(true);
+    const d = restorePreview.data;
+    let imported = { accounts: 0, members: 0 };
+
+    // Restore accounts
+    const backupAccounts = (d.accounts || []) as Array<Record<string, unknown>>;
+    for (const acct of backupAccounts) {
+      const name = String(acct.name || '');
+      if (!name || accounts.find(a => a.name.toLowerCase() === name.toLowerCase())) continue;
+      addAccount({
+        name,
+        nameHi: String(acct.nameHi || name),
+        type: String(acct.type || 'asset') as 'asset' | 'liability' | 'income' | 'expense',
+        openingBalance: Number(acct.openingBalance) || 0,
+        openingBalanceType: String(acct.openingBalanceType || 'debit') as 'debit' | 'credit',
+        isSystem: false,
+      });
+      imported.accounts++;
+    }
+
+    // Restore members
+    const backupMembers = (d.members || []) as Array<Record<string, unknown>>;
+    for (const m of backupMembers) {
+      const mid = String(m.memberId || '');
+      if (!mid || members.find(x => x.memberId === mid)) continue;
+      addMember({
+        memberId: mid,
+        name: String(m.name || ''),
+        fatherName: String(m.fatherName || ''),
+        address: String(m.address || ''),
+        phone: String(m.phone || ''),
+        shareCapital: Number(m.shareCapital) || 0,
+        admissionFee: Number(m.admissionFee) || 0,
+        memberType: String(m.memberType || 'member') as 'member' | 'nominal',
+        joinDate: String(m.joinDate || new Date().toISOString().split('T')[0]),
+        status: String(m.status || 'active') as 'active' | 'inactive',
+      });
+      imported.members++;
+    }
+
+    setRestoring(false);
+    setRestorePreview(null);
+    toast({
+      title: hi ? 'Restore सफल!' : 'Restore successful!',
+      description: `${imported.accounts} accounts, ${imported.members} members restored. Vouchers manually re-enter करें।`,
+    });
+  }
 
   const STAT_LABELS: Array<{ key: keyof typeof stats; hi: string; en: string; color: string }> = [
     { key: 'vouchers',       hi: 'वाउचर',          en: 'Vouchers',       color: 'text-blue-700' },
@@ -185,21 +276,52 @@ const BackupRestore: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Restore notice */}
-      <Card className="border-slate-200 bg-slate-50">
+      {/* Restore card */}
+      <Card className="border-orange-200">
         <CardHeader className="py-3">
-          <CardTitle className="text-base flex items-center gap-2 text-slate-600">
-            <Cloud className="h-4 w-4" />
-            {hi ? 'डेटा रीस्टोर' : 'Data Restore'}
+          <CardTitle className="text-base flex items-center gap-2 text-orange-700">
+            <Upload className="h-4 w-4" />
+            {hi ? 'बैकअप से Restore करें' : 'Restore from Backup'}
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-start gap-2 p-2 bg-slate-100 border border-slate-200 rounded text-xs text-slate-700">
-            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+        <CardContent className="space-y-3">
+          <div className="flex items-start gap-2 p-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-800">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             {hi
-              ? 'चूँकि डेटा अब Supabase क्लाउड में संग्रहीत है, फ़ाइल से रीस्टोर उपलब्ध नहीं है। डेटा माइग्रेशन के लिए Supabase डैशबोर्ड या अपने व्यवस्थापक से संपर्क करें।'
-              : 'Since data is now stored in Supabase cloud, file-based restore is not available. For data migration, contact your administrator or use the Supabase dashboard.'}
+              ? 'Accounts और Members restore होंगे। Vouchers manually re-enter करने होंगे।'
+              : 'Accounts and Members will be restored. Vouchers need to be re-entered manually.'}
           </div>
+
+          {!restorePreview ? (
+            <>
+              <input ref={restoreFileRef} type="file" accept=".json" className="hidden" onChange={handleRestoreFile} />
+              <Button variant="outline" className="gap-2" onClick={() => restoreFileRef.current?.click()}>
+                <Upload className="h-4 w-4" />
+                {hi ? 'Backup JSON File चुनें' : 'Select Backup JSON File'}
+              </Button>
+            </>
+          ) : (
+            <div className="space-y-3">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm space-y-1">
+                <p className="font-semibold text-blue-800">{restorePreview.societyName}</p>
+                <p className="text-xs text-blue-600">{hi ? 'बनाया गया:' : 'Created:'} {new Date(restorePreview.createdAt).toLocaleString('hi-IN')}</p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {Object.entries(restorePreview.counts).map(([k, v]) => (
+                    <Badge key={k} variant="outline" className="text-xs">{k}: {v}</Badge>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button className="gap-2 bg-orange-600 hover:bg-orange-700" disabled={restoring} onClick={handleRestore}>
+                  <CheckCircle2 className="h-4 w-4" />
+                  {restoring ? (hi ? 'Restore हो रहा है...' : 'Restoring...') : (hi ? 'Restore करें' : 'Restore Now')}
+                </Button>
+                <Button variant="outline" onClick={() => setRestorePreview(null)}>
+                  {hi ? 'रद्द करें' : 'Cancel'}
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

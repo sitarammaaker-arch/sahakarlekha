@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,31 @@ function parseCSV(text: string): string[][] {
     });
 }
 
+// ─── File Parser (CSV + Excel) ────────────────────────────────────────────────
+
+function parseFileToRows(file: File): Promise<string[][]> {
+  return new Promise((resolve, reject) => {
+    const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+    if (isExcel) {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const buffer = ev.target?.result as ArrayBuffer;
+          const wb = XLSX.read(buffer, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const raw = XLSX.utils.sheet_to_json<(string | number)[]>(ws, { header: 1, defval: '' });
+          resolve(raw.map(r => r.map(c => String(c ?? '').trim())));
+        } catch (err) { reject(err); }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = ev => resolve(parseCSV(ev.target?.result as string));
+      reader.readAsText(file, 'UTF-8');
+    }
+  });
+}
+
 // ─── Template Generators ──────────────────────────────────────────────────────
 
 function downloadTemplate(filename: string, content: string) {
@@ -65,6 +91,14 @@ function downloadTemplate(filename: string, content: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function downloadExcelTemplate(filename: string, csvContent: string) {
+  const rows = csvContent.split('\n').map(r => r.split(','));
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Data');
+  XLSX.writeFile(wb, filename);
 }
 
 const ACCOUNTS_TEMPLATE = `account_name,account_type,opening_balance,balance_type
@@ -195,22 +229,18 @@ const UniversalImporter: React.FC = () => {
 
   // ── Accounts ──
 
-  function handleAccountFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleAccountFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const text = ev.target?.result as string;
-      const parsed = parseCSV(text);
+    try {
+      const parsed = await parseFileToRows(file);
       if (parsed.length < 3) {
-        toast({ title: 'File खाली है', description: 'CSV में कम से कम 1 data row होनी चाहिए', variant: 'destructive' });
+        toast({ title: 'File खाली है', description: 'कम से कम 1 data row होनी चाहिए', variant: 'destructive' });
         return;
       }
       const headers = parsed[0].map(h => h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, ''));
-      const preview = buildPreviewFromParsed(parsed, headers, validateAccountRow);
-      setAccountPreview(preview);
-    };
-    reader.readAsText(file, 'UTF-8');
+      setAccountPreview(buildPreviewFromParsed(parsed, headers, validateAccountRow));
+    } catch { toast({ title: 'File parse error', description: 'Valid CSV या Excel file upload करें', variant: 'destructive' }); }
     e.target.value = '';
   }
 
@@ -248,22 +278,18 @@ const UniversalImporter: React.FC = () => {
 
   // ── Members ──
 
-  function handleMemberFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleMemberFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const text = ev.target?.result as string;
-      const parsed = parseCSV(text);
+    try {
+      const parsed = await parseFileToRows(file);
       if (parsed.length < 3) {
-        toast({ title: 'File खाली है', description: 'CSV में कम से कम 1 data row होनी चाहिए', variant: 'destructive' });
+        toast({ title: 'File खाली है', description: 'कम से कम 1 data row होनी चाहिए', variant: 'destructive' });
         return;
       }
       const headers = parsed[0].map(h => h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, ''));
-      const preview = buildPreviewFromParsed(parsed, headers, validateMemberRow);
-      setMemberPreview(preview);
-    };
-    reader.readAsText(file, 'UTF-8');
+      setMemberPreview(buildPreviewFromParsed(parsed, headers, validateMemberRow));
+    } catch { toast({ title: 'File parse error', description: 'Valid CSV या Excel file upload करें', variant: 'destructive' }); }
     e.target.value = '';
   }
 
@@ -310,22 +336,18 @@ const UniversalImporter: React.FC = () => {
 
   // ── Opening Balances ──
 
-  function handleObFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleObFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const text = ev.target?.result as string;
-      const parsed = parseCSV(text);
+    try {
+      const parsed = await parseFileToRows(file);
       if (parsed.length < 3) {
-        toast({ title: 'File खाली है', description: 'CSV में कम से कम 1 data row होनी चाहिए', variant: 'destructive' });
+        toast({ title: 'File खाली है', description: 'कम से कम 1 data row होनी चाहिए', variant: 'destructive' });
         return;
       }
       const headers = parsed[0].map(h => h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, ''));
-      const preview = buildPreviewFromParsed(parsed, headers, (row, rowNum) => validateObRow(row, accounts, rowNum));
-      setObPreview(preview);
-    };
-    reader.readAsText(file, 'UTF-8');
+      setObPreview(buildPreviewFromParsed(parsed, headers, (row, rowNum) => validateObRow(row, accounts, rowNum)));
+    } catch { toast({ title: 'File parse error', description: 'Valid CSV या Excel file upload करें', variant: 'destructive' }); }
     e.target.value = '';
   }
 
@@ -456,7 +478,7 @@ const UniversalImporter: React.FC = () => {
           Universal Importer
         </h1>
         <p className="text-muted-foreground mt-1">
-          दूसरे software से data import करें — Guided CSV template, preview और Hindi error messages के साथ
+          दूसरे software से data import करें — CSV या Excel (.xlsx) template, preview और Hindi error messages के साथ
         </p>
       </div>
 
@@ -471,7 +493,7 @@ const UniversalImporter: React.FC = () => {
             <ArrowRight className="h-4 w-4 text-blue-400 self-center hidden sm:block" />
             <StepBadge n={2} label="Data भरें / पुराने software से export करके columns match करें" />
             <ArrowRight className="h-4 w-4 text-blue-400 self-center hidden sm:block" />
-            <StepBadge n={3} label="CSV Upload करें — Preview देखें — Confirm करके Import करें" />
+            <StepBadge n={3} label="CSV या Excel Upload करें — Preview देखें — Confirm करके Import करें" />
           </div>
         </CardContent>
       </Card>
@@ -510,15 +532,24 @@ const UniversalImporter: React.FC = () => {
                   नीचे दिए template में example rows और Hindi hints पहले से भरे हैं।
                   Example rows delete करके अपना data भरें।
                 </p>
-                <div className="ml-7">
+                <div className="ml-7 flex gap-2 flex-wrap">
                   <Button
                     variant="outline"
                     size="sm"
                     className="gap-2"
+                    onClick={() => downloadExcelTemplate('accounts_template.xlsx', ACCOUNTS_TEMPLATE)}
+                  >
+                    <Download className="h-4 w-4" />
+                    Excel (.xlsx) Download करें
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-muted-foreground"
                     onClick={() => downloadTemplate('accounts_template.csv', ACCOUNTS_TEMPLATE)}
                   >
                     <Download className="h-4 w-4" />
-                    accounts_template.csv Download करें
+                    CSV Download करें
                   </Button>
                 </div>
               </div>
@@ -542,7 +573,7 @@ const UniversalImporter: React.FC = () => {
                   <input
                     ref={accountFileRef}
                     type="file"
-                    accept=".csv"
+                    accept=".csv,.xlsx,.xls"
                     className="hidden"
                     onChange={handleAccountFile}
                   />
@@ -553,7 +584,7 @@ const UniversalImporter: React.FC = () => {
                     onClick={() => accountFileRef.current?.click()}
                   >
                     <Upload className="h-4 w-4" />
-                    CSV File चुनें
+                    CSV / Excel File चुनें
                   </Button>
                 </div>
               </div>
@@ -617,15 +648,24 @@ const UniversalImporter: React.FC = () => {
                   <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">1</span>
                   Template Download करें
                 </p>
-                <div className="ml-7">
+                <div className="ml-7 flex gap-2 flex-wrap">
                   <Button
                     variant="outline"
                     size="sm"
                     className="gap-2"
+                    onClick={() => downloadExcelTemplate('members_template.xlsx', MEMBERS_TEMPLATE)}
+                  >
+                    <Download className="h-4 w-4" />
+                    Excel (.xlsx) Download करें
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-muted-foreground"
                     onClick={() => downloadTemplate('members_template.csv', MEMBERS_TEMPLATE)}
                   >
                     <Download className="h-4 w-4" />
-                    members_template.csv Download करें
+                    CSV Download करें
                   </Button>
                 </div>
               </div>
@@ -653,7 +693,7 @@ const UniversalImporter: React.FC = () => {
                   <input
                     ref={memberFileRef}
                     type="file"
-                    accept=".csv"
+                    accept=".csv,.xlsx,.xls"
                     className="hidden"
                     onChange={handleMemberFile}
                   />
@@ -664,7 +704,7 @@ const UniversalImporter: React.FC = () => {
                     onClick={() => memberFileRef.current?.click()}
                   >
                     <Upload className="h-4 w-4" />
-                    CSV File चुनें
+                    CSV / Excel File चुनें
                   </Button>
                 </div>
               </div>
@@ -744,15 +784,24 @@ const UniversalImporter: React.FC = () => {
                   <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">1</span>
                   Template Download करें
                 </p>
-                <div className="ml-7">
+                <div className="ml-7 flex gap-2 flex-wrap">
                   <Button
                     variant="outline"
                     size="sm"
                     className="gap-2"
+                    onClick={() => downloadExcelTemplate('opening_balances_template.xlsx', OPENING_BALANCES_TEMPLATE)}
+                  >
+                    <Download className="h-4 w-4" />
+                    Excel (.xlsx) Download करें
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-muted-foreground"
                     onClick={() => downloadTemplate('opening_balances_template.csv', OPENING_BALANCES_TEMPLATE)}
                   >
                     <Download className="h-4 w-4" />
-                    opening_balances_template.csv Download करें
+                    CSV Download करें
                   </Button>
                 </div>
               </div>
@@ -776,7 +825,7 @@ const UniversalImporter: React.FC = () => {
                   <input
                     ref={obFileRef}
                     type="file"
-                    accept=".csv"
+                    accept=".csv,.xlsx,.xls"
                     className="hidden"
                     onChange={handleObFile}
                   />
@@ -787,7 +836,7 @@ const UniversalImporter: React.FC = () => {
                     onClick={() => obFileRef.current?.click()}
                   >
                     <Upload className="h-4 w-4" />
-                    CSV File चुनें
+                    CSV / Excel File चुनें
                   </Button>
                 </div>
               </div>
