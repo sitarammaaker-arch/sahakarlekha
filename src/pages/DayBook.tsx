@@ -165,17 +165,26 @@ const DayBook: React.FC = () => {
   const handlePDF = () => generateDayBookPDF(entries, accounts, society, fromDate, toDate, language);
   const handlePrint = () => window.print();
 
-  const exportHeaders = ['Date', 'Voucher No.', 'Debit Account', 'Credit Account', 'Amount', 'Narration'];
+  const exportHeaders = ['Date', 'Voucher No.', 'Type', 'Account', 'Dr/Cr', 'Amount', 'Narration'];
 
-  const buildExportRows = () =>
-    entries.map(v => [
-      fmtDateShort(v.date),
-      v.voucherNo,
-      getAccountName(v.debitAccountId),
-      getAccountName(v.creditAccountId),
-      v.amount,
-      v.narration || '',
-    ]);
+  // Fix: use getVoucherLines() so multi-line Expert Mode vouchers export all lines correctly.
+  const buildExportRows = () => {
+    const rows: (string | number)[][] = [];
+    entries.forEach(v => {
+      getVoucherLines(v).forEach((l, li) => {
+        rows.push([
+          li === 0 ? fmtDateShort(v.date) : '',
+          li === 0 ? v.voucherNo : '',
+          li === 0 ? typeLabel(v.type) : '',
+          getAccountName(l.accountId),
+          l.type,
+          l.amount,
+          li === 0 ? (v.narration || '') : '',
+        ]);
+      });
+    });
+    return rows;
+  };
 
   const handleCSV = () => {
     downloadCSV(exportHeaders, buildExportRows(), `day-book-${fromDate}-to-${toDate}`);
@@ -373,7 +382,8 @@ const DayBook: React.FC = () => {
                                     </TableCell>
                                     {li === 0 && (
                                       <TableCell rowSpan={vLines.length} className="text-center print:hidden align-middle">
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10" title={language === 'hi' ? 'संपादित करें' : 'Edit'} onClick={() => openEdit(v)}>
+                                        {/* Multi-line vouchers must be edited from the Vouchers page */}
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground cursor-not-allowed opacity-40" title={language === 'hi' ? 'Vouchers पेज से संपादित करें' : 'Edit from Vouchers page'} disabled>
                                           <Pencil className="h-3.5 w-3.5" />
                                         </Button>
                                       </TableCell>
