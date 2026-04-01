@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Download, Truck, Copy, CheckCircle2, Hash } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { ewayBillInsert, ewayBillUpdate } from '@/lib/supabaseService';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -157,9 +157,9 @@ export default function EWayBill() {
       society_id: societyId,
     };
 
-    const { error } = await supabase.from('eway_bills').insert(entry);
+    const { error } = await ewayBillInsert(entry);
     if (error) {
-      console.error('EWayBill save error:', error.message);
+      console.error('EWayBill save error:', error);
     } else {
       setSavedBills(prev => [entry, ...prev]);
     }
@@ -183,7 +183,7 @@ export default function EWayBill() {
   const handleSaveEwbNo = async () => {
     const { billId, ewbNo } = ewbDialog;
     if (!ewbNo.trim()) return;
-    const { error } = await supabase.from('eway_bills').update({ ewbNo: ewbNo.trim() }).eq('id', billId);
+    const { error } = await ewayBillUpdate(billId, { ewbNo: ewbNo.trim() });
     if (error) {
       toast({ title: hi ? 'त्रुटि हुई' : 'Error saving EWB No', variant: 'destructive' });
       return;

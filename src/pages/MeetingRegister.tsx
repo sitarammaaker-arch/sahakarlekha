@@ -30,7 +30,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
-import { supabase } from '@/lib/supabase';
+import { meetingInsert, meetingUpdate, meetingDelete } from '@/lib/supabaseService';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type MeetingType   = 'AGM' | 'SGM' | 'Board' | 'Committee' | 'Other';
@@ -156,12 +156,9 @@ const MeetingRegister: React.FC = () => {
     }
 
     if (editId) {
-      const { error } = await supabase
-        .from('meeting_register')
-        .update({ ...form })
-        .eq('id', editId);
+      const { error } = await meetingUpdate(editId, { ...form });
       if (error) {
-        toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+        toast({ title: 'Save failed', description: error, variant: 'destructive' }); return;
       }
       setMeetings(prev => prev.map(m => m.id === editId ? { ...m, ...form } : m));
       toast({ title: hi ? 'बैठक अपडेट की गई' : 'Meeting updated' });
@@ -173,9 +170,9 @@ const MeetingRegister: React.FC = () => {
         createdAt: new Date().toISOString(),
         society_id: societyId,
       };
-      const { error } = await supabase.from('meeting_register').insert(newMeeting);
+      const { error } = await meetingInsert(newMeeting);
       if (error) {
-        toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+        toast({ title: 'Save failed', description: error, variant: 'destructive' }); return;
       }
       setMeetings(prev => [newMeeting, ...prev]);
       toast({ title: hi ? 'बैठक जोड़ी गई' : 'Meeting added', description: newMeeting.meetingNo });
@@ -186,9 +183,9 @@ const MeetingRegister: React.FC = () => {
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from('meeting_register').delete().eq('id', deleteId);
+    const { error } = await meetingDelete(deleteId);
     if (error) {
-      toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
+      toast({ title: 'Delete failed', description: error, variant: 'destructive' });
       setDeleteId(null); return;
     }
     setMeetings(prev => prev.filter(m => m.id !== deleteId));

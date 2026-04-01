@@ -16,6 +16,7 @@ import { ScrollText, Download, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { getVoucherLines } from '@/lib/voucherUtils';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -47,8 +48,11 @@ const FederationReport: React.FC = () => {
     if (!acc) return 0;
     let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
     vouchers.filter(v => !v.isDeleted).forEach(v => {
-      if (v.debitAccountId === id) bal -= v.amount;
-      if (v.creditAccountId === id) bal += v.amount;
+      getVoucherLines(v).forEach(l => {
+        if (l.accountId !== id) return;
+        if (l.type === 'Dr') bal -= l.amount;
+        else bal += l.amount;
+      });
     });
     return bal;
   };

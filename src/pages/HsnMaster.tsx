@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Hash, Plus, Pencil, Trash2, Search, Download, FileSpreadsheet } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { hsnInsert, hsnUpdate, hsnDelete } from '@/lib/supabaseService';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 interface HsnCode {
@@ -104,10 +104,7 @@ export default function HsnMaster() {
     }
 
     if (editId) {
-      const { error } = await supabase
-        .from('hsn_master')
-        .update({ code: form.code.trim(), description: form.description.trim(), type: form.type, gstRate: form.gstRate, cess: form.cess })
-        .eq('id', editId);
+      const { error } = await hsnUpdate(editId, { code: form.code.trim(), description: form.description.trim(), type: form.type, gstRate: form.gstRate, cess: form.cess });
       if (error) {
         toast({ title: hi ? 'त्रुटि हुई' : 'Error saving', variant: 'destructive' });
         return;
@@ -117,7 +114,7 @@ export default function HsnMaster() {
     } else {
       const newId = `hsn_${Date.now()}`;
       const record = { id: newId, society_id: societyId, code: form.code.trim(), description: form.description.trim(), type: form.type, gstRate: form.gstRate, cess: form.cess, createdAt: new Date().toISOString() };
-      const { error } = await supabase.from('hsn_master').insert(record);
+      const { error } = await hsnInsert(record);
       if (error) {
         toast({ title: hi ? 'त्रुटि हुई' : 'Error saving', variant: 'destructive' });
         return;
@@ -129,7 +126,7 @@ export default function HsnMaster() {
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from('hsn_master').delete().eq('id', id);
+    const { error } = await hsnDelete(id);
     if (error) {
       toast({ title: hi ? 'हटाने में त्रुटि' : 'Error deleting', variant: 'destructive' });
       return;

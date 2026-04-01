@@ -20,6 +20,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { TrendingDown, TrendingUp, Download, Search, Info, FileSpreadsheet } from 'lucide-react';
+import { getVoucherLines } from '@/lib/voucherUtils';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
@@ -79,10 +80,10 @@ function buildAgingRows(
   const rows: AgingRow[] = [];
 
   for (const accountId of accountIds) {
-    // Collect all non-deleted vouchers touching this account
+    // Collect all non-deleted vouchers touching this account (supports multi-line Expert Mode vouchers)
     const relevant = vouchers.filter(v =>
       !v.isDeleted &&
-      (v.debitAccountId === accountId || v.creditAccountId === accountId)
+      getVoucherLines(v).some(l => l.accountId === accountId)
     );
 
     let totalOutstanding = 0;
@@ -90,21 +91,25 @@ function buildAgingRows(
 
     for (const v of relevant) {
       const days = daysSince(v.date);
-      // Signed amount: positive = increases balance (Dr for debtors, Cr for creditors)
-      let signed = 0;
-      if (mode === 'dr') {
-        signed = v.debitAccountId === accountId ? v.amount : -v.amount;
-      } else {
-        signed = v.creditAccountId === accountId ? v.amount : -v.amount;
-      }
+      // Iterate each line that touches this account
+      getVoucherLines(v).forEach(l => {
+        if (l.accountId !== accountId) return;
+        // Signed amount: positive = increases balance (Dr for debtors, Cr for creditors)
+        let signed = 0;
+        if (mode === 'dr') {
+          signed = l.type === 'Dr' ? l.amount : -l.amount;
+        } else {
+          signed = l.type === 'Cr' ? l.amount : -l.amount;
+        }
 
-      totalOutstanding += signed;
+        totalOutstanding += signed;
 
-      if (days <= 30)       bucket0_30    += signed;
-      else if (days <= 60)  bucket31_60   += signed;
-      else if (days <= 90)  bucket61_90   += signed;
-      else if (days <= 180) bucket91_180  += signed;
-      else                  bucketOver180 += signed;
+        if (days <= 30)       bucket0_30    += signed;
+        else if (days <= 60)  bucket31_60   += signed;
+        else if (days <= 90)  bucket61_90   += signed;
+        else if (days <= 180) bucket91_180  += signed;
+        else                  bucketOver180 += signed;
+      });
     }
 
     // Only include if there's an outstanding balance

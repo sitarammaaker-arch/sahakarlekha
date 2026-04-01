@@ -16,7 +16,7 @@ import { Plus, Download, Vote, Trophy, Users, FileSpreadsheet } from 'lucide-rea
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { supabase } from '@/lib/supabase';
+import { electionInsert, electionUpdate } from '@/lib/supabaseService';
 
 type ElectionStatus = 'upcoming' | 'ongoing' | 'completed';
 type PostType = 'president' | 'vice_president' | 'secretary' | 'treasurer' | 'director' | 'other';
@@ -116,9 +116,9 @@ export default function ElectionModule() {
       society_id: societyId,
     };
 
-    const { error } = await supabase.from('elections').insert(election);
+    const { error } = await electionInsert(election);
     if (error) {
-      toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+      toast({ title: 'Save failed', description: error, variant: 'destructive' }); return;
     }
     setElections(prev => [election, ...prev]);
     setShowDialog(false);
@@ -131,9 +131,9 @@ export default function ElectionModule() {
     const winner = [...updatedCandidates].sort((a, b) => b.votes - a.votes)[0];
     const updates = { candidates: updatedCandidates, votesCast, status: 'completed' as ElectionStatus, winnerId: winner?.id };
 
-    const { error } = await supabase.from('elections').update(updates).eq('id', electionId);
+    const { error } = await electionUpdate(electionId, updates);
     if (error) {
-      toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+      toast({ title: 'Save failed', description: error, variant: 'destructive' }); return;
     }
     setElections(prev => prev.map(e => e.id !== electionId ? e : { ...e, ...updates }));
     setShowVoteDialog(null);

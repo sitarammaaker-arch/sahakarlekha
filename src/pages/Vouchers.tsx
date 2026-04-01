@@ -30,6 +30,7 @@ import { getNextVoucherNo, VOUCHER_TEMPLATES, ACCOUNT_IDS } from '@/lib/storage'
 import type { LedgerAccount } from '@/types';
 import { validateVoucher } from '@/lib/validation';
 import { fmtDate } from '@/lib/dateUtils';
+import { getVoucherLines } from '@/lib/voucherUtils';
 
 type EntryMode = 'aasan' | 'expert';
 
@@ -358,16 +359,20 @@ const Vouchers: React.FC = () => {
 
   const handleCSV = () => {
     const getAccName = (id: string) => accounts.find(a => a.id === id)?.name || id;
+    const getDr = (v: typeof vouchers[0]) => getVoucherLines(v).filter(l => l.type === 'Dr').map(l => getAccName(l.accountId)).join('; ');
+    const getCr = (v: typeof vouchers[0]) => getVoucherLines(v).filter(l => l.type === 'Cr').map(l => getAccName(l.accountId)).join('; ');
     const headers = ['Voucher No', 'Date', 'Type', 'Debit Account', 'Credit Account', 'Amount', 'Narration'];
     const allVouchers = vouchers.filter(v => !v.isDeleted);
-    const rows = allVouchers.map(v => [v.voucherNo || '', v.date, v.type, getAccName(v.debitAccountId), getAccName(v.creditAccountId), v.amount, v.narration || '']);
+    const rows = allVouchers.map(v => [v.voucherNo || '', v.date, v.type, getDr(v), getCr(v), v.amount, v.narration || '']);
     downloadCSV(headers, rows, 'vouchers.csv');
   };
   const handleExcel = () => {
     const getAccName = (id: string) => accounts.find(a => a.id === id)?.name || id;
+    const getDr = (v: typeof vouchers[0]) => getVoucherLines(v).filter(l => l.type === 'Dr').map(l => getAccName(l.accountId)).join('; ');
+    const getCr = (v: typeof vouchers[0]) => getVoucherLines(v).filter(l => l.type === 'Cr').map(l => getAccName(l.accountId)).join('; ');
     const headers = ['Voucher No', 'Date', 'Type', 'Debit Account', 'Credit Account', 'Amount', 'Narration'];
     const allVouchers = vouchers.filter(v => !v.isDeleted);
-    const rows = allVouchers.map(v => [v.voucherNo || '', v.date, v.type, getAccName(v.debitAccountId), getAccName(v.creditAccountId), v.amount, v.narration || '']);
+    const rows = allVouchers.map(v => [v.voucherNo || '', v.date, v.type, getDr(v), getCr(v), v.amount, v.narration || '']);
     downloadExcelSingle(headers, rows, 'vouchers.xlsx', 'Vouchers');
   };
 
@@ -933,8 +938,10 @@ const Vouchers: React.FC = () => {
                   </TableHeader>
                   <TableBody>
                     {sortedVouchers.map(v => {
-                      const debitAcc = accounts.find(a => a.id === v.debitAccountId);
-                      const creditAcc = accounts.find(a => a.id === v.creditAccountId);
+                      const drLines = getVoucherLines(v).filter(l => l.type === 'Dr');
+                      const crLines = getVoucherLines(v).filter(l => l.type === 'Cr');
+                      const debitAcc = accounts.find(a => a.id === drLines[0]?.accountId);
+                      const creditAcc = accounts.find(a => a.id === crLines[0]?.accountId);
                       const cancelled = !!v.isDeleted;
                       return (
                         <TableRow key={v.id} className={cn('hover:bg-muted/30', cancelled && 'opacity-50 bg-red-50/30 dark:bg-red-900/10')}>

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Save, ArrowRight, FileSpreadsheet, Download } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { getVoucherLines } from '@/lib/voucherUtils';
 
 interface ObEntry { accountId: string; amount: number; type: 'debit' | 'credit' }
 
@@ -104,10 +105,14 @@ export default function OpeningBalances() {
       }
       vouchers
         .filter(v => !v.isDeleted && v.date <= fyEnd &&
-          (v.debitAccountId === acct.id || v.creditAccountId === acct.id))
+          getVoucherLines(v).some(l => l.accountId === acct.id))
         .forEach(v => {
-          if (v.debitAccountId === acct.id) bal += v.amount;
-          else bal -= v.amount;
+          getVoucherLines(v).forEach(l => {
+            if (l.accountId === acct.id) {
+              if (l.type === 'Dr') bal += l.amount;
+              else bal -= l.amount;
+            }
+          });
         });
       if (Math.abs(bal) > 0.01) {
         newBalances[acct.id] = { accountId: acct.id, amount: Math.abs(bal), type: bal >= 0 ? 'debit' : 'credit' };

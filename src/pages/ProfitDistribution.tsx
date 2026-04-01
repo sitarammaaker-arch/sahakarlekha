@@ -20,6 +20,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
+import { getVoucherLines } from '@/lib/voucherUtils';
 
 // ── Account IDs ─────────────────────────────────────────────────────────────
 const ACC_NET_SURPLUS   = '1208';
@@ -43,7 +44,11 @@ const usePosted = (
   fy: string
 ) =>
   vouchers.find(
-    v => !v.isDeleted && v.debitAccountId === debitId && v.creditAccountId === creditId && v.narration.includes(fy)
+    v =>
+      !v.isDeleted &&
+      getVoucherLines(v).some(l => l.accountId === debitId && l.type === 'Dr') &&
+      getVoucherLines(v).some(l => l.accountId === creditId && l.type === 'Cr') &&
+      v.narration.includes(fy)
   );
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -106,8 +111,11 @@ const ProfitDistribution: React.FC = () => {
     if (!acc) return 0;
     let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
     vouchers.filter(v => !v.isDeleted).forEach(v => {
-      if (v.debitAccountId === id) bal -= v.amount;
-      if (v.creditAccountId === id) bal += v.amount;
+      getVoucherLines(v).forEach(l => {
+        if (l.accountId !== id) return;
+        if (l.type === 'Dr') bal -= l.amount;
+        else bal += l.amount;
+      });
     });
     return bal;
   };

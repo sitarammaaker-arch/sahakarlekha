@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Shield, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
+import { getVoucherLines } from '@/lib/voucherUtils';
 import { useToast } from '@/hooks/use-toast';
 
 const fmt = (amount: number) =>
@@ -48,8 +49,8 @@ const ReserveFund: React.FC = () => {
   const existingReserveVoucher = useMemo(() =>
     vouchers.find(v =>
       !v.isDeleted &&
-      v.debitAccountId === ACC_NET_SURPLUS &&
-      v.creditAccountId === ACC_RESERVE_FUND &&
+      getVoucherLines(v).some(l => l.accountId === ACC_NET_SURPLUS && l.type === 'Dr') &&
+      getVoucherLines(v).some(l => l.accountId === ACC_RESERVE_FUND && l.type === 'Cr') &&
       v.narration.includes(fy)
     ),
     [vouchers, fy]
@@ -58,8 +59,8 @@ const ReserveFund: React.FC = () => {
   const existingEduVoucher = useMemo(() =>
     vouchers.find(v =>
       !v.isDeleted &&
-      v.debitAccountId === ACC_NET_SURPLUS &&
-      v.creditAccountId === ACC_EDUCATION_FUND &&
+      getVoucherLines(v).some(l => l.accountId === ACC_NET_SURPLUS && l.type === 'Dr') &&
+      getVoucherLines(v).some(l => l.accountId === ACC_EDUCATION_FUND && l.type === 'Cr') &&
       v.narration.includes(fy)
     ),
     [vouchers, fy]
@@ -75,8 +76,11 @@ const ReserveFund: React.FC = () => {
     if (!acc) return 0;
     let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
     vouchers.filter(v => !v.isDeleted).forEach(v => {
-      if (v.debitAccountId === id) bal -= v.amount;
-      if (v.creditAccountId === id) bal += v.amount;
+      getVoucherLines(v).forEach(l => {
+        if (l.accountId !== id) return;
+        if (l.type === 'Dr') bal -= l.amount;
+        else bal += l.amount;
+      });
     });
     return bal;
   };

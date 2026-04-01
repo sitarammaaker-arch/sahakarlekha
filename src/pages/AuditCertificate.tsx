@@ -18,6 +18,7 @@ import { FileCheck, Download, Printer, Info, FileSpreadsheet } from 'lucide-reac
 import jsPDF from 'jspdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
+import { getVoucherLines } from '@/lib/voucherUtils';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -37,8 +38,11 @@ const AuditCertificate: React.FC = () => {
     if (!acc) return 0;
     let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
     vouchers.filter(v => !v.isDeleted).forEach(v => {
-      if (v.debitAccountId === id) bal -= v.amount;
-      if (v.creditAccountId === id) bal += v.amount;
+      getVoucherLines(v).forEach(l => {
+        if (l.accountId !== id) return;
+        if (l.type === 'Dr') bal -= l.amount;
+        else bal += l.amount;
+      });
     });
     return bal;
   };

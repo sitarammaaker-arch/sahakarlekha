@@ -45,6 +45,8 @@ interface Account {
   openingBalanceType: 'debit' | 'credit';
 }
 
+interface VoucherLine { accountId: string; type: 'Dr' | 'Cr'; amount: number; }
+
 interface Voucher {
   id: string;
   date: string;
@@ -52,6 +54,16 @@ interface Voucher {
   creditAccountId: string;
   amount: number;
   isDeleted?: boolean;
+  lines?: VoucherLine[];
+}
+
+// Supports multi-line Expert Mode vouchers from backup files
+function getLines(v: Voucher): VoucherLine[] {
+  if (v.lines && Array.isArray(v.lines) && v.lines.length > 0) return v.lines;
+  const result: VoucherLine[] = [];
+  if (v.debitAccountId) result.push({ accountId: v.debitAccountId, type: 'Dr', amount: v.amount });
+  if (v.creditAccountId) result.push({ accountId: v.creditAccountId, type: 'Cr', amount: v.amount });
+  return result;
 }
 
 interface Member {
@@ -117,8 +129,11 @@ function computeClosingBalance(account: Account, vouchers: Voucher[]): number {
 
   for (const v of vouchers) {
     if (v.isDeleted) continue;
-    if (v.debitAccountId === account.id) bal += v.amount;
-    if (v.creditAccountId === account.id) bal -= v.amount;
+    getLines(v).forEach(l => {
+      if (l.accountId !== account.id) return;
+      if (l.type === 'Dr') bal += l.amount;
+      else bal -= l.amount;
+    });
   }
 
   return bal;

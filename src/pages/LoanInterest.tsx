@@ -29,6 +29,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
+import { getVoucherLines } from '@/lib/voucherUtils';
 
 // ── Account IDs ───────────────────────────────────────────────────────────────
 const ACC_INTEREST_REC  = '3313'; // Member Loan Interest Receivable (asset)
@@ -116,8 +117,8 @@ const LoanInterest: React.FC = () => {
   const alreadyPostedVouchers = useMemo(() =>
     vouchers.filter(v =>
       !v.isDeleted &&
-      v.debitAccountId === ACC_INTEREST_REC &&
-      v.creditAccountId === ACC_INTEREST_INC &&
+      getVoucherLines(v).some(l => l.accountId === ACC_INTEREST_REC && l.type === 'Dr') &&
+      getVoucherLines(v).some(l => l.accountId === ACC_INTEREST_INC && l.type === 'Cr') &&
       v.narration.includes(fromDate)
     ),
     [vouchers, fromDate]

@@ -23,6 +23,7 @@ import { CheckCircle2, XCircle, ClipboardList, Eye, FileSpreadsheet, Download } 
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { useToast } from '@/hooks/use-toast';
+import { getVoucherLines } from '@/lib/voucherUtils';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
@@ -88,14 +89,17 @@ const VoucherApproval: React.FC = () => {
     setRejectReason('');
   };
 
+  const getDr = (v: typeof filtered[0]) => getVoucherLines(v).filter(l => l.type === 'Dr').map(l => getAccName(l.accountId)).join('; ');
+  const getCr = (v: typeof filtered[0]) => getVoucherLines(v).filter(l => l.type === 'Cr').map(l => getAccName(l.accountId)).join('; ');
+
   const handleCSV = () => {
     const headers = ['Voucher No', 'Date', 'Type', 'Debit Account', 'Credit Account', 'Amount', 'Status', 'Narration'];
-    const rows = filtered.map(v => [v.voucherNo || '', v.date, v.type, getAccName(v.debitAccountId), getAccName(v.creditAccountId), v.amount, v.approvalStatus || 'pending', v.narration || '']);
+    const rows = filtered.map(v => [v.voucherNo || '', v.date, v.type, getDr(v), getCr(v), v.amount, v.approvalStatus || 'pending', v.narration || '']);
     downloadCSV(headers, rows, 'voucher_approval.csv');
   };
   const handleExcel = () => {
     const headers = ['Voucher No', 'Date', 'Type', 'Debit Account', 'Credit Account', 'Amount', 'Status', 'Narration'];
-    const rows = filtered.map(v => [v.voucherNo || '', v.date, v.type, getAccName(v.debitAccountId), getAccName(v.creditAccountId), v.amount, v.approvalStatus || 'pending', v.narration || '']);
+    const rows = filtered.map(v => [v.voucherNo || '', v.date, v.type, getDr(v), getCr(v), v.amount, v.approvalStatus || 'pending', v.narration || '']);
     downloadExcelSingle(headers, rows, 'voucher_approval.xlsx', 'Voucher Approval');
   };
 
@@ -196,8 +200,8 @@ const VoucherApproval: React.FC = () => {
                         {VOUCHER_TYPE_LABELS[v.type]?.[hi ? 'hi' : 'en'] ?? v.type}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-xs max-w-36 truncate">{getAccName(v.debitAccountId)}</TableCell>
-                    <TableCell className="text-xs max-w-36 truncate">{getAccName(v.creditAccountId)}</TableCell>
+                    <TableCell className="text-xs max-w-36 truncate">{getDr(v)}</TableCell>
+                    <TableCell className="text-xs max-w-36 truncate">{getCr(v)}</TableCell>
                     <TableCell className="text-right font-semibold text-sm">{fmt(v.amount)}</TableCell>
                     <TableCell className="text-xs">{v.createdBy}</TableCell>
                     <TableCell className="text-xs max-w-40 truncate">{v.narration || '—'}</TableCell>

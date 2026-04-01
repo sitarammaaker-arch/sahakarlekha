@@ -17,7 +17,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { KccLoan, CropSeasonType } from '@/types';
-import { supabase } from '@/lib/supabase';
+import { kccLoanInsert, kccLoanUpdate } from '@/lib/supabaseService';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
@@ -144,9 +144,9 @@ export default function KccLoan() {
       society_id: societyId,
     };
 
-    const { error } = await supabase.from('kcc_loans').insert(newLoan);
+    const { error } = await kccLoanInsert(newLoan);
     if (error) {
-      toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+      toast({ title: 'Save failed', description: error, variant: 'destructive' }); return;
     }
     setLoans(prev => [newLoan, ...prev]);
     setShowDialog(false);
@@ -160,12 +160,9 @@ export default function KccLoan() {
     const newRepaid = loan.repaidAmount + repayAmt;
     const newOutstanding = Math.max(0, loan.outstandingAmount - repayAmt);
 
-    const { error } = await supabase
-      .from('kcc_loans')
-      .update({ repaidAmount: newRepaid, outstandingAmount: newOutstanding })
-      .eq('id', loanId);
+    const { error } = await kccLoanUpdate(loanId, { repaidAmount: newRepaid, outstandingAmount: newOutstanding });
     if (error) {
-      toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+      toast({ title: 'Save failed', description: error, variant: 'destructive' }); return;
     }
     setLoans(prev => prev.map(l =>
       l.id !== loanId ? l : { ...l, repaidAmount: newRepaid, outstandingAmount: newOutstanding }

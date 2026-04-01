@@ -15,7 +15,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { Budget, BudgetHead } from '@/types';
-import { supabase } from '@/lib/supabase';
+import { getVoucherLines } from '@/lib/voucherUtils';
+import { budgetInsert, budgetUpdate } from '@/lib/supabaseService';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
@@ -71,8 +72,9 @@ export default function BudgetModule() {
     const map: Record<string, number> = {};
     const active = vouchers.filter(v => !v.isDeleted && v.date >= from && v.date <= to);
     for (const v of active) {
-      map[v.debitAccountId] = (map[v.debitAccountId] || 0) + v.amount;
-      map[v.creditAccountId] = (map[v.creditAccountId] || 0) + v.amount;
+      getVoucherLines(v).forEach(l => {
+        map[l.accountId] = (map[l.accountId] || 0) + l.amount;
+      });
     }
     return map;
   }, [vouchers, from, to]);
@@ -109,9 +111,9 @@ export default function BudgetModule() {
 
     if (existing) {
       const updated = { heads, approvedBy: user?.name, approvedAt: new Date().toISOString() };
-      const { error } = await supabase.from('budgets').update(updated).eq('id', existing.id);
+      const { error } = await budgetUpdate(existing.id, updated);
       if (error) {
-        toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+        toast({ title: 'Save failed', description: error, variant: 'destructive' }); return;
       }
       setBudgets(prev => prev.map(b =>
         b.financialYear === selectedFY ? { ...b, ...updated } : b
@@ -127,9 +129,9 @@ export default function BudgetModule() {
         createdBy: user?.name || '',
         society_id: societyId,
       };
-      const { error } = await supabase.from('budgets').insert(newBudget);
+      const { error } = await budgetInsert(newBudget);
       if (error) {
-        toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return;
+        toast({ title: 'Save failed', description: error, variant: 'destructive' }); return;
       }
       setBudgets(prev => [...prev, newBudget]);
     }

@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { ACCOUNT_IDS } from '@/lib/storage';
 import { useToast } from '@/hooks/use-toast';
 import { fmtDate } from '@/lib/dateUtils';
+import { getVoucherLines } from '@/lib/voucherUtils';
 
 import * as XLSX from 'xlsx';
 
@@ -68,26 +69,32 @@ const BankReconciliation: React.FC = () => {
 
   const bankAccount = accounts.find(a => a.id === ACCOUNT_IDS.BANK);
 
+  // Helper: sum of bank Dr/Cr line amounts for a voucher (supports multi-line Expert Mode vouchers)
+  const bankDrAmt = (v: typeof vouchers[0]) =>
+    getVoucherLines(v).filter(l => l.accountId === ACCOUNT_IDS.BANK && l.type === 'Dr').reduce((s, l) => s + l.amount, 0);
+  const bankCrAmt = (v: typeof vouchers[0]) =>
+    getVoucherLines(v).filter(l => l.accountId === ACCOUNT_IDS.BANK && l.type === 'Cr').reduce((s, l) => s + l.amount, 0);
+
   // All active bank vouchers up to asOfDate
   const bankVouchers = useMemo(() => {
     return vouchers
       .filter(v =>
         !v.isDeleted &&
         v.date <= asOfDate &&
-        (v.debitAccountId === ACCOUNT_IDS.BANK || v.creditAccountId === ACCOUNT_IDS.BANK)
+        getVoucherLines(v).some(l => l.accountId === ACCOUNT_IDS.BANK)
       )
       .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
   }, [vouchers, asOfDate]);
 
   // Uncleared deposits (Dr Bank — money coming in, not yet in bank statement)
-  const unclearedDeposits = bankVouchers.filter(v => !v.isCleared && v.debitAccountId === ACCOUNT_IDS.BANK);
+  const unclearedDeposits = bankVouchers.filter(v => !v.isCleared && bankDrAmt(v) > 0);
   // Uncleared payments/cheques (Cr Bank — cheques issued but not yet presented)
-  const unclearedPayments = bankVouchers.filter(v => !v.isCleared && v.creditAccountId === ACCOUNT_IDS.BANK);
+  const unclearedPayments = bankVouchers.filter(v => !v.isCleared && bankCrAmt(v) > 0);
   // Cleared vouchers
   const clearedVouchers = bankVouchers.filter(v => v.isCleared);
 
-  const totalUnclearedDeposits = unclearedDeposits.reduce((s, v) => s + v.amount, 0);
-  const totalUnclearedPayments = unclearedPayments.reduce((s, v) => s + v.amount, 0);
+  const totalUnclearedDeposits = unclearedDeposits.reduce((s, v) => s + bankDrAmt(v), 0);
+  const totalUnclearedPayments = unclearedPayments.reduce((s, v) => s + bankCrAmt(v), 0);
 
   // Book balance (as per our bank account) — all active bank txns up to asOfDate
   const bookBalance = useMemo(() => {
@@ -96,10 +103,13 @@ const BankReconciliation: React.FC = () => {
     let bal = acct.openingBalanceType === 'debit' ? acct.openingBalance : -acct.openingBalance;
     vouchers
       .filter(v => !v.isDeleted && v.date <= asOfDate &&
-        (v.debitAccountId === ACCOUNT_IDS.BANK || v.creditAccountId === ACCOUNT_IDS.BANK))
+        getVoucherLines(v).some(l => l.accountId === ACCOUNT_IDS.BANK))
       .forEach(v => {
-        if (v.debitAccountId === ACCOUNT_IDS.BANK) bal += v.amount;
-        else bal -= v.amount;
+        getVoucherLines(v).forEach(l => {
+          if (l.accountId !== ACCOUNT_IDS.BANK) return;
+          if (l.type === 'Dr') bal += l.amount;
+          else bal -= l.amount;
+        });
       });
     return bal;
   }, [vouchers, accounts, asOfDate]);
@@ -185,8 +195,10 @@ const BankReconciliation: React.FC = () => {
                     const match = vouchers.find(v =>
                       !v.isDeleted && !v.isCleared &&
                       v.date === row.date &&
-                      Math.abs(v.amount - amt) < 1 &&
-                      (isDeposit ? v.debitAccountId === ACCOUNT_IDS.BANK : v.creditAccountId === ACCOUNT_IDS.BANK)
+                      Math.abs((isDeposit ? bankDrAmt(v) : bankCrAmt(v)) - amt) < 1 &&
+                      getVoucherLines(v).some(l =>
+                        l.accountId === ACCOUNT_IDS.BANK && l.type === (isDeposit ? 'Dr' : 'Cr')
+                      )
                     );
                     if (match) { clearVoucher(match.id); matched++; }
                   });
@@ -342,9 +354,9 @@ const BankReconciliation: React.FC = () => {
                     <TableCell className="text-sm">{fmtDate(v.date)}</TableCell>
                     <TableCell className="font-mono text-sm">{v.voucherNo}</TableCell>
                     <TableCell className="text-sm">
-                      {v.narration || getAccountName(v.creditAccountId)}
+                      {v.narration || getVoucherLines(v).filter(l => l.accountId !== ACCOUNT_IDS.BANK && l.type === 'Cr').map(l => getAccountName(l.accountId)).join(', ')}
                     </TableCell>
-                    <TableCell className="text-right font-medium text-orange-700">{fmt(v.amount)}</TableCell>
+                    <TableCell className="text-right font-medium text-orange-700">{fmt(bankDrAmt(v))}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -401,9 +413,9 @@ const BankReconciliation: React.FC = () => {
                     <TableCell className="text-sm">{fmtDate(v.date)}</TableCell>
                     <TableCell className="font-mono text-sm">{v.voucherNo}</TableCell>
                     <TableCell className="text-sm">
-                      {v.narration || getAccountName(v.debitAccountId)}
+                      {v.narration || getVoucherLines(v).filter(l => l.accountId !== ACCOUNT_IDS.BANK && l.type === 'Dr').map(l => getAccountName(l.accountId)).join(', ')}
                     </TableCell>
-                    <TableCell className="text-right font-medium text-blue-700">{fmt(v.amount)}</TableCell>
+                    <TableCell className="text-right font-medium text-blue-700">{fmt(bankCrAmt(v))}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -446,7 +458,7 @@ const BankReconciliation: React.FC = () => {
               </TableHeader>
               <TableBody>
                 {clearedVouchers.map(v => {
-                  const isDeposit = v.debitAccountId === ACCOUNT_IDS.BANK;
+                  const isDeposit = getVoucherLines(v).some(l => l.accountId === ACCOUNT_IDS.BANK && l.type === 'Dr');
                   return (
                     <TableRow key={v.id} className="bg-green-50/20">
                       <TableCell>
@@ -459,7 +471,7 @@ const BankReconciliation: React.FC = () => {
                       <TableCell className="text-sm">{fmtDate(v.date)}</TableCell>
                       <TableCell className="font-mono text-sm">{v.voucherNo}</TableCell>
                       <TableCell className="text-sm">
-                        {v.narration || getAccountName(isDeposit ? v.creditAccountId : v.debitAccountId)}
+                        {v.narration || getVoucherLines(v).filter(l => l.accountId !== ACCOUNT_IDS.BANK && l.type === (isDeposit ? 'Cr' : 'Dr')).map(l => getAccountName(l.accountId)).join(', ')}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={isDeposit
@@ -471,7 +483,7 @@ const BankReconciliation: React.FC = () => {
                             : (language === 'hi' ? 'भुगतान' : 'Payment')}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right font-medium">{fmt(v.amount)}</TableCell>
+                      <TableCell className="text-right font-medium">{fmt(isDeposit ? bankDrAmt(v) : bankCrAmt(v))}</TableCell>
                       <TableCell className="text-sm text-gray-500">{v.clearedDate ?? '—'}</TableCell>
                     </TableRow>
                   );
