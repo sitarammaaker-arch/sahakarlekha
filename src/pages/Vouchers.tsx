@@ -66,7 +66,7 @@ const AccountSearch: React.FC<{
         />
       </div>
       {open && (
-        <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-xl max-h-52 overflow-y-auto">
+        <div className="absolute z-[200] w-full mt-1 bg-background border rounded-lg shadow-xl max-h-52 overflow-y-auto">
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground px-3 py-2">{language === 'hi' ? 'कोई खाता नहीं मिला' : 'No account found'}</p>
           ) : filtered.slice(0, 25).map(a => (
@@ -718,7 +718,7 @@ const Vouchers: React.FC = () => {
                     {voucherType !== 'contra' && (
                       <div className="space-y-3">
                         <Label className="text-base font-semibold">{language === 'hi' ? 'नाम-जमा पंक्तियाँ' : 'Debit / Credit Lines'}</Label>
-                        <div className="rounded-lg border overflow-hidden">
+                        <div className="rounded-lg border">
                           <Table>
                             <TableHeader>
                               <TableRow className="bg-muted/40">
