@@ -14,14 +14,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Settings, Building2, Calendar, Wallet, Save, History, HardDrive, Download, Upload, AlertTriangle, Plus, Trash2, Lock, Unlock } from 'lucide-react';
+import { Settings, Building2, Calendar, Wallet, Save, History, HardDrive, Download, Upload, AlertTriangle, Plus, Trash2, Lock, Unlock, FastForward, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 const SocietySetup: React.FC = () => {
   const { t, language } = useLanguage();
   const { toast } = useToast();
-  const { society, updateSociety, accounts, updateAccount, addAccount, deleteAccount, getAccountBalance } = useData();
+  const { society, updateSociety, accounts, updateAccount, addAccount, deleteAccount, getAccountBalance, getTrialBalance, getProfitLoss, getReceiptsPayments } = useData();
 
   // Basic info form state
   const [form, setForm] = useState({
@@ -120,6 +121,54 @@ const SocietySetup: React.FC = () => {
     toast({
       title: language === 'hi' ? 'वर्तमान वर्ष शेष भरा गया' : 'Filled from current year closing',
       description: language === 'hi' ? 'कृपया समीक्षा करें और सहेजें' : 'Please review and save',
+    });
+  };
+
+  // --- P5-1: New FY Rollover Wizard ---
+  const [rolloverOpen, setRolloverOpen] = useState(false);
+
+  const handleRolloverFY = () => {
+    const [startYY, endYY] = society.financialYear.split('-');
+    const newFY = `${parseInt(startYY) + 1}-${String(parseInt(endYY) + 1).slice(-2)}`;
+
+    // Snapshot BS closing balances → previousYearBalances
+    const tb = getTrialBalance();
+    const bsBalances: Record<string, number> = {};
+    tb.filter(b => (b.account.type === 'asset' || b.account.type === 'equity' || b.account.type === 'liability') && !b.account.isGroup)
+      .forEach(b => { if (Math.abs(b.netBalance) > 0.01) bsBalances[b.account.id] = b.netBalance; });
+
+    // Snapshot I&E → previousYearIE
+    const { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit } = getProfitLoss();
+    const prevIE = { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit };
+
+    // Snapshot R&P → previousYearRP
+    const rpData = getReceiptsPayments();
+    const prevRP = {
+      openingCash: rpData.openingCash, openingBank: rpData.openingBank,
+      receipts: rpData.receipts.map(r => ({ accountName: r.accountName, accountNameHi: r.accountNameHi || r.accountName, amount: r.amount })),
+      payments: rpData.payments.map(p => ({ accountName: p.accountName, accountNameHi: p.accountNameHi || p.accountName, amount: p.amount })),
+      closingCash: rpData.closingCash, closingBank: rpData.closingBank,
+      totalReceipts: rpData.receipts.reduce((s, r) => s + r.amount, 0),
+      totalPayments: rpData.payments.reduce((s, p) => s + p.amount, 0),
+    };
+
+    updateSociety({
+      previousFinancialYear: society.financialYear,
+      previousYearBalances: bsBalances,
+      previousYearIE: prevIE,
+      previousYearRP: prevRP,
+      financialYear: newFY,
+      fyLocked: false,
+      fyLockedAt: undefined,
+      fyLockedBy: undefined,
+    });
+
+    setRolloverOpen(false);
+    toast({
+      title: language === 'hi' ? `वित्त वर्ष ${newFY} प्रारंभ हुआ` : `Rolled over to FY ${newFY}`,
+      description: language === 'hi'
+        ? `पिछले वर्ष ${society.financialYear} के शेष सहेजे गए। अब ${newFY} में प्रविष्टियां करें।`
+        : `Closing balances of ${society.financialYear} saved as previous year data. Start entries for ${newFY}.`,
     });
   };
 
@@ -495,6 +544,54 @@ const SocietySetup: React.FC = () => {
                   </Button>
                 </div>
               </div>
+
+              {/* P5-1: New FY Rollover Wizard */}
+              <div className={`mt-6 p-4 rounded-lg border-2 ${society.fyLocked ? 'border-success/40 bg-success/5' : 'border-muted bg-muted/30'}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 font-semibold">
+                      <FastForward className={`h-4 w-4 ${society.fyLocked ? 'text-success' : 'text-muted-foreground'}`} />
+                      <span className={society.fyLocked ? 'text-success' : 'text-muted-foreground'}>
+                        {language === 'hi' ? 'नए वित्त वर्ष में जाएं' : 'Roll Over to New Financial Year'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {society.fyLocked
+                        ? (language === 'hi'
+                          ? `वित्त वर्ष ${society.financialYear} लॉक है। सभी शेष राशियां सहेज कर ${society.financialYear.split('-')[0] ? `${parseInt(society.financialYear.split('-')[0]) + 1}-${String(parseInt(society.financialYear.split('-')[1]) + 1).slice(-2)}` : '?'} प्रारंभ करें।`
+                          : `FY ${society.financialYear} is locked and ready for rollover. Closing balances will be saved as previous year data.`)
+                        : (language === 'hi'
+                          ? 'नए वित्त वर्ष में जाने के लिए पहले FY को ऑडिट लॉक करें।'
+                          : 'Lock the FY (after audit) before rolling over to the next financial year.')}
+                    </p>
+                    {society.fyLocked && (
+                      <div className="mt-2 space-y-1">
+                        {[
+                          language === 'hi' ? `BS शेष → पिछले वर्ष की शेष राशि (${society.financialYear})` : `BS closing balances saved as previous year (${society.financialYear})`,
+                          language === 'hi' ? 'आय-व्यय खाता डेटा → तुलना हेतु सहेजा जाएगा' : 'I&E data saved for year-on-year comparison',
+                          language === 'hi' ? 'प्राप्ति-भुगतान डेटा → तुलना हेतु सहेजा जाएगा' : 'R&P data saved for comparison column',
+                          language === 'hi' ? 'FY लॉक हटेगा — नई प्रविष्टियां संभव होंगी' : 'FY lock cleared — new entries allowed in new year',
+                        ].map((item, i) => (
+                          <div key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <CheckCircle2 className="h-3 w-3 text-success shrink-0" />
+                            {item}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="gap-2 flex-shrink-0"
+                    disabled={!society.fyLocked}
+                    onClick={() => setRolloverOpen(true)}
+                  >
+                    <FastForward className="h-4 w-4" />
+                    {language === 'hi' ? 'रोलओवर करें' : 'Roll Over'}
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -791,6 +888,51 @@ const SocietySetup: React.FC = () => {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* P5-1: FY Rollover Confirmation Dialog */}
+      <AlertDialog open={rolloverOpen} onOpenChange={setRolloverOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {language === 'hi' ? `वित्त वर्ष ${society.financialYear} से रोलओवर करें?` : `Roll Over from FY ${society.financialYear}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p>
+                  {language === 'hi'
+                    ? `यह क्रिया निम्न कार्य करेगी:`
+                    : `This action will:`}
+                </p>
+                <ul className="space-y-1.5 text-muted-foreground">
+                  {[
+                    language === 'hi' ? `वर्तमान तुलन पत्र शेष → पिछले वर्ष (${society.financialYear}) डेटा में सहेजेगा` : `Save current Balance Sheet closing balances as ${society.financialYear} previous year data`,
+                    language === 'hi' ? `आय-व्यय और प्राप्ति-भुगतान → तुलना के लिए सहेजेगा` : `Save I&E and R&P figures for year-on-year comparison columns`,
+                    language === 'hi' ? `वित्त वर्ष ${parseInt(society.financialYear.split('-')[0]) + 1}-${String(parseInt(society.financialYear.split('-')[1]) + 1).slice(-2)} शुरू करेगा` : `Switch to FY ${parseInt(society.financialYear.split('-')[0]) + 1}-${String(parseInt(society.financialYear.split('-')[1]) + 1).slice(-2)}`,
+                    language === 'hi' ? `FY ऑडिट लॉक हटाएगा — नई प्रविष्टियां संभव होंगी` : `Clear the audit lock — new entries allowed in the new year`,
+                  ].map((item, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <p className="font-medium text-foreground">
+                  {language === 'hi'
+                    ? 'यह क्रिया पूर्ववत नहीं की जा सकती। क्या आप निश्चित हैं?'
+                    : 'This cannot be undone. Are you sure you want to proceed?'}
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{language === 'hi' ? 'रद्द करें' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRolloverFY} className="bg-success hover:bg-success/90 text-white">
+              <FastForward className="h-4 w-4 mr-2" />
+              {language === 'hi' ? 'रोलओवर करें' : 'Roll Over Now'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

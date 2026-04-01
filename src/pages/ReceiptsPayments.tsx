@@ -24,6 +24,15 @@ const ReceiptsPayments: React.FC = () => {
   const drTotal = openingCash + openingBank + totalReceipts;
   const crTotal = totalPayments + closingCash + closingBank;
 
+  // P5-3: Previous year comparison
+  const pyRP = society.previousYearRP;
+  const hasPY = !!pyRP && !!society.previousFinancialYear;
+  const pyLabel = society.previousFinancialYear || '';
+  const getPYReceipt = (name: string) => pyRP?.receipts.find(r => r.accountName === name)?.amount ?? 0;
+  const getPYPayment = (name: string) => pyRP?.payments.find(p => p.accountName === name)?.amount ?? 0;
+  const pyDrTotal = hasPY ? (pyRP!.openingCash + pyRP!.openingBank + pyRP!.totalReceipts) : 0;
+  const pyCrTotal = hasPY ? (pyRP!.totalPayments + pyRP!.closingCash + pyRP!.closingBank) : 0;
+
   const hi = language === 'hi';
 
   const exportHeaders = ['Type', 'Particulars', 'Amount (₹)'];
@@ -116,6 +125,7 @@ const ReceiptsPayments: React.FC = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{hi ? 'विवरण' : 'Particulars'}</TableHead>
+                    {hasPY && <TableHead className="text-right text-muted-foreground text-xs">{pyLabel}</TableHead>}
                     <TableHead className="text-right">{hi ? 'राशि' : 'Amount'}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -123,27 +133,31 @@ const ReceiptsPayments: React.FC = () => {
                   {/* Opening Balance */}
                   <TableRow className="bg-muted/30 font-medium">
                     <TableCell>{hi ? 'प्रारंभिक शेष (To Balance b/d)' : 'To Balance b/d (Opening)'}</TableCell>
+                    {hasPY && <TableCell className="text-right text-muted-foreground text-sm">—</TableCell>}
                     <TableCell className="text-right"></TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="pl-6 text-muted-foreground">{hi ? 'नकद' : 'Cash in Hand'}</TableCell>
+                    {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{fmt(pyRP!.openingCash)}</TableCell>}
                     <TableCell className="text-right">{fmt(openingCash)}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="pl-6 text-muted-foreground">{hi ? 'बैंक' : 'Cash at Bank'}</TableCell>
+                    {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{fmt(pyRP!.openingBank)}</TableCell>}
                     <TableCell className="text-right">{fmt(openingBank)}</TableCell>
                   </TableRow>
                   {/* Receipts */}
                   {receipts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={2} className="text-center text-muted-foreground">
+                      <TableCell colSpan={hasPY ? 3 : 2} className="text-center text-muted-foreground">
                         {hi ? 'कोई प्राप्ति नहीं' : 'No receipts'}
                       </TableCell>
                     </TableRow>
                   ) : (
                     receipts.map((r, i) => (
                       <TableRow key={i}>
-                        <TableCell>{hi ? `To ${r.accountName}` : `To ${r.accountName}`}</TableCell>
+                        <TableCell>To {r.accountName}</TableCell>
+                        {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{getPYReceipt(r.accountName) ? fmt(getPYReceipt(r.accountName)) : '—'}</TableCell>}
                         <TableCell className="text-right font-medium">{fmt(r.amount)}</TableCell>
                       </TableRow>
                     ))
@@ -151,6 +165,7 @@ const ReceiptsPayments: React.FC = () => {
                   {/* Total */}
                   <TableRow className="bg-success/10 font-bold text-lg">
                     <TableCell>{hi ? 'कुल' : 'Total'}</TableCell>
+                    {hasPY && <TableCell className="text-right text-muted-foreground">{fmt(pyDrTotal)}</TableCell>}
                     <TableCell className="text-right text-success">{fmt(drTotal)}</TableCell>
                   </TableRow>
                 </TableBody>
@@ -166,6 +181,7 @@ const ReceiptsPayments: React.FC = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{hi ? 'विवरण' : 'Particulars'}</TableHead>
+                    {hasPY && <TableHead className="text-right text-muted-foreground text-xs">{pyLabel}</TableHead>}
                     <TableHead className="text-right">{hi ? 'राशि' : 'Amount'}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -173,14 +189,15 @@ const ReceiptsPayments: React.FC = () => {
                   {/* Payments */}
                   {payments.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={2} className="text-center text-muted-foreground">
+                      <TableCell colSpan={hasPY ? 3 : 2} className="text-center text-muted-foreground">
                         {hi ? 'कोई भुगतान नहीं' : 'No payments'}
                       </TableCell>
                     </TableRow>
                   ) : (
                     payments.map((p, i) => (
                       <TableRow key={i}>
-                        <TableCell>{hi ? `By ${p.accountName}` : `By ${p.accountName}`}</TableCell>
+                        <TableCell>By {p.accountName}</TableCell>
+                        {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{getPYPayment(p.accountName) ? fmt(getPYPayment(p.accountName)) : '—'}</TableCell>}
                         <TableCell className="text-right font-medium">{fmt(p.amount)}</TableCell>
                       </TableRow>
                     ))
@@ -188,19 +205,23 @@ const ReceiptsPayments: React.FC = () => {
                   {/* Closing Balance */}
                   <TableRow className="bg-muted/30 font-medium">
                     <TableCell>{hi ? 'अंतिम शेष (By Balance c/d)' : 'By Balance c/d (Closing)'}</TableCell>
+                    {hasPY && <TableCell className="text-right text-muted-foreground text-sm">—</TableCell>}
                     <TableCell className="text-right"></TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="pl-6 text-muted-foreground">{hi ? 'नकद' : 'Cash in Hand'}</TableCell>
+                    {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{fmt(pyRP!.closingCash)}</TableCell>}
                     <TableCell className="text-right">{fmt(closingCash)}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="pl-6 text-muted-foreground">{hi ? 'बैंक' : 'Cash at Bank'}</TableCell>
+                    {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{fmt(pyRP!.closingBank)}</TableCell>}
                     <TableCell className="text-right">{fmt(closingBank)}</TableCell>
                   </TableRow>
                   {/* Total */}
                   <TableRow className="bg-destructive/10 font-bold text-lg">
                     <TableCell>{hi ? 'कुल' : 'Total'}</TableCell>
+                    {hasPY && <TableCell className="text-right text-muted-foreground">{fmt(pyCrTotal)}</TableCell>}
                     <TableCell className="text-right text-destructive">{fmt(crTotal)}</TableCell>
                   </TableRow>
                 </TableBody>

@@ -200,6 +200,23 @@ export interface SocietySettings {
   societyType?: SocietyType;
   previousFinancialYear?: string;
   previousYearBalances?: Record<string, number>; // accountId → amount (positive = debit, negative = credit)
+  previousYearIE?: {            // Saved at FY rollover — I&E comparison column
+    incomeItems: Array<{ name: string; nameHi: string; amount: number }>;
+    expenseItems: Array<{ name: string; nameHi: string; amount: number }>;
+    totalIncome: number;
+    totalExpenses: number;
+    netProfit: number;
+  };
+  previousYearRP?: {            // Saved at FY rollover — R&P comparison column
+    openingCash: number;
+    openingBank: number;
+    receipts: Array<{ accountName: string; accountNameHi: string; amount: number }>;
+    payments: Array<{ accountName: string; accountNameHi: string; amount: number }>;
+    closingCash: number;
+    closingBank: number;
+    totalReceipts: number;
+    totalPayments: number;
+  };
   fyLocked?: boolean;          // true = FY is audit-locked; no new vouchers or edits allowed
   fyLockedAt?: string;         // ISO date when lock was applied
   fyLockedBy?: string;         // Name of user who locked the FY

@@ -21,6 +21,13 @@ const ProfitLoss: React.FC = () => {
   const { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit } = getProfitLoss();
   const isSurplus = netProfit >= 0;
 
+  // P5-2: Previous year comparison
+  const pyIE = society.previousYearIE;
+  const hasPY = !!pyIE && !!society.previousFinancialYear;
+  const pyLabel = society.previousFinancialYear || '';
+  const getPYIncome = (name: string) => pyIE?.incomeItems.find(i => i.name === name)?.amount ?? 0;
+  const getPYExpense = (name: string) => pyIE?.expenseItems.find(i => i.name === name)?.amount ?? 0;
+
   const reserveFund = isSurplus ? Math.round(netProfit * RESERVE_FUND_RATE) : 0;
   const distributableSurplus = isSurplus ? netProfit - reserveFund : 0;
 
@@ -170,13 +177,14 @@ const ProfitLoss: React.FC = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{hi ? 'विवरण' : 'Particulars'}</TableHead>
+                    {hasPY && <TableHead className="text-right text-muted-foreground text-xs">{pyLabel}</TableHead>}
                     <TableHead className="text-right">{hi ? 'राशि' : 'Amount'}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {expenseItems.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={2} className="text-center text-muted-foreground">
+                      <TableCell colSpan={hasPY ? 3 : 2} className="text-center text-muted-foreground">
                         {hi ? 'कोई व्यय नहीं' : 'No expenses'}
                       </TableCell>
                     </TableRow>
@@ -184,6 +192,7 @@ const ProfitLoss: React.FC = () => {
                     expenseItems.map((item, i) => (
                       <TableRow key={i}>
                         <TableCell>{hi ? item.nameHi : item.name}</TableCell>
+                        {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{getPYExpense(item.name) ? fmt(getPYExpense(item.name)) : '—'}</TableCell>}
                         <TableCell className="text-right font-medium">{fmt(item.amount)}</TableCell>
                       </TableRow>
                     ))
@@ -194,6 +203,7 @@ const ProfitLoss: React.FC = () => {
                       <TableCell className="text-amber-700 dark:text-amber-300">
                         {hi ? 'वैधानिक संरक्षित निधि (25%) — To Balance Sheet' : 'Statutory Reserve Fund (25%) — To Balance Sheet'}
                       </TableCell>
+                      {hasPY && <TableCell className="text-right text-muted-foreground text-sm">—</TableCell>}
                       <TableCell className="text-right text-amber-700 dark:text-amber-300">{fmt(reserveFund)}</TableCell>
                     </TableRow>
                   )}
@@ -203,6 +213,7 @@ const ProfitLoss: React.FC = () => {
                       <TableCell className="text-success">
                         {hi ? 'अधिशेष (तुलन पत्र में)' : 'Surplus (to Balance Sheet)'}
                       </TableCell>
+                      {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyIE && pyIE.netProfit >= 0 ? fmt(pyIE.netProfit) : '—'}</TableCell>}
                       <TableCell className="text-right text-success">{fmt(distributableSurplus)}</TableCell>
                     </TableRow>
                   ) : (
@@ -210,11 +221,13 @@ const ProfitLoss: React.FC = () => {
                       <TableCell className="text-destructive">
                         {hi ? 'घाटा (तुलन पत्र में)' : 'Deficit (to Balance Sheet)'}
                       </TableCell>
+                      {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyIE && pyIE.netProfit < 0 ? fmt(Math.abs(pyIE.netProfit)) : '—'}</TableCell>}
                       <TableCell className="text-right text-destructive">{fmt(Math.abs(netProfit))}</TableCell>
                     </TableRow>
                   )}
                   <TableRow className="bg-muted font-bold text-lg">
                     <TableCell>{hi ? 'कुल' : 'Total'}</TableCell>
+                    {hasPY && <TableCell className="text-right text-muted-foreground">{pyIE ? fmt(pyIE.totalIncome) : '—'}</TableCell>}
                     <TableCell className="text-right">{fmt(totalIncome)}</TableCell>
                   </TableRow>
                 </TableBody>
@@ -231,13 +244,14 @@ const ProfitLoss: React.FC = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{hi ? 'विवरण' : 'Particulars'}</TableHead>
+                    {hasPY && <TableHead className="text-right text-muted-foreground text-xs">{pyLabel}</TableHead>}
                     <TableHead className="text-right">{hi ? 'राशि' : 'Amount'}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {incomeItems.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={2} className="text-center text-muted-foreground">
+                      <TableCell colSpan={hasPY ? 3 : 2} className="text-center text-muted-foreground">
                         {hi ? 'कोई आय नहीं' : 'No income'}
                       </TableCell>
                     </TableRow>
@@ -245,12 +259,14 @@ const ProfitLoss: React.FC = () => {
                     incomeItems.map((item, i) => (
                       <TableRow key={i}>
                         <TableCell>{hi ? item.nameHi : item.name}</TableCell>
+                        {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{getPYIncome(item.name) ? fmt(getPYIncome(item.name)) : '—'}</TableCell>}
                         <TableCell className="text-right font-medium">{fmt(item.amount)}</TableCell>
                       </TableRow>
                     ))
                   )}
                   <TableRow className="bg-muted font-bold text-lg">
                     <TableCell>{hi ? 'कुल' : 'Total'}</TableCell>
+                    {hasPY && <TableCell className="text-right text-muted-foreground">{pyIE ? fmt(pyIE.totalIncome) : '—'}</TableCell>}
                     <TableCell className="text-right">{fmt(totalIncome)}</TableCell>
                   </TableRow>
                 </TableBody>
