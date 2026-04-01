@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Hash, Plus, Pencil, Trash2, Search, Download, FileSpreadsheet } from 'lucide-react';
-import { hsnInsert, hsnUpdate, hsnDelete } from '@/lib/supabaseService';
+import { hsnSelect, hsnInsert, hsnUpdate, hsnDelete } from '@/lib/supabaseService';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 interface HsnCode {
@@ -51,28 +51,22 @@ export default function HsnMaster() {
   // Load from Supabase
   useEffect(() => {
     setIsLoading(true);
-    supabase
-      .from('hsn_master')
-      .select('*')
-      .eq('society_id', societyId)
-      .order('code', { ascending: true })
-      .then(({ data, error }) => {
-        setIsLoading(false);
-        if (error) {
-          // Table may not exist yet — just show empty
-          console.warn('HSN Master load:', error.message);
-          return;
-        }
-        const mapped: HsnCode[] = (data || []).map((r: any) => ({
-          id: r.id,
-          code: r.code,
-          description: r.description || '',
-          type: r.type === 'SAC' ? 'SAC' : 'HSN',
-          gstRate: Number(r.gstRate ?? 0),
-          cess: Number(r.cess ?? 0),
-        }));
-        setCodes(mapped);
-      });
+    hsnSelect(societyId).then(({ data, error }) => {
+      setIsLoading(false);
+      if (error) {
+        console.warn('HSN Master load:', error);
+        return;
+      }
+      const mapped: HsnCode[] = data.map((r: any) => ({
+        id: r.id,
+        code: r.code,
+        description: r.description || '',
+        type: r.type === 'SAC' ? 'SAC' : 'HSN',
+        gstRate: Number(r.gstRate ?? 0),
+        cess: Number(r.cess ?? 0),
+      }));
+      setCodes(mapped);
+    });
   }, [societyId]);
 
   const filtered = useMemo(() =>

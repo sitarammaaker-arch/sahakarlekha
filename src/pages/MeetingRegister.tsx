@@ -30,7 +30,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
-import { meetingInsert, meetingUpdate, meetingDelete } from '@/lib/supabaseService';
+import { meetingSelect, meetingInsert, meetingUpdate, meetingDelete } from '@/lib/supabaseService';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type MeetingType   = 'AGM' | 'SGM' | 'Board' | 'Committee' | 'Other';
@@ -106,15 +106,10 @@ const MeetingRegister: React.FC = () => {
   // Load from Supabase
   useEffect(() => {
     if (!societyId) return;
-    supabase
-      .from('meeting_register')
-      .select('*')
-      .eq('society_id', societyId)
-      .order('date', { ascending: false })
-      .then(({ data, error }) => {
-        if (error) { console.error('Meeting load error:', error.message); return; }
-        setMeetings((data || []) as Meeting[]);
-      });
+    meetingSelect(societyId).then(({ data, error }) => {
+      if (error) { console.error('Meeting load error:', error); return; }
+      setMeetings(data as Meeting[]);
+    });
   }, [societyId]);
 
   const filtered = useMemo(() => {

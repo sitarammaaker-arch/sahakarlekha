@@ -16,7 +16,7 @@ import { Plus, Download, Vote, Trophy, Users, FileSpreadsheet } from 'lucide-rea
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { electionInsert, electionUpdate } from '@/lib/supabaseService';
+import { electionSelect, electionInsert, electionUpdate } from '@/lib/supabaseService';
 
 type ElectionStatus = 'upcoming' | 'ongoing' | 'completed';
 type PostType = 'president' | 'vice_president' | 'secretary' | 'treasurer' | 'director' | 'other';
@@ -77,19 +77,14 @@ export default function ElectionModule() {
   // Load from Supabase
   useEffect(() => {
     if (!societyId) return;
-    supabase
-      .from('elections')
-      .select('*')
-      .eq('society_id', societyId)
-      .order('electionDate', { ascending: false })
-      .then(({ data, error }) => {
-        if (error) { console.error('Elections load error:', error.message); return; }
-        const parsed = (data || []).map((e: any) => ({
-          ...e,
-          candidates: Array.isArray(e.candidates) ? e.candidates : [],
-        })) as Election[];
-        setElections(parsed);
-      });
+    electionSelect(societyId).then(({ data, error }) => {
+      if (error) { console.error('Elections load error:', error); return; }
+      const parsed = data.map((e: any) => ({
+        ...e,
+        candidates: Array.isArray(e.candidates) ? e.candidates : [],
+      })) as Election[];
+      setElections(parsed);
+    });
   }, [societyId]);
 
   const activeMembers = useMemo(() => members.filter(m => m.status === 'active'), [members]);

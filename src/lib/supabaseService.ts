@@ -57,6 +57,7 @@ export const budgetInsert  = (record: object) => dbInsert('budgets', record);
 export const budgetUpdate  = (id: string, updates: object) => dbUpdate('budgets', id, updates);
 
 // elections
+export const electionSelect = (societyId: string) => dbSelect('elections', societyId, { orderBy: 'electionDate', ascending: false });
 export const electionInsert = (record: object) => dbInsert('elections', record);
 export const electionUpdate = (id: string, updates: object) => dbUpdate('elections', id, updates);
 
@@ -66,15 +67,18 @@ export const ewayBillInsert = (record: object) => dbInsert('eway_bills', record)
 export const ewayBillUpdate = (id: string, updates: object) => dbUpdate('eway_bills', id, updates);
 
 // hsn_master
-export const hsnInsert = (record: object) => dbInsert('hsn_master', record);
-export const hsnUpdate = (id: string, updates: object) => dbUpdate('hsn_master', id, updates);
-export const hsnDelete = (id: string) => dbDelete('hsn_master', id);
+export const hsnSelect  = (societyId: string) => dbSelect('hsn_master', societyId, { orderBy: 'code', ascending: true });
+export const hsnInsert  = (record: object) => dbInsert('hsn_master', record);
+export const hsnUpdate  = (id: string, updates: object) => dbUpdate('hsn_master', id, updates);
+export const hsnDelete  = (id: string) => dbDelete('hsn_master', id);
 
 // kcc_loans
+export const kccLoanSelect = (societyId: string) => dbSelect('kcc_loans', societyId, { orderBy: 'createdAt', ascending: false });
 export const kccLoanInsert = (record: object) => dbInsert('kcc_loans', record);
 export const kccLoanUpdate = (id: string, updates: object) => dbUpdate('kcc_loans', id, updates);
 
 // meeting_register
+export const meetingSelect = (societyId: string) => dbSelect('meeting_register', societyId, { orderBy: 'date', ascending: false });
 export const meetingInsert = (record: object) => dbInsert('meeting_register', record);
 export const meetingUpdate = (id: string, updates: object) => dbUpdate('meeting_register', id, updates);
 export const meetingDelete = (id: string) => dbDelete('meeting_register', id);

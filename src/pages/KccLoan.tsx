@@ -17,7 +17,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { KccLoan, CropSeasonType } from '@/types';
-import { kccLoanInsert, kccLoanUpdate } from '@/lib/supabaseService';
+import { kccLoanSelect, kccLoanInsert, kccLoanUpdate } from '@/lib/supabaseService';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
@@ -56,15 +56,10 @@ export default function KccLoan() {
   // Load from Supabase
   useEffect(() => {
     if (!societyId) return;
-    supabase
-      .from('kcc_loans')
-      .select('*')
-      .eq('society_id', societyId)
-      .order('createdAt', { ascending: false })
-      .then(({ data, error }) => {
-        if (error) { console.error('KCC load error:', error.message); return; }
-        setLoans((data || []) as KccLoan[]);
-      });
+    kccLoanSelect(societyId).then(({ data, error }) => {
+      if (error) { console.error('KCC load error:', error); return; }
+      setLoans(data as KccLoan[]);
+    });
   }, [societyId]);
 
   const activeMembers = useMemo(() => members.filter(m => m.status === 'active'), [members]);
