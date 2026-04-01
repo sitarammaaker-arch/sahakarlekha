@@ -4,7 +4,7 @@ import { useData } from '@/contexts/DataContext';
 import { ACCOUNT_IDS } from '@/lib/storage';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { QuickActions } from '@/components/dashboard/QuickActions';
-import { Wallet, Building2, Users, TrendingUp, TrendingDown, CheckCircle, XCircle, AlertTriangle, Lock, ShieldCheck } from 'lucide-react';
+import { Wallet, Building2, Users, TrendingUp, TrendingDown, CheckCircle, XCircle, AlertTriangle, Lock, ShieldCheck, Lightbulb, AlertCircle, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fmtDate } from '@/lib/dateUtils';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +21,7 @@ const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b
 
 const Dashboard: React.FC = () => {
   const { t, language } = useLanguage();
-  const { getAccountBalance, members, vouchers, getProfitLoss, loans, society, getTrialBalance, getTradingAccount } = useData();
+  const { getAccountBalance, members, vouchers, getProfitLoss, loans, society, getTrialBalance, getTradingAccount, auditObjections } = useData();
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
@@ -37,7 +37,7 @@ const Dashboard: React.FC = () => {
   const { netProfit, incomeItems, expenseItems, totalIncome, totalExpenses } = getProfitLoss();
   const activeMembers = members.filter(m => m.status === 'active').length;
 
-  // P3-3: Cooperative compliance checks
+  // P3-3 + P4-1/P4-2: Cooperative compliance checks, health score, advisories
   const complianceChecks = useMemo(() => {
     const fy = society.financialYear;
     const activeVouchers = vouchers.filter(v => !v.isDeleted);
@@ -63,15 +63,67 @@ const Dashboard: React.FC = () => {
     // 4. Sec 32 loan limit
     const shareCapital = tb.filter(b => b.account.parentId === '1100' && !b.account.isGroup).reduce((s, b) => s + Math.abs(b.netBalance), 0);
     const reserves = tb.filter(b => b.account.parentId === '1200' && !b.account.isGroup).reduce((s, b) => s + Math.abs(b.netBalance), 0);
-    const loanLimit = (shareCapital + reserves) * 10;
+    const loanBase = shareCapital + reserves;
+    const loanLimit = loanBase * 10;
     const totalOutstandingLoans = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + (l.amount - l.repaidAmount), 0);
     const sec32Ok = loanLimit === 0 || totalOutstandingLoans <= loanLimit;
+    const sec32Pct = loanLimit > 0 ? (totalOutstandingLoans / loanLimit) * 100 : 0;
 
     // 5. FY Lock status
     const fyLocked = !!society.fyLocked;
 
-    return { reservePosted, bsTallied, stockOk, sec32Ok, fyLocked, netProfit };
-  }, [vouchers, getTrialBalance, getTradingAccount, loans, society, netProfit]);
+    // 6. Overdue & pending objections
+    const overdueCount = loans.filter(l => l.status === 'overdue').length;
+    const pendingObjections = auditObjections.filter(o => o.status === 'pending').length;
+
+    // --- P4-1: Financial Health Score (0–100) ---
+    let earned = 0;
+    let maxPts = 0;
+    if (netProfit > 0)       { maxPts += 25; if (reservePosted) earned += 25; }
+    maxPts += 20;              if (bsTallied) earned += 20;
+    if (physicalClosingStock > 0) { maxPts += 10; if (stockOk) earned += 10; }
+    if (loans.length > 0)    { maxPts += 20; if (sec32Ok) earned += 20; }
+    if (loans.length > 0)    { maxPts += 15; if (overdueCount === 0) earned += 15; }
+    if (auditObjections.length > 0) { maxPts += 10; if (pendingObjections === 0) earned += 10; }
+    const healthScore = maxPts > 0 ? Math.round((earned / maxPts) * 100) : 100;
+
+    // --- P4-2: Smart Advisories ---
+    type Advisory = { severity: 'critical' | 'warning' | 'info'; en: string; hi: string };
+    const advisories: Advisory[] = [];
+
+    if (netProfit > 0 && !reservePosted)
+      advisories.push({ severity: 'critical', en: 'Post 25% Statutory Reserve Fund transfer before distributing profits (Sec 65, Haryana Co-op Act)', hi: '25% सांविधिक संचय निधि हस्तांतरण करें — लाभ वितरण से पूर्व अनिवार्य (धारा 65)' });
+    if (!bsTallied)
+      advisories.push({ severity: 'critical', en: 'Balance Sheet is not balanced — check for missing or duplicate journal entries', hi: 'तुलन पत्र असंतुलित है — अपूर्ण या दोहरी जर्नल प्रविष्टियां जांचें' });
+    if (physicalClosingStock > 0 && !closingStockPosted)
+      advisories.push({ severity: 'critical', en: `Journalize closing stock of ₹${physicalClosingStock.toLocaleString('en-IN')} before generating financial reports`, hi: `₹${physicalClosingStock.toLocaleString('en-IN')} का समापन माल जर्नल करें — रिपोर्ट से पूर्व आवश्यक` });
+    if (!sec32Ok)
+      advisories.push({ severity: 'critical', en: `Loan portfolio exceeds Sec 32 limit (${sec32Pct.toFixed(0)}% utilized) — pause new loans or increase member share capital`, hi: `ऋण पोर्टफोलियो धारा 32 सीमा से अधिक (${sec32Pct.toFixed(0)}% उपयोग) — नए ऋण रोकें या शेयर पूंजी बढ़ाएं` });
+    else if (sec32Pct >= 80 && loanLimit > 0)
+      advisories.push({ severity: 'warning', en: `Loan utilisation at ${sec32Pct.toFixed(0)}% of Sec 32 limit — approaching regulatory ceiling`, hi: `ऋण उपयोग धारा 32 सीमा का ${sec32Pct.toFixed(0)}% — नियामक सीमा के निकट` });
+    if (overdueCount > 0)
+      advisories.push({ severity: 'warning', en: `${overdueCount} overdue loan${overdueCount > 1 ? 's' : ''} — initiate recovery proceedings promptly`, hi: `${overdueCount} अतिदेय ऋण — तत्काल वसूली कार्यवाही प्रारंभ करें` });
+    if (pendingObjections > 0)
+      advisories.push({ severity: 'warning', en: `${pendingObjections} pending audit objection${pendingObjections > 1 ? 's' : ''} — resolve before locking the financial year`, hi: `${pendingObjections} लंबित ऑडिट आपत्तियां — वित्त वर्ष लॉक से पूर्व निराकरण करें` });
+    if (!fyLocked) {
+      const endYY = society.financialYear.split('-')[1];
+      if (new Date() > new Date(`20${endYY}-03-31`))
+        advisories.push({ severity: 'info', en: `FY ${society.financialYear} has ended — lock the financial year after audit completion`, hi: `वित्त वर्ष ${society.financialYear} समाप्त — ऑडिट के बाद वित्त वर्ष लॉक करें` });
+    }
+    if (netProfit > 0 && reservePosted) {
+      const divPosted = activeVouchers.some(v =>
+        getVoucherLines(v).some(l => l.accountId === '1208' && l.type === 'Dr') &&
+        getVoucherLines(v).some(l => l.accountId === '3601' && l.type === 'Cr') &&
+        v.narration.includes(fy)
+      );
+      if (!divPosted)
+        advisories.push({ severity: 'info', en: `Net profit of ₹${netProfit.toLocaleString('en-IN')} is available — consider distributing dividend to members`, hi: `₹${netProfit.toLocaleString('en-IN')} शुद्ध लाभ उपलब्ध — सदस्यों को लाभांश वितरण पर विचार करें` });
+    }
+    if (advisories.length === 0)
+      advisories.push({ severity: 'info', en: 'All compliance checks passed — cooperative is in good financial health', hi: 'सभी अनुपालन जांचें पास — सहकारी संस्था की वित्तीय स्थिति उत्तम है' });
+
+    return { reservePosted, bsTallied, stockOk, sec32Ok, fyLocked, netProfit, healthScore, advisories, physicalClosingStock, sec32Pct };
+  }, [vouchers, getTrialBalance, getTradingAccount, loans, society, netProfit, auditObjections]);
 
   const recentVouchers = [...vouchers.filter(v => !v.isDeleted)]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -375,14 +427,21 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* P3-3: Cooperative Compliance Status */}
+      {/* P3-3 + P4-1: Cooperative Compliance Status + Health Score */}
       <Card className="shadow-card">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-primary" />
+          <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+            <ShieldCheck className="h-5 w-5 text-primary shrink-0" />
             {language === 'hi' ? 'सहकारी अनुपालन स्थिति' : 'Cooperative Compliance Status'}
-            <span className="text-xs font-normal text-muted-foreground ml-1">
+            <span className="text-xs font-normal text-muted-foreground">
               {language === 'hi' ? `वित्त वर्ष ${society.financialYear}` : `FY ${society.financialYear}`}
+            </span>
+            <span className="ml-auto flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">{language === 'hi' ? 'स्वास्थ्य स्कोर' : 'Health Score'}</span>
+              <span className={`text-lg font-bold tabular-nums ${complianceChecks.healthScore >= 80 ? 'text-success' : complianceChecks.healthScore >= 60 ? 'text-amber-500' : 'text-destructive'}`}>
+                {complianceChecks.healthScore}
+              </span>
+              <span className="text-xs text-muted-foreground">/100</span>
             </span>
           </CardTitle>
         </CardHeader>
@@ -431,6 +490,41 @@ const Dashboard: React.FC = () => {
                 </span>
               </div>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* P4-2: Smart Advisory Engine */}
+      <Card className="shadow-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Lightbulb className="h-5 w-5 text-amber-500 shrink-0" />
+            {language === 'hi' ? 'स्मार्ट सलाहकार' : 'Smart Advisories'}
+            <span className="text-xs font-normal text-muted-foreground ml-1">
+              {language === 'hi' ? 'स्वचालित सुझाव' : 'Automated recommendations'}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {complianceChecks.advisories.map((adv, i) => {
+              const isCritical = adv.severity === 'critical';
+              const isWarning = adv.severity === 'warning';
+              return (
+                <div key={i} className={`flex items-start gap-3 p-3 rounded-lg border text-sm ${isCritical ? 'bg-destructive/5 border-destructive/20' : isWarning ? 'bg-amber-500/5 border-amber-500/20' : 'bg-success/5 border-success/20'}`}>
+                  {isCritical ? (
+                    <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                  ) : isWarning ? (
+                    <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                  ) : (
+                    <Info className="h-4 w-4 text-success mt-0.5 shrink-0" />
+                  )}
+                  <span className={isCritical ? 'text-destructive' : isWarning ? 'text-amber-600' : 'text-success'}>
+                    {language === 'hi' ? adv.hi : adv.en}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
