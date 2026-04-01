@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -43,6 +44,8 @@ const AccountSearch: React.FC<{
 }> = ({ value, onChange, accounts, placeholder, language }) => {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
+  const inputRef = useRef<HTMLInputElement>(null);
   const selected = accounts.find(a => a.id === value);
   const filtered = query.trim()
     ? accounts.filter(a =>
@@ -52,21 +55,32 @@ const AccountSearch: React.FC<{
       )
     : accounts;
 
+  const openDropdown = () => {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width });
+    }
+    setQuery('');
+    setOpen(true);
+  };
+
   return (
     <div className="relative">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-        <Input
-          value={open ? query : (selected ? `${selected.id} — ${language === 'hi' ? selected.nameHi : selected.name}` : '')}
-          onChange={e => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onChange(''); }}
-          onFocus={() => { setQuery(''); setOpen(true); }}
-          onBlur={() => setTimeout(() => setOpen(false), 160)}
-          placeholder={placeholder}
-          className="h-12 text-base pl-9"
-        />
-      </div>
-      {open && (
-        <div className="absolute z-[200] w-full mt-1 bg-background border rounded-lg shadow-xl max-h-52 overflow-y-auto">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+      <Input
+        ref={inputRef}
+        value={open ? query : (selected ? `${selected.id} — ${language === 'hi' ? selected.nameHi : selected.name}` : '')}
+        onChange={e => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onChange(''); }}
+        onFocus={openDropdown}
+        onBlur={() => setTimeout(() => setOpen(false), 160)}
+        placeholder={placeholder}
+        className="h-12 text-base pl-9"
+      />
+      {open && typeof document !== 'undefined' && createPortal(
+        <div
+          style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999 }}
+          className="bg-background border rounded-lg shadow-xl max-h-52 overflow-y-auto"
+        >
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground px-3 py-2">{language === 'hi' ? 'कोई खाता नहीं मिला' : 'No account found'}</p>
           ) : filtered.slice(0, 25).map(a => (
@@ -83,7 +97,8 @@ const AccountSearch: React.FC<{
               <span>{language === 'hi' ? a.nameHi : a.name}</span>
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
