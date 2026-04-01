@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Settings, Building2, Calendar, Wallet, Save, History, HardDrive, Download, Upload, AlertTriangle, Plus, Trash2 } from 'lucide-react';
+import { Settings, Building2, Calendar, Wallet, Save, History, HardDrive, Download, Upload, AlertTriangle, Plus, Trash2, Lock, Unlock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -75,6 +75,16 @@ const SocietySetup: React.FC = () => {
       title: language === 'hi' ? 'सहेजा गया' : 'Saved',
       description: language === 'hi' ? 'वित्तीय वर्ष अपडेट हो गया' : 'Financial year updated',
     });
+  };
+
+  const handleToggleFYLock = () => {
+    if (society.fyLocked) {
+      updateSociety({ fyLocked: false, fyLockedAt: undefined, fyLockedBy: undefined });
+      toast({ title: language === 'hi' ? 'वित्तीय वर्ष अनलॉक किया गया' : 'Financial Year Unlocked', description: language === 'hi' ? 'अब नई प्रविष्टियां की जा सकती हैं।' : 'New entries are now allowed.' });
+    } else {
+      updateSociety({ fyLocked: true, fyLockedAt: new Date().toISOString().split('T')[0], fyLockedBy: 'Admin' });
+      toast({ title: language === 'hi' ? 'वित्तीय वर्ष लॉक किया गया' : `FY ${society.financialYear} Locked`, description: language === 'hi' ? 'अब इस वर्ष में कोई नई प्रविष्टि नहीं हो सकती।' : 'No new vouchers can be added to this financial year.' });
+    }
   };
 
   const handleSaveOB = () => {
@@ -453,6 +463,37 @@ const SocietySetup: React.FC = () => {
                   <Save className="h-4 w-4" />
                   {t('save')}
                 </Button>
+              </div>
+
+              {/* FY Lock / Audit Lock */}
+              <div className={`mt-6 p-4 rounded-lg border-2 ${society.fyLocked ? 'border-destructive bg-destructive/5' : 'border-amber-300 bg-amber-50 dark:bg-amber-900/20'}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 font-semibold">
+                      {society.fyLocked ? <Lock className="h-4 w-4 text-destructive" /> : <Unlock className="h-4 w-4 text-amber-600" />}
+                      <span className={society.fyLocked ? 'text-destructive' : 'text-amber-800 dark:text-amber-300'}>
+                        {language === 'hi' ? 'ऑडिट लॉक' : 'Audit Lock'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {society.fyLocked
+                        ? (language === 'hi'
+                          ? `वित्तीय वर्ष ${society.financialYear} लॉक है। कोई नई प्रविष्टि नहीं हो सकती। लॉक: ${society.fyLockedAt || ''}`
+                          : `FY ${society.financialYear} is locked. No new entries allowed. Locked on: ${society.fyLockedAt || ''}`)
+                        : (language === 'hi'
+                          ? 'लॉक करने के बाद इस वित्तीय वर्ष में कोई नई वाउचर प्रविष्टि नहीं हो सकती।'
+                          : 'Locking prevents any new voucher entries for this financial year. Use after audit completion.')}
+                    </p>
+                  </div>
+                  <Button
+                    variant={society.fyLocked ? 'outline' : 'destructive'}
+                    size="sm"
+                    className="gap-2 flex-shrink-0"
+                    onClick={handleToggleFYLock}
+                  >
+                    {society.fyLocked ? <><Unlock className="h-4 w-4" />{language === 'hi' ? 'अनलॉक करें' : 'Unlock FY'}</> : <><Lock className="h-4 w-4" />{language === 'hi' ? 'FY लॉक करें' : 'Lock FY'}</>}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

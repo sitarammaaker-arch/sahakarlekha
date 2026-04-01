@@ -14,7 +14,7 @@ import {
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Languages, Bell, User, Settings, HelpCircle, Menu, LogOut, Search, Landmark, ShieldAlert, XCircle } from 'lucide-react';
+import { Languages, Bell, User, Settings, HelpCircle, Menu, LogOut, Search, Landmark, ShieldAlert, XCircle, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GlobalSearch } from '@/components/GlobalSearch';
 
@@ -86,6 +86,11 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
               </h1>
               <p className="text-xs text-muted-foreground hidden sm:block truncate max-w-xs">
                 {language === 'hi' ? 'पंजीकरण संख्या' : 'Reg. No'}: {society.registrationNo} | {language === 'hi' ? 'वित्तीय वर्ष' : 'FY'}: {society.financialYear}
+                {society.fyLocked && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-destructive font-semibold">
+                    <Lock className="h-3 w-3" />{language === 'hi' ? 'लॉक' : 'LOCKED'}
+                  </span>
+                )}
               </p>
             </div>
           </div>

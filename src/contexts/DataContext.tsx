@@ -382,6 +382,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }): Voucher => {
+    // P2-1: Block new vouchers when the FY is audit-locked
+    if (society.fyLocked) {
+      toastRef.current({
+        title: 'FY is Audit-Locked',
+        description: `Financial Year ${society.financialYear} has been locked by ${society.fyLockedBy || 'admin'}. No new entries are allowed. Contact the administrator to unlock.`,
+        variant: 'destructive',
+      });
+      // Return a dummy voucher object to satisfy the return type — caller must handle gracefully
+      return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    }
+
+    // P2-3: Warn if voucher date is outside the active FY range
+    const fyEnd = `20${society.financialYear.split('-')[1]}-03-31`;
+    const fyStart = society.financialYearStart;
+    if (data.date && fyStart && (data.date < fyStart || data.date > fyEnd)) {
+      toastRef.current({
+        title: 'Date Outside Financial Year',
+        description: `Voucher date ${data.date} is outside the active FY ${society.financialYear} (${fyStart} to ${fyEnd}). Entry saved but please verify.`,
+        variant: 'default',
+      });
+    }
+
     const lid = () => crypto.randomUUID();
     // Build lines if not provided (legacy single Dr/Cr mode)
     let lines: VoucherLine[] | undefined = data.lines;
@@ -419,7 +441,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       else syncEntries(newVoucher);
     });
     return newVoucher;
-  }, [society.financialYear]);
+  }, [society.financialYear, society.fyLocked, society.fyLockedBy, society.financialYearStart]);
 
   const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => {
     const current = vouchersRef.current.find(v => v.id === id);
@@ -1116,11 +1138,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const incomeItems = tb
       .filter(b => b.account.type === 'income' && b.netBalance !== 0)
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: Math.abs(b.netBalance) }));
-    // BUG-08 FIX: Expense accounts are debit-nature: netBalance normally positive.
-    // Use Math.abs() for safety in case of over-credit (unusual but possible refund scenario).
+    // P2-4 FIX: Expense accounts are debit-nature: netBalance > 0 = normal expense.
+    // If netBalance < 0 (Cr balance = refund / over-credit), keep it negative so it
+    // correctly REDUCES total expenses rather than inflating them via Math.abs().
+    // This was the root cause of the Rs. 1,234 deficit understatement in the audit.
     const expenseItems = tb
       .filter(b => b.account.type === 'expense' && b.netBalance !== 0)
-      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: Math.abs(b.netBalance) }));
+      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }));
     const totalIncome = incomeItems.reduce((s, i) => s + i.amount, 0);
     const totalExpenses = expenseItems.reduce((s, i) => s + i.amount, 0);
     return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit: totalIncome - totalExpenses };

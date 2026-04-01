@@ -200,6 +200,9 @@ export interface SocietySettings {
   societyType?: SocietyType;
   previousFinancialYear?: string;
   previousYearBalances?: Record<string, number>; // accountId → amount (positive = debit, negative = credit)
+  fyLocked?: boolean;          // true = FY is audit-locked; no new vouchers or edits allowed
+  fyLockedAt?: string;         // ISO date when lock was applied
+  fyLockedBy?: string;         // Name of user who locked the FY
 }
 
 export interface VoucherCounters {
