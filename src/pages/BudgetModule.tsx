@@ -16,7 +16,7 @@ import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { Budget, BudgetHead } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
-import { budgetInsert, budgetUpdate } from '@/lib/supabaseService';
+import { budgetSelect, budgetInsert, budgetUpdate } from '@/lib/supabaseService';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
@@ -43,19 +43,14 @@ export default function BudgetModule() {
   // Load from Supabase
   useEffect(() => {
     if (!societyId) return;
-    supabase
-      .from('budgets')
-      .select('*')
-      .eq('society_id', societyId)
-      .then(({ data, error }) => {
-        if (error) { console.error('Budget load error:', error.message); return; }
-        // Parse heads from jsonb
-        const parsed = (data || []).map((b: any) => ({
-          ...b,
-          heads: Array.isArray(b.heads) ? b.heads : [],
-        })) as Budget[];
-        setBudgets(parsed);
-      });
+    budgetSelect(societyId).then(({ data, error }) => {
+      if (error) { console.error('Budget load error:', error); return; }
+      const parsed = data.map((b: any) => ({
+        ...b,
+        heads: Array.isArray(b.heads) ? b.heads : [],
+      })) as Budget[];
+      setBudgets(parsed);
+    });
   }, [societyId]);
 
   function fyBounds(fy: string) {

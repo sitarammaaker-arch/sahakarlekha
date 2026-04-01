@@ -13,6 +13,17 @@ import { supabase } from '@/lib/supabase';
 
 // ── Generic helpers ───────────────────────────────────────────────────────────
 
+export async function dbSelect<T = unknown>(
+  table: string,
+  societyId: string,
+  opts?: { orderBy?: string; ascending?: boolean },
+): Promise<{ data: T[]; error: string | null }> {
+  let q = supabase.from(table).select('*').eq('society_id', societyId);
+  if (opts?.orderBy) q = (q as any).order(opts.orderBy, { ascending: opts.ascending ?? false });
+  const { data, error } = await q;
+  return { data: (data ?? []) as T[], error: error?.message ?? null };
+}
+
 export async function dbInsert<T extends object>(
   table: string,
   record: T,
@@ -41,14 +52,16 @@ export async function dbDelete(
 // ── Table-specific wrappers ───────────────────────────────────────────────────
 
 // budgets
-export const budgetInsert = (record: object) => dbInsert('budgets', record);
-export const budgetUpdate = (id: string, updates: object) => dbUpdate('budgets', id, updates);
+export const budgetSelect  = (societyId: string) => dbSelect('budgets', societyId);
+export const budgetInsert  = (record: object) => dbInsert('budgets', record);
+export const budgetUpdate  = (id: string, updates: object) => dbUpdate('budgets', id, updates);
 
 // elections
 export const electionInsert = (record: object) => dbInsert('elections', record);
 export const electionUpdate = (id: string, updates: object) => dbUpdate('elections', id, updates);
 
 // eway_bills
+export const ewayBillSelect = (societyId: string) => dbSelect('eway_bills', societyId, { orderBy: 'date', ascending: false });
 export const ewayBillInsert = (record: object) => dbInsert('eway_bills', record);
 export const ewayBillUpdate = (id: string, updates: object) => dbUpdate('eway_bills', id, updates);
 

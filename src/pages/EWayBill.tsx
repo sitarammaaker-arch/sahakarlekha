@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Download, Truck, Copy, CheckCircle2, Hash } from 'lucide-react';
-import { ewayBillInsert, ewayBillUpdate } from '@/lib/supabaseService';
+import { ewayBillSelect, ewayBillInsert, ewayBillUpdate } from '@/lib/supabaseService';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -57,19 +57,14 @@ export default function EWayBill() {
   // Load from Supabase
   useEffect(() => {
     if (!societyId) return;
-    supabase
-      .from('eway_bills')
-      .select('*')
-      .eq('society_id', societyId)
-      .order('date', { ascending: false })
-      .then(({ data, error }) => {
-        if (error) { console.error('EWayBill load error:', error.message); return; }
-        const parsed = (data || []).map((b: any) => ({
-          ...b,
-          items: Array.isArray(b.items) ? b.items : [],
-        })) as EWayEntry[];
-        setSavedBills(parsed);
-      });
+    ewayBillSelect(societyId).then(({ data, error }) => {
+      if (error) { console.error('EWayBill load error:', error); return; }
+      const parsed = data.map((b: any) => ({
+        ...b,
+        items: Array.isArray(b.items) ? b.items : [],
+      })) as EWayEntry[];
+      setSavedBills(parsed);
+    });
   }, [societyId]);
 
   const eligibleSales = useMemo(() =>
