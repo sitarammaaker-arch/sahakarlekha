@@ -22,7 +22,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { ShoppingCart, Plus, Trash2, Eye, Search, FileSpreadsheet, Download } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, Eye, Search, FileSpreadsheet, Download, AlertTriangle } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
@@ -183,6 +183,23 @@ const SaleManagement: React.FC = () => {
         variant: 'destructive',
       });
       return;
+    }
+
+    // Stock availability warning (soft — sale still proceeds)
+    const lowStockItems = validItems.filter(i => {
+      const si = stockItems.find(s => s.id === i.itemId);
+      return si && i.qty > si.currentStock;
+    });
+    if (lowStockItems.length > 0) {
+      const names = lowStockItems.map(i => {
+        const si = stockItems.find(s => s.id === i.itemId);
+        return `${i.itemName} (${language === 'hi' ? 'उपलब्ध' : 'avail'}: ${si?.currentStock ?? 0}, ${language === 'hi' ? 'बिक्री' : 'selling'}: ${i.qty})`;
+      }).join(', ');
+      toast({
+        title: language === 'hi' ? 'अपर्याप्त स्टॉक चेतावनी' : 'Insufficient Stock Warning',
+        description: names,
+        variant: 'default',
+      });
     }
 
     try {
@@ -386,6 +403,7 @@ const SaleManagement: React.FC = () => {
                   <TableRow>
                     <TableHead className="w-48">{language === 'hi' ? 'वस्तु' : 'Item'}</TableHead>
                     <TableHead className="w-20">{language === 'hi' ? 'इकाई' : 'Unit'}</TableHead>
+                    <TableHead className="w-20">{language === 'hi' ? 'स्टॉक' : 'Stock'}</TableHead>
                     <TableHead className="w-24">{language === 'hi' ? 'मात्रा' : 'Qty'}</TableHead>
                     <TableHead className="w-28">{language === 'hi' ? 'दर (₹)' : 'Rate (₹)'}</TableHead>
                     <TableHead className="w-28">{language === 'hi' ? 'राशि (₹)' : 'Amount (₹)'}</TableHead>
@@ -428,13 +446,35 @@ const SaleManagement: React.FC = () => {
                         <Input value={item.unit} readOnly className="bg-gray-50 w-20" />
                       </TableCell>
                       <TableCell>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={item.qty}
-                          onChange={e => updateItem(index, { qty: Math.max(0, Number(e.target.value)) })}
-                          className="w-24"
-                        />
+                        {(() => {
+                          const si = stockItems.find(s => s.id === item.itemId);
+                          const avail = si?.currentStock ?? 0;
+                          const insufficient = item.itemId && item.qty > avail;
+                          return item.itemId ? (
+                            <Badge variant="outline" className={cn('text-xs font-mono', insufficient ? 'border-destructive text-destructive bg-destructive/10' : 'border-success text-success bg-success/10')}>
+                              {avail}
+                            </Badge>
+                          ) : <span className="text-xs text-muted-foreground">—</span>;
+                        })()}
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const si = stockItems.find(s => s.id === item.itemId);
+                          const avail = si?.currentStock ?? 0;
+                          const insufficient = item.itemId && item.qty > avail;
+                          return (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number"
+                                min={1}
+                                value={item.qty}
+                                onChange={e => updateItem(index, { qty: Math.max(0, Number(e.target.value)) })}
+                                className={cn('w-20', insufficient && 'border-destructive')}
+                              />
+                              {insufficient && <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />}
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <Input
