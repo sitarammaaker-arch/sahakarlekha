@@ -104,11 +104,11 @@ const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    minimumFractionDigits: 0,
+    minimumFractionDigits: 2,
   }).format(Math.round(n));
 
 const fmtN = (n: number) =>
-  new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(Math.round(n));
+  new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2 }).format(Math.round(n));
 
 function parseAsArray<T>(raw: unknown): T[] {
   if (Array.isArray(raw)) return raw as T[];
@@ -272,7 +272,7 @@ function exportConsolidatedPDF(branches: BranchData[]) {
 
   const fmtCell = (v: string | number) =>
     typeof v === 'number'
-      ? new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(Math.round(v))
+      ? new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2 }).format(Math.round(v))
       : v;
 
   autoTable(doc, {

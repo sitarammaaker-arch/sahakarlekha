@@ -117,7 +117,7 @@ const Members: React.FC = () => {
   const [form, setForm] = useState(EMPTY_FORM);
 
   const fmt = (amount: number) =>
-    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
+    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').slice(0, 2);
 
@@ -368,7 +368,7 @@ const Members: React.FC = () => {
             const totalCredit = entries.reduce((s, e) => s + e.credit, 0);
             const totalDebit = entries.reduce((s, e) => s + e.debit, 0);
             const closing = entries[entries.length - 1];
-            const fmtAmt = (n: number) => 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(n);
+            const fmtAmt = (n: number) => 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2 }).format(n);
             return (
               <>
                 <SheetHeader className="pb-4 border-b">

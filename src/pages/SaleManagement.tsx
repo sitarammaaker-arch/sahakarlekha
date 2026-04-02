@@ -32,7 +32,7 @@ import type { SaleItem, PaymentMode } from '@/types';
 const TODAY = new Date().toISOString().split('T')[0];
 
 const fmt = (amount: number) =>
-  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
+  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
 const EMPTY_ITEM = (): SaleItem => ({
   itemId: '',

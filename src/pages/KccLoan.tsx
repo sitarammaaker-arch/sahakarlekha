@@ -20,7 +20,7 @@ import { KccLoan, CropSeasonType } from '@/types';
 import { kccLoanSelect, kccLoanInsert, kccLoanUpdate } from '@/lib/supabaseService';
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
 const seasonLabel: Record<CropSeasonType, { hi: string; en: string; color: string }> = {
   kharif: { hi: 'खरीफ', en: 'Kharif', color: 'bg-green-100 text-green-800' },

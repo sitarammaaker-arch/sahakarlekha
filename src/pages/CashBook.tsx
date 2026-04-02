@@ -39,7 +39,7 @@ const CashBook: React.FC = () => {
   const entries = getCashBookEntries(appliedFrom || undefined, appliedTo || undefined);
 
   const fmt = (amount: number) =>
-    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
+    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
   const totalReceipts = entries.filter(e => e.type === 'receipt').reduce((s, e) => s + e.amount, 0);
   const totalPayments = entries.filter(e => e.type === 'payment').reduce((s, e) => s + e.amount, 0);

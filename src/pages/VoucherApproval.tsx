@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getVoucherLines } from '@/lib/voucherUtils';
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
 const VOUCHER_TYPE_LABELS: Record<string, { hi: string; en: string }> = {
   receipt: { hi: 'रसीद', en: 'Receipt' },

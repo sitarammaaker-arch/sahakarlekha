@@ -124,7 +124,7 @@ const AuditRegister: React.FC = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
 
-  const fmt = (n: number) => n > 0 ? new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n) : '—';
+  const fmt = (n: number) => n > 0 ? new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n) : '—';
   const cancelledCount = vouchers.filter(v => v.isDeleted).length;
 
   const filtered = auditObjections.filter(o => {

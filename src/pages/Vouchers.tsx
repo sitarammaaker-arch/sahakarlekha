@@ -850,7 +850,7 @@ const Vouchers: React.FC = () => {
                       />
                       {amount && Number(amount) > 0 && (
                         <p className="text-sm text-muted-foreground text-center">
-                          {new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(Number(amount))}
+                          {new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(Number(amount))}
                         </p>
                       )}
                     </div>
@@ -984,7 +984,7 @@ const Vouchers: React.FC = () => {
                             {language === 'hi' ? creditAcc?.nameHi : creditAcc?.name}
                           </TableCell>
                           <TableCell className={cn('text-right font-semibold', cancelled && 'line-through')}>
-                            {new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(v.amount)}
+                            {new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(v.amount)}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-32 truncate">
                             {cancelled ? <span className="text-destructive text-xs">{v.deletedReason || 'Cancelled'}</span> : v.narration}

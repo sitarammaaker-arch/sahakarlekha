@@ -32,7 +32,7 @@ import { generateSalarySlipPDF } from '@/lib/pdf';
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
 const currentMonth = () => new Date().toISOString().slice(0, 7); // YYYY-MM
 

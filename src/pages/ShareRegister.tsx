@@ -24,7 +24,7 @@ const ShareRegister: React.FC = () => {
   const [form, setForm] = useState({ shareCertNo: '', shareCount: '', shareFaceValue: '', nomineeName: '', nomineeRelation: '', nomineePhone: '' });
 
   const hi = language === 'hi';
-  const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
+  const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
   const filtered = members.filter(m =>
     m.name.toLowerCase().includes(search.toLowerCase()) ||

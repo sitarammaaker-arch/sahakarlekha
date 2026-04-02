@@ -37,7 +37,7 @@ const BankBook: React.FC = () => {
   const bankBalance = getAccountBalance(ACCOUNT_IDS.BANK);
 
   const fmt = (amount: number) =>
-    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
+    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
   const totalDeposits = entries.filter(e => e.type === 'deposit').reduce((s, e) => s + e.amount, 0);
   const totalWithdrawals = entries.filter(e => e.type === 'withdrawal').reduce((s, e) => s + e.amount, 0);

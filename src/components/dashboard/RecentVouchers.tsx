@@ -72,7 +72,7 @@ export const RecentVouchers: React.FC = () => {
     return new Intl.NumberFormat('hi-IN', {
       style: 'currency',
       currency: 'INR',
-      minimumFractionDigits: 0,
+      minimumFractionDigits: 2,
     }).format(amount);
   };
 

@@ -37,7 +37,7 @@ const Ledger: React.FC = () => {
   const [toDate, setToDate] = useState('');
 
   const fmt = (n: number) =>
-    new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2 }).format(n);
 
   const selectedAccount = accounts.find(a => a.id === selectedAccountId);
 

@@ -15,7 +15,7 @@ const BalanceSheet: React.FC = () => {
   const { toast } = useToast();
 
   const fmt = (amount: number) =>
-    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
+    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
   const trialBalance = getTrialBalance();
   const { netProfit } = getProfitLoss();

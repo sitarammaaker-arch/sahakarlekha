@@ -119,7 +119,7 @@ const AssetRegister: React.FC = () => {
 
   const currentFY = society.financialYear;
 
-  const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
+  const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
   // Accumulated depreciation across all FYs up to and including currentFY
   const calcAccumDep = (asset: Asset): number => {

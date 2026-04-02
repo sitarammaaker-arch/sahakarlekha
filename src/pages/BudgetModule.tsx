@@ -19,7 +19,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { budgetSelect, budgetInsert, budgetUpdate } from '@/lib/supabaseService';
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
 function variance(actual: number, budget: number) {
   if (budget === 0) return { pct: 0, fav: true };
@@ -276,7 +276,7 @@ function BudgetTable({ title, rows, totalBudget, totalActual, hi, color }: {
   totalBudget: number; totalActual: number; hi: boolean; color: 'green' | 'red';
 }) {
   const fmt = (n: number) =>
-    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
   return (
     <Card>

@@ -18,7 +18,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { useToast } from '@/hooks/use-toast';
 
 const fmt = (amount: number) =>
-  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
+  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
 // Account IDs
 const ACC_NET_SURPLUS   = '1208'; // Net Surplus / (Deficit) — Dr when appropriating

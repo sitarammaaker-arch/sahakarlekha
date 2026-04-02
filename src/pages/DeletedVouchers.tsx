@@ -14,7 +14,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate, fmtDateTime } from '@/lib/dateUtils';
 
 const fmt = (amount: number) =>
-  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
+  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
 const voucherTypeLabel: Record<VoucherType, { hi: string; en: string; color: string }> = {
   receipt:  { hi: 'रसीद',   en: 'Receipt',  color: 'bg-green-100 text-green-800 border-green-200' },

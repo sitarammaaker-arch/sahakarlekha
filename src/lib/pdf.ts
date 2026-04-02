@@ -7,7 +7,7 @@ import { fmtDate } from '@/lib/dateUtils';
 
 
 const fmt = (amount: number): string =>
-  'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(amount);
+  'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2 }).format(amount);
 
 const preparedOn = (): string => {
   const d = new Date();

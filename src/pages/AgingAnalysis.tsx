@@ -50,10 +50,10 @@ const daysSince = (dateStr: string): number => {
 };
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
 const fmtN = (n: number) =>
-  new Intl.NumberFormat('hi-IN', { minimumFractionDigits: 0 }).format(Math.round(n));
+  new Intl.NumberFormat('hi-IN', { minimumFractionDigits: 2 }).format(Math.round(n));
 
 const BUCKET_LABELS = (hi: boolean) => [
   { key: 'bucket0_30',    label: hi ? '0–30 दिन'   : '0–30 days',   cls: 'text-green-700'  },

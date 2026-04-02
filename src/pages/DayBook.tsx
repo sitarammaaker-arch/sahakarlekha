@@ -69,7 +69,7 @@ const DayBook: React.FC = () => {
   const [filtered, setFiltered] = useState(false);
 
   const fmt = (n: number) =>
-    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
   const getAccountName = (id: string) => {
     const acc = accounts.find(a => a.id === id);

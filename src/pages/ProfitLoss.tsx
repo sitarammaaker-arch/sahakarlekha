@@ -16,7 +16,7 @@ const ProfitLoss: React.FC = () => {
   const { getProfitLoss, society } = useData();
 
   const fmt = (amount: number) =>
-    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
+    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
   const { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit } = getProfitLoss();
   const isSurplus = netProfit >= 0;

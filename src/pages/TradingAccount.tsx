@@ -17,7 +17,7 @@ const TradingAccount: React.FC = () => {
   const hi = language === 'hi';
 
   const fmt = (n: number) =>
-    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
   const {
     salesItems, closingStockItems,

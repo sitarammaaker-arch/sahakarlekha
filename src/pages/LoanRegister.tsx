@@ -121,7 +121,7 @@ const LoanRegister: React.FC = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
 
-  const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n);
+  const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
   const getMemberName = (id: string) => members.find(m => m.id === id)?.name || id;
 
   const filtered = loans.filter(l => {

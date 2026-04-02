@@ -20,7 +20,7 @@ import type { Supplier } from '@/types';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const fmt = (amount: number) =>
-  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
+  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
 const EMPTY_FORM = (): Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'createdAt'> => ({
   name: '',

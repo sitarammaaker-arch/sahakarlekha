@@ -291,7 +291,7 @@ const Inventory: React.FC = () => {
 
   // Formatters
   const fmt = (amount: number) =>
-    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
+    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
 
   // Compute current stock from movements (openingStock + purchases - sales/adjustments)

@@ -13,7 +13,7 @@ const ReceiptsPayments: React.FC = () => {
   const { getReceiptsPayments, society } = useData();
 
   const fmt = (amount: number) =>
-    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
+    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
   const data = getReceiptsPayments();
   const { openingCash, openingBank, receipts, payments, closingCash, closingBank } = data;

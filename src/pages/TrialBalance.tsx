@@ -24,7 +24,7 @@ const TrialBalance: React.FC = () => {
   const [asOnDate, setAsOnDate] = useState(fyEndDate);
 
   const fmt = (amount: number) =>
-    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
+    new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
   // BUG-03 FIX: Pass asOnDate so trial balance filters vouchers up to that date.
   const allBalances = getTrialBalance(asOnDate);
