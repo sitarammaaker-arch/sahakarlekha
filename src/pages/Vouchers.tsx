@@ -57,7 +57,7 @@ const AccountSearch: React.FC<{
     <div className="relative">
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
       <Input
-        value={open ? query : (selected ? `${selected.id} — ${language === 'hi' ? selected.nameHi : selected.name}` : '')}
+        value={open ? query : (selected ? (language === 'hi' ? selected.nameHi : selected.name) : '')}
         onChange={e => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onChange(''); }}
         onFocus={() => { setQuery(''); setOpen(true); }}
         onBlur={() => setTimeout(() => setOpen(false), 160)}
@@ -78,7 +78,6 @@ const AccountSearch: React.FC<{
                 a.id === value && 'bg-primary/5 font-medium'
               )}
             >
-              <span className="font-mono text-xs text-muted-foreground w-10 shrink-0">{a.id}</span>
               <span>{language === 'hi' ? a.nameHi : a.name}</span>
             </button>
           ))}

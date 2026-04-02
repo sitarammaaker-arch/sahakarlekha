@@ -58,7 +58,7 @@ const AccSearch: React.FC<{
       <div className="relative">
         <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
         <Input
-          value={open ? q : (selected ? `${selected.id} — ${language === 'hi' ? selected.nameHi : selected.name}` : '')}
+          value={open ? q : (selected ? (language === 'hi' ? selected.nameHi : selected.name) : '')}
           onChange={e => { setQ(e.target.value); setOpen(true); if (!e.target.value) onChange(''); }}
           onFocus={() => { setQ(''); setOpen(true); }}
           onBlur={() => setTimeout(() => setOpen(false), 160)}
@@ -82,7 +82,6 @@ const AccSearch: React.FC<{
                 a.id === value && 'bg-primary/5 font-medium'
               )}
             >
-              <span className="font-mono text-muted-foreground w-8 shrink-0">{a.id}</span>
               <span>{language === 'hi' ? a.nameHi : a.name}</span>
             </button>
           ))}
