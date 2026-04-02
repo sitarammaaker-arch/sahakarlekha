@@ -7,6 +7,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DataProvider, useData } from "@/contexts/DataContext";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Pages
 import Login from "./pages/Login";
@@ -95,7 +96,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     );
   }
 
-  return <MainLayout>{children}</MainLayout>;
+  return <MainLayout><ErrorBoundary>{children}</ErrorBoundary></MainLayout>;
 };
 
 // Public Route wrapper (redirects to dashboard if authenticated)

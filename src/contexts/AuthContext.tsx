@@ -64,9 +64,11 @@ function restoreSession(): User | null {
   const session = getAuthSession();
   if (!session) return null;
 
-  // Check demo users first
-  const found = demoUsers.find(u => u.user.email === session.email);
-  if (found) return found.user;
+  // Check demo users — only on localhost
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    const found = demoUsers.find(u => u.user.email === session.email);
+    if (found) return found.user;
+  }
 
   // Restore from stored session
   if (session.email && session.name && session.role && session.societyId) {
@@ -245,18 +247,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Supabase unreachable — fall through to demo users
     }
 
-    // 4. Demo users (offline / local dev fallback)
-    await new Promise(resolve => setTimeout(resolve, 400));
-    const found = demoUsers.find(u => u.email === email && u.password === password);
-    if (found) {
-      setUser(found.user);
-      setAuthSession({
-        email: found.user.email,
-        name: found.user.name,
-        role: found.user.role,
-        societyId: found.user.societyId,
-      });
-      return true;
+    // 4. Demo users — ONLY on localhost (disabled in production for security)
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      await new Promise(resolve => setTimeout(resolve, 400));
+      const found = demoUsers.find(u => u.email === email && u.password === password);
+      if (found) {
+        setUser(found.user);
+        setAuthSession({
+          email: found.user.email,
+          name: found.user.name,
+          role: found.user.role,
+          societyId: found.user.societyId,
+        });
+        return true;
+      }
     }
 
     return false;
