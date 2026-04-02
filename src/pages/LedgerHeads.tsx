@@ -15,7 +15,7 @@ import type { EntityLink } from '@/types';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { ListTree, Pencil, Trash2, Plus, Search, FolderOpen, FileSpreadsheet, Download } from 'lucide-react';
+import { ListTree, Pencil, Trash2, Plus, Search, FolderOpen, FileSpreadsheet, Download, Merge, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { LedgerAccount } from '@/types';
@@ -49,7 +49,7 @@ const TYPE_BADGE_CLASS: Record<AccountType, string> = {
 
 const LedgerHeads: React.FC = () => {
   const { language } = useLanguage();
-  const { accounts, addAccount, updateAccount, deleteAccount, getEntityLinks } = useData();
+  const { accounts, addAccount, updateAccount, deleteAccount, mergeAccounts, getEntityLinks, getAccountBalance } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -112,6 +112,27 @@ const LedgerHeads: React.FC = () => {
   const assetCount     = accounts.filter(a => a.type === 'asset').length;
   const liabilityCount = accounts.filter(a => a.type === 'liability').length;
   const incExpCount    = accounts.filter(a => a.type === 'income' || a.type === 'expense').length;
+
+  // Duplicate detection: group non-group accounts by normalized name
+  const duplicateGroups = useMemo(() => {
+    const groups: Record<string, LedgerAccount[]> = {};
+    accounts.filter(a => !a.isGroup).forEach(a => {
+      const key = a.name.trim().toLowerCase();
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(a);
+    });
+    return Object.values(groups).filter(g => g.length > 1);
+  }, [accounts]);
+
+  const handleMerge = (keepId: string, removeId: string, name: string) => {
+    const count = mergeAccounts(keepId, removeId);
+    toast({
+      title: hi ? 'खाते मर्ज किए गए' : 'Accounts Merged',
+      description: hi
+        ? `"${name}" — ${count} वाउचर अपडेट किए गए, डुप्लिकेट हटाया गया`
+        : `"${name}" — ${count} voucher${count !== 1 ? 's' : ''} updated, duplicate removed`,
+    });
+  };
 
   const handleCSV = () => {
     const headers = ['Name', 'Name (Hindi)', 'Type', 'Opening Balance', 'Balance Type', 'Group'];
@@ -242,6 +263,54 @@ const LedgerHeads: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Duplicate accounts warning + merge */}
+      {duplicateGroups.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50 dark:bg-amber-900/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2 text-amber-800 dark:text-amber-200">
+              <AlertTriangle className="h-5 w-5" />
+              {hi
+                ? `${duplicateGroups.length} डुप्लिकेट खाते पाए गए`
+                : `${duplicateGroups.length} Duplicate Account${duplicateGroups.length > 1 ? 's' : ''} Found`}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {duplicateGroups.map((group, gi) => {
+              const sorted = [...group].sort((a, b) => {
+                const aVouchers = Math.abs(getAccountBalance(a.id));
+                const bVouchers = Math.abs(getAccountBalance(b.id));
+                return bVouchers - aVouchers;
+              });
+              const keep = sorted[0];
+              const remove = sorted[1];
+              return (
+                <div key={gi} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg bg-white dark:bg-background border">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{keep.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {hi ? `${group.length} खाते एक ही नाम` : `${group.length} accounts with same name`}
+                      {' · '}
+                      {hi ? 'रखें' : 'Keep'}: <span className="font-mono">{keep.id.length > 8 ? keep.id.slice(0, 8) + '…' : keep.id}</span>
+                      {' → '}
+                      {hi ? 'हटाएं' : 'Remove'}: <span className="font-mono">{remove.id.length > 8 ? remove.id.slice(0, 8) + '…' : remove.id}</span>
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 shrink-0 border-amber-300 text-amber-700 hover:bg-amber-100"
+                    onClick={() => handleMerge(keep.id, remove.id, keep.name)}
+                  >
+                    <Merge className="h-3.5 w-3.5" />
+                    {hi ? 'मर्ज करें' : 'Merge'}
+                  </Button>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

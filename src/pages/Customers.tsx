@@ -71,6 +71,13 @@ const Customers: React.FC = () => {
       toast({ title: language === 'hi' ? 'नाम आवश्यक है' : 'Name is required', variant: 'destructive' });
       return;
     }
+    // Prevent duplicate customer names
+    const nameNorm = form.name.trim().toLowerCase();
+    const duplicate = customers.find(c => c.name.toLowerCase() === nameNorm && c.id !== editId);
+    if (duplicate) {
+      toast({ title: language === 'hi' ? 'यह ग्राहक पहले से मौजूद है' : 'Customer with this name already exists', variant: 'destructive' });
+      return;
+    }
     if (editId) {
       updateCustomer(editId, form);
       toast({ title: language === 'hi' ? 'ग्राहक अपडेट हुआ' : 'Customer updated' });

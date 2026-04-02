@@ -47,6 +47,7 @@ interface DataContextType {
   addAccount: (data: Omit<LedgerAccount, 'id'>) => LedgerAccount;
   updateAccount: (id: string, data: Partial<LedgerAccount>) => void;
   deleteAccount: (id: string) => void;
+  mergeAccounts: (keepId: string, removeId: string) => number;
   updateSociety: (data: Partial<SocietySettings>) => void;
 
   addLoan: (data: Omit<Loan, 'id' | 'loanNo' | 'createdAt'>) => Loan;
@@ -681,6 +682,44 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return updated;
     });
     supabase.from('accounts').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+  }, []);
+
+  // Merge duplicate accounts: move all voucher references from removeId → keepId, then delete removeId
+  const mergeAccounts = useCallback((keepId: string, removeId: string): number => {
+    let touchedCount = 0;
+    const updated = vouchersRef.current.map(v => {
+      let changed = false;
+      const patched = { ...v };
+      if (patched.debitAccountId === removeId) { patched.debitAccountId = keepId; changed = true; }
+      if (patched.creditAccountId === removeId) { patched.creditAccountId = keepId; changed = true; }
+      if (patched.lines && patched.lines.length > 0) {
+        const newLines = patched.lines.map(l =>
+          l.accountId === removeId ? { ...l, accountId: keepId } : l
+        );
+        if (newLines.some((l, i) => l !== patched.lines![i])) {
+          patched.lines = newLines;
+          changed = true;
+        }
+      }
+      if (changed) touchedCount++;
+      return changed ? patched : v;
+    });
+    vouchersRef.current = updated;
+    setVouchersState(updated);
+    // Persist each changed voucher to DB
+    updated.filter((v, i) => v !== vouchersRef.current[i] || v.debitAccountId === keepId || v.creditAccountId === keepId)
+      .forEach(v => {
+        const { editHistory: _eh, ...forDb } = v;
+        supabase.from('vouchers').upsert(withSoc(forDb)).then(({ error }) => {
+          if (error) console.error('Merge voucher save:', error.message);
+        });
+      });
+    // Delete the removed account
+    setAccountsState(prev => prev.filter(a => a.id !== removeId));
+    supabase.from('accounts').delete().eq('id', removeId).then(({ error }) => {
+      if (error) console.error('Merge account delete:', error.message);
+    });
+    return touchedCount;
   }, []);
 
   const updateSociety = useCallback((data: Partial<SocietySettings>) => {
@@ -1794,7 +1833,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       suppliers, customers, kccLoans,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember,
-      addAccount, updateAccount, deleteAccount, updateSociety,
+      addAccount, updateAccount, deleteAccount, mergeAccounts, updateSociety,
       addLoan, updateLoan, deleteLoan,
       addAsset, updateAsset, deleteAsset, postDepreciation,
       addAuditObjection, updateAuditObjection, deleteAuditObjection,

@@ -72,6 +72,13 @@ const Suppliers: React.FC = () => {
       toast({ title: language === 'hi' ? 'नाम आवश्यक है' : 'Name is required', variant: 'destructive' });
       return;
     }
+    // Prevent duplicate supplier names
+    const nameNorm = form.name.trim().toLowerCase();
+    const duplicate = suppliers.find(s => s.name.toLowerCase() === nameNorm && s.id !== editId);
+    if (duplicate) {
+      toast({ title: language === 'hi' ? 'यह आपूर्तिकर्ता पहले से मौजूद है' : 'Supplier with this name already exists', variant: 'destructive' });
+      return;
+    }
     if (editId) {
       updateSupplier(editId, form);
       toast({ title: language === 'hi' ? 'आपूर्तिकर्ता अपडेट हुआ' : 'Supplier updated' });
