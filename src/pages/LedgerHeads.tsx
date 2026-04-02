@@ -29,6 +29,8 @@ const EMPTY_FORM = {
   type: 'asset' as AccountType,
   openingBalance: '',
   openingBalanceType: 'debit' as 'debit' | 'credit',
+  isGroup: false,
+  parentId: '',
 };
 
 const TYPE_OPTIONS: { value: AccountType; label: string; labelHi: string }[] = [
@@ -157,6 +159,8 @@ const LedgerHeads: React.FC = () => {
       type: acc.type,
       openingBalance: String(acc.openingBalance ?? ''),
       openingBalanceType: acc.openingBalanceType ?? 'debit',
+      isGroup: !!acc.isGroup,
+      parentId: acc.parentId || '',
     });
   };
 
@@ -180,10 +184,12 @@ const LedgerHeads: React.FC = () => {
       name: form.name.trim(),
       nameHi: form.nameHi.trim(),
       type: form.type,
-      openingBalance: Number(form.openingBalance) || 0,
+      openingBalance: form.isGroup ? 0 : (Number(form.openingBalance) || 0),
       openingBalanceType: form.openingBalanceType,
+      isGroup: form.isGroup || undefined,
+      parentId: form.parentId || undefined,
     });
-    toast({ title: hi ? 'खाता जोड़ा गया' : 'Account added successfully' });
+    toast({ title: hi ? (form.isGroup ? 'ग्रुप बनाया गया' : 'खाता जोड़ा गया') : (form.isGroup ? 'Group created' : 'Account added successfully') });
     resetForm();
     setIsAddOpen(false);
   };
@@ -208,8 +214,10 @@ const LedgerHeads: React.FC = () => {
     updateAccount(editAccount.id, {
       name: form.name.trim(),
       nameHi: form.nameHi.trim(),
-      openingBalance: Number(form.openingBalance) || 0,
+      openingBalance: form.isGroup ? 0 : (Number(form.openingBalance) || 0),
       openingBalanceType: form.openingBalanceType,
+      isGroup: form.isGroup || undefined,
+      parentId: form.parentId || undefined,
     });
     toast({ title: hi ? 'खाता अपडेट किया गया' : 'Account updated successfully' });
     setEditAccount(null);
@@ -519,33 +527,62 @@ const LedgerHeads: React.FC = () => {
                 <Input value={form.nameHi} onChange={e => setForm(f => ({ ...f, nameHi: e.target.value }))} placeholder="जैसे नकद" />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>{hi ? 'खाता प्रकार' : 'Account Type'} <span className="text-destructive">*</span></Label>
-              <Select value={form.type} onValueChange={val => setForm(f => ({ ...f, type: val as AccountType }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {TYPE_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{hi ? opt.labelHi : opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>{hi ? 'प्रारंभिक शेष' : 'Opening Balance'} (₹)</Label>
-                <Input type="number" min="0" value={form.openingBalance} onChange={e => setForm(f => ({ ...f, openingBalance: e.target.value }))} placeholder="0" />
-              </div>
-              <div className="space-y-2">
-                <Label>{hi ? 'शेष प्रकार' : 'Balance Type'}</Label>
-                <Select value={form.openingBalanceType} onValueChange={val => setForm(f => ({ ...f, openingBalanceType: val as 'debit' | 'credit' }))}>
+                <Label>{hi ? 'खाता प्रकार' : 'Account Type'} <span className="text-destructive">*</span></Label>
+                <Select value={form.type} onValueChange={val => setForm(f => ({ ...f, type: val as AccountType, parentId: '' }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="debit">{hi ? 'नाम (Dr)' : 'Debit (Dr)'}</SelectItem>
-                    <SelectItem value="credit">{hi ? 'जमा (Cr)' : 'Credit (Cr)'}</SelectItem>
+                    {TYPE_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{hi ? opt.labelHi : opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{hi ? 'पैरेंट ग्रुप' : 'Parent Group'}</Label>
+                <Select value={form.parentId || '__none__'} onValueChange={val => setForm(f => ({ ...f, parentId: val === '__none__' ? '' : val }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">{hi ? 'कोई नहीं (Top Level)' : 'None (Top Level)'}</SelectItem>
+                    {accounts.filter(a => a.isGroup && a.type === form.type).map(g => (
+                      <SelectItem key={g.id} value={g.id}>{hi ? g.nameHi || g.name : g.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+              <input
+                type="checkbox"
+                id="isGroupAdd"
+                checked={form.isGroup}
+                onChange={e => setForm(f => ({ ...f, isGroup: e.target.checked }))}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <label htmlFor="isGroupAdd" className="text-sm font-medium cursor-pointer select-none">
+                <FolderOpen className="inline h-4 w-4 mr-1 text-amber-600" />
+                {hi ? 'यह एक ग्रुप है (इसके अंदर खाते आएंगे)' : 'This is a Group (sub-accounts will go under it)'}
+              </label>
+            </div>
+            {!form.isGroup && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{hi ? 'प्रारंभिक शेष' : 'Opening Balance'} (₹)</Label>
+                  <Input type="number" min="0" value={form.openingBalance} onChange={e => setForm(f => ({ ...f, openingBalance: e.target.value }))} placeholder="0" />
+                </div>
+                <div className="space-y-2">
+                  <Label>{hi ? 'शेष प्रकार' : 'Balance Type'}</Label>
+                  <Select value={form.openingBalanceType} onValueChange={val => setForm(f => ({ ...f, openingBalanceType: val as 'debit' | 'credit' }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="debit">{hi ? 'नाम (Dr)' : 'Debit (Dr)'}</SelectItem>
+                      <SelectItem value="credit">{hi ? 'जमा (Cr)' : 'Credit (Cr)'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" type="button" onClick={() => { setIsAddOpen(false); resetForm(); }}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
               <Button type="submit">{hi ? 'सहेजें' : 'Save'}</Button>
@@ -574,8 +611,33 @@ const LedgerHeads: React.FC = () => {
                 <Input value={form.nameHi} onChange={e => setForm(f => ({ ...f, nameHi: e.target.value }))} />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label>{hi ? 'पैरेंट ग्रुप' : 'Parent Group'}</Label>
+              <Select value={form.parentId || '__none__'} onValueChange={val => setForm(f => ({ ...f, parentId: val === '__none__' ? '' : val }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">{hi ? 'कोई नहीं (Top Level)' : 'None (Top Level)'}</SelectItem>
+                  {accounts.filter(a => a.isGroup && a.type === (editAccount?.type || form.type) && a.id !== editAccount?.id).map(g => (
+                    <SelectItem key={g.id} value={g.id}>{hi ? g.nameHi || g.name : g.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+              <input
+                type="checkbox"
+                id="isGroupEdit"
+                checked={form.isGroup}
+                onChange={e => setForm(f => ({ ...f, isGroup: e.target.checked }))}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <label htmlFor="isGroupEdit" className="text-sm font-medium cursor-pointer select-none">
+                <FolderOpen className="inline h-4 w-4 mr-1 text-amber-600" />
+                {hi ? 'यह एक ग्रुप है' : 'This is a Group'}
+              </label>
+            </div>
             {/* Opening balance — only for leaf (non-group) accounts */}
-            {!editAccount?.isGroup && (
+            {!form.isGroup && (
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>{hi ? 'प्रारंभिक शेष' : 'Opening Balance'} (₹)</Label>
