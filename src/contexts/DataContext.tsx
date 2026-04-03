@@ -48,6 +48,7 @@ interface DataContextType {
   updateAccount: (id: string, data: Partial<LedgerAccount>) => void;
   deleteAccount: (id: string) => void;
   mergeAccounts: (keepId: string, removeId: string) => number;
+  resetAccounts: (templateAccounts: LedgerAccount[]) => void;
   updateSociety: (data: Partial<SocietySettings>) => void;
 
   addLoan: (data: Omit<Loan, 'id' | 'loanNo' | 'createdAt'>) => Loan;
@@ -720,6 +721,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) console.error('Merge account delete:', error.message);
     });
     return touchedCount;
+  }, []);
+
+  const resetAccounts = useCallback((templateAccounts: LedgerAccount[]) => {
+    setAccountsState(templateAccounts);
+    const sid = societyIdRef.current;
+    supabase.from('accounts').delete().eq('society_id', sid).then(() => {
+      const BATCH = 50;
+      for (let i = 0; i < templateAccounts.length; i += BATCH) {
+        const batch = templateAccounts.slice(i, i + BATCH).map(a => ({ ...a, society_id: sid }));
+        supabase.from('accounts').insert(batch).then(({ error }) => {
+          if (error) console.error('Reset COA batch error:', error.message);
+        });
+      }
+    });
   }, []);
 
   const updateSociety = useCallback((data: Partial<SocietySettings>) => {
@@ -1833,7 +1848,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       suppliers, customers, kccLoans,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember,
-      addAccount, updateAccount, deleteAccount, mergeAccounts, updateSociety,
+      addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
       addLoan, updateLoan, deleteLoan,
       addAsset, updateAsset, deleteAsset, postDepreciation,
       addAuditObjection, updateAuditObjection, deleteAuditObjection,

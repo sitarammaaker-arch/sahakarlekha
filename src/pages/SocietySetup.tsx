@@ -18,11 +18,13 @@ import { Settings, Building2, Calendar, Wallet, Save, History, HardDrive, Downlo
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
+import { SOCIETY_TEMPLATES } from '@/lib/storage';
 
 const SocietySetup: React.FC = () => {
   const { t, language } = useLanguage();
   const { toast } = useToast();
-  const { society, updateSociety, accounts, updateAccount, addAccount, deleteAccount, getAccountBalance, getTrialBalance, getProfitLoss, getReceiptsPayments } = useData();
+  const { society, updateSociety, accounts, updateAccount, addAccount, deleteAccount, resetAccounts, getAccountBalance, getTrialBalance, getProfitLoss, getReceiptsPayments } = useData();
 
   // Basic info form state
   const [form, setForm] = useState({
@@ -38,6 +40,7 @@ const SocietySetup: React.FC = () => {
     phone: society.phone,
     email: society.email,
     societyType: society.societyType || 'marketing_processing',
+    reserveFundPct: society.reserveFundPct ?? 25,
   });
 
   // Financial year form state
@@ -121,6 +124,21 @@ const SocietySetup: React.FC = () => {
     toast({
       title: language === 'hi' ? 'वर्तमान वर्ष शेष भरा गया' : 'Filled from current year closing',
       description: language === 'hi' ? 'कृपया समीक्षा करें और सहेजें' : 'Please review and save',
+    });
+  };
+
+  // --- Reset COA to Template ---
+  const [resetCoaOpen, setResetCoaOpen] = useState(false);
+  const handleResetCoa = () => {
+    const type = form.societyType || society.societyType || 'marketing_processing';
+    const template = SOCIETY_TEMPLATES[type] || SOCIETY_TEMPLATES['marketing_processing'];
+    resetAccounts(template);
+    setResetCoaOpen(false);
+    toast({
+      title: language === 'hi' ? 'खाता संरचना रीसेट हो गई' : 'COA Reset to Template',
+      description: language === 'hi'
+        ? `${template.length} खाते लोड किए गए — ${SOCIETY_TYPES.find(t => t.value === type)?.labelHi || type}`
+        : `${template.length} accounts loaded — ${SOCIETY_TYPES.find(t => t.value === type)?.label || type}`,
     });
   };
 
@@ -372,13 +390,37 @@ const SocietySetup: React.FC = () => {
                   >
                     <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="marketing_processing">{language === 'hi' ? 'विपणन एवं प्रसंस्करण समिति (CMS)' : 'Marketing & Processing Society (CMS)'}</SelectItem>
-                      <SelectItem value="pacs">{language === 'hi' ? 'प्राथमिक कृषि ऋण समिति (PACS)' : 'Primary Agricultural Credit Society (PACS)'}</SelectItem>
-                      <SelectItem value="consumer">{language === 'hi' ? 'उपभोक्ता सहकारी समिति' : 'Consumer Cooperative Society'}</SelectItem>
-                      <SelectItem value="labour">{language === 'hi' ? 'श्रम सहकारी समिति' : 'Labour Cooperative Society'}</SelectItem>
-                      <SelectItem value="other">{language === 'hi' ? 'अन्य सहकारी समिति' : 'Other Cooperative Society'}</SelectItem>
+                      {SOCIETY_TYPES.map(t => (
+                        <SelectItem key={t.value} value={t.value}>{language === 'hi' ? t.labelHi : t.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>{language === 'hi' ? 'संचय निधि प्रतिशत (%)' : 'Reserve Fund %'}</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={form.reserveFundPct}
+                    onChange={e => setForm(f => ({ ...f, reserveFundPct: Number(e.target.value) }))}
+                    className="h-11"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'hi' ? 'सहकारी अधिनियम के अनुसार न्यूनतम 25%' : 'Min 25% per Cooperative Societies Act'}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>{language === 'hi' ? 'खाता संरचना रीसेट' : 'Reset COA'}</Label>
+                  <Button variant="outline" className="h-11 w-full border-destructive text-destructive hover:bg-destructive/10" onClick={() => setResetCoaOpen(true)}>
+                    {language === 'hi' ? 'COA टेम्पलेट से रीसेट करें' : 'Reset COA to Template'}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'hi' ? 'चयनित समिति प्रकार के अनुसार सभी खाते रीसेट करें' : 'Reset all accounts based on selected society type'}
+                  </p>
                 </div>
               </div>
 
@@ -405,16 +447,9 @@ const SocietySetup: React.FC = () => {
                   <Select value={form.state} onValueChange={v => setForm(f => ({ ...f, state: v }))}>
                     <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="mp">मध्य प्रदेश</SelectItem>
-                      <SelectItem value="up">उत्तर प्रदेश</SelectItem>
-                      <SelectItem value="rj">राजस्थान</SelectItem>
-                      <SelectItem value="gj">गुजरात</SelectItem>
-                      <SelectItem value="mh">महाराष्ट्र</SelectItem>
-                      <SelectItem value="br">बिहार</SelectItem>
-                      <SelectItem value="jh">झारखंड</SelectItem>
-                      <SelectItem value="cg">छत्तीसगढ़</SelectItem>
-                      <SelectItem value="uk">उत्तराखंड</SelectItem>
-                      <SelectItem value="hr">हरियाणा</SelectItem>
+                      {INDIAN_STATES.map(s => (
+                        <SelectItem key={s.value} value={s.value}>{language === 'hi' ? s.labelHi : s.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -888,6 +923,28 @@ const SocietySetup: React.FC = () => {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Reset COA Confirmation Dialog */}
+      <AlertDialog open={resetCoaOpen} onOpenChange={setResetCoaOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">
+              {language === 'hi' ? 'खाता संरचना रीसेट करें?' : 'Reset Chart of Accounts?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {language === 'hi'
+                ? 'यह सभी मौजूदा खातों को हटाकर चयनित समिति प्रकार के डिफॉल्ट खाते लोड करेगा। यदि वाउचर मौजूद हैं तो यह क्रिया समस्या पैदा कर सकती है। क्या आप निश्चित हैं?'
+                : 'This will replace all existing accounts with the default template for the selected society type. If vouchers exist, they may have dangling references. Are you sure?'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{language === 'hi' ? 'रद्द करें' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetCoa} className="bg-destructive hover:bg-destructive/90 text-white">
+              {language === 'hi' ? 'रीसेट करें' : 'Reset COA'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* P5-1: FY Rollover Confirmation Dialog */}
       <AlertDialog open={rolloverOpen} onOpenChange={setRolloverOpen}>

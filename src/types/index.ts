@@ -181,7 +181,7 @@ export interface VoucherEntry {
   societyId?: string;
 }
 
-export type SocietyType = 'marketing_processing' | 'pacs' | 'consumer' | 'labour' | 'other';
+export type SocietyType = 'marketing_processing' | 'pacs' | 'consumer' | 'labour' | 'dairy' | 'housing' | 'sugar' | 'other';
 
 export interface SocietySettings {
   name: string;
@@ -217,6 +217,7 @@ export interface SocietySettings {
     totalReceipts: number;
     totalPayments: number;
   };
+  reserveFundPct?: number;      // 0-100, default 25 if undefined (Sec 65 Haryana / varies by state)
   fyLocked?: boolean;          // true = FY is audit-locked; no new vouchers or edits allowed
   fyLockedAt?: string;         // ISO date when lock was applied
   fyLockedBy?: string;         // Name of user who locked the FY

@@ -30,7 +30,6 @@ const ACC_DIVIDEND      = '1211'; // Dividend Distribution (equity liability to 
 const ACC_BONUS_EXP     = '5207'; // Employee Bonus (expense)
 
 // ── Statutory rates ──────────────────────────────────────────────────────────
-const RESERVE_RATE   = 0.25;
 const EDUCATION_RATE = 0.01;
 
 const fmt = (n: number) =>
@@ -64,6 +63,7 @@ const ProfitDistribution: React.FC = () => {
   // ── Net Surplus ────────────────────────────────────────────────────────────
   const { netProfit } = useMemo(() => getProfitLoss(), [getProfitLoss]);
 
+  const RESERVE_RATE = (society.reserveFundPct ?? 25) / 100;
   const reserveAmt   = Math.round(netProfit * RESERVE_RATE * 100) / 100;
   const educationAmt = Math.round(netProfit * EDUCATION_RATE * 100) / 100;
   const distributable = netProfit - reserveAmt - educationAmt;

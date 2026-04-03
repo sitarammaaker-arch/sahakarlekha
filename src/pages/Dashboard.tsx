@@ -92,7 +92,7 @@ const Dashboard: React.FC = () => {
     const advisories: Advisory[] = [];
 
     if (netProfit > 0 && !reservePosted)
-      advisories.push({ severity: 'critical', en: 'Post 25% Statutory Reserve Fund transfer before distributing profits (Sec 65, Haryana Co-op Act)', hi: '25% सांविधिक संचय निधि हस्तांतरण करें — लाभ वितरण से पूर्व अनिवार्य (धारा 65)' });
+      advisories.push({ severity: 'critical', en: `Post ${society.reserveFundPct ?? 25}% Statutory Reserve Fund transfer before distributing profits`, hi: `${society.reserveFundPct ?? 25}% सांविधिक संचय निधि हस्तांतरण करें — लाभ वितरण से पूर्व अनिवार्य` });
     if (!bsTallied)
       advisories.push({ severity: 'critical', en: 'Balance Sheet is not balanced — check for missing or duplicate journal entries', hi: 'तुलन पत्र असंतुलित है — अपूर्ण या दोहरी जर्नल प्रविष्टियां जांचें' });
     if (physicalClosingStock > 0 && !closingStockPosted)
@@ -449,7 +449,7 @@ const Dashboard: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             {[
               {
-                label: language === 'hi' ? '25% संचय निधि (धारा 65)' : '25% Reserve Fund (Sec 65)',
+                label: language === 'hi' ? `${society.reserveFundPct ?? 25}% संचय निधि` : `${society.reserveFundPct ?? 25}% Reserve Fund`,
                 ok: complianceChecks.netProfit <= 0 || complianceChecks.reservePosted,
                 na: complianceChecks.netProfit <= 0,
               },

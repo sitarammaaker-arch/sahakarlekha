@@ -23,7 +23,7 @@ const BalanceSheet: React.FC = () => {
   // P1-7: If physical closing stock exists but no journal posted, show as synthetic asset
   const unpostedStock = !closingStockPosted && physicalClosingStock > 0 ? physicalClosingStock : 0;
 
-  const RESERVE_FUND_RATE = 0.25;
+  const RESERVE_FUND_RATE = (society.reserveFundPct ?? 25) / 100;
   const reserveFund = netProfit > 0 ? Math.round(netProfit * RESERVE_FUND_RATE) : 0;
   const distributableSurplus = netProfit > 0 ? netProfit - reserveFund : 0;
 

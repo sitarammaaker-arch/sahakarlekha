@@ -11,44 +11,8 @@ import { Building2, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import { SOCIETY_TEMPLATES, CMS_SOCIETY_ACCOUNTS } from '@/lib/storage';
 import type { SocietyType } from '@/types';
 
-const SOCIETY_TYPES: { value: SocietyType; label: string; labelHi: string }[] = [
-  { value: 'marketing_processing', label: 'Marketing cum Processing Society', labelHi: 'विपणन एवं प्रसंस्करण समिति' },
-  { value: 'pacs',                 label: 'Primary Agricultural Credit Society (PACS)', labelHi: 'प्राथमिक कृषि ऋण समिति (PACS)' },
-  { value: 'consumer',             label: 'Consumer Cooperative Society', labelHi: 'उपभोक्ता सहकारी समिति' },
-  { value: 'labour',               label: 'Labour Cooperative Society', labelHi: 'श्रमिक सहकारी समिति' },
-  { value: 'other',                label: 'Other', labelHi: 'अन्य' },
-];
-
-const STATES = [
-  { value: 'ap', label: 'Andhra Pradesh' },
-  { value: 'ar', label: 'Arunachal Pradesh' },
-  { value: 'as', label: 'Assam' },
-  { value: 'br', label: 'Bihar' },
-  { value: 'ct', label: 'Chhattisgarh' },
-  { value: 'ga', label: 'Goa' },
-  { value: 'gj', label: 'Gujarat' },
-  { value: 'hr', label: 'Haryana' },
-  { value: 'hp', label: 'Himachal Pradesh' },
-  { value: 'jh', label: 'Jharkhand' },
-  { value: 'ka', label: 'Karnataka' },
-  { value: 'kl', label: 'Kerala' },
-  { value: 'mp', label: 'Madhya Pradesh' },
-  { value: 'mh', label: 'Maharashtra' },
-  { value: 'mn', label: 'Manipur' },
-  { value: 'ml', label: 'Meghalaya' },
-  { value: 'mz', label: 'Mizoram' },
-  { value: 'nl', label: 'Nagaland' },
-  { value: 'or', label: 'Odisha' },
-  { value: 'pb', label: 'Punjab' },
-  { value: 'rj', label: 'Rajasthan' },
-  { value: 'sk', label: 'Sikkim' },
-  { value: 'tn', label: 'Tamil Nadu' },
-  { value: 'tg', label: 'Telangana' },
-  { value: 'tr', label: 'Tripura' },
-  { value: 'up', label: 'Uttar Pradesh' },
-  { value: 'ut', label: 'Uttarakhand' },
-  { value: 'wb', label: 'West Bengal' },
-];
+import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
+const STATES = INDIAN_STATES;
 
 const Register: React.FC = () => {
   const navigate = useNavigate();

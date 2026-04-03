@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { generateIncomeExpenditurePDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
-const RESERVE_FUND_RATE = 0.25; // 25% mandatory under Haryana Cooperative Societies Act 1984, Sec 65
+// Reserve fund rate read from society.reserveFundPct (default 25%)
 
 const ProfitLoss: React.FC = () => {
   const { language } = useLanguage();
@@ -20,6 +20,7 @@ const ProfitLoss: React.FC = () => {
 
   const { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit } = getProfitLoss();
   const isSurplus = netProfit >= 0;
+  const RESERVE_FUND_RATE = (society.reserveFundPct ?? 25) / 100;
 
   // P5-2: Previous year comparison
   const pyIE = society.previousYearIE;

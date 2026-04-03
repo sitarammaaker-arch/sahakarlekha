@@ -306,7 +306,7 @@ export function generateIncomeExpenditurePDF(
 
   const expBody: string[][] = [
     ...expenseItems.map(i => [i.name, fmt(i.amount)]),
-    ...(isSurplus && reserveFund > 0 ? [['Statutory Reserve Fund (25%) — Sec 65, H.C.S. Act 1984', fmt(reserveFund)]] : []),
+    ...(isSurplus && reserveFund > 0 ? [[`Statutory Reserve Fund (${society.reserveFundPct ?? 25}%)`, fmt(reserveFund)]] : []),
     ...(isSurplus ? [['Surplus carried to Balance Sheet', fmt(distributableSurplus)]] : [['Deficit carried to Balance Sheet', fmt(Math.abs(netProfit))]]),
   ];
   const incBody: string[][] = incomeItems.map(i => [i.name, fmt(i.amount)]);
@@ -445,7 +445,7 @@ export function generateBalanceSheetPDF(
           : [label, displayVal];
       }),
     ...(netProfit > 0 && reserveFund > 0
-      ? [hasPY ? ['Statutory Reserve Fund 25%', '—', fmt(reserveFund)] : ['Statutory Reserve Fund — 25%', fmt(reserveFund)]]
+      ? [hasPY ? [`Statutory Reserve Fund ${society.reserveFundPct ?? 25}%`, '—', fmt(reserveFund)] : [`Statutory Reserve Fund — ${society.reserveFundPct ?? 25}%`, fmt(reserveFund)]]
       : []),
     ...(netProfit > 0
       ? [hasPY ? ['Distributable Surplus', '—', fmt(distributableSurplus)] : ['Distributable Surplus', fmt(distributableSurplus)]]

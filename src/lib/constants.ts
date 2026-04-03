@@ -1,0 +1,53 @@
+import type { SocietyType } from '@/types';
+
+export const SOCIETY_TYPES: { value: SocietyType; label: string; labelHi: string }[] = [
+  { value: 'marketing_processing', label: 'Marketing cum Processing Society', labelHi: 'विपणन एवं प्रसंस्करण समिति' },
+  { value: 'pacs',                 label: 'Primary Agricultural Credit Society (PACS)', labelHi: 'प्राथमिक कृषि ऋण समिति (PACS)' },
+  { value: 'consumer',             label: 'Consumer Cooperative Society', labelHi: 'उपभोक्ता सहकारी समिति' },
+  { value: 'dairy',                label: 'Dairy Cooperative Society', labelHi: 'दुग्ध सहकारी समिति' },
+  { value: 'housing',              label: 'Housing Cooperative Society', labelHi: 'गृह निर्माण सहकारी समिति' },
+  { value: 'sugar',                label: 'Sugar Cooperative Society', labelHi: 'चीनी सहकारी समिति' },
+  { value: 'labour',               label: 'Labour Cooperative Society', labelHi: 'श्रमिक सहकारी समिति' },
+  { value: 'other',                label: 'Other', labelHi: 'अन्य' },
+];
+
+export const INDIAN_STATES = [
+  // 28 States
+  { value: 'ap', label: 'Andhra Pradesh', labelHi: 'आंध्र प्रदेश' },
+  { value: 'ar', label: 'Arunachal Pradesh', labelHi: 'अरुणाचल प्रदेश' },
+  { value: 'as', label: 'Assam', labelHi: 'असम' },
+  { value: 'br', label: 'Bihar', labelHi: 'बिहार' },
+  { value: 'ct', label: 'Chhattisgarh', labelHi: 'छत्तीसगढ़' },
+  { value: 'ga', label: 'Goa', labelHi: 'गोवा' },
+  { value: 'gj', label: 'Gujarat', labelHi: 'गुजरात' },
+  { value: 'hr', label: 'Haryana', labelHi: 'हरियाणा' },
+  { value: 'hp', label: 'Himachal Pradesh', labelHi: 'हिमाचल प्रदेश' },
+  { value: 'jh', label: 'Jharkhand', labelHi: 'झारखंड' },
+  { value: 'ka', label: 'Karnataka', labelHi: 'कर्नाटक' },
+  { value: 'kl', label: 'Kerala', labelHi: 'केरल' },
+  { value: 'mp', label: 'Madhya Pradesh', labelHi: 'मध्य प्रदेश' },
+  { value: 'mh', label: 'Maharashtra', labelHi: 'महाराष्ट्र' },
+  { value: 'mn', label: 'Manipur', labelHi: 'मणिपुर' },
+  { value: 'ml', label: 'Meghalaya', labelHi: 'मेघालय' },
+  { value: 'mz', label: 'Mizoram', labelHi: 'मिज़ोरम' },
+  { value: 'nl', label: 'Nagaland', labelHi: 'नागालैंड' },
+  { value: 'or', label: 'Odisha', labelHi: 'ओडिशा' },
+  { value: 'pb', label: 'Punjab', labelHi: 'पंजाब' },
+  { value: 'rj', label: 'Rajasthan', labelHi: 'राजस्थान' },
+  { value: 'sk', label: 'Sikkim', labelHi: 'सिक्किम' },
+  { value: 'tn', label: 'Tamil Nadu', labelHi: 'तमिलनाडु' },
+  { value: 'tg', label: 'Telangana', labelHi: 'तेलंगाना' },
+  { value: 'tr', label: 'Tripura', labelHi: 'त्रिपुरा' },
+  { value: 'up', label: 'Uttar Pradesh', labelHi: 'उत्तर प्रदेश' },
+  { value: 'ut', label: 'Uttarakhand', labelHi: 'उत्तराखंड' },
+  { value: 'wb', label: 'West Bengal', labelHi: 'पश्चिम बंगाल' },
+  // 8 Union Territories
+  { value: 'an', label: 'Andaman & Nicobar Islands', labelHi: 'अंडमान और निकोबार द्वीपसमूह' },
+  { value: 'ch', label: 'Chandigarh', labelHi: 'चंडीगढ़' },
+  { value: 'dn', label: 'Dadra & Nagar Haveli and Daman & Diu', labelHi: 'दादरा और नगर हवेली एवं दमन और दीव' },
+  { value: 'dl', label: 'Delhi', labelHi: 'दिल्ली' },
+  { value: 'jk', label: 'Jammu & Kashmir', labelHi: 'जम्मू और कश्मीर' },
+  { value: 'la', label: 'Ladakh', labelHi: 'लद्दाख' },
+  { value: 'ld', label: 'Lakshadweep', labelHi: 'लक्षद्वीप' },
+  { value: 'py', label: 'Puducherry', labelHi: 'पुदुचेरी' },
+];

@@ -538,13 +538,20 @@ export const CONSUMER_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '9999', name: 'Suspense Account',           nameHi: 'संदिग्ध खाता',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, subtype: 'suspense' },
 ];
 
+import { DAIRY_SOCIETY_ACCOUNTS } from './templates/dairy';
+import { HOUSING_SOCIETY_ACCOUNTS } from './templates/housing';
+import { SUGAR_SOCIETY_ACCOUNTS } from './templates/sugar';
+
 // Template map: societyType → accounts array
 export const SOCIETY_TEMPLATES: Record<string, LedgerAccount[]> = {
   marketing_processing: CMS_SOCIETY_ACCOUNTS,
   pacs:                 PACS_SOCIETY_ACCOUNTS,
   consumer:             CONSUMER_SOCIETY_ACCOUNTS,
-  labour:               CMS_SOCIETY_ACCOUNTS,   // Labour societies share CMS structure
-  other:                CMS_SOCIETY_ACCOUNTS,   // Default to CMS for unknown types
+  dairy:                DAIRY_SOCIETY_ACCOUNTS,
+  housing:              HOUSING_SOCIETY_ACCOUNTS,
+  sugar:                SUGAR_SOCIETY_ACCOUNTS,
+  labour:               CMS_SOCIETY_ACCOUNTS,
+  other:                CMS_SOCIETY_ACCOUNTS,
 };
 
 // Fallback for societies that have no template (use CMS as default)

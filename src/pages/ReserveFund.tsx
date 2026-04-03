@@ -26,7 +26,6 @@ const ACC_RESERVE_FUND  = '1201'; // Statutory Reserve Fund  — Cr
 const ACC_EDUCATION_FUND = '1203'; // Education Fund          — Cr
 
 // Statutory rates (Cooperative Societies Act)
-const RESERVE_RATE  = 0.25; // 25%
 const EDUCATION_RATE = 0.01; // 1%
 
 const ReserveFund: React.FC = () => {
@@ -41,6 +40,7 @@ const ReserveFund: React.FC = () => {
   const { netProfit } = useMemo(() => getProfitLoss(), [getProfitLoss]);
 
   // Appropriation amounts
+  const RESERVE_RATE = (society.reserveFundPct ?? 25) / 100;
   const reserveAmount  = Math.round(netProfit * RESERVE_RATE * 100) / 100;
   const educationAmount = Math.round(netProfit * EDUCATION_RATE * 100) / 100;
   const afterAppropriation = netProfit - reserveAmount - educationAmount;
