@@ -21,6 +21,7 @@ const ProfitLoss: React.FC = () => {
   const { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit } = getProfitLoss();
   const isSurplus = netProfit >= 0;
   const RESERVE_FUND_RATE = (society.reserveFundPct ?? 25) / 100;
+  const grandTotal = isSurplus ? totalIncome : totalExpenses;
 
   // P5-2: Previous year comparison
   const pyIE = society.previousYearIE;
@@ -229,7 +230,7 @@ const ProfitLoss: React.FC = () => {
                   <TableRow className="bg-muted font-bold text-lg">
                     <TableCell>{hi ? 'कुल' : 'Total'}</TableCell>
                     {hasPY && <TableCell className="text-right text-muted-foreground">{pyIE ? fmt(pyIE.totalIncome) : '—'}</TableCell>}
-                    <TableCell className="text-right">{fmt(totalIncome)}</TableCell>
+                    <TableCell className="text-right">{fmt(grandTotal)}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
@@ -268,7 +269,7 @@ const ProfitLoss: React.FC = () => {
                   <TableRow className="bg-muted font-bold text-lg">
                     <TableCell>{hi ? 'कुल' : 'Total'}</TableCell>
                     {hasPY && <TableCell className="text-right text-muted-foreground">{pyIE ? fmt(pyIE.totalIncome) : '—'}</TableCell>}
-                    <TableCell className="text-right">{fmt(totalIncome)}</TableCell>
+                    <TableCell className="text-right">{fmt(grandTotal)}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>

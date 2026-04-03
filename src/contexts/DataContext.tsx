@@ -854,11 +854,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // BUG-03 FIX: Accept optional asOnDate to filter vouchers up to that date.
   const getTrialBalance = useCallback((asOnDate?: string): AccountBalance[] => {
-    // Exclude group/header accounts from Trial Balance — only leaf accounts have transactions
     const vouchersToUse = asOnDate
       ? activeVouchers.filter(v => v.date <= asOnDate)
       : activeVouchers;
-    return accounts.filter(a => !a.isGroup).map(account => {
+
+    // Build results for existing accounts
+    const accountIds = new Set(accounts.filter(a => !a.isGroup).map(a => a.id));
+    const results = accounts.filter(a => !a.isGroup).map(account => {
       const openingDebit = account.openingBalanceType === 'debit' ? account.openingBalance : 0;
       const openingCredit = account.openingBalanceType === 'credit' ? account.openingBalance : 0;
       let transactionDebit = 0;
@@ -875,6 +877,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const totalCredit = openingCredit + transactionCredit;
       return { account, openingDebit, openingCredit, transactionDebit, transactionCredit, totalDebit, totalCredit, netBalance: totalDebit - totalCredit };
     });
+
+    // Detect orphaned transactions (voucher lines referencing deleted/missing accounts)
+    const orphanMap: Record<string, { dr: number; cr: number }> = {};
+    vouchersToUse.forEach(v => {
+      getVoucherLines(v).forEach(l => {
+        if (!accountIds.has(l.accountId)) {
+          if (!orphanMap[l.accountId]) orphanMap[l.accountId] = { dr: 0, cr: 0 };
+          if (l.type === 'Dr') orphanMap[l.accountId].dr += l.amount;
+          else orphanMap[l.accountId].cr += l.amount;
+        }
+      });
+    });
+    // Add orphaned accounts as synthetic entries so TB can balance
+    Object.entries(orphanMap).forEach(([id, { dr, cr }]) => {
+      const syntheticAccount: LedgerAccount = {
+        id, name: `[Deleted] ${id.slice(0, 8)}...`, nameHi: `[हटाया] ${id.slice(0, 8)}...`,
+        type: 'liability', openingBalance: 0, openingBalanceType: 'credit',
+      };
+      results.push({ account: syntheticAccount, openingDebit: 0, openingCredit: 0, transactionDebit: dr, transactionCredit: cr, totalDebit: dr, totalCredit: cr, netBalance: dr - cr });
+    });
+
+    return results;
   }, [accounts, activeVouchers]);
 
   const getMemberLedger = useCallback((memberId: string): MemberLedgerEntry[] => {
@@ -1058,19 +1082,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (otherLines.length === 0) return;
 
         if (l.type === 'Dr') {
-          // Cash/Bank Dr = Receipt (money came in) — credit side is the source
           otherLines.forEach(ol => {
             const otherAcc = accounts.find(a => a.id === ol.accountId);
-            const name = otherAcc?.name || ol.accountId;
-            if (!receiptMap[ol.accountId]) receiptMap[ol.accountId] = { name, amount: 0 };
+            const name = otherAcc?.name || v.narration || 'Deleted Account';
+            const nameHi = otherAcc?.nameHi || name;
+            if (!receiptMap[ol.accountId]) receiptMap[ol.accountId] = { name, nameHi, amount: 0 };
             receiptMap[ol.accountId].amount += ol.amount;
           });
         } else {
-          // Cash/Bank Cr = Payment (money went out) — debit side is the destination
           otherLines.forEach(ol => {
             const otherAcc = accounts.find(a => a.id === ol.accountId);
-            const name = otherAcc?.name || ol.accountId;
-            if (!paymentMap[ol.accountId]) paymentMap[ol.accountId] = { name, amount: 0 };
+            const name = otherAcc?.name || v.narration || 'Deleted Account';
+            const nameHi = otherAcc?.nameHi || name;
+            if (!paymentMap[ol.accountId]) paymentMap[ol.accountId] = { name, nameHi, amount: 0 };
             paymentMap[ol.accountId].amount += ol.amount;
           });
         }
@@ -1083,8 +1107,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return {
       openingCash,
       openingBank,
-      receipts: Object.entries(receiptMap).map(([id, v]) => ({ accountId: id, accountName: v.name, amount: v.amount })),
-      payments: Object.entries(paymentMap).map(([id, v]) => ({ accountId: id, accountName: v.name, amount: v.amount })),
+      receipts: Object.entries(receiptMap).map(([id, v]) => ({ accountId: id, accountName: v.name, accountNameHi: (v as any).nameHi || v.name, amount: v.amount })),
+      payments: Object.entries(paymentMap).map(([id, v]) => ({ accountId: id, accountName: v.name, accountNameHi: (v as any).nameHi || v.name, amount: v.amount })),
       closingCash,
       closingBank,
     };

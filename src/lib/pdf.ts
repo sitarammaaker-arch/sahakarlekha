@@ -301,15 +301,18 @@ export function generateIncomeExpenditurePDF(
   const isSurplus = netProfit >= 0;
   const distributableSurplus = isSurplus ? netProfit - reserveFund : 0;
 
-  // P-4 FIX: Expenditure side total = expenses + reserve fund + surplus (must equal totalIncome for balance)
-  const expSideTotal = totalExpenses + (isSurplus ? reserveFund + distributableSurplus : 0);
+  // Both sides of T-account must show the same grand total
+  const grandTotal = isSurplus ? totalIncome : totalExpenses;
 
   const expBody: string[][] = [
     ...expenseItems.map(i => [i.name, fmt(i.amount)]),
     ...(isSurplus && reserveFund > 0 ? [[`Statutory Reserve Fund (${society.reserveFundPct ?? 25}%)`, fmt(reserveFund)]] : []),
     ...(isSurplus ? [['Surplus carried to Balance Sheet', fmt(distributableSurplus)]] : [['Deficit carried to Balance Sheet', fmt(Math.abs(netProfit))]]),
   ];
-  const incBody: string[][] = incomeItems.map(i => [i.name, fmt(i.amount)]);
+  const incBody: string[][] = [
+    ...incomeItems.map(i => [i.name, fmt(i.amount)]),
+    ...(!isSurplus ? [['Deficit carried from Expenditure', fmt(Math.abs(netProfit))]] : []),
+  ];
 
   // Expenditure side (left half)
   autoTable(doc, {
@@ -317,7 +320,7 @@ export function generateIncomeExpenditurePDF(
     margin: { left: 15, right: 158 },
     head: [['Expenditure (Dr)', 'Amount']],
     body: expBody,
-    foot: [['Total', fmt(expSideTotal)]],
+    foot: [['Total', fmt(grandTotal)]],
     styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [220, 53, 69], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
@@ -330,7 +333,7 @@ export function generateIncomeExpenditurePDF(
     margin: { left: 154, right: 15 },
     head: [['Income (Cr)', 'Amount']],
     body: incBody,
-    foot: [['Total', fmt(totalIncome)]],
+    foot: [['Total', fmt(grandTotal)]],
     styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
