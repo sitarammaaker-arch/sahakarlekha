@@ -53,6 +53,7 @@ import AgingAnalysis from "./pages/AgingAnalysis";
 import StockValuation from "./pages/StockValuation";
 import BudgetModule from "./pages/BudgetModule";
 import TdsForm16A from "./pages/TdsForm16A";
+import TdsRegister from "./pages/TdsRegister";
 import UserManagement from "./pages/UserManagement";
 import EWayBill from "./pages/EWayBill";
 import HsnMaster from "./pages/HsnMaster";
@@ -163,6 +164,7 @@ const AppRoutes = () => {
       <Route path="/stock-valuation" element={<ProtectedRoute><StockValuation /></ProtectedRoute>} />
       <Route path="/budget-module" element={<ProtectedRoute><BudgetModule /></ProtectedRoute>} />
       <Route path="/tds-form16a" element={<ProtectedRoute><TdsForm16A /></ProtectedRoute>} />
+      <Route path="/tds-register" element={<ProtectedRoute><TdsRegister /></ProtectedRoute>} />
       <Route path="/user-management" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
       <Route path="/eway-bill" element={<ProtectedRoute><EWayBill /></ProtectedRoute>} />
       <Route path="/kcc-loan" element={<ProtectedRoute><KccLoan /></ProtectedRoute>} />

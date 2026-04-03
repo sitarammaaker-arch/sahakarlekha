@@ -41,6 +41,8 @@ const SocietySetup: React.FC = () => {
     email: society.email,
     societyType: society.societyType || 'marketing_processing',
     reserveFundPct: society.reserveFundPct ?? 25,
+    tan: society.tan || '',
+    entityPan: society.entityPan || '',
   });
 
   // Financial year form state
@@ -398,9 +400,19 @@ const SocietySetup: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-2">
-                  <Label>{language === 'hi' ? 'संचय निधि प्रतिशत (%)' : 'Reserve Fund %'}</Label>
+                  <Label>TAN</Label>
+                  <Input value={form.tan} onChange={e => setForm(f => ({ ...f, tan: e.target.value.toUpperCase() }))} placeholder="AAAA11111A" maxLength={10} className="h-11 font-mono" />
+                  <p className="text-xs text-muted-foreground">{language === 'hi' ? 'कर कटौती खाता संख्या (TDS के लिए)' : 'Tax Deduction Account Number'}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>{language === 'hi' ? 'समिति PAN' : 'Society PAN'}</Label>
+                  <Input value={form.entityPan} onChange={e => setForm(f => ({ ...f, entityPan: e.target.value.toUpperCase() }))} placeholder="ABCDE1234F" maxLength={10} className="h-11 font-mono" />
+                  <p className="text-xs text-muted-foreground">{language === 'hi' ? 'स्थायी खाता संख्या' : 'Permanent Account Number'}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>{language === 'hi' ? 'संचय निधि (%)' : 'Reserve Fund %'}</Label>
                   <Input
                     type="number"
                     min={0}

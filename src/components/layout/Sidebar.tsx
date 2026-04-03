@@ -61,6 +61,7 @@ const reportNavItems: NavItem[] = [
   { key: 'gstSummary', icon: Percent, path: '/gst-summary' },
   { key: 'agingAnalysis', icon: TrendingDown, path: '/aging-analysis' },
   { key: 'tdsForm16A', icon: Receipt, path: '/tds-form16a' },
+  { key: 'tdsRegister', icon: Receipt, path: '/tds-register' },
   { key: 'stockValuation', icon: Warehouse, path: '/stock-valuation' },
   { key: 'budgetModule', icon: PiggyBank, path: '/budget-module' },
   { key: 'eWayBill', icon: FileJson, path: '/eway-bill' },

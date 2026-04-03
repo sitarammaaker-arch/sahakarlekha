@@ -51,6 +51,7 @@ export const translations: Translations = {
   stockValuation: { hi: 'स्टॉक मूल्यांकन', en: 'Stock Valuation' },
   budgetModule: { hi: 'बजट मॉड्यूल', en: 'Budget Module' },
   tdsForm16A: { hi: 'TDS Form 16A', en: 'TDS Form 16A' },
+  tdsRegister: { hi: 'TDS रजिस्टर / 26Q', en: 'TDS Register / 26Q' },
   userManagement: { hi: 'उपयोगकर्ता प्रबंधन', en: 'User Management' },
   eWayBill: { hi: 'e-Way Bill', en: 'e-Way Bill' },
   hsnMaster: { hi: 'HSN/SAC मास्टर', en: 'HSN/SAC Master' },

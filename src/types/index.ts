@@ -218,6 +218,8 @@ export interface SocietySettings {
     totalPayments: number;
   };
   reserveFundPct?: number;      // 0-100, default 25 if undefined (Sec 65 Haryana / varies by state)
+  tan?: string;                // Tax Deduction Account Number (10 chars)
+  entityPan?: string;          // Society PAN (10 chars)
   fyLocked?: boolean;          // true = FY is audit-locked; no new vouchers or edits allowed
   fyLockedAt?: string;         // ISO date when lock was applied
   fyLockedBy?: string;         // Name of user who locked the FY
@@ -503,4 +505,43 @@ export interface EntityLink {
   instructionHi: string; // "Vouchers page pe in vouchers ko pehle cancel karo"
   instructionEn: string;
   blocking: boolean;     // true = must handle before delete
+}
+
+// ── TDS Register ────────────────────────────────────────────────────────────
+export type TdsSection = '192' | '194A' | '194C' | '194H' | '194J' | '194Q';
+export type TdsDeducteeType = 'individual' | 'company' | 'firm' | 'cooperative' | 'other';
+export type TdsStatus = 'pending' | 'deposited' | 'filed';
+export type TdsQuarter = 'Q1' | 'Q2' | 'Q3' | 'Q4';
+
+export interface TdsEntry {
+  id: string;
+  date: string;                   // yyyy-mm-dd
+  deducteePan: string;            // 10 chars
+  deducteeName: string;
+  deducteeType: TdsDeducteeType;
+  section: TdsSection;
+  natureOfPayment: string;
+  grossAmount: number;
+  tdsRate: number;
+  tdsAmount: number;
+  challanId?: string;             // link to TdsChallan
+  voucherId?: string;             // link to source voucher
+  purchaseId?: string;            // link to source purchase
+  quarter: TdsQuarter;
+  financialYear: string;
+  status: TdsStatus;
+  createdAt: string;
+}
+
+export interface TdsChallan {
+  id: string;
+  bsrCode: string;                // 7 digit bank BSR code
+  challanDate: string;
+  challanSerial: string;
+  amount: number;
+  bankName: string;
+  quarter: TdsQuarter;
+  financialYear: string;
+  status: 'paid' | 'pending';
+  createdAt: string;
 }
