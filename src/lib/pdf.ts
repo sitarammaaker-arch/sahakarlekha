@@ -59,6 +59,19 @@ function addNoDataMessage(doc: jsPDF, font: string, y: number): void {
   doc.setFont(font, 'normal');
 }
 
+/**
+ * Right-align amount columns in head, body AND foot.
+ * jspdf-autotable's columnStyles only applies to body by default.
+ * This callback forces halign:'right' on specified column indices across all sections.
+ */
+function rightAlignAmountColumns(...colIndices: number[]) {
+  return (data: any) => {
+    if (colIndices.includes(data.column.index)) {
+      data.cell.styles.halign = 'right';
+    }
+  };
+}
+
 /** G7 FIX: Add page numbers + confidentiality footer to every page. Call AFTER all content is added. */
 function addPageNumbers(doc: jsPDF, font: string, societyName?: string): void {
   const total = doc.getNumberOfPages();
@@ -282,6 +295,7 @@ export function generateCashBookPDF(
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 253] },
     columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(3, 4, 5),
   });
 
   addPageNumbers(doc, font, society?.name);
@@ -323,6 +337,7 @@ export function generateBankBookPDF(
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 253] },
     columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(3, 4, 5),
   });
 
   addPageNumbers(doc, font, society?.name);
@@ -362,6 +377,7 @@ export function generateTrialBalancePDF(balances: AccountBalance[], society: Soc
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 253] },
     columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(3, 4),
   });
 
   const tbFinalY = (doc as any).lastAutoTable.finalY + 10;
@@ -421,6 +437,7 @@ export function generateIncomeExpenditurePDF(
     headStyles: { fillColor: [220, 53, 69], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(1),
   });
   const expFinalY = (doc as any).lastAutoTable.finalY;
 
@@ -435,6 +452,7 @@ export function generateIncomeExpenditurePDF(
     headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(1),
   });
 
   const ieFinalY = Math.max(expFinalY, (doc as any).lastAutoTable.finalY) + 10;
@@ -481,6 +499,7 @@ export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society:
     headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(1),
   });
   const drFinalY = (doc as any).lastAutoTable.finalY;
 
@@ -495,6 +514,7 @@ export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society:
     headStyles: { fillColor: [220, 53, 69], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(1),
   });
 
   const rpFinalY = Math.max(drFinalY, (doc as any).lastAutoTable.finalY) + 10;
@@ -583,6 +603,7 @@ export function generateBalanceSheetPDF(
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: colStyles,
+    didParseCell: rightAlignAmountColumns(...(hasPY ? [1, 2] : [1])),
   });
   const liabFinalY = (doc as any).lastAutoTable.finalY;
 
@@ -597,6 +618,7 @@ export function generateBalanceSheetPDF(
     headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: colStyles,
+    didParseCell: rightAlignAmountColumns(...(hasPY ? [1, 2] : [1])),
   });
   const assetFinalY = (doc as any).lastAutoTable.finalY;
 
@@ -645,6 +667,7 @@ export function generateLedgerPDF(
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 253] },
     columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(3, 4, 5),
   });
 
   addPageNumbers(doc, font, society?.name);
@@ -1141,6 +1164,7 @@ export function generateTradingAccountPDF(
     headStyles: { fillColor: [220, 53, 69], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right', cellWidth: 30 } },
+    didParseCell: rightAlignAmountColumns(1),
   });
   const taDrFinalY = (doc as any).lastAutoTable.finalY;
 
@@ -1155,6 +1179,7 @@ export function generateTradingAccountPDF(
     headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right', cellWidth: 30 } },
+    didParseCell: rightAlignAmountColumns(1),
   });
 
   // G8 FIX: Use standardized signature block — use max of both tables to avoid overlap
