@@ -33,7 +33,7 @@ const ACC_BONUS_EXP     = '5207'; // Employee Bonus (expense)
 const EDUCATION_RATE = 0.01;
 
 const fmt = (n: number) =>
-  '\u20B9 ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 // ── Check if a distribution journal exists ───────────────────────────────────
 const usePosted = (

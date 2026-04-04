@@ -8,9 +8,9 @@ import { INDIAN_STATES } from '@/lib/constants';
 import { getStateAuditFormat } from '@/lib/stateAuditFormats';
 
 
-// G1 FIX: ₹ symbol instead of Rs.
+// G1 FIX: Use Rs. prefix — Helvetica font lacks the ₹ glyph, causing garbled output
 const fmt = (amount: number): string =>
-  '\u20B9 ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+  'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
 
 const preparedOn = (): string => {
   const d = new Date();
