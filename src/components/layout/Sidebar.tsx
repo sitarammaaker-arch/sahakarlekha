@@ -86,6 +86,7 @@ const registerNavItems: NavItem[] = [
   { key: 'deletedVouchers', icon: Trash2, path: '/deleted-vouchers', roles: ['admin'] },
   { key: 'kccLoan', icon: Wheat, path: '/kcc-loan' },
   { key: 'electionModule', icon: Vote, path: '/election-module' },
+  { key: 'boardOfDirectors', icon: Users2, path: '/board-of-directors', roles: ['admin'] },
 ];
 
 const settingsNavItems: NavItem[] = [

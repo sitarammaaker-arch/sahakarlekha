@@ -95,15 +95,28 @@ function addPageNumbers(doc: jsPDF, font: string, societyName?: string): void {
 }
 
 /**
- * Add a 3-column signature block.
+ * Get signatory names from society settings. Falls back to empty strings if not configured.
+ */
+function getSignatoryNames(society: SocietySettings): { accountant: string; secretary: string; president: string } {
+  const sig = society.signatories || {};
+  return {
+    accountant: sig.accountant?.name || '',
+    secretary: sig.secretary?.name || '',
+    president: sig.president?.name || '',
+  };
+}
+
+/**
+ * Add a 3-column signature block with optional signatory names above designation labels.
  * labels: e.g. ['Accountant', 'Secretary', 'President']
+ * names: optional array of actual person names to print above the designation
  * Returns the Y position used.
  */
-function addSignatureBlock(doc: jsPDF, font: string, labels: string[], startY: number, note?: string): number {
+function addSignatureBlock(doc: jsPDF, font: string, labels: string[], startY: number, note?: string, names?: string[]): number {
   const pageW = doc.internal.pageSize.width;
   const pageH = doc.internal.pageSize.height;
   // If not enough space on current page, add new page
-  if (startY + 30 > pageH - 20) {
+  if (startY + 35 > pageH - 20) {
     doc.addPage();
     startY = 20;
   }
@@ -122,11 +135,25 @@ function addSignatureBlock(doc: jsPDF, font: string, labels: string[], startY: n
     doc.setDrawColor(80);
     doc.setLineWidth(0.3);
     doc.line(x - 22, startY + 8, x + 22, startY + 8);
-    doc.setFontSize(7.5);
-    doc.text(lbl, x, startY + 13, { align: 'center' });
-    doc.setFontSize(7);
-    doc.setTextColor(100);
-    doc.text('Date: __________', x, startY + 18, { align: 'center' });
+    // Print actual name above designation (if configured)
+    const name = names?.[i];
+    if (name) {
+      doc.setFontSize(8);
+      doc.setFont(font, 'bold');
+      doc.text(name, x, startY + 13, { align: 'center' });
+      doc.setFont(font, 'normal');
+      doc.setFontSize(7.5);
+      doc.text(lbl, x, startY + 18, { align: 'center' });
+      doc.setFontSize(7);
+      doc.setTextColor(100);
+      doc.text('Date: __________', x, startY + 23, { align: 'center' });
+    } else {
+      doc.setFontSize(7.5);
+      doc.text(lbl, x, startY + 13, { align: 'center' });
+      doc.setFontSize(7);
+      doc.setTextColor(100);
+      doc.text('Date: __________', x, startY + 18, { align: 'center' });
+    }
     doc.setTextColor(0);
   });
   return startY + 22;
@@ -166,9 +193,11 @@ function addAuditorCertificate(doc: jsPDF, font: string, society: SocietySetting
   doc.text(lines, 15, startY);
   startY += lines.length * 4 + 4;
 
+  const certSig = getSignatoryNames(society);
   addSignatureBlock(doc, font,
     ['Statutory Auditor\n(Name & Membership No.)', 'Secretary\n(Seal)', 'President\n(Seal)'],
-    startY
+    startY, undefined,
+    ['', certSig.secretary, certSig.president]  // Auditor name left blank (filled manually)
   );
 }
 
@@ -390,8 +419,10 @@ export function generateTrialBalancePDF(balances: AccountBalance[], society: Soc
     15, tbFinalY
   );
   doc.setTextColor(0);
+  const tbSig = getSignatoryNames(society);
   addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], tbFinalY + 6,
-    'Certified that the above Trial Balance has been prepared from the Books of Account of the Society.'
+    'Certified that the above Trial Balance has been prepared from the Books of Account of the Society.',
+    [tbSig.accountant, tbSig.secretary, tbSig.president]
   );
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('TrialBalance', society));
@@ -518,8 +549,10 @@ export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society:
   });
 
   const rpFinalY = Math.max(drFinalY, (doc as any).lastAutoTable.finalY) + 10;
+  const rpSig = getSignatoryNames(society);
   addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], rpFinalY,
-    'Certified that the above Receipts & Payments Account is correct as per the Books of Account of the Society.'
+    'Certified that the above Receipts & Payments Account is correct as per the Books of Account of the Society.',
+    [rpSig.accountant, rpSig.secretary, rpSig.president]
   );
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('ReceiptsPayments', society));
@@ -1184,8 +1217,10 @@ export function generateTradingAccountPDF(
 
   // G8 FIX: Use standardized signature block — use max of both tables to avoid overlap
   const finalY = Math.max(taDrFinalY, (doc as any).lastAutoTable.finalY) + 10;
+  const taSig = getSignatoryNames(society);
   addSignatureBlock(doc, font, ['Accountant', 'Secretary', 'Chairman'], finalY,
-    'Certified that the above Trading Account has been prepared from the Books of Account of the Society.'
+    'Certified that the above Trading Account has been prepared from the Books of Account of the Society.',
+    [taSig.accountant, taSig.secretary, taSig.president]
   );
 
   addPageNumbers(doc, font, society?.name);

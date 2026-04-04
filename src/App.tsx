@@ -64,6 +64,7 @@ import EWayBill from "./pages/EWayBill";
 import HsnMaster from "./pages/HsnMaster";
 import KccLoan from "./pages/KccLoan";
 import ElectionModule from "./pages/ElectionModule";
+import BoardOfDirectors from "./pages/BoardOfDirectors";
 import OpeningBalances from "./pages/OpeningBalances";
 import Register from "./pages/Register";
 import MultiSocietyConsolidation from "./pages/MultiSocietyConsolidation";
@@ -186,6 +187,7 @@ const AppRoutes = () => {
       <Route path="/eway-bill" element={<ProtectedRoute><EWayBill /></ProtectedRoute>} />
       <Route path="/kcc-loan" element={<ProtectedRoute><KccLoan /></ProtectedRoute>} />
       <Route path="/election-module" element={<ProtectedRoute><ElectionModule /></ProtectedRoute>} />
+      <Route path="/board-of-directors" element={<ProtectedRoute><BoardOfDirectors /></ProtectedRoute>} />
       <Route path="/opening-balances" element={<ProtectedRoute><OpeningBalances /></ProtectedRoute>} />
       <Route path="/multi-society-consolidation" element={<ProtectedRoute><MultiSocietyConsolidation /></ProtectedRoute>} />
       <Route path="/nabard-report" element={<ProtectedRoute><NabardReport /></ProtectedRoute>} />

@@ -183,6 +183,30 @@ export interface VoucherEntry {
 
 export type SocietyType = 'marketing_processing' | 'pacs' | 'consumer' | 'labour' | 'dairy' | 'housing' | 'sugar' | 'other';
 
+// Board of Directors / Board of Administration
+export type BoardType = 'bod' | 'boa';
+export type BoardDesignation = 'president' | 'vice_president' | 'secretary' | 'joint_secretary' | 'treasurer' | 'director' | 'administrator' | 'other';
+
+export interface BoardMember {
+  id: string;
+  memberId: string;
+  memberName: string;
+  memberIdNo: string;
+  designation: BoardDesignation;
+  designationLabel: string;
+  designationLabelHi: string;
+  termFrom: string;
+  termTo: string;
+  resolutionNo: string;
+  isSigningAuthority: boolean;
+  status: 'active' | 'resigned' | 'expired';
+}
+
+export interface SignatoryConfig {
+  name: string;
+  source: 'board' | 'employee';
+}
+
 export interface SocietySettings {
   name: string;
   nameHi: string;
@@ -224,6 +248,14 @@ export interface SocietySettings {
   fyLocked?: boolean;          // true = FY is audit-locked; no new vouchers or edits allowed
   fyLockedAt?: string;         // ISO date when lock was applied
   fyLockedBy?: string;         // Name of user who locked the FY
+  // Board & Signing Authority
+  boardType?: BoardType;       // 'bod' (elected) or 'boa' (appointed by Registrar)
+  boardMembers?: BoardMember[];
+  signatories?: {
+    accountant?: SignatoryConfig;
+    secretary?: SignatoryConfig;
+    president?: SignatoryConfig;
+  };
 }
 
 export interface VoucherCounters {

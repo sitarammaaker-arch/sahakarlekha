@@ -58,6 +58,7 @@ export const translations: Translations = {
   hsnMaster: { hi: 'HSN/SAC मास्टर', en: 'HSN/SAC Master' },
   kccLoan: { hi: 'KCC / फसल ऋण', en: 'KCC / Crop Loan' },
   electionModule: { hi: 'सहकारी चुनाव', en: 'Election Module' },
+  boardOfDirectors: { hi: 'निदेशक मंडल', en: 'Board of Directors' },
   openingBalances: { hi: 'प्रारंभिक शेष / CF', en: 'Opening Balances / CF' },
   nabardReport: { hi: 'NABARD क्रेडिट रिपोर्ट', en: 'NABARD Credit Report' },
   federationReport: { hi: 'सहकारी वार्षिक विवरणी', en: 'Federation Annual Return' },
