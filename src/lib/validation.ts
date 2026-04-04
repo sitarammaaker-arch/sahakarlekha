@@ -5,9 +5,15 @@ const CASH_ID = '3301';
 const BANK_ID = '3302';
 const CASH_BANK_FIXED = [CASH_ID, BANK_ID];
 
-// Build full cash/bank set including user-created bank accounts (subtype: 'cash_bank')
+// Build full cash/bank set including user-created bank accounts
+// Includes: subtype cash_bank, parentId 3300 (Current Assets), parentId 3301 (Cash sub-accounts),
+// parentId 3302 (Bank sub-accounts), or any account whose parent is Cash/Bank
 function getCashBankIds(accounts: LedgerAccount[]): string[] {
-  const extra = accounts.filter(a => a.subtype === 'cash_bank' || a.parentId === '3300').map(a => a.id);
+  const cashBankParents = new Set([CASH_ID, BANK_ID, '3300']);
+  const extra = accounts.filter(a =>
+    a.subtype === 'cash_bank' ||
+    (a.parentId && cashBankParents.has(a.parentId))
+  ).map(a => a.id);
   return [...new Set([...CASH_BANK_FIXED, ...extra])];
 }
 
