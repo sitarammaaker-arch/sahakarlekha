@@ -11,6 +11,10 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Pages
 import LandingPage from "./pages/LandingPage";
+import ContactUs from "./pages/ContactUs";
+import AboutUs from "./pages/AboutUs";
+import FAQ from "./pages/FAQ";
+import Pricing from "./pages/Pricing";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import CashBook from "./pages/CashBook";
@@ -68,6 +72,8 @@ import FederationReport from "./pages/FederationReport";
 import AuditSchedules from "./pages/AuditSchedules";
 import UniversalImporter from "./pages/UniversalImporter";
 import ResetPassword from "./pages/ResetPassword";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsConditions from "./pages/TermsConditions";
 import NotFound from "./pages/NotFound";
 import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 import { SuperAdminRoute } from "@/components/SuperAdminRoute";
@@ -123,6 +129,12 @@ const AppRoutes = () => {
       
       {/* Public Landing Page */}
       <Route path="/" element={<LandingPage />} />
+      <Route path="/contact" element={<ContactUs />} />
+      <Route path="/about" element={<AboutUs />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<TermsConditions />} />
+      <Route path="/faq" element={<FAQ />} />
+      <Route path="/pricing" element={<Pricing />} />
 
       {/* Protected Routes */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
