@@ -422,6 +422,7 @@ export function generateIncomeExpenditurePDF(
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right' } },
   });
+  const expFinalY = (doc as any).lastAutoTable.finalY;
 
   // Income side (right half)
   autoTable(doc, {
@@ -436,7 +437,7 @@ export function generateIncomeExpenditurePDF(
     columnStyles: { 1: { halign: 'right' } },
   });
 
-  const ieFinalY = (doc as any).lastAutoTable.finalY + 6;
+  const ieFinalY = Math.max(expFinalY, (doc as any).lastAutoTable.finalY) + 10;
   // M-2: Auditor's Certificate
   addAuditorCertificate(doc, font, society, 'Income & Expenditure Account', ieFinalY);
   addPageNumbers(doc, font, society?.name);
@@ -481,6 +482,7 @@ export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society:
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right' } },
   });
+  const drFinalY = (doc as any).lastAutoTable.finalY;
 
   // Cr (Payments) side — right half
   autoTable(doc, {
@@ -495,7 +497,7 @@ export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society:
     columnStyles: { 1: { halign: 'right' } },
   });
 
-  const rpFinalY = (doc as any).lastAutoTable.finalY + 8;
+  const rpFinalY = Math.max(drFinalY, (doc as any).lastAutoTable.finalY) + 10;
   addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], rpFinalY,
     'Certified that the above Receipts & Payments Account is correct as per the Books of Account of the Society.'
   );
@@ -582,6 +584,7 @@ export function generateBalanceSheetPDF(
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: colStyles,
   });
+  const liabFinalY = (doc as any).lastAutoTable.finalY;
 
   // Assets (right half)
   autoTable(doc, {
@@ -595,8 +598,10 @@ export function generateBalanceSheetPDF(
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: colStyles,
   });
+  const assetFinalY = (doc as any).lastAutoTable.finalY;
 
-  const bsFinalY = (doc as any).lastAutoTable.finalY + 6;
+  // Use the taller of the two side-by-side tables to avoid overlap
+  const bsFinalY = Math.max(liabFinalY, assetFinalY) + 10;
   // M-1: Auditor's Certificate
   addAuditorCertificate(doc, font, society, 'Balance Sheet', bsFinalY);
   addPageNumbers(doc, font, society?.name);
@@ -1137,6 +1142,7 @@ export function generateTradingAccountPDF(
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right', cellWidth: 30 } },
   });
+  const taDrFinalY = (doc as any).lastAutoTable.finalY;
 
   // Render Cr table (right half)
   autoTable(doc, {
@@ -1151,8 +1157,8 @@ export function generateTradingAccountPDF(
     columnStyles: { 1: { halign: 'right', cellWidth: 30 } },
   });
 
-  // G8 FIX: Use standardized signature block
-  const finalY = (doc as any).lastAutoTable.finalY + 10;
+  // G8 FIX: Use standardized signature block — use max of both tables to avoid overlap
+  const finalY = Math.max(taDrFinalY, (doc as any).lastAutoTable.finalY) + 10;
   addSignatureBlock(doc, font, ['Accountant', 'Secretary', 'Chairman'], finalY,
     'Certified that the above Trading Account has been prepared from the Books of Account of the Society.'
   );
