@@ -29,6 +29,7 @@ const Register: React.FC = () => {
   const [district, setDistrict] = useState('');
   const [state, setState] = useState('');
   const [phone, setPhone] = useState('');
+  const [gstin, setGstin] = useState('');
   const [address, setAddress] = useState('');
   const [financialYear, setFinancialYear] = useState('2024-25');
   const [societyType, setSocietyType] = useState<SocietyType>('marketing_processing');
@@ -133,6 +134,7 @@ const Register: React.FC = () => {
         email: adminEmail,
         pinCode: '',
         societyType: societyType,
+        gstin: gstin || undefined,
       });
 
       // 4. Insert template accounts based on society type
@@ -307,6 +309,17 @@ const Register: React.FC = () => {
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
                     placeholder="0755-1234567"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>GSTIN (Optional)</Label>
+                  <Input
+                    value={gstin}
+                    onChange={e => setGstin(e.target.value.toUpperCase())}
+                    placeholder="22AAAAA0000A1Z5"
+                    maxLength={15}
+                    className="font-mono"
                   />
                 </div>
 

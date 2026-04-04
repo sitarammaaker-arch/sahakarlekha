@@ -41,6 +41,7 @@ const SocietySetup: React.FC = () => {
     email: society.email,
     societyType: society.societyType || 'marketing_processing',
     reserveFundPct: society.reserveFundPct ?? 25,
+    gstin: society.gstin || '',
     tan: society.tan || '',
     entityPan: society.entityPan || '',
   });
@@ -400,11 +401,16 @@ const SocietySetup: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="space-y-2">
+                  <Label>GSTIN</Label>
+                  <Input value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value.toUpperCase() }))} placeholder="22AAAAA0000A1Z5" maxLength={15} className="h-11 font-mono" />
+                  <p className="text-xs text-muted-foreground">{language === 'hi' ? 'GST पहचान संख्या (15 अंक)' : 'GST Identification Number (15 chars)'}</p>
+                </div>
                 <div className="space-y-2">
                   <Label>TAN</Label>
                   <Input value={form.tan} onChange={e => setForm(f => ({ ...f, tan: e.target.value.toUpperCase() }))} placeholder="AAAA11111A" maxLength={10} className="h-11 font-mono" />
-                  <p className="text-xs text-muted-foreground">{language === 'hi' ? 'कर कटौती खाता संख्या (TDS के लिए)' : 'Tax Deduction Account Number'}</p>
+                  <p className="text-xs text-muted-foreground">{language === 'hi' ? 'कर कटौती खाता संख्या' : 'Tax Deduction Account No.'}</p>
                 </div>
                 <div className="space-y-2">
                   <Label>{language === 'hi' ? 'समिति PAN' : 'Society PAN'}</Label>

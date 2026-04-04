@@ -218,6 +218,7 @@ export interface SocietySettings {
     totalPayments: number;
   };
   reserveFundPct?: number;      // 0-100, default 25 if undefined (Sec 65 Haryana / varies by state)
+  gstin?: string;              // GSTIN (15 chars — state code + PAN + entity code + check digit)
   tan?: string;                // Tax Deduction Account Number (10 chars)
   entityPan?: string;          // Society PAN (10 chars)
   fyLocked?: boolean;          // true = FY is audit-locked; no new vouchers or edits allowed
