@@ -10,6 +10,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Pages
+import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import CashBook from "./pages/CashBook";
@@ -64,6 +65,7 @@ import Register from "./pages/Register";
 import MultiSocietyConsolidation from "./pages/MultiSocietyConsolidation";
 import NabardReport from "./pages/NabardReport";
 import FederationReport from "./pages/FederationReport";
+import AuditSchedules from "./pages/AuditSchedules";
 import UniversalImporter from "./pages/UniversalImporter";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
@@ -119,8 +121,10 @@ const AppRoutes = () => {
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
       <Route path="/reset-password" element={<ResetPassword />} />
       
+      {/* Public Landing Page */}
+      <Route path="/" element={<LandingPage />} />
+
       {/* Protected Routes */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/cash-book" element={<ProtectedRoute><CashBook /></ProtectedRoute>} />
       <Route path="/bank-book" element={<ProtectedRoute><BankBook /></ProtectedRoute>} />
@@ -157,6 +161,7 @@ const AppRoutes = () => {
       <Route path="/nomination-register" element={<ProtectedRoute><NominationRegister /></ProtectedRoute>} />
       <Route path="/form1-member-list" element={<ProtectedRoute><Form1MemberList /></ProtectedRoute>} />
       <Route path="/audit-certificate" element={<ProtectedRoute><AuditCertificate /></ProtectedRoute>} />
+      <Route path="/audit-schedules" element={<ProtectedRoute><AuditSchedules /></ProtectedRoute>} />
       <Route path="/backup-restore" element={<ProtectedRoute><BackupRestore /></ProtectedRoute>} />
       <Route path="/gst-summary" element={<ProtectedRoute><GstSummary /></ProtectedRoute>} />
       <Route path="/hsn-master" element={<ProtectedRoute><HsnMaster /></ProtectedRoute>} />
