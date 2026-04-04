@@ -327,17 +327,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // Supabase is the single source of truth for society settings.
           // All devices always load from Supabase — save once, sync everywhere.
           // localStorage is only used as offline fallback (when Supabase is unreachable).
-          // Merge board data from localStorage (not yet in Supabase schema)
-          let merged = socData[0];
-          try {
-            const boardJson = localStorage.getItem(`sahayata_board_${sid}`);
-            if (boardJson) {
-              const boardData = JSON.parse(boardJson);
-              merged = { ...merged, ...boardData };
-            }
-          } catch (e) { /* ignore */ }
-          setSocietyState(merged);
-          storage.setSociety(merged);
+          setSocietyState(socData[0]);
+          storage.setSociety(socData[0]);
         }
       } catch (err) {
         console.warn('Supabase load failed, falling back to localStorage:', err);
@@ -749,14 +740,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateSociety = useCallback((data: Partial<SocietySettings>) => {
     setSocietyState(prev => {
       const updated = { ...prev, ...data };
-      // Strip fields that don't exist as Supabase columns to avoid schema errors.
-      // These are stored in localStorage only until DB migration adds them.
-      const { boardType, boardMembers, signatories, ...dbSafe } = updated;
-      // Persist board data in localStorage
-      try {
-        localStorage.setItem(`sahayata_board_${societyIdRef.current}`, JSON.stringify({ boardType, boardMembers, signatories }));
-      } catch (e) { /* ignore */ }
-      supabase.from('society_settings').upsert({ id: societyIdRef.current, society_id: societyIdRef.current, ...dbSafe }).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+      supabase.from('society_settings').upsert({ id: societyIdRef.current, society_id: societyIdRef.current, ...updated }).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
       return updated;
     });
   }, []);

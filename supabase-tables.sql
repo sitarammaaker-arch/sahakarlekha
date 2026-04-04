@@ -794,6 +794,11 @@ alter table society_settings add column if not exists is_locked boolean default 
 alter table society_settings add column if not exists subscription_notes text;
 alter table society_settings add column if not exists created_at timestamptz default now();
 
+-- ── STEP 17b: Board of Directors & Signing Authority ─────────────────────────
+alter table society_settings add column if not exists "boardType" text default 'bod';
+alter table society_settings add column if not exists "boardMembers" jsonb default '[]';
+alter table society_settings add column if not exists signatories jsonb default '{}';
+
 -- ── STEP 17: get_all_societies() — SECURITY DEFINER bypasses RLS ─────────────
 -- Super admin calls this to see all societies regardless of society_id filter.
 create or replace function get_all_societies()
