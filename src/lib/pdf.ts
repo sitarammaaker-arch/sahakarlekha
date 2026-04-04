@@ -1336,3 +1336,120 @@ export function generateGstSummaryPDF(params: GstSummaryPDFParams): void {
   const dateStr = new Date().toISOString().split('T')[0];
   doc.save(`gst-summary-${fromDate}-to-${toDate}-${dateStr}.pdf`);
 }
+
+
+// ── B-2: Audit Schedules PDF ───────────────────────────────────────────────
+
+import type { ResolvedSchedule, StateAuditFormat } from '@/lib/stateAuditFormats';
+
+export function generateAuditSchedulesPDF(
+  schedules: ResolvedSchedule[],
+  society: SocietySettings,
+  format: StateAuditFormat,
+  _language: string,
+): void {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const font = setupFont(doc);
+  const pageW = doc.internal.pageSize.getWidth();
+  let y = 16;
+
+  const hasPY = !!(society.previousFinancialYear && society.previousYearBalances && Object.keys(society.previousYearBalances).length > 0);
+  const pyYear = society.previousFinancialYear || '';
+
+  const fmtAmt = (n: number): string => {
+    if (Math.abs(n) < 0.01) return '—';
+    const abs = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(n));
+    return n < 0 ? `(${abs})` : abs;
+  };
+
+  const ensureSpace = (needed = 40) => {
+    if (y + needed > 270) { doc.addPage(); y = 16; }
+  };
+
+  // Cover page
+  doc.setFont(font, 'bold');
+  doc.setFontSize(16);
+  doc.text('AUDIT SCHEDULES', pageW / 2, y, { align: 'center' }); y += 7;
+  doc.setFontSize(10);
+  doc.text(`[${format.actName}]`, pageW / 2, y, { align: 'center' }); y += 6;
+  if (format.auditFormNumber) {
+    doc.text(`Form: ${format.auditFormNumber}`, pageW / 2, y, { align: 'center' }); y += 6;
+  }
+  doc.setFont(font, 'normal');
+  doc.setFontSize(9);
+  doc.text(society.name, pageW / 2, y, { align: 'center' }); y += 5;
+  doc.text(`Registration No: ${society.registrationNo || 'N/A'}`, pageW / 2, y, { align: 'center' }); y += 5;
+  doc.text(`Financial Year: ${society.financialYear}`, pageW / 2, y, { align: 'center' }); y += 5;
+  doc.text(`Reserve Fund: ${society.reserveFundPct ?? 25}% | Education Fund: ${format.educationFundPct}% | Coop Dev Fund: ${format.coopDevFundPct}%`, pageW / 2, y, { align: 'center' }); y += 5;
+  doc.text(`Generated: ${preparedOn()}`, pageW / 2, y, { align: 'center' });
+  y += 12;
+
+  // Each schedule
+  schedules.forEach(sch => {
+    ensureSpace(50);
+
+    doc.setFont(font, 'bold');
+    doc.setFontSize(11);
+    doc.text(sch.name, 14, y);
+    y += 6;
+
+    const head = [
+      ['#', 'Particulars', ...(hasPY ? [`${pyYear} (Rs.)`] : []), `${society.financialYear} (Rs.)`],
+    ];
+
+    const body = sch.items.map((item, idx) => {
+      const label = item.isTotal ? item.label : `  ${item.indent ? '    '.repeat(item.indent) : ''}${item.label}`;
+      const note = item.note ? ` (${item.note})` : '';
+      return [
+        item.isTotal ? '' : String(idx + 1),
+        `${label}${note}`,
+        ...(hasPY ? [fmtAmt(item.previousYear)] : []),
+        fmtAmt(item.currentYear),
+      ];
+    });
+
+    autoTable(doc, {
+      startY: y,
+      head,
+      body,
+      styles: { fontSize: 8, font },
+      headStyles: { fillColor: [79, 70, 229], textColor: 255 },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: hasPY ? 80 : 100 },
+        ...(hasPY
+          ? { 2: { halign: 'right', cellWidth: 35 }, 3: { halign: 'right', cellWidth: 35 } }
+          : { 2: { halign: 'right', cellWidth: 40 } }),
+      },
+      didParseCell: (data) => {
+        const rowIdx = data.row.index;
+        const item = sch.items[rowIdx];
+        if (data.section === 'body' && item) {
+          if (item.isTotal) {
+            data.cell.styles.fillColor = [238, 242, 255];
+            data.cell.styles.fontStyle = 'bold';
+          } else if (item.bold) {
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
+      },
+    });
+
+    y = (doc as any).lastAutoTable.finalY + 10;
+  });
+
+  // Signature block
+  ensureSpace(40);
+  y += 10;
+  doc.setFont(font, 'normal');
+  doc.setFontSize(9);
+  const sigPositions = [14, pageW / 2 - 25, pageW - 65];
+  const sigLabels = ['Accountant', 'Secretary', 'Chairman'];
+  sigPositions.forEach((x, i) => {
+    doc.text('_______________________', x, y);
+    doc.text(sigLabels[i], x, y + 6);
+  });
+
+  addPageNumbers(doc, font);
+  doc.save(`Audit-Schedules-${society.financialYear.replace('/', '-')}.pdf`);
+}
