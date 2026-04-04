@@ -102,10 +102,23 @@ const LedgerHeads: React.FC = () => {
         .map(acc => ({ acc, depth: 0 }));
     }
 
-    // Sort by account code (numeric order)
-    return [...accounts]
-      .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }))
-      .map(acc => ({ acc, depth: depthMap[acc.id] ?? 0 }));
+    // Hierarchical sort: parent first, then children grouped under parent
+    const sorted: { acc: typeof accounts[0]; depth: number }[] = [];
+    const addWithChildren = (parentId: string | undefined, depth: number) => {
+      const children = accounts
+        .filter(a => (a.parentId || undefined) === parentId)
+        .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+      children.forEach(child => {
+        sorted.push({ acc: child, depth });
+        addWithChildren(child.id, depth + 1);
+      });
+    };
+    // Start with root accounts (no parentId)
+    addWithChildren(undefined, 0);
+    // Add any orphaned accounts (parentId set but parent doesn't exist)
+    const sortedIds = new Set(sorted.map(s => s.acc.id));
+    accounts.filter(a => !sortedIds.has(a.id)).forEach(a => sorted.push({ acc: a, depth: 0 }));
+    return sorted;
   }, [accounts, search, typeFilter, depthMap]);
 
   // Summary counts
