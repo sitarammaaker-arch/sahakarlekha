@@ -3,7 +3,13 @@ import type { LedgerAccount, SocietySettings, VoucherType } from '@/types';
 // Cash and Bank account IDs — same as ACCOUNT_IDS in storage.ts
 const CASH_ID = '3301';
 const BANK_ID = '3302';
-const CASH_BANK = [CASH_ID, BANK_ID];
+const CASH_BANK_FIXED = [CASH_ID, BANK_ID];
+
+// Build full cash/bank set including user-created bank accounts (subtype: 'cash_bank')
+function getCashBankIds(accounts: LedgerAccount[]): string[] {
+  const extra = accounts.filter(a => a.subtype === 'cash_bank' || a.parentId === '3300').map(a => a.id);
+  return [...new Set([...CASH_BANK_FIXED, ...extra])];
+}
 
 export interface VoucherValidationResult {
   valid: boolean;
@@ -86,7 +92,9 @@ export function validateVoucher(
   }
 
   // ── Rule 6: Voucher type ↔ account consistency ────────────────────────────
+  // Includes all user-created bank accounts (subtype cash_bank or under Current Assets 3300)
   if (voucherType && debitAccountId && creditAccountId) {
+    const CASH_BANK = getCashBankIds(accounts);
     if (voucherType === 'receipt' && !CASH_BANK.includes(debitAccountId)) {
       const drAcc = accounts.find(a => a.id === debitAccountId);
       errors.push(
