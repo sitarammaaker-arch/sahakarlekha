@@ -52,10 +52,10 @@ const COMPLIANCE = [
 
 const LandingPage: React.FC = () => {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       {/* Navbar */}
-      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b shadow-sm overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-lg">स</div>
             <div>
@@ -63,13 +63,15 @@ const LandingPage: React.FC = () => {
               <p className="text-xs text-muted-foreground">सहकारलेखा</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Link to="/login">
               <Button variant="outline" size="sm">Login</Button>
             </Link>
             <Link to="/register">
               <Button size="sm" className="gap-1">
-                Free Registration <ArrowRight className="h-4 w-4" />
+                <span className="hidden lg:inline">Free Registration</span>
+                <span className="lg:hidden">Register</span>
+                <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
           </div>
@@ -79,11 +81,11 @@ const LandingPage: React.FC = () => {
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-primary/10 py-16 sm:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-3xl sm:text-5xl font-extrabold text-foreground leading-tight">
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-foreground leading-tight">
             भारत की सहकारी समितियों का<br />
             <span className="text-primary">अपना एकाउंटिंग सॉफ्टवेयर</span>
           </h1>
-          <p className="mt-4 text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto">
+          <p className="mt-4 text-sm sm:text-base lg:text-xl text-muted-foreground max-w-2xl lg:max-w-3xl mx-auto px-4">
             India's ONLY cooperative-specific accounting platform.
             8 society types, 36 states, Hindi+English, TDS/GST/Audit — सब मुफ्त।
           </p>
@@ -101,7 +103,7 @@ const LandingPage: React.FC = () => {
           </div>
 
           {/* Stats */}
-          <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-2xl mx-auto">
+          <div className="mt-12 grid grid-cols-2 lg:grid-cols-4 gap-6 max-w-2xl lg:max-w-3xl mx-auto">
             {STATS.map(s => (
               <div key={s.label} className="text-center">
                 <p className="text-3xl font-extrabold text-primary">{s.value}</p>
