@@ -33,7 +33,7 @@ const ACC_BONUS_EXP     = '5207'; // Employee Bonus (expense)
 const EDUCATION_RATE = 0.01;
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
+  '\u20B9 ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 // ── Check if a distribution journal exists ───────────────────────────────────
 const usePosted = (
@@ -251,7 +251,7 @@ const ProfitDistribution: React.FC = () => {
       });
     }
 
-    doc.save(`profit-distribution-fy-${fy}.pdf`);
+    doc.save(`ProfitDistribution_FY_${fy}.pdf`);
   };
 
   // ────────────────────────────────────────────────────────────────────────────
