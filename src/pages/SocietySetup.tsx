@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,8 +24,9 @@ import { SOCIETY_TEMPLATES } from '@/lib/storage';
 
 const SocietySetup: React.FC = () => {
   const { t, language } = useLanguage();
+  const { user } = useAuth();
   const { toast } = useToast();
-  const { society, updateSociety, accounts, updateAccount, addAccount, deleteAccount, resetAccounts, getAccountBalance, getTrialBalance, getProfitLoss, getReceiptsPayments } = useData();
+  const { society, updateSociety, accounts, vouchers, updateAccount, addAccount, deleteAccount, resetAccounts, getAccountBalance, getTrialBalance, getProfitLoss, getReceiptsPayments } = useData();
 
   // Basic info form state
   const [form, setForm] = useState({
@@ -130,13 +132,56 @@ const SocietySetup: React.FC = () => {
     });
   };
 
-  // --- Reset COA to Template ---
+  // --- Reset COA to Template (4-layer security) ---
   const [resetCoaOpen, setResetCoaOpen] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const activeVoucherCount = vouchers.filter(v => !v.isDeleted).length;
+  const isAdmin = user?.role === 'admin';
+
+  const handleResetCoaClick = () => {
+    // Security 1: Admin-only
+    if (!isAdmin) {
+      toast({ title: language === 'hi' ? 'केवल Admin ही COA रीसेट कर सकता है' : 'Only Admin can reset COA', variant: 'destructive' });
+      return;
+    }
+    // Security 2: Block if vouchers exist
+    if (activeVoucherCount > 0) {
+      toast({
+        title: language === 'hi' ? 'COA रीसेट नहीं हो सकता' : 'Cannot Reset COA',
+        description: language === 'hi'
+          ? `${activeVoucherCount} वाउचर मौजूद हैं। पहले सभी वाउचर हटाएं या नई समिति बनाएं।`
+          : `${activeVoucherCount} vouchers exist. Delete all vouchers first or register a new society.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    setResetConfirmText('');
+    setResetCoaOpen(true);
+  };
+
   const handleResetCoa = () => {
+    // Security 3: Type-to-confirm
+    if (resetConfirmText.trim().toLowerCase() !== society.name.trim().toLowerCase()) {
+      toast({ title: language === 'hi' ? 'समिति का नाम सही नहीं है' : 'Society name does not match', variant: 'destructive' });
+      return;
+    }
+    // Security 4: Auto-backup before reset
+    try {
+      const backupData = { accounts, society, timestamp: new Date().toISOString(), reason: 'pre-reset-backup' };
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backup-before-reset-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { /* backup download failed — proceed anyway */ }
+
     const type = form.societyType || society.societyType || 'marketing_processing';
     const template = SOCIETY_TEMPLATES[type] || SOCIETY_TEMPLATES['marketing_processing'];
     resetAccounts(template);
     setResetCoaOpen(false);
+    setResetConfirmText('');
     toast({
       title: language === 'hi' ? 'खाता संरचना रीसेट हो गई' : 'COA Reset to Template',
       description: language === 'hi'
@@ -433,7 +478,7 @@ const SocietySetup: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>{language === 'hi' ? 'खाता संरचना रीसेट' : 'Reset COA'}</Label>
-                  <Button variant="outline" className="h-11 w-full border-destructive text-destructive hover:bg-destructive/10" onClick={() => setResetCoaOpen(true)}>
+                  <Button variant="outline" className="h-11 w-full border-destructive text-destructive hover:bg-destructive/10" onClick={handleResetCoaClick}>
                     {language === 'hi' ? 'COA टेम्पलेट से रीसेट करें' : 'Reset COA to Template'}
                   </Button>
                   <p className="text-xs text-muted-foreground">
@@ -942,22 +987,49 @@ const SocietySetup: React.FC = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Reset COA Confirmation Dialog */}
-      <AlertDialog open={resetCoaOpen} onOpenChange={setResetCoaOpen}>
+      {/* Reset COA Confirmation Dialog — with type-to-confirm + auto-backup */}
+      <AlertDialog open={resetCoaOpen} onOpenChange={o => { setResetCoaOpen(o); if (!o) setResetConfirmText(''); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-destructive">
+            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
               {language === 'hi' ? 'खाता संरचना रीसेट करें?' : 'Reset Chart of Accounts?'}
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              {language === 'hi'
-                ? 'यह सभी मौजूदा खातों को हटाकर चयनित समिति प्रकार के डिफॉल्ट खाते लोड करेगा। यदि वाउचर मौजूद हैं तो यह क्रिया समस्या पैदा कर सकती है। क्या आप निश्चित हैं?'
-                : 'This will replace all existing accounts with the default template for the selected society type. If vouchers exist, they may have dangling references. Are you sure?'}
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p className="font-medium text-destructive">
+                  {language === 'hi'
+                    ? 'यह सभी मौजूदा खातों को हटाकर डिफॉल्ट टेम्पलेट लोड करेगा। यह क्रिया पूर्ववत नहीं की जा सकती।'
+                    : 'This will DELETE all existing accounts and load the default template. This action CANNOT be undone.'}
+                </p>
+                <p className="text-muted-foreground">
+                  {language === 'hi'
+                    ? 'रीसेट से पहले एक बैकअप फ़ाइल स्वचालित रूप से डाउनलोड होगी।'
+                    : 'A backup file will be automatically downloaded before reset.'}
+                </p>
+                <div className="space-y-2 pt-2">
+                  <Label className="text-foreground font-medium">
+                    {language === 'hi'
+                      ? `पुष्टि के लिए समिति का नाम टाइप करें: "${society.name}"`
+                      : `Type society name to confirm: "${society.name}"`}
+                  </Label>
+                  <Input
+                    value={resetConfirmText}
+                    onChange={e => setResetConfirmText(e.target.value)}
+                    placeholder={society.name}
+                    className="border-destructive"
+                  />
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{language === 'hi' ? 'रद्द करें' : 'Cancel'}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleResetCoa} className="bg-destructive hover:bg-destructive/90 text-white">
+            <AlertDialogAction
+              onClick={handleResetCoa}
+              disabled={resetConfirmText.trim().toLowerCase() !== society.name.trim().toLowerCase()}
+              className="bg-destructive hover:bg-destructive/90 text-white disabled:opacity-50"
+            >
               {language === 'hi' ? 'रीसेट करें' : 'Reset COA'}
             </AlertDialogAction>
           </AlertDialogFooter>
