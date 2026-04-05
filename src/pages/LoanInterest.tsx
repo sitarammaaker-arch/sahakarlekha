@@ -28,6 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { addHeader, addPageNumbers, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 
@@ -198,17 +199,12 @@ const LoanInterest: React.FC = () => {
   // ── PDF ────────────────────────────────────────────────────────────────────
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    let y = 14;
 
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Member Loan Interest Statement', 14, y); y += 7;
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`${society.name}  |  FY ${fy}  |  Period: ${fromDate} to ${toDate} (${days} days)`, 14, y); y += 8;
+    const { startY, font } = addHeader(doc, 'Loan Interest Statement', society,
+      `Period: ${fromDate} to ${toDate} (${days} days)`, { reportCode: 'LI' });
 
     autoTable(doc, {
-      startY: y,
+      startY,
       head: [['#', 'Loan No.', 'Member ID', 'Member Name', 'Principal', 'Outstanding', 'Rate % p.a.', 'Days', 'Interest']],
       body: rows.map((r, i) => [
         i + 1,
@@ -226,13 +222,15 @@ const LoanInterest: React.FC = () => {
       headStyles: { fillColor: [37, 99, 235] },
       footStyles: { fontStyle: 'bold' },
       columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' }, 8: { halign: 'right' } },
+      didParseCell: rightAlignAmountColumns(4, 5, 8),
     });
 
     const finalY = (doc as any).lastAutoTable.finalY + 6;
     doc.setFontSize(8);
-    doc.text(`Formula: Interest = (Outstanding × Rate × Days) / (365 × 100)`, 14, finalY);
+    doc.text(`Formula: Interest = (Outstanding x Rate x Days) / (365 x 100)`, 14, finalY);
 
-    doc.save(`loan-interest-${fromDate}-to-${toDate}.pdf`);
+    addPageNumbers(doc, font, society.name);
+    doc.save(pdfFileName('LoanInterest', society));
   };
 
   // ────────────────────────────────────────────────────────────────────────────

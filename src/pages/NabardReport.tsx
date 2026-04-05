@@ -15,6 +15,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcel } from '@/lib/exportUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -173,15 +174,9 @@ const NabardReport: React.FC = () => {
   // ── PDF Export ───────────────────────────────────────────────────────────────
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageW = doc.internal.pageSize.getWidth();
-    let y = 16;
 
-    const heading = (text: string) => {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.text(text, pageW / 2, y, { align: 'center' });
-      y += 6;
-    };
+    const { startY, font } = addHeader(doc, 'NABARD/DCC Bank Credit Report', society, `Financial Year: ${society.financialYear}`, { reportCode: 'NBR' });
+    let y = startY;
 
     const subHeading = (text: string) => {
       doc.setFont('helvetica', 'bold');
@@ -190,23 +185,11 @@ const NabardReport: React.FC = () => {
       y += 5;
     };
 
-    const addSpace = (n = 4) => { y += n; };
-
-    // Header
-    heading('NABARD/DCC Bank Credit Report');
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text(society.name, pageW / 2, y, { align: 'center' }); y += 5;
-    doc.text(`Registration No: ${society.registrationNo || 'N/A'}`, pageW / 2, y, { align: 'center' }); y += 5;
-    doc.text(`Financial Year: ${society.financialYear}`, pageW / 2, y, { align: 'center' }); y += 5;
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-IN')}`, pageW / 2, y, { align: 'center' });
-    y += 8;
-
     // Section A
     subHeading('Section A — KCC / Crop Loan NPA Classification');
     autoTable(doc, {
       startY: y,
-      head: [['Classification', 'No. of Accounts', 'Outstanding Amount (₹)', 'Overdue Amount (₹)']],
+      head: [['Classification', 'No. of Accounts', 'Outstanding Amount (Rs.)', 'Overdue Amount (Rs.)']],
       body: [
         ...npaData.map(r => [r.classification, r.accounts, fmt(r.outstanding), fmt(r.overdue)]),
         ['Total', kccTotals.accounts, fmt(kccTotals.outstanding), fmt(kccTotals.overdue)],
@@ -215,6 +198,7 @@ const NabardReport: React.FC = () => {
       styles: { fontSize: 8 },
       headStyles: { fillColor: [41, 128, 185] },
       footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0] },
+      didParseCell: rightAlignAmountColumns(2, 3),
       didDrawPage: (data) => { y = data.cursor?.y ?? y; },
     });
     y = (doc as any).lastAutoTable.finalY + 8;
@@ -224,16 +208,17 @@ const NabardReport: React.FC = () => {
     subHeading('Section B — Loan Portfolio Summary');
     autoTable(doc, {
       startY: y,
-      head: [['Particulars', 'Amount (₹)']],
+      head: [['Particulars', 'Amount (Rs.)']],
       body: [
-        ['Total Loans Disbursed', fmt(loanStats.disbursed)],
-        ['Total Outstanding', fmt(loanStats.outstanding)],
-        ['Total Overdue', fmt(loanStats.overdue)],
-        ['Total Recovered', fmt(loanStats.recovered)],
+        ['Total Loans Disbursed', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(loanStats.disbursed)],
+        ['Total Outstanding', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(loanStats.outstanding)],
+        ['Total Overdue', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(loanStats.overdue)],
+        ['Total Recovered', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(loanStats.recovered)],
         ['Recovery %', pct(loanStats.recoveryPct)],
       ],
       styles: { fontSize: 8 },
       headStyles: { fillColor: [41, 128, 185] },
+      didParseCell: rightAlignAmountColumns(1),
       didDrawPage: (data) => { y = data.cursor?.y ?? y; },
     });
     y = (doc as any).lastAutoTable.finalY + 8;
@@ -251,6 +236,7 @@ const NabardReport: React.FC = () => {
       ],
       styles: { fontSize: 8 },
       headStyles: { fillColor: [41, 128, 185] },
+      didParseCell: rightAlignAmountColumns(1),
       didDrawPage: (data) => { y = data.cursor?.y ?? y; },
     });
     y = (doc as any).lastAutoTable.finalY + 8;
@@ -260,19 +246,20 @@ const NabardReport: React.FC = () => {
     subHeading('Section D — Working Capital Statement');
     autoTable(doc, {
       startY: y,
-      head: [['Particulars', 'Amount (₹)']],
+      head: [['Particulars', 'Amount (Rs.)']],
       body: [
-        ['Own Funds (Share Capital + Reserves)', fmt(workingCapital.ownFunds)],
-        ['Borrowed Funds (Deposits + Bank Borrowings)', fmt(workingCapital.borrowedFunds)],
-        ['Total Working Capital', fmt(workingCapital.total)],
+        ['Own Funds (Share Capital + Reserves)', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(workingCapital.ownFunds)],
+        ['Borrowed Funds (Deposits + Bank Borrowings)', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(workingCapital.borrowedFunds)],
+        ['Total Working Capital', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(workingCapital.total)],
       ],
       styles: { fontSize: 8 },
       headStyles: { fillColor: [41, 128, 185] },
+      didParseCell: rightAlignAmountColumns(1),
       didDrawPage: (data) => { y = data.cursor?.y ?? y; },
     });
 
-    doc.save(`NABARD_Credit_Report_${society.financialYear.replace('/', '-')}.pdf`);
-    addSpace();
+    addPageNumbers(doc, font, society?.name);
+    doc.save(pdfFileName('NABARD_CreditReport', society));
   };
 
   // ── UI ──────────────────────────────────────────────────────────────────────

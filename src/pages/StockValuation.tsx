@@ -12,6 +12,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { StockMovement, StockItem } from '@/types';
+import { addHeader, addPageNumbers, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -133,17 +134,11 @@ export default function StockValuation() {
 
   const handlePDF = () => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    const w = doc.internal.pageSize.getWidth();
 
-    doc.setFontSize(14);
-    doc.text(society.name, w / 2, 14, { align: 'center' });
-    doc.setFontSize(11);
-    doc.text('Stock Valuation Report', w / 2, 20, { align: 'center' });
-    doc.setFontSize(9);
-    doc.text(`Method: ${method === 'fifo' ? 'FIFO' : 'Weighted Average'}`, w / 2, 26, { align: 'center' });
+    const { startY, font } = addHeader(doc, 'Stock Valuation Report', society, `Method: ${method === 'fifo' ? 'FIFO' : 'Weighted Average'}`, { reportCode: 'SV' });
 
     autoTable(doc, {
-      startY: 32,
+      startY,
       head: [[
         'Sr.',
         'Code',
@@ -153,8 +148,8 @@ export default function StockValuation() {
         'GST %',
         'Method',
         'Qty',
-        'Rate (₹)',
-        'Value (₹)',
+        'Rate (Rs.)',
+        'Value (Rs.)',
       ]],
       body: rows.map((r, i) => [
         i + 1,
@@ -165,16 +160,18 @@ export default function StockValuation() {
         r.item.gstRate != null ? `${r.item.gstRate}%` : '-',
         r.method,
         r.qty.toFixed(3),
-        r.avgRate.toFixed(2),
-        r.value.toFixed(2),
+        'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(r.avgRate),
+        'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(r.value),
       ]),
-      foot: [['', '', 'Total', '', '', '', '', '', '', totalValue.toFixed(2)]],
+      foot: [['', '', 'Total', '', '', '', '', '', '', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalValue)]],
       styles: { fontSize: 8 },
       headStyles: { fillColor: [41, 128, 185] },
       footStyles: { fillColor: [236, 240, 241], fontStyle: 'bold' },
+      didParseCell: rightAlignAmountColumns(7, 8, 9),
     });
 
-    doc.save(`stock-valuation-${new Date().toISOString().slice(0, 10)}.pdf`);
+    addPageNumbers(doc, font, society?.name);
+    doc.save(pdfFileName('Stock_Valuation', society));
   };
 
   return (

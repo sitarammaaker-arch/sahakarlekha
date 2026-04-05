@@ -11,6 +11,7 @@ import { Download, FileText, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { addHeader, addPageNumbers, pdfFileName } from '@/lib/pdf';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -102,32 +103,26 @@ export default function TdsForm16A() {
     if (entries.length === 0) return;
 
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const w = doc.internal.pageSize.getWidth();
 
-    // Header
-    doc.setFontSize(14);
-    doc.text('FORM 16A', w / 2, 14, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text('Certificate of Tax Deducted at Source (TDS)', w / 2, 21, { align: 'center' });
-    doc.text(`[Under Section 203 of Income Tax Act, 1961]`, w / 2, 27, { align: 'center' });
-
-    doc.line(14, 30, w - 14, 30);
+    const subtitle = supplierName
+      ? `Deductee: ${supplierName} | FY: ${selectedFY}`
+      : `[Under Section 203 of Income Tax Act, 1961] | FY: ${selectedFY}`;
+    const { startY, font } = addHeader(doc, 'TDS Form 16A', society, subtitle, { reportCode: 'F16A' });
 
     // Deductor Info
+    let y = startY;
     doc.setFontSize(9);
-    doc.text(`Name of Deductor: ${deductorName}`, 14, 36);
-    doc.text(`TAN: ${deductorTan || '____________'}   PAN: ${deductorPan || '____________'}`, 14, 42);
-    doc.text(`Financial Year: ${selectedFY}`, 14, 48);
+    doc.setFont(font, 'normal');
+    doc.text(`Name of Deductor: ${deductorName}`, 14, y); y += 6;
+    doc.text(`TAN: ${deductorTan || '____________'}   PAN: ${deductorPan || '____________'}`, 14, y); y += 8;
 
     if (supplierName) {
       const totalDedGross = entries.reduce((s, e) => s + e.grossAmount, 0);
       const totalDedTds = entries.reduce((s, e) => s + e.tdsAmount, 0);
-      doc.line(14, 51, w - 14, 51);
-      doc.text(`Deductee: ${supplierName}`, 14, 57);
-      doc.text(`Total Payment: ${fmt(totalDedGross)}   Total TDS: ${fmt(totalDedTds)}`, 14, 63);
+      doc.text(`Total Payment: ${fmt(totalDedGross)}   Total TDS: ${fmt(totalDedTds)}`, 14, y); y += 6;
 
       autoTable(doc, {
-        startY: 68,
+        startY: y,
         head: [['#', 'Date', 'Particulars', 'Gross Amount', 'TDS %', 'TDS']],
         body: entries.map((e, i) => [i + 1, e.date, `Purchase #${e.purchaseId.slice(-6)}`, e.grossAmount.toFixed(2), `${e.tdsPct}%`, e.tdsAmount.toFixed(2)]),
         foot: [['', '', 'Total', totalDedGross.toFixed(2), '', totalDedTds.toFixed(2)]],
@@ -144,7 +139,7 @@ export default function TdsForm16A() {
     } else {
       // Summary for all suppliers
       autoTable(doc, {
-        startY: 55,
+        startY: y,
         head: [['#', 'Supplier', 'Transactions', 'Gross Amount', 'TDS %', 'TDS Amount']],
         body: uniqueSuppliers.map((s, i) => {
           const es = supplierMap[s];
@@ -160,7 +155,8 @@ export default function TdsForm16A() {
       });
     }
 
-    doc.save(`form16a-${supplierName ? supplierName.replace(/\s+/g, '-') : 'all'}-${selectedFY}.pdf`);
+    addPageNumbers(doc, font, society.name);
+    doc.save(pdfFileName('TDS_Form16A', society));
   };
 
   return (

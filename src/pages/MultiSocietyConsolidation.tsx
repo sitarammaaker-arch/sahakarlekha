@@ -23,6 +23,7 @@ import {
 import { Upload, Download, X, Building2, AlertTriangle, FileJson, RefreshCw, FileSpreadsheet, Wifi, WifiOff } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { addPageNumbers } from '@/lib/pdf';
 import { downloadCSV, downloadExcel } from '@/lib/exportUtils';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -318,7 +319,8 @@ function exportConsolidatedPDF(branches: BranchData[]) {
     foot: [],
   });
 
-  doc.save('consolidated-financial-statement.pdf');
+  addPageNumbers(doc, 'helvetica');
+  doc.save('ConsolidatedFinancialStatement.pdf');
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────

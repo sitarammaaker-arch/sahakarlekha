@@ -16,6 +16,7 @@ import { Plus, Download, Wheat, AlertTriangle, CheckCircle2, FileSpreadsheet } f
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 import { KccLoan, CropSeasonType } from '@/types';
 import { kccLoanSelect, kccLoanInsert, kccLoanUpdate } from '@/lib/supabaseService';
 
@@ -181,14 +182,10 @@ export default function KccLoan() {
 
   const handlePDF = () => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    const w = doc.internal.pageSize.getWidth();
-    doc.setFontSize(14);
-    doc.text(society.name, w / 2, 14, { align: 'center' });
-    doc.setFontSize(11);
-    doc.text('Kisan Credit Card (KCC) Loan Register', w / 2, 21, { align: 'center' });
+    const { startY, font } = addHeader(doc, 'KCC / Crop Loan Report', society, undefined, { reportCode: 'KCC' });
 
     autoTable(doc, {
-      startY: 28,
+      startY,
       head: [['Loan No.', 'Member', 'Crop', 'Season', 'Hectare', 'Sanctioned', 'Drawn', 'Repaid', 'Outstanding', 'Rate %', 'Due Date', 'Status']],
       body: enrichedLoans.map(l => [
         l.loanNo, l.memberName, l.cropName,
@@ -204,9 +201,15 @@ export default function KccLoan() {
       ]),
       styles: { fontSize: 7.5 },
       headStyles: { fillColor: [39, 174, 96] },
+      columnStyles: rightAlignAmountColumns(5, 6, 7, 8),
     });
 
-    doc.save(`kcc-loans-${new Date().toISOString().slice(0, 10)}.pdf`);
+    const sigNames = getSignatoryNames(society);
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    addSignatureBlock(doc, font, ['Secretary / Manager', 'President / Chairman'], finalY, undefined,
+      [sigNames.secretary, sigNames.president]);
+    addPageNumbers(doc, font, society?.name);
+    doc.save(pdfFileName('KCC_CropLoan', society));
   };
 
   const active = enrichedLoans.filter(l => l.status === 'active');

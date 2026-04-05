@@ -24,6 +24,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { addHeader, addPageNumbers, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface AgingRow {
@@ -303,17 +304,13 @@ const AgingAnalysis: React.FC = () => {
   // ── PDF export ─────────────────────────────────────────────────────────────
   const handleDownloadPDF = (mode: 'ar' | 'ap') => {
     const rows   = mode === 'ar' ? debtorRows : creditorRows;
-    const title  = mode === 'ar' ? 'AR Aging — Sundry Debtors' : 'AP Aging — Sundry Creditors';
+    const subtitle = mode === 'ar' ? 'AR Aging — Sundry Debtors' : 'AP Aging — Sundry Creditors';
     const doc    = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    let y = 14;
 
-    doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-    doc.text(title, 14, y); y += 6;
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    doc.text(`${society.name}  |  FY ${society.financialYear}  |  As on: ${today.toLocaleDateString('en-IN')}`, 14, y); y += 8;
+    const { startY, font } = addHeader(doc, 'Aging Analysis Report', society, subtitle, { reportCode: 'AGE' });
 
     autoTable(doc, {
-      startY: y,
+      startY,
       head: [['#', 'Name', 'Code', 'Phone', 'Total Outstanding', '0-30d', '31-60d', '61-90d', '91-180d', '>180d']],
       body: rows.map((r, i) => [
         i + 1, r.name, r.code, r.phone || '—',
@@ -333,9 +330,11 @@ const AgingAnalysis: React.FC = () => {
       headStyles: { fillColor: mode === 'ar' ? [37, 99, 235] : [234, 88, 12] },
       footStyles: { fontStyle: 'bold' },
       columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' } },
+      didParseCell: rightAlignAmountColumns(4, 5, 6, 7, 8, 9),
     });
 
-    doc.save(`${mode}-aging-${society.financialYear}.pdf`);
+    addPageNumbers(doc, font, society.name);
+    doc.save(pdfFileName('AgingAnalysis', society));
   };
 
   // ────────────────────────────────────────────────────────────────────────────

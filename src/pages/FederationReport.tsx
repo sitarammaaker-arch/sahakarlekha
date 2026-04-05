@@ -17,6 +17,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -203,15 +204,9 @@ const FederationReport: React.FC = () => {
   // ── PDF Export ───────────────────────────────────────────────────────────────
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageW = doc.internal.pageSize.getWidth();
-    let y = 16;
 
-    const heading = (text: string) => {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.text(text, pageW / 2, y, { align: 'center' });
-      y += 7;
-    };
+    const { startY, font } = addHeader(doc, 'Federation Annual Return', society, `Cooperative Society Annual Statistical Return | FY: ${society.financialYear}`, { reportCode: 'FED' });
+    let y = startY;
 
     const subHeading = (text: string) => {
       doc.setFont('helvetica', 'bold');
@@ -223,16 +218,6 @@ const FederationReport: React.FC = () => {
     const ensureSpace = (needed = 40) => {
       if (y + needed > 270) { doc.addPage(); y = 16; }
     };
-
-    // Cover
-    heading('Cooperative Society Annual Statistical Return');
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text(society.name, pageW / 2, y, { align: 'center' }); y += 5;
-    doc.text(`Registration No: ${society.registrationNo || 'N/A'}`, pageW / 2, y, { align: 'center' }); y += 5;
-    doc.text(`Financial Year: ${society.financialYear}`, pageW / 2, y, { align: 'center' }); y += 5;
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-IN')}`, pageW / 2, y, { align: 'center' });
-    y += 10;
 
     // Section 1
     subHeading('Section 1 — Society Particulars');
@@ -278,10 +263,11 @@ const FederationReport: React.FC = () => {
       head: [['Particulars', 'Value']],
       body: [
         ['Total Shares Issued', shareData.sharesIssued],
-        ['Total Paid-up Capital (₹)', fmt(shareData.paidUp)],
+        ['Total Paid-up Capital (Rs.)', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(shareData.paidUp)],
       ],
       styles: { fontSize: 8 },
       headStyles: { fillColor: [39, 174, 96] },
+      didParseCell: rightAlignAmountColumns(1),
       didDrawPage: (data) => { y = data.cursor?.y ?? y; },
     });
     y = (doc as any).lastAutoTable.finalY + 8;
@@ -291,10 +277,11 @@ const FederationReport: React.FC = () => {
     subHeading('Section 4 — Deposits (Borrowings)');
     autoTable(doc, {
       startY: y,
-      head: [['Particulars', 'Amount (₹)']],
-      body: [['Total Deposits (FD/RD/Deposit accounts)', fmt(depositTotal)]],
+      head: [['Particulars', 'Amount (Rs.)']],
+      body: [['Total Deposits (FD/RD/Deposit accounts)', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(depositTotal)]],
       styles: { fontSize: 8 },
       headStyles: { fillColor: [39, 174, 96] },
+      didParseCell: rightAlignAmountColumns(1),
       didDrawPage: (data) => { y = data.cursor?.y ?? y; },
     });
     y = (doc as any).lastAutoTable.finalY + 8;
@@ -304,18 +291,19 @@ const FederationReport: React.FC = () => {
     subHeading('Section 5 — Loans & Advances');
     autoTable(doc, {
       startY: y,
-      head: [['Particulars', 'Amount (₹)']],
+      head: [['Particulars', 'Amount (Rs.)']],
       body: [
-        ['Loans Sanctioned', fmt(loanData.sanctioned)],
-        ['Loans Disbursed', fmt(loanData.disbursed)],
-        ['Loans Recovered', fmt(loanData.recovered)],
-        ['Loans Outstanding', fmt(loanData.outstanding)],
-        ['Overdue Amount', fmt(loanData.overdue)],
-        ['NPA Amount', fmt(loanData.npaAmt)],
+        ['Loans Sanctioned', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(loanData.sanctioned)],
+        ['Loans Disbursed', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(loanData.disbursed)],
+        ['Loans Recovered', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(loanData.recovered)],
+        ['Loans Outstanding', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(loanData.outstanding)],
+        ['Overdue Amount', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(loanData.overdue)],
+        ['NPA Amount', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(loanData.npaAmt)],
         ['NPA %', pct(loanData.npaPct)],
       ],
       styles: { fontSize: 8 },
       headStyles: { fillColor: [39, 174, 96] },
+      didParseCell: rightAlignAmountColumns(1),
       didDrawPage: (data) => { y = data.cursor?.y ?? y; },
     });
     y = (doc as any).lastAutoTable.finalY + 8;
@@ -325,14 +313,15 @@ const FederationReport: React.FC = () => {
     subHeading('Section 6 — Working Capital');
     autoTable(doc, {
       startY: y,
-      head: [['Particulars', 'Amount (₹)']],
+      head: [['Particulars', 'Amount (Rs.)']],
       body: [
-        ['Total Own Funds (Equity)', fmt(wcData.ownFunds)],
-        ['Total Borrowings (Liabilities)', fmt(wcData.borrowings)],
-        ['Total Working Capital', fmt(wcData.total)],
+        ['Total Own Funds (Equity)', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(wcData.ownFunds)],
+        ['Total Borrowings (Liabilities)', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(wcData.borrowings)],
+        ['Total Working Capital', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(wcData.total)],
       ],
       styles: { fontSize: 8 },
       headStyles: { fillColor: [39, 174, 96] },
+      didParseCell: rightAlignAmountColumns(1),
       didDrawPage: (data) => { y = data.cursor?.y ?? y; },
     });
     y = (doc as any).lastAutoTable.finalY + 8;
@@ -342,16 +331,17 @@ const FederationReport: React.FC = () => {
     subHeading('Section 7 — Profit & Loss Appropriation');
     autoTable(doc, {
       startY: y,
-      head: [['Particulars', 'Amount (₹)']],
+      head: [['Particulars', 'Amount (Rs.)']],
       body: [
-        ['Net Profit / (Loss)', fmt(plData.netProfit)],
-        ['Statutory Reserve @ 25%', fmt(plData.statutoryReserve)],
-        ['Education Fund @ 1%', fmt(plData.educationFund)],
-        ['Dividend Fund @ 15%', fmt(plData.dividendFund)],
-        ['Balance carried forward', fmt(plData.balance)],
+        ['Net Profit / (Loss)', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(plData.netProfit)],
+        ['Statutory Reserve @ 25%', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(plData.statutoryReserve)],
+        ['Education Fund @ 1%', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(plData.educationFund)],
+        ['Dividend Fund @ 15%', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(plData.dividendFund)],
+        ['Balance carried forward', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(plData.balance)],
       ],
       styles: { fontSize: 8 },
       headStyles: { fillColor: [39, 174, 96] },
+      didParseCell: rightAlignAmountColumns(1),
       didDrawPage: (data) => { y = data.cursor?.y ?? y; },
     });
     y = (doc as any).lastAutoTable.finalY + 8;
@@ -374,7 +364,8 @@ const FederationReport: React.FC = () => {
       didDrawPage: (data) => { y = data.cursor?.y ?? y; },
     });
 
-    doc.save(`Federation_Annual_Return_${society.financialYear.replace('/', '-')}.pdf`);
+    addPageNumbers(doc, font, society?.name);
+    doc.save(pdfFileName('Federation_AnnualReturn', society));
   };
 
   // ── UI ──────────────────────────────────────────────────────────────────────

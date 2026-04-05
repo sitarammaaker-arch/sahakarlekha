@@ -16,6 +16,7 @@ import { Plus, Download, Vote, Trophy, Users, FileSpreadsheet } from 'lucide-rea
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { addHeader, addPageNumbers, pdfFileName } from '@/lib/pdf';
 import { electionSelect, electionInsert, electionUpdate } from '@/lib/supabaseService';
 
 type ElectionStatus = 'upcoming' | 'ongoing' | 'completed';
@@ -147,11 +148,9 @@ export default function ElectionModule() {
 
   const handlePDF = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const w = doc.internal.pageSize.getWidth();
-    doc.setFontSize(14); doc.text(society.name, w / 2, 14, { align: 'center' });
-    doc.setFontSize(11); doc.text('Cooperative Society Election Register', w / 2, 21, { align: 'center' });
+    const { startY, font } = addHeader(doc, 'Election Report', society, `Financial Year: ${society.financialYear}`, { reportCode: 'ELC' });
     autoTable(doc, {
-      startY: 28,
+      startY,
       head: [['No.', 'Title', 'Post', 'Date', 'Candidates', 'Winner', 'Status']],
       body: elections.map(e => {
         const winner = e.winnerId ? e.candidates.find(c => c.id === e.winnerId) : null;
@@ -160,7 +159,8 @@ export default function ElectionModule() {
       styles: { fontSize: 8 },
       headStyles: { fillColor: [52, 73, 94] },
     });
-    doc.save(`elections-${new Date().toISOString().slice(0, 10)}.pdf`);
+    addPageNumbers(doc, font, society?.name);
+    doc.save(pdfFileName('ElectionReport', society));
   };
 
   const upcoming = elections.filter(e => e.status === 'upcoming');

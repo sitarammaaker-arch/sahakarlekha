@@ -24,6 +24,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
+import { addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName } from '@/lib/pdf';
 
 const Form1MemberList: React.FC = () => {
   const { language } = useLanguage();
@@ -141,18 +142,14 @@ const Form1MemberList: React.FC = () => {
       },
     });
 
-    // Footer
+    // Footer — signature block via shared helper
     const finalY = (doc as any).lastAutoTable.finalY + 10;
-    const pageW = doc.internal.pageSize.getWidth();
-    doc.setFontSize(8);
-    doc.text('Secretary / Manager', marginL + 20, finalY);
-    doc.text('President / Chairman', pageW / 2 - 20, finalY);
-    doc.text('Registrar / Auditor', pageW - 60, finalY);
-    doc.line(marginL, finalY - 5, marginL + 50, finalY - 5);
-    doc.line(pageW / 2 - 30, finalY - 5, pageW / 2 + 30, finalY - 5);
-    doc.line(pageW - 70, finalY - 5, pageW - 14, finalY - 5);
+    const sigNames = getSignatoryNames(society);
+    addSignatureBlock(doc, 'helvetica', ['Secretary / Manager', 'President / Chairman', 'Registrar / Auditor'], finalY, undefined,
+      [sigNames.secretary, sigNames.president, '']);
+    addPageNumbers(doc, 'helvetica', society?.name);
 
-    doc.save(`form1-member-list-${society.financialYear}.pdf`);
+    doc.save(pdfFileName('Form1_MemberList', society));
   };
 
   // ────────────────────────────────────────────────────────────────────────────

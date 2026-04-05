@@ -28,6 +28,7 @@ import type { Member } from '@/types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName } from '@/lib/pdf';
 
 const RELATIONS = ['Son', 'Daughter', 'Spouse', 'Father', 'Mother', 'Brother', 'Sister', 'Other'];
 
@@ -109,14 +110,12 @@ const NominationRegister: React.FC = () => {
   // ── PDF ────────────────────────────────────────────────────────────────────
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    let y = 14;
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-    doc.text('Nomination Register', 14, y); y += 7;
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    doc.text(`${society.name}  |  FY ${society.financialYear}  |  Total Active Members: ${activeMembers.length}  |  With Nominee: ${withNominee}`, 14, y); y += 8;
+    const { startY, font } = addHeader(doc, 'Nomination Register', society,
+      `Total Active Members: ${activeMembers.length}  |  With Nominee: ${withNominee}`,
+      { reportCode: 'NR' });
 
     autoTable(doc, {
-      startY: y,
+      startY,
       head: [['#', 'Member ID', 'Member Name', 'Phone', 'Share Capital', 'Nominee Name', 'Relation', 'Nominee Phone', 'Status']],
       body: activeMembers.map((m, i) => [
         i + 1,
@@ -140,7 +139,12 @@ const NominationRegister: React.FC = () => {
       },
     });
 
-    doc.save(`nomination-register-${society.financialYear}.pdf`);
+    const sigNames = getSignatoryNames(society);
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    addSignatureBlock(doc, font, ['Secretary / Manager', 'President / Chairman'], finalY, undefined,
+      [sigNames.secretary, sigNames.president]);
+    addPageNumbers(doc, font, society?.name);
+    doc.save(pdfFileName('NominationRegister', society));
   };
 
   // ────────────────────────────────────────────────────────────────────────────

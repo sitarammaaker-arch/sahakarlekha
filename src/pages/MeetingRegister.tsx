@@ -30,6 +30,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
+import { addHeader, addPageNumbers, pdfFileName } from '@/lib/pdf';
 import { meetingSelect, meetingInsert, meetingUpdate, meetingDelete } from '@/lib/supabaseService';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -207,14 +208,10 @@ const MeetingRegister: React.FC = () => {
 
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    let y = 14;
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-    doc.text('Meeting / AGM Register', 14, y); y += 7;
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    doc.text(`${society.name}  |  FY ${society.financialYear}`, 14, y); y += 8;
+    const { startY, font } = addHeader(doc, 'Meeting Register', society, `Financial Year: ${society.financialYear}`, { reportCode: 'MR' });
 
     autoTable(doc, {
-      startY: y,
+      startY,
       head: [['#', 'Meeting No.', 'Type', 'Date', 'Venue', 'Attendees', 'Status', 'Resolutions']],
       body: filtered.map((m, i) => [
         i + 1,
@@ -230,7 +227,8 @@ const MeetingRegister: React.FC = () => {
       headStyles: { fillColor: [99, 102, 241] },
     });
 
-    doc.save(`meeting-register-${society.financialYear}.pdf`);
+    addPageNumbers(doc, font, society?.name);
+    doc.save(pdfFileName('MeetingRegister', society));
   };
 
   const heldCount = meetings.filter(m => m.status === 'held').length;

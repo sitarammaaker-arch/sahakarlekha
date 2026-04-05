@@ -19,6 +19,7 @@ import jsPDF from 'jspdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { addHeader, addPageNumbers, pdfFileName } from '@/lib/pdf';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -103,7 +104,9 @@ const AuditCertificate: React.FC = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const marginL = 20;
     const pageW = doc.internal.pageSize.getWidth();
-    let y = 16;
+
+    const { startY, font } = addHeader(doc, 'Audit Report / Audit Certificate', society, '[Under the Cooperative Societies Act]', { reportCode: 'AC' });
+    let y = startY;
 
     const line = (text: string, indent = 0, bold = false) => {
       doc.setFont('helvetica', bold ? 'bold' : 'normal');
@@ -114,14 +117,6 @@ const AuditCertificate: React.FC = () => {
     };
     const hline = () => { doc.setLineWidth(0.3); doc.line(marginL, y, pageW - marginL, y); y += 3; };
     const space = (n = 4) => { y += n; };
-
-    // Title
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-    doc.text('AUDIT REPORT / AUDIT CERTIFICATE', pageW / 2, y, { align: 'center' }); y += 7;
-    doc.setFontSize(10);
-    doc.text('[Under the Cooperative Societies Act]', pageW / 2, y, { align: 'center' }); y += 8;
-
-    hline();
 
     // Society details
     line(`Society Name:       ${society.name}`, 0, true);
@@ -199,7 +194,8 @@ const AuditCertificate: React.FC = () => {
     doc.text(`Date: ${fmtDate(auditDate)}`, marginL, y);
     doc.text(`Place: ${society.district || '—'}`, marginL + 50, y);
 
-    doc.save(`audit-certificate-${fy}.pdf`);
+    addPageNumbers(doc, font, society?.name);
+    doc.save(pdfFileName('AuditCertificate', society));
   };
 
   // ────────────────────────────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ import { Coins, CheckCircle2, AlertTriangle, Info, Download, Users, FileSpreadsh
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
@@ -193,20 +194,12 @@ const ProfitDistribution: React.FC = () => {
   // ── PDF ────────────────────────────────────────────────────────────────────
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const marginL = 14;
-    let y = 14;
-
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Profit Distribution Statement', marginL, y); y += 7;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`${society.name}  |  FY ${fy}`, marginL, y); y += 10;
+    const { startY, font } = addHeader(doc, 'Profit Distribution Statement', society, `Financial Year: ${fy}`, { reportCode: 'PD' });
 
     // Part A — Appropriation Summary
     autoTable(doc, {
-      startY: y,
-      head: [['Particulars', 'Amount (₹)']],
+      startY,
+      head: [['Particulars', 'Amount (Rs.)']],
       body: [
         ['Net Surplus (from P&L)', fmt(netProfit)],
         [`Less: Statutory Reserve Fund @ 25%`, `(${fmt(reserveAmt)})`],
@@ -220,7 +213,9 @@ const ProfitDistribution: React.FC = () => {
       headStyles: { fillColor: [22, 163, 74] },
       columnStyles: { 1: { halign: 'right' } },
       didParseCell: (data) => {
-        if (data.row.index === 3 || data.row.index === 6) {
+        // Right-align amount column across head/body/foot
+        if (data.column.index === 1) data.cell.styles.halign = 'right';
+        if (data.section === 'body' && (data.row.index === 3 || data.row.index === 6)) {
           data.cell.styles.fontStyle = 'bold';
         }
       },
@@ -248,10 +243,16 @@ const ProfitDistribution: React.FC = () => {
         headStyles: { fillColor: [37, 99, 235] },
         footStyles: { fontStyle: 'bold' },
         columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' } },
+        didParseCell: rightAlignAmountColumns(3, 4),
       });
     }
 
-    doc.save(`ProfitDistribution_FY_${fy}.pdf`);
+    const sigY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 10 : startY + 80;
+    const sig = getSignatoryNames(society);
+    addSignatureBlock(doc, font, ['Accountant', 'Secretary', 'President'], sigY, undefined,
+      [sig.accountant, sig.secretary, sig.president]);
+    addPageNumbers(doc, font, society?.name);
+    doc.save(pdfFileName('ProfitDistribution', society));
   };
 
   // ────────────────────────────────────────────────────────────────────────────
