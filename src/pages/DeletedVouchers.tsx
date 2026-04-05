@@ -8,7 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Trash2, FileSpreadsheet, Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Trash2, FileSpreadsheet, Download, RotateCcw } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import type { VoucherType } from '@/types';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate, fmtDateTime } from '@/lib/dateUtils';
@@ -25,7 +27,9 @@ const voucherTypeLabel: Record<VoucherType, { hi: string; en: string; color: str
 
 const DeletedVouchers: React.FC = () => {
   const { language } = useLanguage();
-  const { vouchers, accounts, society } = useData();
+  const { vouchers, accounts, society, restoreVoucher } = useData();
+  const { toast } = useToast();
+  const hi = language === 'hi';
 
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
@@ -156,6 +160,7 @@ const DeletedVouchers: React.FC = () => {
                 <TableHead>{language === 'hi' ? 'रद्द कारण' : 'Delete Reason'}</TableHead>
                 <TableHead>{language === 'hi' ? 'रद्द किया' : 'Deleted By'}</TableHead>
                 <TableHead>{language === 'hi' ? 'रद्द तिथि' : 'Deleted At'}</TableHead>
+                <TableHead className="text-center">{hi ? 'पुनर्स्थापित' : 'Undo'}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -195,6 +200,20 @@ const DeletedVouchers: React.FC = () => {
                         {v.deletedAt
                           ? new Date(v.deletedAt).toLocaleString('hi-IN', { dateStyle: 'short', timeStyle: 'short' })
                           : '—'}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1 text-xs h-7 text-green-700 border-green-300 hover:bg-green-50"
+                          onClick={() => {
+                            restoreVoucher(v.id);
+                            toast({ title: hi ? 'वाउचर पुनर्स्थापित किया गया' : 'Voucher restored', description: v.voucherNo });
+                          }}
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          {hi ? 'पुनर्स्थापित' : 'Restore'}
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );

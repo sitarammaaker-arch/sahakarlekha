@@ -128,7 +128,7 @@ interface DataContextType {
     closingStockPosted: boolean;     // true if a closing stock journal exists for current FY
   };
   postClosingStock: (fy?: string) => { posted: boolean; amount: number; alreadyPosted: boolean };
-  getEntityLinks: (entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan', id: string) => EntityLink[];
+  getEntityLinks: (entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan' | 'asset', id: string) => EntityLink[];
   isLoading: boolean;
 }
 
@@ -495,6 +495,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
 
@@ -594,8 +595,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteAuditObjection = useCallback((id: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     setAuditObjectionsState(prev => { const updated = prev.filter(o => o.id !== id); return updated; });
     supabase.from('audit_objections').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    console.info(`[AUDIT-DELETE] AuditObjection id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
   const addMember = useCallback((data: Omit<Member, 'id'>): Member => {
@@ -651,11 +654,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteMember = useCallback((id: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     setMembersState(prev => {
       const updated = prev.filter(m => m.id !== id);
       return updated;
     });
     supabase.from('members').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    console.info(`[AUDIT-DELETE] Member id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
   const addAccount = useCallback((data: Omit<LedgerAccount, 'id'>): LedgerAccount => {
@@ -678,11 +683,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteAccount = useCallback((id: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     setAccountsState(prev => {
       const updated = prev.filter(a => a.id !== id);
       return updated;
     });
     supabase.from('accounts').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    console.info(`[AUDIT-DELETE] Account id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
   // Merge duplicate accounts: move all voucher references from removeId → keepId, then delete removeId
@@ -970,8 +977,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteLoan = useCallback((id: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     setLoansState(prev => { const updated = prev.filter(l => l.id !== id); return updated; });
     supabase.from('loans').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    console.info(`[AUDIT-DELETE] Loan id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
   const addAsset = useCallback((data: Omit<Asset, 'id' | 'assetNo'>): Asset => {
@@ -996,8 +1005,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteAsset = useCallback((id: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     setAssetsState(prev => { const updated = prev.filter(a => a.id !== id); return updated; });
     supabase.from('assets').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    console.info(`[AUDIT-DELETE] Asset id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
   // ── Depreciation Posting ───────────────────────────────────────────────────
@@ -1255,6 +1266,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteStockItem = useCallback((id: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     const today = new Date().toISOString().split('T')[0];
     setStockItemsState(prev => {
       const item = prev.find(i => i.id === id);
@@ -1287,6 +1299,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     supabase.from('stock_movements').delete().eq('itemId', id)
       .then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    console.info(`[AUDIT-DELETE] StockItem id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, [addVoucher, user?.name]);
 
   const addStockMovement = useCallback((data: Omit<StockMovement, 'id' | 'createdAt'>) => {
@@ -1393,6 +1406,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.financialYear, customers, addVoucher]);
 
   const deleteSale = useCallback((id: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     setSalesState(prev => {
       const sale = prev.find(s => s.id === id);
       if (sale) {
@@ -1424,6 +1438,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return updated;
     });
     supabase.from('sales').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    console.info(`[AUDIT-DELETE] Sale id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
   // ── Purchases ──────────────────────────────────────────────────────────────
@@ -1522,6 +1537,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.financialYear, suppliers, addVoucher]);
 
   const deletePurchase = useCallback((id: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     setPurchasesState(prev => {
       const purchase = prev.find(p => p.id === id);
       if (purchase) {
@@ -1553,6 +1569,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return updated;
     });
     supabase.from('purchases').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    console.info(`[AUDIT-DELETE] Purchase id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
   // ── Employees ──────────────────────────────────────────────────────────────
@@ -1578,8 +1595,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteEmployee = useCallback((id: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     setEmployeesState(prev => { const updated = prev.filter(e => e.id !== id); return updated; });
     supabase.from('employees').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    console.info(`[AUDIT-DELETE] Employee id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
   // ── Salary Records ─────────────────────────────────────────────────────────
@@ -1622,8 +1641,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [employees, society.financialYear]);
 
   const deleteSalaryRecord = useCallback((id: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     setSalaryRecordsState(prev => { const updated = prev.filter(r => r.id !== id); return updated; });
     supabase.from('salary_records').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    console.info(`[AUDIT-DELETE] SalaryRecord id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
   // ── Suppliers ──────────────────────────────────────────────────────────────
@@ -1675,6 +1696,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [suppliers]);
 
   const deleteSupplier = useCallback((id: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     const sup = suppliers.find(s => s.id === id);
     setSuppliersState(prev => { const arr = prev.filter(s => s.id !== id); return arr; });
     supabase.from('suppliers').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
@@ -1682,6 +1704,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setAccountsState(prev => { const arr = prev.filter(a => a.id !== sup.accountId); return arr; });
       supabase.from('accounts').delete().eq('id', sup.accountId).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     }
+    console.info(`[AUDIT-DELETE] Supplier id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, [suppliers]);
 
   // ── Customers ──────────────────────────────────────────────────────────────
@@ -1732,6 +1755,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [customers]);
 
   const deleteCustomer = useCallback((id: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     const cus = customers.find(c => c.id === id);
     setCustomersState(prev => { const arr = prev.filter(c => c.id !== id); return arr; });
     supabase.from('customers').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
@@ -1739,9 +1763,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setAccountsState(prev => { const arr = prev.filter(a => a.id !== cus.accountId); return arr; });
       supabase.from('accounts').delete().eq('id', cus.accountId).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     }
+    console.info(`[AUDIT-DELETE] Customer id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, [customers]);
 
-  const getEntityLinks = useCallback((entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan', id: string): EntityLink[] => {
+  const getEntityLinks = useCallback((entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan' | 'asset', id: string): EntityLink[] => {
     const links: EntityLink[] = [];
     const activeVouchers = vouchersRef.current.filter(v => !v.isDeleted);
 
@@ -1860,6 +1885,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         instructionEn: 'Go to Vouchers → cancel linked vouchers first',
         blocking: false,
       });
+    }
+
+    if (entityType === 'asset') {
+      const asset = assetsRef.current.find(a => a.id === id);
+      if (asset) {
+        const vCount = activeVouchers.filter(v => v.narration?.includes(asset.assetNo)).length;
+        if (vCount > 0) links.push({
+          module: 'Vouchers', count: vCount,
+          labelHi: `${vCount} वाउचर (ह्रास आदि)`, labelEn: `${vCount} Voucher(s) (depreciation etc.)`,
+          instructionHi: 'Vouchers page pe jao → pehle in vouchers ko cancel karo',
+          instructionEn: 'Go to Vouchers → cancel depreciation vouchers first',
+          blocking: true,
+        });
+      }
     }
 
     return links;
