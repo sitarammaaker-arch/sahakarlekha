@@ -58,6 +58,8 @@ const reportNavItems: NavItem[] = [
   { key: 'profitLoss', icon: TrendingUp, path: '/profit-loss' },
   { key: 'balanceSheet', icon: FileSpreadsheet, path: '/balance-sheet' },
   { key: 'reports', icon: BarChart3, path: '/reports' },
+  { key: 'saleRegister', icon: ShoppingCart, path: '/sale-register' },
+  { key: 'purchaseRegister', icon: PackagePlus, path: '/purchase-register' },
   { key: 'gstSummary', icon: Percent, path: '/gst-summary' },
   { key: 'agingAnalysis', icon: TrendingDown, path: '/aging-analysis' },
   { key: 'tdsForm16A', icon: Receipt, path: '/tds-form16a' },

@@ -1594,6 +1594,79 @@ export function generateBudgetPDF(params: {
 }
 
 
+// ── Sale Register PDF ────────────────────────────────────────────────────────
+
+export function generateSaleRegisterPDF(
+  sales: { saleNo: string; date: string; customerName: string; netAmount: number; cgstAmount: number; sgstAmount: number; igstAmount: number; taxAmount: number; grandTotal: number; paymentMode: string }[],
+  totals: { netAmount: number; cgst: number; sgst: number; igst: number; taxAmount: number; grandTotal: number },
+  society: SocietySettings, _language: string, fromDate?: string, toDate?: string,
+): void {
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const subtitle = fromDate && toDate ? `${fmtDate(fromDate)} to ${fmtDate(toDate)}` : `FY: ${society.financialYear}`;
+  const { startY, font } = addHeader(doc, 'Sale Register', society, subtitle, { reportCode: 'SR' });
+
+  autoTable(doc, {
+    startY: startY + 2,
+    head: [['#', 'Invoice No', 'Date', 'Customer', 'Taxable (Rs.)', 'CGST', 'SGST', 'IGST', 'Tax Total', 'Grand Total', 'Payment']],
+    body: sales.map((s, i) => [
+      String(i + 1), s.saleNo, fmtDate(s.date), s.customerName,
+      fmt(s.netAmount), s.cgstAmount > 0 ? fmt(s.cgstAmount) : '—', s.sgstAmount > 0 ? fmt(s.sgstAmount) : '—',
+      s.igstAmount > 0 ? fmt(s.igstAmount) : '—', fmt(s.taxAmount), fmt(s.grandTotal), s.paymentMode,
+    ]),
+    foot: [['', '', '', 'Total', fmt(totals.netAmount), fmt(totals.cgst), fmt(totals.sgst), fmt(totals.igst), fmt(totals.taxAmount), fmt(totals.grandTotal), '']],
+    styles: { fontSize: 8, cellPadding: 2, font },
+    headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 253] },
+    columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(4, 5, 6, 7, 8, 9),
+  });
+
+  const sigY = (doc as any).lastAutoTable.finalY + 10;
+  const sig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], sigY, undefined, [sig.accountant, sig.secretary, sig.president]);
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName('SaleRegister', society, fromDate, toDate));
+}
+
+
+// ── Purchase Register PDF ────────────────────────────────────────────────────
+
+export function generatePurchaseRegisterPDF(
+  purchases: { purchaseNo: string; date: string; supplierName: string; netAmount: number; cgstAmount: number; sgstAmount: number; igstAmount: number; taxAmount: number; tdsAmount: number; grandTotal: number; paymentMode: string }[],
+  totals: { netAmount: number; cgst: number; sgst: number; igst: number; taxAmount: number; tds: number; grandTotal: number },
+  society: SocietySettings, _language: string, fromDate?: string, toDate?: string,
+): void {
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const subtitle = fromDate && toDate ? `${fmtDate(fromDate)} to ${fmtDate(toDate)}` : `FY: ${society.financialYear}`;
+  const { startY, font } = addHeader(doc, 'Purchase Register', society, subtitle, { reportCode: 'PR' });
+
+  autoTable(doc, {
+    startY: startY + 2,
+    head: [['#', 'Bill No', 'Date', 'Supplier', 'Taxable (Rs.)', 'CGST', 'SGST', 'IGST', 'Tax Total', 'TDS', 'Grand Total', 'Payment']],
+    body: purchases.map((p, i) => [
+      String(i + 1), p.purchaseNo, fmtDate(p.date), p.supplierName,
+      fmt(p.netAmount), p.cgstAmount > 0 ? fmt(p.cgstAmount) : '—', p.sgstAmount > 0 ? fmt(p.sgstAmount) : '—',
+      p.igstAmount > 0 ? fmt(p.igstAmount) : '—', fmt(p.taxAmount),
+      (p.tdsAmount || 0) > 0 ? fmt(p.tdsAmount) : '—', fmt(p.grandTotal), p.paymentMode,
+    ]),
+    foot: [['', '', '', 'Total', fmt(totals.netAmount), fmt(totals.cgst), fmt(totals.sgst), fmt(totals.igst), fmt(totals.taxAmount), fmt(totals.tds), fmt(totals.grandTotal), '']],
+    styles: { fontSize: 8, cellPadding: 2, font },
+    headStyles: { fillColor: [194, 65, 12], textColor: 255, fontStyle: 'bold' },
+    footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 253] },
+    columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(4, 5, 6, 7, 8, 9, 10),
+  });
+
+  const sigY = (doc as any).lastAutoTable.finalY + 10;
+  const sig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], sigY, undefined, [sig.accountant, sig.secretary, sig.president]);
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName('PurchaseRegister', society, fromDate, toDate));
+}
+
+
 // ── Closing Stock Report PDF — Category-wise grouped ────────────────────────
 
 export interface ClosingStockItemRow {

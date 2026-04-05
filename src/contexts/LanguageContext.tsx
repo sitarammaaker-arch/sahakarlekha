@@ -50,6 +50,8 @@ export const translations: Translations = {
   universalImporter: { hi: 'डेटा Import (Universal)', en: 'Universal Importer' },
   gstSummary: { hi: 'GST सारांश', en: 'GST Summary' },
   agingAnalysis: { hi: 'AR/AP बकाया विश्लेषण', en: 'Aging Analysis' },
+  saleRegister: { hi: 'बिक्री रजिस्टर', en: 'Sale Register' },
+  purchaseRegister: { hi: 'क्रय रजिस्टर', en: 'Purchase Register' },
   stockValuation: { hi: 'स्टॉक मूल्यांकन', en: 'Stock Valuation' },
   closingStockReport: { hi: 'समापन माल रिपोर्ट', en: 'Closing Stock Report' },
   budgetModule: { hi: 'बजट मॉड्यूल', en: 'Budget Module' },

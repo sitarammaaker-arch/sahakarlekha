@@ -38,7 +38,9 @@ import DayBook from "./pages/DayBook";
 import LedgerHeads from "./pages/LedgerHeads";
 import Inventory from "./pages/Inventory";
 import SaleManagement from "./pages/SaleManagement";
+import SaleRegister from "./pages/SaleRegister";
 import PurchaseManagement from "./pages/PurchaseManagement";
+import PurchaseRegister from "./pages/PurchaseRegister";
 import SalaryManagement from "./pages/SalaryManagement";
 import Suppliers from "./pages/Suppliers";
 import Customers from "./pages/Customers";
@@ -162,7 +164,9 @@ const AppRoutes = () => {
       <Route path="/ledger-heads" element={<ProtectedRoute><LedgerHeads /></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
       <Route path="/sales" element={<ProtectedRoute><SaleManagement /></ProtectedRoute>} />
+      <Route path="/sale-register" element={<ProtectedRoute><SaleRegister /></ProtectedRoute>} />
       <Route path="/purchases" element={<ProtectedRoute><PurchaseManagement /></ProtectedRoute>} />
+      <Route path="/purchase-register" element={<ProtectedRoute><PurchaseRegister /></ProtectedRoute>} />
       <Route path="/salary" element={<ProtectedRoute><SalaryManagement /></ProtectedRoute>} />
       <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
       <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
