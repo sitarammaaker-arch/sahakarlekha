@@ -580,6 +580,7 @@ export function generateBalanceSheetPDF(
   language: 'hi' | 'en',
   reserveFund: number = 0,
   allAccounts?: LedgerAccount[],
+  stockItemsData?: { name: string; currentStock: number; purchaseRate: number; isActive: boolean; stockGroup?: string }[],
 ) {
   const doc = new jsPDF('landscape');
   const { startY, font } = addHeader(doc, 'Balance Sheet', society, `As at 31st March 20${society.financialYear.split('-')[1]}`, { reportCode: 'BS' });
@@ -618,11 +619,36 @@ export function generateBalanceSheetPDF(
       const groupPY = items.reduce((s, b) => s + getPY(b.account.id), 0);
       pyTotal += groupPY;
 
+      // Audit-friendly group name overrides
+      const auditGroupNames: Record<string, string> = { '3400': 'CLOSING STOCK', '3300': 'CURRENT ASSETS & CASH/BANK' };
+      const groupLabel = auditGroupNames[group.id] || group.name.toUpperCase();
+
+      // Special: Closing Stock (3400) — show stock group-wise from inventory
+      if (group.id === '3400' && stockItemsData && stockItemsData.length > 0) {
+        const activeStock = stockItemsData.filter(s => s.isActive && s.currentStock > 0);
+        if (activeStock.length > 0) {
+          const stockGroups: Record<string, number> = {};
+          activeStock.forEach(s => {
+            const grp = s.stockGroup || 'General';
+            stockGroups[grp] = (stockGroups[grp] || 0) + s.currentStock * (s.purchaseRate || 0);
+          });
+          const stockTotal = Object.values(stockGroups).reduce((s, v) => s + v, 0);
+          groupRows.push(body.length);
+          body.push(hasPY
+            ? [groupLabel, groupPY ? fmt(groupPY) : '', '', fmt(stockTotal)]
+            : [groupLabel, '', fmt(stockTotal)]);
+          Object.entries(stockGroups).sort(([a], [b]) => a.localeCompare(b)).forEach(([grp, val]) => {
+            body.push(hasPY ? [`  ${grp}`, '—', fmt(val), ''] : [`  ${grp}`, fmt(val), '']);
+          });
+          return;
+        }
+      }
+
       // Group header row
       groupRows.push(body.length);
       body.push(hasPY
-        ? [group.name.toUpperCase(), groupPY ? fmt(groupPY) : '', '', fmt(groupTotal)]
-        : [group.name.toUpperCase(), '', fmt(groupTotal)]);
+        ? [groupLabel, groupPY ? fmt(groupPY) : '', '', fmt(groupTotal)]
+        : [groupLabel, '', fmt(groupTotal)]);
 
       // Child rows (indented)
       items.forEach(b => {

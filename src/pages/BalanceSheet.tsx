@@ -182,7 +182,7 @@ const BalanceSheet: React.FC = () => {
     generateBalanceSheetPDF(
       trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup),
       [...trialBalance.filter(b => b.account.type === 'equity' && !b.account.isGroup), ...trialBalance.filter(b => b.account.type === 'liability' && !b.account.isGroup)],
-      netProfit, society, language, reserveFund, accounts
+      netProfit, society, language, reserveFund, accounts, stockItems
     );
   };
 
