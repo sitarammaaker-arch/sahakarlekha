@@ -30,7 +30,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
-import { addHeader, addPageNumbers, pdfFileName } from '@/lib/pdf';
+import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName } from '@/lib/pdf';
 import { meetingSelect, meetingInsert, meetingUpdate, meetingDelete } from '@/lib/supabaseService';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -226,6 +226,11 @@ const MeetingRegister: React.FC = () => {
       styles: { fontSize: 7 },
       headStyles: { fillColor: [99, 102, 241] },
     });
+
+    const sigY = (doc as any).lastAutoTable.finalY + 10;
+    const sig = getSignatoryNames(society);
+    addSignatureBlock(doc, font, ['Secretary / Manager', 'President'], sigY, undefined,
+      [sig.secretary, sig.president]);
 
     addPageNumbers(doc, font, society?.name);
     doc.save(pdfFileName('MeetingRegister', society));

@@ -16,7 +16,7 @@ import { Plus, Download, Vote, Trophy, Users, FileSpreadsheet } from 'lucide-rea
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { addHeader, addPageNumbers, pdfFileName } from '@/lib/pdf';
+import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName } from '@/lib/pdf';
 import { electionSelect, electionInsert, electionUpdate } from '@/lib/supabaseService';
 
 type ElectionStatus = 'upcoming' | 'ongoing' | 'completed';
@@ -159,6 +159,11 @@ export default function ElectionModule() {
       styles: { fontSize: 8 },
       headStyles: { fillColor: [52, 73, 94] },
     });
+    const sigY = (doc as any).lastAutoTable.finalY + 10;
+    const sig = getSignatoryNames(society);
+    addSignatureBlock(doc, font, ['Secretary', 'Election Officer', 'President'], sigY, undefined,
+      [sig.secretary, '', sig.president]);
+
     addPageNumbers(doc, font, society?.name);
     doc.save(pdfFileName('ElectionReport', society));
   };

@@ -12,7 +12,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { StockMovement, StockItem } from '@/types';
-import { addHeader, addPageNumbers, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
+import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -169,6 +169,11 @@ export default function StockValuation() {
       footStyles: { fillColor: [236, 240, 241], fontStyle: 'bold' },
       didParseCell: rightAlignAmountColumns(7, 8, 9),
     });
+
+    const sigY = (doc as any).lastAutoTable.finalY + 10;
+    const sig = getSignatoryNames(society);
+    addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], sigY, undefined,
+      [sig.accountant, sig.secretary, sig.president]);
 
     addPageNumbers(doc, font, society?.name);
     doc.save(pdfFileName('Stock_Valuation', society));

@@ -331,6 +331,11 @@ export function generateCashBookPDF(
     didParseCell: rightAlignAmountColumns(3, 4, 5),
   });
 
+  const sigY = (doc as any).lastAutoTable.finalY + 10;
+  const sig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], sigY, undefined,
+    [sig.accountant, sig.secretary, sig.president]);
+
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('CashBook', society));
 }
@@ -372,6 +377,11 @@ export function generateBankBookPDF(
     columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
     didParseCell: rightAlignAmountColumns(3, 4, 5),
   });
+
+  const sigY = (doc as any).lastAutoTable.finalY + 10;
+  const sig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], sigY, undefined,
+    [sig.accountant, sig.secretary, sig.president]);
 
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('BankBook', society));
@@ -707,6 +717,11 @@ export function generateLedgerPDF(
     didParseCell: rightAlignAmountColumns(3, 4, 5),
   });
 
+  const sigY = (doc as any).lastAutoTable.finalY + 10;
+  const sig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], sigY, undefined,
+    [sig.accountant, sig.secretary, sig.president]);
+
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName(`Ledger_${account.name.replace(/\s+/g, '_')}`, society));
 }
@@ -854,6 +869,11 @@ export function generateLoanRegisterPDF(loans: Loan[], members: Member[], societ
   doc.setFont(font, 'bold');
   doc.text(`Total Loans: ${loans.length}   |   Total Disbursed: ${fmt(totalDisbursed)}   |   Outstanding: ${fmt(totalOutstanding)}`, 15, finalY);
 
+  const sigY = finalY + 10;
+  const sig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], sigY, undefined,
+    [sig.accountant, sig.secretary, sig.president]);
+
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('LoanRegister', society));
 }
@@ -907,6 +927,11 @@ export function generateAssetRegisterPDF(assets: Asset[], society: SocietySettin
     footStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
     didParseCell: rightAlignAmountColumns(6, 8, 9),
   });
+
+  const sigY = (doc as any).lastAutoTable.finalY + 10;
+  const sig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], sigY, undefined,
+    [sig.accountant, sig.secretary, sig.president]);
 
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('AssetRegister', society));
@@ -1125,6 +1150,11 @@ export function generateDayBookPDF(
       }
     },
   });
+
+  const sigY = (doc as any).lastAutoTable.finalY + 10;
+  const sig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], sigY, undefined,
+    [sig.accountant, sig.secretary, sig.president]);
 
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('DayBook', society));
@@ -1496,6 +1526,12 @@ export function generateGstSummaryPDF(params: GstSummaryPDFParams): void {
   doc.setTextColor(120, 120, 120);
   doc.text('Note: This report is for internal accounting purposes only. Verify with GSTN portal before filing returns.', 15, y);
 
+  const sigY = y + 10;
+  const sig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Accountant', 'Secretary', 'Authorized Signatory'], sigY, undefined,
+    [sig.accountant, sig.secretary, sig.president]);
+
+  addPageNumbers(doc, font, society?.name);
   const dateStr = new Date().toISOString().split('T')[0];
   doc.save(pdfFileName('GSTSummary', society, fromDate, toDate));
 }

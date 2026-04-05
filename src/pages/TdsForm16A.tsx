@@ -11,7 +11,7 @@ import { Download, FileText, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { addHeader, addPageNumbers, pdfFileName } from '@/lib/pdf';
+import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName } from '@/lib/pdf';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -131,11 +131,10 @@ export default function TdsForm16A() {
         footStyles: { fontStyle: 'bold' },
       });
 
-      const finalY = (doc as any).lastAutoTable.finalY + 15;
-      doc.text('Signature of Deductor', 14, finalY + 10);
-      doc.text('__________________________', 14, finalY + 16);
-      doc.text(deductorName, 14, finalY + 22);
-      doc.text(`Designation: _______________________`, 14, finalY + 28);
+      const sigY = (doc as any).lastAutoTable.finalY + 10;
+      const sig = getSignatoryNames(society);
+      addSignatureBlock(doc, font, ['Accountant', 'Authorized Signatory'], sigY, undefined,
+        [sig.accountant, deductorName]);
     } else {
       // Summary for all suppliers
       autoTable(doc, {

@@ -258,6 +258,11 @@ const NabardReport: React.FC = () => {
       didDrawPage: (data) => { y = data.cursor?.y ?? y; },
     });
 
+    const sigY = (doc as any).lastAutoTable.finalY + 10;
+    const sig = getSignatoryNames(society);
+    addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], sigY, undefined,
+      [sig.accountant, sig.secretary, sig.president]);
+
     addPageNumbers(doc, font, society?.name);
     doc.save(pdfFileName('NABARD_CreditReport', society));
   };

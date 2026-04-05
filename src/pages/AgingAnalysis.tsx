@@ -24,7 +24,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { addHeader, addPageNumbers, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
+import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface AgingRow {
@@ -332,6 +332,11 @@ const AgingAnalysis: React.FC = () => {
       columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' } },
       didParseCell: rightAlignAmountColumns(4, 5, 6, 7, 8, 9),
     });
+
+    const sigY = (doc as any).lastAutoTable.finalY + 10;
+    const sig = getSignatoryNames(society);
+    addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], sigY, undefined,
+      [sig.accountant, sig.secretary, sig.president]);
 
     addPageNumbers(doc, font, society.name);
     doc.save(pdfFileName('AgingAnalysis', society));

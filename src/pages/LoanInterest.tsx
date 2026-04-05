@@ -28,7 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { addHeader, addPageNumbers, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
+import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 
@@ -228,6 +228,11 @@ const LoanInterest: React.FC = () => {
     const finalY = (doc as any).lastAutoTable.finalY + 6;
     doc.setFontSize(8);
     doc.text(`Formula: Interest = (Outstanding x Rate x Days) / (365 x 100)`, 14, finalY);
+
+    const sigY2 = finalY + 10;
+    const sig = getSignatoryNames(society);
+    addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], sigY2, undefined,
+      [sig.accountant, sig.secretary, sig.president]);
 
     addPageNumbers(doc, font, society.name);
     doc.save(pdfFileName('LoanInterest', society));
