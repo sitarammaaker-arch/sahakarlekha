@@ -27,7 +27,7 @@ interface BSGroup {
 
 const BalanceSheet: React.FC = () => {
   const { t, language } = useLanguage();
-  const { getTrialBalance, getProfitLoss, getTradingAccount, society, accounts } = useData();
+  const { getTrialBalance, getProfitLoss, getTradingAccount, society, accounts, stockItems } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -94,6 +94,29 @@ const BalanceSheet: React.FC = () => {
       };
       const displayName = auditNames[group.id]?.en || group.name;
       const displayNameHi = auditNames[group.id]?.hi || group.nameHi || group.name;
+
+      // Special: Closing Stock (3400) — show stock group-wise breakdown from inventory
+      if (group.id === '3400' && stockItems && stockItems.length > 0) {
+        const activeStock = stockItems.filter(s => s.isActive && s.currentStock > 0);
+        if (activeStock.length > 0) {
+          const stockGroups: Record<string, number> = {};
+          activeStock.forEach(s => {
+            const grp = s.stockGroup || 'General';
+            stockGroups[grp] = (stockGroups[grp] || 0) + s.currentStock * (s.purchaseRate || 0);
+          });
+          const stockTotal = Object.values(stockGroups).reduce((s, v) => s + v, 0);
+          // Create virtual items for each stock group
+          const stockItems2 = Object.entries(stockGroups).sort(([a], [b]) => a.localeCompare(b)).map(([grp, val]) => ({
+            account: { account: { id: `stock-${grp}`, name: grp, nameHi: grp, type: 'asset' as const } } as any,
+            displayAmount: val,
+            pyAmount: 0,
+          }));
+          return {
+            id: group.id, name: displayName, nameHi: displayNameHi,
+            items: stockItems2, grandTotal: stockTotal, pyGrandTotal: items.reduce((s, i) => s + i.pyAmount, 0),
+          };
+        }
+      }
 
       return {
         id: group.id, name: displayName, nameHi: displayNameHi,
