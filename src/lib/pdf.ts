@@ -1501,6 +1501,63 @@ export function generateGstSummaryPDF(params: GstSummaryPDFParams): void {
 }
 
 
+// ── Budget vs Actual PDF ─────────────────────────────────────────────────────
+
+interface BudgetRow { code: string; name: string; budget: number; actual: number; varPct: number; status: string }
+
+export function generateBudgetPDF(params: {
+  incomeRows: BudgetRow[];
+  expenseRows: BudgetRow[];
+  totalBudgetIncome: number; totalActualIncome: number;
+  totalBudgetExpense: number; totalActualExpense: number;
+  society: SocietySettings; fy: string;
+}): void {
+  const { incomeRows, expenseRows, totalBudgetIncome, totalActualIncome, totalBudgetExpense, totalActualExpense, society, fy } = params;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const { startY, font } = addHeader(doc, 'Budget vs Actual', society, `Financial Year: ${fy}`, { reportCode: 'BVA' });
+
+  const fmtN = (n: number) => fmt(n);
+  const buildBody = (rows: BudgetRow[]) =>
+    rows.map(r => [r.code, r.name, fmtN(r.budget), fmtN(r.actual), `${r.varPct.toFixed(1)}%`, r.status]);
+
+  const tableOpts = (headColor: number[], bodyData: BudgetRow[], totalBudget: number, totalActual: number, y: number) => ({
+    startY: y,
+    head: [['Code', 'Account', 'Budget (Rs.)', 'Actual (Rs.)', 'Var %', 'Status']],
+    body: buildBody(bodyData),
+    foot: [['', 'Total', fmtN(totalBudget), fmtN(totalActual), '', '']],
+    styles: { fontSize: 8, cellPadding: 2, font },
+    headStyles: { fillColor: headColor, textColor: 255, fontStyle: 'bold' as const },
+    footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' as const },
+    alternateRowStyles: { fillColor: [248, 250, 253] },
+    columnStyles: { 2: { halign: 'right' as const }, 3: { halign: 'right' as const }, 4: { halign: 'right' as const } },
+    didParseCell: rightAlignAmountColumns(2, 3, 4),
+  });
+
+  // Income section
+  doc.setFontSize(10);
+  doc.setFont(font, 'bold');
+  doc.text('Income', 15, startY);
+  autoTable(doc, tableOpts([39, 174, 96], incomeRows, totalBudgetIncome, totalActualIncome, startY + 3));
+
+  // Expense section
+  const y2 = (doc as any).lastAutoTable.finalY + 8;
+  doc.setFontSize(10);
+  doc.setFont(font, 'bold');
+  doc.text('Expenses', 15, y2);
+  autoTable(doc, tableOpts([192, 57, 43], expenseRows, totalBudgetExpense, totalActualExpense, y2 + 3));
+
+  const sigY = (doc as any).lastAutoTable.finalY + 10;
+  const sig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Accountant', 'Secretary', 'Chairman'], sigY,
+    'Certified that the above Budget vs Actual statement has been prepared from the Books of Account of the Society.',
+    [sig.accountant, sig.secretary, sig.president]
+  );
+
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName('BudgetVsActual', society));
+}
+
+
 // ── Depreciation Schedule PDF ────────────────────────────────────────────────
 
 interface DepCategoryRow {

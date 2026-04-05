@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Download, Plus, Edit2, CheckCircle2, TrendingUp, TrendingDown, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { generateBudgetPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { Budget, BudgetHead } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
@@ -151,46 +152,13 @@ export default function BudgetModule() {
   const handleExcel = () => downloadExcelSingle(budgetHeaders, budgetDataRows(), 'budget-vs-actual', 'Budget vs Actual');
 
   const handlePDF = () => {
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    const w = doc.internal.pageSize.getWidth();
-    doc.setFontSize(13);
-    doc.text(society.name, w / 2, 14, { align: 'center' });
-    doc.setFontSize(11);
-    doc.text(`Budget vs Actual — ${selectedFY}`, w / 2, 21, { align: 'center' });
-
-    const buildBody = (data: typeof rows) =>
-      data.map(r => [
-        r.account.code,
-        r.account.name,
-        r.budgeted.toFixed(2),
-        r.actual.toFixed(2),
-        `${r.variancePct.toFixed(1)}%`,
-        r.favourable ? 'Fav' : 'Adv',
-      ]);
-
-    doc.setFontSize(10);
-    doc.text('Income', 14, 30);
-    autoTable(doc, {
-      startY: 33,
-      head: [['Code', 'Account', 'Budget', 'Actual', 'Var %', 'Status']],
-      body: buildBody(incomeRows),
-      foot: [['', 'Total', totalBudgetIncome.toFixed(2), totalActualIncome.toFixed(2), '', '']],
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [39, 174, 96] },
+    generateBudgetPDF({
+      incomeRows: incomeRows.map(r => ({ code: r.account.code, name: r.account.name, budget: r.budgeted, actual: r.actual, varPct: r.variancePct, status: r.favourable ? 'Fav' : 'Adv' })),
+      expenseRows: expenseRows.map(r => ({ code: r.account.code, name: r.account.name, budget: r.budgeted, actual: r.actual, varPct: r.variancePct, status: r.favourable ? 'Fav' : 'Adv' })),
+      totalBudgetIncome, totalActualIncome,
+      totalBudgetExpense, totalActualExpense,
+      society, fy: selectedFY,
     });
-
-    const y2 = (doc as any).lastAutoTable.finalY + 6;
-    doc.text('Expenses', 14, y2);
-    autoTable(doc, {
-      startY: y2 + 3,
-      head: [['Code', 'Account', 'Budget', 'Actual', 'Var %', 'Status']],
-      body: buildBody(expenseRows),
-      foot: [['', 'Total', totalBudgetExpense.toFixed(2), totalActualExpense.toFixed(2), '', '']],
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [192, 57, 43] },
-    });
-
-    doc.save(`budget-vs-actual-${selectedFY}.pdf`);
   };
 
   return (
