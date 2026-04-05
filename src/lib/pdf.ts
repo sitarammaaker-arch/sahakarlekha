@@ -751,6 +751,7 @@ export function generateMemberPassbookPDF(
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 253] },
     columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(3, 4, 5),
   });
 
   // Signature line
@@ -790,7 +791,8 @@ export function generateShareRegisterPDF(members: Member[], society: SocietySett
     styles: { fontSize: 8 },
     headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 252] },
-    columnStyles: { 8: { halign: 'right' } },
+    columnStyles: { 7: { halign: 'right' }, 8: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(7, 8),
   });
 
   const srSummaryY = (doc as any).lastAutoTable.finalY + 8;
@@ -842,6 +844,7 @@ export function generateLoanRegisterPDF(loans: Loan[], members: Member[], societ
     headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: { 4: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(4, 8, 9),
   });
 
   const finalY = (doc as any).lastAutoTable.finalY + 10;
@@ -892,7 +895,7 @@ export function generateAssetRegisterPDF(assets: Asset[], society: SocietySettin
     styles: { fontSize: 8 },
     headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 252] },
-    columnStyles: { 6: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' } },
+    columnStyles: { 6: { halign: 'right' }, 7: { halign: 'center' }, 8: { halign: 'right' }, 9: { halign: 'right' } },
     foot: [[
       '', '', '', '', '', 'Total',
       fmt(assets.reduce((s, a) => s + a.cost, 0)),
@@ -902,6 +905,7 @@ export function generateAssetRegisterPDF(assets: Asset[], society: SocietySettin
       '',
     ]],
     footStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
+    didParseCell: rightAlignAmountColumns(6, 8, 9),
   });
 
   addPageNumbers(doc, font, society?.name);
@@ -1294,6 +1298,7 @@ export function generateSalarySlipPDF(
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold', fontSize: 8 },
     footStyles: { fillColor: [240, 248, 240], textColor: [0, 100, 0], fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right' }, 3: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(1, 3),
   });
 
   // ── Payment info ─────────────────────────────────────────────────────────
