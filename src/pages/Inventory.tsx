@@ -75,9 +75,10 @@ interface ItemFormProps {
   onSubmit: () => void;
   submitLabel: string;
   onCancel: () => void;
+  existingGroups?: string[];
 }
 
-const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit, submitLabel, onCancel }) => (
+const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit, submitLabel, onCancel, existingGroups = [] }) => (
   <form onSubmit={e => e.preventDefault()} className="space-y-4">
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div className="space-y-2">
@@ -156,11 +157,33 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
     </div>
     <div className="space-y-2">
       <Label>{hi ? 'माल समूह / श्रेणी' : 'Stock Group / Category'}</Label>
-      <Input
-        value={itemForm.stockGroup}
-        onChange={e => setItemForm(f => ({ ...f, stockGroup: e.target.value }))}
-        placeholder={hi ? 'जैसे: उपभोक्ता वस्तुएं, उर्वरक, पशु आहार' : 'e.g. Consumer Products, Fertilizer, Animal Feed'}
-      />
+      {existingGroups.length > 0 ? (
+        <select
+          value={itemForm.stockGroup}
+          onChange={e => setItemForm(f => ({ ...f, stockGroup: e.target.value }))}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="">{hi ? '— समूह चुनें —' : '— Select Group —'}</option>
+          {existingGroups.map(g => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+          <option value="__new__">{hi ? '+ नया समूह जोड़ें' : '+ Add New Group'}</option>
+        </select>
+      ) : (
+        <Input
+          value={itemForm.stockGroup}
+          onChange={e => setItemForm(f => ({ ...f, stockGroup: e.target.value }))}
+          placeholder={hi ? 'जैसे: उपभोक्ता वस्तुएं, उर्वरक, पशु आहार' : 'e.g. Consumer Products, Fertilizer, Animal Feed'}
+        />
+      )}
+      {itemForm.stockGroup === '__new__' && (
+        <Input
+          value=""
+          onChange={e => setItemForm(f => ({ ...f, stockGroup: e.target.value }))}
+          placeholder={hi ? 'नया समूह नाम लिखें' : 'Type new group name'}
+          autoFocus
+        />
+      )}
     </div>
     <div className="space-y-2">
       <Label>{hi ? 'बारकोड / EAN' : 'Barcode / EAN'}</Label>
@@ -281,6 +304,13 @@ const Inventory: React.FC = () => {
   const editItemRef = useRef<StockItem | null>(null);
   const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
   const [itemForm, setItemForm] = useState(EMPTY_ITEM_FORM);
+
+  // Unique stock groups for dropdown (deduplicated, sorted)
+  const existingGroups = useMemo(() => {
+    const groups = new Set<string>();
+    stockItems.forEach(item => { if (item.stockGroup && item.stockGroup !== 'General') groups.add(item.stockGroup); });
+    return [...groups].sort();
+  }, [stockItems]);
   const itemFormRef = useRef(EMPTY_ITEM_FORM);
   const setItemFormWithRef = useCallback((updater: typeof EMPTY_ITEM_FORM | ((prev: typeof EMPTY_ITEM_FORM) => typeof EMPTY_ITEM_FORM)) => {
     setItemForm(prev => {
@@ -927,6 +957,7 @@ const Inventory: React.FC = () => {
               setIsItemAddOpen(false);
               resetItemForm();
             }}
+            existingGroups={existingGroups}
           />
         </DialogContent>
       </Dialog>
@@ -958,6 +989,7 @@ const Inventory: React.FC = () => {
               setEditItem(null);
               resetItemForm();
             }}
+            existingGroups={existingGroups}
           />
         </DialogContent>
       </Dialog>
