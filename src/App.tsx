@@ -57,6 +57,7 @@ import BackupRestore from "./pages/BackupRestore";
 import GstSummary from "./pages/GstSummary";
 import AgingAnalysis from "./pages/AgingAnalysis";
 import StockValuation from "./pages/StockValuation";
+import ClosingStockReport from "./pages/ClosingStockReport";
 import BudgetModule from "./pages/BudgetModule";
 import TdsForm16A from "./pages/TdsForm16A";
 import TdsRegister from "./pages/TdsRegister";
@@ -182,6 +183,7 @@ const AppRoutes = () => {
       <Route path="/hsn-master" element={<ProtectedRoute><HsnMaster /></ProtectedRoute>} />
       <Route path="/aging-analysis" element={<ProtectedRoute><AgingAnalysis /></ProtectedRoute>} />
       <Route path="/stock-valuation" element={<ProtectedRoute><StockValuation /></ProtectedRoute>} />
+      <Route path="/closing-stock-report" element={<ProtectedRoute><ClosingStockReport /></ProtectedRoute>} />
       <Route path="/budget-module" element={<ProtectedRoute><BudgetModule /></ProtectedRoute>} />
       <Route path="/tds-form16a" element={<ProtectedRoute><TdsForm16A /></ProtectedRoute>} />
       <Route path="/tds-register" element={<ProtectedRoute><TdsRegister /></ProtectedRoute>} />

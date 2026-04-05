@@ -63,6 +63,7 @@ const reportNavItems: NavItem[] = [
   { key: 'tdsForm16A', icon: Receipt, path: '/tds-form16a' },
   { key: 'tdsRegister', icon: Receipt, path: '/tds-register' },
   { key: 'stockValuation', icon: Warehouse, path: '/stock-valuation' },
+  { key: 'closingStockReport', icon: Package, path: '/closing-stock-report' },
   { key: 'budgetModule', icon: PiggyBank, path: '/budget-module' },
   { key: 'eWayBill', icon: FileJson, path: '/eway-bill' },
   { key: 'hsnMaster', icon: Hash, path: '/hsn-master' },

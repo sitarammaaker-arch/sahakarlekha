@@ -1594,6 +1594,62 @@ export function generateBudgetPDF(params: {
 }
 
 
+// ── Closing Stock Report PDF ─────────────────────────────────────────────────
+
+interface ClosingStockRow {
+  itemCode: string; name: string; unit: string;
+  openingQty: number; purchaseQty: number; saleQty: number; adjustmentQty: number;
+  closingQty: number; rate: number; closingValue: number;
+}
+
+interface ClosingStockTotals {
+  openingQty: number; purchaseQty: number; saleQty: number;
+  adjustmentQty: number; closingQty: number; closingValue: number;
+}
+
+export function generateClosingStockPDF(
+  data: ClosingStockRow[], totals: ClosingStockTotals,
+  society: SocietySettings, _language: string,
+): void {
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const { startY, font } = addHeader(doc, 'Closing Stock Report', society,
+    `Financial Year: ${society.financialYear} | As at 31st March`,
+    { reportCode: 'CSR' });
+
+  const fQ = (n: number) => n.toFixed(3);
+
+  autoTable(doc, {
+    startY: startY + 2,
+    head: [['S.No', 'Code', 'Item Name', 'Unit', 'Opening', 'Purchase', 'Sale', 'Adj.', 'Closing Qty', 'Rate (Rs.)', 'Value (Rs.)']],
+    body: data.map((r, i) => [
+      String(i + 1), r.itemCode, r.name, r.unit,
+      fQ(r.openingQty), fQ(r.purchaseQty), fQ(r.saleQty),
+      r.adjustmentQty !== 0 ? fQ(r.adjustmentQty) : '—',
+      fQ(r.closingQty), fmt(r.rate), fmt(r.closingValue),
+    ]),
+    foot: [['', '', 'Total', '', fQ(totals.openingQty), fQ(totals.purchaseQty),
+      fQ(totals.saleQty), fQ(totals.adjustmentQty), fQ(totals.closingQty), '', fmt(totals.closingValue)]],
+    styles: { fontSize: 8, cellPadding: 2, font },
+    headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold' },
+    footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 253] },
+    columnStyles: {
+      4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' },
+      7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right' },
+    },
+    didParseCell: rightAlignAmountColumns(4, 5, 6, 7, 8, 9, 10),
+  });
+
+  const sigY = (doc as any).lastAutoTable.finalY + 10;
+  const sig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], sigY,
+    'Certified that the above Closing Stock statement is correct as per the physical verification and Books of Account.',
+    [sig.accountant, sig.secretary, sig.president]);
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName('ClosingStockReport', society));
+}
+
+
 // ── Depreciation Schedule PDF ────────────────────────────────────────────────
 
 interface DepCategoryRow {

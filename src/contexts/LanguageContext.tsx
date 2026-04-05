@@ -51,6 +51,7 @@ export const translations: Translations = {
   gstSummary: { hi: 'GST सारांश', en: 'GST Summary' },
   agingAnalysis: { hi: 'AR/AP बकाया विश्लेषण', en: 'Aging Analysis' },
   stockValuation: { hi: 'स्टॉक मूल्यांकन', en: 'Stock Valuation' },
+  closingStockReport: { hi: 'समापन माल रिपोर्ट', en: 'Closing Stock Report' },
   budgetModule: { hi: 'बजट मॉड्यूल', en: 'Budget Module' },
   tdsForm16A: { hi: 'TDS Form 16A', en: 'TDS Form 16A' },
   tdsRegister: { hi: 'TDS रजिस्टर / 26Q', en: 'TDS Register / 26Q' },
