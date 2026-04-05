@@ -136,10 +136,9 @@ export default function BudgetModule() {
     toast({ title: hi ? 'बजट सहेजा गया' : 'Budget saved' });
   }, [budgets, selectedFY, user, hi, toast, societyId]);
 
-  const budgetHeaders = ['Code', 'Account', 'Budget (₹)', 'Actual (₹)', 'Variance (₹)', 'Var %', 'Status'];
+  const budgetHeaders = ['Account', 'Budget (₹)', 'Actual (₹)', 'Variance (₹)', 'Var %', 'Status'];
   const budgetDataRows = () =>
     rows.map(r => [
-      r.account.code,
       r.account.name,
       r.budgeted,
       r.actual,
@@ -153,8 +152,8 @@ export default function BudgetModule() {
 
   const handlePDF = () => {
     generateBudgetPDF({
-      incomeRows: incomeRows.map(r => ({ code: r.account.code, name: r.account.name, budget: r.budgeted, actual: r.actual, varPct: r.variancePct, status: r.favourable ? 'Fav' : 'Adv' })),
-      expenseRows: expenseRows.map(r => ({ code: r.account.code, name: r.account.name, budget: r.budgeted, actual: r.actual, varPct: r.variancePct, status: r.favourable ? 'Fav' : 'Adv' })),
+      incomeRows: incomeRows.map(r => ({ name: r.account.name, budget: r.budgeted, actual: r.actual, varPct: r.variancePct, status: r.favourable ? 'Fav' : 'Adv' })),
+      expenseRows: expenseRows.map(r => ({ name: r.account.name, budget: r.budgeted, actual: r.actual, varPct: r.variancePct, status: r.favourable ? 'Fav' : 'Adv' })),
       totalBudgetIncome, totalActualIncome,
       totalBudgetExpense, totalActualExpense,
       society, fy: selectedFY,
@@ -256,7 +255,6 @@ function BudgetTable({ title, rows, totalBudget, totalActual, hi, color }: {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{hi ? 'कोड' : 'Code'}</TableHead>
                 <TableHead>{hi ? 'खाता' : 'Account'}</TableHead>
                 <TableHead className="text-right">{hi ? 'बजट' : 'Budget'}</TableHead>
                 <TableHead className="text-right">{hi ? 'वास्तविक' : 'Actual'}</TableHead>
@@ -267,7 +265,6 @@ function BudgetTable({ title, rows, totalBudget, totalActual, hi, color }: {
             <TableBody>
               {rows.map(r => (
                 <TableRow key={r.account.id}>
-                  <TableCell className="font-mono text-xs">{r.account.code}</TableCell>
                   <TableCell>{r.account.name}</TableCell>
                   <TableCell className="text-right font-mono">{fmt(r.budgeted)}</TableCell>
                   <TableCell className="text-right font-mono">{fmt(r.actual)}</TableCell>

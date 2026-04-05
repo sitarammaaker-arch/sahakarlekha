@@ -1503,7 +1503,7 @@ export function generateGstSummaryPDF(params: GstSummaryPDFParams): void {
 
 // ── Budget vs Actual PDF ─────────────────────────────────────────────────────
 
-interface BudgetRow { code: string; name: string; budget: number; actual: number; varPct: number; status: string }
+interface BudgetRow { name: string; budget: number; actual: number; varPct: number; status: string }
 
 export function generateBudgetPDF(params: {
   incomeRows: BudgetRow[];
@@ -1518,19 +1518,19 @@ export function generateBudgetPDF(params: {
 
   const fmtN = (n: number) => fmt(n);
   const buildBody = (rows: BudgetRow[]) =>
-    rows.map(r => [r.code, r.name, fmtN(r.budget), fmtN(r.actual), `${r.varPct.toFixed(1)}%`, r.status]);
+    rows.map(r => [r.name, fmtN(r.budget), fmtN(r.actual), `${r.varPct.toFixed(1)}%`, r.status]);
 
   const tableOpts = (headColor: number[], bodyData: BudgetRow[], totalBudget: number, totalActual: number, y: number) => ({
     startY: y,
-    head: [['Code', 'Account', 'Budget (Rs.)', 'Actual (Rs.)', 'Var %', 'Status']],
+    head: [['Account', 'Budget (Rs.)', 'Actual (Rs.)', 'Var %', 'Status']],
     body: buildBody(bodyData),
-    foot: [['', 'Total', fmtN(totalBudget), fmtN(totalActual), '', '']],
+    foot: [['Total', fmtN(totalBudget), fmtN(totalActual), '', '']],
     styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: headColor, textColor: 255, fontStyle: 'bold' as const },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' as const },
     alternateRowStyles: { fillColor: [248, 250, 253] },
-    columnStyles: { 2: { halign: 'right' as const }, 3: { halign: 'right' as const }, 4: { halign: 'right' as const } },
-    didParseCell: rightAlignAmountColumns(2, 3, 4),
+    columnStyles: { 1: { halign: 'right' as const }, 2: { halign: 'right' as const }, 3: { halign: 'right' as const } },
+    didParseCell: rightAlignAmountColumns(1, 2, 3),
   });
 
   // Income section
