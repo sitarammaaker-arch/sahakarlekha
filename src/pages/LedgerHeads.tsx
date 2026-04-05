@@ -582,7 +582,7 @@ const LedgerHeads: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>{hi ? 'प्रारंभिक शेष' : 'Opening Balance'} (₹)</Label>
-                  <Input type="number" min="0" value={form.openingBalance} onChange={e => setForm(f => ({ ...f, openingBalance: e.target.value }))} placeholder="0" />
+                  <Input type="number" min="0" step="0.01" value={form.openingBalance} onChange={e => setForm(f => ({ ...f, openingBalance: e.target.value }))} placeholder="0" />
                 </div>
                 <div className="space-y-2">
                   <Label>{hi ? 'शेष प्रकार' : 'Balance Type'}</Label>
@@ -654,7 +654,7 @@ const LedgerHeads: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>{hi ? 'प्रारंभिक शेष' : 'Opening Balance'} (₹)</Label>
-                  <Input type="number" min="0" value={form.openingBalance} onChange={e => setForm(f => ({ ...f, openingBalance: e.target.value }))} placeholder="0" />
+                  <Input type="number" min="0" step="0.01" value={form.openingBalance} onChange={e => setForm(f => ({ ...f, openingBalance: e.target.value }))} placeholder="0" />
                 </div>
                 <div className="space-y-2">
                   <Label>{hi ? 'शेष प्रकार' : 'Balance Type'}</Label>
