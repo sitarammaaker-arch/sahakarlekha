@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { VoucherType, VoucherLine } from '@/types';
 import { Plus, Minus } from 'lucide-react';
-import { getNextVoucherNo, VOUCHER_TEMPLATES, ACCOUNT_IDS } from '@/lib/storage';
+import { getNextVoucherNo, VOUCHER_TEMPLATES, ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import type { LedgerAccount } from '@/types';
 import { validateVoucher } from '@/lib/validation';
 import { fmtDate } from '@/lib/dateUtils';
@@ -131,6 +131,8 @@ const Vouchers: React.FC = () => {
 
   const [voucherType, setVoucherType] = useState<VoucherType>('receipt');
   const [contraDir, setContraDir] = useState<'cash_to_bank' | 'bank_to_cash'>('cash_to_bank');
+  const bankIds = useMemo(() => getBankAccountIds(accounts), [accounts]);
+  const [contraBankId, setContraBankId] = useState('');
   const [voucherDate, setVoucherDate] = useState(new Date().toISOString().split('T')[0]);
   const [debitAccount, setDebitAccount] = useState('');
   const [creditAccount, setCreditAccount] = useState('');
@@ -290,8 +292,9 @@ const Vouchers: React.FC = () => {
     e.preventDefault();
     // For Contra: auto-set Dr/Cr based on direction
     if (voucherType === 'contra') {
-      const drAcc = contraDir === 'cash_to_bank' ? ACCOUNT_IDS.BANK : ACCOUNT_IDS.CASH;
-      const crAcc = contraDir === 'cash_to_bank' ? ACCOUNT_IDS.CASH : ACCOUNT_IDS.BANK;
+      const selectedBankForContra = contraBankId || bankIds[0] || ACCOUNT_IDS.BANK;
+      const drAcc = contraDir === 'cash_to_bank' ? selectedBankForContra : ACCOUNT_IDS.CASH;
+      const crAcc = contraDir === 'cash_to_bank' ? ACCOUNT_IDS.CASH : selectedBankForContra;
       setDebitAccount(drAcc);
       setCreditAccount(crAcc);
       if (!amount || Number(amount) <= 0) {
@@ -734,6 +737,23 @@ const Vouchers: React.FC = () => {
                             <span className="text-xs text-muted-foreground">Dr: Cash / Cr: Bank</span>
                           </button>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Contra bank selector */}
+                    {voucherType === 'contra' && bankIds.length > 1 && (
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">{language === 'hi' ? 'बैंक खाता' : 'Bank Account'}</Label>
+                        <select
+                          value={contraBankId || bankIds[0] || ACCOUNT_IDS.BANK}
+                          onChange={e => setContraBankId(e.target.value)}
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                        >
+                          {bankIds.map(bid => {
+                            const acc = accounts.find(a => a.id === bid);
+                            return <option key={bid} value={bid}>{acc?.name || bid}</option>;
+                          })}
+                        </select>
                       </div>
                     )}
 

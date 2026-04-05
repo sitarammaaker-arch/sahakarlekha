@@ -68,10 +68,31 @@ const KEYS = {
 // only needs updating here.
 export const ACCOUNT_IDS = {
   CASH:      '3301',  // Cash in Hand
-  BANK:      '3302',  // Bank Accounts
+  BANK:      '3302',  // Bank Accounts (GROUP — sub-accounts are individual banks)
   SHARE_CAP: '1102',  // Individual Share Capital (member share capital)
   ADM_FEE:   '4407',  // Admission Fee (Capital Receipt — Balance Sheet)
 } as const;
+
+/**
+ * Get all bank account IDs (leaf accounts under the Bank Accounts group).
+ * If 3302 is a group → returns its children.
+ * If 3302 is a leaf (backward compat) → returns ['3302'].
+ */
+export function getBankAccountIds(accounts: { id: string; parentId?: string; isGroup?: boolean; subtype?: string }[]): string[] {
+  const bankGroup = accounts.find(a => a.id === ACCOUNT_IDS.BANK);
+  if (bankGroup?.isGroup) {
+    const children = accounts.filter(a => !a.isGroup && a.parentId === ACCOUNT_IDS.BANK);
+    return children.length > 0 ? children.map(a => a.id) : [ACCOUNT_IDS.BANK];
+  }
+  return [ACCOUNT_IDS.BANK];
+}
+
+/** Check if an account ID is a bank account (direct or sub-account of 3302) */
+export function isBankAccount(accountId: string, accounts: { id: string; parentId?: string; isGroup?: boolean }[]): boolean {
+  if (accountId === ACCOUNT_IDS.BANK) return true;
+  const acc = accounts.find(a => a.id === accountId);
+  return acc?.parentId === ACCOUNT_IDS.BANK && !acc?.isGroup;
+}
 
 // ── CMSSociety (Marketing cum Processing Society) Chart of Accounts ──────────
 // 136 accounts — verified against ICAI NCE GN 2023 + Haryana Cooperative Societies Act 1984

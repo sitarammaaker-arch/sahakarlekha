@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { ACCOUNT_IDS } from '@/lib/storage';
+import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,10 +31,14 @@ const BankBook: React.FC = () => {
   const [entryAmount, setEntryAmount] = useState('');
   const [entryNarration, setEntryNarration] = useState('');
 
-  const bankAccount = accounts.find(a => a.id === ACCOUNT_IDS.BANK);
+  const bankIds = useMemo(() => getBankAccountIds(accounts), [accounts]);
+  const [selectedBank, setSelectedBank] = useState('');
+  const activeBankId = selectedBank || bankIds[0] || ACCOUNT_IDS.BANK;
+
+  const bankAccount = accounts.find(a => a.id === activeBankId);
   const openingBalance = bankAccount?.openingBalance || 0;
-  const entries = getBankBookEntries();
-  const bankBalance = getAccountBalance(ACCOUNT_IDS.BANK);
+  const entries = getBankBookEntries(undefined, undefined, activeBankId);
+  const bankBalance = getAccountBalance(activeBankId);
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -42,7 +46,7 @@ const BankBook: React.FC = () => {
   const totalDeposits = entries.filter(e => e.type === 'deposit').reduce((s, e) => s + e.amount, 0);
   const totalWithdrawals = entries.filter(e => e.type === 'withdrawal').reduce((s, e) => s + e.amount, 0);
 
-  const nonBankAccounts = accounts.filter(a => !a.isGroup && a.id !== ACCOUNT_IDS.BANK && a.id !== ACCOUNT_IDS.CASH);
+  const nonBankAccounts = accounts.filter(a => !a.isGroup && !bankIds.includes(a.id) && a.id !== ACCOUNT_IDS.CASH);
 
   const exportHeaders = ['Date', 'Voucher No.', 'Particulars', 'Receipt (Dr)', 'Payment (Cr)', 'Balance'];
 
@@ -80,8 +84,8 @@ const BankBook: React.FC = () => {
     addVoucher({
       type: entryType === 'deposit' ? 'receipt' : 'payment',
       date: entryDate,
-      debitAccountId: entryType === 'deposit' ? ACCOUNT_IDS.BANK : otherAccount,
-      creditAccountId: entryType === 'deposit' ? otherAccount : ACCOUNT_IDS.BANK,
+      debitAccountId: entryType === 'deposit' ? activeBankId : otherAccount,
+      creditAccountId: entryType === 'deposit' ? otherAccount : activeBankId,
       amount: Number(entryAmount),
       narration: entryNarration,
       createdBy: user?.name || 'System',
@@ -168,6 +172,20 @@ const BankBook: React.FC = () => {
           </Dialog>
         </div>
       </div>
+
+      {/* Bank Selector */}
+      {bankIds.length > 1 && (
+        <div className="flex items-center gap-3">
+          <Label className="text-sm font-medium">{language === 'hi' ? 'बैंक खाता' : 'Bank Account'}:</Label>
+          <select value={activeBankId} onChange={e => setSelectedBank(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm">
+            {bankIds.map(bid => {
+              const acc = accounts.find(a => a.id === bid);
+              return <option key={bid} value={bid}>{acc?.name || bid}</option>;
+            })}
+          </select>
+        </div>
+      )}
 
       {/* Bank Card */}
       <Card className="ring-2 ring-primary">

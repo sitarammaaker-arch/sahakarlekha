@@ -286,7 +286,7 @@ const HARYANA_SCHEDULES: ScheduleDefinition[] = [
     id: 'sch-VI', name: 'Schedule VI — Current Assets, Loans & Advances', nameHi: 'अनुसूची VI — चालू संपत्ति, ऋण एवं अग्रिम', shortName: 'VI',
     lineItems: [
       { id: 'VI-1', label: 'Cash in Hand', labelHi: 'हाथ में नकद', source: { kind: 'account', accountIds: ['3301'] }, indent: 0 },
-      { id: 'VI-2', label: 'Bank Accounts', labelHi: 'बैंक खाते', source: { kind: 'account', accountIds: ['3302'] }, indent: 0 },
+      { id: 'VI-2', label: 'Bank Accounts', labelHi: 'बैंक खाते', source: { kind: 'parentGroup', parentIds: ['3302'] }, indent: 0 },
       { id: 'VI-3', label: 'Sundry Debtors', labelHi: 'विविध देनदार', source: { kind: 'account', accountIds: ['3303'] }, indent: 0 },
       { id: 'VI-4', label: 'Loans & Advances', labelHi: 'ऋण एवं अग्रिम', source: { kind: 'account', accountIds: ['3304'] }, indent: 0 },
       { id: 'VI-5', label: 'Subsidy Receivable', labelHi: 'प्राप्य अनुदान', source: { kind: 'account', accountIds: ['3305'] }, indent: 0 },

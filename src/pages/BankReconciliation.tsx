@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Building2, CheckCircle2, AlertCircle, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ACCOUNT_IDS } from '@/lib/storage';
+import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { useToast } from '@/hooks/use-toast';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
@@ -67,13 +67,17 @@ const BankReconciliation: React.FC = () => {
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
   const [autoMatched, setAutoMatched] = useState(0);
 
-  const bankAccount = accounts.find(a => a.id === ACCOUNT_IDS.BANK);
+  const bankIds = useMemo(() => getBankAccountIds(accounts), [accounts]);
+  const [selectedBank, setSelectedBank] = useState('');
+  const activeBankId = selectedBank || bankIds[0] || activeBankId;
+
+  const bankAccount = accounts.find(a => a.id === activeBankId);
 
   // Helper: sum of bank Dr/Cr line amounts for a voucher (supports multi-line Expert Mode vouchers)
   const bankDrAmt = (v: typeof vouchers[0]) =>
-    getVoucherLines(v).filter(l => l.accountId === ACCOUNT_IDS.BANK && l.type === 'Dr').reduce((s, l) => s + l.amount, 0);
+    getVoucherLines(v).filter(l => l.accountId === activeBankId && l.type === 'Dr').reduce((s, l) => s + l.amount, 0);
   const bankCrAmt = (v: typeof vouchers[0]) =>
-    getVoucherLines(v).filter(l => l.accountId === ACCOUNT_IDS.BANK && l.type === 'Cr').reduce((s, l) => s + l.amount, 0);
+    getVoucherLines(v).filter(l => l.accountId === activeBankId && l.type === 'Cr').reduce((s, l) => s + l.amount, 0);
 
   // All active bank vouchers up to asOfDate
   const bankVouchers = useMemo(() => {
@@ -81,7 +85,7 @@ const BankReconciliation: React.FC = () => {
       .filter(v =>
         !v.isDeleted &&
         v.date <= asOfDate &&
-        getVoucherLines(v).some(l => l.accountId === ACCOUNT_IDS.BANK)
+        getVoucherLines(v).some(l => l.accountId === activeBankId)
       )
       .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
   }, [vouchers, asOfDate]);
@@ -98,15 +102,15 @@ const BankReconciliation: React.FC = () => {
 
   // Book balance (as per our bank account) — all active bank txns up to asOfDate
   const bookBalance = useMemo(() => {
-    const acct = accounts.find(a => a.id === ACCOUNT_IDS.BANK);
+    const acct = accounts.find(a => a.id === activeBankId);
     if (!acct) return 0;
     let bal = acct.openingBalanceType === 'debit' ? acct.openingBalance : -acct.openingBalance;
     vouchers
       .filter(v => !v.isDeleted && v.date <= asOfDate &&
-        getVoucherLines(v).some(l => l.accountId === ACCOUNT_IDS.BANK))
+        getVoucherLines(v).some(l => l.accountId === activeBankId))
       .forEach(v => {
         getVoucherLines(v).forEach(l => {
-          if (l.accountId !== ACCOUNT_IDS.BANK) return;
+          if (l.accountId !== activeBankId) return;
           if (l.type === 'Dr') bal += l.amount;
           else bal -= l.amount;
         });
@@ -148,7 +152,17 @@ const BankReconciliation: React.FC = () => {
             </div>
             <div className="space-y-1">
               <Label>{language === 'hi' ? 'बैंक खाता' : 'Bank Account'}</Label>
-              <Input value={bankAccount?.name ?? '—'} readOnly className="bg-muted/50" />
+              {bankIds.length > 1 ? (
+                <select value={activeBankId} onChange={e => setSelectedBank(e.target.value)}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm">
+                  {bankIds.map(bid => {
+                    const acc = accounts.find(a => a.id === bid);
+                    return <option key={bid} value={bid}>{acc?.name || bid}</option>;
+                  })}
+                </select>
+              ) : (
+                <Input value={bankAccount?.name ?? '—'} readOnly className="bg-muted/50" />
+              )}
             </div>
             <div className="space-y-1">
               <Label>{language === 'hi' ? 'पासबुक / बैंक स्टेटमेंट शेष (₹)' : 'Passbook / Statement Balance (₹)'}</Label>
@@ -197,7 +211,7 @@ const BankReconciliation: React.FC = () => {
                       v.date === row.date &&
                       Math.abs((isDeposit ? bankDrAmt(v) : bankCrAmt(v)) - amt) < 1 &&
                       getVoucherLines(v).some(l =>
-                        l.accountId === ACCOUNT_IDS.BANK && l.type === (isDeposit ? 'Dr' : 'Cr')
+                        l.accountId === activeBankId && l.type === (isDeposit ? 'Dr' : 'Cr')
                       )
                     );
                     if (match) { clearVoucher(match.id); matched++; }
@@ -354,7 +368,7 @@ const BankReconciliation: React.FC = () => {
                     <TableCell className="text-sm">{fmtDate(v.date)}</TableCell>
                     <TableCell className="font-mono text-sm">{v.voucherNo}</TableCell>
                     <TableCell className="text-sm">
-                      {v.narration || getVoucherLines(v).filter(l => l.accountId !== ACCOUNT_IDS.BANK && l.type === 'Cr').map(l => getAccountName(l.accountId)).join(', ')}
+                      {v.narration || getVoucherLines(v).filter(l => l.accountId !== activeBankId && l.type === 'Cr').map(l => getAccountName(l.accountId)).join(', ')}
                     </TableCell>
                     <TableCell className="text-right font-medium text-orange-700">{fmt(bankDrAmt(v))}</TableCell>
                   </TableRow>
@@ -413,7 +427,7 @@ const BankReconciliation: React.FC = () => {
                     <TableCell className="text-sm">{fmtDate(v.date)}</TableCell>
                     <TableCell className="font-mono text-sm">{v.voucherNo}</TableCell>
                     <TableCell className="text-sm">
-                      {v.narration || getVoucherLines(v).filter(l => l.accountId !== ACCOUNT_IDS.BANK && l.type === 'Dr').map(l => getAccountName(l.accountId)).join(', ')}
+                      {v.narration || getVoucherLines(v).filter(l => l.accountId !== activeBankId && l.type === 'Dr').map(l => getAccountName(l.accountId)).join(', ')}
                     </TableCell>
                     <TableCell className="text-right font-medium text-blue-700">{fmt(bankCrAmt(v))}</TableCell>
                   </TableRow>
@@ -458,7 +472,7 @@ const BankReconciliation: React.FC = () => {
               </TableHeader>
               <TableBody>
                 {clearedVouchers.map(v => {
-                  const isDeposit = getVoucherLines(v).some(l => l.accountId === ACCOUNT_IDS.BANK && l.type === 'Dr');
+                  const isDeposit = getVoucherLines(v).some(l => l.accountId === activeBankId && l.type === 'Dr');
                   return (
                     <TableRow key={v.id} className="bg-green-50/20">
                       <TableCell>
@@ -471,7 +485,7 @@ const BankReconciliation: React.FC = () => {
                       <TableCell className="text-sm">{fmtDate(v.date)}</TableCell>
                       <TableCell className="font-mono text-sm">{v.voucherNo}</TableCell>
                       <TableCell className="text-sm">
-                        {v.narration || getVoucherLines(v).filter(l => l.accountId !== ACCOUNT_IDS.BANK && l.type === (isDeposit ? 'Cr' : 'Dr')).map(l => getAccountName(l.accountId)).join(', ')}
+                        {v.narration || getVoucherLines(v).filter(l => l.accountId !== activeBankId && l.type === (isDeposit ? 'Cr' : 'Dr')).map(l => getAccountName(l.accountId)).join(', ')}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={isDeposit

@@ -15,7 +15,7 @@ import type {
 } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import * as storage from '@/lib/storage';
-import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS } from '@/lib/storage';
+import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY } from '@/lib/depreciation';
 
@@ -104,7 +104,7 @@ interface DataContextType {
 
   getAccountBalance: (accountId: string) => number;
   getCashBookEntries: (fromDate?: string, toDate?: string) => CashBookEntry[];
-  getBankBookEntries: (fromDate?: string, toDate?: string) => BankBookEntry[];
+  getBankBookEntries: (fromDate?: string, toDate?: string, bankAccountId?: string) => BankBookEntry[];
   getTrialBalance: (asOnDate?: string) => AccountBalance[];
   getMemberLedger: (memberId: string) => MemberLedgerEntry[];
   getProfitLoss: () => {
@@ -813,20 +813,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return result;
   }, [accounts, activeVouchers]);
 
-  const getBankBookEntries = useCallback((fromDate?: string, toDate?: string): BankBookEntry[] => {
-    const bankAccount = accounts.find(a => a.id === ACCOUNT_IDS.BANK);
+  const getBankBookEntries = useCallback((fromDate?: string, toDate?: string, bankAccountId?: string): BankBookEntry[] => {
+    const targetBankId = bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK;
+    const bankAccount = accounts.find(a => a.id === targetBankId);
     if (!bankAccount) return [];
     let runningBalance = bankAccount.openingBalanceType === 'debit'
       ? bankAccount.openingBalance
       : -bankAccount.openingBalance;
 
     const bankVouchers = activeVouchers
-      .filter(v => getVoucherLines(v).some(l => l.accountId === ACCOUNT_IDS.BANK))
+      .filter(v => getVoucherLines(v).some(l => l.accountId === targetBankId))
       .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
 
     if (fromDate) {
       bankVouchers.filter(v => v.date < fromDate).forEach(v => {
-        getVoucherLines(v).filter(l => l.accountId === ACCOUNT_IDS.BANK).forEach(l => {
+        getVoucherLines(v).filter(l => l.accountId === targetBankId).forEach(l => {
           runningBalance += l.type === 'Dr' ? l.amount : -l.amount;
         });
       });
@@ -840,10 +841,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return true;
       })
       .forEach(v => {
-        const bankLines = getVoucherLines(v).filter(l => l.accountId === ACCOUNT_IDS.BANK);
+        const bankLines = getVoucherLines(v).filter(l => l.accountId === targetBankId);
         bankLines.forEach(l => {
           runningBalance += l.type === 'Dr' ? l.amount : -l.amount;
-          const otherLines = getVoucherLines(v).filter(ol => ol.accountId !== ACCOUNT_IDS.BANK);
+          const otherLines = getVoucherLines(v).filter(ol => ol.accountId !== targetBankId);
           const otherAcc = accounts.find(a => a.id === otherLines[0]?.accountId);
           result.push({
             id: v.id,
@@ -1073,9 +1074,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const getReceiptsPayments = useCallback((): ReceiptsPaymentsData => {
     const cashAccount = accounts.find(a => a.id === ACCOUNT_IDS.CASH);
-    const bankAccount = accounts.find(a => a.id === ACCOUNT_IDS.BANK);
+    const bankIds = getBankAccountIds(accounts);
     const openingCash = cashAccount?.openingBalance ?? 0;
-    const openingBank = bankAccount?.openingBalance ?? 0;
+    const openingBank = bankIds.reduce((sum, bid) => {
+      const acc = accounts.find(a => a.id === bid);
+      return sum + (acc?.openingBalance ?? 0);
+    }, 0);
 
     const receiptMap: Record<string, { name: string; amount: number }> = {};
     const paymentMap: Record<string, { name: string; amount: number }> = {};
@@ -1085,7 +1089,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     activeVouchers.forEach(v => {
       const lines = getVoucherLines(v);
       lines.forEach(l => {
-        const isCashBank = l.accountId === ACCOUNT_IDS.CASH || l.accountId === ACCOUNT_IDS.BANK;
+        const isCashBank = l.accountId === ACCOUNT_IDS.CASH || isBankAccount(l.accountId, accounts);
         if (!isCashBank) return;
 
         // Determine other-side lines (contra side)
@@ -1113,7 +1117,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     const closingCash = getAccountBalance(ACCOUNT_IDS.CASH);
-    const closingBank = getAccountBalance(ACCOUNT_IDS.BANK);
+    const closingBank = bankIds.reduce((sum, bid) => sum + getAccountBalance(bid), 0);
 
     return {
       openingCash,
@@ -1334,7 +1338,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Dr: Cash / Bank / Debtor for grand total
     const debitAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
-      : data.paymentMode === 'bank' ? ACCOUNT_IDS.BANK
+      : data.paymentMode === 'bank' ? ((data as any).bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
       : (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303');
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
 
@@ -1455,7 +1459,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const lines: VoucherLine[] = [];
     const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || '2101') : '2101';
     const creditAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
-      : data.paymentMode === 'bank' ? ACCOUNT_IDS.BANK
+      : data.paymentMode === 'bank' ? ((data as any).bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
       : supplierAccId;
 
     // Dr: Purchases (5101) for net amount
@@ -1623,7 +1627,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Auto-create voucher when marking as paid
         if (data.isPaid && !r.isPaid && !r.voucherId) {
           const emp = employees.find(e => e.id === r.employeeId);
-          const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : ACCOUNT_IDS.BANK;
+          const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
           const voucherNo = storage.getNextVoucherNo('payment', society.financialYear, vouchersRef.current);
           const newV = { type: 'payment' as const, date: merged.paidDate || new Date().toISOString().split('T')[0], debitAccountId: '5201', creditAccountId: creditAcc, amount: merged.netSalary, narration: `Salary: ${emp?.name || ''} - ${r.month}`, memberId: undefined as undefined, createdBy: 'System', id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
           setVouchersState(v => { const upd = [...v, newV]; return upd; });

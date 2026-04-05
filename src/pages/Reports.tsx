@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
-import { ACCOUNT_IDS } from '@/lib/storage';
+import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,7 +41,8 @@ const Reports: React.FC = () => {
 
   const { totalIncome, totalExpenses, netProfit } = getProfitLoss();
   const cashBalance = getAccountBalance(ACCOUNT_IDS.CASH);
-  const bankBalance = getAccountBalance(ACCOUNT_IDS.BANK);
+  const bankIds = getBankAccountIds(accounts);
+  const bankBalance = bankIds.reduce((sum, bid) => sum + getAccountBalance(bid), 0);
   const activeMembers = members.filter(m => m.status === 'active').length;
 
   const fmt = (n: number) =>

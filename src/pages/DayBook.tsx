@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
-import { ACCOUNT_IDS } from '@/lib/storage';
+import { ACCOUNT_IDS, getBankAccountIds, isBankAccount } from '@/lib/storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -104,7 +104,10 @@ const DayBook: React.FC = () => {
   // Pre-period opening balance: account OB + all vouchers BEFORE the filter start
   const { cashOB, bankOB } = useMemo(() => {
     const cashAccOB = accounts.find(a => a.id === ACCOUNT_IDS.CASH)?.openingBalance || 0;
-    const bankAccOB = accounts.find(a => a.id === ACCOUNT_IDS.BANK)?.openingBalance || 0;
+    const bankAccOB = getBankAccountIds(accounts).reduce((sum, bid) => {
+      const a = accounts.find(x => x.id === bid);
+      return sum + (a?.openingBalance || 0);
+    }, 0);
     // Vouchers BEFORE the first visible date (i.e. outside the current filter window)
     const firstDate = entries.length > 0 ? entries[0].date : null;
     let preCash = cashAccOB;
@@ -114,7 +117,7 @@ const DayBook: React.FC = () => {
         if (v.date >= firstDate) return; // only pre-period
         getVoucherLines(v).forEach(l => {
           if (l.accountId === ACCOUNT_IDS.CASH) preCash += l.type === 'Dr' ? l.amount : -l.amount;
-          if (l.accountId === ACCOUNT_IDS.BANK) preBank += l.type === 'Dr' ? l.amount : -l.amount;
+          if (isBankAccount(l.accountId, accounts)) preBank += l.type === 'Dr' ? l.amount : -l.amount;
         });
       });
     }
@@ -130,7 +133,7 @@ const DayBook: React.FC = () => {
       group.items.forEach(v => {
         getVoucherLines(v).forEach(l => {
           if (l.accountId === ACCOUNT_IDS.CASH) cash += l.type === 'Dr' ? l.amount : -l.amount;
-          if (l.accountId === ACCOUNT_IDS.BANK) bank += l.type === 'Dr' ? l.amount : -l.amount;
+          if (isBankAccount(l.accountId, accounts)) bank += l.type === 'Dr' ? l.amount : -l.amount;
         });
       });
       return { date: group.date, openCash, openBank, closeCash: cash, closeBank: bank };

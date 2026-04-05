@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
-import { ACCOUNT_IDS } from '@/lib/storage';
+import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { QuickActions } from '@/components/dashboard/QuickActions';
 import { Wallet, Building2, Users, TrendingUp, TrendingDown, CheckCircle, XCircle, AlertTriangle, Lock, ShieldCheck, Lightbulb, AlertCircle, Info } from 'lucide-react';
@@ -21,7 +21,7 @@ const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b
 
 const Dashboard: React.FC = () => {
   const { t, language } = useLanguage();
-  const { getAccountBalance, members, vouchers, getProfitLoss, loans, society, getTrialBalance, getTradingAccount, auditObjections } = useData();
+  const { accounts, getAccountBalance, members, vouchers, getProfitLoss, loans, society, getTrialBalance, getTradingAccount, auditObjections } = useData();
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -33,7 +33,8 @@ const Dashboard: React.FC = () => {
   };
 
   const cashBalance = getAccountBalance(ACCOUNT_IDS.CASH);
-  const bankBalance = getAccountBalance(ACCOUNT_IDS.BANK);
+  const bankIds = getBankAccountIds(accounts);
+  const bankBalance = bankIds.reduce((sum, bid) => sum + getAccountBalance(bid), 0);
   const { netProfit, incomeItems, expenseItems, totalIncome, totalExpenses } = getProfitLoss();
   const activeMembers = members.filter(m => m.status === 'active').length;
 

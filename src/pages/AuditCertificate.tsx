@@ -20,6 +20,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { addHeader, addPageNumbers, pdfFileName } from '@/lib/pdf';
+import { getBankAccountIds } from '@/lib/storage';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -49,7 +50,8 @@ const AuditCertificate: React.FC = () => {
   };
 
   const cashBalance  = getBalance('3301'); // Cash in Hand
-  const bankBalance  = getBalance('3302'); // Bank Account
+  const bankIds = getBankAccountIds(accounts);
+  const bankBalance = bankIds.reduce((sum, bid) => sum + getBalance(bid), 0);
   const shareCapital = accounts
     .filter(a => !a.isGroup && a.type === 'equity')
     .reduce((s, a) => {
