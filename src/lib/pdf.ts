@@ -578,100 +578,141 @@ export function generateBalanceSheetPDF(
   netProfit: number,
   society: SocietySettings,
   language: 'hi' | 'en',
-  reserveFund: number = 0
+  reserveFund: number = 0,
+  allAccounts?: LedgerAccount[],
 ) {
   const doc = new jsPDF('landscape');
   const { startY, font } = addHeader(doc, 'Balance Sheet', society, `As at 31st March 20${society.financialYear.split('-')[1]}`, { reportCode: 'BS' });
 
   const totalAssets = assetBalances.reduce((s, b) => s + b.netBalance, 0);
-  // C-1 FIX: Use -netBalance (not Math.abs) so contra-equity accounts (e.g. Dividend Distribution)
-  // correctly reduce the equity total instead of being added to it.
   const totalLiabilities = liabilityBalances.reduce((s, b) => s + (-b.netBalance), 0) + netProfit;
-  const distributableSurplus = netProfit > 0 ? netProfit - reserveFund : 0;
   const pyBalances = society.previousYearBalances || {};
   const pyYear = society.previousFinancialYear || '';
-  const hasPY = pyYear && Object.keys(pyBalances).length > 0;
+  const hasPY = !!(pyYear && Object.keys(pyBalances).length > 0);
   const getPY = (id: string) => pyBalances[id] ?? 0;
 
-  const liabHead = hasPY
-    ? [['Capital & Liabilities', pyYear, society.financialYear]]
-    : [['Capital & Liabilities', 'Amount']];
-  const assetHead = hasPY
-    ? [['Assets', pyYear, society.financialYear]]
-    : [['Assets', 'Amount']];
+  // ── Grouped format (if accounts hierarchy available) ──────────────────
+  const buildGroupedBody = (
+    balances: AccountBalance[], parentIds: string[], signFlip: boolean
+  ): { body: string[][]; groupRows: number[]; pyTotal: number } => {
+    const body: string[][] = [];
+    const groupRows: number[] = [];
+    let pyTotal = 0;
+    const accts = allAccounts || [];
 
-  const liabBody = [
-    ...liabilityBalances
-      .filter(b => b.netBalance !== 0 || getPY(b.account.id) !== 0)
-      .map(b => {
-        // Contra-equity (debit-nature equity, e.g. Dividend Distribution): netBalance > 0 → show in parentheses
-        const isContra = b.netBalance > 0;
-        const displayVal = isContra ? `(${fmt(b.netBalance)})` : fmt(Math.abs(b.netBalance));
-        const label = isContra ? `${b.account.name} (Dr)` : b.account.name;
-        return hasPY
-          ? [label, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', displayVal]
-          : [label, displayVal];
-      }),
-    ...(netProfit > 0 && reserveFund > 0
-      ? [hasPY ? [`Statutory Reserve Fund ${society.reserveFundPct ?? 25}%`, '—', fmt(reserveFund)] : [`Statutory Reserve Fund — ${society.reserveFundPct ?? 25}%`, fmt(reserveFund)]]
-      : []),
-    ...(netProfit > 0
-      ? [hasPY ? ['Distributable Surplus', '—', fmt(distributableSurplus)] : ['Distributable Surplus', fmt(distributableSurplus)]]
-      : []),
-    ...(netProfit < 0
-      ? [hasPY ? ['Deficit (Current Year)', '—', `(${fmt(Math.abs(netProfit))})`] : ['Deficit (Current Year)', `(${fmt(Math.abs(netProfit))})`]]
-      : []),
-  ];
+    const subGroups = accts.filter(a => a.isGroup && parentIds.includes(a.parentId || ''));
 
-  const assetBody = assetBalances
-    .filter(b => b.netBalance !== 0 || getPY(b.account.id) !== 0)
-    .map(b => {
-      const display = b.netBalance < 0 ? `(${fmt(Math.abs(b.netBalance))})` : fmt(b.netBalance);
-      return hasPY
-        ? [b.netBalance < 0 ? `${b.account.name} (Cr)` : b.account.name, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', display]
-        : [b.netBalance < 0 ? `${b.account.name} (Cr)` : b.account.name, display];
+    subGroups.forEach(group => {
+      // Find all leaf children (direct + sub-sub-group children)
+      const childIds = new Set<string>();
+      accts.filter(a => !a.isGroup && a.parentId === group.id).forEach(a => childIds.add(a.id));
+      const subSubGroups = accts.filter(a => a.isGroup && a.parentId === group.id);
+      subSubGroups.forEach(ssg => {
+        accts.filter(a => !a.isGroup && a.parentId === ssg.id).forEach(a => childIds.add(a.id));
+      });
+
+      const items = balances.filter(b => childIds.has(b.account.id) && (b.netBalance !== 0 || getPY(b.account.id) !== 0));
+      if (items.length === 0) return;
+
+      const groupTotal = items.reduce((s, b) => s + (signFlip ? -b.netBalance : b.netBalance), 0);
+      const groupPY = items.reduce((s, b) => s + getPY(b.account.id), 0);
+      pyTotal += groupPY;
+
+      // Group header row
+      groupRows.push(body.length);
+      body.push(hasPY
+        ? [group.name.toUpperCase(), groupPY ? fmt(groupPY) : '', '', fmt(groupTotal)]
+        : [group.name.toUpperCase(), '', fmt(groupTotal)]);
+
+      // Child rows (indented)
+      items.forEach(b => {
+        const val = signFlip ? -b.netBalance : b.netBalance;
+        const isContra = val < 0;
+        const display = isContra ? `(${fmt(Math.abs(val))})` : fmt(val);
+        const label = `  ${b.account.name}`;
+        body.push(hasPY
+          ? [label, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', display, '']
+          : [label, display, '']);
+      });
     });
 
-  const pyLiabTotal = liabilityBalances.reduce((s, b) => s + getPY(b.account.id), 0);
-  const pyAssetTotal = assetBalances.reduce((s, b) => s + getPY(b.account.id), 0);
+    return { body, groupRows, pyTotal };
+  };
 
-  const colStyles = hasPY
-    ? { 1: { halign: 'right' as const }, 2: { halign: 'right' as const } }
-    : { 1: { halign: 'right' as const } };
+  // Build bodies
+  const liab = allAccounts
+    ? buildGroupedBody(liabilityBalances, ['1000', '2000'], true)
+    : { body: liabilityBalances.filter(b => b.netBalance !== 0 || getPY(b.account.id) !== 0).map(b => {
+        const isContra = b.netBalance > 0;
+        const val = isContra ? `(${fmt(b.netBalance)})` : fmt(Math.abs(b.netBalance));
+        return hasPY ? [b.account.name, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', val] : [b.account.name, val];
+      }), groupRows: [] as number[], pyTotal: liabilityBalances.reduce((s, b) => s + getPY(b.account.id), 0) };
 
-  // Capital & Liabilities (left half)
+  // Add P&L row
+  if (netProfit !== 0) {
+    liab.groupRows.push(liab.body.length);
+    const plLabel = netProfit > 0 ? 'PROFIT & LOSS A/C' : 'PROFIT & LOSS A/C (DEFICIT)';
+    const plVal = netProfit < 0 ? `(${fmt(Math.abs(netProfit))})` : fmt(netProfit);
+    liab.body.push(hasPY ? [plLabel, '', '', plVal] : [plLabel, '', plVal]);
+  }
+
+  const asset = allAccounts
+    ? buildGroupedBody(assetBalances, ['3000'], false)
+    : { body: assetBalances.filter(b => b.netBalance !== 0 || getPY(b.account.id) !== 0).map(b => {
+        const display = b.netBalance < 0 ? `(${fmt(Math.abs(b.netBalance))})` : fmt(b.netBalance);
+        return hasPY ? [b.account.name, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', display] : [b.account.name, display];
+      }), groupRows: [] as number[], pyTotal: assetBalances.reduce((s, b) => s + getPY(b.account.id), 0) };
+
+  const liabHead = hasPY
+    ? [['Capital & Liabilities', pyYear, 'Amount', 'Grand']]
+    : [['Capital & Liabilities', 'Amount', 'Grand']];
+  const assetHead = hasPY
+    ? [['Assets', pyYear, 'Amount', 'Grand']]
+    : [['Assets', 'Amount', 'Grand']];
+
+  const amtCols = hasPY ? [1, 2, 3] : [1, 2];
+
+  // Left half — Liabilities
   autoTable(doc, {
     startY,
     margin: { left: 15, right: 158 },
     head: liabHead,
-    body: liabBody,
-    foot: [hasPY ? ['Total', fmt(pyLiabTotal), fmt(totalLiabilities)] : ['Total', fmt(totalLiabilities)]],
-    styles: { fontSize: 8, cellPadding: 2, font },
+    body: liab.body,
+    foot: [hasPY ? ['GRAND TOTAL', fmt(liab.pyTotal), fmt(totalLiabilities), fmt(totalLiabilities)] : ['GRAND TOTAL', fmt(totalLiabilities), fmt(totalLiabilities)]],
+    styles: { fontSize: 7.5, cellPadding: 1.5, font },
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
-    columnStyles: colStyles,
-    didParseCell: rightAlignAmountColumns(...(hasPY ? [1, 2] : [1])),
+    didParseCell: (data) => {
+      amtCols.forEach(c => { if (data.column.index === c) data.cell.styles.halign = 'right'; });
+      if (data.section === 'body' && liab.groupRows.includes(data.row.index)) {
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fillColor = [232, 240, 254];
+      }
+    },
   });
   const liabFinalY = (doc as any).lastAutoTable.finalY;
 
-  // Assets (right half)
+  // Right half — Assets
   autoTable(doc, {
     startY,
     margin: { left: 154, right: 15 },
     head: assetHead,
-    body: assetBody,
-    foot: [hasPY ? ['Total', fmt(pyAssetTotal), fmt(totalAssets)] : ['Total', fmt(totalAssets)]],
-    styles: { fontSize: 8, cellPadding: 2, font },
+    body: asset.body,
+    foot: [hasPY ? ['GRAND TOTAL', fmt(asset.pyTotal), fmt(totalAssets), fmt(totalAssets)] : ['GRAND TOTAL', fmt(totalAssets), fmt(totalAssets)]],
+    styles: { fontSize: 7.5, cellPadding: 1.5, font },
     headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
-    columnStyles: colStyles,
-    didParseCell: rightAlignAmountColumns(...(hasPY ? [1, 2] : [1])),
+    didParseCell: (data) => {
+      amtCols.forEach(c => { if (data.column.index === c) data.cell.styles.halign = 'right'; });
+      if (data.section === 'body' && asset.groupRows.includes(data.row.index)) {
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fillColor = [232, 245, 233];
+      }
+    },
   });
   const assetFinalY = (doc as any).lastAutoTable.finalY;
 
-  // Use the taller of the two side-by-side tables to avoid overlap
   const bsFinalY = Math.max(liabFinalY, assetFinalY) + 10;
-  // M-1: Auditor's Certificate
   addAuditorCertificate(doc, font, society, 'Balance Sheet', bsFinalY);
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('BalanceSheet', society));

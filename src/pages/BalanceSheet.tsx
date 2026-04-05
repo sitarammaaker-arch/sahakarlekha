@@ -1,4 +1,10 @@
-import React from 'react';
+/**
+ * Balance Sheet — Grouped Audit Format
+ * Groups: Share Capital, Reserves, Current Liabilities, Loans | Fixed Assets, Investments, Current Assets, Inventory
+ * Each group shows sub-total in "Grand" column, child accounts indented with individual amounts
+ * Previous Year column shows per-account and per-group values
+ */
+import React, { useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,11 +14,22 @@ import { FileSpreadsheet, Download, AlertTriangle } from 'lucide-react';
 import { generateBalanceSheetPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { useToast } from '@/hooks/use-toast';
+import type { AccountBalance } from '@/types';
+
+interface BSGroup {
+  id: string;
+  name: string;
+  nameHi: string;
+  items: { account: AccountBalance; displayAmount: number; pyAmount: number }[];
+  grandTotal: number;
+  pyGrandTotal: number;
+}
 
 const BalanceSheet: React.FC = () => {
   const { t, language } = useLanguage();
-  const { getTrialBalance, getProfitLoss, getTradingAccount, society } = useData();
+  const { getTrialBalance, getProfitLoss, getTradingAccount, society, accounts } = useData();
   const { toast } = useToast();
+  const hi = language === 'hi';
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -20,75 +37,198 @@ const BalanceSheet: React.FC = () => {
   const trialBalance = getTrialBalance();
   const { netProfit } = getProfitLoss();
   const { physicalClosingStock, closingStockPosted } = getTradingAccount();
-  // P1-7: If physical closing stock exists but no journal posted, show as synthetic asset
   const unpostedStock = !closingStockPosted && physicalClosingStock > 0 ? physicalClosingStock : 0;
 
   const RESERVE_FUND_RATE = (society.reserveFundPct ?? 25) / 100;
   const reserveFund = netProfit > 0 ? Math.round(netProfit * RESERVE_FUND_RATE) : 0;
-  const distributableSurplus = netProfit > 0 ? netProfit - reserveFund : 0;
 
-  const assetBalances = trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup);
-  // Capital & Liabilities side = equity + liability accounts (both right-side of BS)
-  const equityBalances = trialBalance.filter(b => b.account.type === 'equity' && !b.account.isGroup);
-  const liabilityBalances = trialBalance.filter(b => b.account.type === 'liability' && !b.account.isGroup);
-  const capitalAndLiabilityBalances = [...equityBalances, ...liabilityBalances];
-
-  // For display: hide zero-balance accounts (previous year values also considered)
-  const pyBalancesRaw = society.previousYearBalances || {};
-  const visibleAssets = assetBalances.filter(b => b.netBalance !== 0 || (pyBalancesRaw[b.account.id] ?? 0) !== 0);
-  const visibleCapLiab = capitalAndLiabilityBalances.filter(b => b.netBalance !== 0 || (pyBalancesRaw[b.account.id] ?? 0) !== 0);
-
-  // BUG-04 FIX: Use -netBalance for equity/liability totals.
-  // netBalance = totalDebit - totalCredit.
-  // For credit-nature accounts (Share Capital, Reserves): netBalance is negative → -netBalance is positive (adds to equity side).
-  // For debit-nature contra-equity accounts (Dividend Distribution 1211): netBalance is positive → -netBalance is negative (reduces equity side).
-  // Math.abs() was wrong — it was adding contra-equity accounts instead of subtracting them.
-  const totalAssets = assetBalances.reduce((s, b) => s + b.netBalance, 0) + unpostedStock;
-  const totalLiabilities = capitalAndLiabilityBalances.reduce((s, b) => s + (-b.netBalance), 0)
-    + netProfit; // surplus adds, deficit subtracts (negative value)
-
-  const pyBalances = pyBalancesRaw;
+  const pyBalances = society.previousYearBalances || {};
   const pyYear = society.previousFinancialYear || '';
-  const hasPY = pyYear && Object.keys(pyBalances).length > 0;
-  const getPY = (accountId: string) => pyBalances[accountId] ?? 0;
+  const hasPY = !!pyYear && Object.keys(pyBalances).length > 0;
+  const getPY = (id: string) => pyBalances[id] ?? 0;
 
-  const exportHeaders = ['Section', 'Particulars', 'Amount (₹)'];
+  // Build grouped structure
+  const buildGroups = (
+    parentIds: string[], // top-level group IDs (e.g., ['1000', '2000'] for liabilities)
+    signFlip: boolean,   // true for equity/liability (credit-nature → flip to positive)
+  ): BSGroup[] => {
+    // Find sub-groups under these parents
+    const subGroups = accounts.filter(a => a.isGroup && parentIds.includes(a.parentId || ''));
+
+    return subGroups.map(group => {
+      // Find leaf accounts under this group (direct children + children of sub-sub-groups)
+      const childIds = new Set<string>();
+      // Direct children
+      accounts.filter(a => !a.isGroup && a.parentId === group.id).forEach(a => childIds.add(a.id));
+      // Sub-sub-groups (e.g., 2200 Statutory Liabilities under 2000)
+      const subSubGroups = accounts.filter(a => a.isGroup && a.parentId === group.id);
+      subSubGroups.forEach(ssg => {
+        accounts.filter(a => !a.isGroup && a.parentId === ssg.id).forEach(a => childIds.add(a.id));
+      });
+
+      const items = trialBalance
+        .filter(b => childIds.has(b.account.id))
+        .filter(b => b.netBalance !== 0 || getPY(b.account.id) !== 0)
+        .map(b => ({
+          account: b,
+          displayAmount: signFlip ? -b.netBalance : b.netBalance,
+          pyAmount: getPY(b.account.id),
+        }));
+
+      const grandTotal = items.reduce((s, i) => s + i.displayAmount, 0);
+      const pyGrandTotal = items.reduce((s, i) => s + i.pyAmount, 0);
+
+      return {
+        id: group.id,
+        name: group.name,
+        nameHi: group.nameHi || group.name,
+        items,
+        grandTotal,
+        pyGrandTotal,
+      };
+    }).filter(g => g.items.length > 0 || g.grandTotal !== 0);
+  };
+
+  // Liability side groups (equity + liability)
+  const liabilityGroups = useMemo(() => buildGroups(['1000', '2000'], true), [trialBalance, accounts, pyBalances]);
+
+  // Asset side groups
+  const assetGroups = useMemo(() => buildGroups(['3000'], false), [trialBalance, accounts, pyBalances]);
+
+  // Totals
+  const totalLiabilities = useMemo(() =>
+    liabilityGroups.reduce((s, g) => s + g.grandTotal, 0) + netProfit
+  , [liabilityGroups, netProfit]);
+
+  const totalAssets = useMemo(() =>
+    assetGroups.reduce((s, g) => s + g.grandTotal, 0) + unpostedStock
+  , [assetGroups, unpostedStock]);
+
+  const pyTotalLiab = liabilityGroups.reduce((s, g) => s + g.pyGrandTotal, 0);
+  const pyTotalAsset = assetGroups.reduce((s, g) => s + g.pyGrandTotal, 0);
+
+  // Export
+  const exportHeaders = ['Section', 'Group', 'Particulars', 'Amount (Rs.)', 'Grand'];
   const exportRows = (): (string | number)[][] => {
     const rows: (string | number)[][] = [];
-    // Capital & Liabilities
-    visibleCapLiab.forEach(b => rows.push(['Capital & Liabilities', b.account.name, -b.netBalance]));
-    if (netProfit > 0) {
-      rows.push(['Capital & Liabilities', 'Statutory Reserve Fund — 25% (Current Year)', reserveFund]);
-      rows.push(['Capital & Liabilities', 'Distributable Surplus (Current Year)', distributableSurplus]);
-    } else if (netProfit < 0) {
-      rows.push(['Capital & Liabilities', 'Deficit (Current Year)', Math.abs(netProfit)]);
-    }
-    rows.push(['Capital & Liabilities', 'Total', totalLiabilities]);
-    // Assets
-    visibleAssets.forEach(b => rows.push(['Assets', b.account.name, b.netBalance]));
-    if (unpostedStock > 0) rows.push(['Assets', 'Closing Stock (Physical — Not Yet Journalized)', unpostedStock]);
-    rows.push(['Assets', 'Total', totalAssets]);
+    liabilityGroups.forEach(g => {
+      rows.push(['Capital & Liabilities', g.name, '', '', g.grandTotal]);
+      g.items.forEach(i => rows.push(['', '', i.account.account.name, i.displayAmount, '']));
+    });
+    if (netProfit !== 0) rows.push(['Capital & Liabilities', 'Profit & Loss A/c', netProfit >= 0 ? 'Net Profit' : 'Net Loss', Math.abs(netProfit), '']);
+    rows.push(['Capital & Liabilities', '', 'GRAND TOTAL', totalLiabilities, totalLiabilities]);
+    assetGroups.forEach(g => {
+      rows.push(['Assets', g.name, '', '', g.grandTotal]);
+      g.items.forEach(i => rows.push(['', '', i.account.account.name, i.displayAmount, '']));
+    });
+    rows.push(['Assets', '', 'GRAND TOTAL', totalAssets, totalAssets]);
     return rows;
   };
 
   const handleCSV = () => downloadCSV(exportHeaders, exportRows(), `balance-sheet-${society.financialYear}`);
   const handleExcel = () => downloadExcelSingle(exportHeaders, exportRows(), `balance-sheet-${society.financialYear}`, 'Balance Sheet');
 
-  // P1-3: Block PDF if Balance Sheet is not balanced
   const handlePDF = () => {
     const diff = Math.abs(totalLiabilities - totalAssets);
     if (diff >= 1) {
       toast({
-        title: language === 'hi' ? 'तुलन पत्र असंतुलित है' : 'Balance Sheet is not balanced',
-        description: language === 'hi'
-          ? `संपत्तियां और देयताएं में ₹${diff.toFixed(0)} का अंतर है। PDF उत्पन्न करने से पहले इसे ठीक करें।`
-          : `Assets and Liabilities differ by ₹${diff.toFixed(0)}. Please fix the imbalance before generating the PDF.`,
+        title: hi ? 'तुलन पत्र असंतुलित है' : 'Balance Sheet is not balanced',
+        description: hi ? `अंतर: Rs. ${diff.toFixed(0)}` : `Difference: Rs. ${diff.toFixed(0)}`,
         variant: 'destructive',
       });
       return;
     }
-    generateBalanceSheetPDF(assetBalances, capitalAndLiabilityBalances, netProfit, society, language, reserveFund);
+    generateBalanceSheetPDF(
+      trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup),
+      [...trialBalance.filter(b => b.account.type === 'equity' && !b.account.isGroup), ...trialBalance.filter(b => b.account.type === 'liability' && !b.account.isGroup)],
+      netProfit, society, language, reserveFund, accounts
+    );
   };
+
+  // Render a grouped side (liabilities or assets)
+  const renderSide = (groups: BSGroup[], sideLabel: string, sideLabelHi: string, total: number, pyTotal: number, isLiabSide: boolean) => (
+    <div className="space-y-2">
+      <h3 className="text-lg font-semibold text-primary pb-2 border-b">
+        {hi ? sideLabelHi : sideLabel}
+      </h3>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {hasPY && <TableHead className="text-right text-muted-foreground text-xs w-24">{pyYear}</TableHead>}
+            <TableHead>{t('particulars')}</TableHead>
+            <TableHead className="text-right w-28">{hi ? 'राशि' : 'Amount'}</TableHead>
+            <TableHead className="text-right w-28">{hi ? 'कुल योग' : 'Grand'}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {groups.map(group => (
+            <React.Fragment key={group.id}>
+              {/* Group Header */}
+              <TableRow className="bg-primary/5 font-bold">
+                {hasPY && <TableCell className="text-right text-muted-foreground">{group.pyGrandTotal !== 0 ? fmt(group.pyGrandTotal) : ''}</TableCell>}
+                <TableCell className="font-bold uppercase text-sm">
+                  {hi ? group.nameHi : group.name}
+                </TableCell>
+                <TableCell></TableCell>
+                <TableCell className="text-right font-bold">{fmt(group.grandTotal)}</TableCell>
+              </TableRow>
+              {/* Child accounts */}
+              {group.items.map(({ account: b, displayAmount, pyAmount }) => {
+                const isContra = (isLiabSide && displayAmount < 0) || (!isLiabSide && displayAmount < 0);
+                return (
+                  <TableRow key={b.account.id} className="hover:bg-muted/30">
+                    {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyAmount !== 0 ? fmt(pyAmount) : '—'}</TableCell>}
+                    <TableCell className="pl-6 text-sm">
+                      {hi ? b.account.nameHi : b.account.name}
+                      {isContra && <span className="ml-1 text-xs text-destructive">(Dr)</span>}
+                    </TableCell>
+                    <TableCell className={`text-right text-sm ${isContra ? 'text-destructive' : ''}`}>
+                      {isContra ? `(${fmt(Math.abs(displayAmount))})` : fmt(displayAmount)}
+                    </TableCell>
+                    <TableCell></TableCell>
+                  </TableRow>
+                );
+              })}
+            </React.Fragment>
+          ))}
+
+          {/* Profit & Loss (Liabilities side only) */}
+          {isLiabSide && netProfit !== 0 && (
+            <TableRow className={netProfit > 0 ? 'bg-success/10 font-bold' : 'bg-destructive/10 font-bold'}>
+              {hasPY && <TableCell></TableCell>}
+              <TableCell className={`font-bold uppercase text-sm ${netProfit > 0 ? 'text-success' : 'text-destructive'}`}>
+                {hi ? 'लाभ-हानि खाता' : 'Profit & Loss A/c'}
+              </TableCell>
+              <TableCell></TableCell>
+              <TableCell className={`text-right font-bold ${netProfit > 0 ? 'text-success' : 'text-destructive'}`}>
+                {netProfit < 0 ? `(${fmt(Math.abs(netProfit))})` : fmt(netProfit)}
+              </TableCell>
+            </TableRow>
+          )}
+
+          {/* Unposted Closing Stock (Assets side only) */}
+          {!isLiabSide && unpostedStock > 0 && (
+            <TableRow className="bg-amber-50 dark:bg-amber-900/20 font-semibold">
+              {hasPY && <TableCell></TableCell>}
+              <TableCell className="text-amber-800 dark:text-amber-300 text-sm">
+                {hi ? 'समापन माल (भौतिक — जर्नल नहीं हुआ) ⚠' : 'Closing Stock (Physical — Not Yet Journalized) ⚠'}
+              </TableCell>
+              <TableCell></TableCell>
+              <TableCell className="text-right text-amber-800 dark:text-amber-300">{fmt(unpostedStock)}</TableCell>
+            </TableRow>
+          )}
+
+          {/* GRAND TOTAL */}
+          <TableRow className="bg-primary/15 font-bold text-base border-t-2 border-primary">
+            {hasPY && <TableCell className="text-right text-muted-foreground">{fmt(pyTotal)}</TableCell>}
+            <TableCell className="font-bold">{hi ? 'कुल योग' : 'GRAND TOTAL'}</TableCell>
+            <TableCell className="text-right font-bold text-primary">{fmt(total)}</TableCell>
+            <TableCell className="text-right font-bold text-primary">{fmt(total)}</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </div>
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -98,18 +238,12 @@ const BalanceSheet: React.FC = () => {
             <FileSpreadsheet className="h-7 w-7 text-primary" />
             {t('balanceSheet')}
           </h1>
-          <p className="text-muted-foreground">{language === 'hi' ? 'तुलन पत्र - वित्तीय स्थिति विवरण' : 'Statement of Financial Position'}</p>
+          <p className="text-muted-foreground">{hi ? 'तुलन पत्र - वित्तीय स्थिति विवरण' : 'Statement of Financial Position'}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" className="gap-2" onClick={handlePDF}>
-            <Download className="h-4 w-4" />PDF
-          </Button>
-          <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
-            <FileSpreadsheet className="h-4 w-4" />Excel
-          </Button>
-          <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
-            <FileSpreadsheet className="h-4 w-4" />CSV
-          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handlePDF}><Download className="h-4 w-4" />PDF</Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}><FileSpreadsheet className="h-4 w-4" />Excel</Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}><FileSpreadsheet className="h-4 w-4" />CSV</Button>
         </div>
       </div>
 
@@ -118,12 +252,12 @@ const BalanceSheet: React.FC = () => {
           <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
           <div>
             <p className="font-semibold text-amber-800 dark:text-amber-300">
-              {language === 'hi' ? 'समापन माल अभी जर्नल में दर्ज नहीं हुआ' : 'Closing Stock Not Yet Journalized'}
+              {hi ? 'समापन माल अभी जर्नल में दर्ज नहीं हुआ' : 'Closing Stock Not Yet Journalized'}
             </p>
             <p className="text-sm text-amber-700 dark:text-amber-400">
-              {language === 'hi'
-                ? `भौतिक समापन माल ₹${fmt(unpostedStock)} है परंतु लेखा प्रविष्टि नहीं हुई। Trading Account पर जाकर "Post Closing Stock" बटन दबाएं।`
-                : `Physical closing stock of ${fmt(unpostedStock)} exists but no journal entry has been posted. Go to Trading Account and click "Post Closing Stock" to record it.`}
+              {hi
+                ? `भौतिक समापन माल ${fmt(unpostedStock)} है। Trading Account पर "Post Closing Stock" बटन दबाएं।`
+                : `Physical closing stock of ${fmt(unpostedStock)}. Go to Trading Account and click "Post Closing Stock".`}
             </p>
           </div>
         </div>
@@ -131,153 +265,41 @@ const BalanceSheet: React.FC = () => {
 
       <Card className="shadow-card">
         <CardHeader className="border-b text-center">
-          <CardTitle className="text-xl">{language === 'hi' ? 'तुलन पत्र' : 'Balance Sheet'}</CardTitle>
-          <p className="text-sm text-muted-foreground">{language === 'hi' ? society.nameHi : society.name}</p>
+          <CardTitle className="text-xl">{hi ? 'तुलन पत्र' : 'Balance Sheet'}</CardTitle>
+          <p className="text-sm text-muted-foreground">{hi ? society.nameHi : society.name}</p>
           <p className="text-sm text-muted-foreground">
-            {language === 'hi' ? `31 मार्च ${society.financialYear.split('-')[1]} को` : `As at 31st March 20${society.financialYear.split('-')[1]}`}
+            {hi ? `31 मार्च ${society.financialYear.split('-')[1]} को` : `As at 31st March 20${society.financialYear.split('-')[1]}`}
           </p>
         </CardHeader>
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Liabilities */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-primary pb-2 border-b">
-                {language === 'hi' ? 'पूंजी एवं देयताएं' : 'Capital & Liabilities'}
-              </h3>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('particulars')}</TableHead>
-                    {hasPY && <TableHead className="text-right text-muted-foreground text-xs">{pyYear}</TableHead>}
-                    <TableHead className="text-right">{society.financialYear}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visibleCapLiab.map(b => {
-                    // Contra-equity/liability: debit balance on credit-side account (e.g. Dividend Distribution)
-                    const isContra = b.netBalance > 0;
-                    return (
-                    <TableRow key={b.account.id} className="hover:bg-muted/30">
-                      <TableCell>
-                        {language === 'hi' ? b.account.nameHi : b.account.name}
-                        {isContra && <span className="ml-1 text-xs text-destructive">(Dr)</span>}
-                      </TableCell>
-                      {hasPY && <TableCell className="text-right text-muted-foreground">{getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—'}</TableCell>}
-                      <TableCell className={`text-right font-medium ${isContra ? 'text-destructive' : ''}`}>
-                        {isContra ? `(${fmt(b.netBalance)})` : fmt(Math.abs(b.netBalance))}
-                      </TableCell>
-                    </TableRow>
-                    );
-                  })}
-                  {netProfit > 0 && (
-                    <>
-                      <TableRow className="bg-amber-50 dark:bg-amber-900/20">
-                        <TableCell className="text-amber-700 dark:text-amber-300 font-medium">
-                          {language === 'hi' ? 'वैधानिक संरक्षित निधि — 25% (चालू वर्ष)' : 'Statutory Reserve Fund — 25% (Current Year)'}
-                        </TableCell>
-                        {hasPY && <TableCell className="text-right text-muted-foreground">—</TableCell>}
-                        <TableCell className="text-right font-medium text-amber-700 dark:text-amber-300">{fmt(reserveFund)}</TableCell>
-                      </TableRow>
-                      <TableRow className="bg-success/10">
-                        <TableCell className="text-success font-medium">
-                          {language === 'hi' ? 'वितरणयोग्य अधिशेष (चालू वर्ष)' : 'Distributable Surplus (Current Year)'}
-                        </TableCell>
-                        {hasPY && <TableCell className="text-right text-muted-foreground">—</TableCell>}
-                        <TableCell className="text-right font-medium text-success">{fmt(distributableSurplus)}</TableCell>
-                      </TableRow>
-                    </>
-                  )}
-                  {netProfit < 0 && (
-                    <TableRow className="bg-destructive/10">
-                      <TableCell className="text-destructive font-medium">
-                        {language === 'hi' ? 'घाटा (चालू वर्ष)' : 'Deficit (Current Year)'}
-                      </TableCell>
-                      {hasPY && <TableCell className="text-right text-muted-foreground">—</TableCell>}
-                      <TableCell className="text-right font-medium text-destructive">({fmt(Math.abs(netProfit))})</TableCell>
-                    </TableRow>
-                  )}
-                  <TableRow className="bg-primary/10 font-bold text-lg">
-                    <TableCell>{t('total')}</TableCell>
-                    {hasPY && <TableCell className="text-right text-muted-foreground">{fmt(liabilityBalances.reduce((s, b) => s + getPY(b.account.id), 0))}</TableCell>}
-                    <TableCell className="text-right text-primary">{fmt(totalLiabilities)}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Assets */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-primary pb-2 border-b">
-                {language === 'hi' ? 'संपत्तियां' : 'Assets'}
-              </h3>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('particulars')}</TableHead>
-                    {hasPY && <TableHead className="text-right text-muted-foreground text-xs">{pyYear}</TableHead>}
-                    <TableHead className="text-right">{society.financialYear}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visibleAssets.map(b => (
-                    <TableRow key={b.account.id} className="hover:bg-muted/30">
-                      <TableCell>
-                        {language === 'hi' ? b.account.nameHi : b.account.name}
-                        {b.netBalance < 0 && <span className="ml-1 text-xs text-destructive">(Cr)</span>}
-                      </TableCell>
-                      {hasPY && <TableCell className="text-right text-muted-foreground">{getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—'}</TableCell>}
-                      <TableCell className={`text-right font-medium ${b.netBalance < 0 ? 'text-destructive' : ''}`}>
-                        {b.netBalance < 0 ? `(${fmt(Math.abs(b.netBalance))})` : fmt(b.netBalance)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {unpostedStock > 0 && (
-                    <TableRow className="bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100">
-                      <TableCell className="text-amber-800 dark:text-amber-300 font-medium">
-                        {language === 'hi' ? 'समापन माल (भौतिक — जर्नल नहीं हुआ)' : 'Closing Stock (Physical — Not Yet Journalized)'}
-                        <span className="ml-2 text-xs text-amber-600">⚠</span>
-                      </TableCell>
-                      {hasPY && <TableCell className="text-right text-muted-foreground">—</TableCell>}
-                      <TableCell className="text-right font-medium text-amber-800 dark:text-amber-300">{fmt(unpostedStock)}</TableCell>
-                    </TableRow>
-                  )}
-                  <TableRow className="bg-primary/10 font-bold text-lg">
-                    <TableCell>{t('total')}</TableCell>
-                    {hasPY && <TableCell className="text-right text-muted-foreground">{fmt(assetBalances.reduce((s, b) => s + getPY(b.account.id), 0))}</TableCell>}
-                    <TableCell className="text-right text-primary">{fmt(totalAssets)}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
+            {renderSide(liabilityGroups, 'Capital & Liabilities', 'पूंजी एवं देयताएं', totalLiabilities, pyTotalLiab, true)}
+            {renderSide(assetGroups, 'Assets', 'संपत्तियां', totalAssets, pyTotalAsset, false)}
           </div>
 
           <div className="mt-8 p-4 rounded-lg bg-muted/50 text-center">
-            <p className="text-sm text-muted-foreground mb-2">{language === 'hi' ? 'सत्यापन' : 'Verification'}</p>
+            <p className="text-sm text-muted-foreground mb-2">{hi ? 'सत्यापन' : 'Verification'}</p>
             <div className="flex justify-center gap-8 flex-wrap">
               <div>
-                <span className="text-muted-foreground">{language === 'hi' ? 'कुल देयताएं' : 'Total Liabilities'}:</span>{' '}
+                <span className="text-muted-foreground">{hi ? 'कुल देयताएं' : 'Total Liabilities'}:</span>{' '}
                 <span className="font-bold">{fmt(totalLiabilities)}</span>
               </div>
               <div>
-                <span className="text-muted-foreground">{language === 'hi' ? 'कुल संपत्तियां' : 'Total Assets'}:</span>{' '}
+                <span className="text-muted-foreground">{hi ? 'कुल संपत्तियां' : 'Total Assets'}:</span>{' '}
                 <span className="font-bold">{fmt(totalAssets)}</span>
               </div>
               <div className={Math.abs(totalLiabilities - totalAssets) < 1 ? 'text-success' : 'text-destructive'}>
                 <span className="font-bold">
                   {Math.abs(totalLiabilities - totalAssets) < 1
-                    ? (language === 'hi' ? '✓ संतुलित' : '✓ Balanced')
-                    : (language === 'hi' ? '✗ असंतुलित' : '✗ Not Balanced')}
+                    ? (hi ? '✓ संतुलित' : '✓ Balanced')
+                    : (hi ? '✗ असंतुलित' : '✗ Not Balanced')}
                 </span>
               </div>
             </div>
           </div>
 
           <div className="mt-8 pt-8 border-t grid grid-cols-3 gap-4 text-center text-sm">
-            {[
-              language === 'hi' ? 'लेखाकार' : 'Accountant',
-              language === 'hi' ? 'सचिव' : 'Secretary',
-              language === 'hi' ? 'अध्यक्ष' : 'Chairman',
-            ].map(label => (
+            {[hi ? 'लेखाकार' : 'Accountant', hi ? 'सचिव' : 'Secretary', hi ? 'अध्यक्ष' : 'Chairman'].map(label => (
               <div key={label}>
                 <div className="h-16 border-b border-dashed border-muted-foreground/30 mb-2" />
                 <p className="font-medium">{label}</p>
