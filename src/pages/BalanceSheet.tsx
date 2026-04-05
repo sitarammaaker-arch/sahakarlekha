@@ -184,16 +184,20 @@ const BalanceSheet: React.FC = () => {
               </TableRow>
               {/* Child accounts */}
               {group.items.map(({ account: b, displayAmount, pyAmount }) => {
-                const isContra = (isLiabSide && displayAmount < 0) || (!isLiabSide && displayAmount < 0);
+                // Contra = abnormal balance direction
+                // Liab side: displayAmount < 0 means debit balance on credit-nature account → show (Dr)
+                // Asset side: displayAmount < 0 means credit balance on debit-nature account → show (Cr)
+                const isNegative = displayAmount < 0;
+                const contraLabel = isLiabSide ? '(Dr)' : '(Cr)';
                 return (
                   <TableRow key={b.account.id} className="hover:bg-muted/30">
                     {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyAmount !== 0 ? fmt(pyAmount) : '—'}</TableCell>}
                     <TableCell className="pl-6 text-sm">
                       {hi ? b.account.nameHi : b.account.name}
-                      {isContra && <span className="ml-1 text-xs text-destructive">(Dr)</span>}
+                      {isNegative && <span className="ml-1 text-xs text-muted-foreground">{contraLabel}</span>}
                     </TableCell>
-                    <TableCell className={`text-right text-sm ${isContra ? 'text-destructive' : ''}`}>
-                      {isContra ? `(${fmt(Math.abs(displayAmount))})` : fmt(displayAmount)}
+                    <TableCell className={`text-right text-sm ${isNegative ? 'text-muted-foreground' : ''}`}>
+                      {isNegative ? `(${fmt(Math.abs(displayAmount))})` : fmt(displayAmount)}
                     </TableCell>
                     <TableCell></TableCell>
                   </TableRow>
