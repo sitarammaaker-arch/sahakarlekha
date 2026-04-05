@@ -799,6 +799,14 @@ alter table society_settings add column if not exists "boardType" text default '
 alter table society_settings add column if not exists "boardMembers" jsonb default '[]';
 alter table society_settings add column if not exists signatories jsonb default '{}';
 
+-- ── STEP 17c: Asset Register — ICAI AS-6 compliance fields ──────────────────
+alter table assets add column if not exists "depreciationMethod" text default 'SLM';
+alter table assets add column if not exists "depreciationPostedFY" jsonb default '[]';
+alter table assets add column if not exists "usefulLife" numeric;
+alter table assets add column if not exists "residualValue" numeric default 0;
+alter table assets add column if not exists "disposalDate" text;
+alter table assets add column if not exists "saleProceeds" numeric default 0;
+
 -- ── STEP 17: get_all_societies() — SECURITY DEFINER bypasses RLS ─────────────
 -- Super admin calls this to see all societies regardless of society_id filter.
 create or replace function get_all_societies()

@@ -144,6 +144,10 @@ export interface Asset {
   depreciationRate: number;
   depreciationMethod?: 'SLM' | 'WDV';
   depreciationPostedFY?: string[]; // FYs where journal entry has been posted
+  usefulLife?: number;             // years (ICAI AS-6)
+  residualValue?: number;          // scrap value (₹) — depreciable amount = cost - residualValue
+  disposalDate?: string;           // ISO date when disposed/sold
+  saleProceeds?: number;           // amount received on disposal (₹)
   location: string;
   description: string;
   status: AssetStatus;

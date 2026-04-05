@@ -35,6 +35,7 @@ interface CategoryRow {
   labelHi: string;
   assetCount: number;
   totalCost: number;
+  residualValue: number;
   openingWDV: number;
   additions: number;
   deductions: number;
@@ -99,7 +100,7 @@ const DepreciationSchedule: React.FC = () => {
       if (catAssets.length === 0) {
         return {
           category: cat.key, label: cat.label, labelHi: cat.labelHi,
-          assetCount: 0, totalCost: 0, openingWDV: 0, additions: 0,
+          assetCount: 0, totalCost: 0, residualValue: 0, openingWDV: 0, additions: 0,
           deductions: 0, depRate: '—', depAmount: 0, closingWDV: 0,
           assets: [], method: '—',
         };
@@ -123,7 +124,7 @@ const DepreciationSchedule: React.FC = () => {
       if (!DEP_ACCOUNTS[cat.key]) {
         return {
           category: cat.key, label: cat.label, labelHi: cat.labelHi,
-          assetCount: catAssets.length, totalCost, openingWDV: totalCost,
+          assetCount: catAssets.length, totalCost, residualValue: 0, openingWDV: totalCost,
           additions, deductions, depRate: 'N/A', depAmount: 0,
           closingWDV: totalCost - deductions, assets: catAssets, method: 'N/A',
         };
@@ -151,9 +152,12 @@ const DepreciationSchedule: React.FC = () => {
       const methods = [...new Set(activeAssets.map(a => a.depreciationMethod || 'SLM'))];
       const method = methods.join('/');
 
+      const totalResidual = activeAssets.reduce((s, a) => s + (a.residualValue || 0), 0);
+
       return {
         category: cat.key, label: cat.label, labelHi: cat.labelHi,
-        assetCount: catAssets.length, totalCost, openingWDV: Math.max(0, openingWDV),
+        assetCount: catAssets.length, totalCost, residualValue: totalResidual,
+        openingWDV: Math.max(0, openingWDV),
         additions, deductions, depRate, depAmount: totalDep,
         closingWDV: Math.max(0, closingWDV), assets: catAssets, method,
       };

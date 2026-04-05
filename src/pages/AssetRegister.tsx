@@ -26,9 +26,13 @@ const EMPTY_FORM = {
   cost: '',
   depreciationRate: '',
   depreciationMethod: 'SLM' as 'SLM' | 'WDV',
+  usefulLife: '',
+  residualValue: '',
   location: '',
   description: '',
   status: 'active' as AssetStatus,
+  disposalDate: '',
+  saleProceeds: '',
 };
 
 interface AssetFormProps {
@@ -82,6 +86,14 @@ const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCa
         </Select>
       </div>
       <div className="space-y-1">
+        <Label>{hi ? 'उपयोगी जीवन (वर्ष)' : 'Useful Life (Years)'}</Label>
+        <Input type="number" min="0" value={form.usefulLife} onChange={e => setForm(f => ({ ...f, usefulLife: e.target.value }))} placeholder="10" />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'अवशिष्ट मूल्य (₹)' : 'Residual Value (₹)'}</Label>
+        <Input type="number" min="0" value={form.residualValue} onChange={e => setForm(f => ({ ...f, residualValue: e.target.value }))} placeholder="0" />
+      </div>
+      <div className="space-y-1">
         <Label>{hi ? 'स्थिति' : 'Status'}</Label>
         <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as AssetStatus }))}>
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -91,6 +103,18 @@ const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCa
           </SelectContent>
         </Select>
       </div>
+      {form.status === 'disposed' && (
+        <>
+          <div className="space-y-1">
+            <Label>{hi ? 'निपटान तिथि' : 'Disposal Date'}</Label>
+            <Input type="date" value={form.disposalDate} onChange={e => setForm(f => ({ ...f, disposalDate: e.target.value }))} />
+          </div>
+          <div className="space-y-1">
+            <Label>{hi ? 'बिक्री राशि (₹)' : 'Sale Proceeds (₹)'}</Label>
+            <Input type="number" min="0" value={form.saleProceeds} onChange={e => setForm(f => ({ ...f, saleProceeds: e.target.value }))} placeholder="0" />
+          </div>
+        </>
+      )}
       <div className="space-y-1 col-span-2">
         <Label>{hi ? 'विवरण' : 'Description'}</Label>
         <Textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder={hi ? 'अतिरिक्त विवरण...' : 'Additional details...'} />
@@ -105,7 +129,7 @@ const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCa
 
 const AssetRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { assets, addAsset, updateAsset, deleteAsset, postDepreciation, society } = useData();
+  const { assets, addAsset, updateAsset, deleteAsset, postDepreciation, addVoucher, accounts, vouchers, society } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -205,6 +229,8 @@ const AssetRegister: React.FC = () => {
       cost: Number(form.cost),
       depreciationRate: Number(form.depreciationRate) || 0,
       depreciationMethod: form.depreciationMethod,
+      usefulLife: Number(form.usefulLife) || undefined,
+      residualValue: Number(form.residualValue) || 0,
       location: form.location,
       description: form.description,
       status: form.status,
@@ -217,6 +243,10 @@ const AssetRegister: React.FC = () => {
   const handleEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editAsset) return;
+
+    const wasActive = editAsset.status === 'active';
+    const nowDisposed = form.status === 'disposed';
+
     updateAsset(editAsset.id, {
       name: form.name,
       category: form.category,
@@ -224,10 +254,60 @@ const AssetRegister: React.FC = () => {
       cost: Number(form.cost),
       depreciationRate: Number(form.depreciationRate) || 0,
       depreciationMethod: form.depreciationMethod,
+      usefulLife: Number(form.usefulLife) || undefined,
+      residualValue: Number(form.residualValue) || 0,
       location: form.location,
       description: form.description,
       status: form.status,
+      disposalDate: form.disposalDate || undefined,
+      saleProceeds: Number(form.saleProceeds) || 0,
     });
+
+    // C2/C3: Post disposal journal when asset changes from active → disposed
+    if (wasActive && nowDisposed && addVoucher) {
+      const cost = Number(form.cost);
+      const proceeds = Number(form.saleProceeds) || 0;
+      const accumDep = calcAccumDep(editAsset);
+      const bookValue = Math.max(0, cost - accumDep);
+      const profitLoss = proceeds - bookValue;
+      const depAcc = DEP_ACCOUNTS[editAsset.category];
+      const assetAccountId = { Building: '3102', Furniture: '3103', Vehicle: '3104', Equipment: '3105', Computer: '3107', Other: '3106' }[editAsset.category];
+
+      if (depAcc && assetAccountId) {
+        const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [];
+        const lid = () => crypto.randomUUID?.() || Math.random().toString(36).slice(2, 10);
+
+        // Dr Accumulated Depreciation (reverse)
+        if (accumDep > 0) lines.push({ id: lid(), accountId: depAcc.accumId, type: 'Dr', amount: accumDep });
+        // Dr Cash/Bank (sale proceeds)
+        if (proceeds > 0) lines.push({ id: lid(), accountId: '3301', type: 'Dr', amount: proceeds });
+        // Dr Loss on Sale (if loss)
+        if (profitLoss < 0) lines.push({ id: lid(), accountId: '5406', type: 'Dr', amount: Math.abs(profitLoss) });
+        // Cr Fixed Asset (remove from books at cost)
+        lines.push({ id: lid(), accountId: assetAccountId, type: 'Cr', amount: cost });
+        // Cr Profit on Sale (if profit)
+        if (profitLoss > 0) lines.push({ id: lid(), accountId: '4410', type: 'Cr', amount: profitLoss });
+
+        addVoucher({
+          type: 'journal',
+          date: form.disposalDate || new Date().toISOString().split('T')[0],
+          debitAccountId: lines.find(l => l.type === 'Dr')?.accountId || '',
+          creditAccountId: lines.find(l => l.type === 'Cr')?.accountId || '',
+          amount: cost,
+          narration: `Asset Disposal: ${editAsset.name} (${editAsset.assetNo}) — ${profitLoss >= 0 ? 'Profit' : 'Loss'} Rs. ${Math.abs(profitLoss).toFixed(2)}`,
+          lines,
+          createdBy: 'System',
+        } as any);
+
+        toast({
+          title: hi ? 'निपटान जर्नल पोस्ट किया गया' : 'Disposal journal posted',
+          description: hi
+            ? `${profitLoss >= 0 ? 'लाभ' : 'हानि'}: Rs. ${Math.abs(profitLoss).toFixed(2)}`
+            : `${profitLoss >= 0 ? 'Profit' : 'Loss'} on sale: Rs. ${Math.abs(profitLoss).toFixed(2)}`,
+        });
+      }
+    }
+
     toast({ title: hi ? 'संपत्ति अपडेट की गई' : 'Asset updated' });
     setEditAsset(null);
   };
@@ -241,9 +321,13 @@ const AssetRegister: React.FC = () => {
       cost: String(a.cost),
       depreciationRate: String(a.depreciationRate),
       depreciationMethod: a.depreciationMethod ?? 'SLM',
+      usefulLife: a.usefulLife ? String(a.usefulLife) : '',
+      residualValue: a.residualValue ? String(a.residualValue) : '',
       location: a.location,
       description: a.description,
       status: a.status,
+      disposalDate: a.disposalDate || '',
+      saleProceeds: a.saleProceeds ? String(a.saleProceeds) : '',
     });
   };
 

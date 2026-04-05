@@ -44,7 +44,9 @@ export function calcSLMDepreciation(asset: Asset, fy: string): number {
   const daysUsed       = Math.round((fyEnd.getTime() - effectiveStart.getTime()) / 86_400_000) + 1;
   const fraction       = Math.min(daysUsed / 365, 1);
 
-  return Math.round(asset.cost * (asset.depreciationRate / 100) * fraction * 100) / 100;
+  // ICAI AS-6: Depreciable amount = Cost - Residual Value
+  const depreciableAmount = asset.cost - (asset.residualValue || 0);
+  return Math.round(depreciableAmount * (asset.depreciationRate / 100) * fraction * 100) / 100;
 }
 
 /**
@@ -64,14 +66,19 @@ export function calcWDVDepreciation(asset: Asset, fy: string, priorAccumDep: num
 
   if (purchased > fyEnd) return 0;
 
+  const residual  = asset.residualValue || 0;
   const bookValue = Math.max(0, asset.cost - priorAccumDep);
-  if (bookValue <= 0) return 0;
+  // Don't depreciate below residual value
+  const depreciableBook = Math.max(0, bookValue - residual);
+  if (depreciableBook <= 0) return 0;
 
   const effectiveStart = purchased > fyStart ? purchased : fyStart;
   const daysUsed       = Math.round((fyEnd.getTime() - effectiveStart.getTime()) / 86_400_000) + 1;
   const fraction       = Math.min(daysUsed / 365, 1);
 
-  return Math.round(bookValue * (asset.depreciationRate / 100) * fraction * 100) / 100;
+  const dep = Math.round(bookValue * (asset.depreciationRate / 100) * fraction * 100) / 100;
+  // Cap: don't let book value go below residual value
+  return Math.min(dep, depreciableBook);
 }
 
 /**
