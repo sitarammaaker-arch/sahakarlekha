@@ -87,8 +87,16 @@ const BalanceSheet: React.FC = () => {
           };
         });
 
+      // Audit-friendly group names
+      const auditNames: Record<string, { en: string; hi: string }> = {
+        '3400': { en: 'Closing Stock', hi: 'समापन माल' },
+        '3300': { en: 'Current Assets & Cash/Bank', hi: 'चालू संपत्ति एवं नकद/बैंक' },
+      };
+      const displayName = auditNames[group.id]?.en || group.name;
+      const displayNameHi = auditNames[group.id]?.hi || group.nameHi || group.name;
+
       return {
-        id: group.id, name: group.name, nameHi: group.nameHi || group.name,
+        id: group.id, name: displayName, nameHi: displayNameHi,
         items, grandTotal: items.reduce((s, i) => s + i.displayAmount, 0),
         pyGrandTotal: items.reduce((s, i) => s + i.pyAmount, 0),
       };
