@@ -47,62 +47,72 @@ const BalanceSheet: React.FC = () => {
   const hasPY = !!pyYear && Object.keys(pyBalances).length > 0;
   const getPY = (id: string) => pyBalances[id] ?? 0;
 
-  // Build grouped structure
-  const buildGroups = (
-    parentIds: string[], // top-level group IDs (e.g., ['1000', '2000'] for liabilities)
-    signFlip: boolean,   // true for equity/liability (credit-nature → flip to positive)
-  ): BSGroup[] => {
-    // Find sub-groups under these parents
-    const subGroups = accounts.filter(a => a.isGroup && parentIds.includes(a.parentId || ''));
+  // All leaf balances by type (same as original flat BS)
+  const allEquityLeaf = trialBalance.filter(b => b.account.type === 'equity' && !b.account.isGroup);
+  const allLiabilityLeaf = trialBalance.filter(b => b.account.type === 'liability' && !b.account.isGroup);
+  const allCapLiabLeaf = [...allEquityLeaf, ...allLiabilityLeaf];
+  const allAssetLeaf = trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup);
 
-    return subGroups.map(group => {
-      // Find leaf accounts under this group (direct children + children of sub-sub-groups)
+  // Original total calculations (guaranteed correct — same as old flat BS)
+  const totalAssets = allAssetLeaf.reduce((s, b) => s + b.netBalance, 0) + unpostedStock;
+  const totalLiabilities = allCapLiabLeaf.reduce((s, b) => s + (-b.netBalance), 0) + netProfit;
+
+  // Build grouped structure for display
+  const buildGroups = (
+    balances: AccountBalance[],
+    topParentIds: string[],
+    signFlip: boolean,
+  ): BSGroup[] => {
+    const subGroups = accounts.filter(a => a.isGroup && topParentIds.includes(a.parentId || ''));
+    const capturedIds = new Set<string>();
+
+    const groups = subGroups.map(group => {
       const childIds = new Set<string>();
-      // Direct children
+      // Direct leaf children
       accounts.filter(a => !a.isGroup && a.parentId === group.id).forEach(a => childIds.add(a.id));
-      // Sub-sub-groups (e.g., 2200 Statutory Liabilities under 2000)
-      const subSubGroups = accounts.filter(a => a.isGroup && a.parentId === group.id);
-      subSubGroups.forEach(ssg => {
+      // Sub-sub-group children (one level deeper)
+      accounts.filter(a => a.isGroup && a.parentId === group.id).forEach(ssg => {
         accounts.filter(a => !a.isGroup && a.parentId === ssg.id).forEach(a => childIds.add(a.id));
       });
 
-      const items = trialBalance
+      const items = balances
         .filter(b => childIds.has(b.account.id))
         .filter(b => b.netBalance !== 0 || getPY(b.account.id) !== 0)
-        .map(b => ({
-          account: b,
-          displayAmount: signFlip ? -b.netBalance : b.netBalance,
-          pyAmount: getPY(b.account.id),
-        }));
-
-      const grandTotal = items.reduce((s, i) => s + i.displayAmount, 0);
-      const pyGrandTotal = items.reduce((s, i) => s + i.pyAmount, 0);
+        .map(b => {
+          capturedIds.add(b.account.id);
+          return {
+            account: b,
+            displayAmount: signFlip ? -b.netBalance : b.netBalance,
+            pyAmount: getPY(b.account.id),
+          };
+        });
 
       return {
-        id: group.id,
-        name: group.name,
-        nameHi: group.nameHi || group.name,
-        items,
-        grandTotal,
-        pyGrandTotal,
+        id: group.id, name: group.name, nameHi: group.nameHi || group.name,
+        items, grandTotal: items.reduce((s, i) => s + i.displayAmount, 0),
+        pyGrandTotal: items.reduce((s, i) => s + i.pyAmount, 0),
       };
-    }).filter(g => g.items.length > 0 || g.grandTotal !== 0);
+    }).filter(g => g.items.length > 0);
+
+    // Catch orphaned accounts not captured by any group
+    const orphans = balances
+      .filter(b => !capturedIds.has(b.account.id) && (b.netBalance !== 0 || getPY(b.account.id) !== 0))
+      .map(b => ({ account: b, displayAmount: signFlip ? -b.netBalance : b.netBalance, pyAmount: getPY(b.account.id) }));
+
+    if (orphans.length > 0) {
+      groups.push({
+        id: 'other', name: 'Other', nameHi: 'अन्य',
+        items: orphans,
+        grandTotal: orphans.reduce((s, i) => s + i.displayAmount, 0),
+        pyGrandTotal: orphans.reduce((s, i) => s + i.pyAmount, 0),
+      });
+    }
+
+    return groups;
   };
 
-  // Liability side groups (equity + liability)
-  const liabilityGroups = useMemo(() => buildGroups(['1000', '2000'], true), [trialBalance, accounts, pyBalances]);
-
-  // Asset side groups
-  const assetGroups = useMemo(() => buildGroups(['3000'], false), [trialBalance, accounts, pyBalances]);
-
-  // Totals
-  const totalLiabilities = useMemo(() =>
-    liabilityGroups.reduce((s, g) => s + g.grandTotal, 0) + netProfit
-  , [liabilityGroups, netProfit]);
-
-  const totalAssets = useMemo(() =>
-    assetGroups.reduce((s, g) => s + g.grandTotal, 0) + unpostedStock
-  , [assetGroups, unpostedStock]);
+  const liabilityGroups = useMemo(() => buildGroups(allCapLiabLeaf, ['1000', '2000'], true), [trialBalance, accounts, pyBalances]);
+  const assetGroups = useMemo(() => buildGroups(allAssetLeaf, ['3000'], false), [trialBalance, accounts, pyBalances]);
 
   const pyTotalLiab = liabilityGroups.reduce((s, g) => s + g.pyGrandTotal, 0);
   const pyTotalAsset = assetGroups.reduce((s, g) => s + g.pyGrandTotal, 0);
