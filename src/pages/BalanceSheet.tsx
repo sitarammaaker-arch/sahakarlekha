@@ -211,7 +211,9 @@ const BalanceSheet: React.FC = () => {
                   {hi ? group.nameHi : group.name}
                 </TableCell>
                 <TableCell></TableCell>
-                <TableCell className="text-right font-bold">{fmt(group.grandTotal)}</TableCell>
+                <TableCell className={`text-right font-bold ${group.grandTotal < 0 ? 'text-destructive' : ''}`}>
+                  {group.grandTotal < 0 ? `(${fmt(Math.abs(group.grandTotal))})` : fmt(group.grandTotal)}
+                </TableCell>
               </TableRow>
               {/* Child accounts */}
               {group.items.map(({ account: b, displayAmount, pyAmount }) => {
