@@ -139,9 +139,11 @@ function addSignatureBlock(doc: jsPDF, font: string, labels: string[], startY: n
   }
   labels.forEach((lbl, i) => {
     const x = labels.length === 1 ? pageW / 2 : positions[i];
+    const lblLines = lbl.split('\n').length;  // count lines in label (e.g., "Secretary\n(Seal)" = 2)
+    const extraGap = (lblLines - 1) * 4;     // 4px per extra line
     doc.setDrawColor(80);
     doc.setLineWidth(0.3);
-    doc.line(x - 22, startY + 8, x + 22, startY + 8);
+    doc.line(x - 25, startY + 8, x + 25, startY + 8);
     // Print actual name above designation (if configured)
     const name = names?.[i];
     if (name) {
@@ -153,17 +155,17 @@ function addSignatureBlock(doc: jsPDF, font: string, labels: string[], startY: n
       doc.text(lbl, x, startY + 18, { align: 'center' });
       doc.setFontSize(7);
       doc.setTextColor(100);
-      doc.text('Date: __________', x, startY + 23, { align: 'center' });
+      doc.text('Date: __________', x, startY + 24 + extraGap, { align: 'center' });
     } else {
       doc.setFontSize(7.5);
       doc.text(lbl, x, startY + 13, { align: 'center' });
       doc.setFontSize(7);
       doc.setTextColor(100);
-      doc.text('Date: __________', x, startY + 18, { align: 'center' });
+      doc.text('Date: __________', x, startY + 19 + extraGap, { align: 'center' });
     }
     doc.setTextColor(0);
   });
-  return startY + 22;
+  return startY + 26;
 }
 
 /**
