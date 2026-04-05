@@ -807,6 +807,9 @@ alter table assets add column if not exists "residualValue" numeric default 0;
 alter table assets add column if not exists "disposalDate" text;
 alter table assets add column if not exists "saleProceeds" numeric default 0;
 
+-- ── STEP 17d: Stock Group for Closing Stock Report ──────────────────────────
+alter table stock_items add column if not exists "stockGroup" text default 'General';
+
 -- ── STEP 17: get_all_societies() — SECURITY DEFINER bypasses RLS ─────────────
 -- Super admin calls this to see all societies regardless of society_id filter.
 create or replace function get_all_societies()

@@ -56,6 +56,7 @@ const EMPTY_ITEM_FORM = {
   saleRate: '',
   isActive: true,
   barcodeValue: '',
+  stockGroup: '',
 };
 
 const EMPTY_ADJUSTMENT_FORM = {
@@ -152,6 +153,14 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
           placeholder="0"
         />
       </div>
+    </div>
+    <div className="space-y-2">
+      <Label>{hi ? 'माल समूह / श्रेणी' : 'Stock Group / Category'}</Label>
+      <Input
+        value={itemForm.stockGroup}
+        onChange={e => setItemForm(f => ({ ...f, stockGroup: e.target.value }))}
+        placeholder={hi ? 'जैसे: उपभोक्ता वस्तुएं, उर्वरक, पशु आहार' : 'e.g. Consumer Products, Fertilizer, Animal Feed'}
+      />
     </div>
     <div className="space-y-2">
       <Label>{hi ? 'बारकोड / EAN' : 'Barcode / EAN'}</Label>
@@ -372,6 +381,8 @@ const Inventory: React.FC = () => {
       purchaseRate: String(item.purchaseRate ?? ''),
       saleRate: String(item.saleRate ?? ''),
       isActive: item.isActive ?? true,
+      barcodeValue: item.barcodeValue || '',
+      stockGroup: item.stockGroup || '',
     });
   };
 
@@ -393,6 +404,7 @@ const Inventory: React.FC = () => {
       saleRate: Number(itemForm.saleRate) || 0,
       isActive: itemForm.isActive,
       ...(itemForm.barcodeValue.trim() ? { barcodeValue: itemForm.barcodeValue.trim() } : {}),
+      ...(itemForm.stockGroup.trim() ? { stockGroup: itemForm.stockGroup.trim() } : {}),
     });
     toast({ title: hi ? 'वस्तु जोड़ी गई' : 'Item added successfully' });
     resetItemForm();
@@ -416,6 +428,7 @@ const Inventory: React.FC = () => {
       saleRate: Number(f.saleRate) || 0,
       isActive: f.isActive,
       barcodeValue: f.barcodeValue.trim() || undefined,
+      stockGroup: f.stockGroup.trim() || undefined,
     });
     toast({ title: hi ? 'वस्तु अपडेट की गई' : 'Item updated successfully' });
     editItemRef.current = null;

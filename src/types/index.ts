@@ -332,6 +332,7 @@ export interface StockItem {
   gstRate?: number;       // default GST rate % (e.g. 5, 12, 18)
   valuationMethod?: 'fifo' | 'weighted_avg'; // inventory valuation
   barcodeValue?: string;  // EAN-13 / QR / Code128 barcode
+  stockGroup?: string;    // category group (e.g., "Consumer Products", "Fertilizer A/c", "Animal Feed")
 }
 
 // ── Budget ─────────────────────────────────────────────────────────────────────
