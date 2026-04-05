@@ -311,6 +311,51 @@ const Inventory: React.FC = () => {
     stockItems.forEach(item => { if (item.stockGroup && item.stockGroup !== 'General') groups.add(item.stockGroup); });
     return [...groups].sort();
   }, [stockItems]);
+
+  // ── Stock Group Management ──────────────────────────────────────────────────
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<{ old: string; new: string } | null>(null);
+
+  const handleRenameGroup = (oldName: string, newName: string) => {
+    if (!newName.trim() || newName.trim() === oldName) return;
+    const trimmed = newName.trim();
+    // Check duplicate
+    if (existingGroups.includes(trimmed)) {
+      toast({ title: hi ? 'यह समूह पहले से मौजूद है' : 'This group already exists', variant: 'destructive' });
+      return;
+    }
+    // Update all items in old group
+    let count = 0;
+    stockItems.forEach(item => {
+      if (item.stockGroup === oldName) {
+        updateStockItem(item.id, { stockGroup: trimmed });
+        count++;
+      }
+    });
+    toast({ title: hi ? `समूह का नाम बदला: ${count} वस्तुएं` : `Group renamed: ${count} items updated` });
+    setEditingGroup(null);
+  };
+
+  const handleDeleteGroup = (groupName: string) => {
+    let count = 0;
+    stockItems.forEach(item => {
+      if (item.stockGroup === groupName) {
+        updateStockItem(item.id, { stockGroup: 'General' });
+        count++;
+      }
+    });
+    toast({ title: hi ? `समूह हटाया: ${count} वस्तुएं "General" में चली गईं` : `Group deleted: ${count} items moved to "General"` });
+  };
+
+  // Group-wise item counts
+  const groupCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    stockItems.forEach(item => {
+      const g = item.stockGroup || 'General';
+      counts[g] = (counts[g] || 0) + 1;
+    });
+    return counts;
+  }, [stockItems]);
   const itemFormRef = useRef(EMPTY_ITEM_FORM);
   const setItemFormWithRef = useCallback((updater: typeof EMPTY_ITEM_FORM | ((prev: typeof EMPTY_ITEM_FORM) => typeof EMPTY_ITEM_FORM)) => {
     setItemForm(prev => {
@@ -632,6 +677,10 @@ const Inventory: React.FC = () => {
                     {hi ? 'केवल सक्रिय' : 'Active only'}
                   </Label>
                 </div>
+                <Button variant="outline" className="gap-2 shrink-0" onClick={() => setGroupDialogOpen(true)}>
+                  <Boxes className="h-4 w-4" />
+                  {hi ? 'समूह प्रबंधन' : 'Manage Groups'}
+                </Button>
                 <Button className="gap-2 shrink-0" onClick={openAddItem}>
                   <Plus className="h-4 w-4" />
                   {hi ? 'नई वस्तु' : 'Add Item'}
@@ -1093,6 +1142,58 @@ const Inventory: React.FC = () => {
           }
         }}
       />
+
+      {/* Manage Groups Dialog */}
+      <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{hi ? 'माल समूह प्रबंधन' : 'Manage Stock Groups'}</DialogTitle>
+            <DialogDescription>
+              {hi ? 'समूह का नाम बदलें या हटाएं। हटाने पर वस्तुएं "General" में चली जाएंगी।' : 'Rename or delete groups. Deleting moves items to "General".'}
+            </DialogDescription>
+          </DialogHeader>
+          {existingGroups.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              {hi ? 'कोई समूह नहीं बना है। वस्तु जोड़ते समय समूह बनाएं।' : 'No groups created yet. Create groups when adding items.'}
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {existingGroups.map(group => (
+                <div key={group} className="flex items-center gap-2 p-2 border rounded-lg hover:bg-muted/50">
+                  {editingGroup?.old === group ? (
+                    <>
+                      <Input
+                        value={editingGroup.new}
+                        onChange={e => setEditingGroup({ old: group, new: e.target.value })}
+                        className="h-8 text-sm flex-1"
+                        autoFocus
+                        onKeyDown={e => { if (e.key === 'Enter') handleRenameGroup(group, editingGroup.new); if (e.key === 'Escape') setEditingGroup(null); }}
+                      />
+                      <Button size="sm" variant="default" className="h-8 px-3" onClick={() => handleRenameGroup(group, editingGroup.new)}>
+                        {hi ? 'सहेजें' : 'Save'}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setEditingGroup(null)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 text-sm font-medium">{group}</span>
+                      <Badge variant="secondary" className="text-xs">{groupCounts[group] || 0} {hi ? 'वस्तुएं' : 'items'}</Badge>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingGroup({ old: group, new: group })}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => handleDeleteGroup(group)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Barcode scanner modal */}
       <BarcodeScanModal
