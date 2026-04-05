@@ -31,6 +31,7 @@ export const translations: Translations = {
   shareRegister: { hi: 'अंश रजिस्टर', en: 'Share Register' },
   loanRegister: { hi: 'ऋण रजिस्टर', en: 'Loan Register' },
   assetRegister: { hi: 'संपत्ति रजिस्टर', en: 'Asset Register' },
+  depreciationSchedule: { hi: 'ह्रास अनुसूची', en: 'Depreciation Schedule' },
   auditRegister: { hi: 'ऑडिट रजिस्टर', en: 'Audit Register' },
   deletedVouchers: { hi: 'रद्द वाउचर', en: 'Deleted Vouchers' },
   bankReconciliation: { hi: 'बैंक समाधान (BRS)', en: 'Bank Reconciliation' },

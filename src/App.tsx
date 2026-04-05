@@ -32,6 +32,7 @@ import SocietySetup from "./pages/SocietySetup";
 import ShareRegister from "./pages/ShareRegister";
 import LoanRegister from "./pages/LoanRegister";
 import AssetRegister from "./pages/AssetRegister";
+import DepreciationSchedule from "./pages/DepreciationSchedule";
 import AuditRegister from "./pages/AuditRegister";
 import DayBook from "./pages/DayBook";
 import LedgerHeads from "./pages/LedgerHeads";
@@ -154,6 +155,7 @@ const AppRoutes = () => {
       <Route path="/share-register" element={<ProtectedRoute><ShareRegister /></ProtectedRoute>} />
       <Route path="/loan-register" element={<ProtectedRoute><LoanRegister /></ProtectedRoute>} />
       <Route path="/asset-register" element={<ProtectedRoute><AssetRegister /></ProtectedRoute>} />
+      <Route path="/depreciation-schedule" element={<ProtectedRoute><DepreciationSchedule /></ProtectedRoute>} />
       <Route path="/audit-register" element={<ProtectedRoute><AuditRegister /></ProtectedRoute>} />
       <Route path="/day-book" element={<ProtectedRoute><DayBook /></ProtectedRoute>} />
       <Route path="/ledger-heads" element={<ProtectedRoute><LedgerHeads /></ProtectedRoute>} />

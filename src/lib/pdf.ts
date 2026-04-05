@@ -1501,6 +1501,89 @@ export function generateGstSummaryPDF(params: GstSummaryPDFParams): void {
 }
 
 
+// ── Depreciation Schedule PDF ────────────────────────────────────────────────
+
+interface DepCategoryRow {
+  category: string;
+  label: string;
+  assetCount: number;
+  totalCost: number;
+  openingWDV: number;
+  additions: number;
+  depRate: string;
+  method: string;
+  depAmount: number;
+  closingWDV: number;
+}
+
+interface DepTotals {
+  totalCost: number;
+  openingWDV: number;
+  additions: number;
+  deductions: number;
+  depAmount: number;
+  closingWDV: number;
+}
+
+export function generateDepreciationSchedulePDF(
+  data: DepCategoryRow[],
+  totals: DepTotals,
+  society: SocietySettings,
+  _language: string,
+): void {
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const { startY, font } = addHeader(doc, 'DEPRECIATION SCHEDULE', society,
+    `Financial Year: ${society.financialYear} | As per Income Tax Act / Cooperative Societies Act`,
+    { reportCode: 'DEP' }
+  );
+
+  const body = data.map(r => [
+    r.label,
+    String(r.assetCount),
+    fmt(r.openingWDV),
+    r.additions > 0 ? fmt(r.additions) : '—',
+    r.depRate,
+    r.method,
+    fmt(r.depAmount),
+    fmt(r.closingWDV),
+  ]);
+
+  autoTable(doc, {
+    startY: startY + 2,
+    head: [['Category', 'Assets', 'Opening WDV', 'Additions', 'Dep Rate', 'Method', `Dep. (${society.financialYear})`, 'Closing WDV']],
+    body,
+    foot: [['Total', String(data.reduce((s, r) => s + r.assetCount, 0)),
+      fmt(totals.openingWDV), fmt(totals.additions), '', '',
+      fmt(totals.depAmount), fmt(totals.closingWDV),
+    ]],
+    styles: { fontSize: 8, cellPadding: 2.5, font },
+    headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 253] },
+    columnStyles: {
+      1: { halign: 'center' },
+      2: { halign: 'right' },
+      3: { halign: 'right' },
+      4: { halign: 'center' },
+      5: { halign: 'center' },
+      6: { halign: 'right' },
+      7: { halign: 'right' },
+    },
+    didParseCell: rightAlignAmountColumns(2, 3, 6, 7),
+  });
+
+  const depFinalY = (doc as any).lastAutoTable.finalY + 10;
+  const depSig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Accountant', 'Secretary', 'Chairman'], depFinalY,
+    'Certified that the above Depreciation Schedule has been prepared as per the Books of Account of the Society.',
+    [depSig.accountant, depSig.secretary, depSig.president]
+  );
+
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName('DepreciationSchedule', society));
+}
+
+
 // ── B-2: Audit Schedules PDF ───────────────────────────────────────────────
 
 import type { ResolvedSchedule, StateAuditFormat } from '@/lib/stateAuditFormats';

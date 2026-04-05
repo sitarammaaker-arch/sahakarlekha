@@ -75,6 +75,7 @@ const registerNavItems: NavItem[] = [
   { key: 'loanRegister', icon: Landmark, path: '/loan-register' },
   { key: 'loanInterest', icon: Percent, path: '/loan-interest', roles: ['admin', 'accountant'] },
   { key: 'assetRegister', icon: Package, path: '/asset-register' },
+  { key: 'depreciationSchedule', icon: TrendingDown, path: '/depreciation-schedule' },
   { key: 'auditRegister', icon: ShieldCheck, path: '/audit-register' },
   { key: 'meetingRegister', icon: Users2, path: '/meeting-register' },
   { key: 'nominationRegister', icon: UserCheck, path: '/nomination-register' },
