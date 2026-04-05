@@ -66,6 +66,66 @@ const EMPTY_ADJUSTMENT_FORM = {
   date: new Date().toISOString().split('T')[0],
 };
 
+// ─── Stock Group Field (with Add New mode) ──────────────────────────────────────
+
+const StockGroupField: React.FC<{
+  value: string;
+  onChange: (v: string) => void;
+  existingGroups: string[];
+  hi: boolean;
+}> = ({ value, onChange, existingGroups, hi }) => {
+  const [isNewMode, setIsNewMode] = useState(false);
+
+  if (existingGroups.length === 0 || isNewMode) {
+    return (
+      <div className="space-y-2">
+        <Label>{hi ? 'माल समूह / श्रेणी' : 'Stock Group / Category'}</Label>
+        <div className="flex gap-2">
+          <Input
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            placeholder={hi ? 'नया समूह नाम लिखें' : 'Type new group name'}
+            autoFocus={isNewMode}
+          />
+          {existingGroups.length > 0 && (
+            <button
+              type="button"
+              onClick={() => { setIsNewMode(false); onChange(''); }}
+              className="text-xs text-muted-foreground hover:text-foreground whitespace-nowrap px-2 border rounded"
+            >
+              {hi ? '← वापस' : '← Back'}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label>{hi ? 'माल समूह / श्रेणी' : 'Stock Group / Category'}</Label>
+      <select
+        value={value}
+        onChange={e => {
+          if (e.target.value === '__new__') {
+            setIsNewMode(true);
+            onChange('');
+          } else {
+            onChange(e.target.value);
+          }
+        }}
+        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <option value="">{hi ? '— समूह चुनें —' : '— Select Group —'}</option>
+        {existingGroups.map(g => (
+          <option key={g} value={g}>{g}</option>
+        ))}
+        <option value="__new__">{hi ? '+ नया समूह जोड़ें' : '+ Add New Group'}</option>
+      </select>
+    </div>
+  );
+};
+
 // ─── ItemForm component (outside Inventory to prevent remount on re-render) ────
 
 interface ItemFormProps {
@@ -155,48 +215,12 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
         />
       </div>
     </div>
-    <div className="space-y-2">
-      <Label>{hi ? 'माल समूह / श्रेणी' : 'Stock Group / Category'}</Label>
-      {existingGroups.length > 0 && !itemForm.stockGroup?.startsWith('__typing__') ? (
-        <>
-          <select
-            value={itemForm.stockGroup}
-            onChange={e => {
-              if (e.target.value === '__new__') {
-                setItemForm(f => ({ ...f, stockGroup: '__typing__' }));
-              } else {
-                setItemForm(f => ({ ...f, stockGroup: e.target.value }));
-              }
-            }}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="">{hi ? '— समूह चुनें —' : '— Select Group —'}</option>
-            {existingGroups.map(g => (
-              <option key={g} value={g}>{g}</option>
-            ))}
-            <option value="__new__">{hi ? '+ नया समूह जोड़ें' : '+ Add New Group'}</option>
-          </select>
-        </>
-      ) : (
-        <div className="flex gap-2">
-          <Input
-            value={itemForm.stockGroup?.replace('__typing__', '') || ''}
-            onChange={e => setItemForm(f => ({ ...f, stockGroup: e.target.value }))}
-            placeholder={hi ? 'नया समूह नाम लिखें' : 'Type new group name'}
-            autoFocus
-          />
-          {existingGroups.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setItemForm(f => ({ ...f, stockGroup: '' }))}
-              className="text-xs text-muted-foreground hover:text-foreground whitespace-nowrap px-2"
-            >
-              {hi ? 'वापस' : 'Back'}
-            </button>
-          )}
-        </div>
-      )}
-    </div>
+    <StockGroupField
+      value={itemForm.stockGroup}
+      onChange={v => setItemForm(f => ({ ...f, stockGroup: v }))}
+      existingGroups={existingGroups}
+      hi={hi}
+    />
     <div className="space-y-2">
       <Label>{hi ? 'बारकोड / EAN' : 'Barcode / EAN'}</Label>
       <Input
