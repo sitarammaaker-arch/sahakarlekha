@@ -1594,21 +1594,23 @@ export function generateBudgetPDF(params: {
 }
 
 
-// ── Closing Stock Report PDF ─────────────────────────────────────────────────
+// ── Closing Stock Report PDF — Category-wise grouped ────────────────────────
 
-interface ClosingStockRow {
-  itemCode: string; name: string; unit: string;
-  openingQty: number; purchaseQty: number; saleQty: number; adjustmentQty: number;
-  closingQty: number; rate: number; closingValue: number;
+export interface ClosingStockItemRow {
+  name: string; unit: string; stockGroup: string;
+  openingQty: number; openingRate: number; openingValue: number;
+  inwardQty: number; inwardRate: number; inwardValue: number;
+  outwardQty: number; outwardRate: number; outwardValue: number;
+  closingQty: number; closingRate: number; closingValue: number;
 }
 
-interface ClosingStockTotals {
-  openingQty: number; purchaseQty: number; saleQty: number;
-  adjustmentQty: number; closingQty: number; closingValue: number;
+export interface ClosingStockGroupTotals {
+  openingValue: number; inwardValue: number; outwardValue: number; closingValue: number;
 }
 
 export function generateClosingStockPDF(
-  data: ClosingStockRow[], totals: ClosingStockTotals,
+  groups: { group: string; items: ClosingStockItemRow[]; openingValue: number; inwardValue: number; outwardValue: number; closingValue: number }[],
+  grandTotals: ClosingStockGroupTotals,
   society: SocietySettings, _language: string,
 ): void {
   const doc = new jsPDF({ orientation: 'landscape' });
@@ -1616,28 +1618,59 @@ export function generateClosingStockPDF(
     `Financial Year: ${society.financialYear} | As at 31st March`,
     { reportCode: 'CSR' });
 
-  const fQ = (n: number) => n.toFixed(3);
+  const fQ = (n: number) => n > 0 ? n.toFixed(2) : '';
+  const fV = (n: number) => n > 0 ? fmt(n) : '';
+
+  // Build body rows: group headers (bold) + item rows (indented)
+  const body: string[][] = [];
+  const groupRowIndices: number[] = [];
+
+  groups.forEach(g => {
+    groupRowIndices.push(body.length);
+    // Group header row — show only values, not qty/rate
+    body.push([g.group, '', '', fV(g.openingValue), '', '', fV(g.inwardValue), '', '', fV(g.outwardValue), '', '', fV(g.closingValue)]);
+
+    // Item rows
+    g.items.forEach(r => {
+      body.push([
+        `  ${r.name}`, r.unit,
+        fQ(r.openingQty), fV(r.openingValue),
+        fQ(r.inwardQty), fV(r.inwardRate), fV(r.inwardValue),
+        fQ(r.outwardQty), fV(r.outwardRate), fV(r.outwardValue),
+        fQ(r.closingQty), fV(r.closingRate), fV(r.closingValue),
+      ]);
+    });
+  });
 
   autoTable(doc, {
     startY: startY + 2,
-    head: [['S.No', 'Code', 'Item Name', 'Unit', 'Opening', 'Purchase', 'Sale', 'Adj.', 'Closing Qty', 'Rate (Rs.)', 'Value (Rs.)']],
-    body: data.map((r, i) => [
-      String(i + 1), r.itemCode, r.name, r.unit,
-      fQ(r.openingQty), fQ(r.purchaseQty), fQ(r.saleQty),
-      r.adjustmentQty !== 0 ? fQ(r.adjustmentQty) : '—',
-      fQ(r.closingQty), fmt(r.rate), fmt(r.closingValue),
-    ]),
-    foot: [['', '', 'Total', '', fQ(totals.openingQty), fQ(totals.purchaseQty),
-      fQ(totals.saleQty), fQ(totals.adjustmentQty), fQ(totals.closingQty), '', fmt(totals.closingValue)]],
-    styles: { fontSize: 8, cellPadding: 2, font },
-    headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold' },
+    head: [[
+      'Particulars', 'Unit',
+      'Open Qty', 'Open Value',
+      'Inward Qty', 'Inward Rate', 'Inward Value',
+      'Outward Qty', 'Outward Rate', 'Outward Value',
+      'Close Qty', 'Close Rate', 'Close Value',
+    ]],
+    body,
+    foot: [['Grand Total', '', '', fV(grandTotals.openingValue), '', '', fV(grandTotals.inwardValue), '', '', fV(grandTotals.outwardValue), '', '', fV(grandTotals.closingValue)]],
+    styles: { fontSize: 7, cellPadding: 1.5, font },
+    headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold', fontSize: 7 },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [248, 250, 253] },
     columnStyles: {
-      4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' },
-      7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right' },
+      2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
+      5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' },
+      8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right' },
+      11: { halign: 'right' }, 12: { halign: 'right' },
     },
-    didParseCell: rightAlignAmountColumns(4, 5, 6, 7, 8, 9, 10),
+    didParseCell: (data) => {
+      // Right-align amount columns across head/body/foot
+      if (data.column.index >= 2) data.cell.styles.halign = 'right';
+      // Bold group header rows
+      if (data.section === 'body' && groupRowIndices.includes(data.row.index)) {
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fillColor = [232, 245, 233];
+      }
+    },
   });
 
   const sigY = (doc as any).lastAutoTable.finalY + 10;

@@ -168,12 +168,19 @@ const ClosingStockReport: React.FC = () => {
   const handleCSV = () => downloadCSV(csvHeaders, csvRows(), `closing-stock-${fy}`);
   const handleExcel = () => downloadExcelSingle(csvHeaders, csvRows(), `closing-stock-${fy}`, 'Closing Stock');
   const handlePDF = () => generateClosingStockPDF(
-    flatRows.map(r => ({
-      itemCode: r.itemCode, name: r.name, unit: r.unit, hsnCode: '',
-      openingQty: r.openingQty, purchaseQty: r.inwardQty, saleQty: r.outwardQty,
-      adjustmentQty: 0, closingQty: r.closingQty, rate: r.closingRate, closingValue: r.closingValue,
+    groupedData.map(g => ({
+      group: g.group,
+      items: g.items.map(r => ({
+        name: r.name, unit: r.unit, stockGroup: r.stockGroup,
+        openingQty: r.openingQty, openingRate: r.openingRate, openingValue: r.openingValue,
+        inwardQty: r.inwardQty, inwardRate: r.inwardRate, inwardValue: r.inwardValue,
+        outwardQty: r.outwardQty, outwardRate: r.outwardRate, outwardValue: r.outwardValue,
+        closingQty: r.closingQty, closingRate: r.closingRate, closingValue: r.closingValue,
+      })),
+      openingValue: g.openingValue, inwardValue: g.inwardValue,
+      outwardValue: g.outwardValue, closingValue: g.closingValue,
     })),
-    flatTotals, society, language
+    grandTotals, society, language
   );
 
   const fyLabel = fyDates ? `1-Apr-${fyDates.start.split('-')[0]} to 31-Mar-${fyDates.end.split('-')[0]}` : fy;
