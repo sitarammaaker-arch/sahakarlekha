@@ -647,10 +647,11 @@ const ACCOUNTS_TO_ADD: LedgerAccount[] = [
   { id: '5605', name: 'Penalty / Fine',             nameHi: 'जुर्माना / दंड व्यय',      type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600', subtype: 'statutory_expense' },
 ];
 
-export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAccount[]; changed: boolean } {
+export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAccount[]; changed: boolean; newlyAdded: LedgerAccount[] } {
   let changed = false;
+  const newlyAdded: LedgerAccount[] = [];
 
-  // Step 1: Apply patches to existing accounts
+  // Step 1: Apply patches to existing accounts (local only — NOT synced back to Supabase)
   const patched = existing.map(acc => {
     const patch = ACCOUNT_PATCHES[acc.id];
     if (!patch) return acc;
@@ -663,11 +664,12 @@ export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAc
   for (const newAcc of ACCOUNTS_TO_ADD) {
     if (!existingIds.has(newAcc.id)) {
       patched.push(newAcc);
+      newlyAdded.push(newAcc);
       changed = true;
     }
   }
 
-  return { accounts: patched, changed };
+  return { accounts: patched, changed, newlyAdded };
 }
 
 export const DEFAULT_SOCIETY: SocietySettings = {

@@ -234,18 +234,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (mData && mData.length > 0) { setMembersState(mData); storage.setMembers(mData); }
         else setMembersState([]);
 
-        // Load accounts from Supabase; fall back to CMS template (never stale localStorage) if none exist
+        // Load accounts from Supabase; fall back to CMS template if none exist
         const rawAccts: LedgerAccount[] = aData && aData.length > 0 ? [...aData] : [...CMS_SOCIETY_ACCOUNTS];
-        const { accounts: baseAccts, changed: acctsMigrated } = storage.migrateAccounts(rawAccts);
+        const { accounts: baseAccts, changed: acctsMigrated, newlyAdded } = storage.migrateAccounts(rawAccts);
         setAccountsState(baseAccts);
         storage.setAccounts(baseAccts);
-        // Sync migrated accounts back to Supabase if anything changed
-        if (acctsMigrated) {
-          supabase.from('accounts').delete().eq('society_id', sid).then(() => {
-            const rows = baseAccts.map(a => ({ ...a, society_id: sid }));
-            supabase.from('accounts').insert(rows).then(({ error }) => {
-              if (error) console.warn('Account migration sync error:', error.message);
-            });
+        // Only INSERT truly new accounts (don't delete+reinsert — preserves user customizations)
+        if (acctsMigrated && newlyAdded.length > 0) {
+          const rows = newlyAdded.map(a => ({ ...a, society_id: sid }));
+          supabase.from('accounts').upsert(rows).then(({ error }) => {
+            if (error) console.warn('Account migration sync error:', error.message);
           });
         }
 
