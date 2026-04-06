@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { getVoucherLines } from '@/lib/voucherUtils';
@@ -32,9 +33,19 @@ const Ledger: React.FC = () => {
   const { t, language } = useLanguage();
   const { accounts, vouchers, society } = useData();
 
-  const [selectedAccountId, setSelectedAccountId] = useState<string>(accounts[0]?.id ?? '');
+  const [searchParams] = useSearchParams();
+  const urlAccountId = searchParams.get('account');
+
+  const [selectedAccountId, setSelectedAccountId] = useState<string>(urlAccountId || (accounts[0]?.id ?? ''));
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+
+  // If URL has ?account=XXX, select that account
+  useEffect(() => {
+    if (urlAccountId && accounts.some(a => a.id === urlAccountId)) {
+      setSelectedAccountId(urlAccountId);
+    }
+  }, [urlAccountId, accounts]);
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2 }).format(n);

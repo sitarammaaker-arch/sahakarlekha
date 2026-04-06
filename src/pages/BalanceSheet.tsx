@@ -4,15 +4,19 @@
  * Each group shows sub-total in "Grand" column, child accounts indented with individual amounts
  * Previous Year column shows per-account and per-group values
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FileSpreadsheet, Download, AlertTriangle } from 'lucide-react';
+import { FileSpreadsheet, Download, AlertTriangle, Calendar, ExternalLink } from 'lucide-react';
 import { generateBalanceSheetPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { fmtDate } from '@/lib/dateUtils';
 import { useToast } from '@/hooks/use-toast';
 import type { AccountBalance } from '@/types';
 
@@ -29,12 +33,17 @@ const BalanceSheet: React.FC = () => {
   const { t, language } = useLanguage();
   const { getTrialBalance, getProfitLoss, getTradingAccount, society, accounts, stockItems } = useData();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const hi = language === 'hi';
+
+  // As-on-date (default: FY end = 31st March)
+  const fyEndDate = `20${society.financialYear.split('-')[1]}-03-31`;
+  const [asOnDate, setAsOnDate] = useState(fyEndDate);
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
-  const trialBalance = getTrialBalance();
+  const trialBalance = getTrialBalance(asOnDate);
   const { netProfit } = getProfitLoss();
   const { physicalClosingStock, closingStockPosted } = getTradingAccount();
   const unpostedStock = !closingStockPosted && physicalClosingStock > 0 ? physicalClosingStock : 0;
@@ -223,11 +232,17 @@ const BalanceSheet: React.FC = () => {
                 const isNegative = displayAmount < 0;
                 const contraLabel = isLiabSide ? '(Dr)' : '(Cr)';
                 return (
-                  <TableRow key={b.account.id} className="hover:bg-muted/30">
+                  <TableRow key={b.account.id} className="hover:bg-muted/30 cursor-pointer"
+                    onClick={() => navigate(`/ledger?account=${b.account.id}`)}
+                    title={hi ? 'खाता बही देखें' : 'View Ledger'}
+                  >
                     {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyAmount !== 0 ? fmt(pyAmount) : '—'}</TableCell>}
-                    <TableCell className="pl-6 text-sm">
-                      {hi ? b.account.nameHi : b.account.name}
+                    <TableCell className="pl-6 text-sm group">
+                      <span className="group-hover:text-primary group-hover:underline">
+                        {hi ? b.account.nameHi : b.account.name}
+                      </span>
                       {isNegative && <span className="ml-1 text-xs text-muted-foreground">{contraLabel}</span>}
+                      <ExternalLink className="h-3 w-3 ml-1 inline opacity-0 group-hover:opacity-50 text-muted-foreground" />
                     </TableCell>
                     <TableCell className={`text-right text-sm ${isNegative ? 'text-muted-foreground' : ''}`}>
                       {isNegative ? `(${fmt(Math.abs(displayAmount))})` : fmt(displayAmount)}
@@ -294,6 +309,27 @@ const BalanceSheet: React.FC = () => {
         </div>
       </div>
 
+      {/* As-on-date picker */}
+      <Card>
+        <CardContent className="pt-4 pb-3">
+          <div className="flex items-center gap-4 flex-wrap">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <Label className="text-sm font-medium">{hi ? 'दिनांक तक' : 'As on Date'}:</Label>
+            <Input type="date" value={asOnDate} onChange={e => setAsOnDate(e.target.value)} className="w-44 h-8 text-sm" />
+            {asOnDate !== fyEndDate && (
+              <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => setAsOnDate(fyEndDate)}>
+                {hi ? 'FY अंत पर रीसेट' : 'Reset to FY End'}
+              </Button>
+            )}
+            {asOnDate !== fyEndDate && (
+              <span className="text-xs text-amber-600 font-medium">
+                {hi ? '⚠ अंतरिम तुलन पत्र' : '⚠ Interim Balance Sheet'}
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {unpostedStock > 0 && (
         <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700">
           <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
@@ -315,7 +351,7 @@ const BalanceSheet: React.FC = () => {
           <CardTitle className="text-xl">{hi ? 'तुलन पत्र' : 'Balance Sheet'}</CardTitle>
           <p className="text-sm text-muted-foreground">{hi ? society.nameHi : society.name}</p>
           <p className="text-sm text-muted-foreground">
-            {hi ? `31 मार्च ${society.financialYear.split('-')[1]} को` : `As at 31st March 20${society.financialYear.split('-')[1]}`}
+            {hi ? `${fmtDate(asOnDate)} को` : `As at ${fmtDate(asOnDate)}`}
           </p>
         </CardHeader>
         <CardContent className="pt-6">
