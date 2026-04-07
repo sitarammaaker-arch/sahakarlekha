@@ -282,6 +282,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    */
   const sendPasswordReset = async (email: string): Promise<{ success: boolean; isEmailSent: boolean }> => {
     try {
+      // First try Supabase Auth reset (works if user is in Supabase Auth)
       const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
@@ -290,6 +291,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { success: true, isEmailSent: true };
       }
       console.error('[Auth] Password reset error:', error.message);
+
+      // If Supabase Auth fails (user might be on legacy plain-text auth),
+      // try to sign them up in Supabase Auth first, then reset
+      if (error.message?.includes('Unable to process') || error.status === 500) {
+        // Check if user exists in society_users (legacy auth)
+        const { data: legacyUser } = await supabase
+          .from('society_users')
+          .select('email, name')
+          .eq('email', email)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (legacyUser) {
+          // User is on legacy auth — create in Supabase Auth with a temp password
+          const tempPassword = `Temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          const { error: signUpError } = await supabase.auth.signUp({
+            email,
+            password: tempPassword,
+            options: { data: { name: legacyUser.name } },
+          });
+          console.info('[Auth] Legacy user sign-up attempt:', { email, signUpError: signUpError?.message });
+
+          if (!signUpError) {
+            // Now try reset again
+            const { error: retryError } = await supabase.auth.resetPasswordForEmail(email, {
+              redirectTo: `${window.location.origin}/reset-password`,
+            });
+            if (!retryError) {
+              return { success: true, isEmailSent: true };
+            }
+            console.error('[Auth] Retry reset error:', retryError.message);
+          }
+
+          // Even if Supabase Auth signup failed, the user can still use Admin reset
+          return { success: true, isEmailSent: false };
+        }
+      }
     } catch (err) {
       console.error('[Auth] Password reset exception:', err);
     }
