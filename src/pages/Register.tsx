@@ -95,7 +95,21 @@ const Register: React.FC = () => {
         return;
       }
 
-      // 2. Insert admin user
+      // 2a. Create user in Supabase Auth (for password reset, email verification)
+      const { error: authSignUpError } = await supabase.auth.signUp({
+        email: adminEmail,
+        password: adminPassword,
+        options: {
+          data: { name: adminName, society_id: society.id },
+          emailRedirectTo: `${window.location.origin}/login`,
+        },
+      });
+      if (authSignUpError) {
+        console.warn('[Register] Supabase Auth signup warning:', authSignUpError.message);
+        // Don't block registration — continue with society_users insert
+      }
+
+      // 2b. Insert admin user in society_users table
       const { error: userError } = await supabase
         .from('society_users')
         .insert({

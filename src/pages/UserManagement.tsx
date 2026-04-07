@@ -159,6 +159,15 @@ export default function UserManagement() {
         cacheUsers(updated);
       } else {
         // Create new user
+        // First create in Supabase Auth (for password reset & email verification)
+        await supabase.auth.signUp({
+          email: form.email,
+          password: form.password,
+          options: { data: { name: form.name, society_id: societyId } },
+        }).then(({ error: authErr }) => {
+          if (authErr) console.warn('[UserMgmt] Auth signup warning:', authErr.message);
+        });
+
         const newId = `usr_${Date.now()}`;
         const { data, error } = await supabase
           .from('society_users')
