@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -15,15 +16,15 @@ import {
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import type { EntityLink } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download } from 'lucide-react';
+import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MemberType } from '@/types';
-import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { generateMemberPassbookPDF } from '@/lib/pdf';
+import { generateMemberPassbookPDF, generateMemberApplicationPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
 import type { Member, MemberStatus } from '@/types';
 
@@ -99,20 +100,20 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
 const Members: React.FC = () => {
   const { t, language } = useLanguage();
   const { hasPermission } = useAuth();
-  const { members, addMember, updateMember, deleteMember, getMemberLedger, society, getEntityLinks } = useData();
+  const { members, addMember, updateMember, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks } = useData();
   const canEdit = hasPermission(['admin', 'accountant']);
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const hi = language === 'hi';
+  const activeTab = searchParams.get('tab') || 'approved';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editMember, setEditMember] = useState<Member | null>(null);
   const [viewMember, setViewMember] = useState<Member | null>(null);
   const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
-
-  const handleDeleteClick = (member: Member) => {
-    const links = getEntityLinks('member', member.id);
-    setDeleteGuard({ open: true, id: member.id, name: `${member.name} (${member.memberId})`, links });
-  };
   const [ledgerMember, setLedgerMember] = useState<Member | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
 
@@ -121,14 +122,19 @@ const Members: React.FC = () => {
 
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').slice(0, 2);
 
-  const filteredMembers = members.filter(m =>
+  // Split members by approval status
+  const approvedMembers = members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved');
+  const pendingMembers = members.filter(m => m.approvalStatus === 'pending');
+  const rejectedMembers = members.filter(m => m.approvalStatus === 'rejected');
+
+  const filterBySearch = (list: Member[]) => list.filter(m =>
     m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     m.memberId.toLowerCase().includes(searchQuery.toLowerCase()) ||
     m.phone.includes(searchQuery)
   );
 
-  const totalShareCapital = members.reduce((s, m) => s + m.shareCapital, 0);
-  const activeMembers = members.filter(m => m.status === 'active').length;
+  const totalShareCapital = approvedMembers.reduce((s, m) => s + m.shareCapital, 0);
+  const activeApproved = approvedMembers.filter(m => m.status === 'active').length;
 
   const getNextMemberId = () => {
     const nums = members
@@ -138,20 +144,25 @@ const Members: React.FC = () => {
     return `M${String(next).padStart(3, '0')}`;
   };
 
+  const handleDeleteClick = (member: Member) => {
+    const links = getEntityLinks('member', member.id);
+    setDeleteGuard({ open: true, id: member.id, name: `${member.name} (${member.memberId})`, links });
+  };
+
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.phone) {
-      toast({ title: language === 'hi' ? 'कृपया आवश्यक फ़ील्ड भरें' : 'Please fill required fields', variant: 'destructive' });
+      toast({ title: hi ? 'कृपया आवश्यक फ़ील्ड भरें' : 'Please fill required fields', variant: 'destructive' });
       return;
     }
     const memberId = form.memberId.trim() || getNextMemberId();
     if (members.some(m => m.memberId === memberId)) {
-      toast({ title: language === 'hi' ? 'यह सदस्य ID पहले से मौजूद है' : 'Member ID already exists', variant: 'destructive' });
+      toast({ title: hi ? 'यह सदस्य ID पहले से मौजूद है' : 'Member ID already exists', variant: 'destructive' });
       return;
     }
     Object.assign(form, { memberId });
     addMember({ ...form, memberId, shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0 });
-    toast({ title: language === 'hi' ? 'सदस्य जोड़ा गया' : 'Member added' });
+    toast({ title: hi ? 'सदस्य जोड़ा गया' : 'Member added' });
     setForm(EMPTY_FORM);
     setIsAddOpen(false);
   };
@@ -160,13 +171,122 @@ const Members: React.FC = () => {
     e.preventDefault();
     if (!editMember) return;
     updateMember(editMember.id, { ...form, shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0 });
-    toast({ title: language === 'hi' ? 'सदस्य अपडेट किया गया' : 'Member updated' });
+    toast({ title: hi ? 'सदस्य अपडेट किया गया' : 'Member updated' });
     setEditMember(null);
   };
 
   const openEdit = (m: Member) => {
     setEditMember(m);
     setForm({ memberId: m.memberId, name: m.name, fatherName: m.fatherName, address: m.address, phone: m.phone, shareCapital: String(m.shareCapital), admissionFee: String(m.admissionFee || 0), memberType: m.memberType || 'member', joinDate: m.joinDate, status: m.status });
+  };
+
+  const handleApprove = (member: Member) => {
+    approveMember(member.id);
+    toast({ title: hi ? 'सदस्य स्वीकृत' : 'Member Approved', description: hi ? `${member.name} अब सत्यापित सदस्य है` : `${member.name} is now a verified member` });
+  };
+
+  const handleReject = (member: Member) => {
+    rejectMember(member.id);
+    toast({ title: hi ? 'आवेदन अस्वीकृत' : 'Application Rejected', description: member.name });
+  };
+
+  const handleDownloadPDF = (member: Member) => {
+    generateMemberApplicationPDF(member, society);
+  };
+
+  const renderMemberTable = (memberList: Member[], showApprovalActions: boolean) => {
+    const filtered = filterBySearch(memberList);
+    if (filtered.length === 0) {
+      return <p className="text-center text-muted-foreground py-12">{t('noData')}</p>;
+    }
+    return (
+      <div className="rounded-lg border overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="font-semibold">{t('memberId')}</TableHead>
+              <TableHead className="font-semibold">{t('memberName')}</TableHead>
+              <TableHead className="font-semibold">{t('phone')}</TableHead>
+              <TableHead className="font-semibold text-center">{hi ? 'प्रकार' : 'Type'}</TableHead>
+              <TableHead className="font-semibold text-right">{t('shareCapital')}</TableHead>
+              <TableHead className="font-semibold text-right">{hi ? 'प्रवेश शुल्क' : 'Admission Fee'}</TableHead>
+              {!showApprovalActions && <TableHead className="font-semibold text-center">{hi ? 'स्थिति' : 'Status'}</TableHead>}
+              <TableHead className="font-semibold text-center">{hi ? 'क्रियाएं' : 'Actions'}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.map(member => (
+              <TableRow key={member.id} className="hover:bg-muted/30">
+                <TableCell><Badge variant="outline" className="font-mono">{member.memberId}</Badge></TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-9 w-9">
+                      <AvatarFallback className="bg-primary/10 text-primary text-xs">{getInitials(member.name)}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">{member.name}</p>
+                      {member.fatherName && <p className="text-xs text-muted-foreground">{member.fatherName}</p>}
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1 text-sm"><Phone className="h-3 w-3 text-muted-foreground" />{member.phone}</div>
+                </TableCell>
+                <TableCell className="text-center">
+                  <Badge variant="outline" className={member.memberType === 'nominal' ? 'border-amber-500 text-amber-600' : 'border-primary text-primary'}>
+                    {member.memberType === 'nominal' ? (hi ? 'नॉमिनल' : 'Nominal') : (hi ? 'सदस्य' : 'Member')}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right font-semibold">{fmt(member.shareCapital)}</TableCell>
+                <TableCell className="text-right">{fmt(member.admissionFee || 0)}</TableCell>
+                {!showApprovalActions && (
+                  <TableCell className="text-center">
+                    <Badge variant={member.status === 'active' ? 'default' : 'secondary'} className={member.status === 'active' ? 'bg-success' : ''}>
+                      {member.status === 'active' ? (hi ? 'सक्रिय' : 'Active') : (hi ? 'निष्क्रिय' : 'Inactive')}
+                    </Badge>
+                  </TableCell>
+                )}
+                <TableCell>
+                  <div className="flex items-center justify-center gap-1">
+                    {showApprovalActions && canEdit && (
+                      <>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50" onClick={() => handleApprove(member)} title={hi ? 'स्वीकृत' : 'Approve'}>
+                          <CheckCircle className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleReject(member)} title={hi ? 'अस्वीकृत' : 'Reject'}>
+                          <XCircle className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => handleDownloadPDF(member)} title="PDF">
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewMember(member)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    {!showApprovalActions && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" onClick={() => setLedgerMember(member)}>
+                        <BookOpen className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canEdit && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(member)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canEdit && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteClick(member)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
   };
 
   return (
@@ -177,28 +297,36 @@ const Members: React.FC = () => {
             <Users className="h-7 w-7 text-accent" />
             {t('members')}
           </h1>
-          <p className="text-muted-foreground">{language === 'hi' ? 'समिति सदस्यों का प्रबंधन' : 'Manage society members'}</p>
+          <p className="text-muted-foreground">{hi ? 'समिति सदस्यों का प्रबंधन' : 'Manage society members'}</p>
         </div>
-        <Dialog open={isAddOpen} onOpenChange={(o) => { if (o) setForm({ ...EMPTY_FORM, memberId: getNextMemberId() }); else { setIsAddOpen(false); setForm(EMPTY_FORM); } setIsAddOpen(o); }}>
-          <DialogTrigger asChild>
-            <Button className="gap-2"><Plus className="h-4 w-4" />{language === 'hi' ? 'नया सदस्य' : 'New Member'}</Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{language === 'hi' ? 'नया सदस्य जोड़ें' : 'Add New Member'}</DialogTitle>
-              <DialogDescription>{language === 'hi' ? 'सदस्य का विवरण भरें' : 'Fill in member details'}</DialogDescription>
-            </DialogHeader>
-            <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleAdd} submitLabel={t('save')} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          {canEdit && (
+            <Button variant="outline" className="gap-2" onClick={() => navigate('/member-application')}>
+              <ClipboardList className="h-4 w-4" />
+              {hi ? 'आवेदन पत्र' : 'Application Form'}
+            </Button>
+          )}
+          <Dialog open={isAddOpen} onOpenChange={(o) => { if (o) setForm({ ...EMPTY_FORM, memberId: getNextMemberId() }); else { setIsAddOpen(false); setForm(EMPTY_FORM); } setIsAddOpen(o); }}>
+            <DialogTrigger asChild>
+              <Button className="gap-2"><Plus className="h-4 w-4" />{hi ? 'नया सदस्य' : 'New Member'}</Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>{hi ? 'नया सदस्य जोड़ें (सीधा)' : 'Add New Member (Direct)'}</DialogTitle>
+                <DialogDescription>{hi ? 'सदस्य सीधे सत्यापित सूची में जोड़ें' : 'Add member directly to verified list'}</DialogDescription>
+              </DialogHeader>
+              <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleAdd} submitLabel={t('save')} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-accent/10 border-accent/20">
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <div className="h-12 w-12 rounded-lg bg-accent/20 flex items-center justify-center"><Users className="h-6 w-6 text-accent" /></div>
-              <div><p className="text-sm text-muted-foreground">{t('totalMembers')}</p><p className="text-2xl font-bold">{members.length}</p></div>
+              <div><p className="text-sm text-muted-foreground">{t('totalMembers')}</p><p className="text-2xl font-bold">{approvedMembers.length}</p></div>
             </div>
           </CardContent>
         </Card>
@@ -206,7 +334,15 @@ const Members: React.FC = () => {
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <div className="h-12 w-12 rounded-lg bg-success/20 flex items-center justify-center"><Users className="h-6 w-6 text-success" /></div>
-              <div><p className="text-sm text-muted-foreground">{language === 'hi' ? 'सक्रिय सदस्य' : 'Active Members'}</p><p className="text-2xl font-bold text-success">{activeMembers}</p></div>
+              <div><p className="text-sm text-muted-foreground">{hi ? 'सक्रिय सदस्य' : 'Active Members'}</p><p className="text-2xl font-bold text-success">{activeApproved}</p></div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-amber-500/10 border-amber-500/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-lg bg-amber-500/20 flex items-center justify-center"><ClipboardList className="h-6 w-6 text-amber-600" /></div>
+              <div><p className="text-sm text-muted-foreground">{hi ? 'पेंडिंग आवेदन' : 'Pending Applications'}</p><p className="text-2xl font-bold text-amber-600">{pendingMembers.length}</p></div>
             </div>
           </CardContent>
         </Card>
@@ -225,7 +361,7 @@ const Members: React.FC = () => {
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder={language === 'hi' ? 'नाम, ID या फोन से खोजें...' : 'Search by name, ID or phone...'}
+              placeholder={hi ? 'नाम, ID या फोन से खोजें...' : 'Search by name, ID or phone...'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -234,94 +370,73 @@ const Members: React.FC = () => {
         </CardContent>
       </Card>
 
-      <Card className="shadow-card">
-        <CardHeader>
-          <CardTitle className="text-lg">{language === 'hi' ? 'सदस्य सूची' : 'Member List'}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {filteredMembers.length === 0 ? (
-            <p className="text-center text-muted-foreground py-12">{t('noData')}</p>
-          ) : (
-            <div className="rounded-lg border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="font-semibold">{t('memberId')}</TableHead>
-                    <TableHead className="font-semibold">{t('memberName')}</TableHead>
-                    <TableHead className="font-semibold">{t('phone')}</TableHead>
-                    <TableHead className="font-semibold text-center">{language === 'hi' ? 'प्रकार' : 'Type'}</TableHead>
-                    <TableHead className="font-semibold text-right">{t('shareCapital')}</TableHead>
-                    <TableHead className="font-semibold text-right">{language === 'hi' ? 'प्रवेश शुल्क' : 'Admission Fee'}</TableHead>
-                    <TableHead className="font-semibold text-center">{language === 'hi' ? 'स्थिति' : 'Status'}</TableHead>
-                    <TableHead className="font-semibold text-center">{language === 'hi' ? 'क्रियाएं' : 'Actions'}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredMembers.map(member => (
-                    <TableRow key={member.id} className="hover:bg-muted/30">
-                      <TableCell><Badge variant="outline" className="font-mono">{member.memberId}</Badge></TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-9 w-9">
-                            <AvatarFallback className="bg-primary/10 text-primary text-xs">{getInitials(member.name)}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium">{member.name}</p>
-                            {member.fatherName && <p className="text-xs text-muted-foreground">{member.fatherName}</p>}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm"><Phone className="h-3 w-3 text-muted-foreground" />{member.phone}</div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline" className={member.memberType === 'nominal' ? 'border-amber-500 text-amber-600' : 'border-primary text-primary'}>
-                          {member.memberType === 'nominal' ? (language === 'hi' ? 'नॉमिनल' : 'Nominal') : (language === 'hi' ? 'सदस्य' : 'Member')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold">{fmt(member.shareCapital)}</TableCell>
-                      <TableCell className="text-right">{fmt(member.admissionFee || 0)}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={member.status === 'active' ? 'default' : 'secondary'} className={member.status === 'active' ? 'bg-success' : ''}>
-                          {member.status === 'active' ? (language === 'hi' ? 'सक्रिय' : 'Active') : (language === 'hi' ? 'निष्क्रिय' : 'Inactive')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewMember(member)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" onClick={() => setLedgerMember(member)}>
-                            <BookOpen className="h-4 w-4" />
-                          </Button>
-                          {canEdit && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(member)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {canEdit && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteClick(member)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+      <Tabs value={activeTab} onValueChange={v => setSearchParams({ tab: v })}>
+        <TabsList>
+          <TabsTrigger value="approved" className="gap-2">
+            <CheckCircle className="h-4 w-4" />
+            {hi ? 'सत्यापित सदस्य' : 'Verified Members'}
+            <Badge variant="secondary" className="ml-1">{approvedMembers.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="pending" className="gap-2">
+            <ClipboardList className="h-4 w-4" />
+            {hi ? 'पेंडिंग आवेदन' : 'Pending Applications'}
+            {pendingMembers.length > 0 && <Badge variant="destructive" className="ml-1">{pendingMembers.length}</Badge>}
+          </TabsTrigger>
+          {rejectedMembers.length > 0 && (
+            <TabsTrigger value="rejected" className="gap-2">
+              <XCircle className="h-4 w-4" />
+              {hi ? 'अस्वीकृत' : 'Rejected'}
+              <Badge variant="secondary" className="ml-1">{rejectedMembers.length}</Badge>
+            </TabsTrigger>
           )}
-        </CardContent>
-      </Card>
+        </TabsList>
+
+        <TabsContent value="approved">
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle className="text-lg">{hi ? 'सत्यापित सदस्य सूची' : 'Verified Member List'}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {renderMemberTable(approvedMembers, false)}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="pending">
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                {hi ? 'पेंडिंग आवेदन' : 'Pending Applications'}
+                {pendingMembers.length > 0 && <Badge variant="destructive">{pendingMembers.length}</Badge>}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {renderMemberTable(pendingMembers, true)}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {rejectedMembers.length > 0 && (
+          <TabsContent value="rejected">
+            <Card className="shadow-card">
+              <CardHeader>
+                <CardTitle className="text-lg">{hi ? 'अस्वीकृत आवेदन' : 'Rejected Applications'}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {renderMemberTable(rejectedMembers, true)}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+      </Tabs>
 
       {/* Edit Dialog */}
       <Dialog open={!!editMember} onOpenChange={(o) => { if (!o) setEditMember(null); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{language === 'hi' ? 'सदस्य संपादित करें' : 'Edit Member'}</DialogTitle>
+            <DialogTitle>{hi ? 'सदस्य संपादित करें' : 'Edit Member'}</DialogTitle>
           </DialogHeader>
-          <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleEdit} submitLabel={language === 'hi' ? 'अपडेट करें' : 'Update'} onCancel={() => setEditMember(null)} />
+          <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleEdit} submitLabel={hi ? 'अपडेट करें' : 'Update'} onCancel={() => setEditMember(null)} />
         </DialogContent>
       </Dialog>
 
@@ -329,7 +444,7 @@ const Members: React.FC = () => {
       <Dialog open={!!viewMember} onOpenChange={(o) => { if (!o) setViewMember(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{language === 'hi' ? 'सदस्य विवरण' : 'Member Details'}</DialogTitle>
+            <DialogTitle>{hi ? 'सदस्य विवरण' : 'Member Details'}</DialogTitle>
           </DialogHeader>
           {viewMember && (
             <div className="space-y-3 text-sm">
@@ -341,14 +456,21 @@ const Members: React.FC = () => {
               {[
                 [t('memberId'), viewMember.memberId],
                 [t('memberName'), viewMember.name],
-                [language === 'hi' ? 'पिता/पति' : 'Father/Husband', viewMember.fatherName],
+                [hi ? 'पिता/पति' : 'Father/Husband', viewMember.fatherName],
                 [t('phone'), viewMember.phone],
                 [t('address'), viewMember.address],
-                [language === 'hi' ? 'सदस्यता प्रकार' : 'Member Type', viewMember.memberType === 'nominal' ? (language === 'hi' ? 'नॉमिनल सदस्य' : 'Nominal Member') : (language === 'hi' ? 'सदस्य' : 'Member')],
+                [hi ? 'सदस्यता प्रकार' : 'Member Type', viewMember.memberType === 'nominal' ? (hi ? 'नॉमिनल सदस्य' : 'Nominal Member') : (hi ? 'सदस्य' : 'Member')],
                 [t('shareCapital'), fmt(viewMember.shareCapital)],
-                [language === 'hi' ? 'प्रवेश शुल्क' : 'Admission Fee', fmt(viewMember.admissionFee || 0)],
-                [language === 'hi' ? 'शामिल तिथि' : 'Join Date', fmtDate(viewMember.joinDate)],
-                [language === 'hi' ? 'स्थिति' : 'Status', viewMember.status === 'active' ? (language === 'hi' ? 'सक्रिय' : 'Active') : (language === 'hi' ? 'निष्क्रिय' : 'Inactive')],
+                [hi ? 'प्रवेश शुल्क' : 'Admission Fee', fmt(viewMember.admissionFee || 0)],
+                [hi ? 'शामिल तिथि' : 'Join Date', fmtDate(viewMember.joinDate)],
+                [hi ? 'स्थिति' : 'Status', viewMember.status === 'active' ? (hi ? 'सक्रिय' : 'Active') : (hi ? 'निष्क्रिय' : 'Inactive')],
+                ...(viewMember.approvalStatus ? [[hi ? 'अनुमोदन' : 'Approval', viewMember.approvalStatus === 'pending' ? (hi ? 'पेंडिंग' : 'Pending') : viewMember.approvalStatus === 'approved' ? (hi ? 'स्वीकृत' : 'Approved') : (hi ? 'अस्वीकृत' : 'Rejected')]] : []),
+                ...(viewMember.age ? [[hi ? 'आयु' : 'Age', `${viewMember.age} ${hi ? 'वर्ष' : 'years'}`]] : []),
+                ...(viewMember.occupation ? [[hi ? 'व्यवसाय' : 'Occupation', viewMember.occupation]] : []),
+                ...(viewMember.caste ? [[hi ? 'जाति वर्ग' : 'Caste', viewMember.caste]] : []),
+                ...(viewMember.district ? [[hi ? 'जिला' : 'District', viewMember.district]] : []),
+                ...(viewMember.state ? [[hi ? 'राज्य' : 'State', viewMember.state]] : []),
+                ...(viewMember.pinCode ? [[hi ? 'पिन कोड' : 'Pin Code', viewMember.pinCode]] : []),
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground">{label}:</span>
@@ -375,7 +497,7 @@ const Members: React.FC = () => {
                   <SheetTitle className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <BookOpen className="h-5 w-5 text-primary" />
-                      {language === 'hi' ? 'सदस्य खाता बही' : 'Member Share Ledger'}
+                      {hi ? 'सदस्य खाता बही' : 'Member Share Ledger'}
                     </div>
                     <Button
                       size="sm"
@@ -389,7 +511,6 @@ const Members: React.FC = () => {
                   </SheetTitle>
                 </SheetHeader>
 
-                {/* Member Info */}
                 <div className="mt-4 p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">{t('memberId')}:</span>
@@ -400,30 +521,28 @@ const Members: React.FC = () => {
                     <span className="font-semibold">{ledgerMember.name}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">{language === 'hi' ? 'शामिल तिथि' : 'Join Date'}:</span>
+                    <span className="text-muted-foreground">{hi ? 'शामिल तिथि' : 'Join Date'}:</span>
                     <span>{fmtDate(ledgerMember.joinDate)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">{language === 'hi' ? 'शेष' : 'Balance'}:</span>
+                    <span className="text-muted-foreground">{hi ? 'शेष' : 'Balance'}:</span>
                     <span className="font-bold text-primary text-base">
                       {closing ? fmtAmt(closing.balance) : fmtAmt(0)}
                     </span>
                   </div>
                 </div>
 
-                {/* Summary */}
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-center">
-                    <p className="text-xs text-muted-foreground">{language === 'hi' ? 'कुल जमा' : 'Total Deposits'}</p>
+                    <p className="text-xs text-muted-foreground">{hi ? 'कुल जमा' : 'Total Deposits'}</p>
                     <p className="font-bold text-green-700">{fmtAmt(totalCredit)}</p>
                   </div>
                   <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-center">
-                    <p className="text-xs text-muted-foreground">{language === 'hi' ? 'कुल निकासी' : 'Total Withdrawals'}</p>
+                    <p className="text-xs text-muted-foreground">{hi ? 'कुल निकासी' : 'Total Withdrawals'}</p>
                     <p className="font-bold text-red-700">{fmtAmt(totalDebit)}</p>
                   </div>
                 </div>
 
-                {/* Ledger Table */}
                 <div className="mt-4 rounded-lg border overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -431,20 +550,16 @@ const Members: React.FC = () => {
                         <TableHead className="text-xs">{t('date')}</TableHead>
                         <TableHead className="text-xs">{t('voucherNo')}</TableHead>
                         <TableHead className="text-xs">{t('particulars')}</TableHead>
-                        <TableHead className="text-xs text-right">{language === 'hi' ? 'जमा' : 'Credit'}</TableHead>
-                        <TableHead className="text-xs text-right">{language === 'hi' ? 'निकासी' : 'Debit'}</TableHead>
-                        <TableHead className="text-xs text-right">{language === 'hi' ? 'शेष' : 'Balance'}</TableHead>
+                        <TableHead className="text-xs text-right">{hi ? 'जमा' : 'Credit'}</TableHead>
+                        <TableHead className="text-xs text-right">{hi ? 'निकासी' : 'Debit'}</TableHead>
+                        <TableHead className="text-xs text-right">{hi ? 'शेष' : 'Balance'}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {entries.map((entry, idx) => (
                         <TableRow key={entry.id} className={idx === 0 ? 'bg-blue-50/60 font-medium' : 'hover:bg-muted/30'}>
-                          <TableCell className="text-xs whitespace-nowrap">
-                            {fmtDate(entry.date)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="font-mono text-xs">{entry.voucherNo}</Badge>
-                          </TableCell>
+                          <TableCell className="text-xs whitespace-nowrap">{fmtDate(entry.date)}</TableCell>
+                          <TableCell><Badge variant="outline" className="font-mono text-xs">{entry.voucherNo}</Badge></TableCell>
                           <TableCell className="text-xs">{entry.particulars}</TableCell>
                           <TableCell className="text-right text-xs">
                             {entry.credit > 0 && <span className="font-semibold text-green-600">{fmtAmt(entry.credit)}</span>}
@@ -480,7 +595,7 @@ const Members: React.FC = () => {
         onConfirmDelete={() => {
           if (deleteGuard.id) {
             deleteMember(deleteGuard.id);
-            toast({ title: language === 'hi' ? 'सदस्य हटाया गया' : 'Member deleted' });
+            toast({ title: hi ? 'सदस्य हटाया गया' : 'Member deleted' });
           }
         }}
       />

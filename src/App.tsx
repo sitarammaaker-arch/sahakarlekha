@@ -22,6 +22,7 @@ import BankBook from "./pages/BankBook";
 import Vouchers from "./pages/Vouchers";
 import Ledger from "./pages/Ledger";
 import Members from "./pages/Members";
+import MemberApplication from "./pages/MemberApplication";
 import TrialBalance from "./pages/TrialBalance";
 import ProfitLoss from "./pages/ProfitLoss";
 import TradingAccount from "./pages/TradingAccount";
@@ -148,6 +149,7 @@ const AppRoutes = () => {
       <Route path="/vouchers" element={<ProtectedRoute><Vouchers /></ProtectedRoute>} />
       <Route path="/ledger" element={<ProtectedRoute><Ledger /></ProtectedRoute>} />
       <Route path="/members" element={<ProtectedRoute><Members /></ProtectedRoute>} />
+      <Route path="/member-application" element={<ProtectedRoute><MemberApplication /></ProtectedRoute>} />
       <Route path="/trial-balance" element={<ProtectedRoute><TrialBalance /></ProtectedRoute>} />
       <Route path="/trading-account" element={<ProtectedRoute><TradingAccount /></ProtectedRoute>} />
       <Route path="/profit-loss" element={<ProtectedRoute><ProfitLoss /></ProtectedRoute>} />

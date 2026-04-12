@@ -43,6 +43,8 @@ interface DataContextType {
   addMember: (data: Omit<Member, 'id'>) => Member;
   updateMember: (id: string, data: Partial<Member>) => void;
   deleteMember: (id: string) => void;
+  approveMember: (id: string) => void;
+  rejectMember: (id: string) => void;
 
   addAccount: (data: Omit<LedgerAccount, 'id'>) => LedgerAccount;
   updateAccount: (id: string, data: Partial<LedgerAccount>) => void;
@@ -606,6 +608,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return updated;
     });
     supabase.from('members').upsert(withSoc(newMember)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // Skip auto-vouchers for pending applications (created on approval)
+    if (newMember.approvalStatus === 'pending') return newMember;
     // Auto-create Receipt vouchers for Share Capital and Admission Fee
     if ((newMember.shareCapital || 0) > 0) {
       const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: newMember.shareCapital, narration: `Share Capital received from ${newMember.name}`, memberId: newMember.id, createdAt: new Date().toISOString() };
@@ -659,6 +663,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     supabase.from('members').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     console.info(`[AUDIT-DELETE] Member id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+  }, []);
+
+  const approveMember = useCallback((id: string) => {
+    const member = membersRef.current.find(m => m.id === id);
+    if (!member) return;
+    const approved = { ...member, approvalStatus: 'approved' as const };
+    setMembersState(prev => prev.map(m => m.id === id ? approved : m));
+    supabase.from('members').upsert(withSoc(approved)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // Now create auto-vouchers for Share Capital and Admission Fee
+    if ((approved.shareCapital || 0) > 0) {
+      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: approved.shareCapital, narration: `Share Capital received from ${approved.name}`, memberId: approved.id, createdAt: new Date().toISOString() };
+      vouchersRef.current = [...vouchersRef.current, v];
+      setVouchersState(prev => [...prev, v]);
+      supabase.from('vouchers').upsert(withSoc(v)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    }
+    if ((approved.admissionFee || 0) > 0) {
+      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: approved.admissionFee!, narration: `Admission Fee received from ${approved.name}`, memberId: approved.id, createdAt: new Date().toISOString() };
+      vouchersRef.current = [...vouchersRef.current, v];
+      setVouchersState(prev => [...prev, v]);
+      supabase.from('vouchers').upsert(withSoc(v)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    }
+    console.info(`[AUDIT] Member id=${id} approved by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+  }, [society.financialYear]);
+
+  const rejectMember = useCallback((id: string) => {
+    const member = membersRef.current.find(m => m.id === id);
+    if (!member) return;
+    const rejected = { ...member, approvalStatus: 'rejected' as const };
+    setMembersState(prev => prev.map(m => m.id === id ? rejected : m));
+    supabase.from('members').upsert(withSoc(rejected)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    console.info(`[AUDIT] Member id=${id} rejected by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
   const addAccount = useCallback((data: Omit<LedgerAccount, 'id'>): LedgerAccount => {
@@ -1912,7 +1947,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       stockItems, stockMovements, sales, purchases, employees, salaryRecords,
       suppliers, customers, kccLoans,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
-      addMember, updateMember, deleteMember,
+      addMember, updateMember, deleteMember, approveMember, rejectMember,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
       addLoan, updateLoan, deleteLoan,
       addAsset, updateAsset, deleteAsset, postDepreciation,

@@ -19,6 +19,7 @@ export const translations: Translations = {
   vouchers: { hi: 'वाउचर', en: 'Vouchers' },
   ledger: { hi: 'खाता बही', en: 'Ledger' },
   members: { hi: 'सदस्य', en: 'Members' },
+  memberApplication: { hi: 'सदस्यता आवेदन', en: 'Member Application' },
   trialBalance: { hi: 'तलपट', en: 'Trial Balance' },
   tradingAccount: { hi: 'व्यापार खाता', en: 'Trading Account' },
   profitLoss: { hi: 'आय-व्यय', en: 'Income & Expenditure' },

@@ -39,6 +39,7 @@ const mainNavItems: NavItem[] = [
   { key: 'dayBook', icon: CalendarDays, path: '/day-book' },
   { key: 'ledger', icon: BookOpen, path: '/ledger' },
   { key: 'members', icon: Users, path: '/members' },
+  { key: 'memberApplication', icon: ClipboardList, path: '/member-application', roles: ['admin', 'accountant'] },
 ];
 
 const operationsNavItems: NavItem[] = [

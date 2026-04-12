@@ -10,6 +10,8 @@ export interface VoucherLine {
 export type UserRole = 'admin' | 'accountant' | 'viewer';
 export type AccountType = 'asset' | 'liability' | 'income' | 'expense' | 'equity';
 export type MemberStatus = 'active' | 'inactive';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+export type CasteCategory = 'General' | 'Backward Class' | 'Schedule Caste' | 'Schedule Tribe';
 
 export interface VoucherEditSnapshot {
   editedAt: string;
@@ -110,6 +112,22 @@ export interface Member {
   nomineeName?: string;
   nomineeRelation?: string;
   nomineePhone?: string;
+  // Application form fields
+  approvalStatus?: ApprovalStatus;
+  age?: number;
+  occupation?: string;
+  caste?: CasteCategory;
+  tehsil?: string;
+  district?: string;
+  state?: string;
+  pinCode?: string;
+  postOffice?: string;
+  paymentMode?: 'cash' | 'cheque' | 'online';
+  nomineeAge?: number;
+  nomineeOccupation?: string;
+  nomineeAddress?: string;
+  nomineeShares?: number;
+  nomineeFatherName?: string;
 }
 
 export type LoanType = 'short-term' | 'medium-term' | 'long-term';

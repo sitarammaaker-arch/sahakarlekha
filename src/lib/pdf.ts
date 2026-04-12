@@ -2021,3 +2021,153 @@ export function generateAuditSchedulesPDF(
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('AuditSchedules', society));
 }
+
+export function generateMemberApplicationPDF(member: Member, society: SocietySettings): void {
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const font = setupFont(doc);
+  const pageW = doc.internal.pageSize.width;
+  const cx = pageW / 2;
+  const mL = 20;
+  const mR = pageW - 20;
+  const textW = mR - mL;
+
+  // Title
+  doc.setFontSize(14);
+  doc.setFont(font, 'bold');
+  doc.text('Membership Application Form', cx, 18, { align: 'center' });
+
+  // Society name
+  doc.setFontSize(11);
+  doc.text(society.name, cx, 26, { align: 'center' });
+
+  // Society address
+  doc.setFontSize(9);
+  doc.setFont(font, 'normal');
+  const addrParts = [society.address, society.district, society.state ? getStateName(society.state) : ''].filter(Boolean);
+  if (addrParts.length > 0) {
+    doc.text(addrParts.join(', '), cx, 32, { align: 'center' });
+  }
+
+  let y = 42;
+
+  // To / Address block
+  doc.setFontSize(10);
+  doc.setFont(font, 'normal');
+  doc.text('To,', mL, y); y += 5;
+  doc.text('The President,', mL, y); y += 5;
+  doc.text(`${society.name},`, mL, y); y += 5;
+  const socAddr = [society.address, society.district].filter(Boolean).join(', ');
+  if (socAddr) { doc.text(socAddr, mL, y); y += 5; }
+
+  y += 3;
+  doc.setFont(font, 'bold');
+  doc.text('Subject: Application for Membership.', mL, y); y += 8;
+
+  doc.setFont(font, 'normal');
+  doc.text('Respected Sir,', mL, y); y += 7;
+
+  // Body paragraph
+  const shareCount = member.shareCount || Math.ceil(member.shareCapital / (member.shareFaceValue || 100));
+  const total = member.shareCapital + (member.admissionFee || 0);
+  const payMode = member.paymentMode === 'cheque' ? 'cheque' : member.paymentMode === 'online' ? 'online transfer' : 'cash';
+
+  const bodyText =
+    `I hereby submit that I, ${member.name}, ` +
+    `${member.fatherName ? `son/daughter of ${member.fatherName}, ` : ''}` +
+    `${member.age ? `aged ${member.age} years, ` : ''}` +
+    `${member.occupation ? `occupation ${member.occupation}, ` : ''}` +
+    `${member.caste ? `caste ${member.caste}, ` : ''}` +
+    `resident of ${member.address || '________'}` +
+    `${member.postOffice ? `, Post Office ${member.postOffice}` : ''}` +
+    `${member.tehsil ? `, Tehsil ${member.tehsil}` : ''}` +
+    `${member.district ? `, District ${member.district}` : ''}` +
+    `${member.state ? `, ${getStateName(member.state)}` : ''}` +
+    `${member.pinCode ? ` - ${member.pinCode}` : ''}` +
+    `, wish to become a member of ${society.name}.`;
+
+  const bodyLines = doc.splitTextToSize(bodyText, textW);
+  doc.text(bodyLines, mL, y); y += bodyLines.length * 4.5 + 4;
+
+  const para2 =
+    `I request to purchase ${shareCount} shares of the Society. I am submitting a total amount of ` +
+    `${fmt(member.shareCapital)} towards share capital and ${fmt(member.admissionFee || 0)} as admission fee ` +
+    `(total ${fmt(total)}) through ${payMode} along with this application.`;
+  const para2Lines = doc.splitTextToSize(para2, textW);
+  doc.text(para2Lines, mL, y); y += para2Lines.length * 4.5 + 4;
+
+  const para3 =
+    'I hereby declare that I will abide by all the rules, rights, duties, and responsibilities as prescribed ' +
+    'under the Cooperative Societies Act and its relevant rules.';
+  const para3Lines = doc.splitTextToSize(para3, textW);
+  doc.text(para3Lines, mL, y); y += para3Lines.length * 4.5 + 8;
+
+  // Nominee Details
+  doc.setFont(font, 'bold');
+  doc.setFontSize(10);
+  doc.text('Nominee Details:', mL, y); y += 2;
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: mL, right: 20 },
+    head: [['Name & Father\'s Name', 'Address (Tehsil)', 'Age / Occupation', 'Relation', 'No. of Shares']],
+    body: [[
+      [member.nomineeName || '', member.nomineeFatherName || ''].filter(Boolean).join(' s/o ') || '________',
+      member.nomineeAddress || '________',
+      [member.nomineeAge ? `${member.nomineeAge} yrs` : '', member.nomineeOccupation || ''].filter(Boolean).join(' / ') || '________',
+      member.nomineeRelation || '________',
+      String(member.nomineeShares || shareCount),
+    ]],
+    styles: { font, fontSize: 9, cellPadding: 3 },
+    headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+    theme: 'grid',
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 10;
+
+  // Date fields
+  doc.setFontSize(9);
+  doc.setFont(font, 'normal');
+  const appDate = member.joinDate ? fmtDate(member.joinDate) : '___________________';
+  doc.text(`Date of Application: ${appDate}`, mL, y);
+  doc.text('Date of Admission: ___________________', mR - 80, y);
+  y += 15;
+
+  // Signature
+  doc.text('Signature / Thumb Impression of Applicant:', mL, y);
+  doc.line(mL + 75, y, mL + 150, y);
+  y += 15;
+
+  // Member ID
+  doc.setFontSize(8);
+  doc.setTextColor(100);
+  doc.text(`Member ID: ${member.memberId}  |  Phone: ${member.phone || ''}`, mL, y);
+  doc.setTextColor(0);
+
+  // Footer line
+  y += 8;
+  doc.setDrawColor(41, 82, 163);
+  doc.setLineWidth(0.3);
+  doc.line(mL, y, mR, y);
+  y += 5;
+
+  // For Office Use
+  doc.setFontSize(9);
+  doc.setFont(font, 'bold');
+  doc.text('For Office Use Only', cx, y, { align: 'center' }); y += 6;
+  doc.setFont(font, 'normal');
+  doc.setFontSize(8);
+  doc.text('Application Received on: _______________    Approved / Rejected: _______________', mL, y); y += 5;
+  doc.text('Resolution No.: _______________    Date: _______________', mL, y); y += 5;
+  doc.text('Share Certificate No.: _______________    Shares Allotted: _______________', mL, y); y += 12;
+
+  // Signature block for office
+  const sigNames = getSignatoryNames(society);
+  addSignatureBlock(doc, font,
+    ['Accountant', 'Secretary\n(Seal)', 'President\n(Seal)'],
+    y, undefined,
+    [sigNames.accountant, sigNames.secretary, sigNames.president]
+  );
+
+  addPageNumbers(doc, font, society.name);
+  doc.save(pdfFileName('MemberApplication', society, member.memberId));
+}
