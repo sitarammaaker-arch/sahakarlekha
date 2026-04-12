@@ -614,12 +614,12 @@ const Members: React.FC = () => {
 
       {/* View Dialog */}
       <Dialog open={!!viewMember} onOpenChange={(o) => { if (!o) setViewMember(null); }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>{hi ? 'सदस्य विवरण' : 'Member Details'}</DialogTitle>
           </DialogHeader>
           {viewMember && (
-            <div className="space-y-3 text-sm">
+            <div className="space-y-3 text-sm overflow-y-auto flex-1 pr-2">
               <div className="flex justify-center mb-4">
                 <Avatar className="h-16 w-16">
                   <AvatarFallback className="bg-primary/10 text-primary text-xl">{getInitials(viewMember.name)}</AvatarFallback>
@@ -640,9 +640,16 @@ const Members: React.FC = () => {
                 ...(viewMember.age ? [[hi ? 'आयु' : 'Age', `${viewMember.age} ${hi ? 'वर्ष' : 'years'}`]] : []),
                 ...(viewMember.occupation ? [[hi ? 'व्यवसाय' : 'Occupation', viewMember.occupation]] : []),
                 ...(viewMember.caste ? [[hi ? 'जाति वर्ग' : 'Caste', viewMember.caste]] : []),
+                ...(viewMember.postOffice ? [[hi ? 'डाकघर' : 'Post Office', viewMember.postOffice]] : []),
+                ...(viewMember.tehsil ? [[hi ? 'तहसील' : 'Tehsil', viewMember.tehsil]] : []),
                 ...(viewMember.district ? [[hi ? 'जिला' : 'District', viewMember.district]] : []),
                 ...(viewMember.state ? [[hi ? 'राज्य' : 'State', viewMember.state]] : []),
                 ...(viewMember.pinCode ? [[hi ? 'पिन कोड' : 'Pin Code', viewMember.pinCode]] : []),
+                ...(viewMember.paymentMode ? [[hi ? 'भुगतान माध्यम' : 'Payment Mode', viewMember.paymentMode]] : []),
+                ...(viewMember.shareCount ? [[hi ? 'अंश संख्या' : 'Shares', String(viewMember.shareCount)]] : []),
+                ...(viewMember.nomineeName ? [[hi ? 'नामांकित' : 'Nominee', viewMember.nomineeName]] : []),
+                ...(viewMember.nomineeRelation ? [[hi ? 'सम्बन्ध' : 'Relation', viewMember.nomineeRelation]] : []),
+                ...(viewMember.nomineePhone ? [[hi ? 'नामांकित फ़ोन' : 'Nominee Phone', viewMember.nomineePhone]] : []),
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground">{label}:</span>
