@@ -22,13 +22,30 @@ import type { EntityLink } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { MemberType } from '@/types';
+import type { MemberType, CasteCategory } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { generateMemberPassbookPDF, generateMemberApplicationPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
 import type { Member, MemberStatus } from '@/types';
 
-const EMPTY_FORM = { memberId: '', name: '', fatherName: '', address: '', phone: '', shareCapital: '', admissionFee: '', memberType: 'member' as MemberType, joinDate: new Date().toISOString().split('T')[0], status: 'active' as MemberStatus };
+const CASTE_OPTIONS: { value: CasteCategory; label: string; labelHi: string }[] = [
+  { value: 'General', label: 'General', labelHi: 'सामान्य' },
+  { value: 'Backward Class', label: 'Backward Class (BC)', labelHi: 'पिछड़ा वर्ग (BC)' },
+  { value: 'Schedule Caste', label: 'Schedule Caste (SC)', labelHi: 'अनुसूचित जाति (SC)' },
+  { value: 'Schedule Tribe', label: 'Schedule Tribe (ST)', labelHi: 'अनुसूचित जनजाति (ST)' },
+];
+
+const EMPTY_FORM = {
+  memberId: '', name: '', fatherName: '', address: '', phone: '',
+  shareCapital: '', admissionFee: '', memberType: 'member' as MemberType,
+  joinDate: new Date().toISOString().split('T')[0], status: 'active' as MemberStatus,
+  age: '', occupation: '', caste: '' as CasteCategory | '',
+  postOffice: '', tehsil: '', district: '', state: '', pinCode: '',
+  paymentMode: 'cash' as 'cash' | 'cheque' | 'online',
+  nomineeName: '', nomineeFatherName: '', nomineeRelation: '', nomineePhone: '',
+  nomineeAge: '', nomineeOccupation: '', nomineeAddress: '', nomineeShares: '',
+  shareCount: '', shareFaceValue: '',
+};
 
 interface MemberFormProps {
   form: typeof EMPTY_FORM;
@@ -40,62 +57,175 @@ interface MemberFormProps {
   onCancel: () => void;
 }
 
-const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onSubmit, submitLabel, onCancel }) => (
-  <form onSubmit={onSubmit} className="space-y-4">
-    <div className="grid grid-cols-2 gap-4">
-      <div className="space-y-2">
-        <Label>{t('memberId')} <span className="text-xs text-muted-foreground">({language === 'hi' ? 'स्वचालित' : 'auto'})</span></Label>
-        <Input value={form.memberId} onChange={e => setForm(f => ({ ...f, memberId: e.target.value }))} placeholder="M001" />
+const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onSubmit, submitLabel, onCancel }) => {
+  const hi = language === 'hi';
+  const f = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
+  return (
+  <form onSubmit={onSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+    {/* Basic */}
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1">
+        <Label className="text-xs">{t('memberId')} <span className="text-muted-foreground">({hi ? 'स्वचालित' : 'auto'})</span></Label>
+        <Input value={form.memberId} onChange={e => f('memberId', e.target.value)} placeholder="M001" />
       </div>
-      <div className="space-y-2">
-        <Label>{language === 'hi' ? 'शामिल होने की तिथि' : 'Join Date'}</Label>
-        <Input type="date" value={form.joinDate} onChange={e => setForm(f => ({ ...f, joinDate: e.target.value }))} />
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'शामिल होने की तिथि' : 'Join Date'}</Label>
+        <Input type="date" value={form.joinDate} onChange={e => f('joinDate', e.target.value)} />
       </div>
     </div>
-    <div className="space-y-2">
-      <Label>{t('memberName')} *</Label>
-      <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={language === 'hi' ? 'पूरा नाम' : 'Full name'} required />
-    </div>
-    <div className="space-y-2">
-      <Label>{language === 'hi' ? 'पिता/पति का नाम' : "Father's/Husband's Name"}</Label>
-      <Input value={form.fatherName} onChange={e => setForm(f => ({ ...f, fatherName: e.target.value }))} placeholder={language === 'hi' ? 'श्री...' : 'Mr...'} />
-    </div>
-    <div className="space-y-2">
-      <Label>{t('address')}</Label>
-      <Textarea value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder={language === 'hi' ? 'पूरा पता' : 'Full address'} />
-    </div>
-    <div className="grid grid-cols-2 gap-4">
-      <div className="space-y-2">
-        <Label>{t('phone')} *</Label>
-        <Input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="9876543210" required />
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1">
+        <Label className="text-xs">{t('memberName')} *</Label>
+        <Input value={form.name} onChange={e => f('name', e.target.value)} placeholder={hi ? 'पूरा नाम' : 'Full name'} required />
       </div>
-      <div className="space-y-2">
-        <Label>{language === 'hi' ? 'सदस्यता प्रकार' : 'Member Type'}</Label>
-        <Select value={form.memberType} onValueChange={v => setForm(f => ({ ...f, memberType: v as MemberType }))}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'पिता/पति का नाम' : "Father's/Husband's Name"}</Label>
+        <Input value={form.fatherName} onChange={e => f('fatherName', e.target.value)} placeholder={hi ? 'श्री...' : 'Mr...'} />
+      </div>
+    </div>
+    <div className="grid grid-cols-3 gap-3">
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'आयु' : 'Age'}</Label>
+        <Input type="number" value={form.age} onChange={e => f('age', e.target.value)} placeholder="25" min="1" max="120" />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'व्यवसाय' : 'Occupation'}</Label>
+        <Input value={form.occupation} onChange={e => f('occupation', e.target.value)} placeholder={hi ? 'किसान' : 'Farmer'} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'जाति वर्ग' : 'Caste'}</Label>
+        <Select value={form.caste} onValueChange={v => f('caste', v)}>
+          <SelectTrigger><SelectValue placeholder={hi ? 'चुनें' : 'Select'} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="member">{language === 'hi' ? 'सदस्य' : 'Member'}</SelectItem>
-            <SelectItem value="nominal">{language === 'hi' ? 'नॉमिनल सदस्य' : 'Nominal Member'}</SelectItem>
+            {CASTE_OPTIONS.map(c => (
+              <SelectItem key={c.value} value={c.value}>{hi ? c.labelHi : c.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
     </div>
-    <div className="grid grid-cols-2 gap-4">
-      <div className="space-y-2">
-        <Label>{t('shareCapital')} (₹)</Label>
-        <Input type="number" value={form.shareCapital} onChange={e => setForm(f => ({ ...f, shareCapital: e.target.value }))} placeholder="10000" min="0" />
+    {/* Address */}
+    <div className="space-y-1">
+      <Label className="text-xs">{t('address')}</Label>
+      <Textarea value={form.address} onChange={e => f('address', e.target.value)} placeholder={hi ? 'पूरा पता' : 'Full address'} className="h-16" />
+    </div>
+    <div className="grid grid-cols-3 gap-3">
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'डाकघर' : 'Post Office'}</Label>
+        <Input value={form.postOffice} onChange={e => f('postOffice', e.target.value)} />
       </div>
-      <div className="space-y-2">
-        <Label>{language === 'hi' ? 'प्रवेश शुल्क (₹)' : 'Admission Fee (₹)'}</Label>
-        <Input type="number" value={form.admissionFee} onChange={e => setForm(f => ({ ...f, admissionFee: e.target.value }))} placeholder="0" min="0" />
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'तहसील' : 'Tehsil'}</Label>
+        <Input value={form.tehsil} onChange={e => f('tehsil', e.target.value)} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'जिला' : 'District'}</Label>
+        <Input value={form.district} onChange={e => f('district', e.target.value)} />
       </div>
     </div>
-    <div className="flex gap-2 justify-end">
+    <div className="grid grid-cols-3 gap-3">
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'राज्य' : 'State'}</Label>
+        <Input value={form.state} onChange={e => f('state', e.target.value)} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'पिन कोड' : 'Pin Code'}</Label>
+        <Input value={form.pinCode} onChange={e => f('pinCode', e.target.value)} maxLength={6} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{t('phone')} *</Label>
+        <Input type="tel" value={form.phone} onChange={e => f('phone', e.target.value)} placeholder="9876543210" required />
+      </div>
+    </div>
+    {/* Member type & Finance */}
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'सदस्यता प्रकार' : 'Member Type'}</Label>
+        <Select value={form.memberType} onValueChange={v => f('memberType', v)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="member">{hi ? 'सदस्य' : 'Member'}</SelectItem>
+            <SelectItem value="nominal">{hi ? 'नॉमिनल' : 'Nominal'}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'भुगतान माध्यम' : 'Payment Mode'}</Label>
+        <Select value={form.paymentMode} onValueChange={v => f('paymentMode', v)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="cash">{hi ? 'नकद' : 'Cash'}</SelectItem>
+            <SelectItem value="cheque">{hi ? 'चेक' : 'Cheque'}</SelectItem>
+            <SelectItem value="online">{hi ? 'ऑनलाइन' : 'Online'}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+    <div className="grid grid-cols-4 gap-3">
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'अंश संख्या' : 'Shares'}</Label>
+        <Input type="number" value={form.shareCount} onChange={e => f('shareCount', e.target.value)} min="0" />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'प्रति अंश' : 'Face Value'}</Label>
+        <Input type="number" value={form.shareFaceValue} onChange={e => f('shareFaceValue', e.target.value)} min="0" step="0.01" />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{t('shareCapital')} (₹)</Label>
+        <Input type="number" value={form.shareCapital} onChange={e => f('shareCapital', e.target.value)} min="0" step="0.01" />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'प्रवेश शुल्क' : 'Adm. Fee'} (₹)</Label>
+        <Input type="number" value={form.admissionFee} onChange={e => f('admissionFee', e.target.value)} min="0" step="0.01" />
+      </div>
+    </div>
+    {/* Nominee */}
+    <p className="text-xs font-semibold text-muted-foreground pt-1">{hi ? 'नामांकित (Nominee)' : 'Nominee Details'}</p>
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'नामांकित का नाम' : 'Nominee Name'}</Label>
+        <Input value={form.nomineeName} onChange={e => f('nomineeName', e.target.value)} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'नामांकित के पिता' : "Nominee's Father"}</Label>
+        <Input value={form.nomineeFatherName} onChange={e => f('nomineeFatherName', e.target.value)} />
+      </div>
+    </div>
+    <div className="grid grid-cols-3 gap-3">
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'सम्बन्ध' : 'Relation'}</Label>
+        <Input value={form.nomineeRelation} onChange={e => f('nomineeRelation', e.target.value)} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'नामांकित आयु' : 'Nominee Age'}</Label>
+        <Input type="number" value={form.nomineeAge} onChange={e => f('nomineeAge', e.target.value)} min="1" max="120" />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'नामांकित फ़ोन' : 'Nominee Phone'}</Label>
+        <Input type="tel" value={form.nomineePhone} onChange={e => f('nomineePhone', e.target.value)} />
+      </div>
+    </div>
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'नामांकित व्यवसाय' : 'Nominee Occupation'}</Label>
+        <Input value={form.nomineeOccupation} onChange={e => f('nomineeOccupation', e.target.value)} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'नामांकित अंश' : 'Nominee Shares'}</Label>
+        <Input type="number" value={form.nomineeShares} onChange={e => f('nomineeShares', e.target.value)} min="0" />
+      </div>
+    </div>
+    <div className="space-y-1">
+      <Label className="text-xs">{hi ? 'नामांकित का पता' : 'Nominee Address'}</Label>
+      <Input value={form.nomineeAddress} onChange={e => f('nomineeAddress', e.target.value)} />
+    </div>
+    <div className="flex gap-2 justify-end pt-2">
       <Button variant="outline" type="button" onClick={onCancel}>{t('cancel')}</Button>
       <Button type="submit">{submitLabel}</Button>
     </div>
   </form>
-);
+  );
+};
 
 const Members: React.FC = () => {
   const { t, language } = useLanguage();
@@ -161,7 +291,22 @@ const Members: React.FC = () => {
       return;
     }
     Object.assign(form, { memberId });
-    addMember({ ...form, memberId, shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0 });
+    addMember({
+      ...form, memberId,
+      shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0,
+      age: form.age ? Number(form.age) : undefined, caste: form.caste || undefined,
+      occupation: form.occupation || undefined, postOffice: form.postOffice || undefined,
+      tehsil: form.tehsil || undefined, district: form.district || undefined,
+      state: form.state || undefined, pinCode: form.pinCode || undefined,
+      paymentMode: form.paymentMode || undefined,
+      nomineeName: form.nomineeName || undefined, nomineeFatherName: form.nomineeFatherName || undefined,
+      nomineeRelation: form.nomineeRelation || undefined, nomineePhone: form.nomineePhone || undefined,
+      nomineeAge: form.nomineeAge ? Number(form.nomineeAge) : undefined,
+      nomineeOccupation: form.nomineeOccupation || undefined, nomineeAddress: form.nomineeAddress || undefined,
+      nomineeShares: form.nomineeShares ? Number(form.nomineeShares) : undefined,
+      shareCount: form.shareCount ? Number(form.shareCount) : undefined,
+      shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
+    });
     toast({ title: hi ? 'सदस्य जोड़ा गया' : 'Member added' });
     setForm(EMPTY_FORM);
     setIsAddOpen(false);
@@ -170,14 +315,41 @@ const Members: React.FC = () => {
   const handleEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editMember) return;
-    updateMember(editMember.id, { ...form, shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0 });
+    updateMember(editMember.id, {
+      ...form,
+      shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0,
+      age: form.age ? Number(form.age) : undefined, caste: form.caste || undefined,
+      occupation: form.occupation || undefined, postOffice: form.postOffice || undefined,
+      tehsil: form.tehsil || undefined, district: form.district || undefined,
+      state: form.state || undefined, pinCode: form.pinCode || undefined,
+      paymentMode: form.paymentMode || undefined,
+      nomineeName: form.nomineeName || undefined, nomineeFatherName: form.nomineeFatherName || undefined,
+      nomineeRelation: form.nomineeRelation || undefined, nomineePhone: form.nomineePhone || undefined,
+      nomineeAge: form.nomineeAge ? Number(form.nomineeAge) : undefined,
+      nomineeOccupation: form.nomineeOccupation || undefined, nomineeAddress: form.nomineeAddress || undefined,
+      nomineeShares: form.nomineeShares ? Number(form.nomineeShares) : undefined,
+      shareCount: form.shareCount ? Number(form.shareCount) : undefined,
+      shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
+    });
     toast({ title: hi ? 'सदस्य अपडेट किया गया' : 'Member updated' });
     setEditMember(null);
   };
 
   const openEdit = (m: Member) => {
     setEditMember(m);
-    setForm({ memberId: m.memberId, name: m.name, fatherName: m.fatherName, address: m.address, phone: m.phone, shareCapital: String(m.shareCapital), admissionFee: String(m.admissionFee || 0), memberType: m.memberType || 'member', joinDate: m.joinDate, status: m.status });
+    setForm({
+      memberId: m.memberId, name: m.name, fatherName: m.fatherName, address: m.address, phone: m.phone,
+      shareCapital: String(m.shareCapital), admissionFee: String(m.admissionFee || 0),
+      memberType: m.memberType || 'member', joinDate: m.joinDate, status: m.status,
+      age: m.age ? String(m.age) : '', occupation: m.occupation || '', caste: (m.caste || '') as CasteCategory | '',
+      postOffice: m.postOffice || '', tehsil: m.tehsil || '', district: m.district || '',
+      state: m.state || '', pinCode: m.pinCode || '', paymentMode: m.paymentMode || 'cash',
+      nomineeName: m.nomineeName || '', nomineeFatherName: m.nomineeFatherName || '',
+      nomineeRelation: m.nomineeRelation || '', nomineePhone: m.nomineePhone || '',
+      nomineeAge: m.nomineeAge ? String(m.nomineeAge) : '', nomineeOccupation: m.nomineeOccupation || '',
+      nomineeAddress: m.nomineeAddress || '', nomineeShares: m.nomineeShares ? String(m.nomineeShares) : '',
+      shareCount: m.shareCount ? String(m.shareCount) : '', shareFaceValue: m.shareFaceValue ? String(m.shareFaceValue) : '',
+    });
   };
 
   const handleApprove = (member: Member) => {
@@ -310,7 +482,7 @@ const Members: React.FC = () => {
             <DialogTrigger asChild>
               <Button className="gap-2"><Plus className="h-4 w-4" />{hi ? 'नया सदस्य' : 'New Member'}</Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle>{hi ? 'नया सदस्य जोड़ें (सीधा)' : 'Add New Member (Direct)'}</DialogTitle>
                 <DialogDescription>{hi ? 'सदस्य सीधे सत्यापित सूची में जोड़ें' : 'Add member directly to verified list'}</DialogDescription>
@@ -432,7 +604,7 @@ const Members: React.FC = () => {
 
       {/* Edit Dialog */}
       <Dialog open={!!editMember} onOpenChange={(o) => { if (!o) setEditMember(null); }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{hi ? 'सदस्य संपादित करें' : 'Edit Member'}</DialogTitle>
           </DialogHeader>
