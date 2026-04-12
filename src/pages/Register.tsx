@@ -31,7 +31,24 @@ const Register: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [gstin, setGstin] = useState('');
   const [address, setAddress] = useState('');
-  const [financialYear, setFinancialYear] = useState('2024-25');
+  // Auto-detect current FY based on today's date (Apr-Mar cycle)
+  const currentFY = (() => {
+    const now = new Date();
+    const year = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    return `${year}-${String(year + 1).slice(-2)}`;
+  })();
+  const [financialYear, setFinancialYear] = useState(currentFY);
+
+  // Generate FY options: 5 years back + current + 1 future
+  const fyOptions = (() => {
+    const now = new Date();
+    const curYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    const options: string[] = [];
+    for (let y = curYear - 5; y <= curYear + 1; y++) {
+      options.push(`${y}-${String(y + 1).slice(-2)}`);
+    }
+    return options;
+  })();
   const [societyType, setSocietyType] = useState<SocietyType>('marketing_processing');
 
   // Admin fields
@@ -370,9 +387,11 @@ const Register: React.FC = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="2023-24">2023-24</SelectItem>
-                      <SelectItem value="2024-25">2024-25</SelectItem>
-                      <SelectItem value="2025-26">2025-26</SelectItem>
+                      {fyOptions.map(fy => (
+                        <SelectItem key={fy} value={fy}>
+                          {fy}{fy === currentFY ? ' (Current)' : ''}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
