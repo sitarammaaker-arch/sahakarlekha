@@ -110,10 +110,10 @@ Loan from Bank,Liability,200000,Credit
 Admission Fee Income,Income,0,Credit
 Salary Expense,Expense,0,Debit`;
 
-const MEMBERS_TEMPLATE = `member_id,name,father_name,address,phone,share_capital,admission_fee,member_type,join_date,status,share_count,share_face_value,nominee_name,nominee_relation,nominee_phone
-(सदस्य क्रमांक),(पूरा नाम),(पिता/पति का नाम),(पता),(मोबाइल नं),(शेयर पूंजी रुपये),(प्रवेश शुल्क),(member/nominal),(YYYY-MM-DD),(active/inactive),(शेयर संख्या),(प्रति शेयर मूल्य),(नामिनी का नाम),(संबंध),(नामिनी मोबाइल)
-M001,राम कुमार शर्मा,श्री हरि शर्मा,ग्राम - रामपुर जिला - लखनऊ,9876543210,5000,100,member,2020-04-01,active,10,500,सीता देवी,पत्नी,9876543211
-M002,सुरेश यादव,श्री महेश यादव,ग्राम - शिवपुर,9988776655,2500,100,member,2021-06-15,active,5,500,,,`;
+const MEMBERS_TEMPLATE = `member_id,name,father_name,age,occupation,caste,address,post_office,tehsil,district,state,pin_code,phone,share_capital,admission_fee,payment_mode,member_type,join_date,status,share_count,share_face_value,nominee_name,nominee_father_name,nominee_relation,nominee_age,nominee_occupation,nominee_address,nominee_shares,nominee_phone
+(सदस्य क्रमांक),(पूरा नाम),(पिता/पति का नाम),(आयु),(व्यवसाय),(General/Backward Class/Schedule Caste/Schedule Tribe),(पता),(डाकघर),(तहसील),(जिला),(राज्य),(पिन कोड),(मोबाइल नं),(शेयर पूंजी रुपये),(प्रवेश शुल्क),(cash/cheque/online),(member/nominal),(YYYY-MM-DD),(active/inactive),(शेयर संख्या),(प्रति शेयर मूल्य),(नामिनी का नाम),(नामिनी के पिता),(संबंध),(नामिनी आयु),(नामिनी व्यवसाय),(नामिनी पता),(नामिनी शेयर),(नामिनी मोबाइल)
+M001,राम कुमार शर्मा,श्री हरि शर्मा,35,किसान,General,ग्राम - रामपुर,रामपुर,राणिया,सिरसा,Haryana,125076,9876543210,5000,100,cash,member,2020-04-01,active,10,500,सीता देवी,श्री राम कुमार,पत्नी,30,गृहिणी,ग्राम - रामपुर,10,9876543211
+M002,सुरेश यादव,श्री महेश यादव,28,व्यापारी,Backward Class,ग्राम - शिवपुर,शिवपुर,राणिया,सिरसा,Haryana,125076,9988776655,2500,100,cheque,member,2021-06-15,active,5,500,,,,,,,,,`;
 
 const OPENING_BALANCES_TEMPLATE = `account_name,opening_balance,balance_type
 (Account का नाम — बिल्कुल वैसा जैसा system में है),(राशि रुपये में),(Debit/Credit)
@@ -323,6 +323,20 @@ const UniversalImporter: React.FC = () => {
         nomineeName: row.data.nominee_name?.trim() || undefined,
         nomineeRelation: row.data.nominee_relation?.trim() || undefined,
         nomineePhone: row.data.nominee_phone?.trim() || undefined,
+        age: parseInt(row.data.age) || undefined,
+        occupation: row.data.occupation?.trim() || undefined,
+        caste: (['General', 'Backward Class', 'Schedule Caste', 'Schedule Tribe'].includes(row.data.caste?.trim()) ? row.data.caste.trim() : undefined) as Member['caste'],
+        postOffice: row.data.post_office?.trim() || undefined,
+        tehsil: row.data.tehsil?.trim() || undefined,
+        district: row.data.district?.trim() || undefined,
+        state: row.data.state?.trim() || undefined,
+        pinCode: row.data.pin_code?.trim() || undefined,
+        paymentMode: (['cash', 'cheque', 'online'].includes(row.data.payment_mode?.toLowerCase()) ? row.data.payment_mode.toLowerCase() : undefined) as Member['paymentMode'],
+        nomineeFatherName: row.data.nominee_father_name?.trim() || undefined,
+        nomineeAge: parseInt(row.data.nominee_age) || undefined,
+        nomineeOccupation: row.data.nominee_occupation?.trim() || undefined,
+        nomineeAddress: row.data.nominee_address?.trim() || undefined,
+        nomineeShares: parseInt(row.data.nominee_shares) || undefined,
       });
       imported++;
     }
@@ -680,7 +694,10 @@ const UniversalImporter: React.FC = () => {
                 <p><span className="font-medium text-primary">join_date</span> — Format: YYYY-MM-DD (जैसे: 2022-04-01)</p>
                 <p><span className="font-medium text-primary">status</span> — <span className="text-green-700">active</span> / <span className="text-orange-600">inactive</span></p>
                 <p><span className="font-medium text-primary">share_capital</span> — शेयर पूंजी (numbers only)</p>
-                <p className="text-muted-foreground">Optional: address, phone, admission_fee, share_count, share_face_value, nominee fields</p>
+                <p className="text-muted-foreground mt-1">Optional — Personal: age, occupation, caste (General/Backward Class/Schedule Caste/Schedule Tribe)</p>
+                <p className="text-muted-foreground">Optional — Address: address, post_office, tehsil, district, state, pin_code, phone</p>
+                <p className="text-muted-foreground">Optional — Finance: admission_fee, payment_mode (cash/cheque/online), share_count, share_face_value</p>
+                <p className="text-muted-foreground">Optional — Nominee: nominee_name, nominee_father_name, nominee_relation, nominee_age, nominee_occupation, nominee_address, nominee_shares, nominee_phone</p>
               </div>
 
               {/* Step 2 */}
@@ -719,14 +736,15 @@ const UniversalImporter: React.FC = () => {
                   <div className="ml-7 space-y-3">
                     <PreviewTable
                       preview={memberPreview}
-                      columns={['member_id', 'name', 'father_name', 'member_type', 'join_date', 'status', 'share_capital']}
+                      columns={['member_id', 'name', 'father_name', 'age', 'caste', 'district', 'member_type', 'share_capital']}
                       labels={{
                         member_id: 'Member ID',
                         name: 'नाम',
                         father_name: 'पिता का नाम',
+                        age: 'आयु',
+                        caste: 'वर्ग',
+                        district: 'जिला',
                         member_type: 'Type',
-                        join_date: 'Join Date',
-                        status: 'Status',
                         share_capital: 'Share Capital',
                       }}
                     />
