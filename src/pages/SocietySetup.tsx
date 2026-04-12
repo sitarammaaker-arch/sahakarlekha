@@ -575,10 +575,18 @@ const SocietySetup: React.FC = () => {
                   >
                     <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="2025-26">2025-26</SelectItem>
-                      <SelectItem value="2024-25">2024-25</SelectItem>
-                      <SelectItem value="2023-24">2023-24</SelectItem>
-                      <SelectItem value="2022-23">2022-23</SelectItem>
+                      {(() => {
+                        const now = new Date();
+                        const curYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+                        const options: string[] = [];
+                        for (let y = curYear + 1; y >= curYear - 5; y--) {
+                          options.push(`${y}-${String(y + 1).slice(-2)}`);
+                        }
+                        const currentFY = `${curYear}-${String(curYear + 1).slice(-2)}`;
+                        return options.map(fy => (
+                          <SelectItem key={fy} value={fy}>{fy}{fy === currentFY ? ' (Current)' : ''}</SelectItem>
+                        ));
+                      })()}
                     </SelectContent>
                   </Select>
                 </div>
