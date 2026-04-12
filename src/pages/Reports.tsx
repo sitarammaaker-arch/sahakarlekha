@@ -43,7 +43,7 @@ const Reports: React.FC = () => {
   const cashBalance = getAccountBalance(ACCOUNT_IDS.CASH);
   const bankIds = getBankAccountIds(accounts);
   const bankBalance = bankIds.reduce((sum, bid) => sum + getAccountBalance(bid), 0);
-  const activeMembers = members.filter(m => m.status === 'active').length;
+  const activeMembers = members.filter(m => m.status === 'active' && (!m.approvalStatus || m.approvalStatus === 'approved')).length;
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);

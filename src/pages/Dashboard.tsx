@@ -36,7 +36,7 @@ const Dashboard: React.FC = () => {
   const bankIds = getBankAccountIds(accounts);
   const bankBalance = bankIds.reduce((sum, bid) => sum + getAccountBalance(bid), 0);
   const { netProfit, incomeItems, expenseItems, totalIncome, totalExpenses } = getProfitLoss();
-  const activeMembers = members.filter(m => m.status === 'active').length;
+  const activeMembers = members.filter(m => m.status === 'active' && (!m.approvalStatus || m.approvalStatus === 'approved')).length;
 
   // P3-3 + P4-1/P4-2: Cooperative compliance checks, health score, advisories
   const complianceChecks = useMemo(() => {

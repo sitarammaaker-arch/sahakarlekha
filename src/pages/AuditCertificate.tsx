@@ -59,7 +59,7 @@ const AuditCertificate: React.FC = () => {
       return s + (b > 0 ? b : 0);
     }, 0);
 
-  const totalMembersCount = members.filter(m => m.status === 'active').length;
+  const totalMembersCount = members.filter(m => m.status === 'active' && (!m.approvalStatus || m.approvalStatus === 'approved')).length;
 
   // ── Editable fields ────────────────────────────────────────────────────────
   const [auditDate, setAuditDate]         = useState(new Date().toISOString().split('T')[0]);

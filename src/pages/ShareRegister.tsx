@@ -26,14 +26,15 @@ const ShareRegister: React.FC = () => {
   const hi = language === 'hi';
   const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
-  const filtered = members.filter(m =>
+  const approvedMembers = members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved');
+  const filtered = approvedMembers.filter(m =>
     m.name.toLowerCase().includes(search.toLowerCase()) ||
     m.memberId.toLowerCase().includes(search.toLowerCase())
   );
 
-  const totalShares = members.reduce((s, m) => s + (m.shareCount || 0), 0);
-  const totalCapital = members.reduce((s, m) => s + m.shareCapital, 0);
-  const withNominee = members.filter(m => m.nomineeName).length;
+  const totalShares = approvedMembers.reduce((s, m) => s + (m.shareCount || 0), 0);
+  const totalCapital = approvedMembers.reduce((s, m) => s + m.shareCapital, 0);
+  const withNominee = approvedMembers.filter(m => m.nomineeName).length;
 
   const openEdit = (m: Member) => {
     setEditMember(m);
@@ -87,7 +88,7 @@ const ShareRegister: React.FC = () => {
         <Card className="bg-primary/10 border-primary/20">
           <CardContent className="pt-4 pb-4">
             <p className="text-xs text-muted-foreground">{hi ? 'कुल सदस्य' : 'Total Members'}</p>
-            <p className="text-2xl font-bold text-primary">{members.length}</p>
+            <p className="text-2xl font-bold text-primary">{approvedMembers.length}</p>
           </CardContent>
         </Card>
         <Card className="bg-success/10 border-success/20">
@@ -105,7 +106,7 @@ const ShareRegister: React.FC = () => {
         <Card className="bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700">
           <CardContent className="pt-4 pb-4">
             <p className="text-xs text-muted-foreground">{hi ? 'नामांकित' : 'With Nominee'}</p>
-            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{withNominee}/{members.length}</p>
+            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{withNominee}/{approvedMembers.length}</p>
           </CardContent>
         </Card>
       </div>

@@ -59,18 +59,20 @@ const FederationReport: React.FC = () => {
   };
 
   // ── Section 2: Membership Strength ─────────────────────────────────────────
+  const approvedMembers = useMemo(() => members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved'), [members]);
+
   const membershipData = useMemo(() => {
     const fyStartDate = fyStart(society.financialYear);
-    const totalMembers = members.length;
+    const totalMembers = approvedMembers.length;
 
     // Members joined in current FY (createdAt >= fyStart)
-    const joined = members.filter(m => {
+    const joined = approvedMembers.filter(m => {
       const d = new Date(m.joinDate || '');
       return d >= fyStartDate;
     }).length;
 
     // Members left (inactive)
-    const left = members.filter(m => m.status === 'inactive').length;
+    const left = approvedMembers.filter(m => m.status === 'inactive').length;
 
     // Opening = total - joined
     const opening = totalMembers - joined;
@@ -78,14 +80,14 @@ const FederationReport: React.FC = () => {
     const closing = opening + joined - left;
 
     return { opening, joined, left, closing };
-  }, [members, society.financialYear]);
+  }, [approvedMembers, society.financialYear]);
 
   // ── Section 3: Share Capital ────────────────────────────────────────────────
   const shareData = useMemo(() => {
-    const sharesIssued = members.reduce((s, m) => s + (m.shareCount ?? 0), 0);
-    const paidUp = members.reduce((s, m) => s + (m.shareCapital ?? 0), 0);
+    const sharesIssued = approvedMembers.reduce((s, m) => s + (m.shareCount ?? 0), 0);
+    const paidUp = approvedMembers.reduce((s, m) => s + (m.shareCapital ?? 0), 0);
     return { sharesIssued, paidUp };
-  }, [members]);
+  }, [approvedMembers]);
 
   // ── Section 4: Deposits ─────────────────────────────────────────────────────
   const depositTotal = useMemo(() => {

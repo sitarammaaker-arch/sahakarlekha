@@ -38,7 +38,7 @@ const Form1MemberList: React.FC = () => {
   const [typeFilter,  setTypeFilter]  = useState<'all' | 'member' | 'nominal'>('all');
 
   const filtered = useMemo(() => {
-    let list = members;
+    let list = members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved');
     if (statusFilter !== 'all') list = list.filter(m => m.status === statusFilter);
     if (typeFilter   !== 'all') list = list.filter(m => m.memberType === typeFilter);
     if (search.trim()) {

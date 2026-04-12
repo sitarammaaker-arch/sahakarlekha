@@ -63,7 +63,7 @@ export default function KccLoan() {
     });
   }, [societyId]);
 
-  const activeMembers = useMemo(() => members.filter(m => m.status === 'active'), [members]);
+  const activeMembers = useMemo(() => members.filter(m => m.status === 'active' && (!m.approvalStatus || m.approvalStatus === 'approved')), [members]);
 
   const nextLoanNo = () => `KCC-${new Date().getFullYear()}-${String(loans.length + 1).padStart(4, '0')}`;
 

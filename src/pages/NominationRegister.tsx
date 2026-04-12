@@ -43,7 +43,7 @@ const NominationRegister: React.FC = () => {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'with' | 'without'>('all');
 
-  const activeMembers = useMemo(() => members.filter(m => m.status === 'active'), [members]);
+  const activeMembers = useMemo(() => members.filter(m => m.status === 'active' && (!m.approvalStatus || m.approvalStatus === 'approved')), [members]);
 
   const filtered = useMemo(() => {
     let list = activeMembers;

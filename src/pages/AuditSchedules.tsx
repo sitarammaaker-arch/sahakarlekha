@@ -194,8 +194,9 @@ const AuditSchedules: React.FC = () => {
     const trialBalance = getTrialBalance();
     const { totalIncome, totalExpenses, netProfit } = getProfitLoss();
     const { grossProfit } = getTradingAccount();
-    const activeMembers = members.filter(m => m.status === 'active').length;
-    const totalShareCapital = members.reduce((s, m) => s + (m.shareCapital ?? 0), 0);
+    const approvedMembers = members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved');
+    const activeMembers = approvedMembers.filter(m => m.status === 'active').length;
+    const totalShareCapital = approvedMembers.reduce((s, m) => s + (m.shareCapital ?? 0), 0);
 
     const ctx: ResolverContext = {
       trialBalance,

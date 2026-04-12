@@ -45,7 +45,7 @@ const BoardOfDirectors: React.FC = () => {
   const boardType: BoardType = society.boardType || 'bod';
   const signatories = society.signatories || {};
 
-  const activeMembers = useMemo(() => members.filter(m => m.status === 'active'), [members]);
+  const activeMembers = useMemo(() => members.filter(m => m.status === 'active' && (!m.approvalStatus || m.approvalStatus === 'approved')), [members]);
   const activeEmployees = useMemo(() => (employees || []).filter(e => e.status === 'active'), [employees]);
 
   // Dialog state

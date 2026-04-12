@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -113,6 +113,7 @@ const LoanRegister: React.FC = () => {
   const { members, loans, addLoan, updateLoan, deleteLoan, society, getTrialBalance } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
+  const approvedMembers = useMemo(() => members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved'), [members]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -233,7 +234,7 @@ const LoanRegister: React.FC = () => {
           <p className="text-muted-foreground">{hi ? 'सदस्य ऋण का पूर्ण विवरण' : 'Complete record of member loans'}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateLoanRegisterPDF(loans, members, society)}>
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateLoanRegisterPDF(loans, approvedMembers, society)}>
             <Download className="h-4 w-4" />PDF
           </Button>
           <Button size="sm" className="gap-2" onClick={() => { setForm(EMPTY_FORM); setIsAddOpen(true); }}>
@@ -377,7 +378,7 @@ const LoanRegister: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'नया ऋण जोड़ें' : 'Add New Loan'}</DialogTitle>
           </DialogHeader>
-          <LoanForm form={form} setForm={setForm} hi={hi} members={members} onSubmit={handleAdd} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
+          <LoanForm form={form} setForm={setForm} hi={hi} members={approvedMembers} onSubmit={handleAdd} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
         </DialogContent>
       </Dialog>
 
@@ -387,7 +388,7 @@ const LoanRegister: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'ऋण संपादित करें' : 'Edit Loan'} — {editLoan?.loanNo}</DialogTitle>
           </DialogHeader>
-          <LoanForm form={form} setForm={setForm} hi={hi} members={members} onSubmit={handleEdit} onCancel={() => setEditLoan(null)} />
+          <LoanForm form={form} setForm={setForm} hi={hi} members={approvedMembers} onSubmit={handleEdit} onCancel={() => setEditLoan(null)} />
         </DialogContent>
       </Dialog>
 

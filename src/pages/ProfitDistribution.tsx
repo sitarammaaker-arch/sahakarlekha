@@ -79,7 +79,7 @@ const ProfitDistribution: React.FC = () => {
 
   // ── Total share capital of active members ─────────────────────────────────
   const activeMembers = useMemo(
-    () => members.filter(m => m.status === 'active'),
+    () => members.filter(m => m.status === 'active' && (!m.approvalStatus || m.approvalStatus === 'approved')),
     [members]
   );
   const totalShareCapital = useMemo(

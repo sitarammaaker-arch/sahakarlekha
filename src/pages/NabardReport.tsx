@@ -121,10 +121,11 @@ const NabardReport: React.FC = () => {
 
   // ── Section C: Member Credit Summary ────────────────────────────────────────
   const memberStats = useMemo(() => {
-    const total = members.length;
-    const active = members.filter(m => m.status === 'active').length;
+    const approved = members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved');
+    const total = approved.length;
+    const active = approved.filter(m => m.status === 'active').length;
     const memberIdsWithLoans = new Set(loans.map(l => l.memberId));
-    const withLoans = members.filter(m => memberIdsWithLoans.has(m.id)).length;
+    const withLoans = approved.filter(m => memberIdsWithLoans.has(m.id)).length;
     return { total, active, withLoans };
   }, [members, loans]);
 
