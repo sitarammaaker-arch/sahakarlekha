@@ -36,7 +36,8 @@ const Dashboard: React.FC = () => {
   const bankIds = getBankAccountIds(accounts);
   const bankBalance = bankIds.reduce((sum, bid) => sum + getAccountBalance(bid), 0);
   const { netProfit, incomeItems, expenseItems, totalIncome, totalExpenses } = getProfitLoss();
-  const activeMembers = members.filter(m => m.status === 'active' && (!m.approvalStatus || m.approvalStatus === 'approved')).length;
+  const approvedMembers = members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved');
+  const activeMembers = approvedMembers.filter(m => m.status === 'active').length;
 
   // P3-3 + P4-1/P4-2: Cooperative compliance checks, health score, advisories
   const complianceChecks = useMemo(() => {
@@ -226,7 +227,7 @@ const Dashboard: React.FC = () => {
         />
         <StatCard
           title={t('totalMembers')}
-          value={String(members.length)}
+          value={String(approvedMembers.length)}
           subtitle={`${activeMembers} ${language === 'hi' ? 'सक्रिय' : 'active'}`}
           icon={Users}
           variant="members"
