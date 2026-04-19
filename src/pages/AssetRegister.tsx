@@ -33,6 +33,11 @@ const EMPTY_FORM = {
   status: 'active' as AssetStatus,
   disposalDate: '',
   saleProceeds: '',
+  // HAFED Proforma 6 fields
+  p6Category: '' as '' | 'godown' | 'land' | 'shop' | 'truck' | 'other',
+  capacityMT: '',
+  condition: '' as '' | 'serviceable' | 'unserviceable',
+  marketValue: '',
 };
 
 interface AssetFormProps {
@@ -120,6 +125,52 @@ const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCa
         <Textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder={hi ? 'अतिरिक्त विवरण...' : 'Additional details...'} />
       </div>
     </div>
+
+    {/* HAFED Proforma 6 fields */}
+    <div className="space-y-3 p-3 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20">
+      <p className="text-xs font-semibold uppercase text-amber-900 dark:text-amber-200">
+        {hi ? 'HAFED वार्षिक समीक्षा (Proforma 6) वर्गीकरण' : 'HAFED Annual Review (Proforma 6) Classification'}
+        <span className="ml-2 text-[10px] font-normal text-muted-foreground">Optional — Marketing Societies</span>
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs">{hi ? 'P6 श्रेणी' : 'P6 Category'}</Label>
+          <Select value={form.p6Category || '__none__'} onValueChange={v => setForm(f => ({ ...f, p6Category: v === '__none__' ? '' : (v as 'godown'|'land'|'shop'|'truck'|'other') }))}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="— None —" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">— None —</SelectItem>
+              <SelectItem value="godown">1. Godown</SelectItem>
+              <SelectItem value="land">2. Land / Plot</SelectItem>
+              <SelectItem value="shop">3. Shop / Building</SelectItem>
+              <SelectItem value="truck">4. Truck</SelectItem>
+              <SelectItem value="other">5. Other Fixed Assets (F&F)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">{hi ? 'स्थिति' : 'Condition'}</Label>
+          <Select value={form.condition || '__none__'} onValueChange={v => setForm(f => ({ ...f, condition: v === '__none__' ? '' : (v as 'serviceable'|'unserviceable') }))}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="— None —" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">— None —</SelectItem>
+              <SelectItem value="serviceable">Serviceable</SelectItem>
+              <SelectItem value="unserviceable">Unserviceable</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {form.p6Category === 'godown' && (
+          <div className="space-y-1">
+            <Label className="text-xs">{hi ? 'गोदाम क्षमता (MT)' : 'Godown Capacity (MT)'}</Label>
+            <Input type="number" min="0" step="0.01" value={form.capacityMT} onChange={e => setForm(f => ({ ...f, capacityMT: e.target.value }))} placeholder="e.g. 500" />
+          </div>
+        )}
+        <div className="space-y-1">
+          <Label className="text-xs">{hi ? 'वर्तमान बाजार मूल्य (₹)' : 'Current Market Value (₹)'}</Label>
+          <Input type="number" min="0" step="0.01" value={form.marketValue} onChange={e => setForm(f => ({ ...f, marketValue: e.target.value }))} placeholder="e.g. 1500000" />
+        </div>
+      </div>
+    </div>
+
     <div className="flex justify-end gap-2 pt-2">
       <Button type="button" variant="outline" onClick={onCancel}>{hi ? 'रद्द' : 'Cancel'}</Button>
       <Button type="submit">{hi ? 'सहेजें' : 'Save'}</Button>
@@ -234,6 +285,10 @@ const AssetRegister: React.FC = () => {
       location: form.location,
       description: form.description,
       status: form.status,
+      p6Category: form.p6Category || undefined,
+      capacityMT: form.capacityMT ? Number(form.capacityMT) : undefined,
+      condition: form.condition || undefined,
+      marketValue: form.marketValue ? Number(form.marketValue) : undefined,
     });
     toast({ title: hi ? 'संपत्ति जोड़ी गई' : 'Asset added' });
     setForm(EMPTY_FORM);
@@ -261,6 +316,10 @@ const AssetRegister: React.FC = () => {
       status: form.status,
       disposalDate: form.disposalDate || undefined,
       saleProceeds: Number(form.saleProceeds) || 0,
+      p6Category: form.p6Category || undefined,
+      capacityMT: form.capacityMT ? Number(form.capacityMT) : undefined,
+      condition: form.condition || undefined,
+      marketValue: form.marketValue ? Number(form.marketValue) : undefined,
     });
 
     // C2/C3: Post disposal journal when asset changes from active → disposed
@@ -328,6 +387,10 @@ const AssetRegister: React.FC = () => {
       status: a.status,
       disposalDate: a.disposalDate || '',
       saleProceeds: a.saleProceeds ? String(a.saleProceeds) : '',
+      p6Category: (a.p6Category || '') as '' | 'godown' | 'land' | 'shop' | 'truck' | 'other',
+      capacityMT: a.capacityMT ? String(a.capacityMT) : '',
+      condition: (a.condition || '') as '' | 'serviceable' | 'unserviceable',
+      marketValue: a.marketValue ? String(a.marketValue) : '',
     });
   };
 

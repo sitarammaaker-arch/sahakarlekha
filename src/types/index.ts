@@ -152,6 +152,10 @@ export interface Loan {
 export type AssetCategory = 'Land' | 'Building' | 'Furniture' | 'Equipment' | 'Vehicle' | 'Computer' | 'Other';
 export type AssetStatus = 'active' | 'disposed';
 
+// HAFED Proforma 6 asset classification (higher-level grouping than AssetCategory)
+export type P6AssetCategory = 'godown' | 'land' | 'shop' | 'truck' | 'other';
+export type AssetCondition = 'serviceable' | 'unserviceable';
+
 export interface Asset {
   id: string;
   assetNo: string;
@@ -169,6 +173,12 @@ export interface Asset {
   location: string;
   description: string;
   status: AssetStatus;
+
+  // ── HAFED Proforma 6 fields ──
+  p6Category?: P6AssetCategory;     // Godown / Land / Shop / Truck / Other
+  capacityMT?: number;              // capacity in metric tonnes (for godowns)
+  condition?: AssetCondition;       // Serviceable / Unserviceable
+  marketValue?: number;             // Market Value as on reporting date (₹)
 }
 
 export type AccountSubtype =

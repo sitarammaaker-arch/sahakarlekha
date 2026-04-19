@@ -25,6 +25,8 @@ import { calculateP2 } from '@/lib/annualReview/p2Calculator';
 import { generateP2PDF } from '@/lib/annualReview/p2Pdf';
 import { calculateP5 } from '@/lib/annualReview/p5Calculator';
 import { generateP5PDF } from '@/lib/annualReview/p5Pdf';
+import { calculateP6 } from '@/lib/annualReview/p6Calculator';
+import { generateP6PDF } from '@/lib/annualReview/p6Pdf';
 
 const PROFORMAS = [
   { id: 'p1', label: 'P1: Income/Expense', implemented: true },
@@ -32,14 +34,14 @@ const PROFORMAS = [
   { id: 'p3', label: 'P3: Financial Result', implemented: false },
   { id: 'p4', label: 'P4: Patronage Rebate', implemented: false },
   { id: 'p5', label: 'P5: Staff & Salary', implemented: true },
-  { id: 'p6', label: 'P6: Fixed Assets', implemented: false },
+  { id: 'p6', label: 'P6: Fixed Assets', implemented: true },
   { id: 'p7', label: 'P7: Rent/Transport', implemented: false },
   { id: 'p8', label: 'P8: Kachi Aarat', implemented: false },
   { id: 'p9', label: 'P9: District Review', implemented: false },
 ];
 
 const AnnualReviewReport: React.FC = () => {
-  const { society, accounts, vouchers, members, employees, recoverables } = useData();
+  const { society, accounts, vouchers, members, employees, recoverables, assets } = useData();
   const { language } = useLanguage();
   const { hasPermission } = useAuth();
   const hi = language === 'hi';
@@ -94,6 +96,10 @@ const AnnualReviewReport: React.FC = () => {
   // ── P5 — Staff & Salary ──
   const p5 = useMemo(() => calculateP5(employees || [], society), [employees, society]);
   const handleDownloadP5 = () => { generateP5PDF(p5, society, society.financialYear); };
+
+  // ── P6 — Fixed Assets ──
+  const p6 = useMemo(() => calculateP6(assets || [], society), [assets, society]);
+  const handleDownloadP6 = () => { generateP6PDF(p6, society); };
 
   const Row: React.FC<{ sr: string; label: string; amount?: number; bold?: boolean; manual?: React.ReactNode; indent?: boolean }> = ({ sr, label, amount, bold, manual, indent }) => (
     <div className={`grid grid-cols-[60px_1fr_180px] gap-2 py-1.5 px-2 ${bold ? 'bg-muted font-semibold' : ''} ${indent ? 'pl-6' : ''} border-b border-border/50`}>
@@ -426,6 +432,116 @@ const AnnualReviewReport: React.FC = () => {
                   </AlertDescription>
                 </Alert>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ───────────── P6 ───────────── */}
+        <TabsContent value="p6" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="text-lg">Proforma 6 — Detail of Assets (Working / Non-Working)</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {society.name} · FY {society.financialYear}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Link to="/asset-register"><Button variant="outline" size="sm" className="gap-2"><FileText className="h-4 w-4"/>Manage Assets</Button></Link>
+                <Button onClick={handleDownloadP6} size="sm" className="gap-2" disabled={p6.groups.every(g => g.rows.length === 0)}><Download className="h-4 w-4" /> Download PDF</Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4">
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Card className="bg-blue-50 dark:bg-blue-950/20"><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">{hi ? 'कुल मूल लागत' : 'Total Original Cost'}</p>
+                  <p className="text-lg font-bold text-blue-700">₹{p6.grandTotalOriginal.toLocaleString('en-IN')}</p>
+                </CardContent></Card>
+                <Card className="bg-amber-50 dark:bg-amber-950/20"><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">{hi ? 'WDV' : 'Total WDV'}</p>
+                  <p className="text-lg font-bold text-amber-700">₹{p6.grandTotalWdv.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
+                </CardContent></Card>
+                <Card className="bg-green-50 dark:bg-green-950/20"><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">{hi ? 'बाजार मूल्य' : 'Market Value'}</p>
+                  <p className="text-lg font-bold text-green-700">₹{p6.grandTotalMarket.toLocaleString('en-IN')}</p>
+                </CardContent></Card>
+                <Card><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Condition</p>
+                  <p className="text-sm font-bold"><span className="text-green-700">✓ {p6.serviceableCount}</span> · <span className="text-red-700">✗ {p6.unserviceableCount}</span></p>
+                </CardContent></Card>
+              </div>
+
+              {/* Untagged warning */}
+              {p6.untagged.length > 0 && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    {hi
+                      ? `${p6.untagged.length} संपत्ति P6 श्रेणी के बिना है — Asset Register में "P6 Category" सेट करें:`
+                      : `${p6.untagged.length} asset(s) without P6 category — set "P6 Category" in Asset Register:`}
+                    <ul className="pl-4 mt-1">
+                      {p6.untagged.slice(0, 8).map(a => <li key={a.id}>• {a.name}</li>)}
+                      {p6.untagged.length > 8 && <li>... and {p6.untagged.length - 8} more</li>}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Category tables */}
+              {p6.groups.map((group, gi) => (
+                <div key={group.category} className="space-y-2">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Badge variant="outline">{gi + 1}</Badge>
+                    {group.label}
+                    <span className="text-xs text-muted-foreground ml-2">({group.rows.length} items)</span>
+                  </h3>
+                  {group.rows.length === 0 ? (
+                    <p className="text-xs text-muted-foreground pl-6 italic">(no assets classified)</p>
+                  ) : (
+                    <div className="overflow-x-auto border rounded-lg">
+                      <table className="w-full text-xs">
+                        <thead className="bg-muted">
+                          <tr>
+                            <th className="text-left p-2 w-8"></th>
+                            <th className="text-left p-2">Name</th>
+                            {group.category === 'godown' && <th className="text-right p-2">Capacity (MT)</th>}
+                            <th className="text-right p-2">Original Cost</th>
+                            <th className="text-right p-2">WDV</th>
+                            <th className="text-right p-2">Market Value</th>
+                            <th className="text-center p-2">Condition</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.rows.map((r, ri) => (
+                            <tr key={r.id} className="border-t">
+                              <td className="p-2">{String.fromCharCode(65 + ri)}</td>
+                              <td className="p-2 font-medium">{r.name}</td>
+                              {group.category === 'godown' && <td className="p-2 text-right font-mono">{r.capacityMT ? r.capacityMT.toFixed(2) : '—'}</td>}
+                              <td className="p-2 text-right font-mono">{r.originalCost.toLocaleString('en-IN')}</td>
+                              <td className="p-2 text-right font-mono">{r.wdv.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                              <td className="p-2 text-right font-mono">{r.marketValue.toLocaleString('en-IN')}</td>
+                              <td className="p-2 text-center">
+                                {r.condition === 'serviceable' && <Badge variant="outline" className="bg-green-100 text-green-700 text-xs">Serviceable</Badge>}
+                                {r.condition === 'unserviceable' && <Badge variant="outline" className="bg-red-100 text-red-700 text-xs">Unserviceable</Badge>}
+                                {r.condition === 'unknown' && <span className="text-muted-foreground">—</span>}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="border-t bg-muted/60 font-semibold">
+                            <td colSpan={group.category === 'godown' ? 2 : 2} className="p-2">Sub-total</td>
+                            {group.category === 'godown' && <td className="p-2 text-right font-mono">{group.totalCapacity.toFixed(2)}</td>}
+                            <td className="p-2 text-right font-mono">{group.totalOriginal.toLocaleString('en-IN')}</td>
+                            <td className="p-2 text-right font-mono">{group.totalWdv.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                            <td className="p-2 text-right font-mono">{group.totalMarket.toLocaleString('en-IN')}</td>
+                            <td className="p-2"></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
             </CardContent>
           </Card>
         </TabsContent>
