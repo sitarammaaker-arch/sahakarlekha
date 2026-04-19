@@ -4,7 +4,7 @@
  * Phase 1: Proforma 1 (Income/Expense Summary) — fully implemented.
  * Proforma 2–9: Scaffolded placeholders, implemented in later phases.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -31,6 +31,7 @@ import { calculateP4 } from '@/lib/annualReview/p4Calculator';
 import { generateP4PDF } from '@/lib/annualReview/p4Pdf';
 import { calculateP8 } from '@/lib/annualReview/p8Calculator';
 import { generateP8PDF } from '@/lib/annualReview/p8Pdf';
+import { generateP7PDF } from '@/lib/annualReview/p7Pdf';
 
 const PROFORMAS = [
   { id: 'p1', label: 'P1: Income/Expense', implemented: true },
@@ -39,13 +40,13 @@ const PROFORMAS = [
   { id: 'p4', label: 'P4: Patronage Rebate', implemented: true },
   { id: 'p5', label: 'P5: Staff & Salary', implemented: true },
   { id: 'p6', label: 'P6: Fixed Assets', implemented: true },
-  { id: 'p7', label: 'P7: Rent/Transport', implemented: false },
+  { id: 'p7', label: 'P7: Rent/Transport', implemented: true },
   { id: 'p8', label: 'P8: Kachi Aarat', implemented: true },
   { id: 'p9', label: 'P9: District Review', implemented: false },
 ];
 
 const AnnualReviewReport: React.FC = () => {
-  const { society, accounts, vouchers, members, employees, recoverables, assets, stockItems, stockMovements, kachiAaratEntries } = useData();
+  const { society, accounts, vouchers, members, employees, recoverables, assets, stockItems, stockMovements, kachiAaratEntries, p7Entries, upsertP7Entry } = useData();
   const { language } = useLanguage();
   const { hasPermission } = useAuth();
   const hi = language === 'hi';
@@ -121,6 +122,71 @@ const AnnualReviewReport: React.FC = () => {
     societyName: society.name,
   }), [kachiAaratEntries, fromDate, society.name]);
   const handleDownloadP8 = () => { generateP8PDF(p8, society, fromDate); };
+
+  // ── P7 — Rent/Transport/Consumer ──
+  const p7Existing = useMemo(() => (p7Entries || []).find(e => e.fyStartDate === fromDate), [p7Entries, fromDate]);
+  const truckCountFromAssets = useMemo(() => (assets || []).filter(a => a.p6Category === 'truck' && a.status === 'active').length, [assets]);
+  const [p7Form, setP7Form] = useState({
+    rentedGodownCount: '', rentedCapacityMT: '', godownRentPaid: '',
+    truckCount: '', transportChargesPaid: '',
+    sugarCattleFeedSales: '', consumerProductSales: '',
+    narration: '',
+  });
+  // Reset form whenever FY or the existing entry changes
+  useEffect(() => {
+    if (p7Existing) {
+      setP7Form({
+        rentedGodownCount:    String(p7Existing.rentedGodownCount ?? ''),
+        rentedCapacityMT:     String(p7Existing.rentedCapacityMT ?? ''),
+        godownRentPaid:       String(p7Existing.godownRentPaid ?? ''),
+        truckCount:           String(p7Existing.truckCount ?? truckCountFromAssets),
+        transportChargesPaid: String(p7Existing.transportChargesPaid ?? ''),
+        sugarCattleFeedSales: String(p7Existing.sugarCattleFeedSales ?? ''),
+        consumerProductSales: String(p7Existing.consumerProductSales ?? ''),
+        narration:            p7Existing.narration ?? '',
+      });
+    } else {
+      setP7Form({
+        rentedGodownCount: '', rentedCapacityMT: '', godownRentPaid: '',
+        truckCount: String(truckCountFromAssets),
+        transportChargesPaid: '',
+        sugarCattleFeedSales: '', consumerProductSales: '',
+        narration: '',
+      });
+    }
+  }, [p7Existing, truckCountFromAssets, fromDate]);
+
+  const handleSaveP7 = () => {
+    upsertP7Entry({
+      fyStartDate: fromDate,
+      rentedGodownCount:    Number(p7Form.rentedGodownCount) || 0,
+      rentedCapacityMT:     Number(p7Form.rentedCapacityMT) || 0,
+      godownRentPaid:       Number(p7Form.godownRentPaid) || 0,
+      truckCount:           Number(p7Form.truckCount) || 0,
+      transportChargesPaid: Number(p7Form.transportChargesPaid) || 0,
+      sugarCattleFeedSales: Number(p7Form.sugarCattleFeedSales) || 0,
+      consumerProductSales: Number(p7Form.consumerProductSales) || 0,
+      narration: p7Form.narration.trim() || undefined,
+    });
+  };
+
+  const handleDownloadP7 = () => {
+    // Ensure saved first — compose entry from current form
+    const entry = {
+      id: p7Existing?.id || '',
+      fyStartDate: fromDate,
+      rentedGodownCount:    Number(p7Form.rentedGodownCount) || 0,
+      rentedCapacityMT:     Number(p7Form.rentedCapacityMT) || 0,
+      godownRentPaid:       Number(p7Form.godownRentPaid) || 0,
+      truckCount:           Number(p7Form.truckCount) || 0,
+      transportChargesPaid: Number(p7Form.transportChargesPaid) || 0,
+      sugarCattleFeedSales: Number(p7Form.sugarCattleFeedSales) || 0,
+      consumerProductSales: Number(p7Form.consumerProductSales) || 0,
+      narration: p7Form.narration || undefined,
+      createdAt: p7Existing?.createdAt || new Date().toISOString(),
+    };
+    generateP7PDF(entry, society, fromDate);
+  };
 
   const Row: React.FC<{ sr: string; label: string; amount?: number; bold?: boolean; manual?: React.ReactNode; indent?: boolean }> = ({ sr, label, amount, bold, manual, indent }) => (
     <div className={`grid grid-cols-[60px_1fr_180px] gap-2 py-1.5 px-2 ${bold ? 'bg-muted font-semibold' : ''} ${indent ? 'pl-6' : ''} border-b border-border/50`}>
@@ -740,6 +806,105 @@ const AnnualReviewReport: React.FC = () => {
                   </AlertDescription>
                 </Alert>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ───────────── P7 ───────────── */}
+        <TabsContent value="p7" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="text-lg">Proforma 7 — Godown Rent / Transport / Consumer Products</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {society.name} · FY starts {fromDate}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleSaveP7} disabled={!canEdit}>
+                  {hi ? 'सहेजें' : 'Save'}
+                </Button>
+                <Button onClick={handleDownloadP7} size="sm" className="gap-2"><Download className="h-4 w-4" /> Download PDF</Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-6">
+              {/* ── Section 1 — Rented Godowns ── */}
+              <section>
+                <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                  <Badge>1</Badge>
+                  {hi ? 'किराये पर लिए गोदाम' : 'Rented Godowns'}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">{hi ? 'गोदामों की संख्या' : 'No. of Godowns on rent'}</Label>
+                    <Input type="number" min="0" value={p7Form.rentedGodownCount} onChange={e => setP7Form(f => ({ ...f, rentedGodownCount: e.target.value }))} disabled={!canEdit} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">{hi ? 'कुल क्षमता (MT)' : 'Total Capacity (MT)'}</Label>
+                    <Input type="number" min="0" step="0.01" value={p7Form.rentedCapacityMT} onChange={e => setP7Form(f => ({ ...f, rentedCapacityMT: e.target.value }))} disabled={!canEdit} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">{hi ? 'कुल किराया (₹)' : 'Rent Paid during FY (₹)'}</Label>
+                    <Input type="number" min="0" step="0.01" value={p7Form.godownRentPaid} onChange={e => setP7Form(f => ({ ...f, godownRentPaid: e.target.value }))} disabled={!canEdit} />
+                  </div>
+                </div>
+              </section>
+
+              {/* ── Section 2 — Transport ── */}
+              <section>
+                <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                  <Badge>2</Badge>
+                  {hi ? 'परिवहन' : 'Transportation'}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">{hi ? 'ट्रकों की संख्या' : 'No. of Trucks with Society'}</Label>
+                    <Input type="number" min="0" value={p7Form.truckCount} onChange={e => setP7Form(f => ({ ...f, truckCount: e.target.value }))} disabled={!canEdit} />
+                    <p className="text-[10px] text-muted-foreground">
+                      {hi ? `Asset Register से स्वचालित: ${truckCountFromAssets} ट्रक्स` : `Auto-detected from Asset Register: ${truckCountFromAssets} trucks`}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">{hi ? 'परिवहन शुल्क भुगतान (₹)' : 'Transport Charges Paid (₹)'}</Label>
+                    <Input type="number" min="0" step="0.01" value={p7Form.transportChargesPaid} onChange={e => setP7Form(f => ({ ...f, transportChargesPaid: e.target.value }))} disabled={!canEdit} />
+                    <p className="text-[10px] text-muted-foreground">
+                      {hi ? 'PDF पर Lacs में दिखेगा' : 'PDF will display in Lacs'}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              {/* ── Section 3 — Consumer Products ── */}
+              <section>
+                <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                  <Badge>3</Badge>
+                  {hi ? 'उपभोक्ता उत्पाद व चारा बिक्री' : 'Consumer Products & Cattle Feed Sales'}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">{hi ? 'चीनी / पशु चारा / सरसों खली (₹)' : 'Sugar / Cattle Feed / Mustard Cake (₹)'}</Label>
+                    <Input type="number" min="0" step="0.01" value={p7Form.sugarCattleFeedSales} onChange={e => setP7Form(f => ({ ...f, sugarCattleFeedSales: e.target.value }))} disabled={!canEdit} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">{hi ? 'चावल / सरसों तेल / रिफाइंड आदि (₹)' : 'Rice / Mustard Oil / Refined Oil (₹)'}</Label>
+                    <Input type="number" min="0" step="0.01" value={p7Form.consumerProductSales} onChange={e => setP7Form(f => ({ ...f, consumerProductSales: e.target.value }))} disabled={!canEdit} />
+                  </div>
+                </div>
+              </section>
+
+              <div className="space-y-1">
+                <Label className="text-xs">{hi ? 'टिप्पणी' : 'Narration'}</Label>
+                <Input value={p7Form.narration} onChange={e => setP7Form(f => ({ ...f, narration: e.target.value }))} disabled={!canEdit} />
+              </div>
+
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription className="text-xs">
+                  {hi
+                    ? 'सभी 3 भागों के लिए एक ही पंक्ति प्रति FY संग्रहित है। "Save" दबाने पर Supabase में सहेजा जाएगा।'
+                    : 'One row per FY stores all 3 sections. Click "Save" to persist to Supabase, then Download PDF.'}
+                </AlertDescription>
+              </Alert>
             </CardContent>
           </Card>
         </TabsContent>

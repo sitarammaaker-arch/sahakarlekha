@@ -301,6 +301,29 @@ export interface KachiAaratEntry {
   societyId?: string;
 }
 
+// ── P7 Entry (HAFED Proforma 7) ────────────────────────────────────────────
+// Single row per FY capturing:
+//   1. Godown rent paid (count + capacity + amount)
+//   2. Transportation (truck count + charges paid)
+//   3. Consumer products sold (Sugar/Cattle Feed/Mustard Cake  +  Rice/Oil)
+export interface P7Entry {
+  id: string;
+  fyStartDate: string;          // yyyy-mm-dd — identifies the FY (e.g. 2024-04-01)
+  // 1. Rented Godowns
+  rentedGodownCount: number;
+  rentedCapacityMT: number;
+  godownRentPaid: number;
+  // 2. Transportation
+  truckCount: number;           // number of trucks operated by society
+  transportChargesPaid: number; // total during FY
+  // 3. Consumer products sold
+  sugarCattleFeedSales: number; // Sugar / Cattle Feed / Mustard Cake value
+  consumerProductSales: number; // Rice / Mustard Oil / Refined Oil value
+  narration?: string;
+  createdAt: string;
+  societyId?: string;
+}
+
 // Separate row in voucher_entries table — one row per Dr/Cr leg
 export interface VoucherEntry {
   id: string;
