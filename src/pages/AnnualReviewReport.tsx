@@ -17,7 +17,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { FileText, Download, AlertTriangle, Info } from 'lucide-react';
+import { FileText, Download, AlertTriangle, Info, Wand2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+import { analyzeAccounts } from '@/lib/annualReview/autoTagger';
 import { Link } from 'react-router-dom';
 import { calculateP1, CROP_LABELS, EXPENSE_BUCKET_LABELS, TURNOVER_BUCKET_LABELS, fmtLacs } from '@/lib/annualReview/p1Calculator';
 import { generateP1PDF } from '@/lib/annualReview/p1Pdf';
@@ -50,7 +53,7 @@ const PROFORMAS = [
 ];
 
 const AnnualReviewReport: React.FC = () => {
-  const { society, accounts, vouchers, members, employees, recoverables, assets, stockItems, stockMovements, kachiAaratEntries, p7Entries, upsertP7Entry } = useData();
+  const { society, accounts, vouchers, members, employees, recoverables, assets, stockItems, stockMovements, kachiAaratEntries, p7Entries, upsertP7Entry, updateAccount } = useData();
   const { language } = useLanguage();
   const { hasPermission } = useAuth();
   const hi = language === 'hi';
@@ -101,6 +104,26 @@ const AnnualReviewReport: React.FC = () => {
   const [lossReasons, setLossReasons] = useState('');
 
   const activeEmployeeCount = (employees || []).filter(e => e.status === 'active').length;
+
+  // ── Auto-tagger state ──
+  const { toast } = useToast();
+  const [autoTagOpen, setAutoTagOpen] = useState(false);
+  const tagSuggestions = useMemo(() => analyzeAccounts(accounts || []), [accounts]);
+  const changedSuggestions = useMemo(() => tagSuggestions.filter(s => s.changed), [tagSuggestions]);
+  const handleApplyAutoTags = () => {
+    let count = 0;
+    for (const s of changedSuggestions) {
+      updateAccount(s.account.id, {
+        p1IncomeCategory: s.suggested.p1IncomeCategory || s.account.p1IncomeCategory,
+        cropCategory:     s.suggested.cropCategory     || s.account.cropCategory,
+        p1ExpenseBucket:  s.suggested.p1ExpenseBucket  || s.account.p1ExpenseBucket,
+        turnoverBucket:   s.suggested.turnoverBucket   || s.account.turnoverBucket,
+      });
+      count++;
+    }
+    toast({ title: hi ? `${count} खाते tagged हुए` : `Tagged ${count} accounts`, description: hi ? 'बदले गए tags Supabase में सहेजे गए' : 'Changes synced to Supabase' });
+    setAutoTagOpen(false);
+  };
 
   const p1 = useMemo(() => calculateP1({
     accounts, vouchers, members, society,
@@ -263,7 +286,14 @@ const AnnualReviewReport: React.FC = () => {
               : 'Proforma 1 to 9 for Haryana Marketing Cooperative Societies (HAFED)'}
           </p>
         </div>
-        <div className="flex gap-2 items-end">
+        <div className="flex gap-2 items-end flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => setAutoTagOpen(true)} disabled={!canEdit} className="gap-2">
+            <Wand2 className="h-4 w-4" />
+            {hi ? 'स्वचालित Tag खाते' : 'Auto-tag Accounts'}
+            {changedSuggestions.length > 0 && (
+              <Badge variant="secondary" className="ml-1">{changedSuggestions.length}</Badge>
+            )}
+          </Button>
           <div>
             <Label className="text-xs">From Date</Label>
             <Input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setDatesManuallyChanged(true); }} className="h-9" />
@@ -274,6 +304,67 @@ const AnnualReviewReport: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Auto-tag preview dialog */}
+      <Dialog open={autoTagOpen} onOpenChange={setAutoTagOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="h-5 w-5 text-primary" />
+              {hi ? 'स्वचालित खाता वर्गीकरण' : 'Auto-tag Accounts for HAFED Proforma 1'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-xs text-muted-foreground mb-2">
+            {hi
+              ? `SahakarLekha आपके खाते के नाम से स्वतः Proforma 1 वर्गीकरण सुझाएगा। आप नीचे preview देखें, फिर Apply दबाएँ।`
+              : `SahakarLekha reads each account's name (English + Hindi) and suggests the right Proforma 1 classification. Review the preview below, then Apply.`}
+          </div>
+          {changedSuggestions.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              {hi
+                ? 'कोई नया सुझाव नहीं — सभी खाते पहले से tagged हैं या मिलान नहीं हुआ।'
+                : 'No new suggestions — accounts are already tagged, or names did not match any known pattern.'}
+              <p className="mt-2 text-xs italic">
+                {hi ? 'अगर कुछ missing है, Ledger Heads में manually edit करें।' : 'Anything missing? Edit manually in Ledger Heads → account → HAFED section.'}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-y-auto flex-1 border rounded-lg">
+              <table className="w-full text-xs">
+                <thead className="bg-muted sticky top-0">
+                  <tr>
+                    <th className="text-left p-2">Account</th>
+                    <th className="text-left p-2">Type</th>
+                    <th className="text-left p-2">Suggested Tags</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {changedSuggestions.map(({ account, suggested }) => (
+                    <tr key={account.id} className="border-t">
+                      <td className="p-2 font-medium">{account.name}</td>
+                      <td className="p-2">
+                        <Badge variant="outline" className="text-[10px]">{account.type}</Badge>
+                      </td>
+                      <td className="p-2 space-x-1">
+                        {suggested.p1IncomeCategory && <Badge className="bg-green-100 text-green-800 text-[10px]">{suggested.p1IncomeCategory}</Badge>}
+                        {suggested.cropCategory     && <Badge className="bg-yellow-100 text-yellow-800 text-[10px]">{suggested.cropCategory}</Badge>}
+                        {suggested.p1ExpenseBucket  && <Badge className="bg-red-100 text-red-800 text-[10px]">exp:{suggested.p1ExpenseBucket}</Badge>}
+                        {suggested.turnoverBucket   && <Badge className="bg-blue-100 text-blue-800 text-[10px]">turnover:{suggested.turnoverBucket}</Badge>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAutoTagOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
+            <Button onClick={handleApplyAutoTags} disabled={changedSuggestions.length === 0}>
+              {hi ? `${changedSuggestions.length} खाते tag करें` : `Apply ${changedSuggestions.length} tags`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Diagnostic banner — shows what data is available for the selected date range */}
       {(() => {
