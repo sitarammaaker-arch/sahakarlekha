@@ -67,6 +67,7 @@ export const translations: Translations = {
   openingBalances: { hi: 'प्रारंभिक शेष / CF', en: 'Opening Balances / CF' },
   nabardReport: { hi: 'NABARD क्रेडिट रिपोर्ट', en: 'NABARD Credit Report' },
   federationReport: { hi: 'सहकारी वार्षिक विवरणी', en: 'Federation Annual Return' },
+  annualReview: { hi: 'वार्षिक समीक्षा (HAFED)', en: 'Annual Review (HAFED)' },
   operations: { hi: 'संचालन', en: 'Operations' },
   ledgerHeads: { hi: 'खाता शीर्ष', en: 'Ledger Heads' },
   inventory: { hi: 'माल भंडार', en: 'Inventory' },

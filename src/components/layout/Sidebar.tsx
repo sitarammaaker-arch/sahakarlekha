@@ -72,6 +72,7 @@ const reportNavItems: NavItem[] = [
   { key: 'hsnMaster', icon: Hash, path: '/hsn-master' },
   { key: 'nabardReport', icon: Landmark, path: '/nabard-report' },
   { key: 'federationReport', icon: ScrollText, path: '/federation-report' },
+  { key: 'annualReview', icon: ScrollText, path: '/annual-review' },
 ];
 
 const registerNavItems: NavItem[] = [

@@ -18,7 +18,7 @@ import {
 import { ListTree, Pencil, Trash2, Plus, Search, FolderOpen, FileSpreadsheet, Download, Merge, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import type { LedgerAccount } from '@/types';
+import type { LedgerAccount, CropCategory, P1IncomeCategory, P1ExpenseBucket, TurnoverBucket } from '@/types';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 type AccountType = LedgerAccount['type'];
@@ -31,7 +31,54 @@ const EMPTY_FORM = {
   openingBalanceType: 'debit' as 'debit' | 'credit',
   isGroup: false,
   parentId: '',
+  // Annual Review Report (HAFED Proforma 1) classification tags
+  p1IncomeCategory: '' as P1IncomeCategory | '',
+  cropCategory: '' as CropCategory | '',
+  p1ExpenseBucket: '' as P1ExpenseBucket | '',
+  turnoverBucket: '' as TurnoverBucket | '',
 };
+
+const P1_INCOME_OPTIONS: { value: P1IncomeCategory; label: string }[] = [
+  { value: 'commission',       label: '1. Commission (select crop below)' },
+  { value: 'patronageRebate',  label: '2. Patronage Rebate' },
+  { value: 'inputMargin',      label: '4. Margin on Input Distribution' },
+  { value: 'consumerSale',     label: '5. Sale of Consumer Products' },
+  { value: 'processingIncome', label: '6. Own Processing Units' },
+  { value: 'truckIncome',      label: '7. Trucks' },
+  { value: 'rentalIncome',     label: '8. Rental Income' },
+  { value: 'hafedOther',       label: '9. Other from HAFED' },
+  { value: 'nonHafedIncome',   label: '10. Income Other than HAFED' },
+];
+
+const CROP_OPTIONS: { value: CropCategory; label: string }[] = [
+  { value: 'wheat', label: 'Wheat / गेहूं' },
+  { value: 'paddy', label: 'Paddy / धान' },
+  { value: 'sunflower', label: 'Sunflower / सूरजमुखी' },
+  { value: 'mustard', label: 'Mustard / सरसों' },
+  { value: 'gram', label: 'Gram / चना' },
+  { value: 'bajra', label: 'Bajra / बाजरा' },
+  { value: 'maize', label: 'Maize / मक्का' },
+  { value: 'moong', label: 'Moong / मूंग' },
+  { value: 'other', label: 'Other / अन्य' },
+];
+
+const P1_EXPENSE_OPTIONS: { value: P1ExpenseBucket; label: string }[] = [
+  { value: 'admn',          label: 'a) Admn. Exp.' },
+  { value: 'office',        label: 'b) Office Over Head Exp.' },
+  { value: 'marketing',     label: 'c) Marketing Trading Exp.' },
+  { value: 'fertPesticide', label: 'd) Fertilizer & Pesticide Trading' },
+  { value: 'processing',    label: 'e) Processing on Own Units' },
+  { value: 'other',         label: 'f) Other Exp.' },
+];
+
+const TURNOVER_OPTIONS: { value: TurnoverBucket; label: string }[] = [
+  { value: 'procurement', label: 'a) Procurement' },
+  { value: 'consumer',    label: 'b) Consumer Products' },
+  { value: 'fertilizer',  label: 'c) Fertilizers' },
+  { value: 'pesticide',   label: 'd) Pesticides' },
+  { value: 'cattleFeed',  label: 'e) Cattle Feed Plant' },
+  { value: 'nonHafed',    label: 'f) Other than HAFED' },
+];
 
 const TYPE_OPTIONS: { value: AccountType; label: string; labelHi: string }[] = [
   { value: 'equity',    label: 'Equity',    labelHi: 'पूंजी (Equity)' },
@@ -64,6 +111,74 @@ const LedgerHeads: React.FC = () => {
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
+
+  /** P1 (Annual Review — HAFED Marketing Society) classification block — shown for income/expense/asset accounts */
+  const renderP1Classification = () => {
+    const showIncome  = form.type === 'income';
+    const showExpense = form.type === 'expense';
+    const showTurnover = form.type === 'income' || form.type === 'asset';
+    if (!showIncome && !showExpense && !showTurnover) return null;
+    return (
+      <div className="space-y-3 p-3 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20">
+        <p className="text-xs font-semibold uppercase text-amber-900 dark:text-amber-200">
+          {hi ? 'HAFED वार्षिक समीक्षा (Proforma 1) वर्गीकरण' : 'HAFED Annual Review (Proforma 1) Classification'}
+          <span className="ml-2 text-[10px] font-normal text-muted-foreground">Optional — for Marketing Societies</span>
+        </p>
+        {showIncome && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">P1 Income Row</Label>
+                <Select value={form.p1IncomeCategory || '__none__'} onValueChange={val => setForm(f => ({ ...f, p1IncomeCategory: val === '__none__' ? '' : (val as P1IncomeCategory) }))}>
+                  <SelectTrigger className="h-8"><SelectValue placeholder="Select row" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— None —</SelectItem>
+                    {P1_INCOME_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.p1IncomeCategory === 'commission' && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Crop</Label>
+                  <Select value={form.cropCategory || '__none__'} onValueChange={val => setForm(f => ({ ...f, cropCategory: val === '__none__' ? '' : (val as CropCategory) }))}>
+                    <SelectTrigger className="h-8"><SelectValue placeholder="Select crop" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— None —</SelectItem>
+                      {CROP_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+        {showExpense && (
+          <div className="space-y-1">
+            <Label className="text-xs">P1 Expense Bucket</Label>
+            <Select value={form.p1ExpenseBucket || '__none__'} onValueChange={val => setForm(f => ({ ...f, p1ExpenseBucket: val === '__none__' ? '' : (val as P1ExpenseBucket) }))}>
+              <SelectTrigger className="h-8"><SelectValue placeholder="Select bucket" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">— None —</SelectItem>
+                {P1_EXPENSE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {showTurnover && (
+          <div className="space-y-1">
+            <Label className="text-xs">P1 Turnover Bucket (Row 17)</Label>
+            <Select value={form.turnoverBucket || '__none__'} onValueChange={val => setForm(f => ({ ...f, turnoverBucket: val === '__none__' ? '' : (val as TurnoverBucket) }))}>
+              <SelectTrigger className="h-8"><SelectValue placeholder="Select turnover bucket" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">— None —</SelectItem>
+                {TURNOVER_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const fmtBalance = (amount: number, type: 'debit' | 'credit') =>
     `${fmt(amount)} ${type === 'debit' ? (hi ? 'ना.' : 'Dr') : (hi ? 'ज.' : 'Cr')}`;
@@ -174,6 +289,10 @@ const LedgerHeads: React.FC = () => {
       openingBalanceType: acc.openingBalanceType ?? 'debit',
       isGroup: !!acc.isGroup,
       parentId: acc.parentId || '',
+      p1IncomeCategory: (acc.p1IncomeCategory || '') as P1IncomeCategory | '',
+      cropCategory: (acc.cropCategory || '') as CropCategory | '',
+      p1ExpenseBucket: (acc.p1ExpenseBucket || '') as P1ExpenseBucket | '',
+      turnoverBucket: (acc.turnoverBucket || '') as TurnoverBucket | '',
     });
   };
 
@@ -201,6 +320,10 @@ const LedgerHeads: React.FC = () => {
       openingBalanceType: form.openingBalanceType,
       isGroup: form.isGroup || undefined,
       parentId: form.parentId || undefined,
+      p1IncomeCategory: form.p1IncomeCategory || undefined,
+      cropCategory: form.cropCategory || undefined,
+      p1ExpenseBucket: form.p1ExpenseBucket || undefined,
+      turnoverBucket: form.turnoverBucket || undefined,
     });
     toast({ title: hi ? (form.isGroup ? 'ग्रुप बनाया गया' : 'खाता जोड़ा गया') : (form.isGroup ? 'Group created' : 'Account added successfully') });
     resetForm();
@@ -231,6 +354,10 @@ const LedgerHeads: React.FC = () => {
       openingBalanceType: form.openingBalanceType,
       isGroup: form.isGroup || undefined,
       parentId: form.parentId || undefined,
+      p1IncomeCategory: form.p1IncomeCategory || undefined,
+      cropCategory: form.cropCategory || undefined,
+      p1ExpenseBucket: form.p1ExpenseBucket || undefined,
+      turnoverBucket: form.turnoverBucket || undefined,
     });
     toast({ title: hi ? 'खाता अपडेट किया गया' : 'Account updated successfully' });
     setEditAccount(null);
@@ -596,6 +723,7 @@ const LedgerHeads: React.FC = () => {
                 </div>
               </div>
             )}
+            {renderP1Classification()}
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" type="button" onClick={() => { setIsAddOpen(false); resetForm(); }}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
               <Button type="submit">{hi ? 'सहेजें' : 'Save'}</Button>
@@ -668,6 +796,7 @@ const LedgerHeads: React.FC = () => {
                 </div>
               </div>
             )}
+            {renderP1Classification()}
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" type="button" onClick={() => { setEditAccount(null); resetForm(); }}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
               <Button type="submit">{hi ? 'अपडेट करें' : 'Update'}</Button>

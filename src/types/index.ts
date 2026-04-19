@@ -179,6 +179,38 @@ export type AccountSubtype =
   | 'direct_expense' | 'employee_expense' | 'admin_expense' | 'operational_expense' | 'depreciation_expense' | 'statutory_expense'
   | 'suspense';
 
+// ── Annual Review Report (Haryana Marketing Societies) classification tags ──
+export type CropCategory =
+  | 'wheat' | 'paddy' | 'sunflower' | 'mustard' | 'gram'
+  | 'bajra' | 'maize' | 'moong' | 'other';
+
+export type P1ExpenseBucket =
+  | 'admn'           // a) Admn. Exp.
+  | 'office'         // b) Office Over Head Exp.
+  | 'marketing'      // c) Marketing Trading Exp.
+  | 'fertPesticide'  // d) Fertilizer & Pesticides Trading Exp.
+  | 'processing'     // e) Processing Exp on Own Units
+  | 'other';         // f) Other Exp., if any
+
+export type P1IncomeCategory =
+  | 'commission'       // 1. Commission (with cropCategory)
+  | 'patronageRebate'  // 2. Patronage Rebate
+  | 'inputMargin'      // 4. Margin on distribution of inputs
+  | 'consumerSale'     // 5. Consumer products
+  | 'processingIncome' // 6. Own processing units
+  | 'truckIncome'      // 7. Trucks
+  | 'rentalIncome'     // 8. Rental income
+  | 'hafedOther'       // 9. Other income from HAFED
+  | 'nonHafedIncome';  // 10. Income other than HAFED
+
+export type TurnoverBucket =
+  | 'procurement'   // a) Turnover from procurement
+  | 'consumer'      // b) Marketing (Consumer Products)
+  | 'fertilizer'    // c) Fertilizers
+  | 'pesticide'     // d) Pesticides
+  | 'cattleFeed'    // e) Cattle Feed Plant
+  | 'nonHafed';     // f) Other than Hafed
+
 export interface LedgerAccount {
   id: string;
   name: string;
@@ -190,6 +222,12 @@ export interface LedgerAccount {
   isSystem?: boolean;
   parentId?: string;   // parent account code for hierarchy (e.g. '1100' → parent of '1101')
   isGroup?: boolean;   // true = group/header account, cannot be used in vouchers directly
+
+  // ── Annual Review Report tagging (Haryana Marketing Society Proformas) ──
+  cropCategory?: CropCategory;         // for Commission income accounts (P1 row 1)
+  p1IncomeCategory?: P1IncomeCategory; // P1 income category (rows 1–10)
+  p1ExpenseBucket?: P1ExpenseBucket;   // P1 expense bucket (row 12 a–f)
+  turnoverBucket?: TurnoverBucket;     // P1 rows 17/18 turnover split
 }
 
 // Separate row in voucher_entries table — one row per Dr/Cr leg
