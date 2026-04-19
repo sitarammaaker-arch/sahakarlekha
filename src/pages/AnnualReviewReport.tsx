@@ -57,21 +57,38 @@ const AnnualReviewReport: React.FC = () => {
 
   const canEdit = hasPermission(['admin', 'accountant']);
 
-  const fyEnd = society.financialYearStart && society.financialYear
-    ? `20${society.financialYear.split('-')[1]}-03-31`
-    : '';
+  // Derive FY date range — prefer society.financialYearStart, else compute from "YYYY-YY" string.
+  // This handles societies where financialYearStart was never set (only financialYear = e.g. "2025-26").
+  const derivedDates = useMemo(() => {
+    const fyStr = society.financialYear || '';
+    const m = /^(\d{4})-(\d{2})$/.exec(fyStr);
+    let computedStart = '', computedEnd = '';
+    if (m) {
+      const startYear = parseInt(m[1], 10);
+      const endYear = 2000 + parseInt(m[2], 10);
+      computedStart = `${startYear}-04-01`;
+      computedEnd   = `${endYear}-03-31`;
+    }
+    // Use configured start if it looks like a valid ISO date, else compute.
+    const validIso = /^\d{4}-\d{2}-\d{2}$/;
+    const start = validIso.test(society.financialYearStart || '') ? society.financialYearStart : computedStart;
+    const end   = computedEnd || (validIso.test(society.financialYearStart || '') && m
+      ? `${2000 + parseInt(m[2], 10)}-03-31` : '');
+    return { start, end };
+  }, [society.financialYear, society.financialYearStart]);
 
-  const [fromDate, setFromDate] = useState(society.financialYearStart || '');
-  const [toDate, setToDate] = useState(fyEnd);
+  const [fromDate, setFromDate] = useState(derivedDates.start);
+  const [toDate, setToDate] = useState(derivedDates.end);
 
   // Sync dates once society loads from Supabase (initial useState fires before load).
   // Only auto-fill if user hasn't manually picked a date.
   const [datesManuallyChanged, setDatesManuallyChanged] = useState(false);
   useEffect(() => {
     if (datesManuallyChanged) return;
-    if (society.financialYearStart && !fromDate) setFromDate(society.financialYearStart);
-    if (fyEnd && !toDate) setToDate(fyEnd);
-  }, [society.financialYearStart, fyEnd, datesManuallyChanged, fromDate, toDate]);
+    if (derivedDates.start && fromDate !== derivedDates.start) setFromDate(derivedDates.start);
+    if (derivedDates.end && toDate !== derivedDates.end) setToDate(derivedDates.end);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derivedDates.start, derivedDates.end, datesManuallyChanged]);
 
   // ── Manual overrides (P1) ──
   const [manualPatronage, setManualPatronage] = useState('');
