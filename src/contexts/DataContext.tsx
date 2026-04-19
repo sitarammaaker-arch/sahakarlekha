@@ -4,7 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import type {
   Voucher, VoucherEditSnapshot, VoucherLine, Member, LedgerAccount, SocietySettings,
   AccountBalance, CashBookEntry, BankBookEntry, MemberLedgerEntry, ReceiptsPaymentsData,
-  Loan, Asset, AuditObjection,
+  Loan, Asset, AuditObjection, Recoverable,
   StockItem, StockMovement,
   Sale, Purchase,
   Employee, SalaryRecord, PaymentMode,
@@ -39,6 +39,12 @@ interface DataContextType {
   addAuditObjection: (data: Omit<AuditObjection, 'id' | 'objectionNo' | 'createdAt'>) => AuditObjection;
   updateAuditObjection: (id: string, data: Partial<AuditObjection>) => void;
   deleteAuditObjection: (id: string) => void;
+
+  // Recoverables (HAFED Proforma 2)
+  recoverables: Recoverable[];
+  addRecoverable: (data: Omit<Recoverable, 'id' | 'createdAt'>) => Recoverable;
+  updateRecoverable: (id: string, data: Partial<Recoverable>) => void;
+  deleteRecoverable: (id: string) => void;
 
   addMember: (data: Omit<Member, 'id'>) => Member;
   updateMember: (id: string, data: Partial<Member>) => void;
@@ -165,6 +171,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [auditObjections, setAuditObjectionsState] = useState<AuditObjection[]>([]);
   const auditObjectionsRef = useRef<AuditObjection[]>(auditObjections);
   useEffect(() => { auditObjectionsRef.current = auditObjections; }, [auditObjections]);
+  const [recoverables, setRecoverablesState] = useState<Recoverable[]>([]);
+  const recoverablesRef = useRef<Recoverable[]>(recoverables);
+  useEffect(() => { recoverablesRef.current = recoverables; }, [recoverables]);
   const [stockItems, setStockItemsState] = useState<StockItem[]>([]);
   const [stockMovements, setStockMovementsState] = useState<StockMovement[]>([]);
   const [sales, setSalesState] = useState<Sale[]>([]);
@@ -200,6 +209,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
     setSuppliersState([]); setCustomersState([]);
+    setRecoverablesState([]);
 
     const loadFromSupabase = async () => {
       try {
@@ -209,7 +219,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           { data: siData }, { data: smData }, { data: slData },
           { data: puData }, { data: emData }, { data: srData },
           { data: socData }, { data: supData }, { data: cusData },
-          { data: kccData },
+          { data: kccData }, { data: recData },
         ] = await Promise.all([
           supabase.from('vouchers').select('*').eq('society_id', sid).order('createdAt'),
           supabase.from('members').select('*').eq('society_id', sid),
@@ -227,6 +237,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           supabase.from('suppliers').select('*').eq('society_id', sid),
           supabase.from('customers').select('*').eq('society_id', sid),
           supabase.from('kcc_loans').select('*').eq('society_id', sid),
+          supabase.from('recoverables').select('*').eq('society_id', sid).order('createdAt'),
         ]);
 
         if (vErr) console.warn('Vouchers query error:', vErr.message);
@@ -288,6 +299,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSuppliersState(supData || []);
         setCustomersState(cusData || []);
         setKccLoansState(kccData || []);
+        setRecoverablesState(recData || []);
 
         // ── One-time voucher_entries migration ──────────────────────────────
         // For any existing voucher that has no entries in voucher_entries yet,
@@ -599,6 +611,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAuditObjectionsState(prev => { const updated = prev.filter(o => o.id !== id); return updated; });
     supabase.from('audit_objections').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     console.info(`[AUDIT-DELETE] AuditObjection id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+  }, []);
+
+  // ── Recoverables (HAFED Proforma 2) ────────────────────────────────────────
+  const addRecoverable = useCallback((data: Omit<Recoverable, 'id' | 'createdAt'>): Recoverable => {
+    const newRec: Recoverable = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    recoverablesRef.current = [...recoverablesRef.current, newRec];
+    setRecoverablesState(prev => [...prev, newRec]);
+    supabase.from('recoverables').upsert(withSoc(newRec)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    return newRec;
+  }, []);
+
+  const updateRecoverable = useCallback((id: string, data: Partial<Recoverable>) => {
+    setRecoverablesState(prev => {
+      const updated = prev.map(r => r.id === id ? { ...r, ...data } : r);
+      const upd = updated.find(r => r.id === id);
+      if (upd) supabase.from('recoverables').upsert(withSoc(upd)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+      return updated;
+    });
+  }, []);
+
+  const deleteRecoverable = useCallback((id: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    setRecoverablesState(prev => prev.filter(r => r.id !== id));
+    supabase.from('recoverables').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
   }, []);
 
   const addMember = useCallback((data: Omit<Member, 'id'>): Member => {
@@ -1952,6 +1988,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addLoan, updateLoan, deleteLoan,
       addAsset, updateAsset, deleteAsset, postDepreciation,
       addAuditObjection, updateAuditObjection, deleteAuditObjection,
+      recoverables, addRecoverable, updateRecoverable, deleteRecoverable,
       addStockItem, updateStockItem, deleteStockItem, addStockMovement,
       addSale, deleteSale,
       addPurchase, deletePurchase,

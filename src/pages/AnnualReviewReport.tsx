@@ -18,12 +18,15 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FileText, Download, AlertTriangle, Construction } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { calculateP1, CROP_LABELS, EXPENSE_BUCKET_LABELS, TURNOVER_BUCKET_LABELS, fmtLacs } from '@/lib/annualReview/p1Calculator';
 import { generateP1PDF } from '@/lib/annualReview/p1Pdf';
+import { calculateP2 } from '@/lib/annualReview/p2Calculator';
+import { generateP2PDF } from '@/lib/annualReview/p2Pdf';
 
 const PROFORMAS = [
   { id: 'p1', label: 'P1: Income/Expense', implemented: true },
-  { id: 'p2', label: 'P2: Recoverables', implemented: false },
+  { id: 'p2', label: 'P2: Recoverables', implemented: true },
   { id: 'p3', label: 'P3: Financial Result', implemented: false },
   { id: 'p4', label: 'P4: Patronage Rebate', implemented: false },
   { id: 'p5', label: 'P5: Staff & Salary', implemented: false },
@@ -34,7 +37,7 @@ const PROFORMAS = [
 ];
 
 const AnnualReviewReport: React.FC = () => {
-  const { society, accounts, vouchers, members, employees } = useData();
+  const { society, accounts, vouchers, members, employees, recoverables } = useData();
   const { language } = useLanguage();
   const { hasPermission } = useAuth();
   const hi = language === 'hi';
@@ -80,6 +83,11 @@ const AnnualReviewReport: React.FC = () => {
   const handleDownloadP1 = () => {
     generateP1PDF(p1, society, fromDate, toDate);
   };
+
+  // ── P2 — Recoverables ──
+  const p2 = useMemo(() => calculateP2({ recoverables, fyStartDate: fromDate }), [recoverables, fromDate]);
+  const handleDownloadP2 = () => { generateP2PDF(p2, society, fromDate); };
+  const p2CaseCount = recoverables.filter(r => !r.isDeleted && r.fyStartDate === fromDate).length;
 
   const Row: React.FC<{ sr: string; label: string; amount?: number; bold?: boolean; manual?: React.ReactNode; indent?: boolean }> = ({ sr, label, amount, bold, manual, indent }) => (
     <div className={`grid grid-cols-[60px_1fr_180px] gap-2 py-1.5 px-2 ${bold ? 'bg-muted font-semibold' : ''} ${indent ? 'pl-6' : ''} border-b border-border/50`}>
@@ -236,7 +244,79 @@ const AnnualReviewReport: React.FC = () => {
           )}
         </TabsContent>
 
-        {/* ───────────── P2–P9 Placeholders ───────────── */}
+        {/* ───────────── P2 ───────────── */}
+        <TabsContent value="p2" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="text-lg">Proforma 2 — Recoverable Position</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {society.name} · FY starts {fromDate} · ({p2CaseCount} cases) · (Rs. exact)
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Link to="/recoverables"><Button variant="outline" size="sm" className="gap-2"><FileText className="h-4 w-4"/>Manage Cases</Button></Link>
+                <Button onClick={handleDownloadP2} size="sm" className="gap-2" disabled={p2CaseCount === 0}><Download className="h-4 w-4" /> Download PDF</Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {p2CaseCount === 0 && (
+                <div className="p-6 text-center text-sm text-muted-foreground">
+                  {hi
+                    ? 'इस FY के लिए कोई वसूली केस नहीं है। "Manage Cases" बटन से जोड़ें।'
+                    : 'No recoverable cases for this FY. Use "Manage Cases" to add entries.'}
+                </div>
+              )}
+              {p2CaseCount > 0 && (
+                <>
+                  <Row sr="A)" label={`Opening balance as on ${fromDate}`} bold />
+                  <Row sr="1" label="Fertilizer & Pesticide Outstanding" amount={p2.opening.fertPesticide / 100000} indent />
+                  <Row sr="2" label="Advances" amount={p2.opening.advance / 100000} indent />
+                  <Row sr="3" label="Embezzlements (If Any)" amount={p2.opening.embezzlement / 100000} indent />
+                  <Row sr="4" label="Others (if any)" amount={p2.opening.other / 100000} indent />
+                  <Row sr="" label="Total (A)" amount={p2.openingTotal / 100000} bold />
+
+                  <Row sr="B)" label="Addition During the Year" bold />
+                  <Row sr="1" label="Fertilizer & Pesticide Outstanding" amount={p2.additions.fertPesticide / 100000} indent />
+                  <Row sr="2" label="Advances" amount={p2.additions.advance / 100000} indent />
+                  <Row sr="3" label="Embezzlements (If Any)" amount={p2.additions.embezzlement / 100000} indent />
+                  <Row sr="4" label="Others (if any)" amount={p2.additions.other / 100000} indent />
+                  <Row sr="" label="Total (B)" amount={p2.additionsTotal / 100000} bold />
+
+                  <Row sr="C)" label="Recovery Made During the Year" bold />
+                  <Row sr="1" label="Fertilizer & Pesticide Outstanding" amount={p2.recoveries.fertPesticide / 100000} indent />
+                  <Row sr="2" label="Advances" amount={p2.recoveries.advance / 100000} indent />
+                  <Row sr="3" label="Embezzlements (If Any)" amount={p2.recoveries.embezzlement / 100000} indent />
+                  <Row sr="4" label="Others (if any)" amount={p2.recoveries.other / 100000} indent />
+                  <Row sr="" label="Total (C)" amount={p2.recoveriesTotal / 100000} bold />
+
+                  <Row sr="D)" label="Balance Recoverables (Closing) — split by Legal Stage" bold />
+                  <Row sr="1" label="Cases with police" amount={p2.legalStage.police / 100000} indent />
+                  <Row sr="2" label="Cases in arbitration" amount={p2.legalStage.arbitration / 100000} indent />
+                  <Row sr="3" label="Cases under execution" amount={p2.legalStage.execution / 100000} indent />
+                  <Row sr="4" label="Award taken but not sent to execution" amount={p2.legalStage.award / 100000} indent />
+                  <Row sr="5" label="Others" indent />
+                  <Row sr="" label="   a) Confirmed" amount={(p2.legalStage.confirmed + p2.legalStage.none) / 100000} indent />
+                  <Row sr="" label="   b) Un-confirmed" amount={p2.legalStage.unconfirmed / 100000} indent />
+                  <Row sr="" label="Total (D)" amount={p2.legalStageTotal / 100000} bold />
+
+                  {Math.abs(p2.closingTotal - p2.legalStageTotal) > 0.01 && (
+                    <Alert variant="destructive" className="m-3">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>
+                        {hi
+                          ? `Section D total (${fmtLacs(p2.legalStageTotal)}) A+B-C (${fmtLacs(p2.closingTotal)}) से मेल नहीं खाता। कानूनी स्थिति जांचें।`
+                          : `Section D total (${fmtLacs(p2.legalStageTotal)}) does not match A+B−C (${fmtLacs(p2.closingTotal)}). Review legal stages.`}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ───────────── P3–P9 Placeholders ───────────── */}
         {PROFORMAS.filter(p => !p.implemented).map(p => (
           <TabsContent key={p.id} value={p.id}>
             <Card>

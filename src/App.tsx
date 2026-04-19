@@ -77,6 +77,7 @@ import MultiSocietyConsolidation from "./pages/MultiSocietyConsolidation";
 import NabardReport from "./pages/NabardReport";
 import FederationReport from "./pages/FederationReport";
 import AnnualReviewReport from "./pages/AnnualReviewReport";
+import RecoverablesRegister from "./pages/RecoverablesRegister";
 import AuditSchedules from "./pages/AuditSchedules";
 import UniversalImporter from "./pages/UniversalImporter";
 import ResetPassword from "./pages/ResetPassword";
@@ -207,6 +208,7 @@ const AppRoutes = () => {
       <Route path="/nabard-report" element={<ProtectedRoute><NabardReport /></ProtectedRoute>} />
       <Route path="/federation-report" element={<ProtectedRoute><FederationReport /></ProtectedRoute>} />
       <Route path="/annual-review" element={<ProtectedRoute><AnnualReviewReport /></ProtectedRoute>} />
+      <Route path="/recoverables" element={<ProtectedRoute><RecoverablesRegister /></ProtectedRoute>} />
       <Route path="/universal-importer" element={<ProtectedRoute><UniversalImporter /></ProtectedRoute>} />
 
       {/* Super Admin (Platform Owner) */}

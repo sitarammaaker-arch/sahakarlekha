@@ -230,6 +230,40 @@ export interface LedgerAccount {
   turnoverBucket?: TurnoverBucket;     // P1 rows 17/18 turnover split
 }
 
+// ── Recoverables (HAFED Proforma 2 — Recoverable Position) ─────────────────
+// Each row = one recoverable case (party-specific outstanding) tracked across FYs.
+// P2 aggregates: opening + additions − recoveries = closing balance,
+// then splits the closing balance by legalStage for Section D.
+export type RecoverableCategory =
+  | 'fertPesticide'  // 1. Fertilizer & Pesticide Outstanding
+  | 'advance'         // 2. Advances
+  | 'embezzlement'    // 3. Embezzlements (If Any)
+  | 'other';          // 4. Others
+
+export type RecoverableLegalStage =
+  | 'none'          // not escalated
+  | 'police'        // Cases with police
+  | 'arbitration'   // Cases in arbitration
+  | 'execution'     // Cases under execution
+  | 'award'         // Award taken but not sent to execution
+  | 'confirmed'     // Others — Confirmed
+  | 'unconfirmed';  // Others — Un-confirmed
+
+export interface Recoverable {
+  id: string;
+  partyName: string;
+  category: RecoverableCategory;
+  legalStage: RecoverableLegalStage;
+  openingBalance: number;   // amount outstanding as at fyStartDate
+  additions: number;        // added during the FY
+  recoveries: number;       // recovered during the FY
+  fyStartDate: string;      // ISO yyyy-mm-dd (e.g. 2025-04-01) — which FY this row is for
+  narration?: string;
+  createdAt: string;
+  isDeleted?: boolean;
+  societyId?: string;
+}
+
 // Separate row in voucher_entries table — one row per Dr/Cr leg
 export interface VoucherEntry {
   id: string;
