@@ -57,12 +57,21 @@ const AnnualReviewReport: React.FC = () => {
 
   const canEdit = hasPermission(['admin', 'accountant']);
 
-  const fyEnd = society.financialYearStart
+  const fyEnd = society.financialYearStart && society.financialYear
     ? `20${society.financialYear.split('-')[1]}-03-31`
     : '';
 
   const [fromDate, setFromDate] = useState(society.financialYearStart || '');
   const [toDate, setToDate] = useState(fyEnd);
+
+  // Sync dates once society loads from Supabase (initial useState fires before load).
+  // Only auto-fill if user hasn't manually picked a date.
+  const [datesManuallyChanged, setDatesManuallyChanged] = useState(false);
+  useEffect(() => {
+    if (datesManuallyChanged) return;
+    if (society.financialYearStart && !fromDate) setFromDate(society.financialYearStart);
+    if (fyEnd && !toDate) setToDate(fyEnd);
+  }, [society.financialYearStart, fyEnd, datesManuallyChanged, fromDate, toDate]);
 
   // ── Manual overrides (P1) ──
   const [manualPatronage, setManualPatronage] = useState('');
@@ -240,14 +249,45 @@ const AnnualReviewReport: React.FC = () => {
         <div className="flex gap-2 items-end">
           <div>
             <Label className="text-xs">From Date</Label>
-            <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-9" />
+            <Input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setDatesManuallyChanged(true); }} className="h-9" />
           </div>
           <div>
             <Label className="text-xs">To Date</Label>
-            <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-9" />
+            <Input type="date" value={toDate} onChange={e => { setToDate(e.target.value); setDatesManuallyChanged(true); }} className="h-9" />
           </div>
         </div>
       </div>
+
+      {/* Diagnostic banner — shows what data is available for the selected date range */}
+      {(() => {
+        const vouchersInRange = (vouchers || []).filter(v => !v.isDeleted && fromDate && toDate && v.date >= fromDate && v.date <= toDate).length;
+        const taggedAccounts  = (accounts || []).filter(a => a.p1IncomeCategory || a.p1ExpenseBucket || a.turnoverBucket).length;
+        const totalAccounts   = (accounts || []).filter(a => !a.isGroup && (a.type === 'income' || a.type === 'expense')).length;
+        const needAttention   = !fromDate || !toDate || vouchersInRange === 0 || taggedAccounts === 0;
+        if (!needAttention) return null;
+        return (
+          <Alert className="mb-4" variant={vouchersInRange === 0 ? 'destructive' : 'default'}>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              <strong>{hi ? 'डेटा डायग्नोस्टिक:' : 'Data diagnostic:'}</strong>
+              <ul className="list-disc pl-4 mt-1 space-y-0.5">
+                {!fromDate && <li>{hi ? 'From Date सेट नहीं है — कृपया चुनें' : 'From Date not set — please select above'}</li>}
+                {!toDate && <li>{hi ? 'To Date सेट नहीं है — कृपया चुनें' : 'To Date not set — please select above'}</li>}
+                {fromDate && toDate && vouchersInRange === 0 && (
+                  <li>{hi
+                    ? `${fromDate} से ${toDate} के बीच कोई voucher नहीं मिला`
+                    : `No vouchers found between ${fromDate} and ${toDate} — P1 income/expenses will be zero`}</li>
+                )}
+                {taggedAccounts === 0 && totalAccounts > 0 && (
+                  <li>{hi
+                    ? `${totalAccounts} income/expense खातों में से कोई भी P1 classification के साथ tagged नहीं है — Ledger Heads → Edit → HAFED Classification dropdown`
+                    : `0 of ${totalAccounts} income/expense accounts are tagged for P1 — go to Ledger Heads → edit accounts → set HAFED Classification dropdown`}</li>
+                )}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        );
+      })()}
 
       <Tabs defaultValue="p1" className="w-full">
         <TabsList className="grid grid-cols-9 w-full mb-4 h-auto">
