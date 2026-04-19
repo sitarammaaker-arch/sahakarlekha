@@ -378,6 +378,8 @@ export interface SocietySettings {
   societyType?: SocietyType;
   sanctionedStrength?: number;   // HAFED Proforma 5 — sanctioned staff strength
   hafedDistrictOffice?: string;   // HAFED Proforma 5/7 — district office name
+  // HAFED Proforma 3 — Financial Result / District Summary
+  businessType?: 'wholesale' | 'retail' | 'both';
   previousFinancialYear?: string;
   previousYearBalances?: Record<string, number>; // accountId → amount (positive = debit, negative = credit)
   previousYearIE?: {            // Saved at FY rollover — I&E comparison column

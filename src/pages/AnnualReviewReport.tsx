@@ -17,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { FileText, Download, AlertTriangle, Construction, Info } from 'lucide-react';
+import { FileText, Download, AlertTriangle, Info } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { calculateP1, CROP_LABELS, EXPENSE_BUCKET_LABELS, TURNOVER_BUCKET_LABELS, fmtLacs } from '@/lib/annualReview/p1Calculator';
 import { generateP1PDF } from '@/lib/annualReview/p1Pdf';
@@ -32,17 +32,21 @@ import { generateP4PDF } from '@/lib/annualReview/p4Pdf';
 import { calculateP8 } from '@/lib/annualReview/p8Calculator';
 import { generateP8PDF } from '@/lib/annualReview/p8Pdf';
 import { generateP7PDF } from '@/lib/annualReview/p7Pdf';
+import { calculateP3Row } from '@/lib/annualReview/p3Calculator';
+import { generateP3PDF } from '@/lib/annualReview/p3Pdf';
+import { calculateP9Row } from '@/lib/annualReview/p9Calculator';
+import { generateP9PDF } from '@/lib/annualReview/p9Pdf';
 
 const PROFORMAS = [
   { id: 'p1', label: 'P1: Income/Expense', implemented: true },
   { id: 'p2', label: 'P2: Recoverables', implemented: true },
-  { id: 'p3', label: 'P3: Financial Result', implemented: false },
+  { id: 'p3', label: 'P3: Financial Result', implemented: true },
   { id: 'p4', label: 'P4: Patronage Rebate', implemented: true },
   { id: 'p5', label: 'P5: Staff & Salary', implemented: true },
   { id: 'p6', label: 'P6: Fixed Assets', implemented: true },
   { id: 'p7', label: 'P7: Rent/Transport', implemented: true },
   { id: 'p8', label: 'P8: Kachi Aarat', implemented: true },
-  { id: 'p9', label: 'P9: District Review', implemented: false },
+  { id: 'p9', label: 'P9: District Review', implemented: true },
 ];
 
 const AnnualReviewReport: React.FC = () => {
@@ -187,6 +191,15 @@ const AnnualReviewReport: React.FC = () => {
     };
     generateP7PDF(entry, society, fromDate);
   };
+
+  // ── P3 — Financial Result (district row) ──
+  const [p3Remarks, setP3Remarks] = useState('');
+  const p3Row = useMemo(() => calculateP3Row({ society, p1, p5, members, remarks: p3Remarks }), [society, p1, p5, members, p3Remarks]);
+  const handleDownloadP3 = () => { generateP3PDF([p3Row], society, society.financialYear); };
+
+  // ── P9 — District Review (district row) ──
+  const p9Row = useMemo(() => calculateP9Row({ society, p1, p5, p8 }), [society, p1, p5, p8]);
+  const handleDownloadP9 = () => { generateP9PDF([p9Row], society, society.financialYear); };
 
   const Row: React.FC<{ sr: string; label: string; amount?: number; bold?: boolean; manual?: React.ReactNode; indent?: boolean }> = ({ sr, label, amount, bold, manual, indent }) => (
     <div className={`grid grid-cols-[60px_1fr_180px] gap-2 py-1.5 px-2 ${bold ? 'bg-muted font-semibold' : ''} ${indent ? 'pl-6' : ''} border-b border-border/50`}>
@@ -909,23 +922,144 @@ const AnnualReviewReport: React.FC = () => {
           </Card>
         </TabsContent>
 
-        {/* ───────────── P3–P9 Placeholders ───────────── */}
-        {PROFORMAS.filter(p => !p.implemented).map(p => (
-          <TabsContent key={p.id} value={p.id}>
-            <Card>
-              <CardContent className="py-16 flex flex-col items-center gap-3 text-center">
-                <Construction className="h-12 w-12 text-muted-foreground" />
-                <p className="font-semibold">{p.label}</p>
-                <Badge variant="secondary">{hi ? 'जल्द आ रहा है' : 'Coming in next phase'}</Badge>
-                <p className="text-xs text-muted-foreground max-w-md">
-                  {hi
-                    ? 'यह प्रोफॉर्मा अगले चरण में लागू किया जाएगा। P1 (Income/Expense) पूर्ण है।'
-                    : 'This proforma will be implemented in the next phase. P1 (Income/Expense) is complete and ready to export.'}
+        {/* ───────────── P3 ───────────── */}
+        <TabsContent value="p3" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="text-lg">Proforma 3 — Financial Result of Cooperative Marketing Societies</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {society.name} · FY {society.financialYear} · (Rs. in Lacs) · Annexure-1
                 </p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        ))}
+              </div>
+              <Button onClick={handleDownloadP3} size="sm" className="gap-2"><Download className="h-4 w-4" /> Download PDF</Button>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Card><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Turnover</p>
+                  <p className="text-lg font-bold">{fmtLacs(p3Row.turnover)} Lacs</p>
+                </CardContent></Card>
+                <Card><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Net P/L</p>
+                  <p className={`text-lg font-bold ${p3Row.netProfitLoss >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmtLacs(p3Row.netProfitLoss)} Lacs</p>
+                </CardContent></Card>
+                <Card><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Admin Exp</p>
+                  <p className="text-lg font-bold">{fmtLacs(p3Row.adminExp)} Lacs</p>
+                </CardContent></Card>
+                <Card><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Members</p>
+                  <p className="text-sm font-bold">F: {p3Row.memberFarmers} · NF: {p3Row.memberNonFarmers}</p>
+                </CardContent></Card>
+              </div>
+
+              {/* Details table preview */}
+              <div className="overflow-x-auto border rounded-lg">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="text-left p-2">Field</th>
+                      <th className="text-left p-2">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-t"><td className="p-2">Society</td><td className="p-2 font-medium">{p3Row.societyName}</td></tr>
+                    <tr className="border-t"><td className="p-2">Sanctioned Strength</td><td className="p-2">{p3Row.sanctionedStrength}</td></tr>
+                    <tr className="border-t"><td className="p-2">Regular Employees</td><td className="p-2">{p3Row.regularEmployees}</td></tr>
+                    <tr className="border-t"><td className="p-2">Outsourced Employees</td><td className="p-2">{p3Row.outsourcedEmployees}</td></tr>
+                    <tr className="border-t"><td className="p-2">Type of Business</td><td className="p-2">{p3Row.businessType}</td></tr>
+                    <tr className="border-t"><td className="p-2">Address</td><td className="p-2">{p3Row.address || '—'}</td></tr>
+                    <tr className="border-t"><td className="p-2">Email</td><td className="p-2">{p3Row.email || '—'}</td></tr>
+                    <tr className="border-t"><td className="p-2">Phone</td><td className="p-2">{p3Row.phone || '—'}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs">{hi ? 'टिप्पणी' : 'Remarks'}</Label>
+                <Input value={p3Remarks} onChange={e => setP3Remarks(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'Optional'} />
+              </div>
+
+              {!society.businessType && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    {hi
+                      ? 'Society Setup में Business Type (Wholesale / Retail / Both) सेट नहीं है।'
+                      : 'Business Type (Wholesale / Retail / Both) is not set. Configure it in Society Setup.'}
+                  </AlertDescription>
+                </Alert>
+              )}
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription className="text-xs">
+                  {hi
+                    ? 'यह प्रोफॉर्मा District Office को भेजा जाता है। जिला-स्तर समेकन (Federation login) Phase 2 में आएगा।'
+                    : 'This proforma is sent to the HAFED District Office. District-wide consolidation (Federation login pulling multiple societies) will arrive in Phase 2.'}
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ───────────── P9 ───────────── */}
+        <TabsContent value="p9" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="text-lg">Proforma 9 — District Review</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {society.name} · FY {society.financialYear}
+                </p>
+              </div>
+              <Button onClick={handleDownloadP9} size="sm" className="gap-2"><Download className="h-4 w-4" /> Download PDF</Button>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4">
+              <div className="overflow-x-auto border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="text-left p-2">Sr.No</th>
+                      <th className="text-left p-2">Society</th>
+                      <th className="text-right p-2">Turnover (Lacs)</th>
+                      <th className="text-right p-2">P/L (Lacs)</th>
+                      <th className="text-center p-2">Employees</th>
+                      <th className="text-right p-2">Turnover/Emp</th>
+                      <th className="text-right p-2">Kachi Aarat Biz</th>
+                      <th className="text-right p-2">Dami: M/Seed</th>
+                      <th className="text-right p-2">Dami: Gram</th>
+                      <th className="text-right p-2">Dami: Barley</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-t">
+                      <td className="p-2">1</td>
+                      <td className="p-2 font-medium">{p9Row.societyName}</td>
+                      <td className="p-2 text-right font-mono">{p9Row.turnoverLacs.toFixed(2)}</td>
+                      <td className={`p-2 text-right font-mono ${p9Row.netProfitLoss >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmtLacs(p9Row.netProfitLoss)}</td>
+                      <td className="p-2 text-center">{p9Row.totalEmployees}</td>
+                      <td className="p-2 text-right font-mono">{p9Row.turnoverPerEmployee.toFixed(2)}</td>
+                      <td className="p-2 text-right font-mono">{p9Row.kachiAaratBusiness.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                      <td className="p-2 text-right font-mono">{p9Row.damiMustardSeed.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                      <td className="p-2 text-right font-mono">{p9Row.damiGram.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                      <td className="p-2 text-right font-mono">{p9Row.damiBarley.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription className="text-xs">
+                  {hi
+                    ? 'Proforma 9 में P1 (Turnover/P/L), P5 (Employees), और P8 (Kachi Aarat) के आंकड़े स्वचालित रूप से एकत्र होते हैं।'
+                    : 'Proforma 9 pulls live figures from P1 (Turnover/P&L), P5 (Employees), and P8 (Kachi Aarat Dami by crop). No manual entry needed.'}
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
