@@ -435,7 +435,24 @@ export interface StockItem {
   valuationMethod?: 'fifo' | 'weighted_avg'; // inventory valuation
   barcodeValue?: string;  // EAN-13 / QR / Code128 barcode
   stockGroup?: string;    // category group (e.g., "Consumer Products", "Fertilizer A/c", "Animal Feed")
+
+  // ── HAFED Proforma 4 (Patronage Rebate) classification ──
+  // Tag a stock item so its qty is summed for the right P4 column.
+  p4Category?: P4StockCategory;
 }
+
+// Stock categories for HAFED Proforma 4 (Patronage Rebate)
+export type P4StockCategory =
+  | 'dap'            // DAP sold
+  | 'urea'           // Urea sold
+  | 'wheatProc'      // Wheat procured
+  | 'barleyProc'     // Barley procured
+  | 'gramProc'       // Gram procured
+  | 'paddyProc'      // Paddy procured (bonus — commonly needed)
+  | 'mustardProc'    // Mustard procured
+  | 'sunflowerProc'  // Sunflower procured
+  | 'otherFert'      // Other fertilizer sold (not DAP/Urea)
+  | 'otherProc';     // Other procurement
 
 // ── Budget ─────────────────────────────────────────────────────────────────────
 export interface BudgetHead {

@@ -17,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { FileText, Download, AlertTriangle, Construction } from 'lucide-react';
+import { FileText, Download, AlertTriangle, Construction, Info } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { calculateP1, CROP_LABELS, EXPENSE_BUCKET_LABELS, TURNOVER_BUCKET_LABELS, fmtLacs } from '@/lib/annualReview/p1Calculator';
 import { generateP1PDF } from '@/lib/annualReview/p1Pdf';
@@ -27,12 +27,14 @@ import { calculateP5 } from '@/lib/annualReview/p5Calculator';
 import { generateP5PDF } from '@/lib/annualReview/p5Pdf';
 import { calculateP6 } from '@/lib/annualReview/p6Calculator';
 import { generateP6PDF } from '@/lib/annualReview/p6Pdf';
+import { calculateP4 } from '@/lib/annualReview/p4Calculator';
+import { generateP4PDF } from '@/lib/annualReview/p4Pdf';
 
 const PROFORMAS = [
   { id: 'p1', label: 'P1: Income/Expense', implemented: true },
   { id: 'p2', label: 'P2: Recoverables', implemented: true },
   { id: 'p3', label: 'P3: Financial Result', implemented: false },
-  { id: 'p4', label: 'P4: Patronage Rebate', implemented: false },
+  { id: 'p4', label: 'P4: Patronage Rebate', implemented: true },
   { id: 'p5', label: 'P5: Staff & Salary', implemented: true },
   { id: 'p6', label: 'P6: Fixed Assets', implemented: true },
   { id: 'p7', label: 'P7: Rent/Transport', implemented: false },
@@ -41,7 +43,7 @@ const PROFORMAS = [
 ];
 
 const AnnualReviewReport: React.FC = () => {
-  const { society, accounts, vouchers, members, employees, recoverables, assets } = useData();
+  const { society, accounts, vouchers, members, employees, recoverables, assets, stockItems, stockMovements } = useData();
   const { language } = useLanguage();
   const { hasPermission } = useAuth();
   const hi = language === 'hi';
@@ -100,6 +102,15 @@ const AnnualReviewReport: React.FC = () => {
   // ── P6 — Fixed Assets ──
   const p6 = useMemo(() => calculateP6(assets || [], society), [assets, society]);
   const handleDownloadP6 = () => { generateP6PDF(p6, society); };
+
+  // ── P4 — Patronage Rebate quantities ──
+  const p4 = useMemo(() => calculateP4({
+    stockItems: stockItems || [],
+    movements: stockMovements || [],
+    fromDate, toDate,
+    societyName: society.name,
+  }), [stockItems, stockMovements, fromDate, toDate, society.name]);
+  const handleDownloadP4 = () => { generateP4PDF(p4, society, fromDate, toDate); };
 
   const Row: React.FC<{ sr: string; label: string; amount?: number; bold?: boolean; manual?: React.ReactNode; indent?: boolean }> = ({ sr, label, amount, bold, manual, indent }) => (
     <div className={`grid grid-cols-[60px_1fr_180px] gap-2 py-1.5 px-2 ${bold ? 'bg-muted font-semibold' : ''} ${indent ? 'pl-6' : ''} border-b border-border/50`}>
@@ -542,6 +553,108 @@ const AnnualReviewReport: React.FC = () => {
                   )}
                 </div>
               ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ───────────── P4 ───────────── */}
+        <TabsContent value="p4" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="text-lg">Proforma 4 — Patronage Rebate (MT)</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {society.name} · {fromDate} to {toDate} · All quantities in MT (Metric Tonnes)
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Link to="/inventory"><Button variant="outline" size="sm" className="gap-2"><FileText className="h-4 w-4"/>Manage Stock Items</Button></Link>
+                <Button onClick={handleDownloadP4} size="sm" className="gap-2"><Download className="h-4 w-4" /> Download PDF</Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4">
+              {/* Govt format — 5-column table */}
+              <div className="overflow-x-auto border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="text-left p-2">S.No</th>
+                      <th className="text-left p-2">{hi ? 'सोसायटी' : 'Society'}</th>
+                      <th className="text-right p-2">DAP Sold (MT)</th>
+                      <th className="text-right p-2">Urea Sold (MT)</th>
+                      <th className="text-right p-2">Wheat Proc. (MT)</th>
+                      <th className="text-right p-2">Barley Proc. (MT)</th>
+                      <th className="text-right p-2">Gram Proc. (MT)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-t">
+                      <td className="p-2">1</td>
+                      <td className="p-2 font-medium">{p4.society}</td>
+                      <td className="p-2 text-right font-mono">{p4.totals.dap.toFixed(2)}</td>
+                      <td className="p-2 text-right font-mono">{p4.totals.urea.toFixed(2)}</td>
+                      <td className="p-2 text-right font-mono">{p4.totals.wheatProc.toFixed(2)}</td>
+                      <td className="p-2 text-right font-mono">{p4.totals.barleyProc.toFixed(2)}</td>
+                      <td className="p-2 text-right font-mono">{p4.totals.gramProc.toFixed(2)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Additional crops — not in the 5-column govt grid but society may have data */}
+              <div>
+                <h3 className="text-sm font-semibold mb-2">{hi ? 'अतिरिक्त' : 'Additional Categories'}</h3>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <Card className="bg-blue-50 dark:bg-blue-950/20"><CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Paddy Proc.</p>
+                    <p className="text-lg font-bold">{p4.totals.paddyProc.toFixed(2)} MT</p>
+                  </CardContent></Card>
+                  <Card className="bg-blue-50 dark:bg-blue-950/20"><CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Mustard Proc.</p>
+                    <p className="text-lg font-bold">{p4.totals.mustardProc.toFixed(2)} MT</p>
+                  </CardContent></Card>
+                  <Card className="bg-blue-50 dark:bg-blue-950/20"><CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Sunflower Proc.</p>
+                    <p className="text-lg font-bold">{p4.totals.sunflowerProc.toFixed(2)} MT</p>
+                  </CardContent></Card>
+                  <Card className="bg-blue-50 dark:bg-blue-950/20"><CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Other Procurement</p>
+                    <p className="text-lg font-bold">{p4.totals.otherProc.toFixed(2)} MT</p>
+                  </CardContent></Card>
+                  <Card className="bg-green-50 dark:bg-green-950/20"><CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Other Fertilizer</p>
+                    <p className="text-lg font-bold">{p4.totals.otherFert.toFixed(2)} MT</p>
+                  </CardContent></Card>
+                </div>
+              </div>
+
+              {/* Untagged warning */}
+              {p4.untaggedItems.length > 0 && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    {hi
+                      ? `${p4.untaggedItems.length} स्टॉक आइटम पर P4 श्रेणी नहीं है — इनकी quantity Proforma 4 में नहीं आएगी।`
+                      : `${p4.untaggedItems.length} stock item(s) have movements but no P4 category — their quantities won't appear in Proforma 4.`}
+                    <ul className="pl-4 mt-1">
+                      {p4.untaggedItems.slice(0, 8).map(it => <li key={it.id}>• {it.name} ({it.unit})</li>)}
+                      {p4.untaggedItems.length > 8 && <li>... and {p4.untaggedItems.length - 8} more</li>}
+                    </ul>
+                    <p className="mt-2 italic">
+                      {hi ? 'ठीक करने के लिए: Inventory → आइटम Edit → HAFED Proforma 4 Category।' : 'Fix: Inventory → Edit item → set HAFED Proforma 4 Category.'}
+                    </p>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription className="text-xs">
+                  {hi
+                    ? 'मात्राएं Inventory → स्टॉक चाल (Stock Movements) से ली जाती हैं। Unit: kg / quintal / MT स्वचालित रूप से MT में बदलती है। bag/piece/liter आदि इकाइयाँ शून्य दिखाएंगी।'
+                    : 'Quantities are pulled from Inventory → Stock Movements within the date range. Units kg / quintal / MT are auto-converted to MT. Items in bag/piece/liter etc. show 0 — set item unit correctly.'}
+                </AlertDescription>
+              </Alert>
             </CardContent>
           </Card>
         </TabsContent>
