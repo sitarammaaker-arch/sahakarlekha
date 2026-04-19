@@ -23,13 +23,15 @@ import { calculateP1, CROP_LABELS, EXPENSE_BUCKET_LABELS, TURNOVER_BUCKET_LABELS
 import { generateP1PDF } from '@/lib/annualReview/p1Pdf';
 import { calculateP2 } from '@/lib/annualReview/p2Calculator';
 import { generateP2PDF } from '@/lib/annualReview/p2Pdf';
+import { calculateP5 } from '@/lib/annualReview/p5Calculator';
+import { generateP5PDF } from '@/lib/annualReview/p5Pdf';
 
 const PROFORMAS = [
   { id: 'p1', label: 'P1: Income/Expense', implemented: true },
   { id: 'p2', label: 'P2: Recoverables', implemented: true },
   { id: 'p3', label: 'P3: Financial Result', implemented: false },
   { id: 'p4', label: 'P4: Patronage Rebate', implemented: false },
-  { id: 'p5', label: 'P5: Staff & Salary', implemented: false },
+  { id: 'p5', label: 'P5: Staff & Salary', implemented: true },
   { id: 'p6', label: 'P6: Fixed Assets', implemented: false },
   { id: 'p7', label: 'P7: Rent/Transport', implemented: false },
   { id: 'p8', label: 'P8: Kachi Aarat', implemented: false },
@@ -88,6 +90,10 @@ const AnnualReviewReport: React.FC = () => {
   const p2 = useMemo(() => calculateP2({ recoverables, fyStartDate: fromDate }), [recoverables, fromDate]);
   const handleDownloadP2 = () => { generateP2PDF(p2, society, fromDate); };
   const p2CaseCount = recoverables.filter(r => !r.isDeleted && r.fyStartDate === fromDate).length;
+
+  // ── P5 — Staff & Salary ──
+  const p5 = useMemo(() => calculateP5(employees || [], society), [employees, society]);
+  const handleDownloadP5 = () => { generateP5PDF(p5, society, society.financialYear); };
 
   const Row: React.FC<{ sr: string; label: string; amount?: number; bold?: boolean; manual?: React.ReactNode; indent?: boolean }> = ({ sr, label, amount, bold, manual, indent }) => (
     <div className={`grid grid-cols-[60px_1fr_180px] gap-2 py-1.5 px-2 ${bold ? 'bg-muted font-semibold' : ''} ${indent ? 'pl-6' : ''} border-b border-border/50`}>
@@ -311,6 +317,114 @@ const AnnualReviewReport: React.FC = () => {
                     </Alert>
                   )}
                 </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ───────────── P5 ───────────── */}
+        <TabsContent value="p5" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="text-lg">Proforma 5 — Staff & Salary</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {society.name} · FY {society.financialYear} · {p5.summary.totalActive} active employees
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Link to="/salary-management"><Button variant="outline" size="sm" className="gap-2"><FileText className="h-4 w-4"/>Manage Staff</Button></Link>
+                <Button onClick={handleDownloadP5} size="sm" className="gap-2" disabled={p5.summary.totalActive === 0}><Download className="h-4 w-4" /> Download PDF</Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4">
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <Card className="bg-primary/5"><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">{hi ? 'स्वीकृत पद' : 'Sanctioned'}</p>
+                  <p className="text-xl font-bold text-primary">{p5.summary.sanctionedStrength}</p>
+                </CardContent></Card>
+                <Card className="bg-green-50 dark:bg-green-950/20"><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">{hi ? 'कुल सक्रिय' : 'Total Active'}</p>
+                  <p className="text-xl font-bold text-green-700">{p5.summary.totalActive}</p>
+                </CardContent></Card>
+                <Card className="bg-blue-50 dark:bg-blue-950/20"><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">{hi ? 'सोसायटी कर्मचारी' : 'Society Employee'}</p>
+                  <p className="text-xl font-bold text-blue-700">{p5.summary.societyEmployees}</p>
+                </CardContent></Card>
+                <Card className="bg-purple-50 dark:bg-purple-950/20"><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">{hi ? 'HAFED डेप्युटेशन' : 'HAFED Deputed'}</p>
+                  <p className="text-xl font-bold text-purple-700">{p5.summary.hafedDeputed}</p>
+                </CardContent></Card>
+                <Card className="bg-amber-50 dark:bg-amber-950/20"><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">{hi ? 'आउटसोर्स' : 'Outsourced'}</p>
+                  <p className="text-xl font-bold text-amber-700">{p5.summary.outsourced}</p>
+                </CardContent></Card>
+              </div>
+
+              {p5.summary.totalActive === 0 ? (
+                <div className="text-center py-6 text-sm text-muted-foreground">
+                  {hi ? 'कोई सक्रिय कर्मचारी नहीं। Salary Management से जोड़ें।' : 'No active employees. Add via Salary Management.'}
+                </div>
+              ) : (
+                <div className="overflow-x-auto border rounded-lg">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted">
+                      <tr>
+                        <th className="text-left p-2">S.No</th>
+                        <th className="text-left p-2">{hi ? 'कर्मचारी' : 'Employee'}</th>
+                        <th className="text-left p-2">{hi ? 'पदनाम' : 'Designation'}</th>
+                        <th className="text-center p-2">Cat.</th>
+                        <th className="text-left p-2">Pay Scale</th>
+                        <th className="text-right p-2">Basic Pay</th>
+                        <th className="text-center p-2">HAFED Dep.</th>
+                        <th className="text-center p-2">Society</th>
+                        <th className="text-center p-2">Outsrc.</th>
+                        <th className="text-right p-2">HAFED Paid</th>
+                        <th className="text-right p-2">%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {p5.rows.map(r => (
+                        <tr key={r.sNo} className="border-t">
+                          <td className="p-2">{r.sNo}</td>
+                          <td className="p-2 font-medium">{r.employeeName}</td>
+                          <td className="p-2">{r.designation}</td>
+                          <td className="p-2 text-center">
+                            <Badge variant="outline" className="text-xs">{r.category}</Badge>
+                          </td>
+                          <td className="p-2">{r.payScale}</td>
+                          <td className="p-2 text-right font-mono">{r.basicPay.toLocaleString('en-IN')}</td>
+                          <td className="p-2 text-center">{r.isHafedDeputed ? '✓' : '—'}</td>
+                          <td className="p-2 text-center">{r.isSocietyEmployee ? '✓' : '—'}</td>
+                          <td className="p-2 text-center">{r.isOutsourced ? '✓' : '—'}</td>
+                          <td className="p-2 text-right font-mono">{r.hafedSalaryPaid ? r.hafedSalaryPaid.toLocaleString('en-IN') : '—'}</td>
+                          <td className="p-2 text-right">{r.hafedSalaryPercent ? `${r.hafedSalaryPercent}%` : '—'}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-t bg-muted font-semibold">
+                        <td className="p-2" colSpan={5}>TOTAL</td>
+                        <td className="p-2 text-right font-mono">{p5.summary.totalBasicPay.toLocaleString('en-IN')}</td>
+                        <td className="p-2 text-center">{p5.summary.hafedDeputed}</td>
+                        <td className="p-2 text-center">{p5.summary.societyEmployees}</td>
+                        <td className="p-2 text-center">{p5.summary.outsourced}</td>
+                        <td className="p-2 text-right font-mono">{p5.summary.totalHafedSalaryPaid.toLocaleString('en-IN')}</td>
+                        <td className="p-2"></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {!society.sanctionedStrength && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    {hi
+                      ? 'स्वीकृत पद संख्या (Sanctioned Strength) सेट नहीं है। Society Setup से सेट करें।'
+                      : 'Sanctioned strength is not set. Please configure in Society Setup.'}
+                  </AlertDescription>
+                </Alert>
               )}
             </CardContent>
           </Card>

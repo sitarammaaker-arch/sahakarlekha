@@ -316,6 +316,8 @@ export interface SocietySettings {
   financialYear: string;
   financialYearStart: string;
   societyType?: SocietyType;
+  sanctionedStrength?: number;   // HAFED Proforma 5 — sanctioned staff strength
+  hafedDistrictOffice?: string;   // HAFED Proforma 5/7 — district office name
   previousFinancialYear?: string;
   previousYearBalances?: Record<string, number>; // accountId → amount (positive = debit, negative = credit)
   previousYearIE?: {            // Saved at FY rollover — I&E comparison column
@@ -595,6 +597,9 @@ export interface Customer {
 // ── Salary ────────────────────────────────────────────────────────────────────
 export type EmployeeStatus = 'active' | 'inactive';
 
+// ── HAFED Proforma 5 (Staff & Salary) classification ──
+export type EmployeeCategory = 'A' | 'B' | 'C' | 'D';
+
 export interface Employee {
   id: string;
   empNo: string;
@@ -606,6 +611,14 @@ export interface Employee {
   phone: string;
   bankAccount?: string;
   status: EmployeeStatus;
+
+  // ── HAFED Proforma 5 fields ──
+  category?: EmployeeCategory;        // A / B / C / D
+  payScale?: string;                   // e.g. "5200-20200 + 2400 GP"
+  isHafedDeputed?: boolean;            // Whether on Deputation from HAFED
+  isOutsourced?: boolean;              // true = outsourced, false = society own employee
+  hafedSalaryPaid?: number;            // Amount of salary paid by HAFED (₹)
+  hafedSalaryPercent?: number;         // % of salary paid by HAFED (0-100)
 }
 
 export interface SalaryRecord {

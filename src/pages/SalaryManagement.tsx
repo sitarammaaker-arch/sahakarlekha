@@ -53,6 +53,13 @@ const EMPTY_EMP_FORM = {
   phone: '',
   bankAccount: '',
   status: 'active' as 'active' | 'inactive',
+  // HAFED Proforma 5 fields
+  category: '' as 'A' | 'B' | 'C' | 'D' | '',
+  payScale: '',
+  isHafedDeputed: false,
+  isOutsourced: false,
+  hafedSalaryPaid: '',
+  hafedSalaryPercent: '',
 };
 
 // ── row state for salary processing ──────────────────────────────────────────
@@ -155,6 +162,50 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ empForm, setEmpForm, hi, on
         </Select>
       </div>
     </div>
+
+    {/* HAFED Proforma 5 fields — amber highlighted section */}
+    <div className="space-y-3 p-3 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20">
+      <p className="text-xs font-semibold uppercase text-amber-900 dark:text-amber-200">
+        {hi ? 'HAFED वार्षिक समीक्षा (Proforma 5)' : 'HAFED Annual Review (Proforma 5)'}
+        <span className="ml-2 text-[10px] font-normal text-muted-foreground">Optional — Marketing Societies</span>
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs">{hi ? 'श्रेणी (Category A/B/C/D)' : 'Category (A/B/C/D)'}</Label>
+          <Select value={empForm.category || '__none__'} onValueChange={v => setEmpForm(f => ({ ...f, category: v === '__none__' ? '' : (v as 'A'|'B'|'C'|'D') }))}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="— None —" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">— None —</SelectItem>
+              <SelectItem value="A">A (Officer)</SelectItem>
+              <SelectItem value="B">B</SelectItem>
+              <SelectItem value="C">C</SelectItem>
+              <SelectItem value="D">D (Class-IV)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">{hi ? 'वेतनमान' : 'Pay Scale'}</Label>
+          <Input value={empForm.payScale} onChange={e => setEmpForm(f => ({ ...f, payScale: e.target.value }))} placeholder="5200-20200 + 2400 GP" />
+        </div>
+        <div className="flex items-center gap-2 col-span-2 sm:col-span-1">
+          <input type="checkbox" id="hafedDeputed" checked={empForm.isHafedDeputed} onChange={e => setEmpForm(f => ({ ...f, isHafedDeputed: e.target.checked }))} className="h-4 w-4" />
+          <Label htmlFor="hafedDeputed" className="text-xs cursor-pointer">{hi ? 'HAFED से डेप्युटेशन पर' : 'On Deputation from HAFED'}</Label>
+        </div>
+        <div className="flex items-center gap-2 col-span-2 sm:col-span-1">
+          <input type="checkbox" id="outsourced" checked={empForm.isOutsourced} onChange={e => setEmpForm(f => ({ ...f, isOutsourced: e.target.checked }))} className="h-4 w-4" />
+          <Label htmlFor="outsourced" className="text-xs cursor-pointer">{hi ? 'आउटसोर्स कर्मचारी' : 'Outsourced Employee'}</Label>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">{hi ? 'HAFED द्वारा भुगतान (₹)' : 'Salary paid by HAFED (₹)'}</Label>
+          <Input type="number" min="0" step="0.01" value={empForm.hafedSalaryPaid} onChange={e => setEmpForm(f => ({ ...f, hafedSalaryPaid: e.target.value }))} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">{hi ? 'HAFED द्वारा %' : '% Salary paid by HAFED'}</Label>
+          <Input type="number" min="0" max="100" step="0.01" value={empForm.hafedSalaryPercent} onChange={e => setEmpForm(f => ({ ...f, hafedSalaryPercent: e.target.value }))} />
+        </div>
+      </div>
+    </div>
+
     <div className="flex justify-end gap-2 pt-2">
       <Button type="button" variant="outline" onClick={onCancel}>
         {hi ? 'रद्द' : 'Cancel'}
@@ -268,6 +319,12 @@ const SalaryManagement: React.FC = () => {
       phone: empForm.phone,
       bankAccount: empForm.bankAccount || undefined,
       status: empForm.status,
+      category: empForm.category || undefined,
+      payScale: empForm.payScale || undefined,
+      isHafedDeputed: empForm.isHafedDeputed || undefined,
+      isOutsourced: empForm.isOutsourced || undefined,
+      hafedSalaryPaid: empForm.hafedSalaryPaid ? Number(empForm.hafedSalaryPaid) : undefined,
+      hafedSalaryPercent: empForm.hafedSalaryPercent ? Number(empForm.hafedSalaryPercent) : undefined,
     });
     toast({ title: hi ? 'कर्मचारी जोड़ा गया' : 'Employee added' });
     setEmpForm(EMPTY_EMP_FORM);
@@ -290,6 +347,12 @@ const SalaryManagement: React.FC = () => {
       phone: empForm.phone,
       bankAccount: empForm.bankAccount || undefined,
       status: empForm.status,
+      category: empForm.category || undefined,
+      payScale: empForm.payScale || undefined,
+      isHafedDeputed: empForm.isHafedDeputed || undefined,
+      isOutsourced: empForm.isOutsourced || undefined,
+      hafedSalaryPaid: empForm.hafedSalaryPaid ? Number(empForm.hafedSalaryPaid) : undefined,
+      hafedSalaryPercent: empForm.hafedSalaryPercent ? Number(empForm.hafedSalaryPercent) : undefined,
     });
     toast({ title: hi ? 'कर्मचारी अपडेट किया गया' : 'Employee updated' });
     setEditEmp(null);
@@ -306,6 +369,12 @@ const SalaryManagement: React.FC = () => {
       phone: emp.phone,
       bankAccount: emp.bankAccount || '',
       status: emp.status,
+      category: emp.category || '',
+      payScale: emp.payScale || '',
+      isHafedDeputed: !!emp.isHafedDeputed,
+      isOutsourced: !!emp.isOutsourced,
+      hafedSalaryPaid: emp.hafedSalaryPaid ? String(emp.hafedSalaryPaid) : '',
+      hafedSalaryPercent: emp.hafedSalaryPercent ? String(emp.hafedSalaryPercent) : '',
     });
   };
 
