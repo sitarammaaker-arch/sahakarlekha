@@ -74,6 +74,7 @@ const reportNavItems: NavItem[] = [
   { key: 'federationReport', icon: ScrollText, path: '/federation-report' },
   { key: 'annualReview', icon: ScrollText, path: '/annual-review' },
   { key: 'recoverables', icon: ScrollText, path: '/recoverables' },
+  { key: 'kachiAarat', icon: ScrollText, path: '/kachi-aarat' },
 ];
 
 const registerNavItems: NavItem[] = [

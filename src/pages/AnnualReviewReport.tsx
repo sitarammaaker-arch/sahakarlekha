@@ -29,6 +29,8 @@ import { calculateP6 } from '@/lib/annualReview/p6Calculator';
 import { generateP6PDF } from '@/lib/annualReview/p6Pdf';
 import { calculateP4 } from '@/lib/annualReview/p4Calculator';
 import { generateP4PDF } from '@/lib/annualReview/p4Pdf';
+import { calculateP8 } from '@/lib/annualReview/p8Calculator';
+import { generateP8PDF } from '@/lib/annualReview/p8Pdf';
 
 const PROFORMAS = [
   { id: 'p1', label: 'P1: Income/Expense', implemented: true },
@@ -38,12 +40,12 @@ const PROFORMAS = [
   { id: 'p5', label: 'P5: Staff & Salary', implemented: true },
   { id: 'p6', label: 'P6: Fixed Assets', implemented: true },
   { id: 'p7', label: 'P7: Rent/Transport', implemented: false },
-  { id: 'p8', label: 'P8: Kachi Aarat', implemented: false },
+  { id: 'p8', label: 'P8: Kachi Aarat', implemented: true },
   { id: 'p9', label: 'P9: District Review', implemented: false },
 ];
 
 const AnnualReviewReport: React.FC = () => {
-  const { society, accounts, vouchers, members, employees, recoverables, assets, stockItems, stockMovements } = useData();
+  const { society, accounts, vouchers, members, employees, recoverables, assets, stockItems, stockMovements, kachiAaratEntries } = useData();
   const { language } = useLanguage();
   const { hasPermission } = useAuth();
   const hi = language === 'hi';
@@ -111,6 +113,14 @@ const AnnualReviewReport: React.FC = () => {
     societyName: society.name,
   }), [stockItems, stockMovements, fromDate, toDate, society.name]);
   const handleDownloadP4 = () => { generateP4PDF(p4, society, fromDate, toDate); };
+
+  // ── P8 — Kachi Aarat ──
+  const p8 = useMemo(() => calculateP8({
+    entries: kachiAaratEntries || [],
+    fyStartDate: fromDate,
+    societyName: society.name,
+  }), [kachiAaratEntries, fromDate, society.name]);
+  const handleDownloadP8 = () => { generateP8PDF(p8, society, fromDate); };
 
   const Row: React.FC<{ sr: string; label: string; amount?: number; bold?: boolean; manual?: React.ReactNode; indent?: boolean }> = ({ sr, label, amount, bold, manual, indent }) => (
     <div className={`grid grid-cols-[60px_1fr_180px] gap-2 py-1.5 px-2 ${bold ? 'bg-muted font-semibold' : ''} ${indent ? 'pl-6' : ''} border-b border-border/50`}>
@@ -655,6 +665,81 @@ const AnnualReviewReport: React.FC = () => {
                     : 'Quantities are pulled from Inventory → Stock Movements within the date range. Units kg / quintal / MT are auto-converted to MT. Items in bag/piece/liter etc. show 0 — set item unit correctly.'}
                 </AlertDescription>
               </Alert>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ───────────── P8 ───────────── */}
+        <TabsContent value="p8" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="text-lg">Proforma 8 — Kachi Aarat</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {society.name} · FY starts {fromDate} · ({p8.entryCount} entries)
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Link to="/kachi-aarat"><Button variant="outline" size="sm" className="gap-2"><FileText className="h-4 w-4"/>Manage Entries</Button></Link>
+                <Button onClick={handleDownloadP8} size="sm" className="gap-2" disabled={p8.entryCount === 0}><Download className="h-4 w-4" /> Download PDF</Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4">
+              {/* Govt main table */}
+              <div className="overflow-x-auto border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="text-left p-2">S.No</th>
+                      <th className="text-left p-2">{hi ? 'सोसायटी का नाम' : 'Name of CMS'}</th>
+                      <th className="text-right p-2">{hi ? 'व्यापार मूल्य (₹)' : 'Value of Business (₹)'}</th>
+                      <th className="text-right p-2">{hi ? 'दामी अर्जित (₹)' : 'Dami Earned (₹)'}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-t">
+                      <td className="p-2">1</td>
+                      <td className="p-2 font-medium">{p8.society}</td>
+                      <td className="p-2 text-right font-mono">{p8.totalBusinessValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      <td className="p-2 text-right font-mono">{p8.totalDamiEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Crop split (for P9 input) */}
+              <div>
+                <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                  {hi ? 'फसल-वार दामी विभाजन' : 'Dami Earned — Split by Crop'}
+                  <Badge variant="outline" className="text-[10px]">for Proforma 9</Badge>
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {(['mustardSeed','gram','barley','wheat','paddy','other'] as const).map(crop => (
+                    <Card key={crop}><CardContent className="p-3">
+                      <p className="text-xs text-muted-foreground capitalize">{crop === 'mustardSeed' ? 'Mustard Seed' : crop}</p>
+                      <p className="text-sm">
+                        <span className="text-muted-foreground">Business: </span>
+                        <span className="font-mono">{p8.businessByCrop[crop].toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                      </p>
+                      <p className="text-sm">
+                        <span className="text-muted-foreground">Dami: </span>
+                        <span className="font-mono font-semibold text-green-700">{p8.damiByCrop[crop].toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                      </p>
+                    </CardContent></Card>
+                  ))}
+                </div>
+              </div>
+
+              {p8.entryCount === 0 && (
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    {hi
+                      ? 'कोई कच्ची आढ़त एंट्री नहीं। "Manage Entries" बटन से जोड़ें।'
+                      : 'No Kachi Aarat entries yet. Use "Manage Entries" to add transactions (one row per farmer/crop).'}
+                  </AlertDescription>
+                </Alert>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -274,6 +274,33 @@ export interface Recoverable {
   societyId?: string;
 }
 
+// ── Kachi Aarat (HAFED Proforma 8) ─────────────────────────────────────────
+// Each row = a transaction or yearly summary where society acted as
+// Kachi Aarat (commission agent) for a farmer in the mandi.
+// P8 sums businessValue + damiEarned per FY.
+// P9 needs dami split by crop (Mustard Seed, Gram, Barley).
+export type KachiAaratCrop =
+  | 'mustardSeed'  // M/Seed
+  | 'gram'         // Gram
+  | 'barley'       // Barley
+  | 'wheat'
+  | 'paddy'
+  | 'other';
+
+export interface KachiAaratEntry {
+  id: string;
+  date: string;              // ISO yyyy-mm-dd
+  fyStartDate: string;       // which FY this row is for (e.g. 2024-04-01)
+  crop: KachiAaratCrop;
+  partyName?: string;        // farmer name (optional)
+  businessValue: number;     // total ₹ value of business done
+  damiEarned: number;        // ₹ commission earned (before farmer rebate)
+  narration?: string;
+  createdAt: string;
+  isDeleted?: boolean;
+  societyId?: string;
+}
+
 // Separate row in voucher_entries table — one row per Dr/Cr leg
 export interface VoucherEntry {
   id: string;

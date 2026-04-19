@@ -4,7 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import type {
   Voucher, VoucherEditSnapshot, VoucherLine, Member, LedgerAccount, SocietySettings,
   AccountBalance, CashBookEntry, BankBookEntry, MemberLedgerEntry, ReceiptsPaymentsData,
-  Loan, Asset, AuditObjection, Recoverable,
+  Loan, Asset, AuditObjection, Recoverable, KachiAaratEntry,
   StockItem, StockMovement,
   Sale, Purchase,
   Employee, SalaryRecord, PaymentMode,
@@ -45,6 +45,12 @@ interface DataContextType {
   addRecoverable: (data: Omit<Recoverable, 'id' | 'createdAt'>) => Recoverable;
   updateRecoverable: (id: string, data: Partial<Recoverable>) => void;
   deleteRecoverable: (id: string) => void;
+
+  // Kachi Aarat (HAFED Proforma 8)
+  kachiAaratEntries: KachiAaratEntry[];
+  addKachiAaratEntry: (data: Omit<KachiAaratEntry, 'id' | 'createdAt'>) => KachiAaratEntry;
+  updateKachiAaratEntry: (id: string, data: Partial<KachiAaratEntry>) => void;
+  deleteKachiAaratEntry: (id: string) => void;
 
   addMember: (data: Omit<Member, 'id'>) => Member;
   updateMember: (id: string, data: Partial<Member>) => void;
@@ -174,6 +180,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [recoverables, setRecoverablesState] = useState<Recoverable[]>([]);
   const recoverablesRef = useRef<Recoverable[]>(recoverables);
   useEffect(() => { recoverablesRef.current = recoverables; }, [recoverables]);
+  const [kachiAaratEntries, setKachiAaratEntriesState] = useState<KachiAaratEntry[]>([]);
+  const kachiAaratEntriesRef = useRef<KachiAaratEntry[]>(kachiAaratEntries);
+  useEffect(() => { kachiAaratEntriesRef.current = kachiAaratEntries; }, [kachiAaratEntries]);
   const [stockItems, setStockItemsState] = useState<StockItem[]>([]);
   const [stockMovements, setStockMovementsState] = useState<StockMovement[]>([]);
   const [sales, setSalesState] = useState<Sale[]>([]);
@@ -209,7 +218,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
     setSuppliersState([]); setCustomersState([]);
-    setRecoverablesState([]);
+    setRecoverablesState([]); setKachiAaratEntriesState([]);
 
     const loadFromSupabase = async () => {
       try {
@@ -219,7 +228,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           { data: siData }, { data: smData }, { data: slData },
           { data: puData }, { data: emData }, { data: srData },
           { data: socData }, { data: supData }, { data: cusData },
-          { data: kccData }, { data: recData },
+          { data: kccData }, { data: recData }, { data: kaData },
         ] = await Promise.all([
           supabase.from('vouchers').select('*').eq('society_id', sid).order('createdAt'),
           supabase.from('members').select('*').eq('society_id', sid),
@@ -238,6 +247,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           supabase.from('customers').select('*').eq('society_id', sid),
           supabase.from('kcc_loans').select('*').eq('society_id', sid),
           supabase.from('recoverables').select('*').eq('society_id', sid).order('createdAt'),
+          supabase.from('kachi_aarat_entries').select('*').eq('society_id', sid).order('createdAt'),
         ]);
 
         if (vErr) console.warn('Vouchers query error:', vErr.message);
@@ -300,6 +310,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setCustomersState(cusData || []);
         setKccLoansState(kccData || []);
         setRecoverablesState(recData || []);
+        setKachiAaratEntriesState(kaData || []);
 
         // ── One-time voucher_entries migration ──────────────────────────────
         // For any existing voucher that has no entries in voucher_entries yet,
@@ -635,6 +646,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     setRecoverablesState(prev => prev.filter(r => r.id !== id));
     supabase.from('recoverables').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+  }, []);
+
+  // ── Kachi Aarat (HAFED Proforma 8) ─────────────────────────────────────────
+  const addKachiAaratEntry = useCallback((data: Omit<KachiAaratEntry, 'id' | 'createdAt'>): KachiAaratEntry => {
+    const newEntry: KachiAaratEntry = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    kachiAaratEntriesRef.current = [...kachiAaratEntriesRef.current, newEntry];
+    setKachiAaratEntriesState(prev => [...prev, newEntry]);
+    supabase.from('kachi_aarat_entries').upsert(withSoc(newEntry)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    return newEntry;
+  }, []);
+
+  const updateKachiAaratEntry = useCallback((id: string, data: Partial<KachiAaratEntry>) => {
+    setKachiAaratEntriesState(prev => {
+      const updated = prev.map(e => e.id === id ? { ...e, ...data } : e);
+      const upd = updated.find(e => e.id === id);
+      if (upd) supabase.from('kachi_aarat_entries').upsert(withSoc(upd)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+      return updated;
+    });
+  }, []);
+
+  const deleteKachiAaratEntry = useCallback((id: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    setKachiAaratEntriesState(prev => prev.filter(e => e.id !== id));
+    supabase.from('kachi_aarat_entries').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
   }, []);
 
   const addMember = useCallback((data: Omit<Member, 'id'>): Member => {
@@ -1989,6 +2024,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addAsset, updateAsset, deleteAsset, postDepreciation,
       addAuditObjection, updateAuditObjection, deleteAuditObjection,
       recoverables, addRecoverable, updateRecoverable, deleteRecoverable,
+      kachiAaratEntries, addKachiAaratEntry, updateKachiAaratEntry, deleteKachiAaratEntry,
       addStockItem, updateStockItem, deleteStockItem, addStockMovement,
       addSale, deleteSale,
       addPurchase, deletePurchase,

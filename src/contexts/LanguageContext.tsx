@@ -69,6 +69,7 @@ export const translations: Translations = {
   federationReport: { hi: 'सहकारी वार्षिक विवरणी', en: 'Federation Annual Return' },
   annualReview: { hi: 'वार्षिक समीक्षा (HAFED)', en: 'Annual Review (HAFED)' },
   recoverables: { hi: 'वसूली योग्य रजिस्टर', en: 'Recoverables Register' },
+  kachiAarat: { hi: 'कच्ची आढ़त रजिस्टर', en: 'Kachi Aarat Register' },
   operations: { hi: 'संचालन', en: 'Operations' },
   ledgerHeads: { hi: 'खाता शीर्ष', en: 'Ledger Heads' },
   inventory: { hi: 'माल भंडार', en: 'Inventory' },
