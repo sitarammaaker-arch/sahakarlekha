@@ -14,6 +14,7 @@ import LandingPage from "./pages/LandingPage";
 import ContactUs from "./pages/ContactUs";
 import AboutUs from "./pages/AboutUs";
 import FAQ from "./pages/FAQ";
+import UserGuide from "./pages/UserGuide";
 import Pricing from "./pages/Pricing";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -140,6 +141,8 @@ const AppRoutes = () => {
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsConditions />} />
       <Route path="/faq" element={<FAQ />} />
+      <Route path="/guide" element={<UserGuide />} />
+      <Route path="/help" element={<UserGuide />} />
       <Route path="/pricing" element={<Pricing />} />
 
       {/* Protected Routes */}

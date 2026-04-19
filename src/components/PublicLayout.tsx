@@ -90,6 +90,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
               <ul className="space-y-1 text-sm">
                 <li><Link to="/about" className="text-muted-foreground hover:text-primary transition-colors">About Us / हमारे बारे में</Link></li>
                 <li><Link to="/pricing" className="text-muted-foreground hover:text-primary transition-colors">Pricing / मूल्य</Link></li>
+                <li><Link to="/guide" className="text-muted-foreground hover:text-primary transition-colors">How-To Guide / उपयोग गाइड</Link></li>
                 <li><Link to="/faq" className="text-muted-foreground hover:text-primary transition-colors">FAQ / सामान्य प्रश्न</Link></li>
                 <li><Link to="/contact" className="text-muted-foreground hover:text-primary transition-colors">Contact / संपर्क</Link></li>
                 <li><Link to="/privacy" className="text-muted-foreground hover:text-primary transition-colors">Privacy Policy / गोपनीयता</Link></li>
