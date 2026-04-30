@@ -76,9 +76,11 @@ export default function UserManagement() {
   const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
+      const societyId = currentUser?.societyId;
       const { data, error } = await supabase
         .from('society_users')
         .select('id, name, email, role, is_active, society_id, created_at, password')
+        .eq('society_id', societyId)
         .order('created_at', { ascending: true });
 
       if (!error && data && data.length > 0) {
