@@ -351,20 +351,6 @@ export default function UserManagement() {
         </CardContent>
       </Card>
 
-      {/* Info note */}
-      <Card className="border-blue-200 bg-blue-50">
-        <CardContent className="pt-4">
-          <p className="text-sm text-blue-800 flex items-start gap-2">
-            <Lock className="h-4 w-4 mt-0.5 shrink-0" />
-            <span>
-              {hi
-                ? 'यहाँ बनाए गए उपयोगकर्ता Supabase society_users तालिका में सहेजे जाते हैं और तुरंत लॉगिन कर सकते हैं। Supabase Auth (ईमेल reset) के लिए उन्हें Dashboard → Authentication में भी जोड़ें।'
-                : 'Users created here are saved to the Supabase society_users table and can log in immediately. For email-based password reset, also add them in Dashboard → Authentication.'}
-            </span>
-          </p>
-        </CardContent>
-      </Card>
-
       {/* Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-md">
