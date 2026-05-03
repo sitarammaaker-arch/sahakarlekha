@@ -576,7 +576,7 @@ const Vouchers: React.FC = () => {
                         <div className="space-y-2">
                           <Label className="text-base font-semibold">{t('amount')} (₹)</Label>
                           <Input
-                            type="number"
+                            type="number" step="any"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
                             placeholder="0"
@@ -799,7 +799,7 @@ const Vouchers: React.FC = () => {
                                   </td>
                                   <td className="py-1 px-1">
                                     <Input
-                                      type="number"
+                                      type="number" step="any"
                                       value={line.amount}
                                       onChange={e => handleLineChange(line.id, 'amount', e.target.value)}
                                       placeholder="0"
@@ -860,7 +860,7 @@ const Vouchers: React.FC = () => {
                     <div className="space-y-2">
                       <Label className="text-base font-semibold">{t('amount')} (₹)</Label>
                       <Input
-                        type="number"
+                        type="number" step="any"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
                         placeholder="0"
