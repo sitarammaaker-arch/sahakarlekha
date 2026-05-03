@@ -1089,7 +1089,7 @@ const Vouchers: React.FC = () => {
             </div>
             <div className="space-y-1.5">
               <Label>{t('amount')} (₹)</Label>
-              <Input type="number" value={editAmount} onChange={e => setEditAmount(e.target.value)} min="1" className="h-10 text-lg font-bold text-center" />
+              <Input type="number" step="any" value={editAmount} onChange={e => setEditAmount(e.target.value)} min="1" className="h-10 text-lg font-bold text-center" />
             </div>
             <div className="space-y-1.5">
               <Label>{t('narration')}</Label>
