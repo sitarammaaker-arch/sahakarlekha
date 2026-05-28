@@ -26,38 +26,12 @@ export const GLOBAL_SHORTCUTS: Omit<Shortcut, 'action'>[] = [
   { key: 'Alt+R', path: '/reports',        description: 'Reports',            descriptionHi: 'रिपोर्ट' },
 ];
 
-export function useKeyboardShortcuts(onToggleHelp?: () => void) {
-  const navigate = useNavigate();
-
-  const handler = useCallback((e: KeyboardEvent) => {
-    // Don't fire shortcuts when typing in inputs/textareas/selects
-    const tag = (e.target as HTMLElement)?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
-    // Build key combo string
-    const combo = [
-      e.altKey ? 'Alt' : '',
-      e.ctrlKey ? 'Ctrl' : '',
-      e.shiftKey ? 'Shift' : '',
-      e.key,
-    ].filter(Boolean).join('+');
-
-    // Toggle shortcut help with Ctrl+?
-    if (combo === 'Ctrl+?' || combo === 'Ctrl+/') {
-      e.preventDefault();
-      onToggleHelp?.();
-      return;
-    }
-
-    const match = GLOBAL_SHORTCUTS.find(s => s.key === combo || s.key === e.key);
-    if (match?.path) {
-      e.preventDefault();
-      navigate(match.path);
-    }
-  }, [navigate, onToggleHelp]);
-
-  useEffect(() => {
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [handler]);
+export function useKeyboardShortcuts(_onToggleHelp?: () => void) {
+  // Global keyboard shortcuts disabled — F-keys / Alt combos were colliding
+  // with browser defaults (F5 refresh, F11 fullscreen, F12 devtools, Alt+D
+  // address bar, etc). Keep the hook as a no-op so existing call sites stay
+  // valid; the GLOBAL_SHORTCUTS list above is retained for documentation.
+  useNavigate(); // preserves the hook-rules contract
+  useEffect(() => { /* no listener registered */ }, []);
+  useCallback(() => {}, []);
 }
