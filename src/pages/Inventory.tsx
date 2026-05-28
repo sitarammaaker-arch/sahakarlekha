@@ -1120,7 +1120,7 @@ const Inventory: React.FC = () => {
           if (!o) resetItemForm();
         }}
       >
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{hi ? 'नई स्टॉक वस्तु जोड़ें' : 'Add New Stock Item'}</DialogTitle>
             <DialogDescription>
@@ -1154,7 +1154,7 @@ const Inventory: React.FC = () => {
           }
         }}
       >
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{hi ? 'वस्तु संपादित करें' : 'Edit Stock Item'}</DialogTitle>
             <DialogDescription>
