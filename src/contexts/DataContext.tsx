@@ -1678,10 +1678,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       : (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303');
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
 
-    // Cr: Sales A/c (4101) for net amount (excluding GST)
+    // Cr: Sales A/c — split by each item's salesAccountId so multi-product societies
+    // get per-category lines in TB / Trading A/c. Falls back to '4101' for unmapped items.
     const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0));
     if (netAmt > 0) {
-      lines.push({ id: lid(), accountId: '4101', type: 'Cr', amount: netAmt });
+      const totalItemAmount = data.items.reduce((s, it) => s + it.amount, 0) || 1;
+      const salesAccBuckets = new Map<string, number>();
+      data.items.forEach(it => {
+        const stock = stockItems.find(s => s.id === it.itemId);
+        const acc = stock?.salesAccountId || '4101';
+        // Pro-rate net amount by item value share (handles discount + tax-exclusive routing)
+        const itemNet = (it.amount / totalItemAmount) * netAmt;
+        salesAccBuckets.set(acc, (salesAccBuckets.get(acc) || 0) + itemNet);
+      });
+      salesAccBuckets.forEach((amt, accId) => {
+        const rounded = Math.round(amt * 100) / 100;
+        if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: rounded });
+      });
     }
 
     // Cr: GST Output Payable (2201) for tax amount
@@ -1855,7 +1868,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0));
     if (netAmt > 0) {
-      lines.push({ id: lid(), accountId: '4101', type: 'Cr', amount: netAmt });
+      // Split by each item's salesAccountId (same logic as addSale)
+      const totalItemAmount = data.items.reduce((s, it) => s + it.amount, 0) || 1;
+      const salesAccBuckets = new Map<string, number>();
+      data.items.forEach(it => {
+        const stock = stockItems.find(s => s.id === it.itemId);
+        const acc = stock?.salesAccountId || '4101';
+        const itemNet = (it.amount / totalItemAmount) * netAmt;
+        salesAccBuckets.set(acc, (salesAccBuckets.get(acc) || 0) + itemNet);
+      });
+      salesAccBuckets.forEach((amt, accId) => {
+        const rounded = Math.round(amt * 100) / 100;
+        if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: rounded });
+      });
     }
     if ((data.taxAmount ?? 0) > 0) {
       lines.push({ id: lid(), accountId: '2201', type: 'Cr', amount: data.taxAmount!, narration: `GST: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
@@ -1927,10 +1952,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       : data.paymentMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
       : supplierAccId;
 
-    // Dr: Purchases (5101) for net amount
+    // Dr: Purchases A/c — split by each item's purchaseAccountId so multi-product
+    // societies get per-category lines. Falls back to '5101' for unmapped items.
     const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0) + (data.tdsAmount || 0));
     if (netAmt > 0) {
-      lines.push({ id: lid(), accountId: '5101', type: 'Dr', amount: netAmt });
+      const totalItemAmount = data.items.reduce((s, it) => s + it.amount, 0) || 1;
+      const purchaseAccBuckets = new Map<string, number>();
+      data.items.forEach(it => {
+        const stock = stockItems.find(s => s.id === it.itemId);
+        const acc = stock?.purchaseAccountId || '5101';
+        const itemNet = (it.amount / totalItemAmount) * netAmt;
+        purchaseAccBuckets.set(acc, (purchaseAccBuckets.get(acc) || 0) + itemNet);
+      });
+      purchaseAccBuckets.forEach((amt, accId) => {
+        const rounded = Math.round(amt * 100) / 100;
+        if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Dr', amount: rounded });
+      });
     }
 
     // Dr: GST Input Credit (3310) for tax amount
@@ -2119,7 +2156,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0) + (data.tdsAmount || 0));
     if (netAmt > 0) {
-      lines.push({ id: lid(), accountId: '5101', type: 'Dr', amount: netAmt });
+      // Split by each item's purchaseAccountId (same logic as addPurchase)
+      const totalItemAmount = data.items.reduce((s, it) => s + it.amount, 0) || 1;
+      const purchaseAccBuckets = new Map<string, number>();
+      data.items.forEach(it => {
+        const stock = stockItems.find(s => s.id === it.itemId);
+        const acc = stock?.purchaseAccountId || '5101';
+        const itemNet = (it.amount / totalItemAmount) * netAmt;
+        purchaseAccBuckets.set(acc, (purchaseAccBuckets.get(acc) || 0) + itemNet);
+      });
+      purchaseAccBuckets.forEach((amt, accId) => {
+        const rounded = Math.round(amt * 100) / 100;
+        if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Dr', amount: rounded });
+      });
     }
     if ((data.taxAmount ?? 0) > 0) {
       lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: data.taxAmount!, narration: `GST ITC: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });

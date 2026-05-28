@@ -487,6 +487,12 @@ export interface StockItem {
   valuationMethod?: 'fifo' | 'weighted_avg'; // inventory valuation
   barcodeValue?: string;  // EAN-13 / QR / Code128 barcode
   stockGroup?: string;    // category group (e.g., "Consumer Products", "Fertilizer A/c", "Animal Feed")
+  // Per-item ledger account routing — controls which income/expense account the sale or
+  // purchase posts to. If unset, falls back to '4101' (Sales) / '5101' (Purchases). This
+  // lets multi-product societies see separate Sales/Purchase lines in Trial Balance,
+  // Trading A/c and I&E for each category (Fertilizer, Sugar, Consumer Goods, etc.).
+  salesAccountId?: string;     // credit account on sale (under parent 4100 ideally)
+  purchaseAccountId?: string;  // debit account on purchase (under parent 5100 ideally)
 
   // ── HAFED Proforma 4 (Patronage Rebate) classification ──
   // Tag a stock item so its qty is summed for the right P4 column.

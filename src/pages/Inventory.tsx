@@ -57,6 +57,8 @@ const EMPTY_ITEM_FORM = {
   isActive: true,
   barcodeValue: '',
   stockGroup: '',
+  salesAccountId: '',     // empty → '4101' default at posting time
+  purchaseAccountId: '',  // empty → '5101' default at posting time
   p4Category: '' as '' | 'dap' | 'urea' | 'wheatProc' | 'barleyProc' | 'gramProc' | 'paddyProc' | 'mustardProc' | 'sunflowerProc' | 'otherFert' | 'otherProc',
 };
 
@@ -137,9 +139,11 @@ interface ItemFormProps {
   submitLabel: string;
   onCancel: () => void;
   existingGroups?: string[];
+  salesAccounts?: { id: string; name: string; nameHi: string }[];
+  purchaseAccounts?: { id: string; name: string; nameHi: string }[];
 }
 
-const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit, submitLabel, onCancel, existingGroups = [] }) => (
+const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit, submitLabel, onCancel, existingGroups = [], salesAccounts = [], purchaseAccounts = [] }) => (
   <form onSubmit={e => e.preventDefault()} className="space-y-4">
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div className="space-y-2">
@@ -222,6 +226,44 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
       existingGroups={existingGroups}
       hi={hi}
     />
+
+    {/* Sales / Purchase ledger account routing — controls which TB / Trading A/c line
+        this item posts to. Default ('— Auto —') = '4101' / '5101'. */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-lg border bg-blue-50/40 dark:bg-blue-950/20">
+      <div className="space-y-2">
+        <Label className="text-xs font-semibold uppercase text-blue-900 dark:text-blue-200">
+          {hi ? 'बिक्री खाता' : 'Sales A/c'}
+          <span className="ml-2 text-[10px] font-normal text-muted-foreground">Optional</span>
+        </Label>
+        <select
+          value={itemForm.salesAccountId || ''}
+          onChange={e => setItemForm(f => ({ ...f, salesAccountId: e.target.value }))}
+          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="">{hi ? '— Auto (4101) —' : '— Auto (4101) —'}</option>
+          {salesAccounts.map(a => (
+            <option key={a.id} value={a.id}>{a.id} — {hi ? a.nameHi : a.name}</option>
+          ))}
+        </select>
+      </div>
+      <div className="space-y-2">
+        <Label className="text-xs font-semibold uppercase text-blue-900 dark:text-blue-200">
+          {hi ? 'खरीद खाता' : 'Purchase A/c'}
+          <span className="ml-2 text-[10px] font-normal text-muted-foreground">Optional</span>
+        </Label>
+        <select
+          value={itemForm.purchaseAccountId || ''}
+          onChange={e => setItemForm(f => ({ ...f, purchaseAccountId: e.target.value }))}
+          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="">{hi ? '— Auto (5101) —' : '— Auto (5101) —'}</option>
+          {purchaseAccounts.map(a => (
+            <option key={a.id} value={a.id}>{a.id} — {hi ? a.nameHi : a.name}</option>
+          ))}
+        </select>
+      </div>
+    </div>
+
     <div className="space-y-2">
       <Label>{hi ? 'बारकोड / EAN' : 'Barcode / EAN'}</Label>
       <Input
@@ -350,12 +392,27 @@ const Inventory: React.FC = () => {
   const {
     stockItems,
     stockMovements,
+    accounts,
     addStockItem,
     updateStockItem,
     deleteStockItem,
     addStockMovement,
     getEntityLinks,
   } = useData();
+
+  // Sales income accounts (parent 4100) and Purchases/Direct-expense accounts (parent 5100).
+  // Shown in the per-item A/c dropdowns so user can route each stock item to its own ledger
+  // line in Trial Balance / Trading A/c / I&E (e.g. Sugar → 4103, Fertilizer → 4101).
+  const salesAccounts = useMemo(
+    () => accounts.filter(a => a.parentId === '4100' && !a.isGroup)
+      .map(a => ({ id: a.id, name: a.name, nameHi: a.nameHi })),
+    [accounts],
+  );
+  const purchaseAccounts = useMemo(
+    () => accounts.filter(a => a.parentId === '5100' && !a.isGroup)
+      .map(a => ({ id: a.id, name: a.name, nameHi: a.nameHi })),
+    [accounts],
+  );
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -523,6 +580,8 @@ const Inventory: React.FC = () => {
       isActive: item.isActive ?? true,
       barcodeValue: item.barcodeValue || '',
       stockGroup: item.stockGroup || '',
+      salesAccountId: item.salesAccountId || '',
+      purchaseAccountId: item.purchaseAccountId || '',
       p4Category: (item.p4Category || '') as '' | 'dap' | 'urea' | 'wheatProc' | 'barleyProc' | 'gramProc' | 'paddyProc' | 'mustardProc' | 'sunflowerProc' | 'otherFert' | 'otherProc',
     });
   };
@@ -546,6 +605,8 @@ const Inventory: React.FC = () => {
       isActive: itemForm.isActive,
       ...(itemForm.barcodeValue.trim() ? { barcodeValue: itemForm.barcodeValue.trim() } : {}),
       ...(itemForm.stockGroup.trim() ? { stockGroup: itemForm.stockGroup.trim() } : {}),
+      ...(itemForm.salesAccountId ? { salesAccountId: itemForm.salesAccountId } : {}),
+      ...(itemForm.purchaseAccountId ? { purchaseAccountId: itemForm.purchaseAccountId } : {}),
       ...(itemForm.p4Category ? { p4Category: itemForm.p4Category } : {}),
     });
     toast({ title: hi ? 'वस्तु जोड़ी गई' : 'Item added successfully' });
@@ -571,6 +632,8 @@ const Inventory: React.FC = () => {
       isActive: f.isActive,
       barcodeValue: f.barcodeValue.trim() || undefined,
       stockGroup: f.stockGroup.trim() || undefined,
+      salesAccountId: f.salesAccountId || undefined,
+      purchaseAccountId: f.purchaseAccountId || undefined,
       p4Category: f.p4Category || undefined,
     });
     toast({ title: hi ? 'वस्तु अपडेट की गई' : 'Item updated successfully' });
@@ -1075,6 +1138,8 @@ const Inventory: React.FC = () => {
               resetItemForm();
             }}
             existingGroups={existingGroups}
+            salesAccounts={salesAccounts}
+            purchaseAccounts={purchaseAccounts}
           />
         </DialogContent>
       </Dialog>
@@ -1107,6 +1172,8 @@ const Inventory: React.FC = () => {
               resetItemForm();
             }}
             existingGroups={existingGroups}
+            salesAccounts={salesAccounts}
+            purchaseAccounts={purchaseAccounts}
           />
         </DialogContent>
       </Dialog>
