@@ -810,6 +810,12 @@ alter table assets add column if not exists "saleProceeds" numeric default 0;
 -- ── STEP 17d: Stock Group for Closing Stock Report ──────────────────────────
 alter table stock_items add column if not exists "stockGroup" text default 'General';
 
+-- ── STEP 17e: Per-item Sales / Purchase A/c routing ─────────────────────────
+-- Lets each StockItem post to a specific income/expense ledger so reports
+-- show per-category Sales / Purchases lines instead of one lumped account.
+alter table stock_items add column if not exists "salesAccountId" text;
+alter table stock_items add column if not exists "purchaseAccountId" text;
+
 -- ── STEP 17: get_all_societies() — SECURITY DEFINER bypasses RLS ─────────────
 -- Super admin calls this to see all societies regardless of society_id filter.
 create or replace function get_all_societies()

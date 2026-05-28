@@ -1574,6 +1574,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [getTrialBalance]);
 
   // ── Inventory ──────────────────────────────────────────────────────────────
+  // Two-step stock_items save pattern (same as purchases for GST/TDS columns):
+  // Step 1: upsert base columns only — schema cache always knows these, never fails.
+  // Step 2: update the late-added columns (stockGroup, salesAccountId, purchaseAccountId,
+  // p4Category, valuationMethod) separately. If user hasn't run the ALTER TABLE migration
+  // yet, only step 2 fails — local state stays consistent and base save still works.
+  const persistStockItem = (item: StockItem) => {
+    const { salesAccountId, purchaseAccountId, stockGroup, p4Category, valuationMethod, ...baseCols } = item;
+    supabase.from('stock_items').upsert(withSoc(baseCols)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' });
+        return;
+      }
+      const extras: Record<string, unknown> = {};
+      if (salesAccountId !== undefined) extras.salesAccountId = salesAccountId || null;
+      if (purchaseAccountId !== undefined) extras.purchaseAccountId = purchaseAccountId || null;
+      if (stockGroup !== undefined) extras.stockGroup = stockGroup || null;
+      if (p4Category !== undefined) extras.p4Category = p4Category || null;
+      if (valuationMethod !== undefined) extras.valuationMethod = valuationMethod || null;
+      if (Object.keys(extras).length === 0) return;
+      supabase.from('stock_items').update(extras).eq('id', item.id)
+        .then(({ error: extraErr }) => {
+          if (extraErr) {
+            console.warn('Stock item extras update (run ALTER TABLE if column missing):', extraErr.message);
+            // Show a milder warning instead of "Save failed" so the user knows save partially worked
+            toastRef.current({
+              title: 'Saved, but A/c routing not persisted',
+              description: `${extraErr.message}. Run the latest supabase-tables.sql migration to enable A/c routing columns.`,
+              variant: 'default',
+            });
+          }
+        });
+    });
+  };
+
   const addStockItem = useCallback((data: Omit<StockItem, 'id' | 'itemCode'>): StockItem => {
     // Derive next item code from existing items (not localStorage counter) to prevent duplicates
     let newItem: StockItem;
@@ -1584,7 +1619,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }, 0);
       const itemCode = `ITM/${String(maxNum + 1).padStart(3, '0')}`;
       newItem = { ...data, id: crypto.randomUUID(), itemCode };
-      supabase.from('stock_items').upsert(withSoc(newItem)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+      persistStockItem(newItem);
       return [...prev, newItem];
     });
     return newItem!;
@@ -1594,7 +1629,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setStockItemsState(prev => {
       const updated = prev.map(i => i.id === id ? { ...i, ...data } : i);
       const updatedItem = updated.find(i => i.id === id);
-      if (updatedItem) supabase.from('stock_items').upsert(updatedItem).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+      if (updatedItem) persistStockItem(updatedItem);
       return updated;
     });
   }, []);
