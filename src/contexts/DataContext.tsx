@@ -2094,7 +2094,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     if (entityType === 'stockItem') {
-      const mvCount = stockMovements.filter(m => m.itemId === id).length;
+      // Only count movements whose parent purchase/sale still exists.
+      // Orphan movements (parent already deleted) are auto-cleaned by deleteStockItem,
+      // so they should NOT block deletion.
+      const livePurchaseNos = new Set(purchasesRef.current.map(p => p.purchaseNo));
+      const liveSaleNos = new Set(salesRef.current.map(s => s.saleNo));
+      const mvCount = stockMovements.filter(m =>
+        m.itemId === id && (livePurchaseNos.has(m.referenceNo || '') || liveSaleNos.has(m.referenceNo || ''))
+      ).length;
       if (mvCount > 0) links.push({
         module: 'Stock Movements', count: mvCount,
         labelHi: `${mvCount} स्टॉक मूवमेंट`, labelEn: `${mvCount} Stock Movement(s)`,
