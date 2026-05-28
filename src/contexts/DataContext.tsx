@@ -90,6 +90,7 @@ interface DataContextType {
   // Sales
   sales: Sale[];
   addSale: (data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>) => Sale;
+  updateSale: (id: string, data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>) => Sale | null;
   deleteSale: (id: string) => void;
 
   // Purchases
@@ -553,6 +554,38 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
 
+    // H12: Block cancelling auto-generated vouchers — parent record would dangle
+    const linkedSalary = salaryRecordsRef.current.find(r => r.voucherId === id);
+    if (linkedSalary) {
+      toastRef.current({
+        title: 'Voucher delete nahi ho sakta',
+        description: `Ye Salary slip ${linkedSalary.slipNo} ka payment voucher hai. Salary Management → Slip ko unpaid mark karo / delete karo, voucher apne aap reverse ho jayega.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (current.memberId && (current.creditAccountId === ACCOUNT_IDS.SHARE_CAP || current.creditAccountId === ACCOUNT_IDS.ADM_FEE)) {
+      const kind = current.creditAccountId === ACCOUNT_IDS.SHARE_CAP ? 'Share Capital' : 'Admission Fee';
+      toastRef.current({
+        title: 'Voucher delete nahi ho sakta',
+        description: `Ye Member ka auto-generated ${kind} voucher hai. Members page se member ko edit / delete karo.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    // Detect depreciation vouchers by narration pattern + asset link
+    if (current.narration && /depreciation/i.test(current.narration)) {
+      const linkedAsset = assetsRef.current.find(a => current.narration.includes(a.assetNo));
+      if (linkedAsset) {
+        toastRef.current({
+          title: 'Voucher delete nahi ho sakta',
+          description: `Ye Asset ${linkedAsset.assetNo} ki depreciation entry hai. Assets page → Reverse Depreciation use karo.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     const cancelledVoucher = { ...current, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy, deletedReason: reason };
     setVouchersState(prev => {
       const updated = prev.map(v => v.id === id ? cancelledVoucher : v);
@@ -567,6 +600,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const restoreVoucher = useCallback((id: string) => {
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
+    // H6: If parent record (purchase / sale) has already been hard-deleted, blocking restore prevents
+    // creating a "ghost" voucher with no item rows and inconsistent stock.
+    if (current.refType === 'purchase' && current.refId) {
+      const parentExists = purchasesRef.current.some(p => p.id === current.refId);
+      if (!parentExists) {
+        toastRef.current({
+          title: 'Cannot restore',
+          description: 'Linked Purchase has been deleted. Create a new purchase from Purchase Management instead.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+    if (current.refType === 'sale' && current.refId) {
+      const parentExists = salesRef.current.some(s => s.id === current.refId);
+      if (!parentExists) {
+        toastRef.current({
+          title: 'Cannot restore',
+          description: 'Linked Sale has been deleted. Create a new sale from Sale Management instead.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { deletedAt: _da, deletedBy: _db, deletedReason: _dr, ...rest } = current as Voucher & { deletedAt?: string; deletedBy?: string; deletedReason?: string };
     const restoredVoucher = { ...rest, isDeleted: false };
@@ -574,7 +631,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = prev.map(v => v.id === id ? restoredVoucher : v);
       return updated;
     });
-    supabase.from('vouchers').upsert(withSoc(restoredVoucher)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('vouchers').upsert(withSoc(restoredVoucher)).then(({ error }) => {
+      if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
+      else syncEntries(restoredVoucher); // re-populate voucher_entries so SQL reports see it again
+    });
   }, []);
 
   const clearVoucher = useCallback((id: string, clearedDate?: string) => {
@@ -854,17 +914,45 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const deleteAccount = useCallback((id: string) => {
     if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
-    setAccountsState(prev => {
-      const updated = prev.filter(a => a.id !== id);
-      return updated;
-    });
+
+    // H11: Block deletion of built-in system accounts (CASH, BANK, 5101, 3403, etc.)
+    const account = accounts.find(a => a.id === id);
+    if (!account) { toastRef.current({ title: 'Account not found', variant: 'destructive' }); return; }
+    if (account.isSystem) {
+      toastRef.current({ title: 'System account', description: `"${account.name}" is a built-in system account — cannot be deleted (used by Sales/Purchases/Closing Stock posting).`, variant: 'destructive' });
+      return;
+    }
+
+    // H10: Block if account is referenced by active vouchers or by a supplier/customer sub-ledger
+    const activeV = vouchersRef.current.filter(v => !v.isDeleted);
+    const usedInLines = activeV.some(v =>
+      v.debitAccountId === id || v.creditAccountId === id ||
+      (v.lines && v.lines.some(l => l.accountId === id))
+    );
+    if (usedInLines) {
+      toastRef.current({ title: 'Cannot delete account', description: `"${account.name}" is used in active vouchers. Cancel/delete those vouchers first.`, variant: 'destructive' });
+      return;
+    }
+    const supLinked = suppliersRef.current.find(s => s.accountId === id);
+    if (supLinked) {
+      toastRef.current({ title: 'Cannot delete account', description: `"${account.name}" is Supplier "${supLinked.name}"'s account. Delete the supplier instead.`, variant: 'destructive' });
+      return;
+    }
+    const cusLinked = customersRef.current.find(c => c.accountId === id);
+    if (cusLinked) {
+      toastRef.current({ title: 'Cannot delete account', description: `"${account.name}" is Customer "${cusLinked.name}"'s account. Delete the customer instead.`, variant: 'destructive' });
+      return;
+    }
+
+    setAccountsState(prev => prev.filter(a => a.id !== id));
     supabase.from('accounts').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     console.info(`[AUDIT-DELETE] Account id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
-  }, []);
+  }, [accounts, society.fyLocked]);
 
   // Merge duplicate accounts: move all voucher references from removeId → keepId, then delete removeId
   const mergeAccounts = useCallback((keepId: string, removeId: string): number => {
-    let touchedCount = 0;
+    // Track which voucher IDs we actually changed BEFORE we overwrite vouchersRef
+    const changedIds = new Set<string>();
     const updated = vouchersRef.current.map(v => {
       let changed = false;
       const patched = { ...v };
@@ -879,19 +967,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           changed = true;
         }
       }
-      if (changed) touchedCount++;
+      if (changed) changedIds.add(v.id);
       return changed ? patched : v;
     });
+    const touchedCount = changedIds.size;
     vouchersRef.current = updated;
     setVouchersState(updated);
-    // Persist each changed voucher to DB
-    updated.filter((v, i) => v !== vouchersRef.current[i] || v.debitAccountId === keepId || v.creditAccountId === keepId)
-      .forEach(v => {
-        const { editHistory: _eh, ...forDb } = v;
-        supabase.from('vouchers').upsert(withSoc(forDb)).then(({ error }) => {
-          if (error) console.error('Merge voucher save:', error.message);
-        });
+    // H13: Persist only the changed vouchers (and re-sync their voucher_entries rows so SQL reports
+    // point at keepId, not removeId). Old filter logic was self-referential and broken.
+    updated.filter(v => changedIds.has(v.id)).forEach(v => {
+      const { editHistory: _eh, ...forDb } = v;
+      supabase.from('vouchers').upsert(withSoc(forDb)).then(({ error }) => {
+        if (error) console.error('Merge voucher save:', error.message);
+        else if (!v.isDeleted) syncEntries(v); // rebuild voucher_entries with the new accountId
       });
+    });
     // Delete the removed account
     setAccountsState(prev => prev.filter(a => a.id !== removeId));
     supabase.from('accounts').delete().eq('id', removeId).then(({ error }) => {
@@ -1650,6 +1740,127 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.info(`[AUDIT-DELETE] Sale id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
+  const updateSale = useCallback((id: string, data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>): Sale | null => {
+    if (society.fyLocked) {
+      toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' });
+      return null;
+    }
+    const original = salesRef.current.find(s => s.id === id);
+    if (!original) {
+      toastRef.current({ title: 'Sale not found', variant: 'destructive' });
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const lid = () => crypto.randomUUID();
+
+    // 1️⃣ Compute net stock delta (sale REDUCES stock — revert old qty adds back, new qty subtracts).
+    const stockDelta = new Map<string, number>();
+    original.items.forEach(item => {
+      stockDelta.set(item.itemId, (stockDelta.get(item.itemId) || 0) + item.qty); // revert old sale → add back
+    });
+    data.items.forEach(item => {
+      stockDelta.set(item.itemId, (stockDelta.get(item.itemId) || 0) - item.qty); // new sale → subtract
+    });
+
+    setStockItemsState(prev => prev.map(i => {
+      const delta = stockDelta.get(i.id);
+      if (delta == null || delta === 0) return i;
+      const newStock = Math.max(0, i.currentStock + delta);
+      supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id)
+        .then(({ error }) => { if (error) console.error('Stock update sync:', error.message); });
+      return { ...i, currentStock: newStock };
+    }));
+
+    // 1b: Delete old stock_movements rows for this sale (so movement sum stays correct).
+    setStockMovementsState(prev => prev.filter(m => m.referenceNo !== original.saleNo));
+    supabase.from('stock_movements').delete().eq('referenceNo', original.saleNo)
+      .then(({ error }) => { if (error) console.error('Old movements delete sync:', error.message); });
+
+    // 2️⃣ Soft-cancel the original sale voucher(s) + drop voucher_entries
+    const linkedIds = [original.voucherId, ...(original.gstVoucherIds ?? [])].filter(Boolean) as string[];
+    if (linkedIds.length > 0) {
+      setVouchersState(v => {
+        const updated = v.map(x => linkedIds.includes(x.id)
+          ? { ...x, isDeleted: true, deletedAt: now, deletedBy: data.createdBy || 'System', deletedReason: `Sale ${original.saleNo} edited` }
+          : x
+        );
+        linkedIds.forEach(vid => {
+          const cancelled = updated.find(x => x.id === vid);
+          if (cancelled) supabase.from('vouchers').upsert(cancelled).then(({ error }) => {
+            if (error) console.error('Voucher cancel sync:', error.message);
+            else deleteEntries(vid);
+          });
+        });
+        return updated;
+      });
+    }
+
+    // 3️⃣ Build fresh voucher lines from new data
+    const grandTotal = data.grandTotal ?? data.netAmount;
+    const lines: VoucherLine[] = [];
+    const debitAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
+      : data.paymentMode === 'bank' ? ((data as any).bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
+      : (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303');
+    lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
+
+    const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0));
+    if (netAmt > 0) {
+      lines.push({ id: lid(), accountId: '4101', type: 'Cr', amount: netAmt });
+    }
+    if ((data.taxAmount ?? 0) > 0) {
+      lines.push({ id: lid(), accountId: '2201', type: 'Cr', amount: data.taxAmount!, narration: `GST: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
+    }
+
+    const vType = data.paymentMode === 'credit' ? 'sale' : 'receipt';
+    const newVoucher = addVoucher({
+      type: vType,
+      date: data.date,
+      lines,
+      debitAccountId: debitAccId,
+      creditAccountId: '4101',
+      amount: grandTotal,
+      narration: data.narration || `Sale: ${data.customerName} — ${original.saleNo}`,
+      createdBy: data.createdBy,
+      refType: 'sale',
+      refId: id,
+    });
+
+    // 4️⃣ Add fresh stock_movement rows for the edited sale
+    data.items.forEach(item => {
+      const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'sale', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: original.saleNo, narration: `Sale to ${data.customerName} (edited)`, createdAt: now };
+      setStockMovementsState(prev => [...prev, mv]);
+      supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.error('Movement upsert sync:', error.message); });
+    });
+
+    // 5️⃣ Update the sale record in place (same id + saleNo)
+    const updated: Sale = {
+      ...data,
+      id,
+      saleNo: original.saleNo,
+      voucherId: newVoucher.id,
+      gstVoucherIds: undefined,
+      createdAt: original.createdAt,
+    };
+    salesRef.current = salesRef.current.map(s => s.id === id ? updated : s);
+    setSalesState(prev => prev.map(s => s.id === id ? updated : s));
+
+    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, gstVoucherIds: _gv, ...saleBase } = updated;
+    supabase.from('sales').upsert(withSoc(saleBase)).then(({ error }) => {
+      if (error) {
+        console.error('Sale update failed:', error.message);
+        toastRef.current({ title: 'Sale update nahi hua', description: error.message, variant: 'destructive' });
+      } else {
+        supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId })
+          .eq('id', id)
+          .then(({ error: gstErr }) => { if (gstErr) console.warn('Sale GST fields update:', gstErr.message); });
+      }
+    });
+
+    console.info(`[AUDIT-EDIT] Sale id=${id} edited by ${data.createdBy || 'unknown'} at ${now}`);
+    return updated;
+  }, [society.fyLocked, customers, accounts, addVoucher]);
+
   // ── Purchases ──────────────────────────────────────────────────────────────
   const addPurchase = useCallback((data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>): Purchase => {
     const fy = society.financialYear;
@@ -1967,33 +2178,97 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.financialYear]);
 
   const updateSalaryRecord = useCallback((id: string, data: Partial<SalaryRecord>) => {
-    setSalaryRecordsState(prev => {
-      const updated = prev.map(r => {
-        if (r.id !== id) return r;
-        const merged = { ...r, ...data };
-        // Auto-create voucher when marking as paid
-        if (data.isPaid && !r.isPaid && !r.voucherId) {
-          const emp = employees.find(e => e.id === r.employeeId);
-          const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
-          const voucherNo = storage.getNextVoucherNo('payment', society.financialYear, vouchersRef.current);
-          const newV = { type: 'payment' as const, date: merged.paidDate || new Date().toISOString().split('T')[0], debitAccountId: '5201', creditAccountId: creditAcc, amount: merged.netSalary, narration: `Salary: ${emp?.name || ''} - ${r.month}`, memberId: undefined as undefined, createdBy: 'System', id: crypto.randomUUID(), voucherNo, createdAt: new Date().toISOString() };
-          setVouchersState(v => { const upd = [...v, newV]; return upd; });
-          supabase.from('vouchers').upsert(withSoc(newV)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-          merged.voucherId = newV.id;
-        }
-        return merged;
-      });
-      const updatedRecord = updated.find(r => r.id === id);
-      if (updatedRecord) {
-        supabase.from('salary_records').upsert(updatedRecord).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    const oldRecord = salaryRecordsRef.current.find(r => r.id === id);
+    if (!oldRecord) return;
+    const merged = { ...oldRecord, ...data };
+    const lid = () => crypto.randomUUID();
+
+    // H8: Voucher lifecycle —
+    // (a) Was paid, now unpaid → cancel existing voucher
+    // (b) Was unpaid, now paid → create new voucher
+    // (c) Still paid, but amount/date/paymentMode changed → update existing voucher + entries
+
+    if (oldRecord.isPaid && !data.isPaid && oldRecord.voucherId) {
+      // (a) Cancel the linked voucher
+      const v = vouchersRef.current.find(x => x.id === oldRecord.voucherId);
+      if (v && !v.isDeleted) {
+        const cancelled = { ...v, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy: 'System', deletedReason: `Salary slip ${oldRecord.slipNo} marked unpaid` };
+        setVouchersState(prev => prev.map(x => x.id === v.id ? cancelled : x));
+        supabase.from('vouchers').upsert(withSoc(cancelled)).then(({ error }) => {
+          if (error) console.error('Salary voucher cancel sync:', error.message);
+          else deleteEntries(v.id);
+        });
       }
-      return updated;
+      merged.voucherId = undefined;
+    } else if (!oldRecord.isPaid && data.isPaid && !oldRecord.voucherId) {
+      // (b) Create new payment voucher
+      const emp = employees.find(e => e.id === oldRecord.employeeId);
+      const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+      const newV = addVoucher({
+        type: 'payment' as const,
+        date: merged.paidDate || new Date().toISOString().split('T')[0],
+        debitAccountId: '5201',
+        creditAccountId: creditAcc,
+        amount: merged.netSalary,
+        narration: `Salary: ${emp?.name || ''} - ${oldRecord.month}`,
+        createdBy: 'System',
+      });
+      if (newV.id) merged.voucherId = newV.id;
+    } else if (oldRecord.isPaid && data.isPaid && oldRecord.voucherId) {
+      // (c) Still paid — re-sync voucher if amount / date / paymentMode changed
+      const amountChanged = data.netSalary !== undefined && data.netSalary !== oldRecord.netSalary;
+      const dateChanged = data.paidDate !== undefined && data.paidDate !== oldRecord.paidDate;
+      const modeChanged = data.paymentMode !== undefined && data.paymentMode !== oldRecord.paymentMode;
+      if (amountChanged || dateChanged || modeChanged) {
+        const v = vouchersRef.current.find(x => x.id === oldRecord.voucherId);
+        if (v && !v.isDeleted) {
+          const emp = employees.find(e => e.id === oldRecord.employeeId);
+          const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+          const newLines: VoucherLine[] = [
+            { id: lid(), accountId: '5201', type: 'Dr', amount: merged.netSalary },
+            { id: lid(), accountId: creditAcc, type: 'Cr', amount: merged.netSalary },
+          ];
+          const updatedV: Voucher = {
+            ...v,
+            date: merged.paidDate || v.date,
+            creditAccountId: creditAcc,
+            amount: merged.netSalary,
+            lines: newLines,
+            narration: `Salary: ${emp?.name || ''} - ${oldRecord.month}`,
+          };
+          setVouchersState(prev => prev.map(x => x.id === v.id ? updatedV : x));
+          supabase.from('vouchers').upsert(withSoc(updatedV)).then(({ error }) => {
+            if (error) console.error('Salary voucher resync:', error.message);
+            else syncEntries(updatedV);
+          });
+        }
+      }
+    }
+
+    salaryRecordsRef.current = salaryRecordsRef.current.map(r => r.id === id ? merged : r);
+    setSalaryRecordsState(prev => prev.map(r => r.id === id ? merged : r));
+    supabase.from('salary_records').upsert(merged).then(({ error }) => {
+      if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
     });
-  }, [employees, society.financialYear]);
+  }, [employees, accounts, addVoucher]);
 
   const deleteSalaryRecord = useCallback((id: string) => {
     if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
-    setSalaryRecordsState(prev => { const updated = prev.filter(r => r.id !== id); return updated; });
+    // H8: Cascade-cancel the linked payment voucher (if any) so accounting reverses
+    const record = salaryRecordsRef.current.find(r => r.id === id);
+    if (record?.voucherId) {
+      const v = vouchersRef.current.find(x => x.id === record.voucherId);
+      if (v && !v.isDeleted) {
+        const cancelled = { ...v, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy: 'System', deletedReason: `Salary slip ${record.slipNo} deleted` };
+        setVouchersState(prev => prev.map(x => x.id === v.id ? cancelled : x));
+        supabase.from('vouchers').upsert(withSoc(cancelled)).then(({ error }) => {
+          if (error) console.error('Salary voucher cancel sync:', error.message);
+          else deleteEntries(v.id);
+        });
+      }
+    }
+    setSalaryRecordsState(prev => prev.filter(r => r.id !== id));
+    salaryRecordsRef.current = salaryRecordsRef.current.filter(r => r.id !== id);
     supabase.from('salary_records').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     console.info(`[AUDIT-DELETE] SalaryRecord id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
@@ -2049,11 +2324,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deleteSupplier = useCallback((id: string) => {
     if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     const sup = suppliers.find(s => s.id === id);
-    setSuppliersState(prev => { const arr = prev.filter(s => s.id !== id); return arr; });
+    if (!sup) return;
+    // H9: Block if supplier has live purchases — otherwise sub-ledger reconciliation breaks
+    const livePurchases = purchasesRef.current.filter(p => p.supplierId === id).length;
+    if (livePurchases > 0) {
+      toastRef.current({ title: 'Cannot delete supplier', description: `${livePurchases} purchase(s) linked. Delete those purchases first from Purchase Management.`, variant: 'destructive' });
+      return;
+    }
+    setSuppliersState(prev => prev.filter(s => s.id !== id));
     supabase.from('suppliers').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    if (sup?.accountId) {
-      setAccountsState(prev => { const arr = prev.filter(a => a.id !== sup.accountId); return arr; });
-      supabase.from('accounts').delete().eq('id', sup.accountId).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // Only hard-delete the linked Sundry Creditor account if NO vouchers (even soft-deleted) reference it
+    if (sup.accountId) {
+      const accountReferenced = vouchersRef.current.some(v =>
+        v.debitAccountId === sup.accountId || v.creditAccountId === sup.accountId ||
+        (v.lines && v.lines.some(l => l.accountId === sup.accountId))
+      );
+      if (accountReferenced) {
+        // Keep the account so historical vouchers stay reconcilable; just rename it to mark orphan
+        setAccountsState(prev => prev.map(a => a.id === sup.accountId ? { ...a, name: `${a.name} [Supplier deleted]`, isSystem: false } : a));
+        supabase.from('accounts').update({ name: `${sup.name} [Supplier deleted]` }).eq('id', sup.accountId)
+          .then(({ error }) => { if (error) console.error('Account rename sync:', error.message); });
+      } else {
+        setAccountsState(prev => prev.filter(a => a.id !== sup.accountId));
+        supabase.from('accounts').delete().eq('id', sup.accountId).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+      }
     }
     console.info(`[AUDIT-DELETE] Supplier id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, [suppliers]);
@@ -2108,11 +2402,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deleteCustomer = useCallback((id: string) => {
     if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     const cus = customers.find(c => c.id === id);
-    setCustomersState(prev => { const arr = prev.filter(c => c.id !== id); return arr; });
+    if (!cus) return;
+    // H9: Block if customer has live sales
+    const liveSales = salesRef.current.filter(s => s.customerId === id).length;
+    if (liveSales > 0) {
+      toastRef.current({ title: 'Cannot delete customer', description: `${liveSales} sale(s) linked. Delete those sales first from Sale Management.`, variant: 'destructive' });
+      return;
+    }
+    setCustomersState(prev => prev.filter(c => c.id !== id));
     supabase.from('customers').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    if (cus?.accountId) {
-      setAccountsState(prev => { const arr = prev.filter(a => a.id !== cus.accountId); return arr; });
-      supabase.from('accounts').delete().eq('id', cus.accountId).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    if (cus.accountId) {
+      const accountReferenced = vouchersRef.current.some(v =>
+        v.debitAccountId === cus.accountId || v.creditAccountId === cus.accountId ||
+        (v.lines && v.lines.some(l => l.accountId === cus.accountId))
+      );
+      if (accountReferenced) {
+        setAccountsState(prev => prev.map(a => a.id === cus.accountId ? { ...a, name: `${a.name} [Customer deleted]`, isSystem: false } : a));
+        supabase.from('accounts').update({ name: `${cus.name} [Customer deleted]` }).eq('id', cus.accountId)
+          .then(({ error }) => { if (error) console.error('Account rename sync:', error.message); });
+      } else {
+        setAccountsState(prev => prev.filter(a => a.id !== cus.accountId));
+        supabase.from('accounts').delete().eq('id', cus.accountId).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+      }
     }
     console.info(`[AUDIT-DELETE] Customer id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, [customers]);
@@ -2277,7 +2588,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       kachiAaratEntries, addKachiAaratEntry, updateKachiAaratEntry, deleteKachiAaratEntry,
       p7Entries, upsertP7Entry, deleteP7Entry,
       addStockItem, updateStockItem, deleteStockItem, addStockMovement,
-      addSale, deleteSale,
+      addSale, updateSale, deleteSale,
       addPurchase, updatePurchase, deletePurchase,
       addEmployee, updateEmployee, deleteEmployee,
       addSalaryRecord, updateSalaryRecord, deleteSalaryRecord,

@@ -22,7 +22,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { ShoppingCart, Plus, Trash2, Eye, Search, FileSpreadsheet, Download, AlertTriangle } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, Eye, Pencil, Search, FileSpreadsheet, Download, AlertTriangle } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
@@ -58,7 +58,7 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const SaleManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { sales, stockItems, customers, addSale, deleteSale, addStockItem, society } = useData();
+  const { sales, stockItems, customers, addSale, updateSale, deleteSale, addStockItem, society } = useData();
   const { toast } = useToast();
 
   // ── New Sale form state ───────────────────────────────────────────────────
@@ -74,6 +74,8 @@ const SaleManagement: React.FC = () => {
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
   const [narration, setNarration] = useState('');
   const [savedSaleNo, setSavedSaleNo] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'new-sale' | 'sale-list'>('new-sale');
 
   // ── Sale List filter state ────────────────────────────────────────────────
   const [filterFrom, setFilterFrom] = useState('');
@@ -167,7 +169,39 @@ const SaleManagement: React.FC = () => {
     setItems(prev => prev.filter((_, i) => i !== index));
   };
 
-  // ── Save sale ─────────────────────────────────────────────────────────────
+  // ── Reset form helper ─────────────────────────────────────────────────────
+  const resetForm = () => {
+    setSaleDate(TODAY);
+    setCustomerId('');
+    setCustomerName('');
+    setCustomerPhone('');
+    setItems([EMPTY_ITEM()]);
+    setDiscount(0);
+    setCgstPct(0); setSgstPct(0); setIgstPct(0);
+    setPaymentMode('cash');
+    setNarration('');
+    setEditingId(null);
+  };
+
+  // ── Load sale into form for editing ───────────────────────────────────────
+  const handleEdit = (sale: typeof sales[number]) => {
+    setEditingId(sale.id);
+    setSaleDate(sale.date);
+    setCustomerId(sale.customerId || '');
+    setCustomerName(sale.customerName);
+    setCustomerPhone(sale.customerPhone || '');
+    setItems(sale.items.length ? sale.items.map(it => ({ ...it })) : [EMPTY_ITEM()]);
+    setDiscount(sale.discount || 0);
+    setCgstPct(sale.cgstPct || 0);
+    setSgstPct(sale.sgstPct || 0);
+    setIgstPct(sale.igstPct || 0);
+    setPaymentMode(sale.paymentMode);
+    setNarration(sale.narration || '');
+    setSavedSaleNo(null);
+    setActiveTab('new-sale');
+  };
+
+  // ── Save sale (create or update) ──────────────────────────────────────────
   const handleSave = () => {
     if (!customerName.trim()) {
       toast({
@@ -185,15 +219,22 @@ const SaleManagement: React.FC = () => {
       return;
     }
 
-    // Stock availability warning (soft — sale still proceeds)
+    // Stock availability warning (soft — sale still proceeds).
+    // While editing, account for the qty being "given back" (original sale being reverted).
+    const original = editingId ? sales.find(s => s.id === editingId) : null;
     const lowStockItems = validItems.filter(i => {
       const si = stockItems.find(s => s.id === i.itemId);
-      return si && i.qty > si.currentStock;
+      if (!si) return false;
+      const originalQty = original?.items.find(it => it.itemId === i.itemId)?.qty || 0;
+      const effectiveAvailable = si.currentStock + originalQty;
+      return i.qty > effectiveAvailable;
     });
     if (lowStockItems.length > 0) {
       const names = lowStockItems.map(i => {
         const si = stockItems.find(s => s.id === i.itemId);
-        return `${i.itemName} (${language === 'hi' ? 'उपलब्ध' : 'avail'}: ${si?.currentStock ?? 0}, ${language === 'hi' ? 'बिक्री' : 'selling'}: ${i.qty})`;
+        const originalQty = original?.items.find(it => it.itemId === i.itemId)?.qty || 0;
+        const effectiveAvailable = (si?.currentStock ?? 0) + originalQty;
+        return `${i.itemName} (${language === 'hi' ? 'उपलब्ध' : 'avail'}: ${effectiveAvailable}, ${language === 'hi' ? 'बिक्री' : 'selling'}: ${i.qty})`;
       }).join(', ');
       toast({
         title: language === 'hi' ? 'अपर्याप्त स्टॉक चेतावनी' : 'Insufficient Stock Warning',
@@ -202,41 +243,46 @@ const SaleManagement: React.FC = () => {
       });
     }
 
+    const payload = {
+      date: saleDate,
+      customerName: customerName.trim(),
+      customerPhone: customerPhone.trim() || undefined,
+      customerId: customerId || undefined,
+      items: validItems,
+      totalAmount,
+      discount,
+      netAmount,
+      cgstPct, sgstPct, igstPct,
+      cgstAmount, sgstAmount, igstAmount,
+      taxAmount, grandTotal,
+      paymentMode,
+      narration: narration.trim(),
+      createdBy: user?.name ?? 'Unknown',
+    };
+
     try {
-      const newSale = addSale({
-        date: saleDate,
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim() || undefined,
-        customerId: customerId || undefined,
-        items: validItems,
-        totalAmount,
-        discount,
-        netAmount,
-        cgstPct, sgstPct, igstPct,
-        cgstAmount, sgstAmount, igstAmount,
-        taxAmount, grandTotal,
-        paymentMode,
-        narration: narration.trim(),
-        createdBy: user?.name ?? 'Unknown',
-      });
-
-      setSavedSaleNo(newSale.saleNo);
-      toast({
-        title: language === 'hi'
-          ? `बिक्री सहेजी गई: ${newSale.saleNo}`
-          : `Sale saved: ${newSale.saleNo}`,
-      });
-
-      // Reset form
-      setSaleDate(TODAY);
-      setCustomerId('');
-      setCustomerName('');
-      setCustomerPhone('');
-      setItems([EMPTY_ITEM()]);
-      setDiscount(0);
-      setCgstPct(0); setSgstPct(0); setIgstPct(0);
-      setPaymentMode('cash');
-      setNarration('');
+      if (editingId) {
+        const updated = updateSale(editingId, payload);
+        if (updated) {
+          setSavedSaleNo(updated.saleNo);
+          toast({
+            title: language === 'hi'
+              ? `बिक्री अपडेट हुई: ${updated.saleNo}`
+              : `Sale updated: ${updated.saleNo}`,
+          });
+          resetForm();
+          setActiveTab('sale-list');
+        }
+      } else {
+        const newSale = addSale(payload);
+        setSavedSaleNo(newSale.saleNo);
+        toast({
+          title: language === 'hi'
+            ? `बिक्री सहेजी गई: ${newSale.saleNo}`
+            : `Sale saved: ${newSale.saleNo}`,
+        });
+        resetForm();
+      }
     } catch {
       toast({
         title: language === 'hi' ? 'कोई त्रुटि हुई' : 'An error occurred',
@@ -296,10 +342,12 @@ const SaleManagement: React.FC = () => {
         </div>
       </div>
 
-      <Tabs defaultValue="new-sale">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'new-sale' | 'sale-list')}>
         <TabsList className="grid w-full max-w-sm grid-cols-2">
           <TabsTrigger value="new-sale">
-            {language === 'hi' ? 'नई बिक्री' : 'New Sale'}
+            {editingId
+              ? (language === 'hi' ? 'बिक्री संपादन' : 'Edit Sale')
+              : (language === 'hi' ? 'नई बिक्री' : 'New Sale')}
           </TabsTrigger>
           <TabsTrigger value="sale-list">
             {language === 'hi' ? 'बिक्री सूची' : 'Sale List'}
@@ -308,6 +356,24 @@ const SaleManagement: React.FC = () => {
 
         {/* ── Tab 1: New Sale Entry ─────────────────────────────────────── */}
         <TabsContent value="new-sale" className="space-y-4 mt-4">
+          {editingId && (
+            <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <Pencil className="h-4 w-4 text-amber-700" />
+              <span className="text-amber-800 font-medium text-sm">
+                {language === 'hi'
+                  ? `संपादन मोड — पुरानी प्रविष्टि बदली जाएगी, स्टॉक एडजस्ट होगा`
+                  : `Editing mode — original entry will be replaced, stock will be re-adjusted`}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto text-amber-700"
+                onClick={() => { resetForm(); }}
+              >
+                {language === 'hi' ? 'रद्द करें' : 'Cancel Edit'}
+              </Button>
+            </div>
+          )}
           {savedSaleNo && (
             <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
               <span className="text-green-700 font-medium">
@@ -600,8 +666,15 @@ const SaleManagement: React.FC = () => {
           </div>
 
           <div className="flex justify-end">
+            {editingId && (
+              <Button variant="outline" onClick={resetForm} className="mr-2">
+                {language === 'hi' ? 'रद्द करें' : 'Cancel'}
+              </Button>
+            )}
             <Button onClick={handleSave} className="px-8">
-              {language === 'hi' ? 'बिक्री सहेजें' : 'Save Sale'}
+              {editingId
+                ? (language === 'hi' ? 'अपडेट करें' : 'Update Sale')
+                : (language === 'hi' ? 'बिक्री सहेजें' : 'Save Sale')}
             </Button>
           </div>
         </TabsContent>
@@ -749,6 +822,14 @@ const SaleManagement: React.FC = () => {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                onClick={() => handleEdit(sale)}
+                                title={language === 'hi' ? 'संपादन' : 'Edit'}
+                              >
+                                <Pencil className="h-4 w-4 text-amber-600" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => setDeleteId(sale.id)}
                                 title={language === 'hi' ? 'हटाएं' : 'Delete'}
                               >
@@ -873,6 +954,17 @@ const SaleManagement: React.FC = () => {
                   <span>{language === 'hi' ? 'कुल देय राशि' : 'Grand Total'}</span>
                   <span className="text-green-700">{fmt(viewSale.grandTotal ?? viewSale.netAmount)}</span>
                 </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => { const s = viewSale; setViewSale(null); handleEdit(s); }}
+                  className="gap-2"
+                >
+                  <Pencil className="h-4 w-4" />
+                  {language === 'hi' ? 'इस बिक्री को संपादित करें' : 'Edit this Sale'}
+                </Button>
               </div>
             </div>
           )}
