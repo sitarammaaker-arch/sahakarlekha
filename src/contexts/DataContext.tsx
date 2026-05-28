@@ -1567,13 +1567,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return updated;
           });
         }
-        // Reverse stock deductions
+        // Reverse stock deductions on stock_items.currentStock
         sale.items.forEach(item => {
           setStockItemsState(s => {
             const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = i.currentStock + item.qty; supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { console.error('Stock currentStock sync error:', error.message); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } }); return { ...i, currentStock: newStock }; });
             return updated;
           });
         });
+        // Cascade-delete stock_movements for this sale
+        // (Inventory / Stock Valuation / Closing Stock all derive qty from movements.)
+        setStockMovementsState(s => s.filter(m => m.referenceNo !== sale.saleNo));
+        supabase.from('stock_movements').delete().eq('referenceNo', sale.saleNo)
+          .then(({ error }) => { if (error) console.error('Movements cascade-delete sync:', error.message); });
       }
       const updated = prev.filter(s => s.id !== id);
       return updated;
@@ -1698,13 +1703,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return updated;
           });
         }
-        // Reverse stock additions
+        // Reverse stock additions on stock_items.currentStock
         purchase.items.forEach(item => {
           setStockItemsState(s => {
             const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = Math.max(0, i.currentStock - item.qty); supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { console.error('Stock currentStock sync error:', error.message); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } }); return { ...i, currentStock: newStock }; });
             return updated;
           });
         });
+        // Cascade-delete stock_movements for this purchase
+        // (Inventory / Stock Valuation / Closing Stock all compute qty from movements,
+        //  so orphan movements would keep stock showing as if the purchase still existed.)
+        setStockMovementsState(s => s.filter(m => m.referenceNo !== purchase.purchaseNo));
+        supabase.from('stock_movements').delete().eq('referenceNo', purchase.purchaseNo)
+          .then(({ error }) => { if (error) console.error('Movements cascade-delete sync:', error.message); });
       }
       const updated = prev.filter(p => p.id !== id);
       return updated;
