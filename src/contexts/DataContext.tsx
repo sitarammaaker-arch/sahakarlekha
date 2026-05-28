@@ -1727,19 +1727,31 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const now = new Date().toISOString();
     const lid = () => crypto.randomUUID();
 
-    // 1️⃣ Reverse original stock additions
+    // 1️⃣ Compute net stock delta per item (old qty -> new qty) and apply atomically
+    const stockDelta = new Map<string, number>();
     original.items.forEach(item => {
-      setStockItemsState(prev => {
-        const updated = prev.map(i => {
-          if (i.id !== item.itemId) return i;
-          const newStock = Math.max(0, i.currentStock - item.qty);
-          supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id)
-            .then(({ error }) => { if (error) console.error('Stock revert sync:', error.message); });
-          return { ...i, currentStock: newStock };
-        });
-        return updated;
-      });
+      stockDelta.set(item.itemId, (stockDelta.get(item.itemId) || 0) - item.qty);
     });
+    data.items.forEach(item => {
+      stockDelta.set(item.itemId, (stockDelta.get(item.itemId) || 0) + item.qty);
+    });
+    const newRateMap = new Map<string, number>();
+    data.items.forEach(item => { newRateMap.set(item.itemId, item.rate); });
+
+    setStockItemsState(prev => prev.map(i => {
+      const delta = stockDelta.get(i.id);
+      if (delta == null || delta === 0 && !newRateMap.has(i.id)) return i;
+      const newStock = Math.max(0, i.currentStock + (delta || 0));
+      const newRate = newRateMap.get(i.id) ?? i.purchaseRate;
+      supabase.from('stock_items').update({ currentStock: newStock, purchaseRate: newRate }).eq('id', i.id)
+        .then(({ error }) => { if (error) console.error('Stock update sync:', error.message); });
+      return { ...i, currentStock: newStock, purchaseRate: newRate };
+    }));
+
+    // 1️⃣b Delete old stock_movements for this purchase (so they don't double-count)
+    setStockMovementsState(prev => prev.filter(m => m.referenceNo !== original.purchaseNo));
+    supabase.from('stock_movements').delete().eq('referenceNo', original.purchaseNo)
+      .then(({ error }) => { if (error) console.error('Old movements delete sync:', error.message); });
 
     // 2️⃣ Soft-delete the original purchase voucher(s)
     const linkedIds = [original.voucherId, ...(original.taxVoucherIds ?? [])].filter(Boolean) as string[];
@@ -1794,21 +1806,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       refId: id,
     });
 
-    // 4️⃣ Apply new stock additions
+    // 4️⃣ Add fresh stock_movement rows for the edited purchase
+    //    (stock currentStock was already updated above via net-delta;
+    //     old movement rows were deleted in step 1b)
     data.items.forEach(item => {
-      setStockItemsState(prev => {
-        const updated = prev.map(i => {
-          if (i.id !== item.itemId) return i;
-          const newStock = i.currentStock + item.qty;
-          supabase.from('stock_items').update({ currentStock: newStock, purchaseRate: item.rate }).eq('id', i.id)
-            .then(({ error }) => { if (error) console.error('Stock sync error:', error.message); });
-          return { ...i, currentStock: newStock, purchaseRate: item.rate };
-        });
-        return updated;
-      });
       const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'purchase', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: original.purchaseNo, narration: `Purchase from ${data.supplierName} (edited)`, createdAt: now };
       setStockMovementsState(prev => [...prev, mv]);
-      supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.error('DB sync error:', error.message); });
+      supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.error('Movement upsert sync:', error.message); });
     });
 
     // 5️⃣ Update the purchase record in place (same id + purchaseNo)
