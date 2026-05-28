@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, ReactNode, use
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import type {
-  Voucher, VoucherEditSnapshot, VoucherLine, Member, LedgerAccount, SocietySettings,
+  Voucher, VoucherEditSnapshot, VoucherLine, VoucherType, Member, LedgerAccount, SocietySettings,
   AccountBalance, CashBookEntry, BankBookEntry, MemberLedgerEntry, ReceiptsPaymentsData,
   Loan, Asset, AuditObjection, Recoverable, KachiAaratEntry, P7Entry,
   StockItem, StockMovement,
@@ -317,8 +317,131 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setAuditObjectionsState(aoData || []);
         setStockItemsState(siData || []);
         setStockMovementsState(smData || []);
-        setSalesState(slData || []);
-        setPurchasesState(puData || []);
+
+        // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
+        // If earlier buggy builds saved a sale or purchase to its own table but
+        // its linked voucher save failed silently, the row is "orphan": Sales /
+        // Purchases page shows it, but Trial Balance / Trading A/c / Receipts &
+        // Payments / Dashboard show ₹0 because the voucher never existed.
+        // Detect those orphans on every load and rebuild the missing voucher
+        // using the legacy single-Dr/single-Cr pattern (saves cleanly to the
+        // base 'vouchers' table — no `lines` column dependency).
+        try {
+          const voucherIds = new Set<string>(((vData || []) as Voucher[]).map(v => v.id));
+          const fyStr2: string = (socData && socData.length > 0 ? socData[0] : society).financialYear || '2024-25';
+          const repairVouchers: Voucher[] = [];
+          const patchedSales: Sale[] = [];
+          const patchedPurchases: Purchase[] = [];
+          const allVouchersSoFar: Voucher[] = [...((vData || []) as Voucher[])];
+
+          // SALES — Dr Cash/Bank/Debtor, Cr Sales (4101)
+          for (const sale of ((slData || []) as Sale[])) {
+            const hasVoucher = sale.voucherId && voucherIds.has(sale.voucherId);
+            if (hasVoucher) continue;
+            const customerAcc = sale.customerId ? ((cusData || []) as Customer[]).find(c => c.id === sale.customerId)?.accountId : undefined;
+            const debitAccId = sale.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
+              : sale.paymentMode === 'bank' ? (sale.bankAccountId || getBankAccountIds((aData || []) as LedgerAccount[])[0] || ACCOUNT_IDS.BANK)
+              : (customerAcc || '3303');
+            const vType: VoucherType = sale.paymentMode === 'credit' ? 'sale' : 'receipt';
+            const amount = sale.grandTotal ?? sale.netAmount;
+            if (amount <= 0) continue;
+            const newId = crypto.randomUUID();
+            const voucherNo = storage.getNextVoucherNo(vType as 'receipt' | 'payment' | 'journal' | 'contra', fyStr2, allVouchersSoFar);
+            const v: Voucher = {
+              id: newId,
+              voucherNo,
+              type: vType,
+              date: sale.date,
+              debitAccountId: debitAccId,
+              creditAccountId: '4101',
+              amount,
+              narration: sale.narration || `Sale: ${sale.customerName} — ${sale.saleNo} [auto-repair]`,
+              createdAt: new Date().toISOString(),
+              createdBy: sale.createdBy || 'System (repair)',
+              refType: 'sale',
+              refId: sale.id,
+            };
+            repairVouchers.push(v);
+            allVouchersSoFar.push(v);
+            patchedSales.push({ ...sale, voucherId: newId });
+          }
+
+          // PURCHASES — Dr Purchase (5101), Cr Cash/Bank/Supplier
+          for (const purchase of ((puData || []) as Purchase[])) {
+            const hasVoucher = purchase.voucherId && voucherIds.has(purchase.voucherId);
+            if (hasVoucher) continue;
+            const supplierAcc = purchase.supplierId ? ((supData || []) as Supplier[]).find(s => s.id === purchase.supplierId)?.accountId : undefined;
+            const creditAccId = purchase.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
+              : purchase.paymentMode === 'bank' ? (purchase.bankAccountId || getBankAccountIds((aData || []) as LedgerAccount[])[0] || ACCOUNT_IDS.BANK)
+              : (supplierAcc || '2101');
+            const vType: VoucherType = purchase.paymentMode === 'credit' ? 'purchase' : 'payment';
+            const amount = purchase.grandTotal ?? purchase.netAmount;
+            if (amount <= 0) continue;
+            const newId = crypto.randomUUID();
+            const voucherNo = storage.getNextVoucherNo(vType as 'receipt' | 'payment' | 'journal' | 'contra', fyStr2, allVouchersSoFar);
+            const v: Voucher = {
+              id: newId,
+              voucherNo,
+              type: vType,
+              date: purchase.date,
+              debitAccountId: '5101',
+              creditAccountId: creditAccId,
+              amount,
+              narration: purchase.narration || `Purchase: ${purchase.supplierName} — ${purchase.purchaseNo} [auto-repair]`,
+              createdAt: new Date().toISOString(),
+              createdBy: purchase.createdBy || 'System (repair)',
+              refType: 'purchase',
+              refId: purchase.id,
+            };
+            repairVouchers.push(v);
+            allVouchersSoFar.push(v);
+            patchedPurchases.push({ ...purchase, voucherId: newId });
+          }
+
+          if (repairVouchers.length > 0) {
+            // Replace state with the repaired data
+            setVouchersState(allVouchersSoFar);
+            storage.setVouchers(allVouchersSoFar);
+            const patchedSalesIds = new Set(patchedSales.map(s => s.id));
+            const finalSales = ((slData || []) as Sale[]).map(s => patchedSalesIds.has(s.id)
+              ? patchedSales.find(ps => ps.id === s.id)! : s);
+            const patchedPurchaseIds = new Set(patchedPurchases.map(p => p.id));
+            const finalPurchases = ((puData || []) as Purchase[]).map(p => patchedPurchaseIds.has(p.id)
+              ? patchedPurchases.find(pp => pp.id === p.id)! : p);
+            setSalesState(finalSales);
+            setPurchasesState(finalPurchases);
+
+            // Persist to Supabase
+            for (const v of repairVouchers) {
+              supabase.from('vouchers').upsert({ ...v, society_id: sid }).then(({ error }) => {
+                if (error) console.error('Repair voucher save error:', error.message);
+              });
+            }
+            for (const s of patchedSales) {
+              supabase.from('sales').update({ voucherId: s.voucherId }).eq('id', s.id)
+                .then(({ error }) => { if (error) console.warn('Sale voucherId patch:', error.message); });
+            }
+            for (const p of patchedPurchases) {
+              supabase.from('purchases').update({ voucherId: p.voucherId }).eq('id', p.id)
+                .then(({ error }) => { if (error) console.warn('Purchase voucherId patch:', error.message); });
+            }
+            console.log(`[REPAIR] Rebuilt ${repairVouchers.length} missing voucher(s) for ${patchedSales.length} sale(s) + ${patchedPurchases.length} purchase(s).`);
+            toastRef.current({
+              title: `${repairVouchers.length} missing voucher(s) auto-repaired`,
+              description: `Found ${patchedSales.length} sale(s) and ${patchedPurchases.length} purchase(s) without accounting vouchers — rebuilt them so Trial Balance / Dashboard reflect correctly.`,
+              variant: 'default',
+              duration: 8000,
+            });
+          } else {
+            setSalesState(slData || []);
+            setPurchasesState(puData || []);
+          }
+        } catch (repairErr) {
+          console.warn('Sale/Purchase voucher auto-repair non-fatal error:', repairErr);
+          setSalesState(slData || []);
+          setPurchasesState(puData || []);
+        }
+
         setEmployeesState(emData || []);
         setSalaryRecordsState(srData || []);
         setSuppliersState(supData || []);
