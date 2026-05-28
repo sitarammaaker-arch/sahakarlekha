@@ -319,87 +319,197 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setStockMovementsState(smData || []);
 
         // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
-        // If earlier buggy builds saved a sale or purchase to its own table but
-        // its linked voucher save failed silently, the row is "orphan": Sales /
-        // Purchases page shows it, but Trial Balance / Trading A/c / Receipts &
-        // Payments / Dashboard show ₹0 because the voucher never existed.
-        // Detect those orphans on every load and rebuild the missing voucher
-        // using the legacy single-Dr/single-Cr pattern (saves cleanly to the
-        // base 'vouchers' table — no `lines` column dependency).
+        // Two cases handled:
+        // (a) Sale / purchase has NO matching voucher (orphan): create one.
+        // (b) Sale / purchase HAS a previous auto-repair voucher that posted to
+        //     the hardcoded 4101 / 5101, but the items map to a different
+        //     salesAccountId / purchaseAccountId (e.g. Sugar → 4103 Consumer
+        //     Goods Sales). Re-route the voucher in-place with proper per-item
+        //     account splitting via the multi-line `lines` field.
         try {
-          const voucherIds = new Set<string>(((vData || []) as Voucher[]).map(v => v.id));
+          const vList = ((vData || []) as Voucher[]);
+          const voucherById = new Map<string, Voucher>(vList.map(v => [v.id, v]));
           const fyStr2: string = (socData && socData.length > 0 ? socData[0] : society).financialYear || '2024-25';
-          const repairVouchers: Voucher[] = [];
+          const newRepairVouchers: Voucher[] = [];
+          const updatedVouchers = new Map<string, Voucher>(); // id → updated voucher
           const patchedSales: Sale[] = [];
           const patchedPurchases: Purchase[] = [];
-          const allVouchersSoFar: Voucher[] = [...((vData || []) as Voucher[])];
+          const allVouchersSoFar: Voucher[] = [...vList];
+          const stockMap = new Map<string, StockItem>(((siData || []) as StockItem[]).map(i => [i.id, i]));
 
-          // SALES — Dr Cash/Bank/Debtor, Cr Sales (4101)
+          const computeSaleAccBuckets = (sale: Sale) => {
+            const totalItemAmount = sale.items.reduce((s, it) => s + it.amount, 0) || 1;
+            const netAmt = sale.netAmount || (sale.grandTotal - (sale.taxAmount || 0));
+            const buckets = new Map<string, number>();
+            sale.items.forEach(it => {
+              const stock = stockMap.get(it.itemId);
+              const acc = stock?.salesAccountId || '4101';
+              const portion = (it.amount / totalItemAmount) * netAmt;
+              buckets.set(acc, (buckets.get(acc) || 0) + portion);
+            });
+            return buckets;
+          };
+          const computePurchaseAccBuckets = (p: Purchase) => {
+            const totalItemAmount = p.items.reduce((s, it) => s + it.amount, 0) || 1;
+            const netAmt = p.netAmount || (p.grandTotal - (p.taxAmount || 0) + (p.tdsAmount || 0));
+            const buckets = new Map<string, number>();
+            p.items.forEach(it => {
+              const stock = stockMap.get(it.itemId);
+              const acc = stock?.purchaseAccountId || '5101';
+              const portion = (it.amount / totalItemAmount) * netAmt;
+              buckets.set(acc, (buckets.get(acc) || 0) + portion);
+            });
+            return buckets;
+          };
+          const dominantAcc = (buckets: Map<string, number>, fallback: string) => {
+            let best = fallback, max = 0;
+            buckets.forEach((amt, acc) => { if (amt > max) { max = amt; best = acc; } });
+            return best;
+          };
+
+          // SALES
           for (const sale of ((slData || []) as Sale[])) {
-            const hasVoucher = sale.voucherId && voucherIds.has(sale.voucherId);
-            if (hasVoucher) continue;
+            const existing = sale.voucherId ? voucherById.get(sale.voucherId) : undefined;
+            const isAutoRepair = !!existing?.narration?.includes('[auto-repair]');
+            // Don't touch user-made vouchers — only rebuild if missing OR an old auto-repair
+            if (existing && !isAutoRepair) continue;
+
             const customerAcc = sale.customerId ? ((cusData || []) as Customer[]).find(c => c.id === sale.customerId)?.accountId : undefined;
             const debitAccId = sale.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
               : sale.paymentMode === 'bank' ? (sale.bankAccountId || getBankAccountIds((aData || []) as LedgerAccount[])[0] || ACCOUNT_IDS.BANK)
               : (customerAcc || '3303');
             const vType: VoucherType = sale.paymentMode === 'credit' ? 'sale' : 'receipt';
-            const amount = sale.grandTotal ?? sale.netAmount;
-            if (amount <= 0) continue;
-            const newId = crypto.randomUUID();
-            const voucherNo = storage.getNextVoucherNo(vType as 'receipt' | 'payment' | 'journal' | 'contra', fyStr2, allVouchersSoFar);
-            const v: Voucher = {
-              id: newId,
-              voucherNo,
-              type: vType,
-              date: sale.date,
-              debitAccountId: debitAccId,
-              creditAccountId: '4101',
-              amount,
-              narration: sale.narration || `Sale: ${sale.customerName} — ${sale.saleNo} [auto-repair]`,
-              createdAt: new Date().toISOString(),
-              createdBy: sale.createdBy || 'System (repair)',
-              refType: 'sale',
-              refId: sale.id,
-            };
-            repairVouchers.push(v);
-            allVouchersSoFar.push(v);
-            patchedSales.push({ ...sale, voucherId: newId });
+            const grandTotal = sale.grandTotal ?? sale.netAmount;
+            if (grandTotal <= 0) continue;
+            const buckets = computeSaleAccBuckets(sale);
+            const lines: VoucherLine[] = [];
+            const lid = () => crypto.randomUUID();
+            lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
+            buckets.forEach((amt, accId) => {
+              const rounded = Math.round(amt * 100) / 100;
+              if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: rounded });
+            });
+            if ((sale.taxAmount ?? 0) > 0) {
+              lines.push({ id: lid(), accountId: '2201', type: 'Cr', amount: sale.taxAmount!, narration: `GST: CGST ₹${sale.cgstAmount||0} + SGST ₹${sale.sgstAmount||0} + IGST ₹${sale.igstAmount||0}` });
+            }
+            const dominantCr = dominantAcc(buckets, '4101');
+
+            if (existing && isAutoRepair) {
+              // Re-route in place — preserve id/voucherNo/createdAt
+              const updated: Voucher = {
+                ...existing,
+                type: vType,
+                date: sale.date,
+                debitAccountId: debitAccId,
+                creditAccountId: dominantCr,
+                amount: grandTotal,
+                narration: `Sale: ${sale.customerName} — ${sale.saleNo} [auto-repair v2]`,
+                lines,
+                refType: 'sale',
+                refId: sale.id,
+              };
+              updatedVouchers.set(existing.id, updated);
+              // Also reflect in allVouchersSoFar for voucherNo uniqueness
+              const idx = allVouchersSoFar.findIndex(v => v.id === existing.id);
+              if (idx >= 0) allVouchersSoFar[idx] = updated;
+            } else {
+              const newId = crypto.randomUUID();
+              const voucherNo = storage.getNextVoucherNo(vType as 'receipt' | 'payment' | 'journal' | 'contra', fyStr2, allVouchersSoFar);
+              const v: Voucher = {
+                id: newId,
+                voucherNo,
+                type: vType,
+                date: sale.date,
+                debitAccountId: debitAccId,
+                creditAccountId: dominantCr,
+                amount: grandTotal,
+                narration: `Sale: ${sale.customerName} — ${sale.saleNo} [auto-repair v2]`,
+                createdAt: new Date().toISOString(),
+                createdBy: sale.createdBy || 'System (repair)',
+                refType: 'sale',
+                refId: sale.id,
+                lines,
+              };
+              newRepairVouchers.push(v);
+              allVouchersSoFar.push(v);
+              patchedSales.push({ ...sale, voucherId: newId });
+            }
           }
 
-          // PURCHASES — Dr Purchase (5101), Cr Cash/Bank/Supplier
+          // PURCHASES
           for (const purchase of ((puData || []) as Purchase[])) {
-            const hasVoucher = purchase.voucherId && voucherIds.has(purchase.voucherId);
-            if (hasVoucher) continue;
+            const existing = purchase.voucherId ? voucherById.get(purchase.voucherId) : undefined;
+            const isAutoRepair = !!existing?.narration?.includes('[auto-repair]');
+            if (existing && !isAutoRepair) continue;
+
             const supplierAcc = purchase.supplierId ? ((supData || []) as Supplier[]).find(s => s.id === purchase.supplierId)?.accountId : undefined;
             const creditAccId = purchase.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
               : purchase.paymentMode === 'bank' ? (purchase.bankAccountId || getBankAccountIds((aData || []) as LedgerAccount[])[0] || ACCOUNT_IDS.BANK)
               : (supplierAcc || '2101');
             const vType: VoucherType = purchase.paymentMode === 'credit' ? 'purchase' : 'payment';
-            const amount = purchase.grandTotal ?? purchase.netAmount;
-            if (amount <= 0) continue;
-            const newId = crypto.randomUUID();
-            const voucherNo = storage.getNextVoucherNo(vType as 'receipt' | 'payment' | 'journal' | 'contra', fyStr2, allVouchersSoFar);
-            const v: Voucher = {
-              id: newId,
-              voucherNo,
-              type: vType,
-              date: purchase.date,
-              debitAccountId: '5101',
-              creditAccountId: creditAccId,
-              amount,
-              narration: purchase.narration || `Purchase: ${purchase.supplierName} — ${purchase.purchaseNo} [auto-repair]`,
-              createdAt: new Date().toISOString(),
-              createdBy: purchase.createdBy || 'System (repair)',
-              refType: 'purchase',
-              refId: purchase.id,
-            };
-            repairVouchers.push(v);
-            allVouchersSoFar.push(v);
-            patchedPurchases.push({ ...purchase, voucherId: newId });
+            const grandTotal = purchase.grandTotal ?? purchase.netAmount;
+            if (grandTotal <= 0) continue;
+            const buckets = computePurchaseAccBuckets(purchase);
+            const lines: VoucherLine[] = [];
+            const lid = () => crypto.randomUUID();
+            buckets.forEach((amt, accId) => {
+              const rounded = Math.round(amt * 100) / 100;
+              if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Dr', amount: rounded });
+            });
+            if ((purchase.taxAmount ?? 0) > 0) {
+              lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: purchase.taxAmount!, narration: `GST ITC: CGST ₹${purchase.cgstAmount||0} + SGST ₹${purchase.sgstAmount||0} + IGST ₹${purchase.igstAmount||0}` });
+            }
+            const netPayable = grandTotal - (purchase.tdsAmount || 0);
+            if (netPayable > 0) {
+              lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: netPayable });
+            }
+            if ((purchase.tdsAmount ?? 0) > 0) {
+              lines.push({ id: lid(), accountId: '2202', type: 'Cr', amount: purchase.tdsAmount!, narration: `TDS ${purchase.tdsPct||0}%` });
+            }
+            const dominantDr = dominantAcc(buckets, '5101');
+
+            if (existing && isAutoRepair) {
+              const updated: Voucher = {
+                ...existing,
+                type: vType,
+                date: purchase.date,
+                debitAccountId: dominantDr,
+                creditAccountId: creditAccId,
+                amount: grandTotal,
+                narration: `Purchase: ${purchase.supplierName} — ${purchase.purchaseNo} [auto-repair v2]`,
+                lines,
+                refType: 'purchase',
+                refId: purchase.id,
+              };
+              updatedVouchers.set(existing.id, updated);
+              const idx = allVouchersSoFar.findIndex(v => v.id === existing.id);
+              if (idx >= 0) allVouchersSoFar[idx] = updated;
+            } else {
+              const newId = crypto.randomUUID();
+              const voucherNo = storage.getNextVoucherNo(vType as 'receipt' | 'payment' | 'journal' | 'contra', fyStr2, allVouchersSoFar);
+              const v: Voucher = {
+                id: newId,
+                voucherNo,
+                type: vType,
+                date: purchase.date,
+                debitAccountId: dominantDr,
+                creditAccountId: creditAccId,
+                amount: grandTotal,
+                narration: `Purchase: ${purchase.supplierName} — ${purchase.purchaseNo} [auto-repair v2]`,
+                createdAt: new Date().toISOString(),
+                createdBy: purchase.createdBy || 'System (repair)',
+                refType: 'purchase',
+                refId: purchase.id,
+                lines,
+              };
+              newRepairVouchers.push(v);
+              allVouchersSoFar.push(v);
+              patchedPurchases.push({ ...purchase, voucherId: newId });
+            }
           }
 
-          if (repairVouchers.length > 0) {
-            // Replace state with the repaired data
+          const totalAffected = newRepairVouchers.length + updatedVouchers.size;
+          if (totalAffected > 0) {
             setVouchersState(allVouchersSoFar);
             storage.setVouchers(allVouchersSoFar);
             const patchedSalesIds = new Set(patchedSales.map(s => s.id));
@@ -411,12 +521,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setSalesState(finalSales);
             setPurchasesState(finalPurchases);
 
-            // Persist to Supabase
-            for (const v of repairVouchers) {
-              supabase.from('vouchers').upsert({ ...v, society_id: sid }).then(({ error }) => {
-                if (error) console.error('Repair voucher save error:', error.message);
+            // Persist NEW repair vouchers
+            for (const v of newRepairVouchers) {
+              const { lines: vlines, refType, refId, ...base } = v;
+              supabase.from('vouchers').upsert({ ...base, society_id: sid }).then(({ error }) => {
+                if (error) { console.error('Repair voucher save error:', error.message); return; }
+                supabase.from('vouchers').update({ lines: vlines, refType, refId }).eq('id', v.id)
+                  .then(({ error: e2 }) => { if (e2) console.warn('Repair lines patch:', e2.message); });
               });
             }
+            // Persist UPDATED auto-repair vouchers (in-place re-route)
+            updatedVouchers.forEach((v) => {
+              const { lines: vlines, refType, refId, ...base } = v;
+              supabase.from('vouchers').upsert({ ...base, society_id: sid }).then(({ error }) => {
+                if (error) { console.error('Repair voucher update error:', error.message); return; }
+                supabase.from('vouchers').update({ lines: vlines, refType, refId }).eq('id', v.id)
+                  .then(({ error: e2 }) => { if (e2) console.warn('Re-route lines patch:', e2.message); });
+              });
+            });
             for (const s of patchedSales) {
               supabase.from('sales').update({ voucherId: s.voucherId }).eq('id', s.id)
                 .then(({ error }) => { if (error) console.warn('Sale voucherId patch:', error.message); });
@@ -425,10 +547,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               supabase.from('purchases').update({ voucherId: p.voucherId }).eq('id', p.id)
                 .then(({ error }) => { if (error) console.warn('Purchase voucherId patch:', error.message); });
             }
-            console.log(`[REPAIR] Rebuilt ${repairVouchers.length} missing voucher(s) for ${patchedSales.length} sale(s) + ${patchedPurchases.length} purchase(s).`);
+            console.log(`[REPAIR v2] New: ${newRepairVouchers.length}, Re-routed: ${updatedVouchers.size}.`);
             toastRef.current({
-              title: `${repairVouchers.length} missing voucher(s) auto-repaired`,
-              description: `Found ${patchedSales.length} sale(s) and ${patchedPurchases.length} purchase(s) without accounting vouchers — rebuilt them so Trial Balance / Dashboard reflect correctly.`,
+              title: `${totalAffected} voucher(s) auto-repaired`,
+              description: `${newRepairVouchers.length} created, ${updatedVouchers.size} re-routed to correct Sales/Purchase ledger accounts (per-item).`,
               variant: 'default',
               duration: 8000,
             });
