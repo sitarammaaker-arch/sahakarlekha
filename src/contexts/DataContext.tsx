@@ -1282,10 +1282,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: Math.max(0, b.netBalance) }))
       .filter(i => i.amount > 0);
 
-    // Physical closing stock from stockItems (currentStock × purchaseRate)
+    // Physical closing stock — use movement-based qty (same formula as Inventory/Stock Valuation)
+    // so that orphan currentStock left over from old buggy edits/deletes doesn't show as phantom stock.
     const physicalClosingStock = stockItems
-      .filter(s => s.isActive && s.currentStock > 0)
-      .reduce((sum, s) => sum + s.currentStock * s.purchaseRate, 0);
+      .filter(s => s.isActive)
+      .reduce((sum, s) => {
+        let qty = s.openingStock || 0;
+        for (const m of stockMovements) {
+          if (m.itemId !== s.id) continue;
+          if (m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0)) qty += m.qty;
+          else qty -= Math.abs(m.qty);
+        }
+        qty = Math.max(0, qty);
+        return sum + qty * (s.purchaseRate || 0);
+      }, 0);
 
     // Check if closing stock journal has been posted for this FY — use getVoucherLines() (Rule 4)
     const closingStockPosted = activeVouchers.some(v =>
@@ -1332,7 +1342,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { salesItems, closingStockItems, openingStockItems, purchaseItems, directExpItems,
       totalSales, totalClosingStock, totalOpeningStock, totalPurchases, totalDirectExp, grossProfit,
       physicalClosingStock, closingStockPosted };
-  }, [getTrialBalance, stockItems, activeVouchers, society.financialYear]);
+  }, [getTrialBalance, stockItems, stockMovements, activeVouchers, society.financialYear]);
 
   const postClosingStock = useCallback((fy?: string): { posted: boolean; amount: number; alreadyPosted: boolean } => {
     const currentFY = fy ?? society.financialYear;
