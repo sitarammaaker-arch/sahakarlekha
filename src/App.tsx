@@ -76,7 +76,6 @@ import Register from "./pages/Register";
 import MultiSocietyConsolidation from "./pages/MultiSocietyConsolidation";
 import NabardReport from "./pages/NabardReport";
 import FederationReport from "./pages/FederationReport";
-import AnnualReviewReport from "./pages/AnnualReviewReport";
 import RecoverablesRegister from "./pages/RecoverablesRegister";
 import KachiAaratRegister from "./pages/KachiAaratRegister";
 import AuditSchedules from "./pages/AuditSchedules";
@@ -208,7 +207,6 @@ const AppRoutes = () => {
       <Route path="/multi-society-consolidation" element={<ProtectedRoute><MultiSocietyConsolidation /></ProtectedRoute>} />
       <Route path="/nabard-report" element={<ProtectedRoute><NabardReport /></ProtectedRoute>} />
       <Route path="/federation-report" element={<ProtectedRoute><FederationReport /></ProtectedRoute>} />
-      <Route path="/annual-review" element={<ProtectedRoute><AnnualReviewReport /></ProtectedRoute>} />
       <Route path="/recoverables" element={<ProtectedRoute><RecoverablesRegister /></ProtectedRoute>} />
       <Route path="/kachi-aarat" element={<ProtectedRoute><KachiAaratRegister /></ProtectedRoute>} />
       <Route path="/universal-importer" element={<ProtectedRoute><UniversalImporter /></ProtectedRoute>} />
