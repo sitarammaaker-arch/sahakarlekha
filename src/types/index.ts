@@ -597,6 +597,7 @@ export interface Sale {
   taxAmount: number;       // cgst + sgst + igst
   grandTotal: number;      // netAmount + taxAmount
   paymentMode: PaymentMode;
+  bankAccountId?: string;  // when paymentMode = 'bank', which bank account to credit
   customerId?: string; // linked registered customer
   voucherId?: string;
   gstVoucherIds?: string[]; // auto-created GST output journal IDs
@@ -637,6 +638,7 @@ export interface Purchase {
   taxAmount: number;       // cgst + sgst + igst
   grandTotal: number;      // netAmount + taxAmount - tdsAmount
   paymentMode: PaymentMode;
+  bankAccountId?: string;  // when paymentMode = 'bank', which bank account to credit
   supplierId?: string;     // linked registered supplier
   voucherId?: string;
   taxVoucherIds?: string[]; // auto-created GST/TDS journal voucher IDs

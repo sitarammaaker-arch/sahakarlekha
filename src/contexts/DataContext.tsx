@@ -127,16 +127,18 @@ interface DataContextType {
   getCashBookEntries: (fromDate?: string, toDate?: string) => CashBookEntry[];
   getBankBookEntries: (fromDate?: string, toDate?: string, bankAccountId?: string) => BankBookEntry[];
   getTrialBalance: (asOnDate?: string) => AccountBalance[];
+  // M15: All point-in-time aggregators accept asOnDate so Day Book / Balance Sheet
+  // historical lookups don't silently show current-day numbers.
   getMemberLedger: (memberId: string) => MemberLedgerEntry[];
-  getProfitLoss: () => {
+  getProfitLoss: (asOnDate?: string) => {
     incomeItems: { name: string; nameHi: string; amount: number }[];
     expenseItems: { name: string; nameHi: string; amount: number }[];
     totalIncome: number;
     totalExpenses: number;
     netProfit: number;
   };
-  getReceiptsPayments: () => ReceiptsPaymentsData;
-  getTradingAccount: () => {
+  getReceiptsPayments: (asOnDate?: string) => ReceiptsPaymentsData;
+  getTradingAccount: (asOnDate?: string) => {
     salesItems:        { name: string; nameHi: string; amount: number }[];
     closingStockItems: { name: string; nameHi: string; amount: number }[];
     openingStockItems: { name: string; nameHi: string; amount: number }[];
@@ -1225,8 +1227,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     loansRef.current = [...loansRef.current, newLoan];
     setLoansState(prev => { const updated = [...prev, newLoan]; return updated; });
     supabase.from('loans').upsert(withSoc(newLoan)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+
+    // M16: Create disbursement voucher so loan appears as an asset in Trial Balance / Balance Sheet.
+    // Dr: Loans & Advances (3304) for principal; Cr: Cash (default) — user can re-class later from Vouchers.
+    // Tolerant of chart-of-accounts variants: if 3304 isn't present, look for any account whose name
+    // contains "Loans" under parent 3300.
+    if (newLoan.amount > 0) {
+      const loanAccount = accounts.find(a => a.id === '3304')
+        || accounts.find(a => a.parentId === '3300' && /loan/i.test(a.name) && !a.isGroup);
+      if (loanAccount) {
+        const member = membersRef.current.find(m => m.id === newLoan.memberId);
+        addVoucher({
+          type: 'payment',
+          date: newLoan.disbursementDate || new Date().toISOString().split('T')[0],
+          debitAccountId: loanAccount.id,
+          creditAccountId: ACCOUNT_IDS.CASH,
+          amount: newLoan.amount,
+          narration: `Loan ${loanNo} disbursed to ${member?.name || newLoan.memberId} — ${newLoan.purpose || newLoan.loanType}`,
+          createdBy: user?.name ?? 'System',
+          memberId: newLoan.memberId,
+        });
+      } else {
+        toastRef.current({
+          title: 'Loan saved, voucher skipped',
+          description: 'No "Loans & Advances" (3304) account found. Trial Balance will not show this loan until you add a manual disbursement voucher.',
+          variant: 'default',
+        });
+      }
+    }
+
     return newLoan;
-  }, [society.financialYear]);
+  }, [society.financialYear, accounts, addVoucher, user?.name]);
 
   const updateLoan = useCallback((id: string, data: Partial<Loan>) => {
     setLoansState(prev => {
@@ -1332,7 +1363,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // addVoucher and updateAsset are stable callbacks; assets/accounts/society/user are state
   }, [assets, accounts, society, user, addVoucher, updateAsset]); // eslint-disable-line
 
-  const getReceiptsPayments = useCallback((): ReceiptsPaymentsData => {
+  const getReceiptsPayments = useCallback((asOnDate?: string): ReceiptsPaymentsData => {
     const cashAccount = accounts.find(a => a.id === ACCOUNT_IDS.CASH);
     const bankIds = getBankAccountIds(accounts);
     const openingCash = cashAccount?.openingBalance ?? 0;
@@ -1344,9 +1375,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const receiptMap: Record<string, { name: string; amount: number }> = {};
     const paymentMap: Record<string, { name: string; amount: number }> = {};
 
+    // M15: Honor asOnDate so historical Day Book / Balance Sheet lookups stay accurate.
+    const vouchersToUse = asOnDate ? activeVouchers.filter(v => v.date <= asOnDate) : activeVouchers;
     // BUG-02 FIX: Use getVoucherLines() to handle multi-line Expert Mode vouchers.
     // For each line touching Cash/Bank, find the "other" side accounts in the same voucher.
-    activeVouchers.forEach(v => {
+    vouchersToUse.forEach(v => {
       const lines = getVoucherLines(v);
       lines.forEach(l => {
         const isCashBank = l.accountId === ACCOUNT_IDS.CASH || isBankAccount(l.accountId, accounts);
@@ -1376,8 +1409,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
     });
 
-    const closingCash = getAccountBalance(ACCOUNT_IDS.CASH);
-    const closingBank = bankIds.reduce((sum, bid) => sum + getAccountBalance(bid), 0);
+    // M15: Compute closing balances honoring asOnDate (instead of always-current getAccountBalance).
+    const closingFor = (accId: string): number => {
+      const acc = accounts.find(a => a.id === accId);
+      if (!acc) return 0;
+      let bal = acc.openingBalanceType === 'debit' ? acc.openingBalance : -acc.openingBalance;
+      vouchersToUse.forEach(v => {
+        getVoucherLines(v).forEach(l => {
+          if (l.accountId === accId) bal += l.type === 'Dr' ? l.amount : -l.amount;
+        });
+      });
+      return bal;
+    };
+    const closingCash = closingFor(ACCOUNT_IDS.CASH);
+    const closingBank = bankIds.reduce((sum, bid) => sum + closingFor(bid), 0);
 
     return {
       openingCash,
@@ -1387,10 +1432,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       closingCash,
       closingBank,
     };
-  }, [accounts, vouchers, getAccountBalance]);
+  }, [accounts, vouchers, activeVouchers]);
 
-  const getTradingAccount = useCallback(() => {
-    const tb = getTrialBalance();
+  const getTradingAccount = useCallback((asOnDate?: string) => {
+    // M15: Pass asOnDate to underlying TB so historical Trading A/c is consistent.
+    const tb = getTrialBalance(asOnDate);
     const fy = society.financialYear;
 
     // Cr side: Sales / Trading Income (parentId '4100')
@@ -1407,11 +1453,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Physical closing stock — use movement-based qty (same formula as Inventory/Stock Valuation)
     // so that orphan currentStock left over from old buggy edits/deletes doesn't show as phantom stock.
+    // M15: Filter movements by asOnDate so historical Trading A/c matches its date window.
+    const movementsToUse = asOnDate ? stockMovements.filter(m => m.date <= asOnDate) : stockMovements;
     const physicalClosingStock = stockItems
       .filter(s => s.isActive)
       .reduce((sum, s) => {
         let qty = s.openingStock || 0;
-        for (const m of stockMovements) {
+        for (const m of movementsToUse) {
           if (m.itemId !== s.id) continue;
           if (m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0)) qty += m.qty;
           else qty -= Math.abs(m.qty);
@@ -1506,8 +1554,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { posted: true, amount, alreadyPosted: false };
   }, [stockItems, stockMovements, activeVouchers, society.financialYear, addVoucher, user?.name]);
 
-  const getProfitLoss = useCallback(() => {
-    const tb = getTrialBalance();
+  const getProfitLoss = useCallback((asOnDate?: string) => {
+    // M15: Pass asOnDate to underlying TB so historical P&L is accurate.
+    const tb = getTrialBalance(asOnDate);
     // Income accounts are credit-nature: netBalance = debit - credit → normally negative → abs gives the income amount.
     const incomeItems = tb
       .filter(b => b.account.type === 'income' && b.netBalance !== 0)
@@ -1625,7 +1674,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Dr: Cash / Bank / Debtor for grand total
     const debitAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
-      : data.paymentMode === 'bank' ? ((data as any).bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
+      : data.paymentMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
       : (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303');
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
 
@@ -1800,7 +1849,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const grandTotal = data.grandTotal ?? data.netAmount;
     const lines: VoucherLine[] = [];
     const debitAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
-      : data.paymentMode === 'bank' ? ((data as any).bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
+      : data.paymentMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
       : (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303');
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
 
@@ -1875,7 +1924,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const lines: VoucherLine[] = [];
     const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || '2101') : '2101';
     const creditAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
-      : data.paymentMode === 'bank' ? ((data as any).bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
+      : data.paymentMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
       : supplierAccId;
 
     // Dr: Purchases (5101) for net amount
@@ -2065,7 +2114,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const lines: VoucherLine[] = [];
     const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || '2101') : '2101';
     const creditAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
-      : data.paymentMode === 'bank' ? ((data as any).bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
+      : data.paymentMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
       : supplierAccId;
 
     const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0) + (data.tdsAmount || 0));
@@ -2559,7 +2608,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (entityType === 'asset') {
       const asset = assetsRef.current.find(a => a.id === id);
       if (asset) {
-        const vCount = activeVouchers.filter(v => v.narration?.includes(asset.assetNo)).length;
+        // M14: Tighter match — require a word-boundary around assetNo (prevents AST/0010
+        // matching AST/00100) AND restrict to depreciation/disposal vouchers, so a casual
+        // narration mention of the assetNo doesn't falsely block deletion.
+        const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const assetNoRe = new RegExp(`(^|[^\\w/-])${escapeRegex(asset.assetNo)}([^\\w/-]|$)`);
+        const vCount = activeVouchers.filter(v => {
+          if (!v.narration || !assetNoRe.test(v.narration)) return false;
+          return /depreciation|disposal|sold|written off|impair/i.test(v.narration);
+        }).length;
         if (vCount > 0) links.push({
           module: 'Vouchers', count: vCount,
           labelHi: `${vCount} वाउचर (ह्रास आदि)`, labelEn: `${vCount} Voucher(s) (depreciation etc.)`,
