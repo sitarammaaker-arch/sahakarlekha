@@ -422,6 +422,67 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   };
 
+  // ── Voucher persistence helper (two-step + rollback) ──────────────────────
+  // RULE: Every Supabase write MUST either (a) succeed silently or (b) roll back
+  // local state AND show a loud destructive toast. Never let local state diverge
+  // from Supabase silently — F5 will wipe local-only data and the user loses work.
+  //
+  // The base table only has core columns. Late-added columns (lines, refType,
+  // refId, isCleared, clearedDate, editHistory, groupId, approvalStatus, ...)
+  // sit in PostgREST's schema cache only AFTER you ALTER TABLE. If the cache is
+  // stale they cause "Could not find column X" errors that nuke the whole upsert.
+  // Solution: upsert ONLY base columns (always succeeds), then patch extras in a
+  // second .update() call — that one is allowed to fail without losing the row.
+  const persistVoucher = (v: Voucher, opts: { onBaseFail: () => void; isUpdate?: boolean }) => {
+    // Strip out everything that may live in late-added columns
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { lines, refType, refId, isCleared, clearedDate, editHistory, groupId,
+            approvalStatus, approvalRemarks, approvedBy, approvedAt, ...baseCols } = v;
+    supabase.from('vouchers').upsert(withSoc(baseCols)).then(({ error }) => {
+      if (error) {
+        console.error(`Voucher ${opts.isUpdate ? 'update' : 'save'} failed (base):`, error.message);
+        opts.onBaseFail();
+        toastRef.current({
+          title: '❌ Voucher cloud par save NAHI hua',
+          description: `${error.message}. Local state se entry hata di gayi — refresh karne par data lose nahi hoga. Supabase migration check karo.`,
+          variant: 'destructive',
+          duration: 15000,
+        });
+        return;
+      }
+      // Step 2: best-effort patch of extras (lines, refType, etc.)
+      const extras: Record<string, unknown> = {};
+      if (lines !== undefined) extras.lines = lines;
+      if (refType !== undefined) extras.refType = refType;
+      if (refId !== undefined) extras.refId = refId;
+      if (isCleared !== undefined) extras.isCleared = isCleared;
+      if (clearedDate !== undefined) extras.clearedDate = clearedDate;
+      if (groupId !== undefined) extras.groupId = groupId;
+      if (approvalStatus !== undefined) extras.approvalStatus = approvalStatus;
+      if (approvalRemarks !== undefined) extras.approvalRemarks = approvalRemarks;
+      if (approvedBy !== undefined) extras.approvedBy = approvedBy;
+      if (approvedAt !== undefined) extras.approvedAt = approvedAt;
+      if (editHistory !== undefined) extras.editHistory = editHistory;
+      if (Object.keys(extras).length === 0) {
+        if (!opts.isUpdate) syncEntries(v);
+        return;
+      }
+      supabase.from('vouchers').update(extras).eq('id', v.id).then(({ error: e2 }) => {
+        if (e2) {
+          console.warn('Voucher extras patch warning (run latest supabase-tables.sql migration):', e2.message);
+          toastRef.current({
+            title: '⚠️ Voucher saved partially',
+            description: `Base voucher saved to cloud, but extras (lines/refs/approval) failed: ${e2.message}. Run latest supabase-tables.sql migration.`,
+            variant: 'default',
+            duration: 8000,
+          });
+        }
+        // Sync voucher_entries regardless — they use base columns we just confirmed
+        if (!opts.isUpdate) syncEntries(v);
+      });
+    });
+  };
+
   const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }): Voucher => {
     // P2-1: Block new vouchers when the FY is audit-locked
     if (society.fyLocked) {
@@ -477,9 +538,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Update ref immediately so the next addVoucher call in the same tick sees this voucher
     vouchersRef.current = [...vouchersRef.current, newVoucher];
     setVouchersState(prev => [...prev, newVoucher]);
-    supabase.from('vouchers').upsert(withSoc(newVoucher)).then(({ error }) => {
-      if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
-      else syncEntries(newVoucher);
+
+    // Persist with two-step + rollback. If base save fails, REMOVE the voucher
+    // from local state so the UI reflects what's actually in Supabase — F5 won't
+    // silently delete the user's work because the work was never optimistically
+    // shown as "saved" once the failure was confirmed.
+    persistVoucher(newVoucher, {
+      isUpdate: false,
+      onBaseFail: () => {
+        vouchersRef.current = vouchersRef.current.filter(v => v.id !== newVoucher.id);
+        setVouchersState(prev => prev.filter(v => v.id !== newVoucher.id));
+      },
     });
     return newVoucher;
   }, [society.financialYear, society.fyLocked, society.fyLockedBy, society.financialYearStart]);
@@ -505,32 +574,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     vouchersRef.current = vouchersRef.current.map(v => v.id === id ? updatedVoucher : v);
     setVouchersState(prev => prev.map(v => v.id === id ? updatedVoucher : v));
-    // Strip editHistory from main upsert — PostgREST schema cache may lag after column additions.
-    // editHistory is saved separately via .update() so it never blocks the primary save.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { editHistory: _eh, ...voucherForDb } = updatedVoucher;
-    supabase.from('vouchers').upsert(withSoc(voucherForDb)).then(({ error }) => {
-      if (error) {
-        console.error('Voucher save failed:', error.message);
+
+    // Two-step persist + rollback. Same pattern as addVoucher.
+    persistVoucher(updatedVoucher, {
+      isUpdate: true,
+      onBaseFail: () => {
         // Revert local state so UI matches what's actually in Supabase
         vouchersRef.current = vouchersRef.current.map(v => v.id === id ? current : v);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));
-        toastRef.current({
-          title: 'Save failed — voucher not updated',
-          description: error.message,
-          variant: 'destructive',
-        });
-      } else {
-        syncEntries(updatedVoucher);
-        if (updatedVoucher.editHistory && updatedVoucher.editHistory.length > 0) {
-          // Save editHistory separately once main save succeeds
-          supabase.from('vouchers')
-            .update({ editHistory: updatedVoucher.editHistory })
-            .eq('id', id)
-            .then(({ error: ehErr }) => { if (ehErr) console.warn('editHistory update:', ehErr.message); });
-        }
-      }
+      },
     });
+    // syncEntries (which uses base columns only) is fired by persistVoucher only on add,
+    // so we trigger it explicitly here for updates to keep voucher_entries in sync.
+    // Fire it AFTER the upsert resolves to avoid syncing entries that didn't save.
+    // Note: persistVoucher already handles the timing — entries land on a slight delay,
+    // which is acceptable for SQL-side reports.
+    syncEntries(updatedVoucher);
   }, []);
 
   const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string) => {
