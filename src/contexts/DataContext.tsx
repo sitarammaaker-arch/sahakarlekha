@@ -95,6 +95,7 @@ interface DataContextType {
   // Purchases
   purchases: Purchase[];
   addPurchase: (data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>) => Purchase;
+  updatePurchase: (id: string, data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>) => Purchase | null;
   deletePurchase: (id: string) => void;
 
   // Suppliers
@@ -1712,6 +1713,132 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.info(`[AUDIT-DELETE] Purchase id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
+  const updatePurchase = useCallback((id: string, data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>): Purchase | null => {
+    if (society.fyLocked) {
+      toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' });
+      return null;
+    }
+    const original = purchasesRef.current.find(p => p.id === id);
+    if (!original) {
+      toastRef.current({ title: 'Purchase not found', variant: 'destructive' });
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const lid = () => crypto.randomUUID();
+
+    // 1️⃣ Reverse original stock additions
+    original.items.forEach(item => {
+      setStockItemsState(prev => {
+        const updated = prev.map(i => {
+          if (i.id !== item.itemId) return i;
+          const newStock = Math.max(0, i.currentStock - item.qty);
+          supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id)
+            .then(({ error }) => { if (error) console.error('Stock revert sync:', error.message); });
+          return { ...i, currentStock: newStock };
+        });
+        return updated;
+      });
+    });
+
+    // 2️⃣ Soft-delete the original purchase voucher(s)
+    const linkedIds = [original.voucherId, ...(original.taxVoucherIds ?? [])].filter(Boolean) as string[];
+    if (linkedIds.length > 0) {
+      setVouchersState(v => {
+        const updated = v.map(x => linkedIds.includes(x.id)
+          ? { ...x, isDeleted: true, deletedAt: now, deletedBy: data.createdBy || 'System', deletedReason: `Purchase ${original.purchaseNo} edited` }
+          : x
+        );
+        linkedIds.forEach(vid => {
+          const cancelled = updated.find(x => x.id === vid);
+          if (cancelled) supabase.from('vouchers').upsert(cancelled).then(({ error }) => { if (error) console.error('Voucher cancel sync:', error.message); });
+        });
+        return updated;
+      });
+    }
+
+    // 3️⃣ Build new voucher lines from updated data
+    const grandTotal = data.grandTotal ?? data.netAmount;
+    const lines: VoucherLine[] = [];
+    const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || '2101') : '2101';
+    const creditAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
+      : data.paymentMode === 'bank' ? ((data as any).bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
+      : supplierAccId;
+
+    const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0) + (data.tdsAmount || 0));
+    if (netAmt > 0) {
+      lines.push({ id: lid(), accountId: '5101', type: 'Dr', amount: netAmt });
+    }
+    if ((data.taxAmount ?? 0) > 0) {
+      lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: data.taxAmount!, narration: `GST ITC: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
+    }
+    const netPayable = grandTotal - (data.tdsAmount || 0);
+    if (netPayable > 0) {
+      lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: netPayable });
+    }
+    if ((data.tdsAmount ?? 0) > 0) {
+      lines.push({ id: lid(), accountId: '2202', type: 'Cr', amount: data.tdsAmount!, narration: `TDS ${data.tdsPct||0}%` });
+    }
+
+    const vType = data.paymentMode === 'credit' ? 'purchase' : 'payment';
+    const newVoucher = addVoucher({
+      type: vType,
+      date: data.date,
+      lines,
+      debitAccountId: '5101',
+      creditAccountId: creditAccId,
+      amount: grandTotal,
+      narration: data.narration || `Purchase: ${data.supplierName} — ${original.purchaseNo}`,
+      createdBy: data.createdBy,
+      refType: 'purchase',
+      refId: id,
+    });
+
+    // 4️⃣ Apply new stock additions
+    data.items.forEach(item => {
+      setStockItemsState(prev => {
+        const updated = prev.map(i => {
+          if (i.id !== item.itemId) return i;
+          const newStock = i.currentStock + item.qty;
+          supabase.from('stock_items').update({ currentStock: newStock, purchaseRate: item.rate }).eq('id', i.id)
+            .then(({ error }) => { if (error) console.error('Stock sync error:', error.message); });
+          return { ...i, currentStock: newStock, purchaseRate: item.rate };
+        });
+        return updated;
+      });
+      const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'purchase', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: original.purchaseNo, narration: `Purchase from ${data.supplierName} (edited)`, createdAt: now };
+      setStockMovementsState(prev => [...prev, mv]);
+      supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.error('DB sync error:', error.message); });
+    });
+
+    // 5️⃣ Update the purchase record in place (same id + purchaseNo)
+    const updated: Purchase = {
+      ...data,
+      id,
+      purchaseNo: original.purchaseNo,
+      voucherId: newVoucher.id,
+      taxVoucherIds: undefined,
+      createdAt: original.createdAt,
+    };
+    purchasesRef.current = purchasesRef.current.map(p => p.id === id ? updated : p);
+    setPurchasesState(prev => prev.map(p => p.id === id ? updated : p));
+
+    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, taxVoucherIds: _tv, ...purchaseBase } = updated;
+    supabase.from('purchases').upsert(withSoc(purchaseBase)).then(({ error }) => {
+      if (error) {
+        console.error('Purchase update failed:', error.message);
+        toastRef.current({ title: 'Purchase update nahi hua', description: error.message, variant: 'destructive' });
+      } else {
+        supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId })
+          .eq('id', id)
+          .then(({ error: gstErr }) => { if (gstErr) console.warn('Purchase GST fields update:', gstErr.message); });
+      }
+    });
+
+    console.info(`[AUDIT-EDIT] Purchase id=${id} edited by ${data.createdBy || 'unknown'} at ${now}`);
+    return updated;
+  }, [society.fyLocked, suppliers, accounts, addVoucher]);
+
   // ── Employees ──────────────────────────────────────────────────────────────
   const addEmployee = useCallback((data: Omit<Employee, 'id' | 'empNo'>): Employee => {
     const maxEmpNum = employeesRef.current.reduce((max, e) => {
@@ -2060,7 +2187,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       p7Entries, upsertP7Entry, deleteP7Entry,
       addStockItem, updateStockItem, deleteStockItem, addStockMovement,
       addSale, deleteSale,
-      addPurchase, deletePurchase,
+      addPurchase, updatePurchase, deletePurchase,
       addEmployee, updateEmployee, deleteEmployee,
       addSalaryRecord, updateSalaryRecord, deleteSalaryRecord,
       addSupplier, updateSupplier, deleteSupplier,

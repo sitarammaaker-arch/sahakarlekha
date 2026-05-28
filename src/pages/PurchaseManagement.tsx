@@ -22,7 +22,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { PackagePlus, Plus, Trash2, Eye, Search, FileSpreadsheet, Download } from 'lucide-react';
+import { PackagePlus, Plus, Trash2, Eye, Pencil, Search, FileSpreadsheet, Download } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
@@ -58,7 +58,7 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const PurchaseManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { purchases, stockItems, suppliers, addPurchase, deletePurchase, addStockItem, society } = useData();
+  const { purchases, stockItems, suppliers, addPurchase, updatePurchase, deletePurchase, addStockItem, society } = useData();
   const { toast } = useToast();
 
   // ── New Purchase form state ───────────────────────────────────────────────
@@ -76,6 +76,8 @@ const PurchaseManagement: React.FC = () => {
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
   const [narration, setNarration] = useState('');
   const [savedPurchaseNo, setSavedPurchaseNo] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'new-purchase' | 'purchase-list'>('new-purchase');
 
   // ── Purchase List filter state ────────────────────────────────────────────
   const [filterFrom, setFilterFrom] = useState('');
@@ -171,7 +173,40 @@ const PurchaseManagement: React.FC = () => {
     setItems(prev => prev.filter((_, i) => i !== index));
   };
 
-  // ── Save purchase ─────────────────────────────────────────────────────────
+  // ── Reset form helper ─────────────────────────────────────────────────────
+  const resetForm = () => {
+    setPurchaseDate(TODAY);
+    setSupplierId('');
+    setSupplierName('');
+    setSupplierPhone('');
+    setItems([EMPTY_ITEM()]);
+    setDiscount(0);
+    setCgstPct(0); setSgstPct(0); setIgstPct(0); setTdsPct(0);
+    setPaymentMode('cash');
+    setNarration('');
+    setEditingId(null);
+  };
+
+  // ── Load purchase into form for editing ──────────────────────────────────
+  const handleEdit = (purchase: typeof purchases[number]) => {
+    setEditingId(purchase.id);
+    setPurchaseDate(purchase.date);
+    setSupplierId(purchase.supplierId || '');
+    setSupplierName(purchase.supplierName);
+    setSupplierPhone(purchase.supplierPhone || '');
+    setItems(purchase.items.length ? purchase.items.map(it => ({ ...it })) : [EMPTY_ITEM()]);
+    setDiscount(purchase.discount || 0);
+    setCgstPct(purchase.cgstPct || 0);
+    setSgstPct(purchase.sgstPct || 0);
+    setIgstPct(purchase.igstPct || 0);
+    setTdsPct(purchase.tdsPct || 0);
+    setPaymentMode(purchase.paymentMode);
+    setNarration(purchase.narration || '');
+    setSavedPurchaseNo(null);
+    setActiveTab('new-purchase');
+  };
+
+  // ── Save purchase (create or update) ──────────────────────────────────────
   const handleSave = () => {
     if (!supplierName.trim()) {
       toast({
@@ -189,41 +224,46 @@ const PurchaseManagement: React.FC = () => {
       return;
     }
 
+    const payload = {
+      date: purchaseDate,
+      supplierName: supplierName.trim(),
+      supplierPhone: supplierPhone.trim() || undefined,
+      supplierId: supplierId || undefined,
+      items: validItems,
+      totalAmount,
+      discount,
+      netAmount,
+      cgstPct, sgstPct, igstPct, tdsPct,
+      cgstAmount, sgstAmount, igstAmount, tdsAmount,
+      taxAmount, grandTotal,
+      paymentMode,
+      narration: narration.trim(),
+      createdBy: user?.name ?? 'Unknown',
+    };
+
     try {
-      const newPurchase = addPurchase({
-        date: purchaseDate,
-        supplierName: supplierName.trim(),
-        supplierPhone: supplierPhone.trim() || undefined,
-        supplierId: supplierId || undefined,
-        items: validItems,
-        totalAmount,
-        discount,
-        netAmount,
-        cgstPct, sgstPct, igstPct, tdsPct,
-        cgstAmount, sgstAmount, igstAmount, tdsAmount,
-        taxAmount, grandTotal,
-        paymentMode,
-        narration: narration.trim(),
-        createdBy: user?.name ?? 'Unknown',
-      });
-
-      setSavedPurchaseNo(newPurchase.purchaseNo);
-      toast({
-        title: language === 'hi'
-          ? `खरीद सहेजी गई: ${newPurchase.purchaseNo}`
-          : `Purchase saved: ${newPurchase.purchaseNo}`,
-      });
-
-      // Reset form
-      setPurchaseDate(TODAY);
-      setSupplierId('');
-      setSupplierName('');
-      setSupplierPhone('');
-      setItems([EMPTY_ITEM()]);
-      setDiscount(0);
-      setCgstPct(0); setSgstPct(0); setIgstPct(0); setTdsPct(0);
-      setPaymentMode('cash');
-      setNarration('');
+      if (editingId) {
+        const updated = updatePurchase(editingId, payload);
+        if (updated) {
+          setSavedPurchaseNo(updated.purchaseNo);
+          toast({
+            title: language === 'hi'
+              ? `खरीद अपडेट हुई: ${updated.purchaseNo}`
+              : `Purchase updated: ${updated.purchaseNo}`,
+          });
+          resetForm();
+          setActiveTab('purchase-list');
+        }
+      } else {
+        const newPurchase = addPurchase(payload);
+        setSavedPurchaseNo(newPurchase.purchaseNo);
+        toast({
+          title: language === 'hi'
+            ? `खरीद सहेजी गई: ${newPurchase.purchaseNo}`
+            : `Purchase saved: ${newPurchase.purchaseNo}`,
+        });
+        resetForm();
+      }
     } catch {
       toast({
         title: language === 'hi' ? 'कोई त्रुटि हुई' : 'An error occurred',
@@ -283,10 +323,12 @@ const PurchaseManagement: React.FC = () => {
         </div>
       </div>
 
-      <Tabs defaultValue="new-purchase">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'new-purchase' | 'purchase-list')}>
         <TabsList className="grid w-full max-w-sm grid-cols-2">
           <TabsTrigger value="new-purchase">
-            {language === 'hi' ? 'नई खरीद' : 'New Purchase'}
+            {editingId
+              ? (language === 'hi' ? 'खरीद संपादन' : 'Edit Purchase')
+              : (language === 'hi' ? 'नई खरीद' : 'New Purchase')}
           </TabsTrigger>
           <TabsTrigger value="purchase-list">
             {language === 'hi' ? 'खरीद सूची' : 'Purchase List'}
@@ -295,6 +337,24 @@ const PurchaseManagement: React.FC = () => {
 
         {/* ── Tab 1: New Purchase Entry ─────────────────────────────────── */}
         <TabsContent value="new-purchase" className="space-y-4 mt-4">
+          {editingId && (
+            <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <Pencil className="h-4 w-4 text-amber-700" />
+              <span className="text-amber-800 font-medium text-sm">
+                {language === 'hi'
+                  ? `संपादन मोड — पुरानी प्रविष्टि बदली जाएगी, स्टॉक एडजस्ट होगा`
+                  : `Editing mode — original entry will be replaced, stock will be re-adjusted`}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto text-amber-700"
+                onClick={() => { resetForm(); }}
+              >
+                {language === 'hi' ? 'रद्द करें' : 'Cancel Edit'}
+              </Button>
+            </div>
+          )}
           {savedPurchaseNo && (
             <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
               <span className="text-green-700 font-medium">
@@ -594,9 +654,16 @@ const PurchaseManagement: React.FC = () => {
             </Card>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            {editingId && (
+              <Button variant="outline" onClick={resetForm}>
+                {language === 'hi' ? 'रद्द करें' : 'Cancel'}
+              </Button>
+            )}
             <Button onClick={handleSave} className="px-8">
-              {language === 'hi' ? 'खरीद सहेजें' : 'Save Purchase'}
+              {editingId
+                ? (language === 'hi' ? 'अपडेट करें' : 'Update Purchase')
+                : (language === 'hi' ? 'खरीद सहेजें' : 'Save Purchase')}
             </Button>
           </div>
         </TabsContent>
@@ -744,6 +811,14 @@ const PurchaseManagement: React.FC = () => {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                onClick={() => handleEdit(purchase)}
+                                title={language === 'hi' ? 'संपादन' : 'Edit'}
+                              >
+                                <Pencil className="h-4 w-4 text-amber-600" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => setDeleteId(purchase.id)}
                                 title={language === 'hi' ? 'हटाएं' : 'Delete'}
                               >
@@ -886,6 +961,17 @@ const PurchaseManagement: React.FC = () => {
                   <span>{language === 'hi' ? 'कुल राशि (Grand Total)' : 'Grand Total'}</span>
                   <span className="text-primary">{fmt(viewPurchase.grandTotal || viewPurchase.netAmount)}</span>
                 </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => { const p = viewPurchase; setViewPurchase(null); handleEdit(p); }}
+                  className="gap-2"
+                >
+                  <Pencil className="h-4 w-4" />
+                  {language === 'hi' ? 'इस खरीद को संपादित करें' : 'Edit this Purchase'}
+                </Button>
               </div>
             </div>
           )}
