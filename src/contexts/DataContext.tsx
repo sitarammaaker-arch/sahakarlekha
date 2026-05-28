@@ -194,6 +194,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => { p7EntriesRef.current = p7Entries; }, [p7Entries]);
   const [stockItems, setStockItemsState] = useState<StockItem[]>([]);
   const [stockMovements, setStockMovementsState] = useState<StockMovement[]>([]);
+  const stockMovementsRef = useRef<StockMovement[]>(stockMovements);
+  useEffect(() => { stockMovementsRef.current = stockMovements; }, [stockMovements]);
   const [sales, setSalesState] = useState<Sale[]>([]);
   const salesRef = useRef<Sale[]>(sales);
   useEffect(() => { salesRef.current = sales; }, [sales]);
@@ -592,20 +594,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const approveVoucher = useCallback((id: string, approvedBy: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
     const updated = { ...current, approvalStatus: 'approved' as const, approvedBy, approvedAt: new Date().toISOString() };
     setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); return u; });
-    supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-  }, []);
+    supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
+      else syncEntries(updated); // mirror to voucher_entries so SQL reports see the approved entries
+    });
+  }, [society.fyLocked]);
 
   const rejectVoucher = useCallback((id: string, rejectedBy: string, reason: string) => {
+    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
     const updated = { ...current, approvalStatus: 'rejected' as const, approvalRemarks: reason, approvedBy: rejectedBy, approvedAt: new Date().toISOString() };
     setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); return u; });
-    supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-  }, []);
+    supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
+      else deleteEntries(id); // rejected vouchers shouldn't impact SQL reports
+    });
+  }, [society.fyLocked]);
 
   const addAuditObjection = useCallback((data: Omit<AuditObjection, 'id' | 'objectionNo' | 'createdAt'>): AuditObjection => {
     const maxNum = auditObjectionsRef.current.filter(o => o.objectionNo?.includes(data.auditYear)).reduce((max, o) => {
@@ -739,23 +749,46 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return updated;
     });
     supabase.from('members').upsert(withSoc(updatedMember)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    // Update Share Capital voucher if amount changed
+    // Helper: re-sync a member's auto-voucher (Share Capital / Admission Fee).
+    // Updates amount + narration + lines AND syncs voucher_entries so SQL reports match.
+    // If the voucher was cancelled earlier, warn the user instead of silently no-op.
+    const resyncMemberVoucher = (creditAccountId: string, newAmount: number, kind: string) => {
+      const active = vouchersRef.current.find(v => v.memberId === id && v.creditAccountId === creditAccountId && !v.isDeleted);
+      if (active) {
+        const lid = () => crypto.randomUUID();
+        // Rebuild lines so multi-line vouchers stay consistent; legacy single-line use derived
+        const newLines: VoucherLine[] = [
+          { id: lid(), accountId: active.debitAccountId, type: 'Dr', amount: newAmount },
+          { id: lid(), accountId: creditAccountId, type: 'Cr', amount: newAmount },
+        ];
+        const updatedV: Voucher = {
+          ...active,
+          amount: newAmount,
+          lines: newLines,
+          narration: `${kind} updated for ${updatedMember.name}`,
+        };
+        setVouchersState(prev => prev.map(v => v.id === active.id ? updatedV : v));
+        supabase.from('vouchers').upsert(withSoc(updatedV)).then(({ error }) => {
+          if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
+          else syncEntries(updatedV); // rebuild voucher_entries rows with new amount
+        });
+      } else {
+        const cancelled = vouchersRef.current.find(v => v.memberId === id && v.creditAccountId === creditAccountId && v.isDeleted);
+        if (cancelled) {
+          toastRef.current({
+            title: `${kind} voucher cancelled`,
+            description: `Previous ${kind} voucher was cancelled — amount changed but no new voucher auto-created. Add a manual voucher if needed.`,
+            variant: 'default',
+          });
+        }
+      }
+    };
+
     if (data.shareCapital !== undefined && data.shareCapital !== oldMember.shareCapital) {
-      const scv = vouchersRef.current.find(v => v.memberId === id && v.creditAccountId === ACCOUNT_IDS.SHARE_CAP && !v.isDeleted);
-      if (scv) {
-        const updated = { ...scv, amount: data.shareCapital };
-        setVouchersState(prev => { const list = prev.map(v => v.id === scv.id ? updated : v); return list; });
-        supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-      }
+      resyncMemberVoucher(ACCOUNT_IDS.SHARE_CAP, data.shareCapital, 'Share Capital');
     }
-    // Update Admission Fee voucher if amount changed
     if (data.admissionFee !== undefined && data.admissionFee !== oldMember.admissionFee) {
-      const afv = vouchersRef.current.find(v => v.memberId === id && v.creditAccountId === ACCOUNT_IDS.ADM_FEE && !v.isDeleted);
-      if (afv) {
-        const updated = { ...afv, amount: data.admissionFee };
-        setVouchersState(prev => { const list = prev.map(v => v.id === afv.id ? updated : v); return list; });
-        supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-      }
+      resyncMemberVoucher(ACCOUNT_IDS.ADM_FEE, data.admissionFee, 'Admission Fee');
     }
   }, []);
 
@@ -1354,9 +1387,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     );
     if (alreadyPosted) return { posted: false, amount: 0, alreadyPosted: true };
 
+    // Use movement-based qty (same formula as Inventory / Stock Valuation / Trading Account)
+    // so the journal posts the same number user sees in reports.
     const amount = stockItems
-      .filter(s => s.isActive && s.currentStock > 0)
-      .reduce((sum, s) => sum + s.currentStock * s.purchaseRate, 0);
+      .filter(s => s.isActive)
+      .reduce((sum, s) => {
+        let qty = s.openingStock || 0;
+        for (const m of stockMovements) {
+          if (m.itemId !== s.id) continue;
+          if (m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0)) qty += m.qty;
+          else qty -= Math.abs(m.qty);
+        }
+        qty = Math.max(0, qty);
+        return sum + qty * (s.purchaseRate || 0);
+      }, 0);
 
     if (amount <= 0) return { posted: false, amount: 0, alreadyPosted: false };
 
@@ -1370,7 +1414,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       createdBy: user?.name ?? 'System',
     });
     return { posted: true, amount, alreadyPosted: false };
-  }, [stockItems, activeVouchers, society.financialYear, addVoucher, user?.name]);
+  }, [stockItems, stockMovements, activeVouchers, society.financialYear, addVoucher, user?.name]);
 
   const getProfitLoss = useCallback(() => {
     const tb = getTrialBalance();
@@ -1455,19 +1499,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addStockMovement = useCallback((data: Omit<StockMovement, 'id' | 'createdAt'>) => {
     const movement: StockMovement = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
-    setStockMovementsState(prev => { const updated = [...prev, movement]; return updated; });
+    stockMovementsRef.current = [...stockMovementsRef.current, movement];
+    setStockMovementsState(prev => [...prev, movement]);
     supabase.from('stock_movements').upsert(withSoc(movement)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    // Update currentStock on the item (Supabase)
-    setStockItemsState(prev => {
-      const updated = prev.map(i => {
-        if (i.id !== data.itemId) return i;
-        const delta = data.type === 'purchase' || (data.type === 'adjustment' && data.qty > 0) ? data.qty : -Math.abs(data.qty);
-        const newStock = i.currentStock + delta;
-        supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { console.error('Stock currentStock sync error:', error.message); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } });
-        return { ...i, currentStock: newStock };
-      });
-      return updated;
-    });
+
+    // Recompute currentStock from openingStock + ALL movements (authoritative — prevents drift
+    // from past partial-sync failures or manual adjustments). Same formula as Inventory page.
+    const allMovs = stockMovementsRef.current;
+    setStockItemsState(prev => prev.map(i => {
+      if (i.id !== data.itemId) return i;
+      let qty = i.openingStock || 0;
+      for (const m of allMovs) {
+        if (m.itemId !== i.id) continue;
+        if (m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0)) qty += m.qty;
+        else qty -= Math.abs(m.qty);
+      }
+      qty = Math.max(0, qty);
+      supabase.from('stock_items').update({ currentStock: qty }).eq('id', i.id).then(({ error }) => { if (error) { console.error('Stock currentStock sync error:', error.message); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } });
+      return { ...i, currentStock: qty };
+    }));
   }, []);
 
   // ── Sales ──────────────────────────────────────────────────────────────────
@@ -1572,7 +1622,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             );
             linkedIds.forEach(vid => {
               const cancelled = updated.find(x => x.id === vid);
-              if (cancelled) supabase.from('vouchers').upsert(cancelled).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+              if (cancelled) supabase.from('vouchers').upsert(cancelled).then(({ error }) => {
+                if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
+                else deleteEntries(vid); // cascade: remove from voucher_entries so SQL reports see the cancellation
+              });
             });
             return updated;
           });
@@ -1708,7 +1761,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             );
             linkedIds.forEach(vid => {
               const cancelled = updated.find(x => x.id === vid);
-              if (cancelled) supabase.from('vouchers').upsert(cancelled).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+              if (cancelled) supabase.from('vouchers').upsert(cancelled).then(({ error }) => {
+                if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
+                else deleteEntries(vid); // cascade: remove from voucher_entries so SQL reports see the cancellation
+              });
             });
             return updated;
           });
@@ -1784,7 +1840,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         );
         linkedIds.forEach(vid => {
           const cancelled = updated.find(x => x.id === vid);
-          if (cancelled) supabase.from('vouchers').upsert(cancelled).then(({ error }) => { if (error) console.error('Voucher cancel sync:', error.message); });
+          if (cancelled) supabase.from('vouchers').upsert(cancelled).then(({ error }) => {
+            if (error) console.error('Voucher cancel sync:', error.message);
+            else deleteEntries(vid); // cascade: remove from voucher_entries
+          });
         });
         return updated;
       });
