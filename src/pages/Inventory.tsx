@@ -59,7 +59,6 @@ const EMPTY_ITEM_FORM = {
   stockGroup: '',
   salesAccountId: '',     // empty → '4101' default at posting time
   purchaseAccountId: '',  // empty → '5101' default at posting time
-  p4Category: '' as '' | 'dap' | 'urea' | 'wheatProc' | 'barleyProc' | 'gramProc' | 'paddyProc' | 'mustardProc' | 'sunflowerProc' | 'otherFert' | 'otherProc',
 };
 
 const EMPTY_ADJUSTMENT_FORM = {
@@ -279,33 +278,6 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
         onCheckedChange={val => setItemForm(f => ({ ...f, isActive: val }))}
       />
       <Label htmlFor="item-active">{hi ? 'सक्रिय' : 'Active'}</Label>
-    </div>
-
-    {/* HAFED Proforma 4 classification */}
-    <div className="space-y-2 p-3 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20">
-      <Label className="text-xs font-semibold uppercase text-amber-900 dark:text-amber-200">
-        {hi ? 'HAFED Proforma 4 (संरक्षण छूट) श्रेणी' : 'HAFED Proforma 4 (Patronage Rebate) Category'}
-        <span className="ml-2 text-[10px] font-normal text-muted-foreground">Optional</span>
-      </Label>
-      <Select
-        value={itemForm.p4Category || '__none__'}
-        onValueChange={v => setItemForm(f => ({ ...f, p4Category: (v === '__none__' ? '' : v) as typeof f.p4Category }))}
-      >
-        <SelectTrigger className="h-9"><SelectValue placeholder="— None —" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__none__">— None —</SelectItem>
-          <SelectItem value="dap">DAP (fertilizer sold)</SelectItem>
-          <SelectItem value="urea">Urea (fertilizer sold)</SelectItem>
-          <SelectItem value="otherFert">Other Fertilizer sold</SelectItem>
-          <SelectItem value="wheatProc">Wheat procured</SelectItem>
-          <SelectItem value="barleyProc">Barley procured</SelectItem>
-          <SelectItem value="gramProc">Gram procured</SelectItem>
-          <SelectItem value="paddyProc">Paddy procured</SelectItem>
-          <SelectItem value="mustardProc">Mustard procured</SelectItem>
-          <SelectItem value="sunflowerProc">Sunflower procured</SelectItem>
-          <SelectItem value="otherProc">Other procurement</SelectItem>
-        </SelectContent>
-      </Select>
     </div>
 
     <div className="flex gap-2 justify-end pt-2">
@@ -582,7 +554,6 @@ const Inventory: React.FC = () => {
       stockGroup: item.stockGroup || '',
       salesAccountId: item.salesAccountId || '',
       purchaseAccountId: item.purchaseAccountId || '',
-      p4Category: (item.p4Category || '') as '' | 'dap' | 'urea' | 'wheatProc' | 'barleyProc' | 'gramProc' | 'paddyProc' | 'mustardProc' | 'sunflowerProc' | 'otherFert' | 'otherProc',
     });
   };
 
@@ -607,7 +578,6 @@ const Inventory: React.FC = () => {
       ...(itemForm.stockGroup.trim() ? { stockGroup: itemForm.stockGroup.trim() } : {}),
       ...(itemForm.salesAccountId ? { salesAccountId: itemForm.salesAccountId } : {}),
       ...(itemForm.purchaseAccountId ? { purchaseAccountId: itemForm.purchaseAccountId } : {}),
-      ...(itemForm.p4Category ? { p4Category: itemForm.p4Category } : {}),
     });
     toast({ title: hi ? 'वस्तु जोड़ी गई' : 'Item added successfully' });
     resetItemForm();
@@ -634,7 +604,6 @@ const Inventory: React.FC = () => {
       stockGroup: f.stockGroup.trim() || undefined,
       salesAccountId: f.salesAccountId || undefined,
       purchaseAccountId: f.purchaseAccountId || undefined,
-      p4Category: f.p4Category || undefined,
     });
     toast({ title: hi ? 'वस्तु अपडेट की गई' : 'Item updated successfully' });
     editItemRef.current = null;
