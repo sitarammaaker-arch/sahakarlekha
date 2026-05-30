@@ -1965,11 +1965,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.openingDebit }))
       .filter(i => i.amount > 0);
 
-    // Dr side: Purchases (account 5101)
-    const purchaseItems = tb
-      .filter(b => b.account.id === '5101')
-      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }))
-      .filter(i => i.amount > 0);
+    const totalClosingStockEarly = closingStockItems.reduce((s, i) => s + i.amount, 0);
+
+    // Dr side: Purchases (account 5101).
+    // Audit C-8: when the year-end closing-stock journal (Dr 3403 / Cr 5101) is posted,
+    // account 5101's net balance is already REDUCED by the closing-stock value. If we
+    // then ALSO add Closing Stock on the Cr side, gross profit double-counts it. So we
+    // GROSS UP purchases back to their pre-adjustment value when the journal is posted,
+    // keeping the formula GP = Sales + ClosingStock − Opening − GrossPurchases − DirectExp
+    // consistent whether or not the journal has been posted.
+    const purchase5101Net = (tb.find(b => b.account.id === '5101')?.netBalance) || 0;
+    const purchase5101Gross = closingStockPosted ? purchase5101Net + totalClosingStockEarly : purchase5101Net;
+    const purchaseItems = purchase5101Gross > 0
+      ? [{ name: 'Purchase', nameHi: 'क्रय', amount: purchase5101Gross }]
+      : [];
 
     // Dr side: Direct Expenses (parentId '5100', excluding 5101 Purchase)
     const directExpItems = tb
@@ -1978,7 +1987,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .filter(i => i.amount > 0);
 
     const totalSales        = salesItems.reduce((s, i) => s + i.amount, 0);
-    const totalClosingStock = closingStockItems.reduce((s, i) => s + i.amount, 0);
+    const totalClosingStock = totalClosingStockEarly;
     const totalOpeningStock = openingStockItems.reduce((s, i) => s + i.amount, 0);
     const totalPurchases    = purchaseItems.reduce((s, i) => s + i.amount, 0);
     const totalDirectExp    = directExpItems.reduce((s, i) => s + i.amount, 0);
@@ -2034,21 +2043,43 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getProfitLoss = useCallback((asOnDate?: string) => {
     // M15: Pass asOnDate to underlying TB so historical P&L is accurate.
     const tb = getTrialBalance(asOnDate);
-    // Income accounts are credit-nature: netBalance = debit - credit → normally negative → abs gives the income amount.
+
+    // ── Audit C-9: NCDC two-statement structure (Trading A/c → P&L/I&E) ──────
+    // Per NCDC Annexure II + III, trading heads (Sales, Purchases, direct expenses,
+    // opening/closing stock) are absorbed into the TRADING ACCOUNT, and only the
+    // resulting GROSS PROFIT (or Gross Loss) flows into the P&L/I&E. Previously
+    // getProfitLoss summed Sales (4100) as income and Purchases/direct-exp (5100)
+    // as expense DIRECTLY — which (a) ignored closing stock (unsold inventory wrongly
+    // treated as a full expense) and (b) never showed the Trading Gross Profit line.
+    // Fix: exclude trading heads here and inject the single Gross Profit line.
+    const isTradingIncome  = (parentId?: string) => parentId === '4100';            // Sales / Trading Income
+    const isTradingExpense = (parentId?: string) => parentId === '5100';            // Purchases + Direct Expenses
+
+    // Indirect (non-trading) INCOME — commission, scheme income, interest, rent,
+    // admission fee, misc. (credit-nature: abs(netBalance) is the income amount).
     const incomeItems = tb
-      .filter(b => b.account.type === 'income' && b.netBalance !== 0)
+      .filter(b => b.account.type === 'income' && !isTradingIncome(b.account.parentId) && b.netBalance !== 0)
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: Math.abs(b.netBalance) }));
-    // P2-4 FIX: Expense accounts are debit-nature: netBalance > 0 = normal expense.
-    // If netBalance < 0 (Cr balance = refund / over-credit), keep it negative so it
-    // correctly REDUCES total expenses rather than inflating them via Math.abs().
-    // This was the root cause of the Rs. 1,234 deficit understatement in the audit.
+
+    // Indirect (operating) EXPENSES — establishment, admin, depreciation, statutory.
+    // P2-4: keep sign so a Cr balance (refund/over-credit) REDUCES total expenses.
     const expenseItems = tb
-      .filter(b => b.account.type === 'expense' && b.netBalance !== 0)
+      .filter(b => b.account.type === 'expense' && !isTradingExpense(b.account.parentId) && b.netBalance !== 0)
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }));
+
+    // Bridge line from the Trading Account (Annexure III opens P&L Cr side with it).
+    const trading = getTradingAccount(asOnDate);
+    const gp = trading.grossProfit;
+    if (gp > 0.005) {
+      incomeItems.unshift({ name: 'Gross Profit from Trading', nameHi: 'व्यापार से सकल लाभ', amount: gp });
+    } else if (gp < -0.005) {
+      expenseItems.unshift({ name: 'Gross Loss from Trading', nameHi: 'व्यापार से सकल हानि', amount: Math.abs(gp) });
+    }
+
     const totalIncome = incomeItems.reduce((s, i) => s + i.amount, 0);
     const totalExpenses = expenseItems.reduce((s, i) => s + i.amount, 0);
     return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit: totalIncome - totalExpenses };
-  }, [getTrialBalance]);
+  }, [getTrialBalance, getTradingAccount]);
 
   // ── Inventory ──────────────────────────────────────────────────────────────
   // Two-step stock_items save pattern (same as purchases for GST/TDS columns):
