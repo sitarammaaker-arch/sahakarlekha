@@ -68,6 +68,19 @@ const BalanceSheet: React.FC = () => {
   const totalAssets = allAssetLeaf.reduce((s, b) => s + b.netBalance, 0) + unpostedStock;
   const totalLiabilities = allCapLiabLeaf.reduce((s, b) => s + (-b.netBalance), 0) + netProfit;
 
+  // ── Balance health diagnostic ──────────────────────────────────────────────
+  // When the sheet doesn't tie, the root cause is almost always a ledger that
+  // itself doesn't balance: opening balances entered with Dr ≠ Cr, or a legacy
+  // voucher posted before Dr=Cr enforcement. Surface the exact gap so the user
+  // can fix the SOURCE (Society Setup → Opening Balances) instead of guessing.
+  const isBalanced = Math.abs(totalLiabilities - totalAssets) < 1;
+  const sumOpenDr = trialBalance.reduce((s, b) => s + (b.openingDebit || 0), 0);
+  const sumOpenCr = trialBalance.reduce((s, b) => s + (b.openingCredit || 0), 0);
+  const sumTxnDr = trialBalance.reduce((s, b) => s + (b.transactionDebit || 0), 0);
+  const sumTxnCr = trialBalance.reduce((s, b) => s + (b.transactionCredit || 0), 0);
+  const openingGap = sumOpenDr - sumOpenCr;   // ≠ 0 ⇒ opening balances don't tie
+  const txnGap = sumTxnDr - sumTxnCr;          // ≠ 0 ⇒ a legacy unbalanced voucher
+
   // Build grouped structure for display
   const buildGroups = (
     balances: AccountBalance[],
@@ -373,14 +386,56 @@ const BalanceSheet: React.FC = () => {
                 <span className="text-muted-foreground">{hi ? 'कुल संपत्तियां' : 'Total Assets'}:</span>{' '}
                 <span className="font-bold">{fmt(totalAssets)}</span>
               </div>
-              <div className={Math.abs(totalLiabilities - totalAssets) < 1 ? 'text-success' : 'text-destructive'}>
+              <div className={isBalanced ? 'text-success' : 'text-destructive'}>
                 <span className="font-bold">
-                  {Math.abs(totalLiabilities - totalAssets) < 1
+                  {isBalanced
                     ? (hi ? '✓ संतुलित' : '✓ Balanced')
                     : (hi ? '✗ असंतुलित' : '✗ Not Balanced')}
                 </span>
               </div>
             </div>
+
+            {/* Diagnostic — only when the sheet doesn't tie. Points to the real source. */}
+            {!isBalanced && (
+              <div className="mt-4 pt-4 border-t text-left max-w-2xl mx-auto text-sm space-y-1">
+                <p className="font-semibold text-destructive">
+                  {hi ? `अंतर: ${fmt(Math.abs(totalLiabilities - totalAssets))} — संभावित कारण:` : `Difference: ${fmt(Math.abs(totalLiabilities - totalAssets))} — likely cause:`}
+                </p>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{hi ? 'प्रारंभिक शेष (Opening) — कुल डेबिट' : 'Opening balances — total Debit'}</span>
+                  <span>{fmt(sumOpenDr)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{hi ? 'प्रारंभिक शेष (Opening) — कुल क्रेडिट' : 'Opening balances — total Credit'}</span>
+                  <span>{fmt(sumOpenCr)}</span>
+                </div>
+                {Math.abs(openingGap) >= 1 && (
+                  <div className="flex justify-between font-semibold text-destructive">
+                    <span>{hi ? '→ Opening Dr ≠ Cr, अंतर' : '→ Opening Dr ≠ Cr, gap'}</span>
+                    <span>{openingGap > 0 ? '' : '−'}{fmt(Math.abs(openingGap))} {openingGap > 0 ? 'Dr' : 'Cr'}</span>
+                  </div>
+                )}
+                {Math.abs(txnGap) >= 1 && (
+                  <div className="flex justify-between font-semibold text-destructive">
+                    <span>{hi ? '→ किसी voucher में Dr ≠ Cr, अंतर' : '→ A voucher has Dr ≠ Cr, gap'}</span>
+                    <span>{txnGap > 0 ? '' : '−'}{fmt(Math.abs(txnGap))} {txnGap > 0 ? 'Dr' : 'Cr'}</span>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground pt-1">
+                  {Math.abs(openingGap) >= 1
+                    ? (hi
+                        ? 'ठीक करें: Society Setup → Opening Balances में जाएँ और कुल डेबिट = कुल क्रेडिट करें (यह अंतर आमतौर पर किसी एक खाते के प्रारंभिक शेष का बिना-जोड़ा हिस्सा होता है, जैसे प्रवेश शुल्क)।'
+                        : 'Fix: open Society Setup → Opening Balances and make total Debit = total Credit (this gap is usually one account\'s unmatched opening balance, e.g. Admission Fee).')
+                    : Math.abs(txnGap) >= 1
+                      ? (hi
+                          ? 'ठीक करें: कोई पुराना voucher असंतुलित है (Dr=Cr लागू होने से पहले बना)। Trial Balance पर भी यही अंतर दिखेगा — उस voucher को खोजकर सुधारें।'
+                          : 'Fix: a legacy voucher is unbalanced (created before Dr=Cr enforcement). The Trial Balance shows the same gap — find and correct that voucher.')
+                      : (hi
+                          ? 'खाते संतुलित हैं पर तुलन पत्र नहीं — समापन माल (closing stock) पोस्टिंग जाँचें।'
+                          : 'Ledger ties but the sheet does not — check the closing-stock posting.')}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="mt-8 pt-8 border-t grid grid-cols-3 gap-4 text-center text-sm">
