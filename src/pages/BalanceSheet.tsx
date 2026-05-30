@@ -48,8 +48,10 @@ const BalanceSheet: React.FC = () => {
   const { physicalClosingStock, closingStockPosted } = getTradingAccount();
   const unpostedStock = !closingStockPosted && physicalClosingStock > 0 ? physicalClosingStock : 0;
 
-  const RESERVE_FUND_RATE = (society.reserveFundPct ?? 25) / 100;
-  const reserveFund = netProfit > 0 ? Math.round(netProfit * RESERVE_FUND_RATE) : 0;
+  // Audit C-10: the Balance Sheet reads the ACTUAL journalled Statutory Reserve
+  // Fund (1201) balance via the equity group below — it never re-computes a
+  // hardcoded 25% of net profit. Reserve appropriation is posted on the Reserve
+  // Fund page (Dr 1208 / Cr 1201) and flows in naturally as an equity balance.
 
   const pyBalances = society.previousYearBalances || {};
   const pyYear = society.previousFinancialYear || '';
@@ -191,7 +193,7 @@ const BalanceSheet: React.FC = () => {
     generateBalanceSheetPDF(
       trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup),
       [...trialBalance.filter(b => b.account.type === 'equity' && !b.account.isGroup), ...trialBalance.filter(b => b.account.type === 'liability' && !b.account.isGroup)],
-      netProfit, society, language, reserveFund, accounts, stockItems
+      netProfit, society, language, 0, accounts, stockItems
     );
   };
 

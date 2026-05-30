@@ -1,26 +1,31 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, TrendingDown, Download, ArrowUp, ArrowDown, FileSpreadsheet } from 'lucide-react';
+import { TrendingUp, TrendingDown, Download, ArrowUp, ArrowDown, FileSpreadsheet, Shield, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateIncomeExpenditurePDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { getVoucherLines } from '@/lib/voucherUtils';
 
-// Reserve fund rate read from society.reserveFundPct (default 25%)
+// Appropriation account IDs (must match ReserveFund.tsx)
+const ACC_NET_SURPLUS = '1208';   // Net Surplus / (Deficit)
+const ACC_RESERVE_FUND = '1201';  // Statutory Reserve Fund
+const ACC_EDUCATION_FUND = '1203';// Education Fund
 
 const ProfitLoss: React.FC = () => {
   const { language } = useLanguage();
-  const { getProfitLoss, society } = useData();
+  const navigate = useNavigate();
+  const { getProfitLoss, society, vouchers } = useData();
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
   const { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit } = getProfitLoss();
   const isSurplus = netProfit >= 0;
-  const RESERVE_FUND_RATE = (society.reserveFundPct ?? 25) / 100;
   const grandTotal = isSurplus ? totalIncome : totalExpenses;
 
   // P5-2: Previous year comparison
@@ -30,8 +35,32 @@ const ProfitLoss: React.FC = () => {
   const getPYIncome = (name: string) => pyIE?.incomeItems.find(i => i.name === name)?.amount ?? 0;
   const getPYExpense = (name: string) => pyIE?.expenseItems.find(i => i.name === name)?.amount ?? 0;
 
-  const reserveFund = isSurplus ? Math.round(netProfit * RESERVE_FUND_RATE) : 0;
-  const distributableSurplus = isSurplus ? netProfit - reserveFund : 0;
+  // ── Audit C-10: read ACTUAL journalled appropriations, not hardcoded 25% ────
+  // NCDC principle (l): appropriation of surplus is SEPARATE from the P&L/I&E.
+  // The I&E shows the full Net Surplus; reserve/education/dividend transfers are
+  // posted as journals (Dr 1208 Net Surplus / Cr 1201/1203) on the Reserve Fund
+  // page and are read here from the ledger — never computed inline.
+  const fyPostedAppropriation = (creditAcc: string): number =>
+    vouchers
+      .filter(v => !v.isDeleted && v.narration?.includes(society.financialYear))
+      .reduce((sum, v) => {
+        const lines = getVoucherLines(v);
+        const hasNetSurplusDr = lines.some(l => l.accountId === ACC_NET_SURPLUS && l.type === 'Dr');
+        if (!hasNetSurplusDr) return sum;
+        const crLine = lines.find(l => l.accountId === creditAcc && l.type === 'Cr');
+        return sum + (crLine?.amount || 0);
+      }, 0);
+
+  const postedReserve = fyPostedAppropriation(ACC_RESERVE_FUND);
+  const postedEducation = fyPostedAppropriation(ACC_EDUCATION_FUND);
+  const totalAppropriated = postedReserve + postedEducation;
+  const undistributedSurplus = isSurplus ? netProfit - totalAppropriated : netProfit;
+  const appropriationPending = isSurplus && netProfit > 0 && totalAppropriated < 0.01;
+
+  // Indicative statutory amounts (for the pending prompt only — NOT posted to books)
+  const RESERVE_FUND_RATE = (society.reserveFundPct ?? 25) / 100;
+  const indicativeReserve = isSurplus ? Math.round(netProfit * RESERVE_FUND_RATE) : 0;
+  const indicativeEducation = isSurplus ? Math.round(netProfit * 0.01) : 0;
 
   const hi = language === 'hi';
 
@@ -41,13 +70,19 @@ const ProfitLoss: React.FC = () => {
     incomeItems.forEach(item => rows.push(['Income', item.name, item.amount]));
     rows.push(['Income', 'Total Income', totalIncome]);
     expenseItems.forEach(item => rows.push(['Expense', item.name, item.amount]));
-    if (isSurplus && netProfit > 0) {
-      rows.push(['Expense', 'Statutory Reserve Fund (25%)', reserveFund]);
-      rows.push(['Expense', 'Surplus (to Balance Sheet)', distributableSurplus]);
-    } else if (!isSurplus) {
-      rows.push(['Expense', 'Deficit (to Balance Sheet)', Math.abs(netProfit)]);
+    // NCDC: full Net Surplus/Deficit goes to the Balance Sheet; appropriation is separate.
+    if (isSurplus) {
+      rows.push(['Expense', 'Net Surplus (to Balance Sheet)', netProfit]);
+    } else {
+      rows.push(['Expense', 'Net Deficit (to Balance Sheet)', Math.abs(netProfit)]);
     }
     rows.push(['Expense', 'Total Expenditure', totalExpenses]);
+    // Separate Appropriation section — actual posted amounts (read from ledger).
+    if (totalAppropriated > 0.01) {
+      rows.push(['Appropriation', 'Statutory Reserve Fund (posted)', postedReserve]);
+      rows.push(['Appropriation', 'Education Fund (posted)', postedEducation]);
+      rows.push(['Appropriation', 'Undistributed Surplus c/d', undistributedSurplus]);
+    }
     return rows;
   };
 
@@ -73,7 +108,7 @@ const ProfitLoss: React.FC = () => {
             variant="outline"
             size="sm"
             className="gap-2"
-            onClick={() => generateIncomeExpenditurePDF(incomeItems, expenseItems, society, language, reserveFund)}
+            onClick={() => generateIncomeExpenditurePDF(incomeItems, expenseItems, society, language, postedReserve)}
           >
             <Download className="h-4 w-4" />PDF
           </Button>
@@ -131,27 +166,57 @@ const ProfitLoss: React.FC = () => {
         </Card>
       </div>
 
-      {/* Reserve Fund info banner */}
+      {/* Appropriation of Surplus — SEPARATE from the I&E (NCDC principle l).
+          Reads ACTUAL journalled reserve/education transfers from the ledger. */}
       {isSurplus && netProfit > 0 && (
-        <Card className="bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-700">
-          <CardContent className="pt-4 pb-4">
-            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-              {hi
-                ? `⚖️ हरियाणा सहकारी समिति अधिनियम 1984, धारा 65 के अनुसार: अधिशेष का न्यूनतम 25% वैधानिक संरक्षित निधि में हस्तांतरित करना अनिवार्य है।`
-                : `⚖️ As per Haryana Cooperative Societies Act 1984, Sec 65: Minimum 25% of surplus must be transferred to Statutory Reserve Fund.`}
-            </p>
-            <div className="mt-2 flex flex-wrap gap-4 text-sm">
-              <span className="font-medium">
-                {hi ? 'वैधानिक संरक्षित निधि (25%)' : 'Statutory Reserve Fund (25%)'}:{' '}
-                <strong className="text-amber-700 dark:text-amber-300">{fmt(reserveFund)}</strong>
-              </span>
-              <span className="font-medium">
-                {hi ? 'वितरणयोग्य अधिशेष' : 'Distributable Surplus'}:{' '}
-                <strong className="text-success">{fmt(distributableSurplus)}</strong>
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+        appropriationPending ? (
+          <Card className="bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-700">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                {hi
+                  ? `⚖️ अधिशेष का आवंटन अभी पोस्ट नहीं हुआ। हरियाणा सहकारी समिति अधिनियम 1984, धारा 65: अधिशेष का न्यूनतम 25% वैधानिक संचय निधि + 1% शिक्षा निधि में हस्तांतरित करना अनिवार्य है।`
+                  : `⚖️ Surplus appropriation not yet posted. Haryana Coop Societies Act 1984, Sec 65: min 25% to Statutory Reserve Fund + 1% to Education Fund.`}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
+                <span className="font-medium">
+                  {hi ? 'अनुमानित संचय निधि (25%)' : 'Indicative Reserve (25%)'}:{' '}
+                  <strong className="text-amber-700 dark:text-amber-300">{fmt(indicativeReserve)}</strong>
+                </span>
+                <span className="font-medium">
+                  {hi ? 'अनुमानित शिक्षा निधि (1%)' : 'Indicative Education (1%)'}:{' '}
+                  <strong className="text-amber-700 dark:text-amber-300">{fmt(indicativeEducation)}</strong>
+                </span>
+                <Button size="sm" className="ml-auto gap-2 bg-amber-600 hover:bg-amber-700" onClick={() => navigate('/reserve-fund')}>
+                  <Shield className="h-4 w-4" />
+                  {hi ? 'आवंटन पोस्ट करें' : 'Post Appropriation'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-sm font-medium text-green-800 dark:text-green-200 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                {hi ? 'अधिशेष आवंटन (Appropriation) — ledger में पोस्ट हो चुका' : 'Surplus Appropriation — posted to ledger'}
+              </p>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                <div className="flex justify-between sm:block">
+                  <span className="text-muted-foreground">{hi ? 'संचय निधि (1201)' : 'Reserve Fund (1201)'}</span>{' '}
+                  <strong className="text-green-700 dark:text-green-300">{fmt(postedReserve)}</strong>
+                </div>
+                <div className="flex justify-between sm:block">
+                  <span className="text-muted-foreground">{hi ? 'शिक्षा निधि (1203)' : 'Education Fund (1203)'}</span>{' '}
+                  <strong className="text-green-700 dark:text-green-300">{fmt(postedEducation)}</strong>
+                </div>
+                <div className="flex justify-between sm:block">
+                  <span className="text-muted-foreground">{hi ? 'अवितरित अधिशेष c/d' : 'Undistributed Surplus c/d'}</span>{' '}
+                  <strong className="text-success">{fmt(undistributedSurplus)}</strong>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
       )}
 
       {/* T-Account format */}
@@ -199,24 +264,16 @@ const ProfitLoss: React.FC = () => {
                       </TableRow>
                     ))
                   )}
-                  {/* Reserve Fund appropriation */}
-                  {isSurplus && netProfit > 0 && (
-                    <TableRow className="bg-amber-50 dark:bg-amber-900/20 font-medium">
-                      <TableCell className="text-amber-700 dark:text-amber-300">
-                        {hi ? 'वैधानिक संरक्षित निधि (25%) — To Balance Sheet' : 'Statutory Reserve Fund (25%) — To Balance Sheet'}
-                      </TableCell>
-                      {hasPY && <TableCell className="text-right text-muted-foreground text-sm">—</TableCell>}
-                      <TableCell className="text-right text-amber-700 dark:text-amber-300">{fmt(reserveFund)}</TableCell>
-                    </TableRow>
-                  )}
-                  {/* Surplus / Deficit row */}
+                  {/* Net Surplus / Deficit row — FULL surplus to Balance Sheet.
+                      Appropriation (reserve/education) is shown SEPARATELY below,
+                      per NCDC principle (l), and posted as journals — not deducted here. */}
                   {isSurplus ? (
                     <TableRow className="bg-success/10 font-semibold">
                       <TableCell className="text-success">
-                        {hi ? 'अधिशेष (तुलन पत्र में)' : 'Surplus (to Balance Sheet)'}
+                        {hi ? 'शुद्ध अधिशेष (तुलन पत्र में)' : 'Net Surplus (to Balance Sheet)'}
                       </TableCell>
                       {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyIE && pyIE.netProfit >= 0 ? fmt(pyIE.netProfit) : '—'}</TableCell>}
-                      <TableCell className="text-right text-success">{fmt(distributableSurplus)}</TableCell>
+                      <TableCell className="text-right text-success">{fmt(netProfit)}</TableCell>
                     </TableRow>
                   ) : (
                     <TableRow className="bg-destructive/10 font-semibold">
