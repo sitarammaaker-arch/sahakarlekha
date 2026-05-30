@@ -91,7 +91,7 @@ const Vouchers: React.FC = () => {
   const { t, language } = useLanguage();
   const { user, hasPermission } = useAuth();
   const canEdit = hasPermission(['admin', 'accountant']);
-  const { accounts, members, vouchers, society, addVoucher, updateVoucher, cancelVoucher, restoreVoucher, getTrialBalance } = useData();
+  const { accounts, members, vouchers, sales, purchases, society, addVoucher, updateVoucher, cancelVoucher, restoreVoucher, getTrialBalance } = useData();
   const [submitForApproval, setSubmitForApproval] = useState(false);
   const { toast } = useToast();
 
@@ -1129,25 +1129,51 @@ const Vouchers: React.FC = () => {
                 : 'This voucher will be marked as cancelled. It will be excluded from accounts but remain in audit records.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {/* Warning for purchase/sale linked vouchers */}
+          {/* Warning for purchase/sale linked vouchers — only show "go to module" when the
+              parent record actually points to THIS voucher. If it points elsewhere (or
+              parent doesn't exist), this is a duplicate/orphan and is safe to cancel here. */}
           {cancelId && (() => {
             const v = vouchers.find(x => x.id === cancelId);
-            if (v?.refType === 'purchase') return (
-              <div className="mx-4 mb-2 p-3 bg-orange-50 border border-orange-300 rounded text-sm text-orange-800">
-                ⚠️ <strong>{language === 'hi' ? 'चेतावनी:' : 'Warning:'}</strong>{' '}
-                {language === 'hi'
-                  ? 'यह वाउचर Purchase Management से बना है। इसे यहाँ रद्द करने पर stock नहीं घटेगा। Purchase Management से delete करें।'
-                  : 'This voucher was created by Purchase Management. Cancelling here will NOT reverse stock. Please delete from Purchase Management instead.'}
-              </div>
-            );
-            if (v?.refType === 'sale') return (
-              <div className="mx-4 mb-2 p-3 bg-orange-50 border border-orange-300 rounded text-sm text-orange-800">
-                ⚠️ <strong>{language === 'hi' ? 'चेतावनी:' : 'Warning:'}</strong>{' '}
-                {language === 'hi'
-                  ? 'यह वाउचर Sale Management से बना है। इसे यहाँ रद्द करने पर stock वापस नहीं आएगी। Sale Management से delete करें।'
-                  : 'This voucher was created by Sale Management. Cancelling here will NOT restore stock. Please delete from Sale Management instead.'}
-              </div>
-            );
+            if (v?.refType === 'purchase') {
+              const parent = purchases.find(p => p.id === v.refId);
+              const isActive = parent && parent.voucherId === v.id;
+              if (isActive) return (
+                <div className="mx-4 mb-2 p-3 bg-orange-50 border border-orange-300 rounded text-sm text-orange-800">
+                  ⚠️ <strong>{language === 'hi' ? 'चेतावनी:' : 'Warning:'}</strong>{' '}
+                  {language === 'hi'
+                    ? 'यह वाउचर Purchase Management से बना है। इसे यहाँ रद्द करने पर stock नहीं घटेगा। Purchase Management से delete करें।'
+                    : 'This voucher was created by Purchase Management. Cancelling here will NOT reverse stock. Please delete from Purchase Management instead.'}
+                </div>
+              );
+              return (
+                <div className="mx-4 mb-2 p-3 bg-blue-50 border border-blue-300 rounded text-sm text-blue-800">
+                  ℹ️ <strong>{language === 'hi' ? 'Orphan/Duplicate:' : 'Orphan/Duplicate:'}</strong>{' '}
+                  {language === 'hi'
+                    ? 'यह purchase voucher है पर इसका parent purchase अब इसे reference नहीं करता (duplicate/orphan है)। यहाँ से safely cancel कर सकते हैं।'
+                    : 'This is a purchase voucher whose parent purchase no longer references it (duplicate/orphan). It is safe to cancel here.'}
+                </div>
+              );
+            }
+            if (v?.refType === 'sale') {
+              const parent = sales.find(s => s.id === v.refId);
+              const isActive = parent && parent.voucherId === v.id;
+              if (isActive) return (
+                <div className="mx-4 mb-2 p-3 bg-orange-50 border border-orange-300 rounded text-sm text-orange-800">
+                  ⚠️ <strong>{language === 'hi' ? 'चेतावनी:' : 'Warning:'}</strong>{' '}
+                  {language === 'hi'
+                    ? 'यह वाउचर Sale Management से बना है। इसे यहाँ रद्द करने पर stock वापस नहीं आएगी। Sale Management से delete करें।'
+                    : 'This voucher was created by Sale Management. Cancelling here will NOT restore stock. Please delete from Sale Management instead.'}
+                </div>
+              );
+              return (
+                <div className="mx-4 mb-2 p-3 bg-blue-50 border border-blue-300 rounded text-sm text-blue-800">
+                  ℹ️ <strong>{language === 'hi' ? 'Orphan/Duplicate:' : 'Orphan/Duplicate:'}</strong>{' '}
+                  {language === 'hi'
+                    ? 'यह sale voucher है पर इसका parent sale अब इसे reference नहीं करता (duplicate/orphan है)। यहाँ से safely cancel कर सकते हैं।'
+                    : 'This is a sale voucher whose parent sale no longer references it (duplicate/orphan). It is safe to cancel here.'}
+                </div>
+              );
+            }
             return null;
           })()}
           <div className="px-4 pb-2">

@@ -954,22 +954,35 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
 
-    // 🔒 Block deletion of vouchers linked to Purchase/Sale — must delete from their module
+    // 🔒 Block deletion of vouchers ACTIVELY linked to a Purchase / Sale parent.
+    // If the parent purchase/sale no longer points to THIS voucher (i.e., it's an
+    // orphan or duplicate left over from auto-repair), allow cancellation so the
+    // user can clean up. Without this, duplicate cleanup is impossible.
     if (current.refType === 'purchase') {
-      toastRef.current({
-        title: 'Voucher delete nahi ho sakta',
-        description: 'Ye voucher Purchase Management se bana hai. Isko Purchase Management → Purchase List se delete karo — stock bhi sahi rahega.',
-        variant: 'destructive',
-      });
-      return;
+      const parent = purchasesRef.current.find(p => p.id === current.refId);
+      const isActive = parent && parent.voucherId === current.id;
+      if (isActive) {
+        toastRef.current({
+          title: 'Voucher delete nahi ho sakta',
+          description: 'Ye voucher Purchase Management se bana hai. Isko Purchase Management → Purchase List se delete karo — stock bhi sahi rahega.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      // else: orphan/duplicate — allow cancellation
     }
     if (current.refType === 'sale') {
-      toastRef.current({
-        title: 'Voucher delete nahi ho sakta',
-        description: 'Ye voucher Sale Management se bana hai. Isko Sale Management → Sale List se delete karo — stock bhi sahi rahega.',
-        variant: 'destructive',
-      });
-      return;
+      const parent = salesRef.current.find(s => s.id === current.refId);
+      const isActive = parent && parent.voucherId === current.id;
+      if (isActive) {
+        toastRef.current({
+          title: 'Voucher delete nahi ho sakta',
+          description: 'Ye voucher Sale Management se bana hai. Isko Sale Management → Sale List se delete karo — stock bhi sahi rahega.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      // else: orphan/duplicate — allow cancellation
     }
 
     // H12: Block cancelling auto-generated vouchers — parent record would dangle
