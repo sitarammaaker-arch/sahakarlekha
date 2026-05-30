@@ -668,14 +668,82 @@ export interface Supplier {
 }
 
 // ── Customer ──────────────────────────────────────────────────────────────────
+export type CustomerType =
+  | 'individual'
+  | 'proprietorship'
+  | 'partnership'
+  | 'llp'
+  | 'pvtLtd'
+  | 'publicLtd'
+  | 'society'
+  | 'trust'
+  | 'huf'
+  | 'government';
+
+export type GstRegistrationType =
+  | 'regular'
+  | 'composition'
+  | 'consumer'        // B2C unregistered consumer
+  | 'unregistered'    // unregistered business
+  | 'sez'             // Special Economic Zone
+  | 'overseas';       // export
+
 export interface Customer {
   id: string;
   customerCode: string;
+  // ── Basic (legacy `name` retained for backward compat — used as legalName fallback) ──
   name: string;
   nameHi?: string;
-  address?: string;
-  phone?: string;
-  gstNo?: string;
+  legalName?: string;     // matches GSTIN if business; defaults to `name`
+  tradeName?: string;     // shop / brand name if different from legal
+  mailingName?: string;   // name to print on invoices; defaults to legalName
+  customerType?: CustomerType;
+
+  // ── Address ──
+  address?: string;       // legacy single-line — kept for backward compat
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;         // mandatory for GST (intra/inter-state)
+  pincode?: string;
+  country?: string;       // default 'India'
+
+  // ── Contact ──
+  phone?: string;         // legacy — kept; maps to mobile
+  mobile?: string;
+  landline?: string;
+  email?: string;
+  website?: string;
+  contactPerson?: string;
+  contactDesignation?: string;
+
+  // ── Tax / GST ──
+  gstNo?: string;         // legacy alias for gstin — kept
+  gstin?: string;         // 15-digit GSTIN
+  pan?: string;           // 10-digit PAN (often auto-derived from GSTIN positions 3-12)
+  registrationType?: GstRegistrationType;
+  placeOfSupply?: string; // state name; auto from GSTIN first 2 digits
+  tdsApplicable?: boolean;
+  tcsApplicable?: boolean;
+
+  // ── Banking ──
+  bankName?: string;
+  accountNo?: string;
+  ifsc?: string;
+  branch?: string;
+  upiId?: string;
+
+  // ── Credit Terms ──
+  creditDays?: number;
+  creditLimit?: number;
+  discountPercent?: number;
+  openingBalance?: number;        // Dr/Cr handled separately
+  openingBalanceType?: 'debit' | 'credit';
+
+  // ── Misc ──
+  notes?: string;
+
+  // ── System ──
   accountId: string; // sub-ledger under Sundry Debtors (3303)
   isActive: boolean;
   createdAt: string;

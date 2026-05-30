@@ -816,6 +816,45 @@ alter table stock_items add column if not exists "stockGroup" text default 'Gene
 alter table stock_items add column if not exists "salesAccountId" text;
 alter table stock_items add column if not exists "purchaseAccountId" text;
 
+-- ── STEP 17f: Tally-style comprehensive Customer master ─────────────────────
+-- Lets the user register both simple individual customers and full B2B / society
+-- customers with complete GST + address + banking + credit-term info, so Sale
+-- Invoices can render a proper Bill To block with CGST/SGST vs IGST routing.
+-- All columns optional — old simple-name customers continue to work.
+alter table customers add column if not exists "legalName"        text;
+alter table customers add column if not exists "tradeName"        text;
+alter table customers add column if not exists "mailingName"      text;
+alter table customers add column if not exists "customerType"     text;
+alter table customers add column if not exists "addressLine1"     text;
+alter table customers add column if not exists "addressLine2"     text;
+alter table customers add column if not exists "city"             text;
+alter table customers add column if not exists "state"            text;
+alter table customers add column if not exists "pincode"          text;
+alter table customers add column if not exists "country"          text default 'India';
+alter table customers add column if not exists "mobile"           text;
+alter table customers add column if not exists "landline"         text;
+alter table customers add column if not exists "email"            text;
+alter table customers add column if not exists "website"          text;
+alter table customers add column if not exists "contactPerson"    text;
+alter table customers add column if not exists "contactDesignation" text;
+alter table customers add column if not exists "gstin"            text;
+alter table customers add column if not exists "pan"              text;
+alter table customers add column if not exists "registrationType" text;
+alter table customers add column if not exists "placeOfSupply"    text;
+alter table customers add column if not exists "tdsApplicable"    boolean default false;
+alter table customers add column if not exists "tcsApplicable"    boolean default false;
+alter table customers add column if not exists "bankName"         text;
+alter table customers add column if not exists "accountNo"        text;
+alter table customers add column if not exists "ifsc"             text;
+alter table customers add column if not exists "branch"           text;
+alter table customers add column if not exists "upiId"            text;
+alter table customers add column if not exists "creditDays"       numeric default 0;
+alter table customers add column if not exists "creditLimit"      numeric default 0;
+alter table customers add column if not exists "discountPercent"  numeric default 0;
+alter table customers add column if not exists "openingBalance"   numeric default 0;
+alter table customers add column if not exists "openingBalanceType" text default 'debit';
+alter table customers add column if not exists "notes"            text;
+
 -- ── STEP 17: get_all_societies() — SECURITY DEFINER bypasses RLS ─────────────
 -- Super admin calls this to see all societies regardless of society_id filter.
 create or replace function get_all_societies()

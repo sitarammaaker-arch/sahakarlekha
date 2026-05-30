@@ -2915,21 +2915,82 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [suppliers]);
 
   // ── Customers ──────────────────────────────────────────────────────────────
+  // Two-step customer save (RULE 1): base columns (name, nameHi, address, phone, gstNo,
+  // accountId, isActive, createdAt) save first — schema cache always knows these. Tally
+  // extras (legalName, tradeName, customerType, addressLine1/2, city, state, pincode,
+  // country, mobile, landline, email, website, contactPerson, contactDesignation, gstin,
+  // pan, registrationType, placeOfSupply, tdsApplicable, tcsApplicable, bankName, accountNo,
+  // ifsc, branch, upiId, creditDays, creditLimit, discountPercent, openingBalance,
+  // openingBalanceType, notes, mailingName) patch separately so missing migration only
+  // shows a soft warning instead of nuking the row.
+  const persistCustomer = (c: Customer, opts: { onBaseFail: () => void; isUpdate: boolean }) => {
+    const {
+      legalName, tradeName, mailingName, customerType,
+      addressLine1, addressLine2, city, state, pincode, country,
+      mobile, landline, email, website, contactPerson, contactDesignation,
+      gstin, pan, registrationType, placeOfSupply, tdsApplicable, tcsApplicable,
+      bankName, accountNo, ifsc, branch, upiId,
+      creditDays, creditLimit, discountPercent, openingBalance, openingBalanceType,
+      notes,
+      ...baseCols
+    } = c;
+    supabase.from('customers').upsert(withSoc(baseCols)).then(({ error }) => {
+      if (error) {
+        console.error(`Customer ${opts.isUpdate ? 'update' : 'save'} failed (base):`, error.message);
+        opts.onBaseFail();
+        toastRef.current({
+          title: '❌ Customer cloud par save NAHI hua',
+          description: `${error.message}. Local state se hata di gayi.`,
+          variant: 'destructive',
+          duration: 15000,
+        });
+        return;
+      }
+      const extras: Record<string, unknown> = {};
+      const setIf = (k: string, v: unknown) => { if (v !== undefined) extras[k] = v; };
+      setIf('legalName', legalName); setIf('tradeName', tradeName); setIf('mailingName', mailingName);
+      setIf('customerType', customerType);
+      setIf('addressLine1', addressLine1); setIf('addressLine2', addressLine2);
+      setIf('city', city); setIf('state', state); setIf('pincode', pincode); setIf('country', country);
+      setIf('mobile', mobile); setIf('landline', landline); setIf('email', email);
+      setIf('website', website); setIf('contactPerson', contactPerson); setIf('contactDesignation', contactDesignation);
+      setIf('gstin', gstin); setIf('pan', pan); setIf('registrationType', registrationType);
+      setIf('placeOfSupply', placeOfSupply); setIf('tdsApplicable', tdsApplicable); setIf('tcsApplicable', tcsApplicable);
+      setIf('bankName', bankName); setIf('accountNo', accountNo); setIf('ifsc', ifsc);
+      setIf('branch', branch); setIf('upiId', upiId);
+      setIf('creditDays', creditDays); setIf('creditLimit', creditLimit); setIf('discountPercent', discountPercent);
+      setIf('openingBalance', openingBalance); setIf('openingBalanceType', openingBalanceType);
+      setIf('notes', notes);
+      if (Object.keys(extras).length === 0) return;
+      supabase.from('customers').update(extras).eq('id', c.id).then(({ error: e2 }) => {
+        if (e2) {
+          console.warn('Customer extras patch warning (run latest supabase-tables.sql migration):', e2.message);
+          toastRef.current({
+            title: '⚠️ Customer saved partially',
+            description: `Base info saved. Extra fields (GST/Bank/etc.) failed: ${e2.message}. Run STEP 17f migration.`,
+            variant: 'default',
+            duration: 8000,
+          });
+        }
+      });
+    });
+  };
+
   const addCustomer = useCallback((data: Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'createdAt'>): Customer => {
     const accountId = crypto.randomUUID();
     // Auto-create ledger account under Sundry Debtors (3303)
     const newAccount: LedgerAccount = {
       id: accountId,
-      name: data.name,
-      nameHi: data.nameHi || data.name,
+      name: data.legalName || data.name,
+      nameHi: data.nameHi || data.legalName || data.name,
       type: 'asset',
-      openingBalance: 0,
-      openingBalanceType: 'debit',
+      openingBalance: data.openingBalance || 0,
+      openingBalanceType: data.openingBalanceType || 'debit',
       isSystem: false,
       isGroup: false,
       parentId: '3303',
     };
-    setAccountsState(prev => { const updated = [...prev, newAccount]; return updated; });
+    setAccountsState(prev => [...prev, newAccount]);
     supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
 
     const maxCusNum = customersRef.current.reduce((max, c) => {
@@ -2938,28 +2999,46 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const customerCode = `CUS/${String(maxCusNum + 1).padStart(3, '0')}`;
     const customer: Customer = { ...data, id: crypto.randomUUID(), customerCode, accountId, createdAt: new Date().toISOString() };
     customersRef.current = [...customersRef.current, customer];
-    setCustomersState(prev => { const updated = [...prev, customer]; return updated; });
-    supabase.from('customers').upsert(withSoc(customer)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    setCustomersState(prev => [...prev, customer]);
+    persistCustomer(customer, {
+      isUpdate: false,
+      onBaseFail: () => {
+        customersRef.current = customersRef.current.filter(c => c.id !== customer.id);
+        setCustomersState(prev => prev.filter(c => c.id !== customer.id));
+      },
+    });
     return customer;
   }, []);
 
   const updateCustomer = useCallback((id: string, data: Partial<Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'createdAt'>>) => {
-    let updated: Customer | undefined;
-    setCustomersState(prev => {
-      const arr = prev.map(c => c.id === id ? { ...c, ...data } : c);
-      updated = arr.find(c => c.id === id);
-      return arr;
-    });
-    if (data.name || data.nameHi) {
-      setAccountsState(prev => {
-        const cus = customers.find(c => c.id === id);
-        if (!cus) return prev;
-        const arr = prev.map(a => a.id === cus.accountId ? { ...a, name: data.name ?? a.name, nameHi: data.nameHi ?? data.name ?? a.nameHi } : a);
-        return arr;
-      });
+    const before = customersRef.current.find(c => c.id === id);
+    if (!before) return;
+    const updated: Customer = { ...before, ...data };
+    customersRef.current = customersRef.current.map(c => c.id === id ? updated : c);
+    setCustomersState(prev => prev.map(c => c.id === id ? updated : c));
+
+    // Mirror name + opening balance changes to the linked Sundry Debtor account
+    if (data.name || data.nameHi || data.legalName || data.openingBalance !== undefined || data.openingBalanceType) {
+      setAccountsState(prev => prev.map(a => {
+        if (a.id !== updated.accountId) return a;
+        return {
+          ...a,
+          name: updated.legalName || updated.name,
+          nameHi: updated.nameHi || updated.legalName || updated.name,
+          openingBalance: updated.openingBalance ?? a.openingBalance,
+          openingBalanceType: updated.openingBalanceType ?? a.openingBalanceType,
+        };
+      }));
     }
-    if (updated) supabase.from('customers').upsert(withSoc(updated)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-  }, [customers]);
+
+    persistCustomer(updated, {
+      isUpdate: true,
+      onBaseFail: () => {
+        customersRef.current = customersRef.current.map(c => c.id === id ? before : c);
+        setCustomersState(prev => prev.map(c => c.id === id ? before : c));
+      },
+    });
+  }, []);
 
   const deleteCustomer = useCallback((id: string) => {
     if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
