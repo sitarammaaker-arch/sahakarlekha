@@ -70,7 +70,7 @@ export const ACCOUNT_IDS = {
   CASH:      '3301',  // Cash in Hand
   BANK:      '3302',  // Bank Accounts (GROUP — sub-accounts are individual banks)
   SHARE_CAP: '1102',  // Individual Share Capital (member share capital)
-  ADM_FEE:   '4407',  // Admission Fee (Capital Receipt — Balance Sheet)
+  ADM_FEE:   '4407',  // Admission Fee (Income — P&L, audit C-3)
 } as const;
 
 /**
@@ -225,8 +225,8 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '4408', name: 'Interest on Member Loans',  nameHi: 'सदस्य ऋण पर ब्याज',        type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
   { id: '4409', name: 'Bad Debt Recovery',          nameHi: 'अशोध्य ऋण वसूली',          type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
   { id: '4410', name: 'Profit on Sale of Assets',  nameHi: 'संपत्ति बिक्री पर लाभ',    type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
-  { id: '4406', name: 'Patronage Rebate',           nameHi: 'संरक्षण छूट',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'other_income' },
-  { id: '4407', name: 'Admission Fee',              nameHi: 'प्रवेश शुल्क (पूंजी)',     type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: false, parentId: '1200', subtype: 'reserve' },
+  { id: '4406', name: 'Patronage Rebate (Appropriation)', nameHi: 'संरक्षण छूट (अधिशेष वितरण)', type: 'equity', openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
+  { id: '4407', name: 'Admission Fee',              nameHi: 'प्रवेश शुल्क',             type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
 
   // ── Expenses ─────────────────────────────────────────────────────────────
   { id: '5000', name: 'Expenses',                   nameHi: 'व्यय',                     type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: true  },
@@ -308,7 +308,7 @@ export const PACS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '1207', name: 'Welfare Fund',               nameHi: 'कल्याण निधि',              type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
   { id: '1208', name: 'Net Surplus / (Deficit)',    nameHi: 'शुद्ध अधिशेष / (घाटा)',    type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'surplus' },
   { id: '1209', name: 'Agricultural Dev Fund',      nameHi: 'कृषि विकास निधि',           type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
-  { id: '4407', name: 'Admission Fee',              nameHi: 'प्रवेश शुल्क (पूंजी)',     type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: false, parentId: '1200', subtype: 'reserve' },
+  { id: '4407', name: 'Admission Fee',              nameHi: 'प्रवेश शुल्क',             type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
 
   // ── Liabilities ──────────────────────────────────────────────────────────
   { id: '2000', name: 'Liabilities',                nameHi: 'दायित्व',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true  },
@@ -432,7 +432,7 @@ export const CONSUMER_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '1207', name: 'Welfare Fund',               nameHi: 'कल्याण निधि',              type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
   { id: '1208', name: 'Net Surplus / (Deficit)',    nameHi: 'शुद्ध अधिशेष / (घाटा)',    type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'surplus' },
   { id: '1209', name: 'Price Stabilization Fund',  nameHi: 'मूल्य स्थिरता निधि',       type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
-  { id: '4407', name: 'Admission Fee',              nameHi: 'प्रवेश शुल्क (पूंजी)',     type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: false, parentId: '1200', subtype: 'reserve' },
+  { id: '4407', name: 'Admission Fee',              nameHi: 'प्रवेश शुल्क',             type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
 
   // ── Liabilities ──────────────────────────────────────────────────────────
   { id: '2000', name: 'Liabilities',                nameHi: 'दायित्व',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true  },
@@ -584,8 +584,15 @@ export const DEFAULT_ACCOUNTS = CMS_SOCIETY_ACCOUNTS;
 const ACCOUNT_PATCHES: Record<string, Partial<LedgerAccount>> = {
   '1201': { name: 'Statutory Reserve Fund',         nameHi: 'वैधानिक संचय निधि' },
   '1208': { name: 'Net Surplus / (Deficit)',          nameHi: 'शुद्ध अधिशेष / (घाटा)' },
-  '4406': { type: 'expense', openingBalanceType: 'debit',  parentId: '5400' },
-  '4407': { type: 'equity',  openingBalanceType: 'credit', parentId: '1200', nameHi: 'प्रवेश शुल्क (पूंजी)' },
+  // Audit C-4: Patronage Rebate is a member surplus-distribution (appropriation),
+  // NOT an operating expense. Move out of the 5400 expense tree into Reserves &
+  // Appropriations (1200) with debit nature — same treatment as Dividend
+  // Distribution (1211). Keeps it out of P&L opex; shows as a deduction of surplus.
+  '4406': { type: 'equity',  openingBalanceType: 'debit',  parentId: '1200', subtype: 'reserve', name: 'Patronage Rebate (Appropriation)', nameHi: 'संरक्षण छूट (अधिशेष वितरण)' },
+  // Audit C-3: Admission Fee is income per NCDC Annexure III (P&L Cr line), not a
+  // capital reserve. Move into Other Income (4400) so it flows through I&E. Any
+  // transfer to Statutory Reserve is done via a separate appropriation journal.
+  '4407': { type: 'income',  openingBalanceType: 'credit', parentId: '4400', subtype: 'other_income', isSystem: false, name: 'Admission Fee', nameHi: 'प्रवेश शुल्क' },
   '5602': { name: 'Professional Tax / Local Levies', nameHi: 'व्यावसायिक कर / स्थानीय शुल्क' },
 };
 

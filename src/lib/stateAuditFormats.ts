@@ -216,7 +216,8 @@ const HARYANA_SCHEDULES: ScheduleDefinition[] = [
       { id: 'I-1', label: 'Government Share Capital', labelHi: 'सरकारी शेयर पूंजी', source: { kind: 'account', accountIds: ['1101'] }, indent: 0 },
       { id: 'I-2', label: 'Individual Member Share Capital', labelHi: 'व्यक्तिगत सदस्य शेयर पूंजी', source: { kind: 'account', accountIds: ['1102'] }, indent: 0 },
       { id: 'I-3', label: 'PACS / Institutional Share Capital', labelHi: 'संस्थागत शेयर पूंजी', source: { kind: 'account', accountIds: ['1103'] }, indent: 0 },
-      { id: 'I-4', label: 'Admission Fee (Capital Receipt)', labelHi: 'प्रवेश शुल्क (पूंजी प्राप्ति)', source: { kind: 'account', accountIds: ['4407'] }, indent: 0 },
+      // Audit C-3: Admission Fee reclassified to Income (4407) — now reported in
+      // Schedule VIII (Other Income), not as a capital receipt here.
       { id: 'I-T', label: 'Total Share Capital', labelHi: 'कुल शेयर पूंजी', source: { kind: 'parentGroup', parentIds: ['1100'] }, bold: true, isTotal: true },
     ],
   },
@@ -234,6 +235,8 @@ const HARYANA_SCHEDULES: ScheduleDefinition[] = [
       { id: 'II-8', label: 'Price Stabilization Fund', labelHi: 'मूल्य स्थिरता निधि', source: { kind: 'account', accountIds: ['1209'] }, indent: 0 },
       { id: 'II-9', label: 'Social / Cooperative Dev Fund', labelHi: 'सहकारी विकास निधि', source: { kind: 'account', accountIds: ['1210'] }, indent: 0, note: 'Sec 65(3)' },
       { id: 'II-10', label: 'Dividend Distribution (Contra)', labelHi: 'लाभांश वितरण (विपरीत)', source: { kind: 'account', accountIds: ['1211'] }, indent: 0 },
+      // Audit C-4: Patronage Rebate is an appropriation of surplus (member distribution), not opex.
+      { id: 'II-10b', label: 'Patronage Rebate (Contra)', labelHi: 'संरक्षण छूट (विपरीत)', source: { kind: 'account', accountIds: ['4406'] }, indent: 0 },
       { id: 'II-11', label: 'Net Surplus / (Deficit) b/f', labelHi: 'शुद्ध अधिशेष / (घाटा) आ.शे.', source: { kind: 'account', accountIds: ['1208'] }, indent: 0 },
       { id: 'II-12', label: 'Current Year Surplus / (Deficit)', labelHi: 'चालू वर्ष अधिशेष / (घाटा)', source: { kind: 'computed', key: 'netProfit' }, indent: 0, bold: true },
       { id: 'II-T', label: 'Total Reserves & Surplus', labelHi: 'कुल संचय एवं अधिशेष', source: { kind: 'parentGroup', parentIds: ['1200'] }, bold: true, isTotal: true },

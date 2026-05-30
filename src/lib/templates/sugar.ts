@@ -22,7 +22,7 @@ export const SUGAR_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '1209', name: 'Molasses Fund',              nameHi: 'शीरा निधि',                type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
   { id: '1208', name: 'Net Surplus / (Deficit)',     nameHi: 'शुद्ध अधिशेष / (घाटा)',    type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'surplus' },
   { id: '1211', name: 'Dividend Distribution',      nameHi: 'लाभांश वितरण',             type: 'equity',    openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
-  { id: '4407', name: 'Admission Fee',              nameHi: 'प्रवेश शुल्क (पूंजी)',     type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: false, parentId: '1200', subtype: 'reserve' },
+  { id: '4407', name: 'Admission Fee',              nameHi: 'प्रवेश शुल्क',             type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
 
   // ── Liabilities ──────────────────────────────────────────────────────────
   { id: '2000', name: 'Liabilities',                nameHi: 'दायित्व',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true  },
