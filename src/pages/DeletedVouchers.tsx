@@ -18,11 +18,13 @@ import { fmtDate, fmtDateTime } from '@/lib/dateUtils';
 const fmt = (amount: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
-const voucherTypeLabel: Record<VoucherType, { hi: string; en: string; color: string }> = {
+const voucherTypeLabel: Partial<Record<VoucherType, { hi: string; en: string; color: string }>> = {
   receipt:  { hi: 'रसीद',   en: 'Receipt',  color: 'bg-green-100 text-green-800 border-green-200' },
   payment:  { hi: 'भुगतान', en: 'Payment',  color: 'bg-red-100 text-red-800 border-red-200' },
   journal:  { hi: 'जर्नल',  en: 'Journal',  color: 'bg-purple-100 text-purple-800 border-purple-200' },
   contra:   { hi: 'कॉन्ट्रा', en: 'Contra', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+  sale:     { hi: 'बिक्री',  en: 'Sale',     color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+  purchase: { hi: 'खरीद',   en: 'Purchase', color: 'bg-amber-100 text-amber-800 border-amber-200' },
 };
 
 const DeletedVouchers: React.FC = () => {
@@ -172,7 +174,7 @@ const DeletedVouchers: React.FC = () => {
                 </TableRow>
               ) : (
                 deletedVouchers.map(v => {
-                  const typeInfo = voucherTypeLabel[v.type];
+                  const typeInfo = voucherTypeLabel[v.type] || { hi: v.type, en: v.type, color: 'bg-gray-100 text-gray-700 border-gray-200' };
                   return (
                     <TableRow key={v.id} className="bg-red-50/30 hover:bg-red-50/60">
                       <TableCell className="font-mono text-sm line-through text-gray-400">
