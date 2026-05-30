@@ -358,17 +358,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // entries (like a fresh Contra) on F5.
           const repairByRefId = new Map<string, Voucher>();
           const duplicateRepairs: Voucher[] = []; // to soft-delete
+          // AGGRESSIVE DEDUP: For each (refType, refId) combination, keep ONLY the
+          // latest non-deleted voucher. Older duplicates get soft-deleted. This catches
+          // both [auto-repair] tagged duplicates AND any other duplicate sale/purchase
+          // vouchers (e.g. from an accidental double-save or pre-tag-era repair runs).
+          // refType + refId uniquely identifies a parent sale or purchase, so only one
+          // voucher should ever reference it.
           for (const v of vList) {
-            if (!v.narration?.includes('[auto-repair]')) continue;
+            if (v.isDeleted) continue;
             if (!v.refId) continue;
-            const existing = repairByRefId.get(v.refId);
+            if (v.refType !== 'sale' && v.refType !== 'purchase') continue;
+            const key = `${v.refType}:${v.refId}`;
+            const existing = repairByRefId.get(key);
             if (!existing) {
-              repairByRefId.set(v.refId, v);
+              repairByRefId.set(key, v);
             } else {
               // Pick the one with later createdAt as "primary"; mark the older as duplicate
               const keep = (v.createdAt || '') > (existing.createdAt || '') ? v : existing;
               const drop = keep === v ? existing : v;
-              repairByRefId.set(v.refId, keep);
+              repairByRefId.set(key, keep);
               if (!drop.isDeleted) duplicateRepairs.push(drop);
             }
           }
@@ -416,14 +424,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // (handles the case where the sale.voucherId Supabase patch failed previously —
             //  prevents creating a brand-new duplicate every F5).
             let existing = sale.voucherId ? voucherById.get(sale.voucherId) : undefined;
-            if (!existing) existing = repairByRefId.get(sale.id);
-            const isAutoRepair = !!existing?.narration?.includes('[auto-repair]');
-            // Don't touch user-made vouchers — only rebuild if missing OR an old auto-repair
-            if (existing && !isAutoRepair) continue;
-            // If we recovered the voucherId via refId lookup, mark the sale for re-patching
-            if (existing && sale.voucherId !== existing.id) {
+            if (!existing || existing.isDeleted) existing = repairByRefId.get(`sale:${sale.id}`);
+            // Re-point sale.voucherId at the kept-latest voucher BEFORE the skip check,
+            // so user-made vouchers also benefit from the patch when their voucherId
+            // pointed to a now-deduped older duplicate.
+            if (existing && !existing.isDeleted && sale.voucherId !== existing.id) {
               patchedSales.push({ ...sale, voucherId: existing.id });
             }
+            const isAutoRepair = !!existing?.narration?.includes('[auto-repair]');
+            // Don't touch user-made vouchers — only rebuild if missing OR an old auto-repair
+            if (existing && !existing.isDeleted && !isAutoRepair) continue;
 
             const customerAcc = sale.customerId ? ((cusData || []) as Customer[]).find(c => c.id === sale.customerId)?.accountId : undefined;
             const debitAccId = sale.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
@@ -490,12 +500,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // PURCHASES
           for (const purchase of ((puData || []) as Purchase[])) {
             let existing = purchase.voucherId ? voucherById.get(purchase.voucherId) : undefined;
-            if (!existing) existing = repairByRefId.get(purchase.id);
-            const isAutoRepair = !!existing?.narration?.includes('[auto-repair]');
-            if (existing && !isAutoRepair) continue;
-            if (existing && purchase.voucherId !== existing.id) {
+            if (!existing || existing.isDeleted) existing = repairByRefId.get(`purchase:${purchase.id}`);
+            if (existing && !existing.isDeleted && purchase.voucherId !== existing.id) {
               patchedPurchases.push({ ...purchase, voucherId: existing.id });
             }
+            const isAutoRepair = !!existing?.narration?.includes('[auto-repair]');
+            if (existing && !existing.isDeleted && !isAutoRepair) continue;
 
             const supplierAcc = purchase.supplierId ? ((supData || []) as Supplier[]).find(s => s.id === purchase.supplierId)?.accountId : undefined;
             const creditAccId = purchase.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
