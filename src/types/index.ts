@@ -654,14 +654,82 @@ export interface Purchase {
 }
 
 // ── Supplier ──────────────────────────────────────────────────────────────────
+export type SupplierType =
+  | 'individual'
+  | 'proprietorship'
+  | 'partnership'
+  | 'llp'
+  | 'pvtLtd'
+  | 'publicLtd'
+  | 'society'
+  | 'trust'
+  | 'huf'
+  | 'government'
+  | 'manufacturer'
+  | 'distributor'
+  | 'wholesaler'
+  | 'retailer'
+  | 'serviceProvider';
+
 export interface Supplier {
   id: string;
   supplierCode: string;
+  // ── Basic (legacy `name` retained for backward compat) ──
   name: string;
   nameHi?: string;
-  address?: string;
-  gstNo?: string;
-  phone?: string;
+  legalName?: string;
+  tradeName?: string;
+  mailingName?: string;
+  supplierType?: SupplierType;
+
+  // ── Address ──
+  address?: string;       // legacy single-line
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  country?: string;
+
+  // ── Contact ──
+  phone?: string;         // legacy
+  mobile?: string;
+  landline?: string;
+  email?: string;
+  website?: string;
+  contactPerson?: string;
+  contactDesignation?: string;
+  salesRep?: string;      // Supplier-side rep we deal with
+
+  // ── Tax / GST ──
+  gstNo?: string;         // legacy alias
+  gstin?: string;
+  pan?: string;
+  registrationType?: GstRegistrationType;
+  placeOfSupply?: string;
+  tdsApplicable?: boolean;
+  tdsSection?: TdsSection;
+  tcsApplicable?: boolean;
+
+  // ── Banking ──
+  bankName?: string;
+  accountNo?: string;
+  ifsc?: string;
+  branch?: string;
+  upiId?: string;
+  beneficiaryName?: string; // when A/c name differs from supplier name
+
+  // ── Credit Terms ──
+  creditDays?: number;
+  creditLimit?: number;
+  discountPercent?: number;
+  openingBalance?: number;
+  openingBalanceType?: 'debit' | 'credit';
+
+  // ── Misc ──
+  notes?: string;
+
+  // ── System ──
   accountId: string; // sub-ledger under Sundry Creditors (2101)
   isActive: boolean;
   createdAt: string;
@@ -804,7 +872,8 @@ export interface EntityLink {
 }
 
 // ── TDS Register ────────────────────────────────────────────────────────────
-export type TdsSection = '192' | '194A' | '194C' | '194H' | '194J' | '194Q';
+// Used by both the TDS Register page and the Supplier master (TDS section per supplier).
+export type TdsSection = '192' | '194A' | '194C' | '194H' | '194I' | '194J' | '194Q' | '195';
 export type TdsDeducteeType = 'individual' | 'company' | 'firm' | 'cooperative' | 'other';
 export type TdsStatus = 'pending' | 'deposited' | 'filed';
 export type TdsQuarter = 'Q1' | 'Q2' | 'Q3' | 'Q4';

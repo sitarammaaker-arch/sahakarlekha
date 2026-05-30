@@ -855,6 +855,47 @@ alter table customers add column if not exists "openingBalance"   numeric defaul
 alter table customers add column if not exists "openingBalanceType" text default 'debit';
 alter table customers add column if not exists "notes"            text;
 
+-- ── STEP 17g: Tally-style comprehensive Supplier master ─────────────────────
+-- Parallel to STEP 17f (Customer). Lets supplier registration capture full
+-- business / GST / banking / TDS details so Purchase Records, payment vouchers
+-- and TDS returns can be rendered without manual re-entry every time.
+alter table suppliers add column if not exists "legalName"        text;
+alter table suppliers add column if not exists "tradeName"        text;
+alter table suppliers add column if not exists "mailingName"      text;
+alter table suppliers add column if not exists "supplierType"     text;
+alter table suppliers add column if not exists "addressLine1"     text;
+alter table suppliers add column if not exists "addressLine2"     text;
+alter table suppliers add column if not exists "city"             text;
+alter table suppliers add column if not exists "state"            text;
+alter table suppliers add column if not exists "pincode"          text;
+alter table suppliers add column if not exists "country"          text default 'India';
+alter table suppliers add column if not exists "mobile"           text;
+alter table suppliers add column if not exists "landline"         text;
+alter table suppliers add column if not exists "email"            text;
+alter table suppliers add column if not exists "website"          text;
+alter table suppliers add column if not exists "contactPerson"    text;
+alter table suppliers add column if not exists "contactDesignation" text;
+alter table suppliers add column if not exists "salesRep"         text;
+alter table suppliers add column if not exists "gstin"            text;
+alter table suppliers add column if not exists "pan"              text;
+alter table suppliers add column if not exists "registrationType" text;
+alter table suppliers add column if not exists "placeOfSupply"    text;
+alter table suppliers add column if not exists "tdsApplicable"    boolean default false;
+alter table suppliers add column if not exists "tdsSection"       text;
+alter table suppliers add column if not exists "tcsApplicable"    boolean default false;
+alter table suppliers add column if not exists "bankName"         text;
+alter table suppliers add column if not exists "accountNo"        text;
+alter table suppliers add column if not exists "ifsc"             text;
+alter table suppliers add column if not exists "branch"           text;
+alter table suppliers add column if not exists "upiId"            text;
+alter table suppliers add column if not exists "beneficiaryName"  text;
+alter table suppliers add column if not exists "creditDays"       numeric default 0;
+alter table suppliers add column if not exists "creditLimit"      numeric default 0;
+alter table suppliers add column if not exists "discountPercent"  numeric default 0;
+alter table suppliers add column if not exists "openingBalance"   numeric default 0;
+alter table suppliers add column if not exists "openingBalanceType" text default 'credit';
+alter table suppliers add column if not exists "notes"            text;
+
 -- ── STEP 17: get_all_societies() — SECURITY DEFINER bypasses RLS ─────────────
 -- Super admin calls this to see all societies regardless of society_id filter.
 create or replace function get_all_societies()

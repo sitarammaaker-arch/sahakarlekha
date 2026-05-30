@@ -2836,21 +2836,79 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   // ── Suppliers ──────────────────────────────────────────────────────────────
+  // Two-step supplier save (mirror of persistCustomer — RULE 1).
+  // Base columns save first; Tally extras patched separately so missing
+  // migration only shows a soft warning.
+  const persistSupplier = (s: Supplier, opts: { onBaseFail: () => void; isUpdate: boolean }) => {
+    const {
+      legalName, tradeName, mailingName, supplierType,
+      addressLine1, addressLine2, city, state, pincode, country,
+      mobile, landline, email, website, contactPerson, contactDesignation, salesRep,
+      gstin, pan, registrationType, placeOfSupply, tdsApplicable, tdsSection, tcsApplicable,
+      bankName, accountNo, ifsc, branch, upiId, beneficiaryName,
+      creditDays, creditLimit, discountPercent, openingBalance, openingBalanceType,
+      notes,
+      ...baseCols
+    } = s;
+    supabase.from('suppliers').upsert(withSoc(baseCols)).then(({ error }) => {
+      if (error) {
+        console.error(`Supplier ${opts.isUpdate ? 'update' : 'save'} failed (base):`, error.message);
+        opts.onBaseFail();
+        toastRef.current({
+          title: '❌ Supplier cloud par save NAHI hua',
+          description: `${error.message}. Local state se hata di gayi.`,
+          variant: 'destructive',
+          duration: 15000,
+        });
+        return;
+      }
+      const extras: Record<string, unknown> = {};
+      const setIf = (k: string, v: unknown) => { if (v !== undefined) extras[k] = v; };
+      setIf('legalName', legalName); setIf('tradeName', tradeName); setIf('mailingName', mailingName);
+      setIf('supplierType', supplierType);
+      setIf('addressLine1', addressLine1); setIf('addressLine2', addressLine2);
+      setIf('city', city); setIf('state', state); setIf('pincode', pincode); setIf('country', country);
+      setIf('mobile', mobile); setIf('landline', landline); setIf('email', email);
+      setIf('website', website); setIf('contactPerson', contactPerson); setIf('contactDesignation', contactDesignation);
+      setIf('salesRep', salesRep);
+      setIf('gstin', gstin); setIf('pan', pan); setIf('registrationType', registrationType);
+      setIf('placeOfSupply', placeOfSupply); setIf('tdsApplicable', tdsApplicable);
+      setIf('tdsSection', tdsSection); setIf('tcsApplicable', tcsApplicable);
+      setIf('bankName', bankName); setIf('accountNo', accountNo); setIf('ifsc', ifsc);
+      setIf('branch', branch); setIf('upiId', upiId); setIf('beneficiaryName', beneficiaryName);
+      setIf('creditDays', creditDays); setIf('creditLimit', creditLimit); setIf('discountPercent', discountPercent);
+      setIf('openingBalance', openingBalance); setIf('openingBalanceType', openingBalanceType);
+      setIf('notes', notes);
+      if (Object.keys(extras).length === 0) return;
+      supabase.from('suppliers').update(extras).eq('id', s.id).then(({ error: e2 }) => {
+        if (e2) {
+          console.warn('Supplier extras patch warning (run STEP 17g migration):', e2.message);
+          toastRef.current({
+            title: '⚠️ Supplier saved partially',
+            description: `Base info saved. Extra fields (GST/Bank/etc.) failed: ${e2.message}. Run STEP 17g migration.`,
+            variant: 'default',
+            duration: 8000,
+          });
+        }
+      });
+    });
+  };
+
   const addSupplier = useCallback((data: Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'createdAt'>): Supplier => {
     const accountId = crypto.randomUUID();
     // Auto-create ledger account under Sundry Creditors (2101)
     const newAccount: LedgerAccount = {
       id: accountId,
-      name: data.name,
-      nameHi: data.nameHi || data.name,
+      name: data.legalName || data.name,
+      nameHi: data.nameHi || data.legalName || data.name,
       type: 'liability',
-      openingBalance: 0,
-      openingBalanceType: 'credit',
+      openingBalance: data.openingBalance || 0,
+      openingBalanceType: data.openingBalanceType || 'credit',
       isSystem: false,
       isGroup: false,
       parentId: '2101',
     };
-    setAccountsState(prev => { const updated = [...prev, newAccount]; return updated; });
+    setAccountsState(prev => [...prev, newAccount]);
     supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
 
     const maxSupNum = suppliersRef.current.reduce((max, s) => {
@@ -2859,29 +2917,46 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const supplierCode = `SUP/${String(maxSupNum + 1).padStart(3, '0')}`;
     const supplier: Supplier = { ...data, id: crypto.randomUUID(), supplierCode, accountId, createdAt: new Date().toISOString() };
     suppliersRef.current = [...suppliersRef.current, supplier];
-    setSuppliersState(prev => { const updated = [...prev, supplier]; return updated; });
-    supabase.from('suppliers').upsert(withSoc(supplier)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    setSuppliersState(prev => [...prev, supplier]);
+    persistSupplier(supplier, {
+      isUpdate: false,
+      onBaseFail: () => {
+        suppliersRef.current = suppliersRef.current.filter(s => s.id !== supplier.id);
+        setSuppliersState(prev => prev.filter(s => s.id !== supplier.id));
+      },
+    });
     return supplier;
   }, []);
 
   const updateSupplier = useCallback((id: string, data: Partial<Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'createdAt'>>) => {
-    let updated: Supplier | undefined;
-    setSuppliersState(prev => {
-      const arr = prev.map(s => s.id === id ? { ...s, ...data } : s);
-      updated = arr.find(s => s.id === id);
-      return arr;
-    });
-    // Sync name change to linked account
-    if (data.name || data.nameHi) {
-      setAccountsState(prev => {
-        const sup = suppliers.find(s => s.id === id);
-        if (!sup) return prev;
-        const arr = prev.map(a => a.id === sup.accountId ? { ...a, name: data.name ?? a.name, nameHi: data.nameHi ?? data.name ?? a.nameHi } : a);
-        return arr;
-      });
+    const before = suppliersRef.current.find(s => s.id === id);
+    if (!before) return;
+    const updated: Supplier = { ...before, ...data };
+    suppliersRef.current = suppliersRef.current.map(s => s.id === id ? updated : s);
+    setSuppliersState(prev => prev.map(s => s.id === id ? updated : s));
+
+    // Mirror name + opening balance changes to the linked Sundry Creditor account
+    if (data.name || data.nameHi || data.legalName || data.openingBalance !== undefined || data.openingBalanceType) {
+      setAccountsState(prev => prev.map(a => {
+        if (a.id !== updated.accountId) return a;
+        return {
+          ...a,
+          name: updated.legalName || updated.name,
+          nameHi: updated.nameHi || updated.legalName || updated.name,
+          openingBalance: updated.openingBalance ?? a.openingBalance,
+          openingBalanceType: updated.openingBalanceType ?? a.openingBalanceType,
+        };
+      }));
     }
-    if (updated) supabase.from('suppliers').upsert(withSoc(updated)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-  }, [suppliers]);
+
+    persistSupplier(updated, {
+      isUpdate: true,
+      onBaseFail: () => {
+        suppliersRef.current = suppliersRef.current.map(s => s.id === id ? before : s);
+        setSuppliersState(prev => prev.map(s => s.id === id ? before : s));
+      },
+    });
+  }, []);
 
   const deleteSupplier = useCallback((id: string) => {
     if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
