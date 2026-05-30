@@ -4,7 +4,6 @@ import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Scale, Download, CheckCircle, AlertTriangle, Calendar, FileSpreadsheet } from 'lucide-react';
@@ -28,32 +27,114 @@ const TrialBalance: React.FC = () => {
 
   // BUG-03 FIX: Pass asOnDate so trial balance filters vouchers up to that date.
   const allBalances = getTrialBalance(asOnDate);
-  // Hide accounts with no activity (both Dr and Cr are zero)
-  const balances = allBalances.filter(b => b.totalDebit > 0 || b.totalCredit > 0);
-  const totalDebit = allBalances.reduce((s, b) => s + b.totalDebit, 0);
-  const totalCredit = allBalances.reduce((s, b) => s + b.totalCredit, 0);
-  const isBalanced = Math.abs(totalDebit - totalCredit) < 1;
+  // Hide accounts with no activity and no opening balance.
+  const balances = allBalances.filter(b => b.totalDebit > 0 || b.totalCredit > 0 || b.openingDebit > 0 || b.openingCredit > 0);
 
-  const exportHeaders = ['Account Code', 'Account Name', 'Type', 'Debit (Dr)', 'Credit (Cr)'];
-  const exportRows = () => balances.map(b => [
-    b.account.id,
-    b.account.name,
-    b.account.type,
-    b.totalDebit > 0 ? b.totalDebit : '',
-    b.totalCredit > 0 ? b.totalCredit : '',
-  ] as (string | number)[]);
+  // ── Audit C-6: NCDC Annexure-I two-section layout ────────────────────────
+  // Section I = "Liabilities & Income" (credit-nature: liability, equity, income).
+  // Section II = "Assets & Expenditure" (debit-nature: asset, expense).
+  const sectionOf = (type: string): 'liabInc' | 'assetExp' =>
+    (type === 'asset' || type === 'expense') ? 'assetExp' : 'liabInc';
+  const liabIncRows = balances.filter(b => sectionOf(b.account.type) === 'liabInc');
+  const assetExpRows = balances.filter(b => sectionOf(b.account.type) === 'assetExp');
+
+  // Closing balance is signed: netBalance > 0 ⇒ Dr, < 0 ⇒ Cr.
+  const closingDrOf = (b: typeof allBalances[number]) => Math.max(b.netBalance, 0);
+  const closingCrOf = (b: typeof allBalances[number]) => Math.max(-b.netBalance, 0);
+
+  // Per-section totals (movement during period + closing balances).
+  const sectionTotals = (rows: typeof allBalances) => ({
+    movDr: rows.reduce((s, b) => s + (b.transactionDebit || 0), 0),
+    movCr: rows.reduce((s, b) => s + (b.transactionCredit || 0), 0),
+    clDr: rows.reduce((s, b) => s + closingDrOf(b), 0),
+    clCr: rows.reduce((s, b) => s + closingCrOf(b), 0),
+  });
+
+  const grandClosingDr = balances.reduce((s, b) => s + closingDrOf(b), 0);
+  const grandClosingCr = balances.reduce((s, b) => s + closingCrOf(b), 0);
+  const totalMovDr = balances.reduce((s, b) => s + (b.transactionDebit || 0), 0);
+  const totalMovCr = balances.reduce((s, b) => s + (b.transactionCredit || 0), 0);
+  // NCDC: a Trial Balance is balanced when total CLOSING Dr = total CLOSING Cr.
+  const isBalanced = Math.abs(grandClosingDr - grandClosingCr) < 1;
+  // Kept for the headline cards / PDF legacy balance line.
+  const totalDebit = grandClosingDr;
+  const totalCredit = grandClosingCr;
+
+  const openingLabel = (b: typeof allBalances[number]) =>
+    b.openingDebit > 0 ? `${b.openingDebit} Dr` : b.openingCredit > 0 ? `${b.openingCredit} Cr` : '';
+  const closingLabel = (b: typeof allBalances[number]) =>
+    b.netBalance > 0 ? `${b.netBalance} Dr` : b.netBalance < 0 ? `${-b.netBalance} Cr` : '';
+
+  const exportHeaders = ['Section', 'Account Code', 'Account Name', 'Type', 'Opening', 'Debit (period)', 'Credit (period)', 'Closing'];
+  const sectionExportRows = (rows: typeof allBalances, sectionLabel: string): (string | number)[][] =>
+    rows.map(b => [
+      sectionLabel,
+      b.account.id,
+      b.account.name,
+      b.account.type,
+      openingLabel(b),
+      (b.transactionDebit || 0) > 0 ? b.transactionDebit : '',
+      (b.transactionCredit || 0) > 0 ? b.transactionCredit : '',
+      closingLabel(b),
+    ]);
+  const exportRows = (): (string | number)[][] => [
+    ...sectionExportRows(liabIncRows, 'Liabilities & Income'),
+    ...sectionExportRows(assetExpRows, 'Assets & Expenditure'),
+  ];
 
   const handleCSV = () => downloadCSV(exportHeaders, exportRows(), `trial-balance-${society.financialYear}`);
   const handleExcel = () => downloadExcelSingle(exportHeaders, exportRows(), `trial-balance-${society.financialYear}`, 'Trial Balance');
 
-  const typeBadge = (type: string) => {
-    const cfg: Record<string, { label: string; labelHi: string; className: string }> = {
-      asset: { label: 'Asset', labelHi: 'संपत्ति', className: 'bg-info/20 text-info' },
-      liability: { label: 'Liability', labelHi: 'देयता', className: 'bg-warning/20 text-warning' },
-      income: { label: 'Income', labelHi: 'आय', className: 'bg-success/20 text-success' },
-      expense: { label: 'Expense', labelHi: 'व्यय', className: 'bg-destructive/20 text-destructive' },
-    };
-    return cfg[type] || { label: type, labelHi: type, className: '' };
+  // Render one NCDC section (header row + account rows + subtotal row).
+  const renderSection = (
+    rows: typeof allBalances,
+    titleEn: string, titleHi: string,
+    headerClass: string,
+  ) => {
+    const t2 = sectionTotals(rows);
+    return (
+      <>
+        <TableRow className={headerClass}>
+          <TableCell colSpan={6} className="font-bold uppercase text-sm tracking-wide">
+            {language === 'hi' ? titleHi : titleEn}
+          </TableCell>
+        </TableRow>
+        {rows.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={6} className="text-center text-muted-foreground text-sm py-2">
+              {language === 'hi' ? 'कोई खाता नहीं' : 'No accounts'}
+            </TableCell>
+          </TableRow>
+        ) : rows.map((b, i) => (
+          <TableRow key={b.account.id} className="hover:bg-muted/30">
+            <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+            <TableCell className="font-medium">{language === 'hi' ? b.account.nameHi : b.account.name}</TableCell>
+            <TableCell className="text-right text-sm text-muted-foreground">
+              {b.openingDebit > 0 ? <>{fmt(b.openingDebit)} <span className="text-[10px]">Dr</span></>
+                : b.openingCredit > 0 ? <>{fmt(b.openingCredit)} <span className="text-[10px]">Cr</span></> : '—'}
+            </TableCell>
+            <TableCell className="text-right">{(b.transactionDebit || 0) > 0 ? fmt(b.transactionDebit) : '—'}</TableCell>
+            <TableCell className="text-right">{(b.transactionCredit || 0) > 0 ? fmt(b.transactionCredit) : '—'}</TableCell>
+            <TableCell className="text-right font-semibold">
+              {b.netBalance > 0 ? <>{fmt(b.netBalance)} <span className="text-[10px] text-info">Dr</span></>
+                : b.netBalance < 0 ? <>{fmt(-b.netBalance)} <span className="text-[10px] text-warning">Cr</span></> : '—'}
+            </TableCell>
+          </TableRow>
+        ))}
+        <TableRow className="bg-muted/50 font-semibold">
+          <TableCell colSpan={2} className="text-right">
+            {(language === 'hi' ? titleHi : titleEn)} — {language === 'hi' ? 'उप-योग' : 'Subtotal'}
+          </TableCell>
+          <TableCell className="text-right">—</TableCell>
+          <TableCell className="text-right">{fmt(t2.movDr)}</TableCell>
+          <TableCell className="text-right">{fmt(t2.movCr)}</TableCell>
+          <TableCell className="text-right">
+            {t2.clDr >= t2.clCr ? <>{fmt(t2.clDr - t2.clCr)} <span className="text-[10px] text-info">Dr</span></>
+              : <>{fmt(t2.clCr - t2.clDr)} <span className="text-[10px] text-warning">Cr</span></>}
+          </TableCell>
+        </TableRow>
+      </>
+    );
   };
 
   return (
@@ -116,44 +197,36 @@ const TrialBalance: React.FC = () => {
           </div>
         </CardHeader>
         <CardContent className="pt-0">
-          <div className="rounded-lg border overflow-hidden">
+          <p className="text-xs text-muted-foreground mb-2">
+            {language === 'hi'
+              ? 'NCDC अनुलग्नक-I प्रारूप: दो खंड — (I) देयताएं एवं आय, (II) संपत्ति एवं व्यय। समापन डेबिट = समापन क्रेडिट होने पर तलपट संतुलित है।'
+              : 'NCDC Annexure-I format: two sections — (I) Liabilities & Income, (II) Assets & Expenditure. Balanced when total Closing Dr = total Closing Cr.'}
+          </p>
+          <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">
                   <TableHead className="font-semibold w-12">{language === 'hi' ? 'क्र.' : 'S.No.'}</TableHead>
                   <TableHead className="font-semibold">{language === 'hi' ? 'खाते का नाम' : 'Account Name'}</TableHead>
-                  <TableHead className="font-semibold">{language === 'hi' ? 'प्रकार' : 'Type'}</TableHead>
+                  <TableHead className="font-semibold text-right">{language === 'hi' ? 'प्रारंभिक शेष' : 'Opening'}</TableHead>
                   <TableHead className="font-semibold text-right">{t('debit')} (₹)</TableHead>
                   <TableHead className="font-semibold text-right">{t('credit')} (₹)</TableHead>
+                  <TableHead className="font-semibold text-right">{language === 'hi' ? 'समापन शेष' : 'Closing'}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {balances.map((b, i) => {
-                  const badge = typeBadge(b.account.type);
-                  return (
-                    <TableRow key={b.account.id} className="hover:bg-muted/30">
-                      <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                      <TableCell className="font-medium">{language === 'hi' ? b.account.nameHi : b.account.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={badge.className}>
-                          {language === 'hi' ? badge.labelHi : badge.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {b.totalDebit > 0 && <span className="font-semibold">{fmt(b.totalDebit)}</span>}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {b.totalCredit > 0 && <span className="font-semibold">{fmt(b.totalCredit)}</span>}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {renderSection(liabIncRows, 'Section I — Liabilities & Income', 'खंड I — देयताएं एवं आय', 'bg-warning/10')}
+                {renderSection(assetExpRows, 'Section II — Assets & Expenditure', 'खंड II — संपत्ति एवं व्यय', 'bg-info/10')}
               </TableBody>
               <TableFooter>
-                <TableRow className="bg-primary/5 font-bold text-lg">
-                  <TableCell colSpan={3} className="text-right">{t('total')}</TableCell>
-                  <TableCell className="text-right text-primary">{fmt(totalDebit)}</TableCell>
-                  <TableCell className="text-right text-primary">{fmt(totalCredit)}</TableCell>
+                <TableRow className="bg-primary/5 font-bold">
+                  <TableCell colSpan={2} className="text-right">{language === 'hi' ? 'कुल (समापन)' : 'Grand Total (Closing)'}</TableCell>
+                  <TableCell className="text-right">—</TableCell>
+                  <TableCell className="text-right text-primary">{fmt(totalMovDr)}</TableCell>
+                  <TableCell className="text-right text-primary">{fmt(totalMovCr)}</TableCell>
+                  <TableCell className="text-right text-primary">
+                    {fmt(grandClosingDr)} <span className="text-[10px]">Dr</span> = {fmt(grandClosingCr)} <span className="text-[10px]">Cr</span>
+                  </TableCell>
                 </TableRow>
               </TableFooter>
             </Table>

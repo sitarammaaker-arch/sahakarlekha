@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import type { RowInput } from 'jspdf-autotable';
 import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord } from '@/types';
 import { ACCOUNT_IDS } from '@/lib/storage';
 import { getVoucherLines } from '@/lib/voucherUtils';
@@ -399,32 +400,74 @@ export function generateTrialBalancePDF(balances: AccountBalance[], society: Soc
     return;
   }
 
-  const totalDebit = balances.reduce((s, b) => s + b.totalDebit, 0);
-  const totalCredit = balances.reduce((s, b) => s + b.totalCredit, 0);
+  // ── NCDC Annexure-I two-section format ───────────────────────────────────
+  // Section I = Liabilities & Income (credit-nature); Section II = Assets &
+  // Expenditure (debit-nature). Columns: Opening | Debit (period) | Credit
+  // (period) | Closing. Balanced when total Closing Dr = total Closing Cr.
+  const isLiabInc = (b: AccountBalance) => !(b.account.type === 'asset' || b.account.type === 'expense');
+  const closingDr = (b: AccountBalance) => Math.max(b.netBalance, 0);
+  const closingCr = (b: AccountBalance) => Math.max(-b.netBalance, 0);
+  const openingLabel = (b: AccountBalance) =>
+    b.openingDebit > 0 ? `${fmt(b.openingDebit)} Dr` : b.openingCredit > 0 ? `${fmt(b.openingCredit)} Cr` : '';
+  const closingLabel = (b: AccountBalance) =>
+    b.netBalance > 0 ? `${fmt(b.netBalance)} Dr` : b.netBalance < 0 ? `${fmt(-b.netBalance)} Cr` : '';
 
-  const body = balances.map((b, i) => [
-    String(i + 1),
-    b.account.name, // Always English in PDF
-    b.account.type.charAt(0).toUpperCase() + b.account.type.slice(1),
-    b.totalDebit > 0 ? fmt(b.totalDebit) : '',
-    b.totalCredit > 0 ? fmt(b.totalCredit) : '',
-  ]);
+  const liabInc = balances.filter(isLiabInc);
+  const assetExp = balances.filter(b => !isLiabInc(b));
+
+  const sectionRows = (rows: AccountBalance[], title: string): RowInput[] => {
+    const movDr = rows.reduce((s, b) => s + (b.transactionDebit || 0), 0);
+    const movCr = rows.reduce((s, b) => s + (b.transactionCredit || 0), 0);
+    const clDr = rows.reduce((s, b) => s + closingDr(b), 0);
+    const clCr = rows.reduce((s, b) => s + closingCr(b), 0);
+    const out: RowInput[] = [];
+    // Section header band.
+    out.push([{ content: title, colSpan: 6, styles: { fillColor: [225, 232, 245], fontStyle: 'bold', halign: 'left' } }]);
+    rows.forEach((b, i) => out.push([
+      String(i + 1),
+      b.account.name,
+      openingLabel(b),
+      (b.transactionDebit || 0) > 0 ? fmt(b.transactionDebit) : '',
+      (b.transactionCredit || 0) > 0 ? fmt(b.transactionCredit) : '',
+      closingLabel(b),
+    ]));
+    if (rows.length === 0) out.push([{ content: 'No accounts', colSpan: 6, styles: { halign: 'center', textColor: [120, 120, 120] } }]);
+    // Subtotal row.
+    out.push([
+      { content: `${title} — Subtotal`, colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
+      '',
+      fmt(movDr),
+      fmt(movCr),
+      clDr >= clCr ? `${fmt(clDr - clCr)} Dr` : `${fmt(clCr - clDr)} Cr`,
+    ].map((c, idx) => typeof c === 'string' ? { content: c, styles: { fontStyle: 'bold', halign: idx >= 3 ? 'right' : 'left', fillColor: [240, 243, 248] } } : { ...c, styles: { ...(c as any).styles, fillColor: [240, 243, 248] } }) as any);
+    return out;
+  };
+
+  const totalMovDr = balances.reduce((s, b) => s + (b.transactionDebit || 0), 0);
+  const totalMovCr = balances.reduce((s, b) => s + (b.transactionCredit || 0), 0);
+  const grandClosingDr = balances.reduce((s, b) => s + closingDr(b), 0);
+  const grandClosingCr = balances.reduce((s, b) => s + closingCr(b), 0);
+
+  const body: RowInput[] = [
+    ...sectionRows(liabInc, 'Section I — Liabilities & Income'),
+    ...sectionRows(assetExp, 'Section II — Assets & Expenditure'),
+  ];
 
   autoTable(doc, {
     startY,
-    head: [['#', 'Account Name', 'Type', 'Debit (Dr)', 'Credit (Cr)']],
+    head: [['#', 'Account Name', 'Opening', 'Debit (period)', 'Credit (period)', 'Closing']],
     body,
-    foot: [['', '', 'Total', fmt(totalDebit), fmt(totalCredit)]],
-    styles: { fontSize: 8, cellPadding: 2, font },
+    foot: [['', 'Grand Total (Closing)', '', fmt(totalMovDr), fmt(totalMovCr), `${fmt(grandClosingDr)} Dr = ${fmt(grandClosingCr)} Cr`]],
+    styles: { fontSize: 7.5, cellPadding: 1.8, font },
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [248, 250, 253] },
-    columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' } },
-    didParseCell: rightAlignAmountColumns(3, 4),
+    columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
   });
 
   const tbFinalY = (doc as any).lastAutoTable.finalY + 10;
-  const tbBalanced = Math.abs(totalDebit - totalCredit) < 1;
+  const tbBalanced = Math.abs(grandClosingDr - grandClosingCr) < 1;
+  const totalDebit = grandClosingDr;
+  const totalCredit = grandClosingCr;
   doc.setFontSize(8);
   doc.setFont(font, 'normal');
   doc.setTextColor(tbBalanced ? 22 : 220, tbBalanced ? 163 : 38, tbBalanced ? 74 : 38);
