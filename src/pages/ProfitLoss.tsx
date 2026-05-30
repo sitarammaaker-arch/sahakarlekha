@@ -24,7 +24,11 @@ const ProfitLoss: React.FC = () => {
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
-  const { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit } = getProfitLoss();
+  // Bound the I&E to the financial-year end (31 March) so vouchers mis-dated into
+  // the NEXT FY don't leak into this year's surplus — keeps the I&E consistent
+  // with the Trial Balance / Balance Sheet (which are read as-on the FY end).
+  const fyEndDate = `20${society.financialYear.split('-')[1]}-03-31`;
+  const { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit } = getProfitLoss(fyEndDate);
   const isSurplus = netProfit >= 0;
   const grandTotal = isSurplus ? totalIncome : totalExpenses;
 

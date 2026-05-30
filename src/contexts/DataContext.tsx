@@ -1912,8 +1912,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [accounts, vouchers, activeVouchers]);
 
   const getTradingAccount = useCallback((asOnDate?: string) => {
-    // M15: Pass asOnDate to underlying TB so historical Trading A/c is consistent.
-    const tb = getTrialBalance(asOnDate);
+    // BS-tie fix: when no date is given, bound to the FINANCIAL-YEAR END (not "all
+    // time"), so vouchers mis-dated into the next FY never leak into this year's
+    // Trading A/c / Gross Profit and unbalance the Balance Sheet.
+    const fyEnd = `20${society.financialYear.split('-')[1]}-03-31`;
+    const effDate = asOnDate ?? fyEnd;
+    // M15: Pass effDate to underlying TB so historical Trading A/c is consistent.
+    const tb = getTrialBalance(effDate);
     const fy = society.financialYear;
 
     // Cr side: Sales / Trading Income (parentId '4100'). Signed (-nb) so a net SALES
@@ -1934,8 +1939,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Physical closing stock — use movement-based qty (same formula as Inventory/Stock Valuation)
     // so that orphan currentStock left over from old buggy edits/deletes doesn't show as phantom stock.
-    // M15: Filter movements by asOnDate so historical Trading A/c matches its date window.
-    const movementsToUse = asOnDate ? stockMovements.filter(m => m.date <= asOnDate) : stockMovements;
+    // M15: Filter movements by effDate so historical Trading A/c matches its date window.
+    const movementsToUse = stockMovements.filter(m => m.date <= effDate);
     const physicalClosingStock = stockItems
       .filter(s => s.isActive)
       .reduce((sum, s) => {
@@ -2048,8 +2053,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [stockItems, stockMovements, activeVouchers, society.financialYear, addVoucher, user?.name]);
 
   const getProfitLoss = useCallback((asOnDate?: string) => {
-    // M15: Pass asOnDate to underlying TB so historical P&L is accurate.
-    const tb = getTrialBalance(asOnDate);
+    // BS-tie fix: default to the FINANCIAL-YEAR END so a voucher mis-dated into the
+    // next FY can't inflate this year's surplus (which would unbalance the Balance
+    // Sheet, whose asset side is correctly date-filtered).
+    const fyEnd = `20${society.financialYear.split('-')[1]}-03-31`;
+    const effDate = asOnDate ?? fyEnd;
+    // M15: Pass effDate to underlying TB so historical P&L is accurate.
+    const tb = getTrialBalance(effDate);
 
     // ── Audit C-9: NCDC two-statement structure (Trading A/c → P&L/I&E) ──────
     // Per NCDC Annexure II + III, trading heads (Sales, Purchases, direct expenses,
@@ -2079,7 +2089,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }));
 
     // Bridge line from the Trading Account (Annexure III opens P&L Cr side with it).
-    const trading = getTradingAccount(asOnDate);
+    const trading = getTradingAccount(effDate);
     const gp = trading.grossProfit;
     if (gp > 0.005) {
       incomeItems.unshift({ name: 'Gross Profit from Trading', nameHi: 'व्यापार से सकल लाभ', amount: gp });
@@ -2090,7 +2100,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const totalIncome = incomeItems.reduce((s, i) => s + i.amount, 0);
     const totalExpenses = expenseItems.reduce((s, i) => s + i.amount, 0);
     return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit: totalIncome - totalExpenses };
-  }, [getTrialBalance, getTradingAccount]);
+  }, [getTrialBalance, getTradingAccount, society.financialYear]);
 
   // ── Inventory ──────────────────────────────────────────────────────────────
   // Two-step stock_items save pattern (same as purchases for GST/TDS columns):

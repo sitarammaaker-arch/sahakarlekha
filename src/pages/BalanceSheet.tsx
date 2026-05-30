@@ -43,9 +43,14 @@ const BalanceSheet: React.FC = () => {
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
+  // BS-tie fix: net profit and trading MUST be bounded to the SAME as-on date as
+  // the balances. Calling getProfitLoss()/getTradingAccount() without asOnDate
+  // counted vouchers dated AFTER the as-on date (e.g. a fee posted in the next
+  // FY) into net profit while the asset/cash side — correctly date-filtered —
+  // excluded the matching receipt, throwing the sheet out by that amount.
   const trialBalance = getTrialBalance(asOnDate);
-  const { netProfit } = getProfitLoss();
-  const { physicalClosingStock, closingStockPosted } = getTradingAccount();
+  const { netProfit } = getProfitLoss(asOnDate);
+  const { physicalClosingStock, closingStockPosted } = getTradingAccount(asOnDate);
   const unpostedStock = !closingStockPosted && physicalClosingStock > 0 ? physicalClosingStock : 0;
 
   // Audit C-10: the Balance Sheet reads the ACTUAL journalled Statutory Reserve
