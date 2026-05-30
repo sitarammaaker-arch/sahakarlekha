@@ -16,6 +16,7 @@ import type {
 import { getVoucherLines } from '@/lib/voucherUtils';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } from '@/lib/storage';
+import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY } from '@/lib/depreciation';
 
@@ -874,6 +875,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ];
       }
     }
+
+    // ── Double-entry balance guard (Audit C-1/C-2, NCDC double-entry rule) ────
+    // Every Dr MUST have an equal Cr. Two-tier handling:
+    //  • Sub-rupee residual (< ₹1) = rounding from pro-rated GST/TDS splits →
+    //    snap it into the largest line on the deficient side so the voucher
+    //    tallies EXACTLY (standard accounting rounding adjustment).
+    //  • Material imbalance (≥ ₹1) = a real error → BLOCK the save with a loud
+    //    toast and return a dummy voucher (caller handles id==='' gracefully).
+    if (lines && lines.length > 0) {
+      let bal = voucherLinesBalance(lines);
+      if (!bal.balanced && bal.diff < 1) {
+        const residual = +(bal.drTotal - bal.crTotal).toFixed(2); // >0 ⇒ Dr-heavy
+        const side: 'Dr' | 'Cr' = residual > 0 ? 'Cr' : 'Dr';     // add to deficient side
+        let idx = -1, max = -Infinity;
+        lines.forEach((l, i) => { if (l.type === side && l.amount > max) { max = l.amount; idx = i; } });
+        if (idx >= 0) {
+          lines = lines.map((l, i) => i === idx ? { ...l, amount: +(l.amount + Math.abs(residual)).toFixed(2) } : l);
+          bal = voucherLinesBalance(lines);
+        }
+      }
+      if (!bal.balanced) {
+        toastRef.current({
+          title: '❌ वाउचर असंतुलित / Voucher not balanced',
+          description: `डेबिट ₹${bal.drTotal.toFixed(2)} ≠ क्रेडिट ₹${bal.crTotal.toFixed(2)} (अंतर ₹${bal.diff.toFixed(2)})। हर Dr का बराबर Cr होना चाहिए — ठीक करके दोबारा save करें।`,
+          variant: 'destructive',
+          duration: 12000,
+        });
+        return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+      }
+    }
+
     // Compute legacy fields from lines (for backward compat with existing reports)
     const drLines = (lines || []).filter(l => l.type === 'Dr');
     const crLines = (lines || []).filter(l => l.type === 'Cr');
@@ -929,6 +961,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ? [...(current.editHistory ?? []), snapshot]
         : current.editHistory,
     };
+
+    // ── Double-entry balance guard on edit (Audit C-1/C-2) ───────────────────
+    // Block an edit that would leave a multi-line voucher materially unbalanced.
+    if (updatedVoucher.lines && updatedVoucher.lines.length > 0) {
+      const bal = voucherLinesBalance(updatedVoucher.lines);
+      if (!bal.balanced && bal.diff >= 1) {
+        toastRef.current({
+          title: '❌ वाउचर असंतुलित / Voucher not balanced',
+          description: `डेबिट ₹${bal.drTotal.toFixed(2)} ≠ क्रेडिट ₹${bal.crTotal.toFixed(2)} (अंतर ₹${bal.diff.toFixed(2)})। बदलाव save नहीं हुआ — Dr=Cr करें।`,
+          variant: 'destructive',
+          duration: 12000,
+        });
+        return;
+      }
+    }
+
     vouchersRef.current = vouchersRef.current.map(v => v.id === id ? updatedVoucher : v);
     setVouchersState(prev => prev.map(v => v.id === id ? updatedVoucher : v));
 

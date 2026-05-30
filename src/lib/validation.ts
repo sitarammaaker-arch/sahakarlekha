@@ -1,4 +1,4 @@
-import type { LedgerAccount, SocietySettings, VoucherType } from '@/types';
+import type { LedgerAccount, SocietySettings, VoucherType, VoucherLine } from '@/types';
 
 // Cash and Bank account IDs — same as ACCOUNT_IDS in storage.ts
 const CASH_ID = '3301';
@@ -36,6 +36,8 @@ export interface VoucherValidationResult {
  *   Payment  → Cr must be Cash or Bank
  *   Contra   → both Dr and Cr must be Cash or Bank
  *   Journal  → no restriction
+ * Rule 7: Double-entry balance — when multi-line `lines` are supplied, total Dr
+ *   must equal total Cr (NCDC: "every debit must have a corresponding credit").
  */
 export function validateVoucher(
   debitAccountId: string,
@@ -45,6 +47,7 @@ export function validateVoucher(
   accounts: LedgerAccount[],
   society: SocietySettings,
   voucherType?: VoucherType,
+  lines?: VoucherLine[],
 ): VoucherValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -140,7 +143,36 @@ export function validateVoucher(
     }
   }
 
+  // ── Rule 7: Double-entry balance (multi-line vouchers) ───────────────────
+  // NCDC: "every debit must have a corresponding credit and vice-versa".
+  // Only checked when explicit lines are supplied (Expert / compound mode);
+  // legacy single Dr/Cr vouchers are balanced by construction.
+  if (lines && lines.length > 0) {
+    const bal = voucherLinesBalance(lines);
+    if (!bal.balanced) {
+      errors.push(
+        `वाउचर असंतुलित है: डेबिट (₹${bal.drTotal.toFixed(2)}) ≠ क्रेडिट (₹${bal.crTotal.toFixed(2)}) / ` +
+        `Voucher not balanced: Dr ≠ Cr (difference ₹${bal.diff.toFixed(2)})`
+      );
+    }
+  }
+
   return { valid: errors.length === 0, errors, warnings };
+}
+
+/**
+ * Compute Dr/Cr totals for a set of voucher lines and report whether they balance.
+ * Tolerance is 0.01 (one paisa) to absorb floating-point rounding from
+ * pro-rated GST/TDS splits. This is the single source of truth for the
+ * double-entry balance check enforced at every voucher save path.
+ */
+export function voucherLinesBalance(lines: VoucherLine[]): {
+  drTotal: number; crTotal: number; diff: number; balanced: boolean;
+} {
+  const drTotal = lines.filter(l => l.type === 'Dr').reduce((s, l) => s + (l.amount || 0), 0);
+  const crTotal = lines.filter(l => l.type === 'Cr').reduce((s, l) => s + (l.amount || 0), 0);
+  const diff = Math.abs(drTotal - crTotal);
+  return { drTotal, crTotal, diff, balanced: diff < 0.01 };
 }
 
 /**
