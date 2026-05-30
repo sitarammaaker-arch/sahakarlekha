@@ -20,7 +20,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, CheckCircle, RotateCcw, EyeOff, Eye, Pencil, Zap, Settings2, ArrowLeft, ArrowLeftRight, Search, FileSpreadsheet, Download } from 'lucide-react';
+import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, CheckCircle, RotateCcw, EyeOff, Eye, Pencil, Printer, Zap, Settings2, ArrowLeft, ArrowLeftRight, Search, FileSpreadsheet, Download } from 'lucide-react';
+import { generateVoucherPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -91,7 +92,7 @@ const Vouchers: React.FC = () => {
   const { t, language } = useLanguage();
   const { user, hasPermission } = useAuth();
   const canEdit = hasPermission(['admin', 'accountant']);
-  const { accounts, members, vouchers, sales, purchases, society, addVoucher, updateVoucher, cancelVoucher, restoreVoucher, getTrialBalance } = useData();
+  const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, restoreVoucher, getTrialBalance } = useData();
   const [submitForApproval, setSubmitForApproval] = useState(false);
   const { toast } = useToast();
 
@@ -171,6 +172,55 @@ const Vouchers: React.FC = () => {
   const [editAmount, setEditAmount] = useState('');
   const [editNarration, setEditNarration] = useState('');
   const [editMemberId, setEditMemberId] = useState('');
+
+  // ── Print voucher PDF (A5, Tally-style narrative) ──────────────────────────
+  const handlePrintVoucher = (voucherId: string) => {
+    const v = vouchers.find(x => x.id === voucherId);
+    if (!v) return;
+    // If this voucher is linked to a sale/purchase, prefer the customer/supplier
+    // name+address for the "from/to" narrative line.
+    let partyName: string | undefined;
+    let partyAddress: string | undefined;
+    if (v.refType === 'sale' && v.refId) {
+      const sale = sales.find(s => s.id === v.refId);
+      if (sale) {
+        const cust = sale.customerId ? customers.find(c => c.id === sale.customerId) : undefined;
+        partyName = cust?.legalName || cust?.name || sale.customerName;
+        partyAddress = [cust?.addressLine1 || cust?.address, cust?.city, cust?.state, cust?.pincode ? `PIN: ${cust.pincode}` : null].filter(Boolean).join(', ');
+      }
+    } else if (v.refType === 'purchase' && v.refId) {
+      const purchase = purchases.find(p => p.id === v.refId);
+      if (purchase) {
+        const sup = purchase.supplierId ? suppliers.find(s => s.id === purchase.supplierId) : undefined;
+        partyName = sup?.legalName || sup?.name || purchase.supplierName;
+        partyAddress = [sup?.addressLine1 || sup?.address, sup?.city, sup?.state, sup?.pincode ? `PIN: ${sup.pincode}` : null].filter(Boolean).join(', ');
+      }
+    }
+    try {
+      generateVoucherPDF({
+        voucher: {
+          id: v.id,
+          voucherNo: v.voucherNo,
+          type: v.type,
+          date: v.date,
+          debitAccountId: v.debitAccountId,
+          creditAccountId: v.creditAccountId,
+          amount: v.amount,
+          narration: v.narration,
+          memberId: v.memberId,
+          createdBy: v.createdBy,
+          lines: v.lines,
+        },
+        accounts,
+        members,
+        partyName,
+        partyAddress: partyAddress || undefined,
+      }, society);
+      toast({ title: language === 'hi' ? `Voucher PDF: ${v.voucherNo}` : `Voucher PDF: ${v.voucherNo}` });
+    } catch (err) {
+      toast({ title: language === 'hi' ? 'PDF नहीं बना' : 'PDF generation failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
+    }
+  };
 
   const openEdit = (v: { id: string; date: string; type: VoucherType; debitAccountId: string; creditAccountId: string; amount: number; narration?: string; memberId?: string; refType?: string }) => {
     if (v.refType === 'purchase') {
@@ -1011,6 +1061,11 @@ const Vouchers: React.FC = () => {
                           </TableCell>
                           <TableCell className="text-center">
                             <div className="flex items-center justify-center gap-1">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:bg-green-50"
+                                title={language === 'hi' ? 'Voucher PDF' : 'Voucher PDF'}
+                                onClick={() => handlePrintVoucher(v.id)}>
+                                <Printer className="h-4 w-4" />
+                              </Button>
                               {canEdit && !cancelled && (
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10"
                                   title={language === 'hi' ? 'संपादित करें' : 'Edit'}

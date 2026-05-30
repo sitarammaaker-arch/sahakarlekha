@@ -2566,3 +2566,635 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
   const safeCustomer = (input.customer.legalName || input.customer.name || 'Customer').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
   doc.save(`Invoice_${safeSaleNo}_${safeCustomer}.pdf`);
 }
+
+// ── Universal Voucher PDF (A5, Tally-style narrative) ────────────────────────
+//
+// Renders a printable PDF for any voucher type (Receipt, Payment, Journal,
+// Contra). User choice:
+// - A5 portrait (compact receipt-book style)
+// - Tally narrative ("Received with thanks from..." / "Paid to...")
+// - Single Original copy
+// - Signatures: Cashier | Accountant | Manager
+
+export interface VoucherPDFInput {
+  voucher: {
+    id: string;
+    voucherNo: string;
+    type: string;             // 'receipt' | 'payment' | 'journal' | 'contra' | 'sale' | 'purchase'
+    date: string;
+    debitAccountId: string;
+    creditAccountId: string;
+    amount: number;
+    narration: string;
+    memberId?: string;
+    createdBy: string;
+    lines?: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number; narration?: string }[];
+  };
+  accounts: { id: string; name: string; nameHi?: string; type?: string }[];
+  members?: { id: string; name: string; memberId?: string }[];
+  // Optional: linked party name (e.g., customer/supplier from the sale/purchase)
+  partyName?: string;
+  partyAddress?: string;
+}
+
+const VOUCHER_TYPE_LABEL: Record<string, string> = {
+  receipt: 'RECEIPT VOUCHER',
+  payment: 'PAYMENT VOUCHER',
+  journal: 'JOURNAL VOUCHER',
+  contra: 'CONTRA VOUCHER',
+  sale: 'SALE VOUCHER',
+  purchase: 'PURCHASE VOUCHER',
+};
+
+export function generateVoucherPDF(input: VoucherPDFInput, society: SocietySettings): void {
+  const { voucher, accounts, members, partyName, partyAddress } = input;
+  // A5 portrait: 148mm × 210mm
+  const doc = new jsPDF({ orientation: 'portrait', format: 'a5' });
+  const font = setupFont(doc);
+  const pageW = doc.internal.pageSize.width;   // ~148mm
+  const pageH = doc.internal.pageSize.height;  // ~210mm
+  const left = 8;
+  const right = pageW - 8;
+
+  // Account name helper
+  const acctName = (id: string): string => {
+    const a = accounts.find(x => x.id === id);
+    return a ? a.name : id;
+  };
+  // Member name helper
+  const memberName = voucher.memberId
+    ? (members?.find(m => m.id === voucher.memberId)?.name || '')
+    : '';
+
+  const vType = (voucher.type || '').toLowerCase();
+  const isReceipt = vType === 'receipt';
+  const isPayment = vType === 'payment';
+  const isContra = vType === 'contra';
+  const title = VOUCHER_TYPE_LABEL[vType] || 'VOUCHER';
+
+  // ── Society header (centered, compact for A5) ──────────────────────────────
+  let y = 10;
+  doc.setFontSize(10);
+  doc.setFont(font, 'bold');
+  const societyLines: string[] = doc.splitTextToSize(society.name, pageW - 16);
+  doc.text(societyLines, pageW / 2, y, { align: 'center' });
+  y += societyLines.length * 4;
+
+  doc.setFontSize(7);
+  doc.setFont(font, 'normal');
+  doc.setTextColor(60);
+  const addr = [society.address, society.district, society.state, society.pinCode ? `PIN: ${society.pinCode}` : null]
+    .filter(Boolean).join(', ');
+  if (addr) {
+    const addrLines: string[] = doc.splitTextToSize(addr, pageW - 16);
+    doc.text(addrLines, pageW / 2, y, { align: 'center' });
+    y += addrLines.length * 3;
+  }
+  if (society.registrationNo) {
+    doc.text(`Reg. No: ${society.registrationNo}  |  FY: ${society.financialYear}`, pageW / 2, y, { align: 'center' });
+    y += 3;
+  }
+  doc.setTextColor(0);
+  y += 1;
+  // Divider
+  doc.setDrawColor(120);
+  doc.setLineWidth(0.4);
+  doc.line(left, y, right, y);
+  y += 5;
+
+  // ── Voucher title banner ───────────────────────────────────────────────────
+  doc.setFillColor(41, 82, 163);
+  doc.rect(left, y - 4, right - left, 6.5, 'F');
+  doc.setTextColor(255);
+  doc.setFont(font, 'bold');
+  doc.setFontSize(10);
+  doc.text(title, pageW / 2, y, { align: 'center' });
+  doc.setTextColor(0);
+  y += 7;
+
+  // ── Voucher No. + Date row ─────────────────────────────────────────────────
+  doc.setFontSize(8);
+  doc.setFont(font, 'normal');
+  doc.text(`Voucher No.: `, left, y);
+  doc.setFont(font, 'bold');
+  doc.text(voucher.voucherNo, left + 22, y);
+  doc.setFont(font, 'normal');
+  doc.text(`Date: `, pageW - 50, y);
+  doc.setFont(font, 'bold');
+  doc.text(fmtDate(voucher.date), pageW - 38, y);
+  y += 6;
+
+  // ── Narrative line (Tally-style) for Receipt / Payment / Contra ────────────
+  // Receipt: "Received with thanks from [Party] a sum of Rs. ___"
+  // Payment: "Paid to [Party] a sum of Rs. ___"
+  // Contra:  "Transferred Rs. ___ from [From A/c] to [To A/c]"
+  // Journal: no narrative line — direct table.
+  if (isReceipt || isPayment) {
+    const debitNm = acctName(voucher.debitAccountId);
+    const creditNm = acctName(voucher.creditAccountId);
+    // For Receipt: party is who paid us (= Cr-side account or partyName if linked)
+    // For Payment: party is who we paid (= Dr-side account or partyName if linked)
+    const linkedParty = partyName || memberName;
+    const narrSubject = isReceipt
+      ? (linkedParty || creditNm)
+      : (linkedParty || debitNm);
+    doc.setFontSize(8.5);
+    doc.setFont(font, 'normal');
+    const narrative = isReceipt
+      ? `Received with thanks from `
+      : `Paid to `;
+    doc.text(narrative, left, y);
+    doc.setFont(font, 'bold');
+    const subjLines: string[] = doc.splitTextToSize(narrSubject, right - left - 35);
+    doc.text(subjLines, left + (isReceipt ? 36 : 14), y);
+    y += subjLines.length * 4;
+    if (partyAddress) {
+      doc.setFontSize(7.5);
+      doc.setFont(font, 'normal');
+      doc.setTextColor(80);
+      const partyAddrLines: string[] = doc.splitTextToSize(partyAddress, right - left - 4);
+      doc.text(partyAddrLines, left + 4, y);
+      y += partyAddrLines.length * 3.5;
+      doc.setTextColor(0);
+    }
+    y += 1;
+    doc.setFont(font, 'normal');
+    doc.setFontSize(8.5);
+    doc.text(`a sum of `, left, y);
+    doc.setFont(font, 'bold');
+    doc.text(fmt(voucher.amount), left + 16, y);
+    y += 5;
+  } else if (isContra) {
+    const debitNm = acctName(voucher.debitAccountId);
+    const creditNm = acctName(voucher.creditAccountId);
+    doc.setFontSize(8.5);
+    doc.setFont(font, 'normal');
+    doc.text(`Transferred `, left, y);
+    doc.setFont(font, 'bold');
+    doc.text(fmt(voucher.amount), left + 19, y);
+    y += 4.5;
+    doc.setFont(font, 'normal');
+    doc.text(`From: `, left, y);
+    doc.setFont(font, 'bold');
+    doc.text(creditNm, left + 12, y);
+    y += 4;
+    doc.setFont(font, 'normal');
+    doc.text(`To: `, left, y);
+    doc.setFont(font, 'bold');
+    doc.text(debitNm, left + 8, y);
+    y += 5;
+  }
+
+  // ── Particulars table (Dr/Cr) ──────────────────────────────────────────────
+  const lines = voucher.lines && voucher.lines.length > 0
+    ? voucher.lines
+    : [
+        { accountId: voucher.debitAccountId, type: 'Dr' as const, amount: voucher.amount },
+        { accountId: voucher.creditAccountId, type: 'Cr' as const, amount: voucher.amount },
+      ];
+
+  const bodyRows: string[][] = lines.map(l => [
+    acctName(l.accountId),
+    l.type === 'Dr' ? fmt(l.amount) : '',
+    l.type === 'Cr' ? fmt(l.amount) : '',
+  ]);
+  const drTotal = lines.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0);
+  const crTotal = lines.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0);
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left, right: 8 },
+    head: [['Particulars', 'Dr (Rs.)', 'Cr (Rs.)']],
+    body: bodyRows,
+    foot: [['Total', fmt(drTotal), fmt(crTotal)]],
+    styles: { fontSize: 8, cellPadding: 1.5, font, lineColor: [200, 200, 200], lineWidth: 0.1 },
+    headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    footStyles: { fillColor: [230, 235, 245], textColor: 0, fontStyle: 'bold' },
+    columnStyles: {
+      0: { cellWidth: 'auto' },
+      1: { halign: 'right', cellWidth: 30 },
+      2: { halign: 'right', cellWidth: 30 },
+    },
+    didParseCell: rightAlignAmountColumns(1, 2),
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  y = (doc as any).lastAutoTable.finalY + 4;
+
+  // ── Amount in words ────────────────────────────────────────────────────────
+  doc.setFontSize(8);
+  doc.setFont(font, 'bold');
+  doc.text('In Words:', left, y);
+  doc.setFont(font, 'normal');
+  const inWords = _numToWordsIN(voucher.amount);
+  const wordsLines: string[] = doc.splitTextToSize(inWords, right - left - 16);
+  doc.text(wordsLines, left + 16, y);
+  y += wordsLines.length * 3.5 + 2;
+
+  // ── Narration ──────────────────────────────────────────────────────────────
+  if (voucher.narration) {
+    doc.setFontSize(7.5);
+    doc.setFont(font, 'bold');
+    doc.text('Narration:', left, y);
+    doc.setFont(font, 'normal');
+    const narrLines: string[] = doc.splitTextToSize(voucher.narration, right - left - 18);
+    doc.text(narrLines, left + 18, y);
+    y += narrLines.length * 3.5 + 2;
+  }
+
+  // ── Signature block (3-column: Cashier | Accountant | Manager) ─────────────
+  // Reserve enough space at the bottom
+  const sigY = pageH - 26;
+  // 3 columns
+  const colW = (right - left) / 3;
+  const labels = ['Cashier', 'Accountant', 'Manager'];
+  doc.setFontSize(7);
+  doc.setDrawColor(80);
+  doc.setLineWidth(0.3);
+  for (let i = 0; i < 3; i++) {
+    const cx = left + colW * i + colW / 2;
+    doc.line(cx - 18, sigY, cx + 18, sigY);
+    doc.setFont(font, 'bold');
+    doc.text(labels[i], cx, sigY + 4, { align: 'center' });
+    doc.setFont(font, 'normal');
+    doc.setTextColor(110);
+    doc.text('Date: ________', cx, sigY + 8, { align: 'center' });
+    doc.setTextColor(0);
+  }
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  doc.setFontSize(6);
+  doc.setTextColor(140);
+  doc.text(`Generated by SahakarLekha.com  |  ${preparedOn()}`, left, pageH - 4);
+  doc.text(`${voucher.voucherNo}`, right, pageH - 4, { align: 'right' });
+  doc.setTextColor(0);
+
+  const safeName = voucher.voucherNo.replace(/[^a-zA-Z0-9]/g, '_');
+  doc.save(`Voucher_${safeName}.pdf`);
+}
+
+// ── Purchase Record PDF (Internal record — mirror of Sale Invoice) ───────────
+//
+// Renders an internal accounting record for a purchase from a supplier. Layout
+// mirrors the Sale Invoice — but Bill From = Supplier (their GSTIN, address,
+// bank details), Bill To = Society (us). An "INTERNAL RECORD" watermark makes
+// clear this is for our books, not a re-issued invoice to the supplier.
+
+export interface PurchaseRecordInput {
+  purchaseNo: string;
+  date: string;
+  supplier: {
+    legalName?: string;
+    name?: string;
+    tradeName?: string;
+    supplierType?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    country?: string;
+    mobile?: string;
+    phone?: string;
+    email?: string;
+    gstin?: string;
+    gstNo?: string;
+    pan?: string;
+    placeOfSupply?: string;
+    contactPerson?: string;
+    bankName?: string;
+    accountNo?: string;
+    ifsc?: string;
+    branch?: string;
+    upiId?: string;
+    tdsSection?: string;
+  };
+  items: { itemName: string; unit: string; qty: number; rate: number; amount: number; hsn?: string }[];
+  totalAmount: number;
+  discount: number;
+  netAmount: number;
+  cgstPct: number;
+  sgstPct: number;
+  igstPct: number;
+  tdsPct: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  tdsAmount: number;
+  taxAmount: number;
+  grandTotal: number;
+  paymentMode: string;
+  narration?: string;
+}
+
+export function generatePurchaseRecordPDF(input: PurchaseRecordInput, society: SocietySettings): void {
+  const doc = new jsPDF();
+  const font = setupFont(doc);
+  const pageW = doc.internal.pageSize.width;
+  const left = 12;
+  const right = pageW - 12;
+
+  const supplierGstin = input.supplier.gstin || input.supplier.gstNo;
+  const buyerGstin = (society as { gstin?: string }).gstin;
+
+  // Intra vs inter-state: society state vs supplier place of supply
+  const societyState = (society.state || '').toLowerCase();
+  const supplierState = (input.supplier.placeOfSupply || input.supplier.state || '').toLowerCase();
+  const intraState = societyState && supplierState && societyState === supplierState;
+
+  const isTaxRecord = !!supplierGstin && input.taxAmount > 0;
+
+  // ── Top banner ──────────────────────────────────────────────────────────────
+  doc.setFillColor(194, 65, 12);
+  doc.rect(left, 10, right - left, 9, 'F');
+  doc.setTextColor(255);
+  doc.setFont(font, 'bold');
+  doc.setFontSize(13);
+  doc.text(isTaxRecord ? 'PURCHASE RECORD (TAX)' : 'PURCHASE RECORD', pageW / 2, 16.5, { align: 'center' });
+
+  doc.setFontSize(7);
+  doc.text('INTERNAL RECORD — Society Books', right - 2, 14.5, { align: 'right' });
+  doc.setTextColor(0);
+
+  // ── Diagonal watermark "INTERNAL RECORD" ───────────────────────────────────
+  // Light gray, large, behind content so it's visible but doesn't overpower.
+  doc.saveGraphicsState();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (doc as any).setGState((doc as any).GState({ opacity: 0.08 }));
+  doc.setFontSize(60);
+  doc.setFont(font, 'bold');
+  doc.setTextColor(180, 60, 20);
+  doc.text('INTERNAL RECORD', pageW / 2, 160, { align: 'center', angle: -30 });
+  doc.restoreGraphicsState();
+  doc.setTextColor(0);
+
+  // ── Supplier (Bill From) — FULL WIDTH centered, name wraps ────────────────
+  const innerW = right - left;
+  let y = 24;
+  doc.setFontSize(11);
+  doc.setFont(font, 'bold');
+  doc.setTextColor(41, 82, 163);
+  doc.text('From (Supplier):', left, y);
+  doc.setTextColor(0);
+  y += 5;
+
+  doc.setFontSize(12);
+  doc.setFont(font, 'bold');
+  const supName = input.supplier.legalName || input.supplier.name || 'Supplier';
+  const supLines: string[] = doc.splitTextToSize(supName, innerW - 4);
+  doc.text(supLines, left, y);
+  y += supLines.length * 5;
+
+  doc.setFontSize(8);
+  doc.setFont(font, 'normal');
+  doc.setTextColor(70);
+  const supAddr = [
+    input.supplier.addressLine1 || input.supplier.address,
+    input.supplier.addressLine2,
+    input.supplier.city,
+    input.supplier.state,
+    input.supplier.pincode ? `PIN: ${input.supplier.pincode}` : null,
+  ].filter(Boolean).join(', ');
+  if (supAddr) {
+    const supAddrLines: string[] = doc.splitTextToSize(supAddr, innerW - 4);
+    doc.text(supAddrLines, left, y);
+    y += supAddrLines.length * 4;
+  }
+  const supContact: string[] = [];
+  if (input.supplier.mobile || input.supplier.phone) supContact.push(`Mobile: ${input.supplier.mobile || input.supplier.phone}`);
+  if (input.supplier.email) supContact.push(`Email: ${input.supplier.email}`);
+  if (supContact.length > 0) {
+    doc.text(supContact.join('   '), left, y);
+    y += 4;
+  }
+  const supTaxIds: string[] = [];
+  if (supplierGstin) supTaxIds.push(`GSTIN: ${supplierGstin}`);
+  if (input.supplier.pan) supTaxIds.push(`PAN: ${input.supplier.pan}`);
+  if (supTaxIds.length > 0) {
+    doc.setTextColor(0);
+    doc.setFont(font, 'bold');
+    doc.text(supTaxIds.join('   '), left, y);
+    doc.setFont(font, 'normal');
+    y += 5;
+  }
+  doc.setTextColor(0);
+
+  // Divider
+  y += 1;
+  doc.setDrawColor(180);
+  doc.setLineWidth(0.3);
+  doc.line(left, y, right, y);
+  y += 5;
+
+  // ── Bill To (left) — Society — and Meta (right) ────────────────────────────
+  const midX = pageW / 2;
+  const leftColMax = midX - left - 5;
+  const rightColStart = midX + 2;
+  let leftY = y;
+  let rightY = y;
+
+  doc.setFontSize(9);
+  doc.setFont(font, 'bold');
+  doc.setTextColor(41, 82, 163);
+  doc.text('Bill To (Us):', left, leftY);
+  doc.setTextColor(0);
+  leftY += 5;
+
+  doc.setFontSize(10.5);
+  const sLines: string[] = doc.splitTextToSize(society.name, leftColMax);
+  doc.text(sLines, left, leftY);
+  leftY += sLines.length * 4.5;
+
+  doc.setFontSize(8);
+  doc.setFont(font, 'normal');
+  const ourAddr = [society.address, society.district, society.state, society.pinCode ? `PIN: ${society.pinCode}` : null]
+    .filter(Boolean).join(', ');
+  if (ourAddr) {
+    const oaLines: string[] = doc.splitTextToSize(ourAddr, leftColMax);
+    doc.text(oaLines, left, leftY);
+    leftY += oaLines.length * 4;
+  }
+  const ourTaxIds: string[] = [];
+  if (buyerGstin) ourTaxIds.push(`GSTIN: ${buyerGstin}`);
+  if (society.entityPan) ourTaxIds.push(`PAN: ${society.entityPan}`);
+  if (ourTaxIds.length > 0) {
+    doc.setFont(font, 'bold');
+    doc.text(ourTaxIds.join('   '), left, leftY);
+    doc.setFont(font, 'normal');
+    leftY += 5;
+  }
+
+  // RIGHT — Meta
+  doc.setFontSize(8.5);
+  const metaPairs: [string, string][] = [
+    ['Purchase No.', input.purchaseNo],
+    ['Date', fmtDate(input.date)],
+    ['Place of Supply', input.supplier.placeOfSupply || input.supplier.state || '—'],
+    ['Payment Mode', input.paymentMode.toUpperCase()],
+  ];
+  for (const [k, v] of metaPairs) {
+    doc.setFont(font, 'normal');
+    doc.setTextColor(80);
+    doc.text(k + ':', rightColStart, rightY);
+    doc.setFont(font, 'bold');
+    doc.setTextColor(0);
+    const valLines: string[] = doc.splitTextToSize(v, right - rightColStart - 35);
+    doc.text(valLines, right, rightY, { align: 'right' });
+    rightY += Math.max(5, valLines.length * 4 + 1);
+  }
+
+  const by = Math.max(leftY, rightY) + 3;
+
+  // ── Items table ────────────────────────────────────────────────────────────
+  const tableHead = ['#', 'Item', 'HSN', 'Qty', 'Unit', 'Rate', 'Amount'];
+  const tableBody = input.items.map((it, i) => [
+    String(i + 1),
+    it.itemName,
+    it.hsn || '—',
+    it.qty.toString(),
+    it.unit,
+    fmt(it.rate),
+    fmt(it.amount),
+  ]);
+
+  autoTable(doc, {
+    startY: by,
+    margin: { left, right: 12 },
+    head: [tableHead],
+    body: tableBody,
+    styles: { fontSize: 8, cellPadding: 2, font, lineColor: [200, 200, 200], lineWidth: 0.1 },
+    headStyles: { fillColor: [194, 65, 12], textColor: 255, fontStyle: 'bold' },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 8 },
+      1: { cellWidth: 'auto' },
+      2: { halign: 'center', cellWidth: 18 },
+      3: { halign: 'right', cellWidth: 14 },
+      4: { halign: 'center', cellWidth: 14 },
+      5: { halign: 'right', cellWidth: 22 },
+      6: { halign: 'right', cellWidth: 26 },
+    },
+    didParseCell: rightAlignAmountColumns(5, 6),
+  });
+
+  // ── Totals block — right edge aligned ──────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const lastY = (doc as any).lastAutoTable.finalY;
+  let ty = lastY + 4;
+  const totalsRight = right;
+  const totalsWidth = 80;
+  const totalsLeft = totalsRight - totalsWidth;
+  const labelX = totalsLeft + 3;
+  const valueX = totalsRight - 3;
+  doc.setFontSize(8.5);
+
+  const addTotalsRow = (label: string, value: string, opts?: { bold?: boolean; fill?: [number, number, number] }) => {
+    if (opts?.fill) {
+      doc.setFillColor(...opts.fill);
+      doc.rect(totalsLeft, ty - 4, totalsWidth, 6.5, 'F');
+    }
+    doc.setFont(font, opts?.bold ? 'bold' : 'normal');
+    doc.setTextColor(opts?.fill ? 255 : 0);
+    doc.text(label, labelX, ty);
+    doc.text(value, valueX, ty, { align: 'right' });
+    doc.setTextColor(0);
+    ty += 5.5;
+  };
+
+  addTotalsRow('Subtotal', fmt(input.totalAmount));
+  if (input.discount > 0) addTotalsRow('Discount', '- ' + fmt(input.discount));
+  addTotalsRow('Taxable Amount', fmt(input.netAmount), { bold: true });
+  if (isTaxRecord) {
+    if (intraState) {
+      if (input.cgstAmount > 0) addTotalsRow(`CGST @ ${input.cgstPct}% (ITC)`, fmt(input.cgstAmount));
+      if (input.sgstAmount > 0) addTotalsRow(`SGST @ ${input.sgstPct}% (ITC)`, fmt(input.sgstAmount));
+    } else {
+      if (input.igstAmount > 0) addTotalsRow(`IGST @ ${input.igstPct}% (ITC)`, fmt(input.igstAmount));
+      if (input.cgstAmount > 0) addTotalsRow(`CGST @ ${input.cgstPct}% (ITC)`, fmt(input.cgstAmount));
+      if (input.sgstAmount > 0) addTotalsRow(`SGST @ ${input.sgstPct}% (ITC)`, fmt(input.sgstAmount));
+    }
+    addTotalsRow('Total ITC', fmt(input.taxAmount));
+  }
+  if (input.tdsAmount > 0) {
+    addTotalsRow(`TDS @ ${input.tdsPct}% (deducted)`, '- ' + fmt(input.tdsAmount));
+  }
+  addTotalsRow('Grand Total Payable', fmt(input.grandTotal - (input.tdsAmount || 0)), { bold: true, fill: [194, 65, 12] });
+  ty += 2;
+
+  // ── Amount in words ────────────────────────────────────────────────────────
+  doc.setFontSize(8);
+  doc.setFont(font, 'bold');
+  doc.text('Amount in Words:', left, ty);
+  doc.setFont(font, 'normal');
+  const netPayable = input.grandTotal - (input.tdsAmount || 0);
+  const words = _numToWordsIN(netPayable);
+  doc.text(words, left + 32, ty, { maxWidth: pageW - left - 32 - 12 });
+  ty += 7;
+
+  // ── Supplier bank details (for our payment) ────────────────────────────────
+  if (input.supplier.bankName || input.supplier.accountNo) {
+    doc.setFillColor(245, 245, 245);
+    doc.rect(left, ty - 3, right - left, 14, 'F');
+    doc.setFontSize(7.5);
+    doc.setFont(font, 'bold');
+    doc.text("Supplier Bank Details (for our payment):", left + 2, ty);
+    ty += 3.5;
+    doc.setFont(font, 'normal');
+    const bank: string[] = [];
+    if (input.supplier.bankName) bank.push(`Bank: ${input.supplier.bankName}`);
+    if (input.supplier.accountNo) bank.push(`A/c: ${input.supplier.accountNo}`);
+    if (input.supplier.ifsc) bank.push(`IFSC: ${input.supplier.ifsc}`);
+    if (input.supplier.branch) bank.push(`Branch: ${input.supplier.branch}`);
+    if (input.supplier.upiId) bank.push(`UPI: ${input.supplier.upiId}`);
+    doc.text(bank.join('   '), left + 2, ty, { maxWidth: right - left - 4 });
+    ty += 8;
+  }
+
+  // ── Notes / TDS note ───────────────────────────────────────────────────────
+  if (input.narration) {
+    doc.setFontSize(7.5);
+    doc.setTextColor(80);
+    doc.text(`Notes: ${input.narration}`, left, ty, { maxWidth: pageW - left - 12 });
+    doc.setTextColor(0);
+    ty += 5;
+  }
+  if (input.tdsAmount > 0 && input.supplier.tdsSection) {
+    doc.setFontSize(7.5);
+    doc.setTextColor(80);
+    doc.text(`TDS deducted under section ${input.supplier.tdsSection} of Income Tax Act.`, left, ty, { maxWidth: pageW - left - 12 });
+    doc.setTextColor(0);
+    ty += 5;
+  }
+  ty += 3;
+
+  // ── Signature block (3-column: Cashier | Accountant | Manager) ────────────
+  const pageH = doc.internal.pageSize.height;
+  const sigY = Math.min(ty + 12, pageH - 30);
+  const colW = (right - left) / 3;
+  const labels = ['Cashier', 'Accountant', 'Manager'];
+  doc.setFontSize(8);
+  doc.setDrawColor(80);
+  doc.setLineWidth(0.3);
+  for (let i = 0; i < 3; i++) {
+    const cx = left + colW * i + colW / 2;
+    doc.line(cx - 22, sigY, cx + 22, sigY);
+    doc.setFont(font, 'bold');
+    doc.text(labels[i], cx, sigY + 5, { align: 'center' });
+    doc.setFont(font, 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(110);
+    doc.text('Date: __________', cx, sigY + 10, { align: 'center' });
+    doc.setTextColor(0);
+    doc.setFontSize(8);
+  }
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  doc.setFontSize(6.5);
+  doc.setTextColor(140);
+  doc.text(`Generated by SahakarLekha.com  |  ${preparedOn()}  |  INTERNAL RECORD — not for issue to supplier`, left, pageH - 8);
+  doc.text(`${input.purchaseNo}`, right, pageH - 8, { align: 'right' });
+  doc.setTextColor(0);
+
+  const safePurchaseNo = input.purchaseNo.replace(/[^a-zA-Z0-9]/g, '_');
+  const safeSupplier = (input.supplier.legalName || input.supplier.name || 'Supplier').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+  doc.save(`PurchaseRecord_${safePurchaseNo}_${safeSupplier}.pdf`);
+}

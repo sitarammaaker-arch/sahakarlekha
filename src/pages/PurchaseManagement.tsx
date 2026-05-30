@@ -22,7 +22,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { PackagePlus, Plus, Trash2, Eye, Pencil, Search, FileSpreadsheet, Download } from 'lucide-react';
+import { PackagePlus, Plus, Trash2, Eye, Pencil, Printer, Search, FileSpreadsheet, Download } from 'lucide-react';
+import { generatePurchaseRecordPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
@@ -278,6 +279,81 @@ const PurchaseManagement: React.FC = () => {
     deletePurchase(deleteId);
     setDeleteId(null);
     toast({ title: language === 'hi' ? 'खरीद हटाई गई' : 'Purchase deleted' });
+  };
+
+  // ── Download Purchase Record PDF (internal) ───────────────────────────────
+  const handleDownloadRecord = (purchase: typeof purchases[number]) => {
+    const supplier = purchase.supplierId ? suppliers.find(s => s.id === purchase.supplierId) : undefined;
+    const recordSupplier = supplier ? {
+      legalName: supplier.legalName || supplier.name,
+      name: supplier.name,
+      tradeName: supplier.tradeName,
+      supplierType: supplier.supplierType,
+      addressLine1: supplier.addressLine1 || supplier.address,
+      addressLine2: supplier.addressLine2,
+      address: supplier.address,
+      city: supplier.city,
+      state: supplier.state,
+      pincode: supplier.pincode,
+      country: supplier.country,
+      mobile: supplier.mobile || supplier.phone,
+      phone: supplier.phone,
+      email: supplier.email,
+      gstin: supplier.gstin || supplier.gstNo,
+      gstNo: supplier.gstNo,
+      pan: supplier.pan,
+      placeOfSupply: supplier.placeOfSupply,
+      contactPerson: supplier.contactPerson,
+      bankName: supplier.bankName,
+      accountNo: supplier.accountNo,
+      ifsc: supplier.ifsc,
+      branch: supplier.branch,
+      upiId: supplier.upiId,
+      tdsSection: supplier.tdsSection,
+    } : {
+      name: purchase.supplierName,
+      legalName: purchase.supplierName,
+      phone: purchase.supplierPhone,
+      mobile: purchase.supplierPhone,
+    };
+    const enrichedItems = purchase.items.map(it => ({
+      itemName: it.itemName,
+      unit: it.unit,
+      qty: it.qty,
+      rate: it.rate,
+      amount: it.amount,
+      hsn: stockItems.find(s => s.id === it.itemId)?.hsnCode,
+    }));
+    try {
+      generatePurchaseRecordPDF({
+        purchaseNo: purchase.purchaseNo,
+        date: purchase.date,
+        supplier: recordSupplier,
+        items: enrichedItems,
+        totalAmount: purchase.totalAmount,
+        discount: purchase.discount || 0,
+        netAmount: purchase.netAmount,
+        cgstPct: purchase.cgstPct || 0,
+        sgstPct: purchase.sgstPct || 0,
+        igstPct: purchase.igstPct || 0,
+        tdsPct: purchase.tdsPct || 0,
+        cgstAmount: purchase.cgstAmount || 0,
+        sgstAmount: purchase.sgstAmount || 0,
+        igstAmount: purchase.igstAmount || 0,
+        tdsAmount: purchase.tdsAmount || 0,
+        taxAmount: purchase.taxAmount || 0,
+        grandTotal: purchase.grandTotal || purchase.netAmount,
+        paymentMode: purchase.paymentMode,
+        narration: purchase.narration,
+      }, society);
+      toast({ title: language === 'hi' ? `Purchase Record: ${purchase.purchaseNo}` : `Purchase Record: ${purchase.purchaseNo}` });
+    } catch (err) {
+      toast({
+        title: language === 'hi' ? 'PDF नहीं बना' : 'Could not generate PDF',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      });
+    }
   };
 
   // ── Filtered purchases ────────────────────────────────────────────────────
@@ -807,6 +883,14 @@ const PurchaseManagement: React.FC = () => {
                                 title={language === 'hi' ? 'देखें' : 'View'}
                               >
                                 <Eye className="h-4 w-4 text-blue-600" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDownloadRecord(purchase)}
+                                title={language === 'hi' ? 'Purchase Record PDF' : 'Purchase Record PDF'}
+                              >
+                                <Printer className="h-4 w-4 text-green-600" />
                               </Button>
                               <Button
                                 variant="ghost"
