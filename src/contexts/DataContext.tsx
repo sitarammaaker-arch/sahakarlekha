@@ -244,25 +244,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           { data: socData }, { data: supData }, { data: cusData },
           { data: kccData }, { data: recData }, { data: kaData }, { data: p7Data },
         ] = await Promise.all([
-          supabase.from('vouchers').select('*').eq('society_id', sid).order('createdAt'),
-          supabase.from('members').select('*').eq('society_id', sid),
-          supabase.from('accounts').select('*').eq('society_id', sid),
-          supabase.from('loans').select('*').eq('society_id', sid),
-          supabase.from('assets').select('*').eq('society_id', sid),
-          supabase.from('audit_objections').select('*').eq('society_id', sid),
-          supabase.from('stock_items').select('*').eq('society_id', sid),
-          supabase.from('stock_movements').select('*').eq('society_id', sid).order('createdAt'),
-          supabase.from('sales').select('*').eq('society_id', sid).order('createdAt'),
-          supabase.from('purchases').select('*').eq('society_id', sid).order('createdAt'),
-          supabase.from('employees').select('*').eq('society_id', sid),
-          supabase.from('salary_records').select('*').eq('society_id', sid).order('createdAt'),
+          // CRITICAL: PostgREST default row limit is 1000. Without an explicit higher limit,
+          // societies with >1000 vouchers / movements lose the newest rows silently — they
+          // appear to "vanish" on F5 because they fall outside the 1000-row window. We bump
+          // each query that can realistically grow past 1000 to 100000.
+          supabase.from('vouchers').select('*').eq('society_id', sid).order('createdAt').limit(100000),
+          supabase.from('members').select('*').eq('society_id', sid).limit(100000),
+          supabase.from('accounts').select('*').eq('society_id', sid).limit(10000),
+          supabase.from('loans').select('*').eq('society_id', sid).limit(100000),
+          supabase.from('assets').select('*').eq('society_id', sid).limit(100000),
+          supabase.from('audit_objections').select('*').eq('society_id', sid).limit(100000),
+          supabase.from('stock_items').select('*').eq('society_id', sid).limit(100000),
+          supabase.from('stock_movements').select('*').eq('society_id', sid).order('createdAt').limit(100000),
+          supabase.from('sales').select('*').eq('society_id', sid).order('createdAt').limit(100000),
+          supabase.from('purchases').select('*').eq('society_id', sid).order('createdAt').limit(100000),
+          supabase.from('employees').select('*').eq('society_id', sid).limit(100000),
+          supabase.from('salary_records').select('*').eq('society_id', sid).order('createdAt').limit(100000),
           supabase.from('society_settings').select('*').eq('society_id', sid).limit(1),
-          supabase.from('suppliers').select('*').eq('society_id', sid),
-          supabase.from('customers').select('*').eq('society_id', sid),
-          supabase.from('kcc_loans').select('*').eq('society_id', sid),
-          supabase.from('recoverables').select('*').eq('society_id', sid).order('createdAt'),
-          supabase.from('kachi_aarat_entries').select('*').eq('society_id', sid).order('createdAt'),
-          supabase.from('p7_entries').select('*').eq('society_id', sid).order('createdAt'),
+          supabase.from('suppliers').select('*').eq('society_id', sid).limit(100000),
+          supabase.from('customers').select('*').eq('society_id', sid).limit(100000),
+          supabase.from('kcc_loans').select('*').eq('society_id', sid).limit(100000),
+          supabase.from('recoverables').select('*').eq('society_id', sid).order('createdAt').limit(100000),
+          supabase.from('kachi_aarat_entries').select('*').eq('society_id', sid).order('createdAt').limit(100000),
+          supabase.from('p7_entries').select('*').eq('society_id', sid).order('createdAt').limit(100000),
         ]);
 
         if (vErr) console.warn('Vouchers query error:', vErr.message);
@@ -329,6 +333,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
           const vList = ((vData || []) as Voucher[]);
           const voucherById = new Map<string, Voucher>(vList.map(v => [v.id, v]));
+          // Index repair vouchers by their refId so we can REUSE an existing repair
+          // (instead of creating a new one every F5) when the sale.voucherId patch
+          // earlier didn't make it to Supabase. This prevents the vouchers table from
+          // ballooning past the row-limit and silently dropping the user's newest
+          // entries (like a fresh Contra) on F5.
+          const repairByRefId = new Map<string, Voucher>();
+          const duplicateRepairs: Voucher[] = []; // to soft-delete
+          for (const v of vList) {
+            if (!v.narration?.includes('[auto-repair]')) continue;
+            if (!v.refId) continue;
+            const existing = repairByRefId.get(v.refId);
+            if (!existing) {
+              repairByRefId.set(v.refId, v);
+            } else {
+              // Pick the one with later createdAt as "primary"; mark the older as duplicate
+              const keep = (v.createdAt || '') > (existing.createdAt || '') ? v : existing;
+              const drop = keep === v ? existing : v;
+              repairByRefId.set(v.refId, keep);
+              if (!drop.isDeleted) duplicateRepairs.push(drop);
+            }
+          }
           const fyStr2: string = (socData && socData.length > 0 ? socData[0] : society).financialYear || '2024-25';
           const newRepairVouchers: Voucher[] = [];
           const updatedVouchers = new Map<string, Voucher>(); // id → updated voucher
@@ -369,10 +394,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           // SALES
           for (const sale of ((slData || []) as Sale[])) {
-            const existing = sale.voucherId ? voucherById.get(sale.voucherId) : undefined;
+            // First try sale.voucherId; if missing, look up by refId from existing repair vouchers
+            // (handles the case where the sale.voucherId Supabase patch failed previously —
+            //  prevents creating a brand-new duplicate every F5).
+            let existing = sale.voucherId ? voucherById.get(sale.voucherId) : undefined;
+            if (!existing) existing = repairByRefId.get(sale.id);
             const isAutoRepair = !!existing?.narration?.includes('[auto-repair]');
             // Don't touch user-made vouchers — only rebuild if missing OR an old auto-repair
             if (existing && !isAutoRepair) continue;
+            // If we recovered the voucherId via refId lookup, mark the sale for re-patching
+            if (existing && sale.voucherId !== existing.id) {
+              patchedSales.push({ ...sale, voucherId: existing.id });
+            }
 
             const customerAcc = sale.customerId ? ((cusData || []) as Customer[]).find(c => c.id === sale.customerId)?.accountId : undefined;
             const debitAccId = sale.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
@@ -438,9 +471,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           // PURCHASES
           for (const purchase of ((puData || []) as Purchase[])) {
-            const existing = purchase.voucherId ? voucherById.get(purchase.voucherId) : undefined;
+            let existing = purchase.voucherId ? voucherById.get(purchase.voucherId) : undefined;
+            if (!existing) existing = repairByRefId.get(purchase.id);
             const isAutoRepair = !!existing?.narration?.includes('[auto-repair]');
             if (existing && !isAutoRepair) continue;
+            if (existing && purchase.voucherId !== existing.id) {
+              patchedPurchases.push({ ...purchase, voucherId: existing.id });
+            }
 
             const supplierAcc = purchase.supplierId ? ((supData || []) as Supplier[]).find(s => s.id === purchase.supplierId)?.accountId : undefined;
             const creditAccId = purchase.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
@@ -508,7 +545,36 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
           }
 
-          const totalAffected = newRepairVouchers.length + updatedVouchers.size;
+          // Soft-delete duplicate repair vouchers (caused by previous F5s creating new
+          // vouchers when sale.voucherId patch silently failed). Mark them isDeleted in
+          // state + Supabase so they don't pollute Trial Balance and don't keep growing
+          // past the PostgREST row-limit.
+          if (duplicateRepairs.length > 0) {
+            const dropIds = new Set(duplicateRepairs.map(v => v.id));
+            const now = new Date().toISOString();
+            for (let i = 0; i < allVouchersSoFar.length; i++) {
+              if (dropIds.has(allVouchersSoFar[i].id)) {
+                allVouchersSoFar[i] = {
+                  ...allVouchersSoFar[i],
+                  isDeleted: true,
+                  deletedAt: now,
+                  deletedBy: 'System (repair cleanup)',
+                  deletedReason: 'Duplicate auto-repair voucher cleaned up',
+                };
+              }
+            }
+            duplicateRepairs.forEach(v => {
+              supabase.from('vouchers').update({
+                isDeleted: true,
+                deletedAt: now,
+                deletedBy: 'System (repair cleanup)',
+                deletedReason: 'Duplicate auto-repair voucher cleaned up',
+              }).eq('id', v.id).then(({ error }) => { if (error) console.warn('Duplicate repair cleanup:', error.message); });
+            });
+            console.log(`[REPAIR v2] Cleaned ${duplicateRepairs.length} duplicate auto-repair voucher(s).`);
+          }
+
+          const totalAffected = newRepairVouchers.length + updatedVouchers.size + duplicateRepairs.length;
           if (totalAffected > 0) {
             setVouchersState(allVouchersSoFar);
             storage.setVouchers(allVouchersSoFar);
@@ -547,10 +613,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               supabase.from('purchases').update({ voucherId: p.voucherId }).eq('id', p.id)
                 .then(({ error }) => { if (error) console.warn('Purchase voucherId patch:', error.message); });
             }
-            console.log(`[REPAIR v2] New: ${newRepairVouchers.length}, Re-routed: ${updatedVouchers.size}.`);
+            console.log(`[REPAIR v2] New: ${newRepairVouchers.length}, Re-routed: ${updatedVouchers.size}, Cleaned duplicates: ${duplicateRepairs.length}.`);
             toastRef.current({
               title: `${totalAffected} voucher(s) auto-repaired`,
-              description: `${newRepairVouchers.length} created, ${updatedVouchers.size} re-routed to correct Sales/Purchase ledger accounts (per-item).`,
+              description: `${newRepairVouchers.length} created, ${updatedVouchers.size} re-routed, ${duplicateRepairs.length} duplicate(s) cleaned.`,
               variant: 'default',
               duration: 8000,
             });
