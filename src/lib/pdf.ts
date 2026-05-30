@@ -2424,6 +2424,10 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
 
   autoTable(doc, {
     startY: by,
+    // Explicit margins so the items table aligns exactly with the page margins
+    // used everywhere else (header, totals block, signature). Default autoTable
+    // margin is 40pt (~14mm) which doesn't match our 12mm margins.
+    margin: { left, right: 12 },
     head: [tableHead],
     body: tableBody,
     styles: { fontSize: 8, cellPadding: 2, font, lineColor: [200, 200, 200], lineWidth: 0.1 },
@@ -2440,24 +2444,29 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
     didParseCell: rightAlignAmountColumns(5, 6),
   });
 
-  // ── Totals block ───────────────────────────────────────────────────────────
+  // ── Totals block — right edge aligned with items table right edge (`right`) ─
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const lastY = (doc as any).lastAutoTable.finalY;
-  let ty = lastY + 2;
+  let ty = lastY + 4;
 
-  const totalsX = pageW - 80;
-  const totalsW = 70;
+  // Totals box spans 80mm and ends flush with the page right margin so it
+  // sits directly under the items table's right edge — no overhang, no float.
+  const totalsRight = right;
+  const totalsWidth = 80;
+  const totalsLeft = totalsRight - totalsWidth;
+  const labelX = totalsLeft + 3;     // 3mm inner padding
+  const valueX = totalsRight - 3;
   doc.setFontSize(8.5);
 
   const addTotalsRow = (label: string, value: string, opts?: { bold?: boolean; fill?: [number, number, number] }) => {
     if (opts?.fill) {
       doc.setFillColor(...opts.fill);
-      doc.rect(totalsX - 2, ty - 3.5, totalsW + 2, 6, 'F');
+      doc.rect(totalsLeft, ty - 4, totalsWidth, 6.5, 'F');
     }
     doc.setFont(font, opts?.bold ? 'bold' : 'normal');
     doc.setTextColor(opts?.fill ? 255 : 0);
-    doc.text(label, totalsX, ty);
-    doc.text(value, totalsX + totalsW, ty, { align: 'right' });
+    doc.text(label, labelX, ty);
+    doc.text(value, valueX, ty, { align: 'right' });
     doc.setTextColor(0);
     ty += 5.5;
   };
