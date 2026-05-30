@@ -22,7 +22,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { ShoppingCart, Plus, Trash2, Eye, Pencil, Search, FileSpreadsheet, Download, AlertTriangle } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, Eye, Pencil, Search, FileSpreadsheet, Download, AlertTriangle, Printer } from 'lucide-react';
+import { generateSaleInvoicePDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
@@ -297,6 +298,76 @@ const SaleManagement: React.FC = () => {
     deleteSale(deleteId);
     setDeleteId(null);
     toast({ title: language === 'hi' ? 'बिक्री हटाई गई' : 'Sale deleted' });
+  };
+
+  // ── Download Invoice PDF ──────────────────────────────────────────────────
+  const handleDownloadInvoice = (sale: typeof sales[number]) => {
+    const customer = sale.customerId ? customers.find(c => c.id === sale.customerId) : undefined;
+    // Build invoice input — fallback to embedded sale.customerName/Phone if no linked customer
+    const invoiceCustomer = customer ? {
+      legalName: customer.legalName || customer.name,
+      name: customer.name,
+      tradeName: customer.tradeName,
+      mailingName: customer.mailingName,
+      customerType: customer.customerType,
+      addressLine1: customer.addressLine1 || customer.address,
+      addressLine2: customer.addressLine2,
+      address: customer.address,
+      city: customer.city,
+      state: customer.state,
+      pincode: customer.pincode,
+      country: customer.country,
+      mobile: customer.mobile || customer.phone,
+      phone: customer.phone,
+      email: customer.email,
+      gstin: customer.gstin || customer.gstNo,
+      gstNo: customer.gstNo,
+      pan: customer.pan,
+      placeOfSupply: customer.placeOfSupply,
+      contactPerson: customer.contactPerson,
+    } : {
+      name: sale.customerName,
+      legalName: sale.customerName,
+      phone: sale.customerPhone,
+      mobile: sale.customerPhone,
+    };
+    // Enrich items with HSN from stockItems where available
+    const enrichedItems = sale.items.map(it => ({
+      itemName: it.itemName,
+      unit: it.unit,
+      qty: it.qty,
+      rate: it.rate,
+      amount: it.amount,
+      hsn: stockItems.find(s => s.id === it.itemId)?.hsnCode,
+    }));
+    try {
+      generateSaleInvoicePDF({
+        saleNo: sale.saleNo,
+        date: sale.date,
+        customer: invoiceCustomer,
+        items: enrichedItems,
+        totalAmount: sale.totalAmount,
+        discount: sale.discount || 0,
+        netAmount: sale.netAmount,
+        cgstPct: sale.cgstPct || 0,
+        sgstPct: sale.sgstPct || 0,
+        igstPct: sale.igstPct || 0,
+        cgstAmount: sale.cgstAmount || 0,
+        sgstAmount: sale.sgstAmount || 0,
+        igstAmount: sale.igstAmount || 0,
+        taxAmount: sale.taxAmount || 0,
+        grandTotal: sale.grandTotal || sale.netAmount,
+        paymentMode: sale.paymentMode,
+        narration: sale.narration,
+      }, society);
+      toast({ title: language === 'hi' ? `Invoice download: ${sale.saleNo}` : `Invoice downloaded: ${sale.saleNo}` });
+    } catch (err) {
+      toast({
+        title: language === 'hi' ? 'PDF नहीं बना' : 'Could not generate PDF',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      });
+    }
   };
 
   // ── Filtered sales ────────────────────────────────────────────────────────
@@ -822,6 +893,14 @@ const SaleManagement: React.FC = () => {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                onClick={() => handleDownloadInvoice(sale)}
+                                title={language === 'hi' ? 'Invoice PDF' : 'Invoice PDF'}
+                              >
+                                <Printer className="h-4 w-4 text-green-600" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => handleEdit(sale)}
                                 title={language === 'hi' ? 'संपादन' : 'Edit'}
                               >
@@ -956,7 +1035,15 @@ const SaleManagement: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end pt-2">
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => handleDownloadInvoice(viewSale)}
+                  className="gap-2"
+                >
+                  <Printer className="h-4 w-4" />
+                  {language === 'hi' ? 'Invoice PDF Download' : 'Download Invoice PDF'}
+                </Button>
                 <Button
                   variant="outline"
                   onClick={() => { const s = viewSale; setViewSale(null); handleEdit(s); }}

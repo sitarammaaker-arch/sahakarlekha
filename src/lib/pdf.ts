@@ -2171,3 +2171,347 @@ export function generateMemberApplicationPDF(member: Member, society: SocietySet
   addPageNumbers(doc, font, society.name);
   doc.save(pdfFileName('MemberApplication', society, member.memberId));
 }
+
+// ── Sale Invoice PDF (Tax Invoice / Bill of Supply) ──────────────────────────
+//
+// Renders a Tally-style GST-compliant invoice for a single sale.
+// - If the seller (society) has a GSTIN AND a positive taxAmount on the sale,
+//   it's a TAX INVOICE. CGST+SGST shown for intra-state, IGST for inter-state.
+// - Otherwise (no GSTIN or no tax), it's a BILL OF SUPPLY.
+// - Customer fields fall back to legacy (name/phone/gstNo/address) when the new
+//   Tally-style fields are not set, so old simple customers still render fine.
+
+// Convert a positive number to Indian numbering words (e.g., 12345 → "Twelve Thousand Three Hundred Forty-Five")
+function _numToWordsIN(num: number): string {
+  if (!isFinite(num) || num < 0) return '';
+  const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+    'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const inWords = (n: number): string => {
+    if (n < 20) return a[n];
+    if (n < 100) return b[Math.floor(n / 10)] + (n % 10 ? '-' + a[n % 10] : '');
+    if (n < 1000) return a[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + inWords(n % 100) : '');
+    if (n < 100000) return inWords(Math.floor(n / 1000)) + ' Thousand' + (n % 1000 ? ' ' + inWords(n % 1000) : '');
+    if (n < 10000000) return inWords(Math.floor(n / 100000)) + ' Lakh' + (n % 100000 ? ' ' + inWords(n % 100000) : '');
+    return inWords(Math.floor(n / 10000000)) + ' Crore' + (n % 10000000 ? ' ' + inWords(n % 10000000) : '');
+  };
+  const whole = Math.floor(num);
+  const paise = Math.round((num - whole) * 100);
+  let str = inWords(whole) + ' Rupees';
+  if (paise > 0) str += ' and ' + inWords(paise) + ' Paise';
+  return str + ' Only';
+}
+
+export interface SaleInvoiceInput {
+  saleNo: string;
+  date: string;
+  customer: {
+    legalName?: string;
+    name?: string;
+    tradeName?: string;
+    mailingName?: string;
+    customerType?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    country?: string;
+    mobile?: string;
+    phone?: string;
+    email?: string;
+    gstin?: string;
+    gstNo?: string;
+    pan?: string;
+    placeOfSupply?: string;
+    contactPerson?: string;
+  };
+  items: { itemName: string; unit: string; qty: number; rate: number; amount: number; hsn?: string }[];
+  totalAmount: number;
+  discount: number;
+  netAmount: number;
+  cgstPct: number;
+  sgstPct: number;
+  igstPct: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  taxAmount: number;
+  grandTotal: number;
+  paymentMode: string;
+  narration?: string;
+}
+
+export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: SocietySettings): void {
+  const doc = new jsPDF();
+  const font = setupFont(doc);
+  const pageW = doc.internal.pageSize.width;
+  const left = 12;
+  const right = pageW - 12;
+
+  const sellerGstin = (society as { gstin?: string }).gstin;
+  const isTaxInvoice = !!sellerGstin && input.taxAmount > 0;
+
+  // Decide intra vs inter-state for label clarity (used only if Tax Invoice)
+  const sellerState = (society.state || '').toLowerCase();
+  const buyerState = (input.customer.placeOfSupply || input.customer.state || '').toLowerCase();
+  const intraState = sellerState && buyerState && sellerState === buyerState;
+
+  // ── Top banner ──────────────────────────────────────────────────────────────
+  doc.setFillColor(41, 82, 163);
+  doc.rect(left, 10, right - left, 9, 'F');
+  doc.setTextColor(255);
+  doc.setFont(font, 'bold');
+  doc.setFontSize(13);
+  doc.text(isTaxInvoice ? 'TAX INVOICE' : 'BILL OF SUPPLY', pageW / 2, 16.5, { align: 'center' });
+  doc.setTextColor(0);
+
+  // Original/Duplicate marker (top-right of banner)
+  doc.setFontSize(7);
+  doc.setTextColor(255);
+  doc.text('Original for Recipient', right - 2, 14.5, { align: 'right' });
+  doc.setTextColor(0);
+
+  // ── Seller block (Bill From) — top half left ───────────────────────────────
+  let y = 23;
+  doc.setFontSize(11);
+  doc.setFont(font, 'bold');
+  doc.text(society.name, left, y);
+  y += 4;
+  doc.setFontSize(8);
+  doc.setFont(font, 'normal');
+  const sellerAddr = [society.address, society.district, society.state, society.pinCode ? `PIN: ${society.pinCode}` : null]
+    .filter(Boolean).join(', ');
+  if (sellerAddr) { doc.text(sellerAddr, left, y, { maxWidth: 110 }); y += 4; }
+  if (society.phone) { doc.text(`Phone: ${society.phone}`, left, y); y += 4; }
+  if (society.email) { doc.text(`Email: ${society.email}`, left, y); y += 4; }
+  const sellerTaxIds: string[] = [];
+  if (sellerGstin) sellerTaxIds.push(`GSTIN: ${sellerGstin}`);
+  if (society.entityPan) sellerTaxIds.push(`PAN: ${society.entityPan}`);
+  if (sellerTaxIds.length > 0) {
+    doc.setFont(font, 'bold');
+    doc.text(sellerTaxIds.join('   '), left, y);
+    doc.setFont(font, 'normal');
+    y += 4;
+  }
+  const sellerEndY = y;
+
+  // ── Invoice meta (top half right) ──────────────────────────────────────────
+  const metaX = pageW - 80;
+  let my = 23;
+  doc.setFontSize(8);
+  const metaPairs: [string, string][] = [
+    ['Invoice No.', input.saleNo],
+    ['Invoice Date', fmtDate(input.date)],
+    ['Place of Supply', input.customer.placeOfSupply || input.customer.state || '—'],
+    ['Payment Mode', input.paymentMode.toUpperCase()],
+  ];
+  for (const [k, v] of metaPairs) {
+    doc.setFont(font, 'normal'); doc.setTextColor(80);
+    doc.text(k + ':', metaX, my);
+    doc.setFont(font, 'bold'); doc.setTextColor(0);
+    doc.text(v, metaX + 32, my);
+    my += 5;
+  }
+
+  const headerEndY = Math.max(sellerEndY, my) + 2;
+  doc.setDrawColor(180);
+  doc.line(left, headerEndY, right, headerEndY);
+
+  // ── Buyer block (Bill To) ──────────────────────────────────────────────────
+  let by = headerEndY + 5;
+  doc.setFontSize(9);
+  doc.setFont(font, 'bold');
+  doc.setTextColor(41, 82, 163);
+  doc.text('Bill To:', left, by);
+  doc.setTextColor(0);
+  by += 5;
+
+  doc.setFontSize(11);
+  doc.text(input.customer.legalName || input.customer.name || 'Customer', left, by);
+  by += 4.5;
+
+  if (input.customer.tradeName) {
+    doc.setFontSize(8);
+    doc.setFont(font, 'italic');
+    doc.setTextColor(80);
+    doc.text(input.customer.tradeName, left, by);
+    doc.setTextColor(0);
+    doc.setFont(font, 'normal');
+    by += 4;
+  }
+
+  doc.setFontSize(8);
+  doc.setFont(font, 'normal');
+  const buyerAddrParts = [
+    input.customer.addressLine1 || input.customer.address,
+    input.customer.addressLine2,
+    input.customer.city,
+    input.customer.state,
+    input.customer.pincode ? `PIN: ${input.customer.pincode}` : null,
+  ].filter(Boolean);
+  if (buyerAddrParts.length > 0) {
+    doc.text(buyerAddrParts.join(', '), left, by, { maxWidth: 150 });
+    by += 4 * Math.ceil(buyerAddrParts.join(', ').length / 80);
+  }
+
+  const buyerContact: string[] = [];
+  if (input.customer.mobile || input.customer.phone) buyerContact.push(`Mobile: ${input.customer.mobile || input.customer.phone}`);
+  if (input.customer.email) buyerContact.push(`Email: ${input.customer.email}`);
+  if (buyerContact.length > 0) {
+    doc.text(buyerContact.join('   '), left, by);
+    by += 4;
+  }
+
+  const buyerTaxIds: string[] = [];
+  const buyerGstin = input.customer.gstin || input.customer.gstNo;
+  if (buyerGstin) buyerTaxIds.push(`GSTIN: ${buyerGstin}`);
+  if (input.customer.pan) buyerTaxIds.push(`PAN: ${input.customer.pan}`);
+  if (buyerTaxIds.length > 0) {
+    doc.setFont(font, 'bold');
+    doc.text(buyerTaxIds.join('   '), left, by);
+    doc.setFont(font, 'normal');
+    by += 4;
+  }
+  by += 2;
+
+  // ── Items table ────────────────────────────────────────────────────────────
+  const tableHead: string[] = isTaxInvoice
+    ? (intraState
+        ? ['#', 'Item', 'HSN', 'Qty', 'Unit', 'Rate', 'Amount']
+        : ['#', 'Item', 'HSN', 'Qty', 'Unit', 'Rate', 'Amount'])
+    : ['#', 'Item', 'HSN', 'Qty', 'Unit', 'Rate', 'Amount'];
+  const tableBody = input.items.map((it, i) => [
+    String(i + 1),
+    it.itemName,
+    it.hsn || '—',
+    it.qty.toString(),
+    it.unit,
+    fmt(it.rate),
+    fmt(it.amount),
+  ]);
+
+  autoTable(doc, {
+    startY: by,
+    head: [tableHead],
+    body: tableBody,
+    styles: { fontSize: 8, cellPadding: 2, font, lineColor: [200, 200, 200], lineWidth: 0.1 },
+    headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 8 },
+      1: { cellWidth: 'auto' },
+      2: { halign: 'center', cellWidth: 18 },
+      3: { halign: 'right', cellWidth: 14 },
+      4: { halign: 'center', cellWidth: 14 },
+      5: { halign: 'right', cellWidth: 22 },
+      6: { halign: 'right', cellWidth: 26 },
+    },
+    didParseCell: rightAlignAmountColumns(5, 6),
+  });
+
+  // ── Totals block ───────────────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const lastY = (doc as any).lastAutoTable.finalY;
+  let ty = lastY + 2;
+
+  const totalsX = pageW - 80;
+  const totalsW = 70;
+  doc.setFontSize(8.5);
+
+  const addTotalsRow = (label: string, value: string, opts?: { bold?: boolean; fill?: [number, number, number] }) => {
+    if (opts?.fill) {
+      doc.setFillColor(...opts.fill);
+      doc.rect(totalsX - 2, ty - 3.5, totalsW + 2, 6, 'F');
+    }
+    doc.setFont(font, opts?.bold ? 'bold' : 'normal');
+    doc.setTextColor(opts?.fill ? 255 : 0);
+    doc.text(label, totalsX, ty);
+    doc.text(value, totalsX + totalsW, ty, { align: 'right' });
+    doc.setTextColor(0);
+    ty += 5.5;
+  };
+
+  addTotalsRow('Subtotal', fmt(input.totalAmount));
+  if (input.discount > 0) addTotalsRow('Discount', '- ' + fmt(input.discount));
+  addTotalsRow('Taxable Amount', fmt(input.netAmount), { bold: true });
+
+  if (isTaxInvoice) {
+    if (intraState) {
+      if (input.cgstAmount > 0) addTotalsRow(`CGST @ ${input.cgstPct}%`, fmt(input.cgstAmount));
+      if (input.sgstAmount > 0) addTotalsRow(`SGST @ ${input.sgstPct}%`, fmt(input.sgstAmount));
+    } else {
+      if (input.igstAmount > 0) addTotalsRow(`IGST @ ${input.igstPct}%`, fmt(input.igstAmount));
+      // Also show CGST/SGST if user did intra-state amounts despite inter-state customer
+      if (input.cgstAmount > 0) addTotalsRow(`CGST @ ${input.cgstPct}%`, fmt(input.cgstAmount));
+      if (input.sgstAmount > 0) addTotalsRow(`SGST @ ${input.sgstPct}%`, fmt(input.sgstAmount));
+    }
+    addTotalsRow('Total Tax', fmt(input.taxAmount));
+  }
+
+  addTotalsRow('Grand Total', fmt(input.grandTotal), { bold: true, fill: [41, 82, 163] });
+  ty += 2;
+
+  // ── Amount in words ────────────────────────────────────────────────────────
+  doc.setFontSize(8);
+  doc.setFont(font, 'bold');
+  doc.text('Amount in Words:', left, ty);
+  doc.setFont(font, 'normal');
+  const words = _numToWordsIN(input.grandTotal);
+  doc.text(words, left + 32, ty, { maxWidth: pageW - left - 32 - 12 });
+  ty += 7;
+
+  // ── Bank details (if seller has them in society settings) — extension point ──
+  // Society type currently doesn't carry bank details so this is a placeholder
+  // for a future field. Skipped if not present.
+
+  // ── Notes ──────────────────────────────────────────────────────────────────
+  if (input.narration) {
+    doc.setFontSize(7.5);
+    doc.setTextColor(80);
+    doc.text(`Notes: ${input.narration}`, left, ty, { maxWidth: pageW - left - 12 });
+    doc.setTextColor(0);
+    ty += 6;
+  }
+
+  // ── Tax declaration (for Tax Invoice) ──────────────────────────────────────
+  if (isTaxInvoice) {
+    doc.setFontSize(7);
+    doc.setTextColor(60);
+    doc.text('Declaration: We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.', left, ty, { maxWidth: pageW - left - 12 });
+    doc.setTextColor(0);
+    ty += 8;
+  } else {
+    // Bill of Supply note (no tax collected)
+    doc.setFontSize(7);
+    doc.setTextColor(60);
+    doc.text('This is a Bill of Supply — no tax is chargeable on this transaction.', left, ty, { maxWidth: pageW - left - 12 });
+    doc.setTextColor(0);
+    ty += 8;
+  }
+
+  // ── Signature block (single right-aligned for invoices) ────────────────────
+  const pageH = doc.internal.pageSize.height;
+  const sigY = Math.min(ty + 10, pageH - 30);
+  doc.setDrawColor(80);
+  doc.setLineWidth(0.3);
+  doc.line(pageW - 60, sigY, pageW - 12, sigY);
+  doc.setFontSize(8);
+  doc.setFont(font, 'bold');
+  doc.text(`For ${society.name}`, pageW - 36, sigY - 2, { align: 'center' });
+  doc.setFont(font, 'normal');
+  doc.setFontSize(7);
+  doc.text('Authorised Signatory', pageW - 36, sigY + 4, { align: 'center' });
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  doc.setFontSize(6.5);
+  doc.setTextColor(140);
+  doc.text(`Generated by SahakarLekha.com  |  ${preparedOn()}`, left, pageH - 8);
+  doc.text(`Invoice ${input.saleNo}`, right, pageH - 8, { align: 'right' });
+  doc.setTextColor(0);
+
+  // Save with descriptive filename
+  const safeSaleNo = input.saleNo.replace(/[^a-zA-Z0-9]/g, '_');
+  const safeCustomer = (input.customer.legalName || input.customer.name || 'Customer').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+  doc.save(`Invoice_${safeSaleNo}_${safeCustomer}.pdf`);
+}
