@@ -234,6 +234,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setSuppliersState([]); setCustomersState([]);
     setRecoverablesState([]); setKachiAaratEntriesState([]); setP7EntriesState([]);
 
+    // Paginated fetch — bypasses PostgREST max-rows server cap (typically 1000).
+    // We loop .range() in 1000-row pages until a partial page comes back. Guarantees
+    // ALL rows are loaded regardless of server-side cap; otherwise the user's newest
+    // entries silently vanish on F5 once total rows exceed the cap.
+    const fetchAllPaged = async <T,>(table: string, orderCol?: string): Promise<{ data: T[]; error: { message: string } | null }> => {
+      const PAGE = 1000;
+      const out: T[] = [];
+      let from = 0;
+      // Safety cap: 200 pages = 200,000 rows. Tweak if any single table ever exceeds this.
+      for (let i = 0; i < 200; i++) {
+        let q = supabase.from(table).select('*').eq('society_id', sid).range(from, from + PAGE - 1);
+        if (orderCol) q = q.order(orderCol);
+        const { data, error } = await q;
+        if (error) return { data: out, error };
+        if (!data || data.length === 0) break;
+        out.push(...(data as T[]));
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      return { data: out, error: null };
+    };
+
     const loadFromSupabase = async () => {
       try {
         const [
@@ -244,29 +266,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           { data: socData }, { data: supData }, { data: cusData },
           { data: kccData }, { data: recData }, { data: kaData }, { data: p7Data },
         ] = await Promise.all([
-          // CRITICAL: PostgREST default row limit is 1000. Without an explicit higher limit,
-          // societies with >1000 vouchers / movements lose the newest rows silently — they
-          // appear to "vanish" on F5 because they fall outside the 1000-row window. We bump
-          // each query that can realistically grow past 1000 to 100000.
-          supabase.from('vouchers').select('*').eq('society_id', sid).order('createdAt').limit(100000),
-          supabase.from('members').select('*').eq('society_id', sid).limit(100000),
-          supabase.from('accounts').select('*').eq('society_id', sid).limit(10000),
-          supabase.from('loans').select('*').eq('society_id', sid).limit(100000),
-          supabase.from('assets').select('*').eq('society_id', sid).limit(100000),
-          supabase.from('audit_objections').select('*').eq('society_id', sid).limit(100000),
-          supabase.from('stock_items').select('*').eq('society_id', sid).limit(100000),
-          supabase.from('stock_movements').select('*').eq('society_id', sid).order('createdAt').limit(100000),
-          supabase.from('sales').select('*').eq('society_id', sid).order('createdAt').limit(100000),
-          supabase.from('purchases').select('*').eq('society_id', sid).order('createdAt').limit(100000),
-          supabase.from('employees').select('*').eq('society_id', sid).limit(100000),
-          supabase.from('salary_records').select('*').eq('society_id', sid).order('createdAt').limit(100000),
+          fetchAllPaged<Voucher>('vouchers', 'createdAt'),
+          fetchAllPaged<Member>('members'),
+          fetchAllPaged<LedgerAccount>('accounts'),
+          fetchAllPaged<Loan>('loans'),
+          fetchAllPaged<Asset>('assets'),
+          fetchAllPaged<AuditObjection>('audit_objections'),
+          fetchAllPaged<StockItem>('stock_items'),
+          fetchAllPaged<StockMovement>('stock_movements', 'createdAt'),
+          fetchAllPaged<Sale>('sales', 'createdAt'),
+          fetchAllPaged<Purchase>('purchases', 'createdAt'),
+          fetchAllPaged<Employee>('employees'),
+          fetchAllPaged<SalaryRecord>('salary_records', 'createdAt'),
           supabase.from('society_settings').select('*').eq('society_id', sid).limit(1),
-          supabase.from('suppliers').select('*').eq('society_id', sid).limit(100000),
-          supabase.from('customers').select('*').eq('society_id', sid).limit(100000),
-          supabase.from('kcc_loans').select('*').eq('society_id', sid).limit(100000),
-          supabase.from('recoverables').select('*').eq('society_id', sid).order('createdAt').limit(100000),
-          supabase.from('kachi_aarat_entries').select('*').eq('society_id', sid).order('createdAt').limit(100000),
-          supabase.from('p7_entries').select('*').eq('society_id', sid).order('createdAt').limit(100000),
+          fetchAllPaged<Supplier>('suppliers'),
+          fetchAllPaged<Customer>('customers'),
+          fetchAllPaged<KccLoan>('kcc_loans'),
+          fetchAllPaged<Recoverable>('recoverables', 'createdAt'),
+          fetchAllPaged<KachiAaratEntry>('kachi_aarat_entries', 'createdAt'),
+          fetchAllPaged<P7Entry>('p7_entries', 'createdAt'),
         ]);
 
         if (vErr) console.warn('Vouchers query error:', vErr.message);
@@ -749,18 +767,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { lines, refType, refId, isCleared, clearedDate, editHistory, groupId,
             approvalStatus, approvalRemarks, approvedBy, approvedAt, ...baseCols } = v;
+
+    const handleBaseFailure = (msg: string) => {
+      console.error(`Voucher ${opts.isUpdate ? 'update' : 'save'} failed (base):`, msg);
+      opts.onBaseFail();
+      toastRef.current({
+        title: '❌ Voucher cloud par save NAHI hua',
+        description: `${msg}. Local state se entry hata di gayi — refresh karne par data lose nahi hoga.`,
+        variant: 'destructive',
+        duration: 15000,
+      });
+    };
+
     supabase.from('vouchers').upsert(withSoc(baseCols)).then(({ error }) => {
       if (error) {
-        console.error(`Voucher ${opts.isUpdate ? 'update' : 'save'} failed (base):`, error.message);
-        opts.onBaseFail();
-        toastRef.current({
-          title: '❌ Voucher cloud par save NAHI hua',
-          description: `${error.message}. Local state se entry hata di gayi — refresh karne par data lose nahi hoga. Supabase migration check karo.`,
-          variant: 'destructive',
-          duration: 15000,
-        });
+        handleBaseFailure(error.message);
         return;
       }
+      // VERIFY: confirm the row actually persisted (catches RLS / cache-miss
+      // edge cases where upsert returns no error but no row was written).
+      supabase.from('vouchers').select('id').eq('id', v.id).limit(1).then(({ data: verifyData, error: verifyErr }) => {
+        if (verifyErr || !verifyData || verifyData.length === 0) {
+          handleBaseFailure(verifyErr?.message || 'Verification failed — row not found after upsert');
+          return;
+        }
       // Step 2: best-effort patch of extras (lines, refType, etc.)
       const extras: Record<string, unknown> = {};
       if (lines !== undefined) extras.lines = lines;
@@ -791,6 +821,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Sync voucher_entries regardless — they use base columns we just confirmed
         if (!opts.isUpdate) syncEntries(v);
       });
+      }); // close verify .then
+    }, (rejection: unknown) => {
+      // Promise rejection (network error, fetch abort) — supabase-js usually resolves
+      // with { error } rather than rejecting, but cover the rare case.
+      const msg = rejection instanceof Error ? rejection.message : String(rejection);
+      handleBaseFailure(`Network/promise rejection: ${msg}`);
     });
   };
 
