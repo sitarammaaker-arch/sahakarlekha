@@ -2265,81 +2265,88 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
   doc.setFont(font, 'bold');
   doc.setFontSize(13);
   doc.text(isTaxInvoice ? 'TAX INVOICE' : 'BILL OF SUPPLY', pageW / 2, 16.5, { align: 'center' });
-  doc.setTextColor(0);
 
   // Original/Duplicate marker (top-right of banner)
   doc.setFontSize(7);
-  doc.setTextColor(255);
   doc.text('Original for Recipient', right - 2, 14.5, { align: 'right' });
   doc.setTextColor(0);
 
-  // ── Seller block (Bill From) — top half left ───────────────────────────────
-  let y = 23;
-  doc.setFontSize(11);
+  // ── Seller block (Bill From) — FULL WIDTH centered, society name wraps ────
+  const innerW = right - left;
+  let y = 24;
+  doc.setFontSize(12);
   doc.setFont(font, 'bold');
-  doc.text(society.name, left, y);
-  y += 4;
+  const societyLines: string[] = doc.splitTextToSize(society.name, innerW - 4);
+  doc.text(societyLines, pageW / 2, y, { align: 'center' });
+  y += societyLines.length * 5;
+
   doc.setFontSize(8);
   doc.setFont(font, 'normal');
+  doc.setTextColor(70);
   const sellerAddr = [society.address, society.district, society.state, society.pinCode ? `PIN: ${society.pinCode}` : null]
     .filter(Boolean).join(', ');
-  if (sellerAddr) { doc.text(sellerAddr, left, y, { maxWidth: 110 }); y += 4; }
-  if (society.phone) { doc.text(`Phone: ${society.phone}`, left, y); y += 4; }
-  if (society.email) { doc.text(`Email: ${society.email}`, left, y); y += 4; }
+  if (sellerAddr) {
+    const addrLines: string[] = doc.splitTextToSize(sellerAddr, innerW - 4);
+    doc.text(addrLines, pageW / 2, y, { align: 'center' });
+    y += addrLines.length * 4;
+  }
+  const contactLine: string[] = [];
+  if (society.phone) contactLine.push(`Phone: ${society.phone}`);
+  if (society.email) contactLine.push(`Email: ${society.email}`);
+  if (contactLine.length > 0) {
+    doc.text(contactLine.join('  |  '), pageW / 2, y, { align: 'center' });
+    y += 4;
+  }
   const sellerTaxIds: string[] = [];
   if (sellerGstin) sellerTaxIds.push(`GSTIN: ${sellerGstin}`);
   if (society.entityPan) sellerTaxIds.push(`PAN: ${society.entityPan}`);
+  if (society.tan) sellerTaxIds.push(`TAN: ${society.tan}`);
   if (sellerTaxIds.length > 0) {
+    doc.setTextColor(0);
     doc.setFont(font, 'bold');
-    doc.text(sellerTaxIds.join('   '), left, y);
+    doc.text(sellerTaxIds.join('   '), pageW / 2, y, { align: 'center' });
     doc.setFont(font, 'normal');
-    y += 4;
+    y += 5;
   }
-  const sellerEndY = y;
+  doc.setTextColor(0);
 
-  // ── Invoice meta (top half right) ──────────────────────────────────────────
-  const metaX = pageW - 80;
-  let my = 23;
-  doc.setFontSize(8);
-  const metaPairs: [string, string][] = [
-    ['Invoice No.', input.saleNo],
-    ['Invoice Date', fmtDate(input.date)],
-    ['Place of Supply', input.customer.placeOfSupply || input.customer.state || '—'],
-    ['Payment Mode', input.paymentMode.toUpperCase()],
-  ];
-  for (const [k, v] of metaPairs) {
-    doc.setFont(font, 'normal'); doc.setTextColor(80);
-    doc.text(k + ':', metaX, my);
-    doc.setFont(font, 'bold'); doc.setTextColor(0);
-    doc.text(v, metaX + 32, my);
-    my += 5;
-  }
-
-  const headerEndY = Math.max(sellerEndY, my) + 2;
+  // Divider
+  y += 1;
   doc.setDrawColor(180);
-  doc.line(left, headerEndY, right, headerEndY);
+  doc.setLineWidth(0.3);
+  doc.line(left, y, right, y);
+  y += 5;
 
-  // ── Buyer block (Bill To) ──────────────────────────────────────────────────
-  let by = headerEndY + 5;
+  // ── Bill To (left col) + Invoice Meta (right col) — proper 2-column row ───
+  const midX = pageW / 2;
+  const leftColMax = midX - left - 5;
+  const rightColStart = midX + 2;
+  let leftY = y;
+  let rightY = y;
+
+  // LEFT — Bill To
   doc.setFontSize(9);
   doc.setFont(font, 'bold');
   doc.setTextColor(41, 82, 163);
-  doc.text('Bill To:', left, by);
+  doc.text('Bill To:', left, leftY);
   doc.setTextColor(0);
-  by += 5;
+  leftY += 5;
 
   doc.setFontSize(11);
-  doc.text(input.customer.legalName || input.customer.name || 'Customer', left, by);
-  by += 4.5;
+  const custName = input.customer.legalName || input.customer.name || 'Customer';
+  const custNameLines: string[] = doc.splitTextToSize(custName, leftColMax);
+  doc.text(custNameLines, left, leftY);
+  leftY += custNameLines.length * 5;
 
   if (input.customer.tradeName) {
     doc.setFontSize(8);
     doc.setFont(font, 'italic');
     doc.setTextColor(80);
-    doc.text(input.customer.tradeName, left, by);
+    const tradeLines: string[] = doc.splitTextToSize(input.customer.tradeName, leftColMax);
+    doc.text(tradeLines, left, leftY);
+    leftY += tradeLines.length * 4;
     doc.setTextColor(0);
     doc.setFont(font, 'normal');
-    by += 4;
   }
 
   doc.setFontSize(8);
@@ -2350,18 +2357,20 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
     input.customer.city,
     input.customer.state,
     input.customer.pincode ? `PIN: ${input.customer.pincode}` : null,
-  ].filter(Boolean);
-  if (buyerAddrParts.length > 0) {
-    doc.text(buyerAddrParts.join(', '), left, by, { maxWidth: 150 });
-    by += 4 * Math.ceil(buyerAddrParts.join(', ').length / 80);
+  ].filter(Boolean).join(', ');
+  if (buyerAddrParts) {
+    const buyerAddrLines: string[] = doc.splitTextToSize(buyerAddrParts, leftColMax);
+    doc.text(buyerAddrLines, left, leftY);
+    leftY += buyerAddrLines.length * 4;
   }
 
   const buyerContact: string[] = [];
   if (input.customer.mobile || input.customer.phone) buyerContact.push(`Mobile: ${input.customer.mobile || input.customer.phone}`);
   if (input.customer.email) buyerContact.push(`Email: ${input.customer.email}`);
   if (buyerContact.length > 0) {
-    doc.text(buyerContact.join('   '), left, by);
-    by += 4;
+    const contactLines: string[] = doc.splitTextToSize(buyerContact.join('   '), leftColMax);
+    doc.text(contactLines, left, leftY);
+    leftY += contactLines.length * 4;
   }
 
   const buyerTaxIds: string[] = [];
@@ -2370,11 +2379,32 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
   if (input.customer.pan) buyerTaxIds.push(`PAN: ${input.customer.pan}`);
   if (buyerTaxIds.length > 0) {
     doc.setFont(font, 'bold');
-    doc.text(buyerTaxIds.join('   '), left, by);
+    const idLines: string[] = doc.splitTextToSize(buyerTaxIds.join('   '), leftColMax);
+    doc.text(idLines, left, leftY);
     doc.setFont(font, 'normal');
-    by += 4;
+    leftY += idLines.length * 4;
   }
-  by += 2;
+
+  // RIGHT — Invoice meta (label left-aligned, value right-aligned)
+  doc.setFontSize(8.5);
+  const metaPairs: [string, string][] = [
+    ['Invoice No.', input.saleNo],
+    ['Invoice Date', fmtDate(input.date)],
+    ['Place of Supply', input.customer.placeOfSupply || input.customer.state || '—'],
+    ['Payment Mode', input.paymentMode.toUpperCase()],
+  ];
+  for (const [k, v] of metaPairs) {
+    doc.setFont(font, 'normal');
+    doc.setTextColor(80);
+    doc.text(k + ':', rightColStart, rightY);
+    doc.setFont(font, 'bold');
+    doc.setTextColor(0);
+    const valueLines: string[] = doc.splitTextToSize(v, right - rightColStart - 35);
+    doc.text(valueLines, right, rightY, { align: 'right' });
+    rightY += Math.max(5, valueLines.length * 4 + 1);
+  }
+
+  const by = Math.max(leftY, rightY) + 3;
 
   // ── Items table ────────────────────────────────────────────────────────────
   const tableHead: string[] = isTaxInvoice
@@ -2490,18 +2520,30 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
     ty += 8;
   }
 
-  // ── Signature block (single right-aligned for invoices) ────────────────────
+  // ── Signature block — right-aligned, name BELOW line (wraps for long names) ─
   const pageH = doc.internal.pageSize.height;
-  const sigY = Math.min(ty + 10, pageH - 30);
+  // Wider signature column (75mm) so long society names fit
+  const sigLineLeft = right - 80;
+  const sigLineRight = right - 5;
+  const sigCenter = (sigLineLeft + sigLineRight) / 2;
+  // Pre-compute how many lines the "For [name]" text will take so we can
+  // back off enough from the page bottom to avoid overflow.
+  doc.setFontSize(7.5);
+  doc.setFont(font, 'bold');
+  const forText = `For ${society.name}`;
+  const forLines: string[] = doc.splitTextToSize(forText, sigLineRight - sigLineLeft);
+  const sigBlockHeight = 6 + forLines.length * 3.5 + 5; // line + wrapped name + designation
+  const sigY = Math.min(ty + 12, pageH - 18 - sigBlockHeight);
   doc.setDrawColor(80);
   doc.setLineWidth(0.3);
-  doc.line(pageW - 60, sigY, pageW - 12, sigY);
-  doc.setFontSize(8);
-  doc.setFont(font, 'bold');
-  doc.text(`For ${society.name}`, pageW - 36, sigY - 2, { align: 'center' });
+  doc.line(sigLineLeft, sigY, sigLineRight, sigY);
+  // Name below the line (wrapped)
+  doc.text(forLines, sigCenter, sigY + 4, { align: 'center' });
   doc.setFont(font, 'normal');
   doc.setFontSize(7);
-  doc.text('Authorised Signatory', pageW - 36, sigY + 4, { align: 'center' });
+  doc.setTextColor(80);
+  doc.text('Authorised Signatory', sigCenter, sigY + 4 + forLines.length * 3.5 + 1, { align: 'center' });
+  doc.setTextColor(0);
 
   // ── Footer ────────────────────────────────────────────────────────────────
   doc.setFontSize(6.5);
