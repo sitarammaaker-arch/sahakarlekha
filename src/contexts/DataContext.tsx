@@ -1916,17 +1916,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const tb = getTrialBalance(asOnDate);
     const fy = society.financialYear;
 
-    // Cr side: Sales / Trading Income (parentId '4100')
+    // Cr side: Sales / Trading Income (parentId '4100'). Signed (-nb) so a net SALES
+    // RETURN (abnormal debit) reduces sales and stays consistent with the ledger
+    // (BS-tie fix — Math.abs would inflate sales and break the Balance Sheet).
     const salesItems = tb
       .filter(b => b.account.parentId === '4100')
-      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: Math.abs(b.netBalance) }))
-      .filter(i => i.amount > 0);
+      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: -b.netBalance }))
+      .filter(i => Math.abs(i.amount) > 0.005);
 
-    // Cr side: Closing Stock from ledger (net debit balance of inventory accounts under parentId '3400')
+    // Cr side: Closing Stock from ledger (net balance of inventory accounts under '3400').
+    // Signed (not Math.max(0,..)) so an abnormal credit balance nets correctly against
+    // the same account on the asset side, keeping the Balance Sheet in balance.
     const ledgerClosingItems = tb
       .filter(b => b.account.parentId === '3400')
-      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: Math.max(0, b.netBalance) }))
-      .filter(i => i.amount > 0);
+      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }))
+      .filter(i => Math.abs(i.amount) > 0.005);
 
     // Physical closing stock — use movement-based qty (same formula as Inventory/Stock Valuation)
     // so that orphan currentStock left over from old buggy edits/deletes doesn't show as phantom stock.
@@ -1976,15 +1980,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // consistent whether or not the journal has been posted.
     const purchase5101Net = (tb.find(b => b.account.id === '5101')?.netBalance) || 0;
     const purchase5101Gross = closingStockPosted ? purchase5101Net + totalClosingStockEarly : purchase5101Net;
-    const purchaseItems = purchase5101Gross > 0
+    // Include even when net is negative (abnormal — e.g. returns exceed purchases) so
+    // the figure ties to the ledger (BS-tie fix).
+    const purchaseItems = Math.abs(purchase5101Gross) > 0.005
       ? [{ name: 'Purchase', nameHi: 'क्रय', amount: purchase5101Gross }]
       : [];
 
-    // Dr side: Direct Expenses (parentId '5100', excluding 5101 Purchase)
+    // Dr side: Direct Expenses (parentId '5100', excluding 5101 Purchase). Keep signed
+    // so a credit balance (refund/over-credit) nets correctly and ties to the ledger.
     const directExpItems = tb
       .filter(b => b.account.parentId === '5100' && b.account.id !== '5101')
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }))
-      .filter(i => i.amount > 0);
+      .filter(i => Math.abs(i.amount) > 0.005);
 
     const totalSales        = salesItems.reduce((s, i) => s + i.amount, 0);
     const totalClosingStock = totalClosingStockEarly;
@@ -2057,9 +2064,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Indirect (non-trading) INCOME — commission, scheme income, interest, rent,
     // admission fee, misc. (credit-nature: abs(netBalance) is the income amount).
+    // Use signed (-netBalance) NOT Math.abs: income accounts are credit-nature so
+    // -nb is the positive income amount, but an account carrying an abnormal DEBIT
+    // balance (refund/over-credit) must REDUCE income — and must net to the same
+    // figure the ledger holds, otherwise the Balance Sheet won't tie. (BS-tie fix.)
     const incomeItems = tb
       .filter(b => b.account.type === 'income' && !isTradingIncome(b.account.parentId) && b.netBalance !== 0)
-      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: Math.abs(b.netBalance) }));
+      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: -b.netBalance }));
 
     // Indirect (operating) EXPENSES — establishment, admin, depreciation, statutory.
     // P2-4: keep sign so a Cr balance (refund/over-credit) REDUCES total expenses.
