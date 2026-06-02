@@ -659,27 +659,54 @@ export function generateBalanceSheetPDF(
 
     const subGroups = accts.filter(a => a.isGroup && parentIds.includes(a.parentId || ''));
 
-    subGroups.forEach(group => {
-      // Find all leaf children (direct + sub-sub-group children)
-      const childIds = new Set<string>();
-      accts.filter(a => !a.isGroup && a.parentId === group.id).forEach(a => childIds.add(a.id));
-      const subSubGroups = accts.filter(a => a.isGroup && a.parentId === group.id);
-      subSubGroups.forEach(ssg => {
-        accts.filter(a => !a.isGroup && a.parentId === ssg.id).forEach(a => childIds.add(a.id));
+    const nz = (b: AccountBalance) => b.netBalance !== 0 || getPY(b.account.id) !== 0;
+    // Recursive roll-up of every leaf balance under a parent (any nesting depth).
+    const leafTotal = (parentId: string): { amt: number; py: number; has: boolean } => {
+      let amt = 0, py = 0, has = false;
+      balances.filter(b => b.account.parentId === parentId && !b.account.isGroup && nz(b)).forEach(b => {
+        amt += signFlip ? -b.netBalance : b.netBalance; py += getPY(b.account.id); has = true;
       });
+      accts.filter(a => a.isGroup && a.parentId === parentId).forEach(g => {
+        const sub = leafTotal(g.id); amt += sub.amt; py += sub.py; if (sub.has) has = true;
+      });
+      return { amt, py, has };
+    };
+    const captureLeaves = (parentId: string) => {
+      balances.filter(b => b.account.parentId === parentId && !b.account.isGroup).forEach(b => capturedIds.add(b.account.id));
+      accts.filter(a => a.isGroup && a.parentId === parentId).forEach(g => captureLeaves(g.id));
+    };
+    // Recursively emit rows to ANY depth: direct leaves first, then each nested
+    // sub-group as an indented heading (with its rolled-up subtotal) + its sub-tree.
+    const renderTree = (parentId: string, depth: number) => {
+      const pad = '  '.repeat(depth + 1);
+      balances.filter(b => b.account.parentId === parentId && !b.account.isGroup && nz(b)).forEach(b => {
+        capturedIds.add(b.account.id);
+        const val = signFlip ? -b.netBalance : b.netBalance;
+        const display = val < 0 ? `(${fmt(Math.abs(val))})` : fmt(val);
+        body.push(hasPY
+          ? [`${pad}${b.account.name}`, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', display, '']
+          : [`${pad}${b.account.name}`, display, '']);
+      });
+      accts.filter(a => a.isGroup && a.parentId === parentId).forEach(g => {
+        const sub = leafTotal(g.id);
+        if (!sub.has) return;
+        const subDisp = sub.amt < 0 ? `(${fmt(Math.abs(sub.amt))})` : fmt(sub.amt);
+        body.push(hasPY
+          ? [`${pad}${g.name}`, sub.py ? fmt(sub.py) : '', subDisp, '']
+          : [`${pad}${g.name}`, subDisp, '']);
+        renderTree(g.id, depth + 1);
+      });
+    };
 
-      const items = balances.filter(b => childIds.has(b.account.id) && (b.netBalance !== 0 || getPY(b.account.id) !== 0));
-      if (items.length === 0) return;
+    subGroups.forEach(group => {
+      const gTot = leafTotal(group.id);
+      if (!gTot.has) return;
+      pyTotal += gTot.py;
 
-      const groupTotal = items.reduce((s, b) => s + (signFlip ? -b.netBalance : b.netBalance), 0);
-      const groupPY = items.reduce((s, b) => s + getPY(b.account.id), 0);
-      pyTotal += groupPY;
-
-      // Audit-friendly group name overrides
       const auditGroupNames: Record<string, string> = { '3400': 'CLOSING STOCK', '3300': 'CURRENT ASSETS & CASH/BANK' };
       const groupLabel = auditGroupNames[group.id] || group.name.toUpperCase();
 
-      // Special: Closing Stock (3400) — show stock group-wise from inventory
+      // Special: Closing Stock (3400) — show stock group-wise from inventory.
       if (group.id === '3400' && stockItemsData && stockItemsData.length > 0) {
         const activeStock = stockItemsData.filter(s => s.isActive && s.currentStock > 0);
         if (activeStock.length > 0) {
@@ -689,10 +716,10 @@ export function generateBalanceSheetPDF(
             stockGroups[grp] = (stockGroups[grp] || 0) + s.currentStock * (s.purchaseRate || 0);
           });
           const stockTotal = Object.values(stockGroups).reduce((s, v) => s + v, 0);
-          items.forEach(b => capturedIds.add(b.account.id));
+          captureLeaves('3400');
           groupRows.push(body.length);
           body.push(hasPY
-            ? [groupLabel, groupPY ? fmt(groupPY) : '', '', fmt(stockTotal)]
+            ? [groupLabel, gTot.py ? fmt(gTot.py) : '', '', fmt(stockTotal)]
             : [groupLabel, '', fmt(stockTotal)]);
           Object.entries(stockGroups).sort(([a], [b]) => a.localeCompare(b)).forEach(([grp, val]) => {
             body.push(hasPY ? [`  ${grp}`, '—', fmt(val), ''] : [`  ${grp}`, fmt(val), '']);
@@ -701,36 +728,12 @@ export function generateBalanceSheetPDF(
         }
       }
 
-      // Group header row
+      // Group header + recursive children
       groupRows.push(body.length);
       body.push(hasPY
-        ? [groupLabel, groupPY ? fmt(groupPY) : '', '', fmt(groupTotal)]
-        : [groupLabel, '', fmt(groupTotal)]);
-
-      // Child rows — direct leaves, then each nested sub-group (e.g. a user-made
-      // "Market Supplier Chakan") as an indented sub-heading with its own leaves,
-      // mirroring the on-screen Balance Sheet instead of flattening them.
-      const nz = (b: AccountBalance) => b.netBalance !== 0 || getPY(b.account.id) !== 0;
-      const pushLeaf = (b: AccountBalance, pad: string) => {
-        capturedIds.add(b.account.id);
-        const val = signFlip ? -b.netBalance : b.netBalance;
-        const display = val < 0 ? `(${fmt(Math.abs(val))})` : fmt(val);
-        body.push(hasPY
-          ? [`${pad}${b.account.name}`, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', display, '']
-          : [`${pad}${b.account.name}`, display, '']);
-      };
-      balances.filter(b => b.account.parentId === group.id && !b.account.isGroup && nz(b)).forEach(b => pushLeaf(b, '  '));
-      subSubGroups.forEach(ssg => {
-        const ssgLeaves = balances.filter(b => b.account.parentId === ssg.id && !b.account.isGroup && nz(b));
-        if (ssgLeaves.length === 0) return;
-        const subtotal = ssgLeaves.reduce((s, b) => s + (signFlip ? -b.netBalance : b.netBalance), 0);
-        const subPY = ssgLeaves.reduce((s, b) => s + getPY(b.account.id), 0);
-        const subDisp = subtotal < 0 ? `(${fmt(Math.abs(subtotal))})` : fmt(subtotal);
-        body.push(hasPY
-          ? [`  ${ssg.name}`, subPY ? fmt(subPY) : '', subDisp, '']
-          : [`  ${ssg.name}`, subDisp, '']);
-        ssgLeaves.forEach(b => pushLeaf(b, '      '));
-      });
+        ? [groupLabel, gTot.py ? fmt(gTot.py) : '', '', fmt(gTot.amt)]
+        : [groupLabel, '', fmt(gTot.amt)]);
+      renderTree(group.id, 0);
     });
 
     // Orphan accounts — leaf balances not captured by any sub-group (e.g. auto-

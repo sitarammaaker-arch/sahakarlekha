@@ -109,27 +109,32 @@ const BalanceSheet: React.FC = () => {
       return { account: b, displayAmount: signFlip ? -b.netBalance : b.netBalance, pyAmount: getPY(b.account.id), indent };
     };
 
-    const groups = subGroups.map(group => {
-      // Build an ORDERED item list that PRESERVES nested sub-groups (e.g. a
-      // user-made "Market Supplier Chakan" under Current Liabilities) instead of
-      // flattening their ledgers straight under the top group.
-      const items: BSItem[] = [];
-      // 1) Direct leaf children of this group.
+    // Recursively build rows for a group to ANY depth: direct leaves at `depth`,
+    // then each nested sub-group as a heading (with its rolled-up subtotal)
+    // followed by its own sub-tree at depth+1. Preserves the full hierarchy
+    // (group → sub-group → sub-sub-group → … → ledger) instead of flattening it.
+    const buildRows = (parentId: string, depth: number): BSItem[] => {
+      const out: BSItem[] = [];
       balances
-        .filter(b => b.account.parentId === group.id && !b.account.isGroup && nonZero(b))
-        .forEach(b => items.push(mkLeaf(b, 0)));
-      // 2) Each nested sub-group → a heading row + its leaves (indented), with subtotal.
-      accounts.filter(a => a.isGroup && a.parentId === group.id).forEach(ssg => {
-        const ssgLeaves = balances.filter(b => b.account.parentId === ssg.id && !b.account.isGroup && nonZero(b));
-        if (ssgLeaves.length === 0) return;
-        const subtotal = ssgLeaves.reduce((s, b) => s + (signFlip ? -b.netBalance : b.netBalance), 0);
-        const pySubtotal = ssgLeaves.reduce((s, b) => s + getPY(b.account.id), 0);
-        items.push({
+        .filter(b => b.account.parentId === parentId && !b.account.isGroup && nonZero(b))
+        .forEach(b => out.push(mkLeaf(b, depth)));
+      accounts.filter(a => a.isGroup && a.parentId === parentId).forEach(ssg => {
+        const subRows = buildRows(ssg.id, depth + 1);
+        const leaves = subRows.filter(r => !r.isSubHeader);
+        if (leaves.length === 0) return;
+        out.push({
           account: { account: { id: `subgrp-${ssg.id}`, name: ssg.name, nameHi: ssg.nameHi, type: ssg.type } } as any,
-          displayAmount: subtotal, pyAmount: pySubtotal, isSubHeader: true, indent: 0,
+          displayAmount: leaves.reduce((s, r) => s + r.displayAmount, 0),
+          pyAmount: leaves.reduce((s, r) => s + r.pyAmount, 0),
+          isSubHeader: true, indent: depth,
         });
-        ssgLeaves.forEach(b => items.push(mkLeaf(b, 1)));
+        out.push(...subRows);
       });
+      return out;
+    };
+
+    const groups = subGroups.map(group => {
+      const items: BSItem[] = buildRows(group.id, 0);
 
       // Audit-friendly group names
       const auditNames: Record<string, { en: string; hi: string }> = {
@@ -267,12 +272,15 @@ const BalanceSheet: React.FC = () => {
                 const isNegative = displayAmount < 0;
                 const contraLabel = isLiabSide ? '(Dr)' : '(Cr)';
 
+                // Indent grows with nesting depth (works for any number of levels).
+                const padLeft = `${1.5 + (indent || 0) * 1.25}rem`;
+
                 // Nested sub-group heading row (e.g. "Market Supplier Chakan") with its subtotal.
                 if (isSubHeader) {
                   return (
                     <TableRow key={b.account.id} className="bg-muted/30">
                       {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyAmount !== 0 ? fmt(pyAmount) : '—'}</TableCell>}
-                      <TableCell className="pl-6 text-sm font-semibold">{hi ? b.account.nameHi : b.account.name}</TableCell>
+                      <TableCell className="text-sm font-semibold" style={{ paddingLeft: padLeft }}>{hi ? b.account.nameHi : b.account.name}</TableCell>
                       <TableCell className="text-right text-sm font-semibold">
                         {isNegative ? `(${fmt(Math.abs(displayAmount))})` : fmt(displayAmount)}
                       </TableCell>
@@ -287,7 +295,7 @@ const BalanceSheet: React.FC = () => {
                     title={hi ? 'खाता बही देखें' : 'View Ledger'}
                   >
                     {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyAmount !== 0 ? fmt(pyAmount) : '—'}</TableCell>}
-                    <TableCell className={`${indent === 1 ? 'pl-12' : 'pl-6'} text-sm group`}>
+                    <TableCell className="text-sm group" style={{ paddingLeft: padLeft }}>
                       <span className="group-hover:text-primary group-hover:underline">
                         {hi ? b.account.nameHi : b.account.name}
                       </span>
