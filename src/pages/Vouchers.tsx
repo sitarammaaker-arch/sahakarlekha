@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { AccountPicker } from '@/components/AccountPicker';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -36,58 +37,6 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 type EntryMode = 'aasan' | 'expert';
 
 // Searchable account combobox — type account name/id to filter
-const AccountSearch: React.FC<{
-  value: string;
-  onChange: (id: string) => void;
-  accounts: LedgerAccount[];
-  placeholder: string;
-  language: 'hi' | 'en';
-}> = ({ value, onChange, accounts, placeholder, language }) => {
-  const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
-  const selected = accounts.find(a => a.id === value);
-  const filtered = query.trim()
-    ? accounts.filter(a =>
-        a.name.toLowerCase().includes(query.toLowerCase()) ||
-        a.nameHi.includes(query) ||
-        a.id.startsWith(query)
-      )
-    : accounts;
-
-  return (
-    <div className="relative">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
-      <Input
-        value={open ? query : (selected ? (language === 'hi' ? selected.nameHi : selected.name) : '')}
-        onChange={e => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onChange(''); }}
-        onFocus={() => { setQuery(''); setOpen(true); }}
-        onBlur={() => setTimeout(() => setOpen(false), 160)}
-        placeholder={placeholder}
-        className="h-12 text-base pl-9"
-      />
-      {open && (
-        <div className="absolute z-[200] w-full mt-1 bg-background border rounded-lg shadow-xl max-h-52 overflow-y-auto">
-          {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground px-3 py-2">{language === 'hi' ? 'कोई खाता नहीं मिला' : 'No account found'}</p>
-          ) : filtered.slice(0, 25).map(a => (
-            <button
-              key={a.id}
-              type="button"
-              onMouseDown={() => { onChange(a.id); setOpen(false); setQuery(''); }}
-              className={cn(
-                'w-full text-left px-3 py-2.5 hover:bg-muted text-sm border-b last:border-0 flex items-center gap-3',
-                a.id === value && 'bg-primary/5 font-medium'
-              )}
-            >
-              <span>{language === 'hi' ? a.nameHi : a.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
 const Vouchers: React.FC = () => {
   const { t, language } = useLanguage();
   const { user, hasPermission } = useAuth();
@@ -828,12 +777,10 @@ const Vouchers: React.FC = () => {
                                 <tr key={line.id} className={`border-b last:border-0 ${line.type === 'Dr' ? 'bg-blue-50/30' : 'bg-green-50/30'}`}>
                                   <td className="text-xs text-muted-foreground py-2 px-3">{idx + 1}</td>
                                   <td className="py-1 px-1 relative">
-                                    <AccountSearch
+                                    <AccountPicker
                                       value={line.accountId}
                                       onChange={id => handleLineChange(line.id, 'accountId', id)}
-                                      accounts={accounts.filter(a => !a.isGroup)}
-                                      placeholder={language === 'hi' ? 'खाता खोजें...' : 'Search account...'}
-                                      language={language}
+                                      triggerClassName="h-11"
                                     />
                                   </td>
                                   <td className="py-1 px-1">
@@ -1126,21 +1073,11 @@ const Vouchers: React.FC = () => {
             </div>
             <div className="space-y-1.5">
               <Label><span className="text-destructive font-bold">Dr.</span> {language === 'hi' ? 'नाम खाता' : 'Debit Account'}</Label>
-              <Select value={editDebit} onValueChange={setEditDebit}>
-                <SelectTrigger className="h-9"><SelectValue placeholder={language === 'hi' ? 'खाता चुनें' : 'Select'} /></SelectTrigger>
-                <SelectContent>
-                  {accounts.filter(a => !a.isGroup).map(a => <SelectItem key={a.id} value={a.id}>{a.id} — {language === 'hi' ? (a.nameHi || a.name) : a.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <AccountPicker value={editDebit} onChange={setEditDebit} triggerClassName="h-9" />
             </div>
             <div className="space-y-1.5">
               <Label><span className="text-success font-bold">Cr.</span> {language === 'hi' ? 'जमा खाता' : 'Credit Account'}</Label>
-              <Select value={editCredit} onValueChange={setEditCredit}>
-                <SelectTrigger className="h-9"><SelectValue placeholder={language === 'hi' ? 'खाता चुनें' : 'Select'} /></SelectTrigger>
-                <SelectContent>
-                  {accounts.filter(a => !a.isGroup).map(a => <SelectItem key={a.id} value={a.id}>{a.id} — {language === 'hi' ? (a.nameHi || a.name) : a.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <AccountPicker value={editCredit} onChange={setEditCredit} triggerClassName="h-9" />
             </div>
             <div className="space-y-1.5">
               <Label>{t('amount')} (₹)</Label>

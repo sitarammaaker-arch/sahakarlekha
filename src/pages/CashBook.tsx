@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AccountPicker } from '@/components/AccountPicker';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Wallet, Calendar, Filter, Download, ArrowDownLeft, ArrowUpRight, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -45,7 +46,6 @@ const CashBook: React.FC = () => {
   const totalPayments = entries.filter(e => e.type === 'payment').reduce((s, e) => s + e.amount, 0);
   const closingBalance = getAccountBalance(ACCOUNT_IDS.CASH);
 
-  const nonCashAccounts = accounts.filter(a => !a.isGroup && a.id !== ACCOUNT_IDS.CASH && a.id !== ACCOUNT_IDS.BANK);
 
   const handleAddEntry = (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,14 +159,11 @@ const CashBook: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>{language === 'hi' ? 'दूसरा खाता' : 'Other Account'}</Label>
-                  <Select value={otherAccount} onValueChange={setOtherAccount} required>
-                    <SelectTrigger><SelectValue placeholder={language === 'hi' ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
-                    <SelectContent>
-                      {nonCashAccounts.map(a => (
-                        <SelectItem key={a.id} value={a.id}>{language === 'hi' ? a.nameHi : a.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <AccountPicker
+                    value={otherAccount}
+                    onChange={setOtherAccount}
+                    excludeIds={[ACCOUNT_IDS.CASH, ACCOUNT_IDS.BANK]}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>{t('amount')} (₹)</Label>

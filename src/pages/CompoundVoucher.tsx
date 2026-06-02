@@ -22,74 +22,14 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Trash2, Save, RotateCcw, Search, Layers } from 'lucide-react';
+import { Plus, Trash2, Save, RotateCcw, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { getNextVoucherNo } from '@/lib/storage';
-import type { LedgerAccount } from '@/types';
+import { AccountPicker } from '@/components/AccountPicker';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
-
-// ── Compact account search ────────────────────────────────────────────────────
-const AccSearch: React.FC<{
-  value: string;
-  onChange: (id: string) => void;
-  accounts: LedgerAccount[];
-  language: 'hi' | 'en';
-  placeholder?: string;
-}> = ({ value, onChange, accounts, language, placeholder }) => {
-  const [q, setQ] = useState('');
-  const [open, setOpen] = useState(false);
-  const selected = accounts.find(a => a.id === value);
-
-  const filtered = useMemo(() => {
-    const lq = q.trim().toLowerCase();
-    if (!lq) return accounts.slice(0, 20);
-    return accounts.filter(a =>
-      a.name.toLowerCase().includes(lq) ||
-      a.nameHi.includes(q) ||
-      a.id.startsWith(q)
-    ).slice(0, 20);
-  }, [q, accounts]);
-
-  return (
-    <div className="relative">
-      <div className="relative">
-        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
-        <Input
-          value={open ? q : (selected ? (language === 'hi' ? selected.nameHi : selected.name) : '')}
-          onChange={e => { setQ(e.target.value); setOpen(true); if (!e.target.value) onChange(''); }}
-          onFocus={() => { setQ(''); setOpen(true); }}
-          onBlur={() => setTimeout(() => setOpen(false), 160)}
-          placeholder={placeholder ?? (language === 'hi' ? 'खाता खोजें' : 'Search account')}
-          className="h-8 text-sm pl-6"
-        />
-      </div>
-      {open && (
-        <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-xl max-h-44 overflow-y-auto">
-          {filtered.length === 0 ? (
-            <p className="text-xs text-muted-foreground px-3 py-2">
-              {language === 'hi' ? 'कोई खाता नहीं' : 'No account found'}
-            </p>
-          ) : filtered.map(a => (
-            <button
-              key={a.id}
-              type="button"
-              onMouseDown={() => { onChange(a.id); setOpen(false); setQ(''); }}
-              className={cn(
-                'w-full text-left px-3 py-1.5 hover:bg-muted text-xs border-b last:border-0 flex items-center gap-2',
-                a.id === value && 'bg-primary/5 font-medium'
-              )}
-            >
-              <span>{language === 'hi' ? a.nameHi : a.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
 
 // ── Line interface ────────────────────────────────────────────────────────────
 interface Line {
@@ -111,12 +51,10 @@ const LineTable: React.FC<{
   lines: Line[];
   type: 'debit' | 'credit';
   hi: boolean;
-  language: 'hi' | 'en';
-  accounts: LedgerAccount[];
   onChange: (id: string, field: keyof Line, val: string) => void;
   onAdd: () => void;
   onRemove: (id: string) => void;
-}> = ({ lines, type, hi, language, accounts, onChange, onAdd, onRemove }) => {
+}> = ({ lines, type, hi, onChange, onAdd, onRemove }) => {
   const total = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
   const isDebit = type === 'debit';
   const headerClass = isDebit
@@ -148,11 +86,10 @@ const LineTable: React.FC<{
             <TableRow key={line.id}>
               <TableCell className="text-xs text-gray-400">{i + 1}</TableCell>
               <TableCell>
-                <AccSearch
+                <AccountPicker
                   value={line.accountId}
                   onChange={v => onChange(line.id, 'accountId', v)}
-                  accounts={accounts}
-                  language={language}
+                  triggerClassName="h-8 text-sm"
                 />
               </TableCell>
               <TableCell>
@@ -361,8 +298,6 @@ const CompoundVoucher: React.FC = () => {
         lines={debitLines}
         type="debit"
         hi={hi}
-        language={language}
-        accounts={leafAccounts}
         onChange={(id, field, val) => updateLine(setDebitLines, id, field, val)}
         onAdd={() => addLine(setDebitLines)}
         onRemove={id => removeLine(setDebitLines, id)}
@@ -373,8 +308,6 @@ const CompoundVoucher: React.FC = () => {
         lines={creditLines}
         type="credit"
         hi={hi}
-        language={language}
-        accounts={leafAccounts}
         onChange={(id, field, val) => updateLine(setCreditLines, id, field, val)}
         onAdd={() => addLine(setCreditLines)}
         onRemove={id => removeLine(setCreditLines, id)}
