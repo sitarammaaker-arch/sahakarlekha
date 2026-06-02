@@ -671,6 +671,12 @@ const ACCOUNTS_TO_ADD: LedgerAccount[] = [
   { id: '5114', name: 'Animal Feed Purchase',       nameHi: 'पशु आहार क्रय',            type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
   { id: '5115', name: 'PDS / Ration Goods Purchase', nameHi: 'सार्वजनिक वितरण क्रय',    type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
   { id: '5116', name: 'Govt Procurement Purchase',  nameHi: 'सरकारी खरीद क्रय',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
+  // Audit C-8: dedicated Closing-Stock contra. The year-end closing-stock journal
+  // posts Dr 3403 (asset) / Cr 5150 — a SEPARATE Trading-A/c credit — instead of
+  // reversing Purchases (5101), so 5101 stays GROSS per NCDC Annexure II. Lives in
+  // the 5100 trading group (credit-nature) so getProfitLoss auto-excludes it; the
+  // Trading A/c reads closing stock from the 3403 asset, not from this account.
+  { id: '5150', name: 'Closing Stock (Trading A/c)', nameHi: 'समापन माल (व्यापार खाता)', type: 'expense',   openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: false, parentId: '5100', subtype: 'closing_stock' },
 ];
 
 export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAccount[]; changed: boolean; newlyAdded: LedgerAccount[] } {

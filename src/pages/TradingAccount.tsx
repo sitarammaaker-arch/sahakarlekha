@@ -70,7 +70,7 @@ const TradingAccount: React.FC = () => {
               size="sm"
               className="gap-2 bg-amber-600 hover:bg-amber-700"
               onClick={handlePostClosingStock}
-              title={hi ? 'समापन माल जर्नल पोस्ट करें (Dr 3403 / Cr 5101)' : 'Post closing stock journal (Dr 3403 / Cr 5101)'}
+              title={hi ? 'समापन माल जर्नल पोस्ट करें (Dr 3403 / Cr 5150)' : 'Post closing stock journal (Dr 3403 / Cr 5150)'}
             >
               <AlertTriangle className="h-4 w-4" />
               {hi ? `समापन माल पोस्ट करें (${fmt(physicalClosingStock)})` : `Post Closing Stock (${fmt(physicalClosingStock)})`}

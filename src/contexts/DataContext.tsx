@@ -1972,12 +1972,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return sum + qty * (s.purchaseRate || 0);
       }, 0);
 
-    // Check if closing stock journal has been posted for this FY — use getVoucherLines() (Rule 4)
-    const closingStockPosted = activeVouchers.some(v =>
+    // Check if the closing-stock journal has been posted for this FY.
+    // Audit C-8: the NEW journal credits the dedicated 5150 (Purchases stay gross);
+    // LEGACY journals credited 5101 (Purchases reduced — needs gross-up below).
+    const closingViaLegacy = activeVouchers.some(v =>
       getVoucherLines(v).some(l => l.accountId === '3403' && l.type === 'Dr') &&
       getVoucherLines(v).some(l => l.accountId === '5101' && l.type === 'Cr') &&
       v.narration.includes(fy)
     );
+    const closingViaDedicated = activeVouchers.some(v =>
+      getVoucherLines(v).some(l => l.accountId === '3403' && l.type === 'Dr') &&
+      getVoucherLines(v).some(l => l.accountId === '5150' && l.type === 'Cr') &&
+      v.narration.includes(fy)
+    );
+    const closingStockPosted = closingViaLegacy || closingViaDedicated;
 
     // Use ledger closing stock if journals are posted; otherwise use physical stock as synthetic item
     const closingStockItems = ledgerClosingItems.length > 0
@@ -1995,24 +2003,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const totalClosingStockEarly = closingStockItems.reduce((s, i) => s + i.amount, 0);
 
     // Dr side: Purchases (account 5101).
-    // Audit C-8: when the year-end closing-stock journal (Dr 3403 / Cr 5101) is posted,
-    // account 5101's net balance is already REDUCED by the closing-stock value. If we
-    // then ALSO add Closing Stock on the Cr side, gross profit double-counts it. So we
-    // GROSS UP purchases back to their pre-adjustment value when the journal is posted,
-    // keeping the formula GP = Sales + ClosingStock − Opening − GrossPurchases − DirectExp
-    // consistent whether or not the journal has been posted.
+    // Audit C-8: a LEGACY closing-stock journal (Dr 3403 / Cr 5101) reduced 5101 by
+    // the closing-stock value, so we GROSS IT UP to keep GP = Sales + ClosingStock −
+    // Opening − GrossPurchases − DirectExp consistent. The NEW journal credits the
+    // dedicated 5150 instead, leaving 5101 already gross — so no gross-up then.
     const purchase5101Net = (tb.find(b => b.account.id === '5101')?.netBalance) || 0;
-    const purchase5101Gross = closingStockPosted ? purchase5101Net + totalClosingStockEarly : purchase5101Net;
+    const purchase5101Gross = closingViaLegacy ? purchase5101Net + totalClosingStockEarly : purchase5101Net;
     // Include even when net is negative (abnormal — e.g. returns exceed purchases) so
     // the figure ties to the ledger (BS-tie fix).
     const purchaseItems = Math.abs(purchase5101Gross) > 0.005
       ? [{ name: 'Purchase', nameHi: 'क्रय', amount: purchase5101Gross }]
       : [];
 
-    // Dr side: Direct Expenses (parentId '5100', excluding 5101 Purchase). Keep signed
-    // so a credit balance (refund/over-credit) nets correctly and ties to the ledger.
+    // Dr side: Direct Expenses (parentId '5100', excluding 5101 Purchase AND the
+    // 5150 Closing-Stock contra — the closing stock is shown on the Cr side from the
+    // 3403 asset, so counting 5150 here too would double-count it). Keep signed so a
+    // credit balance (refund/over-credit) nets correctly and ties to the ledger.
     const directExpItems = tb
-      .filter(b => b.account.parentId === '5100' && b.account.id !== '5101')
+      .filter(b => b.account.parentId === '5100' && b.account.id !== '5101' && b.account.id !== '5150')
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }))
       .filter(i => Math.abs(i.amount) > 0.005);
 
@@ -2058,7 +2066,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // any 4100 sales not mapped to a defined activity.
     const unallocated = {
       purchases: nbById('5101'),
-      directExp: tb.filter(b => b.account.parentId === '5100' && b.account.id !== '5101' && !activityPurchaseIds.has(b.account.id))
+      directExp: tb.filter(b => b.account.parentId === '5100' && b.account.id !== '5101' && b.account.id !== '5150' && !activityPurchaseIds.has(b.account.id))
         .reduce((s, b) => s + b.netBalance, 0),
       otherSales: tb.filter(b => b.account.parentId === '4100' && !activitySalesIds.has(b.account.id))
         .reduce((s, b) => s + (-b.netBalance), 0),
@@ -2071,10 +2079,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const postClosingStock = useCallback((fy?: string): { posted: boolean; amount: number; alreadyPosted: boolean } => {
     const currentFY = fy ?? society.financialYear;
-    // Check if already posted — use getVoucherLines() to support Expert Mode multi-line vouchers (Rule 4)
+    // Check if already posted — accept the NEW (Cr 5150) or LEGACY (Cr 5101) journal.
     const alreadyPosted = activeVouchers.some(v =>
       getVoucherLines(v).some(l => l.accountId === '3403' && l.type === 'Dr') &&
-      getVoucherLines(v).some(l => l.accountId === '5101' && l.type === 'Cr') &&
+      getVoucherLines(v).some(l => (l.accountId === '5150' || l.accountId === '5101') && l.type === 'Cr') &&
       v.narration.includes(currentFY)
     );
     if (alreadyPosted) return { posted: false, amount: 0, alreadyPosted: true };
@@ -2099,8 +2107,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addVoucher({
       type: 'journal',
       date: new Date().toISOString().split('T')[0],
-      debitAccountId: '3403',   // Trading Goods inventory
-      creditAccountId: '5101',  // Purchase (reduces net purchase cost)
+      debitAccountId: '3403',   // Trading Goods inventory (Balance Sheet asset)
+      creditAccountId: '5150',  // Audit C-8: dedicated Closing Stock A/c — keeps Purchases (5101) gross
       amount,
       narration: `Closing Stock at year end — FY ${currentFY}`,
       createdBy: user?.name ?? 'System',
