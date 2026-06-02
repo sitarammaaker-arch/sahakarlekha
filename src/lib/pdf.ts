@@ -707,16 +707,29 @@ export function generateBalanceSheetPDF(
         ? [groupLabel, groupPY ? fmt(groupPY) : '', '', fmt(groupTotal)]
         : [groupLabel, '', fmt(groupTotal)]);
 
-      // Child rows (indented)
-      items.forEach(b => {
+      // Child rows — direct leaves, then each nested sub-group (e.g. a user-made
+      // "Market Supplier Chakan") as an indented sub-heading with its own leaves,
+      // mirroring the on-screen Balance Sheet instead of flattening them.
+      const nz = (b: AccountBalance) => b.netBalance !== 0 || getPY(b.account.id) !== 0;
+      const pushLeaf = (b: AccountBalance, pad: string) => {
         capturedIds.add(b.account.id);
         const val = signFlip ? -b.netBalance : b.netBalance;
-        const isContra = val < 0;
-        const display = isContra ? `(${fmt(Math.abs(val))})` : fmt(val);
-        const label = `  ${b.account.name}`;
+        const display = val < 0 ? `(${fmt(Math.abs(val))})` : fmt(val);
         body.push(hasPY
-          ? [label, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', display, '']
-          : [label, display, '']);
+          ? [`${pad}${b.account.name}`, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', display, '']
+          : [`${pad}${b.account.name}`, display, '']);
+      };
+      balances.filter(b => b.account.parentId === group.id && !b.account.isGroup && nz(b)).forEach(b => pushLeaf(b, '  '));
+      subSubGroups.forEach(ssg => {
+        const ssgLeaves = balances.filter(b => b.account.parentId === ssg.id && !b.account.isGroup && nz(b));
+        if (ssgLeaves.length === 0) return;
+        const subtotal = ssgLeaves.reduce((s, b) => s + (signFlip ? -b.netBalance : b.netBalance), 0);
+        const subPY = ssgLeaves.reduce((s, b) => s + getPY(b.account.id), 0);
+        const subDisp = subtotal < 0 ? `(${fmt(Math.abs(subtotal))})` : fmt(subtotal);
+        body.push(hasPY
+          ? [`  ${ssg.name}`, subPY ? fmt(subPY) : '', subDisp, '']
+          : [`  ${ssg.name}`, subDisp, '']);
+        ssgLeaves.forEach(b => pushLeaf(b, '      '));
       });
     });
 

@@ -20,11 +20,19 @@ import { fmtDate } from '@/lib/dateUtils';
 import { useToast } from '@/hooks/use-toast';
 import type { AccountBalance } from '@/types';
 
+interface BSItem {
+  account: AccountBalance;
+  displayAmount: number;
+  pyAmount: number;
+  indent?: number;        // 0 = direct child, 1 = under a nested sub-group
+  isSubHeader?: boolean;  // a nested sub-group heading row (displayAmount = its sub-total)
+}
+
 interface BSGroup {
   id: string;
   name: string;
   nameHi: string;
-  items: { account: AccountBalance; displayAmount: number; pyAmount: number }[];
+  items: BSItem[];
   grandTotal: number;
   pyGrandTotal: number;
 }
@@ -95,26 +103,33 @@ const BalanceSheet: React.FC = () => {
     const subGroups = accounts.filter(a => a.isGroup && topParentIds.includes(a.parentId || ''));
     const capturedIds = new Set<string>();
 
-    const groups = subGroups.map(group => {
-      const childIds = new Set<string>();
-      // Direct leaf children
-      accounts.filter(a => !a.isGroup && a.parentId === group.id).forEach(a => childIds.add(a.id));
-      // Sub-sub-group children (one level deeper)
-      accounts.filter(a => a.isGroup && a.parentId === group.id).forEach(ssg => {
-        accounts.filter(a => !a.isGroup && a.parentId === ssg.id).forEach(a => childIds.add(a.id));
-      });
+    const nonZero = (b: AccountBalance) => b.netBalance !== 0 || getPY(b.account.id) !== 0;
+    const mkLeaf = (b: AccountBalance, indent: number): BSItem => {
+      capturedIds.add(b.account.id);
+      return { account: b, displayAmount: signFlip ? -b.netBalance : b.netBalance, pyAmount: getPY(b.account.id), indent };
+    };
 
-      const items = balances
-        .filter(b => childIds.has(b.account.id))
-        .filter(b => b.netBalance !== 0 || getPY(b.account.id) !== 0)
-        .map(b => {
-          capturedIds.add(b.account.id);
-          return {
-            account: b,
-            displayAmount: signFlip ? -b.netBalance : b.netBalance,
-            pyAmount: getPY(b.account.id),
-          };
+    const groups = subGroups.map(group => {
+      // Build an ORDERED item list that PRESERVES nested sub-groups (e.g. a
+      // user-made "Market Supplier Chakan" under Current Liabilities) instead of
+      // flattening their ledgers straight under the top group.
+      const items: BSItem[] = [];
+      // 1) Direct leaf children of this group.
+      balances
+        .filter(b => b.account.parentId === group.id && !b.account.isGroup && nonZero(b))
+        .forEach(b => items.push(mkLeaf(b, 0)));
+      // 2) Each nested sub-group → a heading row + its leaves (indented), with subtotal.
+      accounts.filter(a => a.isGroup && a.parentId === group.id).forEach(ssg => {
+        const ssgLeaves = balances.filter(b => b.account.parentId === ssg.id && !b.account.isGroup && nonZero(b));
+        if (ssgLeaves.length === 0) return;
+        const subtotal = ssgLeaves.reduce((s, b) => s + (signFlip ? -b.netBalance : b.netBalance), 0);
+        const pySubtotal = ssgLeaves.reduce((s, b) => s + getPY(b.account.id), 0);
+        items.push({
+          account: { account: { id: `subgrp-${ssg.id}`, name: ssg.name, nameHi: ssg.nameHi, type: ssg.type } } as any,
+          displayAmount: subtotal, pyAmount: pySubtotal, isSubHeader: true, indent: 0,
         });
+        ssgLeaves.forEach(b => items.push(mkLeaf(b, 1)));
+      });
 
       // Audit-friendly group names
       const auditNames: Record<string, { en: string; hi: string }> = {
@@ -147,10 +162,13 @@ const BalanceSheet: React.FC = () => {
         }
       }
 
+      // Grand total sums LEAVES only — sub-header rows already carry their leaves'
+      // subtotal, so counting both would double the nested sub-group's amount.
+      const leafItems = items.filter(i => !i.isSubHeader);
       return {
         id: group.id, name: displayName, nameHi: displayNameHi,
-        items, grandTotal: items.reduce((s, i) => s + i.displayAmount, 0),
-        pyGrandTotal: items.reduce((s, i) => s + i.pyAmount, 0),
+        items, grandTotal: leafItems.reduce((s, i) => s + i.displayAmount, 0),
+        pyGrandTotal: leafItems.reduce((s, i) => s + i.pyAmount, 0),
       };
     }).filter(g => g.items.length > 0);
 
@@ -244,20 +262,32 @@ const BalanceSheet: React.FC = () => {
                   {group.grandTotal < 0 ? `(${fmt(Math.abs(group.grandTotal))})` : fmt(group.grandTotal)}
                 </TableCell>
               </TableRow>
-              {/* Child accounts */}
-              {group.items.map(({ account: b, displayAmount, pyAmount }) => {
-                // Contra = abnormal balance direction
-                // Liab side: displayAmount < 0 means debit balance on credit-nature account → show (Dr)
-                // Asset side: displayAmount < 0 means credit balance on debit-nature account → show (Cr)
+              {/* Child accounts (with nested sub-group headings) */}
+              {group.items.map(({ account: b, displayAmount, pyAmount, indent, isSubHeader }) => {
                 const isNegative = displayAmount < 0;
                 const contraLabel = isLiabSide ? '(Dr)' : '(Cr)';
+
+                // Nested sub-group heading row (e.g. "Market Supplier Chakan") with its subtotal.
+                if (isSubHeader) {
+                  return (
+                    <TableRow key={b.account.id} className="bg-muted/30">
+                      {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyAmount !== 0 ? fmt(pyAmount) : '—'}</TableCell>}
+                      <TableCell className="pl-6 text-sm font-semibold">{hi ? b.account.nameHi : b.account.name}</TableCell>
+                      <TableCell className="text-right text-sm font-semibold">
+                        {isNegative ? `(${fmt(Math.abs(displayAmount))})` : fmt(displayAmount)}
+                      </TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
+                  );
+                }
+
                 return (
                   <TableRow key={b.account.id} className="hover:bg-muted/30 cursor-pointer"
                     onClick={() => navigate(`/ledger?account=${b.account.id}`)}
                     title={hi ? 'खाता बही देखें' : 'View Ledger'}
                   >
                     {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyAmount !== 0 ? fmt(pyAmount) : '—'}</TableCell>}
-                    <TableCell className="pl-6 text-sm group">
+                    <TableCell className={`${indent === 1 ? 'pl-12' : 'pl-6'} text-sm group`}>
                       <span className="group-hover:text-primary group-hover:underline">
                         {hi ? b.account.nameHi : b.account.name}
                       </span>
