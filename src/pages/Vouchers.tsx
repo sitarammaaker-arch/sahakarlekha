@@ -739,8 +739,10 @@ const Vouchers: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Contra bank selector */}
-                    {voucherType === 'contra' && bankIds.length > 1 && (
+                    {/* Contra bank selector — show whenever at least one bank ledger
+                        exists, so the user can always see/choose which bank account the
+                        transfer uses (not only when there are 2+ banks). */}
+                    {voucherType === 'contra' && bankIds.length >= 1 && (
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">{language === 'hi' ? 'बैंक खाता' : 'Bank Account'}</Label>
                         <select
@@ -750,9 +752,16 @@ const Vouchers: React.FC = () => {
                         >
                           {bankIds.map(bid => {
                             const acc = accounts.find(a => a.id === bid);
-                            return <option key={bid} value={bid}>{acc?.name || bid}</option>;
+                            return <option key={bid} value={bid}>{acc?.name || bid}{acc?.nameHi && language === 'hi' ? ` (${acc.nameHi})` : ''}</option>;
                           })}
                         </select>
+                        {bankIds.length === 1 && (
+                          <p className="text-xs text-muted-foreground">
+                            {language === 'hi'
+                              ? 'और बैंक खाते जोड़ने के लिए: Ledger Heads → "Bank Accounts" के नीचे नया खाता बनाएं।'
+                              : 'To add more bank accounts: Ledger Heads → create an account under "Bank Accounts".'}
+                          </p>
+                        )}
                       </div>
                     )}
 
