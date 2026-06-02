@@ -47,6 +47,9 @@ const BalanceSheet: React.FC = () => {
   // As-on-date (default: FY end = 31st March)
   const fyEndDate = `20${society.financialYear.split('-')[1]}-03-31`;
   const [asOnDate, setAsOnDate] = useState(fyEndDate);
+  // Detail level: Summary (default) shows groups/sub-groups with totals and hides
+  // the long lists of individual ledgers; Detailed expands every account.
+  const [showLedgers, setShowLedgers] = useState(false);
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -234,7 +237,7 @@ const BalanceSheet: React.FC = () => {
     generateBalanceSheetPDF(
       trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup),
       [...trialBalance.filter(b => b.account.type === 'equity' && !b.account.isGroup), ...trialBalance.filter(b => b.account.type === 'liability' && !b.account.isGroup)],
-      netProfit, society, language, 0, accounts, stockItems
+      netProfit, society, language, 0, accounts, stockItems, showLedgers
     );
   };
 
@@ -288,6 +291,11 @@ const BalanceSheet: React.FC = () => {
                     </TableRow>
                   );
                 }
+
+                // Summary mode: hide individual ledgers — those nested inside a
+                // sub-group, and the long catch-all "Other" list — keeping only
+                // group/sub-group totals and the few direct group lines.
+                if (!showLedgers && ((indent || 0) >= 1 || group.id === 'other')) return null;
 
                 return (
                   <TableRow key={b.account.id} className="hover:bg-muted/30 cursor-pointer"
@@ -384,7 +392,27 @@ const BalanceSheet: React.FC = () => {
                 {hi ? '⚠ अंतरिम तुलन पत्र' : '⚠ Interim Balance Sheet'}
               </span>
             )}
+            {/* Summary ⇄ Detailed: collapse the long ledger lists into group totals. */}
+            <div className="ml-auto flex items-center gap-1 rounded-md border p-0.5">
+              <Button
+                variant={showLedgers ? 'ghost' : 'default'} size="sm" className="h-7 text-xs"
+                onClick={() => setShowLedgers(false)}
+              >
+                {hi ? 'सारांश' : 'Summary'}
+              </Button>
+              <Button
+                variant={showLedgers ? 'default' : 'ghost'} size="sm" className="h-7 text-xs"
+                onClick={() => setShowLedgers(true)}
+              >
+                {hi ? 'पूर्ण विवरण' : 'Full detail'}
+              </Button>
+            </div>
           </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            {hi
+              ? 'सारांश: समूह/उप-समूह केवल कुल योग के साथ (व्यक्तिगत खाते छिपे)। पूर्ण विवरण: हर खाता दिखे।'
+              : 'Summary: groups/sub-groups with totals only (individual ledgers hidden). Full detail: every account.'}
+          </p>
         </CardContent>
       </Card>
 

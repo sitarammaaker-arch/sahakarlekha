@@ -636,6 +636,7 @@ export function generateBalanceSheetPDF(
   reserveFund: number = 0,
   allAccounts?: LedgerAccount[],
   stockItemsData?: { name: string; currentStock: number; purchaseRate: number; isActive: boolean; stockGroup?: string }[],
+  detailed: boolean = true,   // false = Summary (groups/sub-groups + totals only)
 ) {
   const doc = new jsPDF('landscape');
   const { startY, font } = addHeader(doc, 'Balance Sheet', society, `As at 31st March 20${society.financialYear.split('-')[1]}`, { reportCode: 'BS' });
@@ -681,6 +682,8 @@ export function generateBalanceSheetPDF(
       const pad = '  '.repeat(depth + 1);
       balances.filter(b => b.account.parentId === parentId && !b.account.isGroup && nz(b)).forEach(b => {
         capturedIds.add(b.account.id);
+        // Summary: hide individual ledgers nested inside a sub-group (depth >= 1).
+        if (!detailed && depth >= 1) return;
         const val = signFlip ? -b.netBalance : b.netBalance;
         const display = val < 0 ? `(${fmt(Math.abs(val))})` : fmt(val);
         body.push(hasPY
@@ -749,7 +752,8 @@ export function generateBalanceSheetPDF(
       body.push(hasPY
         ? [language === 'hi' ? 'अन्य' : 'OTHER', orphanPY ? fmt(orphanPY) : '', '', fmt(orphanTotal)]
         : [language === 'hi' ? 'अन्य' : 'OTHER', '', fmt(orphanTotal)]);
-      orphans.forEach(b => {
+      // Summary: collapse the long catch-all "Other" list to its total only.
+      if (detailed) orphans.forEach(b => {
         const val = signFlip ? -b.netBalance : b.netBalance;
         const display = val < 0 ? `(${fmt(Math.abs(val))})` : fmt(val);
         body.push(hasPY
