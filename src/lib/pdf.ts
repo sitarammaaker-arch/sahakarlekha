@@ -655,6 +655,7 @@ export function generateBalanceSheetPDF(
     const groupRows: number[] = [];
     let pyTotal = 0;
     const accts = allAccounts || [];
+    const capturedIds = new Set<string>();
 
     const subGroups = accts.filter(a => a.isGroup && parentIds.includes(a.parentId || ''));
 
@@ -688,6 +689,7 @@ export function generateBalanceSheetPDF(
             stockGroups[grp] = (stockGroups[grp] || 0) + s.currentStock * (s.purchaseRate || 0);
           });
           const stockTotal = Object.values(stockGroups).reduce((s, v) => s + v, 0);
+          items.forEach(b => capturedIds.add(b.account.id));
           groupRows.push(body.length);
           body.push(hasPY
             ? [groupLabel, groupPY ? fmt(groupPY) : '', '', fmt(stockTotal)]
@@ -707,6 +709,7 @@ export function generateBalanceSheetPDF(
 
       // Child rows (indented)
       items.forEach(b => {
+        capturedIds.add(b.account.id);
         const val = signFlip ? -b.netBalance : b.netBalance;
         const isContra = val < 0;
         const display = isContra ? `(${fmt(Math.abs(val))})` : fmt(val);
@@ -716,6 +719,28 @@ export function generateBalanceSheetPDF(
           : [label, display, '']);
       });
     });
+
+    // Orphan accounts — leaf balances not captured by any sub-group (e.g. auto-
+    // created sundry creditor/debtor accounts). Mirror the on-screen "Other" group
+    // so the printed groups reconcile to the Grand Total instead of silently
+    // dropping these balances.
+    const orphans = balances.filter(b => !capturedIds.has(b.account.id) && (b.netBalance !== 0 || getPY(b.account.id) !== 0));
+    if (orphans.length > 0) {
+      const orphanTotal = orphans.reduce((s, b) => s + (signFlip ? -b.netBalance : b.netBalance), 0);
+      const orphanPY = orphans.reduce((s, b) => s + getPY(b.account.id), 0);
+      pyTotal += orphanPY;
+      groupRows.push(body.length);
+      body.push(hasPY
+        ? [language === 'hi' ? 'अन्य' : 'OTHER', orphanPY ? fmt(orphanPY) : '', '', fmt(orphanTotal)]
+        : [language === 'hi' ? 'अन्य' : 'OTHER', '', fmt(orphanTotal)]);
+      orphans.forEach(b => {
+        const val = signFlip ? -b.netBalance : b.netBalance;
+        const display = val < 0 ? `(${fmt(Math.abs(val))})` : fmt(val);
+        body.push(hasPY
+          ? [`  ${b.account.name}`, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', display, '']
+          : [`  ${b.account.name}`, display, '']);
+      });
+    }
 
     return { body, groupRows, pyTotal };
   };

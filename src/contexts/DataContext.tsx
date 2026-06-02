@@ -2007,20 +2007,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // the closing-stock value, so we GROSS IT UP to keep GP = Sales + ClosingStock −
     // Opening − GrossPurchases − DirectExp consistent. The NEW journal credits the
     // dedicated 5150 instead, leaving 5101 already gross — so no gross-up then.
+    // Activity-wise purchase heads (audit C-5) belong with Purchases, not Direct
+    // Expenses, so the Trading A/c lists each commodity's purchase under "Purchases".
+    const PURCHASE_ACTIVITY_IDS = ['5110', '5111', '5112', '5113', '5114', '5115', '5116'];
     const purchase5101Net = (tb.find(b => b.account.id === '5101')?.netBalance) || 0;
     const purchase5101Gross = closingViaLegacy ? purchase5101Net + totalClosingStockEarly : purchase5101Net;
     // Include even when net is negative (abnormal — e.g. returns exceed purchases) so
     // the figure ties to the ledger (BS-tie fix).
-    const purchaseItems = Math.abs(purchase5101Gross) > 0.005
-      ? [{ name: 'Purchase', nameHi: 'क्रय', amount: purchase5101Gross }]
-      : [];
+    const purchaseItems = [
+      ...(Math.abs(purchase5101Gross) > 0.005 ? [{ name: 'Purchase', nameHi: 'क्रय', amount: purchase5101Gross }] : []),
+      ...tb.filter(b => PURCHASE_ACTIVITY_IDS.includes(b.account.id) && Math.abs(b.netBalance) > 0.005)
+        .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance })),
+    ];
 
-    // Dr side: Direct Expenses (parentId '5100', excluding 5101 Purchase AND the
-    // 5150 Closing-Stock contra — the closing stock is shown on the Cr side from the
-    // 3403 asset, so counting 5150 here too would double-count it). Keep signed so a
-    // credit balance (refund/over-credit) nets correctly and ties to the ledger.
+    // Dr side: Direct Expenses (parentId '5100', excluding 5101 Purchase, the activity
+    // purchase heads (now under Purchases), AND the 5150 Closing-Stock contra — the
+    // closing stock is shown on the Cr side from the 3403 asset, so counting 5150 here
+    // would double-count it). Keep signed so a credit balance nets correctly.
     const directExpItems = tb
-      .filter(b => b.account.parentId === '5100' && b.account.id !== '5101' && b.account.id !== '5150')
+      .filter(b => b.account.parentId === '5100' && b.account.id !== '5101' && b.account.id !== '5150' && !PURCHASE_ACTIVITY_IDS.includes(b.account.id))
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }))
       .filter(i => Math.abs(i.amount) > 0.005);
 
