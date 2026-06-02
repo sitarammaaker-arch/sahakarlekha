@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ArrowLeftRight, Download, FileSpreadsheet } from 'lucide-react';
 import { generateReceiptsPaymentsPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import type { ReceiptsPaymentsItem } from '@/types';
 
 const ReceiptsPayments: React.FC = () => {
   const { language } = useLanguage();
@@ -35,17 +36,48 @@ const ReceiptsPayments: React.FC = () => {
 
   const hi = language === 'hi';
 
-  const exportHeaders = ['Type', 'Particulars', 'Amount (₹)'];
+  // Audit C-12: render R&P lines grouped Capital → Revenue, each under a subhead.
+  const renderRPRows = (
+    items: ReceiptsPaymentsItem[],
+    prefix: 'To' | 'By',
+    getPY: (name: string) => number,
+  ) => {
+    const section = (labelEn: string, labelHi: string, arr: ReceiptsPaymentsItem[]) =>
+      arr.length === 0 ? null : (
+        <React.Fragment key={labelEn}>
+          <TableRow className="bg-muted/20">
+            <TableCell colSpan={hasPY ? 3 : 2} className="font-semibold text-[11px] uppercase tracking-wide text-muted-foreground">
+              {hi ? labelHi : labelEn}
+            </TableCell>
+          </TableRow>
+          {arr.map((r, i) => (
+            <TableRow key={labelEn + i}>
+              <TableCell className="pl-4">{prefix} {hi ? (r.accountNameHi || r.accountName) : r.accountName}</TableCell>
+              {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{getPY(r.accountName) ? fmt(getPY(r.accountName)) : '—'}</TableCell>}
+              <TableCell className="text-right font-medium">{fmt(r.amount)}</TableCell>
+            </TableRow>
+          ))}
+        </React.Fragment>
+      );
+    return (
+      <>
+        {section('Capital', 'पूंजीगत', items.filter(i => i.nature === 'capital'))}
+        {section('Revenue', 'राजस्व', items.filter(i => i.nature === 'revenue'))}
+      </>
+    );
+  };
+
+  const exportHeaders = ['Section', 'Nature', 'Particulars', 'Amount (₹)'];
   const exportRows = (): (string | number)[][] => {
     const rows: (string | number)[][] = [];
-    rows.push(['Receipt', 'Opening Balance — Cash in Hand', openingCash]);
-    rows.push(['Receipt', 'Opening Balance — Cash at Bank', openingBank]);
-    receipts.forEach(r => rows.push(['Receipt', r.accountName, r.amount]));
-    rows.push(['Receipt', 'Total Receipts (Dr)', drTotal]);
-    payments.forEach(p => rows.push(['Payment', p.accountName, p.amount]));
-    rows.push(['Payment', 'Closing Balance — Cash in Hand', closingCash]);
-    rows.push(['Payment', 'Closing Balance — Cash at Bank', closingBank]);
-    rows.push(['Payment', 'Total Payments (Cr)', crTotal]);
+    rows.push(['Receipt', '', 'Opening Balance — Cash in Hand', openingCash]);
+    rows.push(['Receipt', '', 'Opening Balance — Cash at Bank', openingBank]);
+    receipts.forEach(r => rows.push(['Receipt', r.nature === 'capital' ? 'Capital' : 'Revenue', r.accountName, r.amount]));
+    rows.push(['Receipt', '', 'Total Receipts (Dr)', drTotal]);
+    payments.forEach(p => rows.push(['Payment', p.nature === 'capital' ? 'Capital' : 'Revenue', p.accountName, p.amount]));
+    rows.push(['Payment', '', 'Closing Balance — Cash in Hand', closingCash]);
+    rows.push(['Payment', '', 'Closing Balance — Cash at Bank', closingBank]);
+    rows.push(['Payment', '', 'Total Payments (Cr)', crTotal]);
     return rows;
   };
 
@@ -154,13 +186,7 @@ const ReceiptsPayments: React.FC = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    receipts.map((r, i) => (
-                      <TableRow key={i}>
-                        <TableCell>To {r.accountName}</TableCell>
-                        {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{getPYReceipt(r.accountName) ? fmt(getPYReceipt(r.accountName)) : '—'}</TableCell>}
-                        <TableCell className="text-right font-medium">{fmt(r.amount)}</TableCell>
-                      </TableRow>
-                    ))
+                    renderRPRows(receipts, 'To', getPYReceipt)
                   )}
                   {/* Total */}
                   <TableRow className="bg-success/10 font-bold text-lg">
@@ -194,13 +220,7 @@ const ReceiptsPayments: React.FC = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    payments.map((p, i) => (
-                      <TableRow key={i}>
-                        <TableCell>By {p.accountName}</TableCell>
-                        {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{getPYPayment(p.accountName) ? fmt(getPYPayment(p.accountName)) : '—'}</TableCell>}
-                        <TableCell className="text-right font-medium">{fmt(p.amount)}</TableCell>
-                      </TableRow>
-                    ))
+                    renderRPRows(payments, 'By', getPYPayment)
                   )}
                   {/* Closing Balance */}
                   <TableRow className="bg-muted/30 font-medium">

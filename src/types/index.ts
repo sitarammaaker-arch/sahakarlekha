@@ -456,7 +456,12 @@ export interface BankBookEntry {
 export interface ReceiptsPaymentsItem {
   accountId: string;
   accountName: string;
+  accountNameHi?: string;
   amount: number;
+  // Audit C-12: every R&P line is classified Capital vs Revenue.
+  nature: 'capital' | 'revenue';
+  // Audit C-11: GL-head ledger type (asset / liability / income / expense / equity).
+  glType?: string;
 }
 
 export interface ReceiptsPaymentsData {

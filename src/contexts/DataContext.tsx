@@ -1849,8 +1849,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return sum + (acc?.openingBalance ?? 0);
     }, 0);
 
-    const receiptMap: Record<string, { name: string; amount: number }> = {};
-    const paymentMap: Record<string, { name: string; amount: number }> = {};
+    // ── Audit C-11/C-12: classify each R&P line by GL-head type and Capital/Revenue ──
+    // NCDC Annexure VII: a Receipts & Payments Account must distinguish CAPITAL
+    // receipts/payments (share capital, reserves, long-term loans, fixed assets,
+    // investments, deposits) from REVENUE ones (trading, income, operating expenses,
+    // trade debtors/creditors). Everything else defaults to Revenue.
+    const CAPITAL_PARENTS = new Set(['1100', '1200', '2300', '3100', '3200']);
+    const CAPITAL_SUBTYPES = new Set(['fixed_asset', 'investment', 'long_term_loan', 'deposit', 'accumulated_dep', 'reserve', 'surplus', 'share_capital']);
+    const natureOf = (accId: string): 'capital' | 'revenue' => {
+      const acc = accounts.find(a => a.id === accId);
+      if (!acc) return 'revenue';
+      if (acc.type === 'equity') return 'capital';
+      if (acc.subtype && CAPITAL_SUBTYPES.has(acc.subtype)) return 'capital';
+      if (acc.parentId && CAPITAL_PARENTS.has(acc.parentId)) return 'capital';
+      return 'revenue';
+    };
+    const glTypeOf = (accId: string): string => accounts.find(a => a.id === accId)?.type || 'asset';
+
+    type RPEntry = { name: string; nameHi: string; amount: number; nature: 'capital' | 'revenue'; glType: string };
+    const receiptMap: Record<string, RPEntry> = {};
+    const paymentMap: Record<string, RPEntry> = {};
 
     // M15: Honor asOnDate so historical Day Book / Balance Sheet lookups stay accurate.
     const vouchersToUse = asOnDate ? activeVouchers.filter(v => v.date <= asOnDate) : activeVouchers;
@@ -1871,7 +1889,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const otherAcc = accounts.find(a => a.id === ol.accountId);
             const name = otherAcc?.name || v.narration || 'Deleted Account';
             const nameHi = otherAcc?.nameHi || name;
-            if (!receiptMap[ol.accountId]) receiptMap[ol.accountId] = { name, nameHi, amount: 0 };
+            if (!receiptMap[ol.accountId]) receiptMap[ol.accountId] = { name, nameHi, amount: 0, nature: natureOf(ol.accountId), glType: glTypeOf(ol.accountId) };
             receiptMap[ol.accountId].amount += ol.amount;
           });
         } else {
@@ -1879,7 +1897,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const otherAcc = accounts.find(a => a.id === ol.accountId);
             const name = otherAcc?.name || v.narration || 'Deleted Account';
             const nameHi = otherAcc?.nameHi || name;
-            if (!paymentMap[ol.accountId]) paymentMap[ol.accountId] = { name, nameHi, amount: 0 };
+            if (!paymentMap[ol.accountId]) paymentMap[ol.accountId] = { name, nameHi, amount: 0, nature: natureOf(ol.accountId), glType: glTypeOf(ol.accountId) };
             paymentMap[ol.accountId].amount += ol.amount;
           });
         }
@@ -1904,8 +1922,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return {
       openingCash,
       openingBank,
-      receipts: Object.entries(receiptMap).map(([id, v]) => ({ accountId: id, accountName: v.name, accountNameHi: (v as any).nameHi || v.name, amount: v.amount })),
-      payments: Object.entries(paymentMap).map(([id, v]) => ({ accountId: id, accountName: v.name, accountNameHi: (v as any).nameHi || v.name, amount: v.amount })),
+      receipts: Object.entries(receiptMap).map(([id, v]) => ({ accountId: id, accountName: v.name, accountNameHi: v.nameHi || v.name, amount: v.amount, nature: v.nature, glType: v.glType })),
+      payments: Object.entries(paymentMap).map(([id, v]) => ({ accountId: id, accountName: v.name, accountNameHi: v.nameHi || v.name, amount: v.amount, nature: v.nature, glType: v.glType })),
       closingCash,
       closingBank,
     };

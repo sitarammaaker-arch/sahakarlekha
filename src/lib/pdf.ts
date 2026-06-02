@@ -560,17 +560,29 @@ export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society:
   const drTotal = openingCash + openingBank + totalReceipts;
   const crTotal = totalPayments + closingCash + closingBank;
 
-  // Dr side: Opening Balance + Receipts
-  const drBody: string[][] = [
+  // Audit C-12: group lines Capital → Revenue under subheader bands.
+  const natureBand = (label: string): RowInput =>
+    [{ content: label, colSpan: 2, styles: { fontStyle: 'bold' as const, fillColor: [225, 232, 245] as [number, number, number] } }];
+  const groupedLines = (items: typeof receipts, prefix: 'To' | 'By'): RowInput[] => {
+    const cap = items.filter(i => i.nature === 'capital');
+    const rev = items.filter(i => i.nature === 'revenue');
+    const out: RowInput[] = [];
+    if (cap.length) { out.push(natureBand('Capital')); cap.forEach(i => out.push([`${prefix} ${i.accountName}`, fmt(i.amount)])); }
+    if (rev.length) { out.push(natureBand('Revenue')); rev.forEach(i => out.push([`${prefix} ${i.accountName}`, fmt(i.amount)])); }
+    return out;
+  };
+
+  // Dr side: Opening Balance + Receipts (grouped Capital/Revenue)
+  const drBody: RowInput[] = [
     ['To Balance b/d (Opening)', ''],
     ['  Cash in Hand', fmt(openingCash)],
     ['  Cash at Bank', fmt(openingBank)],
-    ...receipts.map(r => [`To ${r.accountName}`, fmt(r.amount)]),
+    ...groupedLines(receipts, 'To'),
   ];
 
-  // Cr side: Payments + Closing Balance
-  const crBody: string[][] = [
-    ...payments.map(p => [`By ${p.accountName}`, fmt(p.amount)]),
+  // Cr side: Payments (grouped Capital/Revenue) + Closing Balance
+  const crBody: RowInput[] = [
+    ...groupedLines(payments, 'By'),
     ['By Balance c/d (Closing)', ''],
     ['  Cash in Hand', fmt(closingCash)],
     ['  Cash at Bank', fmt(closingBank)],
