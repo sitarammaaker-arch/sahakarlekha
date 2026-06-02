@@ -1883,9 +1883,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Determine other-side lines (contra side)
         const otherLines = lines.filter(ol => ol.type !== l.type);
         if (otherLines.length === 0) return;
+        // Audit C-11: an internal Cash↔Bank transfer (the other side is ALSO Cash/Bank)
+        // is NOT a real receipt or payment — it must not inflate the R&P account.
+        const otherIsCashBank = (id: string) => id === ACCOUNT_IDS.CASH || isBankAccount(id, accounts);
 
         if (l.type === 'Dr') {
           otherLines.forEach(ol => {
+            if (otherIsCashBank(ol.accountId)) return;
             const otherAcc = accounts.find(a => a.id === ol.accountId);
             const name = otherAcc?.name || v.narration || 'Deleted Account';
             const nameHi = otherAcc?.nameHi || name;
@@ -1894,6 +1898,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           });
         } else {
           otherLines.forEach(ol => {
+            if (otherIsCashBank(ol.accountId)) return;
             const otherAcc = accounts.find(a => a.id === ol.accountId);
             const name = otherAcc?.name || v.narration || 'Deleted Account';
             const nameHi = otherAcc?.nameHi || name;

@@ -200,21 +200,26 @@ const ProfitLoss: React.FC = () => {
         ) : (
           <Card className="bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700">
             <CardContent className="pt-4 pb-4">
-              <p className="text-sm font-medium text-green-800 dark:text-green-200 flex items-center gap-2">
+              <p className="text-sm font-semibold text-green-800 dark:text-green-200 flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4" />
-                {hi ? 'अधिशेष आवंटन (Appropriation) — ledger में पोस्ट हो चुका' : 'Surplus Appropriation — posted to ledger'}
+                {hi ? 'लाभ-हानि विनियोजन खाता (Appropriation A/c) — ledger में पोस्ट' : 'Profit & Loss Appropriation Account — posted to ledger'}
               </p>
-              <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                <div className="flex justify-between sm:block">
-                  <span className="text-muted-foreground">{hi ? 'संचय निधि (1201)' : 'Reserve Fund (1201)'}</span>{' '}
-                  <strong className="text-green-700 dark:text-green-300">{fmt(postedReserve)}</strong>
+              {/* Formal appropriation account: Net Surplus less statutory transfers = balance c/d. */}
+              <div className="mt-2 max-w-md text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{hi ? 'वर्ष का शुद्ध अधिशेष' : 'Net Surplus for the year'}</span>
+                  <strong>{fmt(netProfit)}</strong>
                 </div>
-                <div className="flex justify-between sm:block">
-                  <span className="text-muted-foreground">{hi ? 'शिक्षा निधि (1203)' : 'Education Fund (1203)'}</span>{' '}
-                  <strong className="text-green-700 dark:text-green-300">{fmt(postedEducation)}</strong>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{hi ? 'घटाएँ: वैधानिक संचय निधि (1201)' : 'Less: Statutory Reserve Fund (1201)'}</span>
+                  <span className="text-green-700 dark:text-green-300">({fmt(postedReserve)})</span>
                 </div>
-                <div className="flex justify-between sm:block">
-                  <span className="text-muted-foreground">{hi ? 'अवितरित अधिशेष c/d' : 'Undistributed Surplus c/d'}</span>{' '}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{hi ? 'घटाएँ: शिक्षा निधि (1203)' : 'Less: Education Fund (1203)'}</span>
+                  <span className="text-green-700 dark:text-green-300">({fmt(postedEducation)})</span>
+                </div>
+                <div className="flex justify-between border-t pt-1 font-semibold">
+                  <span>{hi ? 'अवितरित अधिशेष c/d (तुलन पत्र में)' : 'Undistributed Surplus c/d (to Balance Sheet)'}</span>
                   <strong className="text-success">{fmt(undistributedSurplus)}</strong>
                 </div>
               </div>

@@ -43,8 +43,12 @@ const Dashboard: React.FC = () => {
   const complianceChecks = useMemo(() => {
     const fy = society.financialYear;
     const activeVouchers = vouchers.filter(v => !v.isDeleted);
-    const tb = getTrialBalance();
-    const { physicalClosingStock, closingStockPosted } = getTradingAccount();
+    // Bound the tally to the FY end so it matches netProfit / getTradingAccount
+    // (which default to the FY end) — otherwise a voucher mis-dated into the next
+    // FY would make the Balance Sheet tally falsely fail.
+    const fyEnd = `20${fy.split('-')[1]}-03-31`;
+    const tb = getTrialBalance(fyEnd);
+    const { physicalClosingStock, closingStockPosted } = getTradingAccount(fyEnd);
 
     // 1. Reserve Fund posted (Sec 65)
     const reservePosted = activeVouchers.some(v =>
@@ -57,7 +61,9 @@ const Dashboard: React.FC = () => {
     const totalAssets = tb.filter(b => b.account.type === 'asset' && !b.account.isGroup).reduce((s, b) => s + b.netBalance, 0);
     const capLiab = tb.filter(b => (b.account.type === 'equity' || b.account.type === 'liability') && !b.account.isGroup);
     const totalLiab = capLiab.reduce((s, b) => s + (-b.netBalance), 0) + netProfit;
-    const bsTallied = Math.abs(totalAssets - totalLiab) < 1;
+    // Audit (High): tighten the tolerance from Rs.1 to 1 paisa — a sub-rupee gap is
+    // a real imbalance now that Dr=Cr is enforced at save and the figures are exact.
+    const bsTallied = Math.abs(totalAssets - totalLiab) < 0.01;
 
     // 3. Closing stock journalized
     const stockOk = physicalClosingStock === 0 || closingStockPosted;
