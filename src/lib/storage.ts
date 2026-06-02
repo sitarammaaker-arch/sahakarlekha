@@ -652,6 +652,25 @@ const ACCOUNTS_TO_ADD: LedgerAccount[] = [
   { id: '5603', name: 'Income Tax',                 nameHi: 'आयकर व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600', subtype: 'statutory_expense' },
   { id: '5604', name: 'Interest on Borrowings',     nameHi: 'उधार पर ब्याज व्यय',       type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600', subtype: 'statutory_expense' },
   { id: '5605', name: 'Penalty / Fine',             nameHi: 'जुर्माना / दंड व्यय',      type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600', subtype: 'statutory_expense' },
+  // ── Audit C-5: activity-wise Sales (4100) & Purchase (5100) GL heads ──────────
+  // NCDC Annexure V mandates separate Trading Accounts per activity. These give a
+  // dedicated Sales head and a matching Purchase head per commodity so per-item
+  // routing (StockItem.salesAccountId / purchaseAccountId, RULE 4) can post each
+  // activity to its own ledger. isSystem:false — a society may delete the ones it
+  // does not trade in. Purchases keep subtype 'direct_expense' so the Trading A/c
+  // and audit schedules continue to treat them as Dr-side trading costs.
+  { id: '4104', name: 'Pesticides Sales',           nameHi: 'कीटनाशक बिक्री',           type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100', subtype: 'trading_income' },
+  { id: '4105', name: 'Animal Feed Sales',          nameHi: 'पशु आहार बिक्री',          type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100', subtype: 'trading_income' },
+  { id: '4106', name: 'Agricultural Implements Sales', nameHi: 'कृषि यंत्र बिक्री',     type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100', subtype: 'trading_income' },
+  { id: '4107', name: 'PDS / Ration Goods Sales',   nameHi: 'सार्वजनिक वितरण बिक्री',   type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100', subtype: 'trading_income' },
+  { id: '4108', name: 'Govt Procurement Sales',     nameHi: 'सरकारी खरीद बिक्री',       type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100', subtype: 'trading_income' },
+  { id: '5110', name: 'Fertilizer Purchase',        nameHi: 'उर्वरक क्रय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
+  { id: '5111', name: 'Seed Purchase',              nameHi: 'बीज क्रय',                 type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
+  { id: '5112', name: 'Consumer Goods Purchase',    nameHi: 'उपभोक्ता वस्तु क्रय',      type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
+  { id: '5113', name: 'Pesticides Purchase',        nameHi: 'कीटनाशक क्रय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
+  { id: '5114', name: 'Animal Feed Purchase',       nameHi: 'पशु आहार क्रय',            type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
+  { id: '5115', name: 'PDS / Ration Goods Purchase', nameHi: 'सार्वजनिक वितरण क्रय',    type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
+  { id: '5116', name: 'Govt Procurement Purchase',  nameHi: 'सरकारी खरीद क्रय',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
 ];
 
 export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAccount[]; changed: boolean; newlyAdded: LedgerAccount[] } {
