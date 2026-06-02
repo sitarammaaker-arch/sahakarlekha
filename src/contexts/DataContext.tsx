@@ -2026,9 +2026,47 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const drTotal   = totalOpeningStock + totalPurchases + totalDirectExp;
     const grossProfit = crTotal - drTotal;
 
+    // ── Audit C-7: activity-wise Trading breakdown (NCDC Annexure V) ─────────────
+    // ADDITIVE — does NOT change grossProfit / the combined totals above (P&L and
+    // Balance Sheet depend on them). Each commodity pairs its Sales head with its
+    // Purchase head; Gross Margin = Sales − Purchases (the closing-stock adjustment
+    // stays in the combined statement). Purchases still parked in the generic 5101,
+    // plus non-purchase direct expenses, surface under "Unallocated" so the user can
+    // see exactly which postings still need per-item activity routing.
+    const nbById = (id: string) => tb.find(b => b.account.id === id)?.netBalance ?? 0;
+    const ACTIVITY_DEFS: { key: string; keyHi: string; salesId: string; purchaseId: string }[] = [
+      { key: 'Fertilizer',        keyHi: 'उर्वरक',            salesId: '4101', purchaseId: '5110' },
+      { key: 'Seed',              keyHi: 'बीज',               salesId: '4102', purchaseId: '5111' },
+      { key: 'Consumer Goods',    keyHi: 'उपभोक्ता वस्तु',    salesId: '4103', purchaseId: '5112' },
+      { key: 'Pesticides',        keyHi: 'कीटनाशक',           salesId: '4104', purchaseId: '5113' },
+      { key: 'Animal Feed',       keyHi: 'पशु आहार',          salesId: '4105', purchaseId: '5114' },
+      { key: 'Agri Implements',   keyHi: 'कृषि यंत्र',        salesId: '4106', purchaseId: '' },
+      { key: 'PDS / Ration',      keyHi: 'सार्वजनिक वितरण',   salesId: '4107', purchaseId: '5115' },
+      { key: 'Govt Procurement',  keyHi: 'सरकारी खरीद',       salesId: '4108', purchaseId: '5116' },
+    ];
+    const activityPurchaseIds = new Set(ACTIVITY_DEFS.map(a => a.purchaseId).filter(Boolean));
+    const activitySalesIds = new Set(ACTIVITY_DEFS.map(a => a.salesId));
+    const activities = ACTIVITY_DEFS.map(a => {
+      const sales = -nbById(a.salesId);                       // credit-nature → positive
+      const purchases = a.purchaseId ? nbById(a.purchaseId) : 0; // debit-nature → positive
+      const hasRoutedPurchase = Math.abs(purchases) > 0.005;
+      return { key: a.key, keyHi: a.keyHi, salesId: a.salesId, purchaseId: a.purchaseId,
+        sales, purchases, hasRoutedPurchase, grossMargin: sales - purchases };
+    }).filter(a => Math.abs(a.sales) > 0.005 || a.hasRoutedPurchase);
+
+    // Unallocated bucket: generic 5101 purchases + non-purchase direct expenses +
+    // any 4100 sales not mapped to a defined activity.
+    const unallocated = {
+      purchases: nbById('5101'),
+      directExp: tb.filter(b => b.account.parentId === '5100' && b.account.id !== '5101' && !activityPurchaseIds.has(b.account.id))
+        .reduce((s, b) => s + b.netBalance, 0),
+      otherSales: tb.filter(b => b.account.parentId === '4100' && !activitySalesIds.has(b.account.id))
+        .reduce((s, b) => s + (-b.netBalance), 0),
+    };
+
     return { salesItems, closingStockItems, openingStockItems, purchaseItems, directExpItems,
       totalSales, totalClosingStock, totalOpeningStock, totalPurchases, totalDirectExp, grossProfit,
-      physicalClosingStock, closingStockPosted };
+      physicalClosingStock, closingStockPosted, activities, unallocated };
   }, [getTrialBalance, stockItems, stockMovements, activeVouchers, society.financialYear]);
 
   const postClosingStock = useCallback((fy?: string): { posted: boolean; amount: number; alreadyPosted: boolean } => {

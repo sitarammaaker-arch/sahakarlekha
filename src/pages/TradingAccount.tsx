@@ -25,7 +25,13 @@ const TradingAccount: React.FC = () => {
     totalSales, totalClosingStock,
     totalOpeningStock, totalPurchases, totalDirectExp,
     grossProfit, physicalClosingStock, closingStockPosted,
+    activities, unallocated,
   } = getTradingAccount();
+
+  const hasUnallocated =
+    Math.abs(unallocated.purchases) > 0.005 ||
+    Math.abs(unallocated.directExp) > 0.005 ||
+    Math.abs(unallocated.otherSales) > 0.005;
 
   const handlePostClosingStock = () => {
     const result = postClosingStock();
@@ -353,6 +359,63 @@ const TradingAccount: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Audit C-7: Activity-wise Trading (NCDC Annexure V) */}
+      {(activities.length > 0 || hasUnallocated) && (
+        <Card className="shadow-card">
+          <CardHeader className="border-b">
+            <CardTitle className="text-lg">{hi ? 'गतिविधि-वार व्यापार खाता (NCDC अनुलग्नक V)' : 'Activity-wise Trading Account (NCDC Annexure V)'}</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              {hi
+                ? 'सकल मार्जिन = बिक्री − क्रय (समापन-स्टॉक समायोजन संयुक्त खाते में रहता है)। जिस गतिविधि की खरीद किसी खाते से नहीं जुड़ी, वह नीचे "अनावंटित" में दिखती है।'
+                : 'Gross Margin = Sales − Purchases (closing-stock adjustment stays in the combined statement). Purchases not routed to an activity head appear under "Unallocated" below.'}
+            </p>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <div className="rounded-lg border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="font-semibold">{hi ? 'गतिविधि' : 'Activity'}</TableHead>
+                    <TableHead className="font-semibold text-right">{hi ? 'बिक्री' : 'Sales'}</TableHead>
+                    <TableHead className="font-semibold text-right">{hi ? 'क्रय' : 'Purchases'}</TableHead>
+                    <TableHead className="font-semibold text-right">{hi ? 'सकल मार्जिन' : 'Gross Margin'}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activities.map(a => (
+                    <TableRow key={a.salesId} className="hover:bg-muted/30">
+                      <TableCell className="font-medium">{hi ? a.keyHi : a.key}</TableCell>
+                      <TableCell className="text-right">{a.sales > 0 ? fmt(a.sales) : '—'}</TableCell>
+                      <TableCell className="text-right">{a.hasRoutedPurchase ? fmt(a.purchases) : '—'}</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {a.hasRoutedPurchase
+                          ? <span className={a.grossMargin >= 0 ? 'text-success' : 'text-destructive'}>{fmt(a.grossMargin)}</span>
+                          : <span className="text-[11px] text-amber-600">{hi ? 'खरीद अनावंटित' : 'purchases unrouted'}</span>}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {hasUnallocated && (
+                    <TableRow className="bg-amber-50 dark:bg-amber-900/20">
+                      <TableCell className="font-medium text-amber-800 dark:text-amber-300">
+                        {hi ? 'अनावंटित (सामान्य 5101 + प्रत्यक्ष व्यय)' : 'Unallocated (generic 5101 + direct exp.)'}
+                      </TableCell>
+                      <TableCell className="text-right">{Math.abs(unallocated.otherSales) > 0.005 ? fmt(unallocated.otherSales) : '—'}</TableCell>
+                      <TableCell className="text-right">{fmt(unallocated.purchases + unallocated.directExp)}</TableCell>
+                      <TableCell className="text-right text-[11px] text-amber-600">{hi ? 'items को खाता दें' : 'route items'}</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              {hi
+                ? '➡ सही per-activity लाभ के लिए Inventory में हर वस्तु का "Purchase A/c" उसकी गतिविधि पर सेट करें — फिर नई खरीद उसी खाते में जाएगी।'
+                : '➡ For accurate per-activity profit, set each item\'s "Purchase A/c" to its activity in Inventory — new purchases then post to that head.'}
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

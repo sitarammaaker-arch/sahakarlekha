@@ -261,6 +261,11 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
           ))}
         </select>
       </div>
+      <p className="sm:col-span-2 text-[11px] text-blue-800/80 dark:text-blue-200/80">
+        {hi
+          ? 'गतिविधि-वार व्यापार खाता (NCDC अनुलग्नक V) के लिए हर वस्तु को उसके खाते से जोड़ें — जैसे "गेहूँ" → बिक्री 4103 / खरीद 5112। न जोड़ने पर खरीद सामान्य 5101 में जाएगी और उस वस्तु का अलग सकल लाभ नहीं बनेगा।'
+          : 'For activity-wise Trading Accounts (NCDC Annexure V), route each item to its own ledger — e.g. "Wheat" → Sales 4103 / Purchase 5112. Unrouted purchases fall into the generic 5101 and that activity gets no separate Gross Profit.'}
+      </p>
     </div>
 
     <div className="space-y-2">
