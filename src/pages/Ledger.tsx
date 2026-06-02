@@ -10,10 +10,12 @@ import { Badge } from '@/components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
-import { BookOpen, Download, Calendar, FileText, FileSpreadsheet } from 'lucide-react';
+  Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem,
+} from '@/components/ui/command';
+import { BookOpen, Download, Calendar, FileText, FileSpreadsheet, Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { generateLedgerPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
@@ -37,6 +39,7 @@ const Ledger: React.FC = () => {
   const urlAccountId = searchParams.get('account');
 
   const [selectedAccountId, setSelectedAccountId] = useState<string>(urlAccountId || (accounts[0]?.id ?? ''));
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
@@ -217,23 +220,48 @@ const Ledger: React.FC = () => {
               <label className="text-sm font-medium">
                 {language === 'hi' ? 'खाता चुनें' : 'Select Account'}
               </label>
-              <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {grouped.map(g => g.items.length > 0 && (
-                    <React.Fragment key={g.label}>
-                      <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase">
-                        {g.label}
-                      </div>
-                      {g.items.map(a => (
-                        <SelectItem key={a.id} value={a.id}>
-                          {language === 'hi' ? a.nameHi : a.name}
-                        </SelectItem>
+              {/* Searchable account picker — type the name (Hindi/English) or the
+                  account code to filter, instead of scrolling the whole list. */}
+              <Popover open={accountPickerOpen} onOpenChange={setAccountPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={accountPickerOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className="truncate">
+                      {selectedAccount
+                        ? `${language === 'hi' ? selectedAccount.nameHi : selectedAccount.name} (${selectedAccount.id})`
+                        : (language === 'hi' ? 'खाता चुनें' : 'Select account')}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command filter={(value, search) => value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0}>
+                    <CommandInput placeholder={language === 'hi' ? 'खाता खोजें (नाम या कोड)…' : 'Search account (name or code)…'} />
+                    <CommandList>
+                      <CommandEmpty>{language === 'hi' ? 'कोई खाता नहीं मिला' : 'No account found'}</CommandEmpty>
+                      {grouped.map(g => g.items.length > 0 && (
+                        <CommandGroup key={g.label} heading={g.label}>
+                          {g.items.map(a => (
+                            <CommandItem
+                              key={a.id}
+                              value={`${a.name} ${a.nameHi} ${a.id}`}
+                              onSelect={() => { setSelectedAccountId(a.id); setAccountPickerOpen(false); }}
+                            >
+                              <Check className={cn('mr-2 h-4 w-4', selectedAccountId === a.id ? 'opacity-100' : 'opacity-0')} />
+                              <span className="flex-1 truncate">{language === 'hi' ? a.nameHi : a.name}</span>
+                              <span className="ml-2 text-xs text-muted-foreground">{a.id}</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
                       ))}
-                    </React.Fragment>
-                  ))}
-                </SelectContent>
-              </Select>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">

@@ -60,7 +60,9 @@
       "Bash(xargs grep \"^import.*Voucher.*from\")",
       "Bash(xargs grep -l \"export.*Voucher\")",
       "PowerShell($errs = npx tsc --noEmit 2>&1 | Select-String -Pattern \"error TS\"; \"Total TS errors: $\\($errs.Count\\)\")",
-      "PowerShell(git add -A)"
+      "PowerShell(git add -A)",
+      "Bash(popover)",
+      "Bash(combobox\")"
     ]
   }
 }
