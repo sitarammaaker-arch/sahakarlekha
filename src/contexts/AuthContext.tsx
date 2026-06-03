@@ -226,18 +226,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Supabase unreachable — fall through
     }
 
-    // 3. Fallback: old plain-text password check (transition period — for users not yet in Supabase Auth)
+    // 3. Secure server-side verify via SECURITY DEFINER RPC (app_login).
+    //    Reliable bridge for users whose Supabase Auth (JWT) login is unavailable.
+    //    Works even under strict RLS — anon can EXECUTE the function but cannot
+    //    read society_users directly, and the password is verified server-side
+    //    (never exposed). Returns the user record only on a correct password.
     try {
       const { data, error } = await supabase
-        .from('society_users')
-        .select('id, name, email, role, society_id, is_active')
-        .eq('email', email)
-        .eq('password', password)
-        .eq('is_active', true)
+        .rpc('app_login', { p_email: email, p_password: password })
         .maybeSingle();
 
       if (!error && data) {
-        const u = buildUser(data);
+        const u = buildUser(data as { id: string; name: string; email: string; role: string; society_id: string });
         setUser(u);
         setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId });
         checkSuperAdmin(u.email).then(setIsSuperAdmin);
