@@ -1273,7 +1273,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = [...prev, newMember];
       return updated;
     });
-    supabase.from('members').upsert(withSoc(newMember)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('members').upsert(withSoc(newMember)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        setMembersState(prev => prev.filter(m => m.id !== newMember.id));   // RULE 1: roll back local state
+        toastRef.current({ title: 'सदस्य सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
     // Skip auto-vouchers for pending applications (created on approval)
     if (newMember.approvalStatus === 'pending') return newMember;
     // Auto-create Receipt vouchers for Share Capital and Admission Fee
@@ -1718,7 +1724,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const newLoan: Loan = { ...data, id: crypto.randomUUID(), loanNo, createdAt: new Date().toISOString() };
     loansRef.current = [...loansRef.current, newLoan];
     setLoansState(prev => { const updated = [...prev, newLoan]; return updated; });
-    supabase.from('loans').upsert(withSoc(newLoan)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('loans').upsert(withSoc(newLoan)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        loansRef.current = loansRef.current.filter(l => l.id !== newLoan.id);
+        setLoansState(prev => prev.filter(l => l.id !== newLoan.id));   // RULE 1: roll back
+        toastRef.current({ title: 'ऋण सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
 
     // M16: Create disbursement voucher so loan appears as an asset in Trial Balance / Balance Sheet.
     // Dr: Loans & Advances (3304) for principal; Cr: Cash (default) — user can re-class later from Vouchers.
@@ -2296,7 +2309,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const movement: StockMovement = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     stockMovementsRef.current = [...stockMovementsRef.current, movement];
     setStockMovementsState(prev => [...prev, movement]);
-    supabase.from('stock_movements').upsert(withSoc(movement)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('stock_movements').upsert(withSoc(movement)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        stockMovementsRef.current = stockMovementsRef.current.filter(m => m.id !== movement.id);
+        setStockMovementsState(prev => prev.filter(m => m.id !== movement.id));   // RULE 1: roll back
+        toastRef.current({ title: 'स्टॉक मूवमेंट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
 
     // Recompute currentStock from openingStock + ALL movements (authoritative — prevents drift
     // from past partial-sync failures or manual adjustments). Same formula as Inventory page.
