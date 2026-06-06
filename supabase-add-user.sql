@@ -62,16 +62,23 @@ begin
   end if;
 
   -- 3. Create the Supabase Auth login (CONFIRMED) + email identity.
+  --    NOTE: the *_token / email_change / phone_change columns MUST be '' (empty
+  --    string), NOT NULL — gotrue's sign-in scans them as strings and throws on
+  --    NULL. This is exactly why a half-built (SQL) auth row logs in only via the
+  --    RPC fallback (no JWT) and then sees no data under RLS.
   v_uid := gen_random_uuid();
   insert into auth.users (
     instance_id, id, aud, role, email, encrypted_password,
-    email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
+    email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data,
+    confirmation_token, recovery_token, email_change, email_change_token_new,
+    email_change_token_current, phone_change, phone_change_token, reauthentication_token
   ) values (
     '00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated',
     v_email, crypt(p_password, gen_salt('bf')),
     now(), now(), now(),
     jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
-    jsonb_build_object('name', coalesce(p_name, ''))
+    jsonb_build_object('name', coalesce(p_name, '')),
+    '', '', '', '', '', '', '', ''
   );
   insert into auth.identities (
     id, user_id, provider_id, identity_data, provider, created_at, updated_at
