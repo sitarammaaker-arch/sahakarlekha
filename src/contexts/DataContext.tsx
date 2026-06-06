@@ -2406,7 +2406,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
     return sale;
-  }, [society.financialYear, customers, addVoucher]);
+  }, [society.financialYear, customers, accounts, addVoucher, stockItems]);
 
   const deleteSale = useCallback((id: string) => {
     if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
@@ -2597,7 +2597,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     console.info(`[AUDIT-EDIT] Sale id=${id} edited by ${data.createdBy || 'unknown'} at ${now}`);
     return updated;
-  }, [society.fyLocked, customers, accounts, addVoucher]);
+  }, [society.fyLocked, customers, accounts, addVoucher, stockItems]);
 
   // ── Purchases ──────────────────────────────────────────────────────────────
   const addPurchase = useCallback((data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>): Purchase => {
@@ -2716,7 +2716,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
     return purchase;
-  }, [society.financialYear, suppliers, addVoucher]);
+  }, [society.financialYear, suppliers, accounts, addVoucher, stockItems]);
 
   const deletePurchase = useCallback((id: string) => {
     if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
@@ -2920,7 +2920,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     console.info(`[AUDIT-EDIT] Purchase id=${id} edited by ${data.createdBy || 'unknown'} at ${now}`);
     return updated;
-  }, [society.fyLocked, suppliers, accounts, addVoucher]);
+  }, [society.fyLocked, suppliers, accounts, addVoucher, stockItems]);
 
   // ── Employees ──────────────────────────────────────────────────────────────
   const addEmployee = useCallback((data: Omit<Employee, 'id' | 'empNo'>): Employee => {
