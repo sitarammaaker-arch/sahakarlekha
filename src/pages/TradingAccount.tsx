@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ShoppingCart, Download, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateTradingAccountPDF } from '@/lib/pdf';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const TradingAccount: React.FC = () => {
   const { language } = useLanguage();
@@ -35,6 +36,23 @@ const TradingAccount: React.FC = () => {
   const crTotal    = totalSales + totalClosingStock + (isProfit ? 0 : Math.abs(grossProfit));
   const drTotal    = totalOpeningStock + totalPurchases + totalDirectExp + (isProfit ? grossProfit : 0);
   const grandTotal = Math.max(crTotal, drTotal);
+
+  // Excel / CSV export — mirrors the on-screen Dr/Cr statement and grand total.
+  const exportHeaders = ['Side', 'Particulars', 'Amount (Rs.)'];
+  const exportRows = (): (string | number)[][] => {
+    const r: (string | number)[][] = [];
+    openingStockItems.forEach(i => r.push(['Dr', `Opening Stock — ${i.name}`, i.amount]));
+    purchaseItems.forEach(i => r.push(['Dr', i.name, i.amount]));
+    directExpItems.forEach(i => r.push(['Dr', i.name, i.amount]));
+    if (isProfit) r.push(['Dr', 'Gross Profit c/d', grossProfit]);
+    salesItems.forEach(i => r.push(['Cr', i.name, i.amount]));
+    closingStockItems.forEach(i => r.push(['Cr', `Closing Stock — ${i.name}`, i.amount]));
+    if (!isProfit) r.push(['Cr', 'Gross Loss c/d', Math.abs(grossProfit)]);
+    r.push(['', 'GRAND TOTAL', grandTotal]);
+    return r;
+  };
+  const handleCSV = () => downloadCSV(exportHeaders, exportRows(), `trading-account-${society.financialYear}`);
+  const handleExcel = () => downloadExcelSingle(exportHeaders, exportRows(), `trading-account-${society.financialYear}`, 'Trading Account');
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -70,6 +88,12 @@ const TradingAccount: React.FC = () => {
             )}
           >
             <Download className="h-4 w-4" />PDF
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
+            <Download className="h-4 w-4" />Excel
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
+            <Download className="h-4 w-4" />CSV
           </Button>
         </div>
       </div>
