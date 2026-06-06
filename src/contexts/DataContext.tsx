@@ -2601,6 +2601,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ── Purchases ──────────────────────────────────────────────────────────────
   const addPurchase = useCallback((data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>): Purchase => {
+    // Enforce per-item Purchase A/c (group): block posting if any STOCK item being
+    // purchased has no purchaseAccountId, so purchases never silently fall to '5101'.
+    const unmappedNames = data.items
+      .map(it => stockItems.find(s => s.id === it.itemId))
+      .filter((s): s is NonNullable<typeof s> => !!s && !s.purchaseAccountId)
+      .map(s => s.name);
+    if (unmappedNames.length > 0) {
+      throw new Error(
+        `इन वस्तुओं को पहले खरीद खाता (group) असाइन करें: ${unmappedNames.join(', ')} — फिर खरीद पोस्ट होगी। (Assign a Purchase A/c to: ${unmappedNames.join(', ')})`
+      );
+    }
+
     const fy = society.financialYear;
     const maxPurNum = purchasesRef.current.filter(p => p.purchaseNo?.includes(fy)).reduce((max, p) => {
       const m = p.purchaseNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
@@ -2754,6 +2766,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updatePurchase = useCallback((id: string, data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>): Purchase | null => {
     if (society.fyLocked) {
       toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' });
+      return null;
+    }
+    // Enforce per-item Purchase A/c (group) BEFORE mutating anything (no data loss).
+    const unmappedNames = data.items
+      .map(it => stockItems.find(s => s.id === it.itemId))
+      .filter((s): s is NonNullable<typeof s> => !!s && !s.purchaseAccountId)
+      .map(s => s.name);
+    if (unmappedNames.length > 0) {
+      toastRef.current({
+        title: 'खरीद खाता आवश्यक',
+        description: `इन वस्तुओं को पहले खरीद खाता (group) असाइन करें: ${unmappedNames.join(', ')}`,
+        variant: 'destructive',
+        duration: 10000,
+      });
       return null;
     }
     const original = purchasesRef.current.find(p => p.id === id);
