@@ -160,42 +160,31 @@ export default function UserManagement() {
         setUsers(updated);
         cacheUsers(updated);
       } else {
-        // Create new user
-        // First create in Supabase Auth (for password reset & email verification)
-        await supabase.auth.signUp({
-          email: form.email,
-          password: form.password,
-          options: { data: { name: form.name, society_id: societyId } },
-        }).then(({ error: authErr }) => {
-          if (authErr) console.warn('[UserMgmt] Auth signup warning:', authErr.message);
+        // Create new user — atomically creates a CONFIRMED Supabase Auth login
+        // (with identity) AND the society_users row, server-side via RPC. This
+        // never disrupts the admin's session and never leaves a user without a
+        // working JWT login (required for society-scoped RLS). Errors surface to
+        // the admin instead of being swallowed.
+        const { data: newSuId, error } = await supabase.rpc('app_add_society_user', {
+          p_email: form.email,
+          p_password: form.password,
+          p_name: form.name,
+          p_role: form.role,
+          p_society_id: societyId,
+          p_is_active: form.isActive,
         });
-
-        const newId = `usr_${Date.now()}`;
-        const { data, error } = await supabase
-          .from('society_users')
-          .insert({
-            id: newId,
-            name: form.name,
-            email: form.email,
-            password: form.password,
-            role: form.role,
-            is_active: form.isActive,
-            society_id: societyId,
-          })
-          .select()
-          .single();
 
         if (error) throw error;
 
         const newUser: AppUser = {
-          id: data?.id || newId,
+          id: (newSuId as string) || form.email,
           name: form.name,
           email: form.email,
           password: form.password,
           role: form.role,
           isActive: form.isActive,
           society_id: societyId,
-          createdAt: data?.created_at || new Date().toISOString(),
+          createdAt: new Date().toISOString(),
         };
         const updated = [...users, newUser];
         setUsers(updated);
