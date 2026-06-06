@@ -178,6 +178,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => { membersRef.current = members; }, [members]);
   const [accounts, setAccountsState] = useState<LedgerAccount[]>([]);
   const [society, setSocietyState] = useState<SocietySettings>(() => storage.getSociety());
+  const societyRef = useRef(society);
+  useEffect(() => { societyRef.current = society; }, [society]);
+  // FY-lock guard — reads the LATEST society via ref, so it is never stale even
+  // inside useCallbacks declared with empty deps. Returns true (and toasts) when locked.
+  const guardFYLocked = useCallback((): boolean => {
+    if (societyRef.current?.fyLocked) {
+      toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while the Financial Year is audit-locked. (वित्तीय वर्ष लॉक है)', variant: 'destructive' });
+      return true;
+    }
+    return false;
+  }, []);
   const [loans, setLoansState] = useState<Loan[]>([]);
   const loansRef = useRef<Loan[]>(loans);
   useEffect(() => { loansRef.current = loans; }, [loans]);
@@ -943,6 +954,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.financialYear, society.fyLocked, society.fyLockedBy, society.financialYearStart]);
 
   const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => {
+    if (guardFYLocked()) return;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
     // Capture edit audit snapshot — only track the fields that actually changed
@@ -998,7 +1010,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
 
@@ -1077,6 +1089,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const restoreVoucher = useCallback((id: string) => {
+    if (guardFYLocked()) return;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
     // H6: If parent record (purchase / sale) has already been hard-deleted, blocking restore prevents
@@ -1133,7 +1146,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const approveVoucher = useCallback((id: string, approvedBy: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
     const updated = { ...current, approvalStatus: 'approved' as const, approvedBy, approvedAt: new Date().toISOString() };
@@ -1145,7 +1158,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.fyLocked]);
 
   const rejectVoucher = useCallback((id: string, rejectedBy: string, reason: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
     const updated = { ...current, approvalStatus: 'rejected' as const, approvalRemarks: reason, approvedBy: rejectedBy, approvedAt: new Date().toISOString() };
@@ -1178,7 +1191,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteAuditObjection = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     setAuditObjectionsState(prev => { const updated = prev.filter(o => o.id !== id); return updated; });
     supabase.from('audit_objections').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     console.info(`[AUDIT-DELETE] AuditObjection id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
@@ -1203,7 +1216,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteRecoverable = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     setRecoverablesState(prev => prev.filter(r => r.id !== id));
     supabase.from('recoverables').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
   }, []);
@@ -1227,7 +1240,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteKachiAaratEntry = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     setKachiAaratEntriesState(prev => prev.filter(e => e.id !== id));
     supabase.from('kachi_aarat_entries').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
   }, []);
@@ -1249,7 +1262,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteP7Entry = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     setP7EntriesState(prev => prev.filter(e => e.id !== id));
     supabase.from('p7_entries').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
   }, []);
@@ -1332,7 +1345,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteMember = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     setMembersState(prev => {
       const updated = prev.filter(m => m.id !== id);
       return updated;
@@ -1392,7 +1405,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteAccount = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
 
     // H11: Block deletion of built-in system accounts (CASH, BANK, 5101, 3403, etc.)
     const account = accounts.find(a => a.id === id);
@@ -1430,6 +1443,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Merge duplicate accounts: move all voucher references from removeId → keepId, then delete removeId
   const mergeAccounts = useCallback((keepId: string, removeId: string): number => {
+    if (guardFYLocked()) return 0;
     // Track which voucher IDs we actually changed BEFORE we overwrite vouchersRef
     const changedIds = new Set<string>();
     const updated = vouchersRef.current.map(v => {
@@ -1470,6 +1484,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const resetAccounts = useCallback((templateAccounts: LedgerAccount[]) => {
+    if (guardFYLocked()) return;
     setAccountsState(templateAccounts);
     const sid = societyIdRef.current;
     supabase.from('accounts').delete().eq('society_id', sid).then(() => {
@@ -1746,7 +1761,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteLoan = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     setLoansState(prev => { const updated = prev.filter(l => l.id !== id); return updated; });
     supabase.from('loans').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     console.info(`[AUDIT-DELETE] Loan id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
@@ -1774,7 +1789,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteAsset = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     setAssetsState(prev => { const updated = prev.filter(a => a.id !== id); return updated; });
     supabase.from('assets').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     console.info(`[AUDIT-DELETE] Asset id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
@@ -1980,12 +1995,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Check if the closing-stock journal has been posted for this FY.
     // Audit C-8: the NEW journal credits the dedicated 5150 (Purchases stay gross);
     // LEGACY journals credited 5101 (Purchases reduced — needs gross-up below).
-    const closingViaLegacy = activeVouchers.some(v =>
+    // Detect the posting against the SAME date window as the balances (effDate),
+    // else an interim Balance Sheet before the posting date would drop closing stock.
+    const closingScopedVouchers = activeVouchers.filter(v => v.date <= effDate);
+    const closingViaLegacy = closingScopedVouchers.some(v =>
       getVoucherLines(v).some(l => l.accountId === '3403' && l.type === 'Dr') &&
       getVoucherLines(v).some(l => l.accountId === '5101' && l.type === 'Cr') &&
       v.narration.includes(fy)
     );
-    const closingViaDedicated = activeVouchers.some(v =>
+    const closingViaDedicated = closingScopedVouchers.some(v =>
       getVoucherLines(v).some(l => l.accountId === '3403' && l.type === 'Dr') &&
       getVoucherLines(v).some(l => l.accountId === '5150' && l.type === 'Cr') &&
       v.narration.includes(fy)
@@ -2238,7 +2256,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteStockItem = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     const today = new Date().toISOString().split('T')[0];
     setStockItemsState(prev => {
       const item = prev.find(i => i.id === id);
@@ -2409,7 +2427,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.financialYear, customers, accounts, addVoucher, stockItems]);
 
   const deleteSale = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     setSalesState(prev => {
       const sale = prev.find(s => s.id === id);
       if (sale) {
@@ -2453,10 +2471,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateSale = useCallback((id: string, data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>): Sale | null => {
-    if (society.fyLocked) {
-      toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' });
-      return null;
-    }
+    if (guardFYLocked()) return null;
     // Enforce per-item Sales A/c (group) BEFORE mutating anything (no data loss).
     const unmappedNames = data.items
       .map(it => stockItems.find(s => s.id === it.itemId))
@@ -2719,7 +2734,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.financialYear, suppliers, accounts, addVoucher, stockItems]);
 
   const deletePurchase = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     setPurchasesState(prev => {
       const purchase = prev.find(p => p.id === id);
       if (purchase) {
@@ -2764,10 +2779,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updatePurchase = useCallback((id: string, data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>): Purchase | null => {
-    if (society.fyLocked) {
-      toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' });
-      return null;
-    }
+    if (guardFYLocked()) return null;
     // Enforce per-item Purchase A/c (group) BEFORE mutating anything (no data loss).
     const unmappedNames = data.items
       .map(it => stockItems.find(s => s.id === it.itemId))
@@ -2945,7 +2957,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteEmployee = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     setEmployeesState(prev => { const updated = prev.filter(e => e.id !== id); return updated; });
     supabase.from('employees').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     console.info(`[AUDIT-DELETE] Employee id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
@@ -3041,7 +3053,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [employees, accounts, addVoucher]);
 
   const deleteSalaryRecord = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     // H8: Cascade-cancel the linked payment voucher (if any) so accounting reverses
     const record = salaryRecordsRef.current.find(r => r.id === id);
     if (record?.voucherId) {
@@ -3185,7 +3197,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteSupplier = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     const sup = suppliers.find(s => s.id === id);
     if (!sup) return;
     // H9: Block if supplier has live purchases — otherwise sub-ledger reconciliation breaks
@@ -3342,7 +3354,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteCustomer = useCallback((id: string) => {
-    if (society.fyLocked) { toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' }); return; }
+    if (guardFYLocked()) return;
     const cus = customers.find(c => c.id === id);
     if (!cus) return;
     // H9: Block if customer has live sales
