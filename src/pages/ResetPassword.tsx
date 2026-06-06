@@ -20,6 +20,7 @@ const ResetPassword: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [syncWarning, setSyncWarning] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState(false);
 
@@ -60,14 +61,29 @@ const ResetPassword: React.FC = () => {
 
     setIsLoading(true);
     try {
+      // 1. Update the Supabase Auth (JWT) password — the primary login path.
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) {
         setError(hi ? 'पासवर्ड अपडेट नहीं हो सका। कृपया पुनः प्रयास करें।' : 'Could not update password. Please try again.');
-      } else {
-        setSuccess(true);
-        // Auto-redirect to login after 3 seconds
-        setTimeout(() => navigate('/login'), 3000);
+        return;
       }
+
+      // 2. CRITICAL: also sync the app's RPC-login store (society_users.password).
+      //    Without this, the app_login() fallback still checks the OLD password,
+      //    so a user whose JWT path is unavailable would be locked out with their
+      //    new password. The email is read server-side from the recovery-session
+      //    JWT, so a user can only ever change THEIR OWN password.
+      //    Best-effort: the Auth password is already changed (primary path works),
+      //    so on sync failure we surface a gentle note but still let them proceed.
+      const { error: syncError } = await supabase.rpc('app_set_my_password', { p_password: password });
+      if (syncError) {
+        console.warn('[Reset] society_users password sync failed:', syncError.message);
+        setSyncWarning(true);
+      }
+
+      setSuccess(true);
+      // Auto-redirect to login after 3 seconds
+      setTimeout(() => navigate('/login'), 3000);
     } catch {
       setError(hi ? 'कोई त्रुटि हुई' : 'An error occurred');
     } finally {
@@ -118,6 +134,13 @@ const ResetPassword: React.FC = () => {
                 </div>
                 <p>{hi ? 'आपको कुछ ही क्षणों में लॉगिन पेज पर भेजा जाएगा।' : 'Redirecting you to login in a moment…'}</p>
               </div>
+              {syncWarning && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                  {hi
+                    ? 'नोट: नया पासवर्ड लागू हो गया है। अगर लॉगिन में कोई दिक्कत आए तो एक बार दोबारा कोशिश करें या एडमिन से संपर्क करें।'
+                    : 'Note: your new password is active. If login has any trouble, try once more or contact your admin.'}
+                </div>
+              )}
               <Button className="w-full" onClick={() => navigate('/login')}>
                 {hi ? 'लॉगिन पेज पर जाएं' : 'Go to Login'}
               </Button>
