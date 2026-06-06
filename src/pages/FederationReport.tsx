@@ -145,12 +145,26 @@ const FederationReport: React.FC = () => {
   // ── Section 7: Profit & Loss Appropriation ──────────────────────────────────
   const plData = useMemo(() => {
     const { netProfit } = getProfitLoss();
-    const statutoryReserve = netProfit > 0 ? netProfit * 0.25 : 0;
-    const educationFund = netProfit > 0 ? netProfit * 0.01 : 0;
-    const dividendFund = netProfit > 0 ? netProfit * 0.15 : 0;
-    const balance = netProfit - statutoryReserve - educationFund - dividendFund;
-    return { netProfit, statutoryReserve, educationFund, dividendFund, balance };
-  }, [getProfitLoss]);
+    const fy = society.financialYear;
+    // ACTUAL posted appropriations this FY (Dr 1208 / Cr <fund>) — not assumed %.
+    const postedTo = (fundId: string) =>
+      vouchers.filter(v => !v.isDeleted && v.narration.includes(fy)).reduce((sum, v) => {
+        const lines = getVoucherLines(v);
+        if (!lines.some(l => l.accountId === '1208' && l.type === 'Dr')) return sum;
+        return sum + lines.filter(l => l.accountId === fundId && l.type === 'Cr').reduce((s, l) => s + l.amount, 0);
+      }, 0);
+    const totalAppropriated = vouchers.filter(v => !v.isDeleted && v.narration.includes(fy)).reduce((sum, v) => {
+      const lines = getVoucherLines(v);
+      if (!lines.some(l => l.accountId === '1208' && l.type === 'Dr')) return sum;
+      return sum + lines.filter(l => l.type === 'Cr' && l.accountId !== '1208').reduce((s, l) => s + l.amount, 0);
+    }, 0);
+    const statutoryReserve = postedTo('1201');
+    const educationFund = postedTo('1203');
+    const dividendFund = postedTo('1211');
+    const otherAppropriations = Math.max(0, totalAppropriated - statutoryReserve - educationFund - dividendFund);
+    const balance = netProfit - totalAppropriated;
+    return { netProfit, statutoryReserve, educationFund, dividendFund, otherAppropriations, balance };
+  }, [getProfitLoss, vouchers, society.financialYear]);
 
   // ── CSV / Excel Export ───────────────────────────────────────────────────────
   const fedHeaders = ['Section', 'Particulars', 'Value'];
@@ -187,9 +201,10 @@ const FederationReport: React.FC = () => {
     ['6. Working Capital', 'Total Working Capital (₹)', fmt(wcData.total)],
     // Section 7
     ['7. P&L Appropriation', 'Net Profit / (Loss) (₹)', fmt(plData.netProfit)],
-    ['7. P&L Appropriation', 'Statutory Reserve @ 25% (₹)', fmt(plData.statutoryReserve)],
-    ['7. P&L Appropriation', 'Education Fund @ 1% (₹)', fmt(plData.educationFund)],
-    ['7. P&L Appropriation', 'Dividend Fund @ 15% (₹)', fmt(plData.dividendFund)],
+    ['7. P&L Appropriation', 'Statutory Reserve Fund (₹)', fmt(plData.statutoryReserve)],
+    ['7. P&L Appropriation', 'Education Fund (₹)', fmt(plData.educationFund)],
+    ['7. P&L Appropriation', 'Dividend (₹)', fmt(plData.dividendFund)],
+    ['7. P&L Appropriation', 'Other Fund Appropriations (₹)', fmt(plData.otherAppropriations)],
     ['7. P&L Appropriation', 'Balance carried forward (₹)', fmt(plData.balance)],
     // Section 8
     ['8. Audit Status', 'Audit Completion Date', auditDate || '(Pending)'],
@@ -336,9 +351,10 @@ const FederationReport: React.FC = () => {
       head: [['Particulars', 'Amount (Rs.)']],
       body: [
         ['Net Profit / (Loss)', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(plData.netProfit)],
-        ['Statutory Reserve @ 25%', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(plData.statutoryReserve)],
-        ['Education Fund @ 1%', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(plData.educationFund)],
-        ['Dividend Fund @ 15%', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(plData.dividendFund)],
+        ['Statutory Reserve Fund', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(plData.statutoryReserve)],
+        ['Education Fund', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(plData.educationFund)],
+        ['Dividend', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(plData.dividendFund)],
+        ['Other Fund Appropriations', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(plData.otherAppropriations)],
         ['Balance carried forward', 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(plData.balance)],
       ],
       styles: { fontSize: 8 },
@@ -583,9 +599,10 @@ const FederationReport: React.FC = () => {
               </thead>
               <tbody>
                 <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'शुद्ध लाभ / (हानि)' : 'Net Profit / (Loss)'}</td><td className="border px-3 py-2 text-right font-semibold">{fmt(plData.netProfit)}</td></tr>
-                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'वैधानिक संचय @ 25%' : 'Statutory Reserve @ 25%'}</td><td className="border px-3 py-2 text-right">{fmt(plData.statutoryReserve)}</td></tr>
-                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'शिक्षा निधि @ 1%' : 'Education Fund @ 1%'}</td><td className="border px-3 py-2 text-right">{fmt(plData.educationFund)}</td></tr>
-                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'लाभांश निधि @ 15%' : 'Dividend Fund @ 15%'}</td><td className="border px-3 py-2 text-right">{fmt(plData.dividendFund)}</td></tr>
+                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'वैधानिक संचय निधि' : 'Statutory Reserve Fund'}</td><td className="border px-3 py-2 text-right">{fmt(plData.statutoryReserve)}</td></tr>
+                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'शिक्षा निधि' : 'Education Fund'}</td><td className="border px-3 py-2 text-right">{fmt(plData.educationFund)}</td></tr>
+                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'लाभांश' : 'Dividend'}</td><td className="border px-3 py-2 text-right">{fmt(plData.dividendFund)}</td></tr>
+                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'अन्य निधि आवंटन' : 'Other Fund Appropriations'}</td><td className="border px-3 py-2 text-right">{fmt(plData.otherAppropriations)}</td></tr>
                 <tr className="font-bold bg-muted"><td className="border px-3 py-2">{hi ? 'शेष राशि (आगे ले जाने हेतु)' : 'Balance carried forward'}</td><td className="border px-3 py-2 text-right">{fmt(plData.balance)}</td></tr>
               </tbody>
             </table>

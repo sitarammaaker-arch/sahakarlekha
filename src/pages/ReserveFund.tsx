@@ -21,15 +21,16 @@ import { useToast } from '@/hooks/use-toast';
 const fmt = (amount: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
-// Account IDs
-const ACC_NET_SURPLUS   = '1208'; // Net Surplus / (Deficit) — Dr when appropriating
-const ACC_RESERVE_FUND  = '1201'; // Statutory Reserve Fund  — Cr
-const ACC_EDUCATION_FUND = '1203'; // Education Fund          — Cr
+// Net Surplus / (Deficit) — Dr when appropriating to any fund (Cr).
+const ACC_NET_SURPLUS = '1208';
+const RESERVES_GROUP  = '1200'; // parent group "Reserves & Surplus"
 
-// Suggested default rates (editable — appropriation is optional). A society may
+// Suggested default rates (editable — appropriation is OPTIONAL). A society may
 // set any percentage or a flat amount per fund, or skip a fund entirely.
-const DEFAULT_RESERVE_PCT = 25;
-const DEFAULT_EDUCATION_PCT = 1;
+const DEFAULT_RESERVE_PCT = 25;   // Reserve Fund 1201
+const DEFAULT_EDUCATION_PCT = 1;  // Education Fund 1203
+
+type Mode = 'pct' | 'amt';
 
 const ReserveFund: React.FC = () => {
   const { language } = useLanguage();
@@ -43,49 +44,59 @@ const ReserveFund: React.FC = () => {
 
   const { netProfit } = useMemo(() => getProfitLoss(), [getProfitLoss]);
 
-  // ── Appropriation is OPTIONAL & fully editable ──────────────────────────────
-  // Each fund: choose a % (of net surplus) OR a flat ₹ amount. Defaults are the
-  // common statutory rates, but any value (incl. 0 = skip) is allowed.
-  const [reserveMode, setReserveMode]   = useState<'pct' | 'amt'>('pct');
-  const [reserveInput, setReserveInput] = useState(String(society.reserveFundPct ?? DEFAULT_RESERVE_PCT));
-  const [eduMode, setEduMode]           = useState<'pct' | 'amt'>('pct');
-  const [eduInput, setEduInput]         = useState(String(DEFAULT_EDUCATION_PCT));
+  // ── All appropriable funds = credit accounts under "Reserves & Surplus" ──────
+  // (excludes the Net Surplus source 1208 and the debit-side Dividend/Patronage).
+  const fundAccounts = useMemo(() =>
+    accounts
+      .filter(a => a.parentId === RESERVES_GROUP && !a.isGroup
+        && a.id !== ACC_NET_SURPLUS && a.openingBalanceType === 'credit')
+      .sort((a, b) => a.id.localeCompare(b.id)),
+    [accounts]
+  );
 
-  const calcAmt = (mode: 'pct' | 'amt', input: string) => {
-    const v = parseFloat(input) || 0;
+  const fundName = (a: { name: string; nameHi?: string }) => (hi && a.nameHi) ? a.nameHi : a.name;
+  const defaultRate = (id: string): string =>
+    id === '1201' ? String(society.reserveFundPct ?? DEFAULT_RESERVE_PCT)
+    : id === '1203' ? String(DEFAULT_EDUCATION_PCT)
+    : '0';
+
+  // ── Per-fund editable input (% of net surplus OR flat ₹). Optional, default 0 ─
+  const [fundInputs, setFundInputs] = useState<Record<string, { mode: Mode; value: string }>>({});
+  const getInput = (id: string) => fundInputs[id] ?? { mode: 'pct' as Mode, value: defaultRate(id) };
+  const setInput = (id: string, patch: Partial<{ mode: Mode; value: string }>) =>
+    setFundInputs(prev => ({ ...prev, [id]: { ...getInput(id), ...patch } }));
+
+  const inputAmount = (id: string) => {
+    const { mode, value } = getInput(id);
+    const v = parseFloat(value) || 0;
     const amt = mode === 'pct' ? (netProfit * v) / 100 : v;
     return Math.max(0, Math.round(amt * 100) / 100);
   };
-  const reserveAmount   = calcAmt(reserveMode, reserveInput);
-  const educationAmount = calcAmt(eduMode, eduInput);
-  const afterAppropriation = netProfit - reserveAmount - educationAmount;
 
-  // Check if already posted for this FY
-  const existingReserveVoucher = useMemo(() =>
-    vouchers.find(v =>
-      !v.isDeleted &&
-      getVoucherLines(v).some(l => l.accountId === ACC_NET_SURPLUS && l.type === 'Dr') &&
-      getVoucherLines(v).some(l => l.accountId === ACC_RESERVE_FUND && l.type === 'Cr') &&
-      v.narration.includes(fy)
-    ),
-    [vouchers, fy]
-  );
+  // ── Which funds are already posted for this FY (Dr 1208 / Cr fund) ───────────
+  const postedMap = useMemo(() => {
+    const m: Record<string, (typeof vouchers)[number] | undefined> = {};
+    fundAccounts.forEach(f => {
+      m[f.id] = vouchers.find(v =>
+        !v.isDeleted &&
+        getVoucherLines(v).some(l => l.accountId === ACC_NET_SURPLUS && l.type === 'Dr') &&
+        getVoucherLines(v).some(l => l.accountId === f.id && l.type === 'Cr') &&
+        v.narration.includes(fy)
+      );
+    });
+    return m;
+  }, [vouchers, fundAccounts, fy]);
 
-  const existingEduVoucher = useMemo(() =>
-    vouchers.find(v =>
-      !v.isDeleted &&
-      getVoucherLines(v).some(l => l.accountId === ACC_NET_SURPLUS && l.type === 'Dr') &&
-      getVoucherLines(v).some(l => l.accountId === ACC_EDUCATION_FUND && l.type === 'Cr') &&
-      v.narration.includes(fy)
-    ),
-    [vouchers, fy]
-  );
+  const effectiveAmount = (id: string) => postedMap[id]?.amount ?? inputAmount(id);
 
-  const reserveAlreadyPosted  = !!existingReserveVoucher;
-  const educationAlreadyPosted = !!existingEduVoucher;
-  const allPosted = reserveAlreadyPosted && educationAlreadyPosted;
+  const totalAppropriated = fundAccounts.reduce((s, f) => s + effectiveAmount(f.id), 0);
+  const afterAppropriation = netProfit - totalAppropriated;
 
-  // Current fund balances
+  const pendingFunds = fundAccounts.filter(f => !postedMap[f.id] && inputAmount(f.id) > 0);
+  const canPost = netProfit > 0 && pendingFunds.length > 0;
+  const postedVouchers = fundAccounts.map(f => postedMap[f.id]).filter(Boolean) as (typeof vouchers)[number][];
+
+  // ── Current ledger balance of any account ────────────────────────────────────
   const getBalance = (id: string) => {
     const acc = accounts.find(a => a.id === id);
     if (!acc) return 0;
@@ -100,43 +111,25 @@ const ReserveFund: React.FC = () => {
     return bal;
   };
 
-  const reserveFundBalance   = getBalance(ACC_RESERVE_FUND);
-  const educationFundBalance = getBalance(ACC_EDUCATION_FUND);
-  const netSurplusBalance    = getBalance(ACC_NET_SURPLUS);
-
   const handlePost = () => {
     const today = new Date().toISOString().split('T')[0];
     let posted = 0;
-
-    if (!reserveAlreadyPosted && reserveAmount > 0) {
+    pendingFunds.forEach(f => {
+      const { mode, value } = getInput(f.id);
       addVoucher({
         type: 'journal',
         date: today,
         debitAccountId: ACC_NET_SURPLUS,
-        creditAccountId: ACC_RESERVE_FUND,
-        amount: reserveAmount,
-        narration: `Reserve Fund Appropriation ${reserveMode === 'pct' ? `@ ${reserveInput}%` : '(fixed amount)'} — FY ${fy}`,
+        creditAccountId: f.id,
+        amount: inputAmount(f.id),
+        narration: `${f.name} Appropriation ${mode === 'pct' ? `@ ${value}%` : '(fixed amount)'} — FY ${fy}`,
         createdBy: user?.name ?? 'System',
       });
       posted++;
-    }
-
-    if (!educationAlreadyPosted && educationAmount > 0) {
-      addVoucher({
-        type: 'journal',
-        date: today,
-        debitAccountId: ACC_NET_SURPLUS,
-        creditAccountId: ACC_EDUCATION_FUND,
-        amount: educationAmount,
-        narration: `Education Fund Appropriation ${eduMode === 'pct' ? `@ ${eduInput}%` : '(fixed amount)'} — FY ${fy}`,
-        createdBy: user?.name ?? 'System',
-      });
-      posted++;
-    }
-
+    });
     setConfirmOpen(false);
     toast({
-      title: language === 'hi'
+      title: hi
         ? `${posted} जर्नल प्रविष्टियाँ सफलतापूर्वक पोस्ट की गईं`
         : `${posted} journal entries posted successfully`,
     });
@@ -151,35 +144,41 @@ const ReserveFund: React.FC = () => {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {language === 'hi' ? 'वैधानिक आवंटन (संचय निधि)' : 'Statutory Appropriation — Reserve Fund'}
+            {hi ? 'निधि आवंटन (अधिशेष से)' : 'Fund Appropriation (from Surplus)'}
           </h1>
-          <p className="text-sm text-gray-500">{society.name} · {language === 'hi' ? 'वित्तीय वर्ष' : 'FY'} {fy}</p>
+          <p className="text-sm text-gray-500">{society.name} · {hi ? 'वित्तीय वर्ष' : 'FY'} {fy}</p>
         </div>
-        {allPosted && (
+        {postedVouchers.length > 0 && pendingFunds.length === 0 && (
           <Badge className="ml-auto bg-green-100 text-green-800 border-green-300">
             <CheckCircle2 className="h-3 w-3 mr-1" />
-            {language === 'hi' ? 'इस वर्ष के लिए पोस्ट हो चुका है' : 'Posted for this FY'}
+            {hi ? 'इस वर्ष के लिए पोस्ट हो चुका है' : 'Posted for this FY'}
           </Badge>
         )}
       </div>
 
-      {/* Statutory info banner */}
+      {/* Info banner */}
       <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
         <Info className="h-4 w-4 mt-0.5 shrink-0" />
         <span>
           {hi
-            ? 'सुझाव: सामान्यतः शुद्ध लाभ का 25% संचय निधि व 1% शिक्षा निधि में डाला जाता है — पर यह वैकल्पिक है। नीचे आप हर निधि के लिए % या निश्चित राशि स्वयं चुन सकते हैं (0 करने पर वह निधि छूट जाएगी)।'
-            : 'Suggested: usually 25% of net surplus goes to Reserve Fund and 1% to Education Fund — but this is optional. Below you can set a % or a fixed ₹ amount per fund (set 0 to skip a fund).'}
+            ? 'निधि आवंटन पूरी तरह वैकल्पिक है। नीचे हर निधि के लिए शुद्ध लाभ का % या एक निश्चित ₹ राशि चुनें (0 रखने पर वह निधि छूट जाएगी)। सामान्य सुझाव: संचय निधि 25%, शिक्षा निधि 1% — पर आप कुछ भी चुन सकते हैं।'
+            : 'Fund appropriation is entirely optional. For each fund below, set a % of net surplus or a fixed ₹ amount (leave 0 to skip). Common suggestion: Reserve 25%, Education 1% — but you may choose anything.'}
         </span>
       </div>
 
-      {/* Net Surplus + Calculation */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* Net surplus zero/negative */}
+      {netProfit <= 0 && (
+        <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          {hi ? 'शुद्ध अधिशेष शून्य या ऋणात्मक है — आवंटन आवश्यक नहीं।' : 'Net surplus is zero or negative — no appropriation needed.'}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* ── Fund appropriation inputs ── */}
         <Card>
           <CardHeader className="py-3">
-            <CardTitle className="text-base">
-              {language === 'hi' ? 'अधिशेष गणना' : 'Surplus Calculation'}
-            </CardTitle>
+            <CardTitle className="text-base">{hi ? 'निधि आवंटन' : 'Fund Appropriation'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
@@ -188,55 +187,43 @@ const ReserveFund: React.FC = () => {
                 {fmt(netProfit)}
               </span>
             </div>
+
             <div className="border-t pt-2 space-y-2">
-              {/* Reserve Fund — editable % or ₹ (optional) */}
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1">
-                  {hi ? 'संचय निधि' : 'Reserve Fund'} <span className="text-xs text-gray-400">(1201)</span>
-                  {reserveAlreadyPosted && <CheckCircle2 className="h-3 w-3 text-green-600" />}
-                </span>
-                {reserveAlreadyPosted ? (
-                  <span className="text-orange-600 font-medium">{fmt(reserveAmount)}</span>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <Input type="number" min="0" step="0.5" value={reserveInput}
-                      onChange={e => setReserveInput(e.target.value)}
-                      className="h-8 w-20 text-right" disabled={netProfit <= 0} />
-                    <select value={reserveMode}
-                      onChange={e => setReserveMode(e.target.value as 'pct' | 'amt')}
-                      className="h-8 rounded-md border border-input bg-background px-1 text-sm"
-                      disabled={netProfit <= 0}>
-                      <option value="pct">%</option>
-                      <option value="amt">₹</option>
-                    </select>
-                    <span className="w-28 text-right text-orange-600 font-medium">{fmt(reserveAmount)}</span>
+              {fundAccounts.map(f => {
+                const posted = postedMap[f.id];
+                const inp = getInput(f.id);
+                return (
+                  <div key={f.id} className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1 min-w-0">
+                      <span className="truncate">{fundName(f)}</span>
+                      <span className="text-xs text-gray-400 shrink-0">({f.id})</span>
+                      {posted && <CheckCircle2 className="h-3 w-3 text-green-600 shrink-0" />}
+                    </span>
+                    {posted ? (
+                      <span className="text-orange-600 font-medium shrink-0">{fmt(posted.amount)}</span>
+                    ) : (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Input type="number" min="0" step="0.5" value={inp.value}
+                          onChange={e => setInput(f.id, { value: e.target.value })}
+                          className="h-8 w-20 text-right" disabled={netProfit <= 0} />
+                        <select value={inp.mode}
+                          onChange={e => setInput(f.id, { mode: e.target.value as Mode })}
+                          className="h-8 rounded-md border border-input bg-background px-1 text-sm"
+                          disabled={netProfit <= 0}>
+                          <option value="pct">%</option>
+                          <option value="amt">₹</option>
+                        </select>
+                        <span className="w-28 text-right text-orange-600 font-medium">{fmt(inputAmount(f.id))}</span>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              {/* Education Fund — editable % or ₹ (optional) */}
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1">
-                  {hi ? 'शिक्षा निधि' : 'Education Fund'} <span className="text-xs text-gray-400">(1203)</span>
-                  {educationAlreadyPosted && <CheckCircle2 className="h-3 w-3 text-green-600" />}
-                </span>
-                {educationAlreadyPosted ? (
-                  <span className="text-orange-600 font-medium">{fmt(educationAmount)}</span>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <Input type="number" min="0" step="0.5" value={eduInput}
-                      onChange={e => setEduInput(e.target.value)}
-                      className="h-8 w-20 text-right" disabled={netProfit <= 0} />
-                    <select value={eduMode}
-                      onChange={e => setEduMode(e.target.value as 'pct' | 'amt')}
-                      className="h-8 rounded-md border border-input bg-background px-1 text-sm"
-                      disabled={netProfit <= 0}>
-                      <option value="pct">%</option>
-                      <option value="amt">₹</option>
-                    </select>
-                    <span className="w-28 text-right text-orange-600 font-medium">{fmt(educationAmount)}</span>
-                  </div>
-                )}
-              </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-between border-t pt-2">
+              <span className="text-gray-600">{hi ? 'कुल आवंटन' : 'Total Appropriated'}</span>
+              <span className="font-medium text-orange-700">{fmt(totalAppropriated)}</span>
             </div>
             <div className="flex justify-between font-bold text-base border-t pt-2">
               <span>{hi ? 'वितरण योग्य अधिशेष' : 'Distributable Surplus'}</span>
@@ -247,45 +234,43 @@ const ReserveFund: React.FC = () => {
           </CardContent>
         </Card>
 
+        {/* ── Current balances + Post ── */}
         <Card>
           <CardHeader className="py-3">
-            <CardTitle className="text-base">
-              {language === 'hi' ? 'निधि वर्तमान शेष' : 'Current Fund Balances'}
-            </CardTitle>
+            <CardTitle className="text-base">{hi ? 'निधि वर्तमान शेष' : 'Current Fund Balances'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-600">{language === 'hi' ? 'शुद्ध अधिशेष खाता' : 'Net Surplus Account (1208)'}</span>
-              <span className="font-semibold">{fmt(netSurplusBalance)}</span>
+              <span className="text-gray-600">{hi ? 'शुद्ध अधिशेष खाता (1208)' : 'Net Surplus Account (1208)'}</span>
+              <span className="font-semibold">{fmt(getBalance(ACC_NET_SURPLUS))}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">{language === 'hi' ? 'वैधानिक संचय निधि' : 'Statutory Reserve Fund (1201)'}</span>
-              <span className="font-semibold text-green-700">{fmt(reserveFundBalance)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">{language === 'hi' ? 'शिक्षा निधि' : 'Education Fund (1203)'}</span>
-              <span className="font-semibold text-blue-700">{fmt(educationFundBalance)}</span>
-            </div>
+            {fundAccounts
+              .filter(f => Math.abs(getBalance(f.id)) > 0.005 || effectiveAmount(f.id) > 0)
+              .map(f => (
+                <div key={f.id} className="flex justify-between">
+                  <span className="text-gray-600 truncate">{fundName(f)} <span className="text-xs text-gray-400">({f.id})</span></span>
+                  <span className="font-semibold text-green-700">{fmt(getBalance(f.id))}</span>
+                </div>
+              ))}
             <div className="border-t pt-2">
               {netProfit <= 0 ? (
                 <div className="flex items-center gap-2 text-amber-700 text-xs">
                   <AlertTriangle className="h-3 w-3 shrink-0" />
-                  {language === 'hi'
-                    ? 'शुद्ध अधिशेष शून्य या ऋणात्मक है — आवंटन आवश्यक नहीं'
-                    : 'Net surplus is zero or negative — no appropriation needed'}
+                  {hi ? 'शुद्ध अधिशेष शून्य या ऋणात्मक है — आवंटन आवश्यक नहीं' : 'Net surplus is zero or negative — no appropriation needed'}
                 </div>
-              ) : !allPosted ? (
-                <Button
-                  onClick={() => setConfirmOpen(true)}
-                  className="w-full bg-green-700 hover:bg-green-800"
-                >
+              ) : canPost ? (
+                <Button onClick={() => setConfirmOpen(true)} className="w-full bg-green-700 hover:bg-green-800">
                   <Shield className="h-4 w-4 mr-2" />
-                  {language === 'hi' ? 'आवंटन जर्नल पोस्ट करें' : 'Post Appropriation Journals'}
+                  {hi ? `आवंटन जर्नल पोस्ट करें (${pendingFunds.length})` : `Post Appropriation Journals (${pendingFunds.length})`}
                 </Button>
-              ) : (
+              ) : postedVouchers.length > 0 ? (
                 <div className="flex items-center gap-2 text-green-700 text-sm font-medium">
                   <CheckCircle2 className="h-4 w-4" />
-                  {language === 'hi' ? 'आवंटन पूर्ण हो चुका है' : 'Appropriation already posted'}
+                  {hi ? 'आवंटन पोस्ट हो चुका है' : 'Appropriation posted'}
+                </div>
+              ) : (
+                <div className="text-xs text-gray-500">
+                  {hi ? 'पोस्ट करने के लिए किसी निधि में राशि/% डालें।' : 'Enter a % or amount in a fund to post.'}
                 </div>
               )}
             </div>
@@ -294,26 +279,26 @@ const ReserveFund: React.FC = () => {
       </div>
 
       {/* Posted Vouchers */}
-      {(reserveAlreadyPosted || educationAlreadyPosted) && (
+      {postedVouchers.length > 0 && (
         <Card>
           <CardHeader className="py-3">
             <CardTitle className="text-base text-green-700 flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
-              {language === 'hi' ? 'पोस्ट की गई जर्नल प्रविष्टियाँ' : 'Posted Appropriation Journals'}
+              {hi ? 'पोस्ट की गई जर्नल प्रविष्टियाँ' : 'Posted Appropriation Journals'}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{language === 'hi' ? 'वाउचर नं.' : 'Voucher No.'}</TableHead>
-                  <TableHead>{language === 'hi' ? 'तिथि' : 'Date'}</TableHead>
-                  <TableHead>{language === 'hi' ? 'विवरण' : 'Description'}</TableHead>
-                  <TableHead className="text-right">{language === 'hi' ? 'राशि' : 'Amount'}</TableHead>
+                  <TableHead>{hi ? 'वाउचर नं.' : 'Voucher No.'}</TableHead>
+                  <TableHead>{hi ? 'तिथि' : 'Date'}</TableHead>
+                  <TableHead>{hi ? 'विवरण' : 'Description'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'राशि' : 'Amount'}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {[existingReserveVoucher, existingEduVoucher].filter(Boolean).map(v => v && (
+                {postedVouchers.map(v => (
                   <TableRow key={v.id}>
                     <TableCell className="font-mono text-sm">{v.voucherNo}</TableCell>
                     <TableCell className="text-sm">{fmtDate(v.date)}</TableCell>
@@ -331,37 +316,27 @@ const ReserveFund: React.FC = () => {
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {language === 'hi' ? 'वैधानिक आवंटन पोस्ट करें?' : 'Post Statutory Appropriation?'}
-            </AlertDialogTitle>
+            <AlertDialogTitle>{hi ? 'निधि आवंटन पोस्ट करें?' : 'Post Fund Appropriation?'}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
-                <p>
-                  {language === 'hi'
-                    ? 'निम्नलिखित जर्नल प्रविष्टियाँ बनाई जाएंगी:'
-                    : 'The following journal entries will be created:'}
-                </p>
-                {!reserveAlreadyPosted && (
-                  <div className="bg-gray-50 rounded p-2 font-mono text-xs">
-                    Dr 1208 Net Surplus &nbsp;{fmt(reserveAmount)}<br />
-                    &nbsp;&nbsp;Cr 1201 Reserve Fund &nbsp;{fmt(reserveAmount)}<br />
-                    <span className="text-gray-500">{reserveMode === 'pct' ? `@ ${reserveInput}% of ${fmt(netProfit)}` : `fixed amount`}</span>
-                  </div>
-                )}
-                {!educationAlreadyPosted && (
-                  <div className="bg-gray-50 rounded p-2 font-mono text-xs">
-                    Dr 1208 Net Surplus &nbsp;{fmt(educationAmount)}<br />
-                    &nbsp;&nbsp;Cr 1203 Education Fund &nbsp;{fmt(educationAmount)}<br />
-                    <span className="text-gray-500">{eduMode === 'pct' ? `@ ${eduInput}% of ${fmt(netProfit)}` : `fixed amount`}</span>
-                  </div>
-                )}
+                <p>{hi ? 'निम्नलिखित जर्नल प्रविष्टियाँ बनाई जाएंगी:' : 'The following journal entries will be created:'}</p>
+                {pendingFunds.map(f => {
+                  const inp = getInput(f.id);
+                  return (
+                    <div key={f.id} className="bg-gray-50 rounded p-2 font-mono text-xs">
+                      Dr 1208 Net Surplus &nbsp;{fmt(inputAmount(f.id))}<br />
+                      &nbsp;&nbsp;Cr {f.id} {f.name} &nbsp;{fmt(inputAmount(f.id))}<br />
+                      <span className="text-gray-500">{inp.mode === 'pct' ? `@ ${inp.value}% of ${fmt(netProfit)}` : 'fixed amount'}</span>
+                    </div>
+                  );
+                })}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{language === 'hi' ? 'रद्द करें' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogCancel>{hi ? 'रद्द करें' : 'Cancel'}</AlertDialogCancel>
             <AlertDialogAction onClick={handlePost} className="bg-green-700 hover:bg-green-800">
-              {language === 'hi' ? 'पोस्ट करें' : 'Post'}
+              {hi ? 'पोस्ट करें' : 'Post'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

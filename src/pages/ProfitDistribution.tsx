@@ -25,8 +25,6 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 
 // ── Account IDs ─────────────────────────────────────────────────────────────
 const ACC_NET_SURPLUS   = '1208';
-const ACC_RESERVE_FUND  = '1201';
-const ACC_EDUCATION     = '1203';
 const ACC_DIVIDEND      = '1211'; // Dividend Distribution (equity liability to members)
 const ACC_BONUS_EXP     = '5207'; // Employee Bonus (expense)
 
@@ -61,13 +59,23 @@ const ProfitDistribution: React.FC = () => {
   // ── Net Surplus ────────────────────────────────────────────────────────────
   const { netProfit } = useMemo(() => getProfitLoss(), [getProfitLoss]);
 
-  // Appropriations (Reserve/Education) are OPTIONAL — reflect what has ACTUALLY
-  // been posted on the Reserve Fund page (0 if the society chose to skip them).
-  const reserveVoucher   = usePosted(vouchers, ACC_NET_SURPLUS, ACC_RESERVE_FUND, fy);
-  const educationVoucher = usePosted(vouchers, ACC_NET_SURPLUS, ACC_EDUCATION, fy);
-  const reserveAmt   = reserveVoucher?.amount ?? 0;
-  const educationAmt = educationVoucher?.amount ?? 0;
-  const distributable = netProfit - reserveAmt - educationAmt;
+  // Appropriations are OPTIONAL — subtract the TOTAL actually posted to ANY fund
+  // (Dr 1208 / Cr <fund under group 1200>), whichever funds the society chose.
+  const fundAccountIds = useMemo(() =>
+    accounts.filter(a => a.parentId === '1200' && !a.isGroup
+      && a.id !== ACC_NET_SURPLUS && a.openingBalanceType === 'credit').map(a => a.id),
+    [accounts]
+  );
+  const appropriatedAmt = useMemo(() =>
+    vouchers.filter(v => !v.isDeleted && v.narration.includes(fy)).reduce((sum, v) => {
+      const lines = getVoucherLines(v);
+      if (!lines.some(l => l.accountId === ACC_NET_SURPLUS && l.type === 'Dr')) return sum;
+      return sum + lines.filter(l => l.type === 'Cr' && fundAccountIds.includes(l.accountId))
+        .reduce((s, l) => s + l.amount, 0);
+    }, 0),
+    [vouchers, fy, fundAccountIds]
+  );
+  const distributable = netProfit - appropriatedAmt;
 
   // ── User inputs ────────────────────────────────────────────────────────────
   const [dividendRate, setDividendRate] = useState('');   // % of share capital
@@ -185,8 +193,7 @@ const ProfitDistribution: React.FC = () => {
       head: [['Particulars', 'Amount (Rs.)']],
       body: [
         ['Net Surplus (from P&L)', fmt(netProfit)],
-        [`Less: Reserve Fund (posted)`, `(${fmt(reserveAmt)})`],
-        [`Less: Education Fund (posted)`, `(${fmt(educationAmt)})`],
+        [`Less: Fund Appropriations (posted)`, `(${fmt(appropriatedAmt)})`],
         ['Distributable Surplus', fmt(distributable)],
         [`Less: Dividend @ ${dividendRatePct}% of Share Capital`, `(${fmt(totalDividend)})`],
         [`Less: Employee Bonus`, `(${fmt(bonusAmount)})`],
@@ -198,7 +205,7 @@ const ProfitDistribution: React.FC = () => {
       didParseCell: (data) => {
         // Right-align amount column across head/body/foot
         if (data.column.index === 1) data.cell.styles.halign = 'right';
-        if (data.section === 'body' && (data.row.index === 3 || data.row.index === 6)) {
+        if (data.section === 'body' && (data.row.index === 2 || data.row.index === 5)) {
           data.cell.styles.fontStyle = 'bold';
         }
       },
@@ -301,10 +308,8 @@ const ProfitDistribution: React.FC = () => {
               valueClass={netProfit >= 0 ? 'text-green-700 font-semibold' : 'text-red-600 font-semibold'}
             />
             <div className="border-t pt-2 space-y-1">
-              <Row label={hi ? 'घटाएं: संचय निधि (पोस्ट)' : 'Less: Reserve Fund (posted)'}
-                   value={`(${fmt(reserveAmt)})`} valueClass="text-orange-600" />
-              <Row label={hi ? 'घटाएं: शिक्षा निधि (पोस्ट)' : 'Less: Education Fund (posted)'}
-                   value={`(${fmt(educationAmt)})`} valueClass="text-orange-600" />
+              <Row label={hi ? 'घटाएं: निधि आवंटन (पोस्ट)' : 'Less: Fund Appropriations (posted)'}
+                   value={`(${fmt(appropriatedAmt)})`} valueClass="text-orange-600" />
             </div>
             <div className="border-t pt-2 border-b pb-2">
               <Row label={hi ? 'वितरण योग्य अधिशेष' : 'Distributable Surplus'}
