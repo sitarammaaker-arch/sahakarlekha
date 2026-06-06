@@ -2652,7 +2652,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     // Cr: Cash / Bank / Supplier for net payable (grandTotal - tdsAmount)
-    const netPayable = grandTotal - (data.tdsAmount || 0);
+    const netPayable = grandTotal;  // grandTotal already nets TDS (= netAmount + tax − TDS)
     if (netPayable > 0) {
       lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: netPayable });
     }
@@ -2863,7 +2863,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if ((data.taxAmount ?? 0) > 0) {
       lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: data.taxAmount!, narration: `GST ITC: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
     }
-    const netPayable = grandTotal - (data.tdsAmount || 0);
+    const netPayable = grandTotal;  // grandTotal already nets TDS (= netAmount + tax − TDS)
     if (netPayable > 0) {
       lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: netPayable });
     }

@@ -147,28 +147,11 @@ const BalanceSheet: React.FC = () => {
       const displayName = auditNames[group.id]?.en || group.name;
       const displayNameHi = auditNames[group.id]?.hi || group.nameHi || group.name;
 
-      // Special: Closing Stock (3400) — show stock group-wise breakdown from inventory
-      if (group.id === '3400' && stockItems && stockItems.length > 0) {
-        const activeStock = stockItems.filter(s => s.isActive && s.currentStock > 0);
-        if (activeStock.length > 0) {
-          const stockGroups: Record<string, number> = {};
-          activeStock.forEach(s => {
-            const grp = s.stockGroup || 'General';
-            stockGroups[grp] = (stockGroups[grp] || 0) + s.currentStock * (s.purchaseRate || 0);
-          });
-          const stockTotal = Object.values(stockGroups).reduce((s, v) => s + v, 0);
-          // Create virtual items for each stock group
-          const stockItems2 = Object.entries(stockGroups).sort(([a], [b]) => a.localeCompare(b)).map(([grp, val]) => ({
-            account: { account: { id: `stock-${grp}`, name: grp, nameHi: grp, type: 'asset' as const } } as any,
-            displayAmount: val,
-            pyAmount: 0,
-          }));
-          return {
-            id: group.id, name: displayName, nameHi: displayNameHi,
-            items: stockItems2, grandTotal: stockTotal, pyGrandTotal: items.reduce((s, i) => s + i.pyAmount, 0),
-          };
-        }
-      }
+      // NOTE: Closing stock is NOT rendered here from currentStock. It is shown
+      // once, movement-based (RULE 2), via the injected "Closing Stock (from
+      // Inventory)" row (unpostedStock) when no journal is posted, or via the
+      // 3400 ledger leaves when a journal IS posted. Rendering it from
+      // currentStock here caused a double-count and a second (wrong) formula.
 
       // Grand total sums LEAVES only — sub-header rows already carry their leaves'
       // subtotal, so counting both would double the nested sub-group's amount.
