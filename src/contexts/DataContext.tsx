@@ -1378,6 +1378,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return updated;
     });
     supabase.from('members').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // RULE 3: soft-cancel the member's auto-generated vouchers (share capital /
+    // admission fee) so no ghost Share Capital lingers in the Trial Balance.
+    const now = new Date().toISOString();
+    const linkedIds = new Set(vouchersRef.current.filter(v => v.memberId === id && !v.isDeleted).map(v => v.id));
+    if (linkedIds.size > 0) {
+      const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Member deleted' } : v;
+      vouchersRef.current = vouchersRef.current.map(cancel);
+      setVouchersState(prev => prev.map(cancel));
+      linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) console.error('Member voucher cancel sync:', error.message); else deleteEntries(vid); }));
+    }
     console.info(`[AUDIT-DELETE] Member id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
@@ -1493,6 +1503,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const touchedCount = changedIds.size;
     vouchersRef.current = updated;
     setVouchersState(updated);
+    // RULE 3: re-point supplier/customer sub-ledger links that pointed at removeId.
+    const reSup = suppliersRef.current.filter(s => s.accountId === removeId);
+    if (reSup.length > 0) {
+      suppliersRef.current = suppliersRef.current.map(s => s.accountId === removeId ? { ...s, accountId: keepId } : s);
+      setSuppliersState(prev => prev.map(s => s.accountId === removeId ? { ...s, accountId: keepId } : s));
+      reSup.forEach(s => supabase.from('suppliers').update({ accountId: keepId }).eq('id', s.id).then(({ error }) => { if (error) console.error('Supplier re-point sync:', error.message); }));
+    }
+    const reCus = customersRef.current.filter(c => c.accountId === removeId);
+    if (reCus.length > 0) {
+      customersRef.current = customersRef.current.map(c => c.accountId === removeId ? { ...c, accountId: keepId } : c);
+      setCustomersState(prev => prev.map(c => c.accountId === removeId ? { ...c, accountId: keepId } : c));
+      reCus.forEach(c => supabase.from('customers').update({ accountId: keepId }).eq('id', c.id).then(({ error }) => { if (error) console.error('Customer re-point sync:', error.message); }));
+    }
     // H13: Persist only the changed vouchers (and re-sync their voucher_entries rows so SQL reports
     // point at keepId, not removeId). Old filter logic was self-referential and broken.
     updated.filter(v => changedIds.has(v.id)).forEach(v => {
