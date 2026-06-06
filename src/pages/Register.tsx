@@ -86,10 +86,15 @@ const Register: React.FC = () => {
     setError('');
 
     try {
-      // 1. Insert society
-      const { data: society, error: societyError } = await supabase
+      // 1. Insert society. Generate the id CLIENT-SIDE so we do NOT need a
+      //    RETURNING/select-back: under strict RLS, anon has only the seed INSERT
+      //    policy on societies (no SELECT), so .insert().select() would fail with
+      //    "new row violates row-level security policy".
+      const newSocietyId = crypto.randomUUID();
+      const { error: societyError } = await supabase
         .from('societies')
         .insert({
+          id: newSocietyId,
           name: societyName,
           name_hi: societyNameHi || null,
           registration_no: registrationNo,
@@ -98,9 +103,7 @@ const Register: React.FC = () => {
           state,
           phone: phone || null,
           financial_year: financialYear,
-        })
-        .select()
-        .single();
+        });
 
       if (societyError) {
         if (societyError.code === '23505') {
@@ -122,12 +125,12 @@ const Register: React.FC = () => {
         p_email: adminEmail,
         p_password: adminPassword,
         p_name: adminName,
-        p_society_id: society.id,
+        p_society_id: newSocietyId,
       });
 
       if (adminError) {
         // Roll back the society so the user can retry cleanly.
-        await supabase.from('societies').delete().eq('id', society.id);
+        await supabase.from('societies').delete().eq('id', newSocietyId);
         const msg = adminError.message || '';
         if (/already/i.test(msg)) {
           setError('This email is already registered. Please use a different email.');
@@ -140,8 +143,8 @@ const Register: React.FC = () => {
 
       // 3. Insert society_settings so the correct name shows after login
       await supabase.from('society_settings').insert({
-        id: society.id,
-        society_id: society.id,
+        id: newSocietyId,
+        society_id: newSocietyId,
         name: societyName,
         nameHi: societyNameHi || societyName,
         registrationNo: registrationNo,
@@ -158,7 +161,7 @@ const Register: React.FC = () => {
       });
 
       // 4. Insert template accounts based on society type
-      const sid = society.id;
+      const sid = newSocietyId;
       const templateAccounts = SOCIETY_TEMPLATES[societyType] ?? CMS_SOCIETY_ACCOUNTS;
       // Insert in batches of 50 to avoid Supabase row limits
       const BATCH = 50;
