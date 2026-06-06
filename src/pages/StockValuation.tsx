@@ -108,6 +108,22 @@ export default function StockValuation() {
   const totalValue = useMemo(() => rows.reduce((s, r) => s + r.value, 0), [rows]);
   const totalItems = rows.filter(r => r.qty > 0).length;
 
+  // Balance-Sheet basis: qty (openingStock + movements, clamped) × CURRENT purchase
+  // rate — identical to getTradingAccount.physicalClosingStock and the BS closing
+  // stock. Shown for reconciliation since the table above uses FIFO/WA.
+  const currentCostTotal = useMemo(() =>
+    activeItems.reduce((sum, item) => {
+      let qty = item.openingStock || 0;
+      for (const m of stockMovements) {
+        if (m.itemId !== item.id) continue;
+        if (m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0)) qty += m.qty;
+        else qty -= Math.abs(m.qty);
+      }
+      qty = Math.max(0, qty);
+      return sum + qty * (item.purchaseRate || 0);
+    }, 0),
+    [activeItems, stockMovements]);
+
   const stockHeaders = ['Sr.', 'Code', 'Item Name', 'HSN/SAC', 'Unit', 'GST %', 'Method', 'Qty', 'Rate (₹)', 'Value (₹)'];
 
   const stockDataRows = () =>
@@ -219,6 +235,16 @@ export default function StockValuation() {
             <p className="text-2xl font-bold">{activeItems.length}</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Reconciliation with Balance Sheet (current-cost basis) */}
+      <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+        <TrendingUp className="h-4 w-4 mt-0.5 shrink-0" />
+        <span>
+          {hi
+            ? `तुलन-पत्र / व्यापार खाता में समापन माल current-cost (मात्रा × वर्तमान क्रय दर) पर लिया जाता है = ${fmt(currentCostTotal)}। ऊपर की तालिका ${method === 'fifo' ? 'FIFO' : 'भारित औसत'} पर है — क्रय दर बदलने पर अंतर सामान्य है।`
+            : `The Balance Sheet / Trading A/c value closing stock at current cost (qty × current purchase rate) = ${fmt(currentCostTotal)}. The table above uses ${method === 'fifo' ? 'FIFO' : 'Weighted Average'} — a difference is expected when purchase rates have changed.`}
+        </span>
       </div>
 
       {/* Method selector */}
