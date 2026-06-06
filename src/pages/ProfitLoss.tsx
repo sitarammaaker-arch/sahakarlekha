@@ -178,8 +178,8 @@ const ProfitLoss: React.FC = () => {
             <CardContent className="pt-4 pb-4">
               <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
                 {hi
-                  ? `⚖️ अधिशेष का आवंटन अभी पोस्ट नहीं हुआ। हरियाणा सहकारी समिति अधिनियम 1984, धारा 65: अधिशेष का न्यूनतम 25% वैधानिक संचय निधि + 1% शिक्षा निधि में हस्तांतरित करना अनिवार्य है।`
-                  : `⚖️ Surplus appropriation not yet posted. Haryana Coop Societies Act 1984, Sec 65: min 25% to Statutory Reserve Fund + 1% to Education Fund.`}
+                  ? `⚖️ अधिशेष का आवंटन अभी पोस्ट नहीं हुआ (वैकल्पिक)। आप "संचय निधि" पृष्ठ पर संचय/शिक्षा निधि में कोई भी % या राशि चुनकर आवंटित कर सकते हैं। नीचे केवल सामान्य सुझाव (25%/1%) दिखाया गया है।`
+                  : `⚖️ Surplus appropriation not yet posted (optional). On the Reserve Fund page you can allocate any % or amount to Reserve/Education funds. The figures below are only the common suggestion (25%/1%).`}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
                 <span className="font-medium">

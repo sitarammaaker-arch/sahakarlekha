@@ -473,7 +473,7 @@ const SocietySetup: React.FC = () => {
                     className="h-11"
                   />
                   <p className="text-xs text-muted-foreground">
-                    {language === 'hi' ? 'सहकारी अधिनियम के अनुसार न्यूनतम 25%' : 'Min 25% per Cooperative Societies Act'}
+                    {language === 'hi' ? 'सुझाव: 25% (वैकल्पिक — आवंटन के समय बदला जा सकता है)' : 'Suggested 25% (optional — can be changed at appropriation time)'}
                   </p>
                 </div>
                 <div className="space-y-2">

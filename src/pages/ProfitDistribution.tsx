@@ -30,9 +30,6 @@ const ACC_EDUCATION     = '1203';
 const ACC_DIVIDEND      = '1211'; // Dividend Distribution (equity liability to members)
 const ACC_BONUS_EXP     = '5207'; // Employee Bonus (expense)
 
-// ── Statutory rates ──────────────────────────────────────────────────────────
-const EDUCATION_RATE = 0.01;
-
 const fmt = (n: number) =>
   'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
@@ -64,9 +61,12 @@ const ProfitDistribution: React.FC = () => {
   // ── Net Surplus ────────────────────────────────────────────────────────────
   const { netProfit } = useMemo(() => getProfitLoss(), [getProfitLoss]);
 
-  const RESERVE_RATE = (society.reserveFundPct ?? 25) / 100;
-  const reserveAmt   = Math.round(netProfit * RESERVE_RATE * 100) / 100;
-  const educationAmt = Math.round(netProfit * EDUCATION_RATE * 100) / 100;
+  // Appropriations (Reserve/Education) are OPTIONAL — reflect what has ACTUALLY
+  // been posted on the Reserve Fund page (0 if the society chose to skip them).
+  const reserveVoucher   = usePosted(vouchers, ACC_NET_SURPLUS, ACC_RESERVE_FUND, fy);
+  const educationVoucher = usePosted(vouchers, ACC_NET_SURPLUS, ACC_EDUCATION, fy);
+  const reserveAmt   = reserveVoucher?.amount ?? 0;
+  const educationAmt = educationVoucher?.amount ?? 0;
   const distributable = netProfit - reserveAmt - educationAmt;
 
   // ── User inputs ────────────────────────────────────────────────────────────
@@ -121,28 +121,11 @@ const ProfitDistribution: React.FC = () => {
     return bal;
   };
 
-  // ── P3-1: Check if 25% Reserve Fund has been posted (Sec 65 compliance) ────
-  const reserveVoucher = usePosted(vouchers, ACC_NET_SURPLUS, ACC_RESERVE_FUND, fy);
-  const reservePosted = !!reserveVoucher;
-  const educationVoucher = usePosted(vouchers, ACC_NET_SURPLUS, ACC_EDUCATION, fy);
-  const educationPosted = !!educationVoucher;
-  const mandatoryAppropriationsDone = netProfit <= 0 || (reservePosted && educationPosted);
-
   // ── Post journals ──────────────────────────────────────────────────────────
-  const canPost = mandatoryAppropriationsDone && (!divPosted && totalDividend > 0 || !bonusPosted && bonusAmount > 0);
+  // Appropriations (reserve/education) are OPTIONAL — never block dividend/bonus.
+  const canPost = (!divPosted && totalDividend > 0) || (!bonusPosted && bonusAmount > 0);
 
   const handlePost = () => {
-    // P3-1: Hard block — mandatory appropriations must be done first
-    if (netProfit > 0 && !mandatoryAppropriationsDone) {
-      toast({
-        title: hi ? 'अनिवार्य आवंटन पहले करें' : 'Mandatory Appropriations Required First',
-        description: hi
-          ? `सहकारी समिति अधिनियम धारा 65 के तहत, लाभांश वितरण से पहले 25% वैधानिक संचय निधि (₹${reserveAmt.toLocaleString('hi-IN')}) और 1% शिक्षा निधि का आवंटन अनिवार्य है। पहले "संचय निधि" पृष्ठ पर जाएं।`
-          : `Under Sec. 65 of the Cooperative Societies Act, you must first transfer 25% Statutory Reserve Fund (₹${reserveAmt.toLocaleString('en-IN')}) and 1% Education Fund before distributing profits. Please visit the Reserve Fund page first.`,
-        variant: 'destructive',
-      });
-      return;
-    }
     const today = new Date().toISOString().split('T')[0];
     let posted = 0;
 
@@ -202,8 +185,8 @@ const ProfitDistribution: React.FC = () => {
       head: [['Particulars', 'Amount (Rs.)']],
       body: [
         ['Net Surplus (from P&L)', fmt(netProfit)],
-        [`Less: Statutory Reserve Fund @ 25%`, `(${fmt(reserveAmt)})`],
-        [`Less: Education Fund @ 1%`, `(${fmt(educationAmt)})`],
+        [`Less: Reserve Fund (posted)`, `(${fmt(reserveAmt)})`],
+        [`Less: Education Fund (posted)`, `(${fmt(educationAmt)})`],
         ['Distributable Surplus', fmt(distributable)],
         [`Less: Dividend @ ${dividendRatePct}% of Share Capital`, `(${fmt(totalDividend)})`],
         [`Less: Employee Bonus`, `(${fmt(bonusAmount)})`],
@@ -290,8 +273,8 @@ const ProfitDistribution: React.FC = () => {
         <Info className="h-4 w-4 mt-0.5 shrink-0" />
         <span>
           {hi
-            ? 'अनिवार्य आवंटन (25% संचय + 1% शिक्षा) के बाद शेष अधिशेष को लाभांश और बोनस के रूप में वितरित करें।'
-            : 'After mandatory appropriations (25% reserve + 1% education), distribute the remaining surplus as dividend and bonus.'}
+            ? 'निधि आवंटन (संचय/शिक्षा) वैकल्पिक है — "संचय निधि" पृष्ठ पर जितना चाहें (% या राशि) पोस्ट करें। उसके बाद बची हुई वितरण-योग्य राशि को लाभांश व बोनस के रूप में बाँटें।'
+            : 'Fund appropriations (reserve/education) are optional — post whatever you like (% or amount) on the Reserve Fund page. The remaining distributable surplus can then be shared as dividend and bonus.'}
         </span>
       </div>
 
@@ -300,23 +283,6 @@ const ProfitDistribution: React.FC = () => {
         <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {hi ? 'शुद्ध अधिशेष शून्य या ऋणात्मक है — वितरण संभव नहीं।' : 'Net surplus is zero or negative — distribution not applicable.'}
-        </div>
-      )}
-
-      {/* P3-1: Mandatory appropriation gate — block if reserve not posted */}
-      {netProfit > 0 && !mandatoryAppropriationsDone && (
-        <div className="flex items-start gap-3 p-4 bg-destructive/5 border-2 border-destructive rounded-lg text-sm">
-          <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
-          <div>
-            <p className="font-semibold text-destructive">
-              {hi ? 'अनिवार्य आवंटन लंबित (धारा 65)' : 'Mandatory Appropriation Pending (Sec. 65)'}
-            </p>
-            <p className="text-destructive/80 mt-0.5">
-              {hi
-                ? `लाभांश वितरण से पहले निम्नलिखित अनिवार्य है: ${!reservePosted ? `25% वैधानिक संचय निधि (₹${reserveAmt.toLocaleString('hi-IN')})` : ''}${!reservePosted && !educationPosted ? ' तथा ' : ''}${!educationPosted ? `1% शिक्षा निधि` : ''}। कृपया पहले "संचय निधि" पृष्ठ पर जाएं।`
-                : `Before distributing profits, you must first post: ${!reservePosted ? `25% Statutory Reserve Fund (₹${reserveAmt.toLocaleString('en-IN')})` : ''}${!reservePosted && !educationPosted ? ' and ' : ''}${!educationPosted ? '1% Education Fund' : ''}. Please visit the Reserve Fund page first.`}
-            </p>
-          </div>
         </div>
       )}
 
@@ -335,9 +301,9 @@ const ProfitDistribution: React.FC = () => {
               valueClass={netProfit >= 0 ? 'text-green-700 font-semibold' : 'text-red-600 font-semibold'}
             />
             <div className="border-t pt-2 space-y-1">
-              <Row label={hi ? 'घटाएं: वैधानिक संचय (25%)' : 'Less: Statutory Reserve (25%)'}
+              <Row label={hi ? 'घटाएं: संचय निधि (पोस्ट)' : 'Less: Reserve Fund (posted)'}
                    value={`(${fmt(reserveAmt)})`} valueClass="text-orange-600" />
-              <Row label={hi ? 'घटाएं: शिक्षा निधि (1%)' : 'Less: Education Fund (1%)'}
+              <Row label={hi ? 'घटाएं: शिक्षा निधि (पोस्ट)' : 'Less: Education Fund (posted)'}
                    value={`(${fmt(educationAmt)})`} valueClass="text-orange-600" />
             </div>
             <div className="border-t pt-2 border-b pb-2">

@@ -5,6 +5,7 @@ import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -25,8 +26,10 @@ const ACC_NET_SURPLUS   = '1208'; // Net Surplus / (Deficit) — Dr when appropr
 const ACC_RESERVE_FUND  = '1201'; // Statutory Reserve Fund  — Cr
 const ACC_EDUCATION_FUND = '1203'; // Education Fund          — Cr
 
-// Statutory rates (Cooperative Societies Act)
-const EDUCATION_RATE = 0.01; // 1%
+// Suggested default rates (editable — appropriation is optional). A society may
+// set any percentage or a flat amount per fund, or skip a fund entirely.
+const DEFAULT_RESERVE_PCT = 25;
+const DEFAULT_EDUCATION_PCT = 1;
 
 const ReserveFund: React.FC = () => {
   const { language } = useLanguage();
@@ -36,13 +39,25 @@ const ReserveFund: React.FC = () => {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const fy = society.financialYear; // e.g. "2024-25"
+  const hi = language === 'hi';
 
   const { netProfit } = useMemo(() => getProfitLoss(), [getProfitLoss]);
 
-  // Appropriation amounts
-  const RESERVE_RATE = (society.reserveFundPct ?? 25) / 100;
-  const reserveAmount  = Math.round(netProfit * RESERVE_RATE * 100) / 100;
-  const educationAmount = Math.round(netProfit * EDUCATION_RATE * 100) / 100;
+  // ── Appropriation is OPTIONAL & fully editable ──────────────────────────────
+  // Each fund: choose a % (of net surplus) OR a flat ₹ amount. Defaults are the
+  // common statutory rates, but any value (incl. 0 = skip) is allowed.
+  const [reserveMode, setReserveMode]   = useState<'pct' | 'amt'>('pct');
+  const [reserveInput, setReserveInput] = useState(String(society.reserveFundPct ?? DEFAULT_RESERVE_PCT));
+  const [eduMode, setEduMode]           = useState<'pct' | 'amt'>('pct');
+  const [eduInput, setEduInput]         = useState(String(DEFAULT_EDUCATION_PCT));
+
+  const calcAmt = (mode: 'pct' | 'amt', input: string) => {
+    const v = parseFloat(input) || 0;
+    const amt = mode === 'pct' ? (netProfit * v) / 100 : v;
+    return Math.max(0, Math.round(amt * 100) / 100);
+  };
+  const reserveAmount   = calcAmt(reserveMode, reserveInput);
+  const educationAmount = calcAmt(eduMode, eduInput);
   const afterAppropriation = netProfit - reserveAmount - educationAmount;
 
   // Check if already posted for this FY
@@ -100,7 +115,7 @@ const ReserveFund: React.FC = () => {
         debitAccountId: ACC_NET_SURPLUS,
         creditAccountId: ACC_RESERVE_FUND,
         amount: reserveAmount,
-        narration: `Statutory Reserve Fund Appropriation @ 25% — FY ${fy}`,
+        narration: `Reserve Fund Appropriation ${reserveMode === 'pct' ? `@ ${reserveInput}%` : '(fixed amount)'} — FY ${fy}`,
         createdBy: user?.name ?? 'System',
       });
       posted++;
@@ -113,7 +128,7 @@ const ReserveFund: React.FC = () => {
         debitAccountId: ACC_NET_SURPLUS,
         creditAccountId: ACC_EDUCATION_FUND,
         amount: educationAmount,
-        narration: `Education Fund Appropriation @ 1% — FY ${fy}`,
+        narration: `Education Fund Appropriation ${eduMode === 'pct' ? `@ ${eduInput}%` : '(fixed amount)'} — FY ${fy}`,
         createdBy: user?.name ?? 'System',
       });
       posted++;
@@ -152,9 +167,9 @@ const ReserveFund: React.FC = () => {
       <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
         <Info className="h-4 w-4 mt-0.5 shrink-0" />
         <span>
-          {language === 'hi'
-            ? 'सहकारी समिति अधिनियम के अंतर्गत: शुद्ध लाभ का 25% वैधानिक संचय निधि में तथा 1% शिक्षा निधि में हस्तांतरित करना अनिवार्य है।'
-            : 'Under the Cooperative Societies Act: 25% of net surplus must be transferred to Statutory Reserve Fund and 1% to Education Fund.'}
+          {hi
+            ? 'सुझाव: सामान्यतः शुद्ध लाभ का 25% संचय निधि व 1% शिक्षा निधि में डाला जाता है — पर यह वैकल्पिक है। नीचे आप हर निधि के लिए % या निश्चित राशि स्वयं चुन सकते हैं (0 करने पर वह निधि छूट जाएगी)।'
+            : 'Suggested: usually 25% of net surplus goes to Reserve Fund and 1% to Education Fund — but this is optional. Below you can set a % or a fixed ₹ amount per fund (set 0 to skip a fund).'}
         </span>
       </div>
 
@@ -168,29 +183,63 @@ const ReserveFund: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-600">{language === 'hi' ? 'शुद्ध अधिशेष (P&L)' : 'Net Surplus (P&L)'}</span>
+              <span className="text-gray-600">{hi ? 'शुद्ध अधिशेष (P&L)' : 'Net Surplus (P&L)'}</span>
               <span className={`font-semibold ${netProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                 {fmt(netProfit)}
               </span>
             </div>
-            <div className="border-t pt-2 space-y-1">
-              <div className="flex justify-between">
+            <div className="border-t pt-2 space-y-2">
+              {/* Reserve Fund — editable % or ₹ (optional) */}
+              <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1">
-                  {language === 'hi' ? 'वैधानिक संचय (25%)' : 'Statutory Reserve (25%)'}
+                  {hi ? 'संचय निधि' : 'Reserve Fund'} <span className="text-xs text-gray-400">(1201)</span>
                   {reserveAlreadyPosted && <CheckCircle2 className="h-3 w-3 text-green-600" />}
                 </span>
-                <span className="text-orange-600 font-medium">{fmt(reserveAmount)}</span>
+                {reserveAlreadyPosted ? (
+                  <span className="text-orange-600 font-medium">{fmt(reserveAmount)}</span>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <Input type="number" min="0" step="0.5" value={reserveInput}
+                      onChange={e => setReserveInput(e.target.value)}
+                      className="h-8 w-20 text-right" disabled={netProfit <= 0} />
+                    <select value={reserveMode}
+                      onChange={e => setReserveMode(e.target.value as 'pct' | 'amt')}
+                      className="h-8 rounded-md border border-input bg-background px-1 text-sm"
+                      disabled={netProfit <= 0}>
+                      <option value="pct">%</option>
+                      <option value="amt">₹</option>
+                    </select>
+                    <span className="w-28 text-right text-orange-600 font-medium">{fmt(reserveAmount)}</span>
+                  </div>
+                )}
               </div>
-              <div className="flex justify-between">
+              {/* Education Fund — editable % or ₹ (optional) */}
+              <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1">
-                  {language === 'hi' ? 'शिक्षा निधि (1%)' : 'Education Fund (1%)'}
+                  {hi ? 'शिक्षा निधि' : 'Education Fund'} <span className="text-xs text-gray-400">(1203)</span>
                   {educationAlreadyPosted && <CheckCircle2 className="h-3 w-3 text-green-600" />}
                 </span>
-                <span className="text-orange-600 font-medium">{fmt(educationAmount)}</span>
+                {educationAlreadyPosted ? (
+                  <span className="text-orange-600 font-medium">{fmt(educationAmount)}</span>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <Input type="number" min="0" step="0.5" value={eduInput}
+                      onChange={e => setEduInput(e.target.value)}
+                      className="h-8 w-20 text-right" disabled={netProfit <= 0} />
+                    <select value={eduMode}
+                      onChange={e => setEduMode(e.target.value as 'pct' | 'amt')}
+                      className="h-8 rounded-md border border-input bg-background px-1 text-sm"
+                      disabled={netProfit <= 0}>
+                      <option value="pct">%</option>
+                      <option value="amt">₹</option>
+                    </select>
+                    <span className="w-28 text-right text-orange-600 font-medium">{fmt(educationAmount)}</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex justify-between font-bold text-base border-t pt-2">
-              <span>{language === 'hi' ? 'वितरण योग्य अधिशेष' : 'Distributable Surplus'}</span>
+              <span>{hi ? 'वितरण योग्य अधिशेष' : 'Distributable Surplus'}</span>
               <span className={afterAppropriation >= 0 ? 'text-green-700' : 'text-red-600'}>
                 {fmt(afterAppropriation)}
               </span>
@@ -295,15 +344,15 @@ const ReserveFund: React.FC = () => {
                 {!reserveAlreadyPosted && (
                   <div className="bg-gray-50 rounded p-2 font-mono text-xs">
                     Dr 1208 Net Surplus &nbsp;{fmt(reserveAmount)}<br />
-                    &nbsp;&nbsp;Cr 1201 Statutory Reserve Fund &nbsp;{fmt(reserveAmount)}<br />
-                    <span className="text-gray-500">@ 25% of {fmt(netProfit)}</span>
+                    &nbsp;&nbsp;Cr 1201 Reserve Fund &nbsp;{fmt(reserveAmount)}<br />
+                    <span className="text-gray-500">{reserveMode === 'pct' ? `@ ${reserveInput}% of ${fmt(netProfit)}` : `fixed amount`}</span>
                   </div>
                 )}
                 {!educationAlreadyPosted && (
                   <div className="bg-gray-50 rounded p-2 font-mono text-xs">
                     Dr 1208 Net Surplus &nbsp;{fmt(educationAmount)}<br />
                     &nbsp;&nbsp;Cr 1203 Education Fund &nbsp;{fmt(educationAmount)}<br />
-                    <span className="text-gray-500">@ 1% of {fmt(netProfit)}</span>
+                    <span className="text-gray-500">{eduMode === 'pct' ? `@ ${eduInput}% of ${fmt(netProfit)}` : `fixed amount`}</span>
                   </div>
                 )}
               </div>

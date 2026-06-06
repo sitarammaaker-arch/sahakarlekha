@@ -100,7 +100,7 @@ const Dashboard: React.FC = () => {
     const advisories: Advisory[] = [];
 
     if (netProfit > 0 && !reservePosted)
-      advisories.push({ severity: 'critical', en: `Post ${society.reserveFundPct ?? 25}% Statutory Reserve Fund transfer before distributing profits`, hi: `${society.reserveFundPct ?? 25}% सांविधिक संचय निधि हस्तांतरण करें — लाभ वितरण से पूर्व अनिवार्य` });
+      advisories.push({ severity: 'info', en: `Optional: post a Reserve Fund / Education Fund appropriation on the Reserve Fund page (choose any % or amount)`, hi: `वैकल्पिक: "संचय निधि" पृष्ठ पर संचय/शिक्षा निधि आवंटन पोस्ट कर सकते हैं (कोई भी % या राशि)` });
     if (!bsTallied)
       advisories.push({ severity: 'critical', en: 'Balance Sheet is not balanced — check for missing or duplicate journal entries', hi: 'तुलन पत्र असंतुलित है — अपूर्ण या दोहरी जर्नल प्रविष्टियां जांचें' });
     if (physicalClosingStock > 0 && !closingStockPosted)
