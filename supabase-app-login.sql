@@ -22,7 +22,7 @@ returns table (id text, name text, email text, role text, society_id text)
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $fn$
   select su.id::text, su.name, su.email, su.role, su.society_id::text
   from public.society_users su

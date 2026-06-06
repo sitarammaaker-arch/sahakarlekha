@@ -24,12 +24,48 @@
 -- ============================================================================
 
 
--- ── STEP 0: PRE-FLIGHT — who is NOT yet in Supabase Auth? (migrate these first)
-select su.email, su.name, su.role, s.name as society
+-- ============================================================================
+--  STATUS: LIVE since 2026-06-06. Society-scoped RLS is ACTIVE on all data
+--  tables, accounts, society_settings, societies, society_users, platform_admins.
+--
+--  LOGIN ARCHITECTURE (two paths, both secure):
+--    1. supabase.auth.signInWithPassword -> real JWT -> RLS scopes rows by
+--       auth.jwt()->>'email' (via current_user_society_ids()). PRIMARY path.
+--       REQUIRES every active society_users row to have a HEALTHY auth.users +
+--       auth.identities row (same email, confirmed, password synced).
+--    2. public.app_login(email, password) -> SECURITY DEFINER RPC fallback
+--       (see supabase-app-login.sql). Verifies server-side; works even without a
+--       JWT, BUT then data tables return nothing (RLS needs the JWT). So path 1
+--       MUST work for each user, or they log in yet see no data.
+--
+--  HARD-WON PREREQUISITE (do NOT skip): the legacy "forgot password" flow created
+--  BROKEN auth rows — auth.users present but auth.identities MISSING — which makes
+--  signInWithPassword fail SILENTLY (pw_ok=true yet no JWT). Symptom: user logs in
+--  via the RPC fallback but sees empty data once strict RLS is on.
+--  FIX per affected user: delete the auth row in SQL (cascades), then recreate via
+--  Dashboard -> Authentication -> Add user (Auto Confirm ON) using their
+--  society_users password. Verify auth.users.last_sign_in_at updates after a fresh
+--  login. Confirm ALL active users have a populated last_sign_in_at BEFORE enabling
+--  strict RLS, else they are locked out of their own data.
+-- ============================================================================
+
+
+-- ── STEP 0: PRE-FLIGHT — every active user must have a HEALTHY gotrue login.
+--    Flags users with: no auth row, unconfirmed email, OR zero identities
+--    (zero identities => signInWithPassword fails silently — see note above).
+--    Must return ZERO rows before running STEP 1+.
+select su.email, su.name, s.name as society,
+       (au.id is not null)                 as has_auth_row,
+       (au.email_confirmed_at is not null) as confirmed,
+       (select count(*) from auth.identities i where i.user_id = au.id) as identities,
+       au.last_sign_in_at
 from public.society_users su
-left join public.societies s on s.id = su.society_id
+left join public.societies s on s.id::text = su.society_id::text
+left join auth.users au on lower(au.email) = lower(su.email)
 where su.is_active
-  and not exists (select 1 from auth.users au where lower(au.email) = lower(su.email))
+  and (au.id is null
+       or au.email_confirmed_at is null
+       or (select count(*) from auth.identities i where i.user_id = au.id) = 0)
 order by s.name, su.email;
 
 
