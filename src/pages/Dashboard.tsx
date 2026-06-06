@@ -48,7 +48,7 @@ const Dashboard: React.FC = () => {
     // FY would make the Balance Sheet tally falsely fail.
     const fyEnd = `20${fy.split('-')[1]}-03-31`;
     const tb = getTrialBalance(fyEnd);
-    const { physicalClosingStock, closingStockPosted } = getTradingAccount(fyEnd);
+    const { physicalClosingStock } = getTradingAccount(fyEnd);
 
     // 1. Reserve Fund posted (Sec 65)
     const reservePosted = activeVouchers.some(v =>
@@ -65,8 +65,8 @@ const Dashboard: React.FC = () => {
     // a real imbalance now that Dr=Cr is enforced at save and the figures are exact.
     const bsTallied = Math.abs(totalAssets - totalLiab) < 0.01;
 
-    // 3. Closing stock journalized
-    const stockOk = physicalClosingStock === 0 || closingStockPosted;
+    // 3. Closing stock — auto-valued from inventory at report time (no journal needed)
+    const stockOk = true;
 
     // 4. Sec 32 loan limit
     const shareCapital = tb.filter(b => b.account.parentId === '1100' && !b.account.isGroup).reduce((s, b) => s + Math.abs(b.netBalance), 0);
@@ -103,8 +103,6 @@ const Dashboard: React.FC = () => {
       advisories.push({ severity: 'info', en: `Optional: post a Reserve Fund / Education Fund appropriation on the Reserve Fund page (choose any % or amount)`, hi: `वैकल्पिक: "संचय निधि" पृष्ठ पर संचय/शिक्षा निधि आवंटन पोस्ट कर सकते हैं (कोई भी % या राशि)` });
     if (!bsTallied)
       advisories.push({ severity: 'critical', en: 'Balance Sheet is not balanced — check for missing or duplicate journal entries', hi: 'तुलन पत्र असंतुलित है — अपूर्ण या दोहरी जर्नल प्रविष्टियां जांचें' });
-    if (physicalClosingStock > 0 && !closingStockPosted)
-      advisories.push({ severity: 'critical', en: `Journalize closing stock of ₹${physicalClosingStock.toLocaleString('en-IN')} before generating financial reports`, hi: `₹${physicalClosingStock.toLocaleString('en-IN')} का समापन माल जर्नल करें — रिपोर्ट से पूर्व आवश्यक` });
     if (!sec32Ok)
       advisories.push({ severity: 'critical', en: `Loan portfolio exceeds Sec 32 limit (${sec32Pct.toFixed(0)}% utilized) — pause new loans or increase member share capital`, hi: `ऋण पोर्टफोलियो धारा 32 सीमा से अधिक (${sec32Pct.toFixed(0)}% उपयोग) — नए ऋण रोकें या शेयर पूंजी बढ़ाएं` });
     else if (sec32Pct >= 80 && loanLimit > 0)
@@ -467,7 +465,7 @@ const Dashboard: React.FC = () => {
                 na: false,
               },
               {
-                label: language === 'hi' ? 'समापन माल जर्नल' : 'Closing Stock Journalized',
+                label: language === 'hi' ? 'समापन माल (स्वतः)' : 'Closing Stock (auto-valued)',
                 ok: complianceChecks.stockOk,
                 na: false,
               },

@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FileSpreadsheet, Download, AlertTriangle, Calendar, ExternalLink } from 'lucide-react';
+import { FileSpreadsheet, Download, Calendar, ExternalLink } from 'lucide-react';
 import { generateBalanceSheetPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
@@ -237,7 +237,7 @@ const BalanceSheet: React.FC = () => {
     generateBalanceSheetPDF(
       trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup),
       [...trialBalance.filter(b => b.account.type === 'equity' && !b.account.isGroup), ...trialBalance.filter(b => b.account.type === 'liability' && !b.account.isGroup)],
-      netProfit, society, language, 0, accounts, stockItems, showLedgers
+      netProfit, society, language, 0, accounts, stockItems, showLedgers, unpostedStock
     );
   };
 
@@ -334,15 +334,15 @@ const BalanceSheet: React.FC = () => {
             </TableRow>
           )}
 
-          {/* Unposted Closing Stock (Assets side only) */}
+          {/* Closing Stock — auto-valued from inventory at the as-on date (Tally-style) */}
           {!isLiabSide && unpostedStock > 0 && (
-            <TableRow className="bg-amber-50 dark:bg-amber-900/20 font-semibold">
+            <TableRow className="font-semibold">
               {hasPY && <TableCell></TableCell>}
-              <TableCell className="text-amber-800 dark:text-amber-300 text-sm">
-                {hi ? 'समापन माल (भौतिक — जर्नल नहीं हुआ) ⚠' : 'Closing Stock (Physical — Not Yet Journalized) ⚠'}
+              <TableCell className="text-sm">
+                {hi ? 'समापन माल (इन्वेंट्री से)' : 'Closing Stock (from Inventory)'}
               </TableCell>
               <TableCell></TableCell>
-              <TableCell className="text-right text-amber-800 dark:text-amber-300">{fmt(unpostedStock)}</TableCell>
+              <TableCell className="text-right">{fmt(unpostedStock)}</TableCell>
             </TableRow>
           )}
 
@@ -415,22 +415,6 @@ const BalanceSheet: React.FC = () => {
           </p>
         </CardContent>
       </Card>
-
-      {unpostedStock > 0 && (
-        <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700">
-          <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="font-semibold text-amber-800 dark:text-amber-300">
-              {hi ? 'समापन माल अभी जर्नल में दर्ज नहीं हुआ' : 'Closing Stock Not Yet Journalized'}
-            </p>
-            <p className="text-sm text-amber-700 dark:text-amber-400">
-              {hi
-                ? `भौतिक समापन माल ${fmt(unpostedStock)} है। Trading Account पर "Post Closing Stock" बटन दबाएं।`
-                : `Physical closing stock of ${fmt(unpostedStock)}. Go to Trading Account and click "Post Closing Stock".`}
-            </p>
-          </div>
-        </div>
-      )}
 
       <Card className="shadow-card">
         <CardHeader className="border-b text-center">

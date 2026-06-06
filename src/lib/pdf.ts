@@ -637,11 +637,12 @@ export function generateBalanceSheetPDF(
   allAccounts?: LedgerAccount[],
   stockItemsData?: { name: string; currentStock: number; purchaseRate: number; isActive: boolean; stockGroup?: string }[],
   detailed: boolean = true,   // false = Summary (groups/sub-groups + totals only)
+  unpostedClosingStock: number = 0,  // closing stock auto-valued from inventory (no journal)
 ) {
   const doc = new jsPDF('landscape');
   const { startY, font } = addHeader(doc, 'Balance Sheet', society, `As at 31st March 20${society.financialYear.split('-')[1]}`, { reportCode: 'BS' });
 
-  const totalAssets = assetBalances.reduce((s, b) => s + b.netBalance, 0);
+  const totalAssets = assetBalances.reduce((s, b) => s + b.netBalance, 0) + unpostedClosingStock;
   const totalLiabilities = liabilityBalances.reduce((s, b) => s + (-b.netBalance), 0) + netProfit;
   const pyBalances = society.previousYearBalances || {};
   const pyYear = society.previousFinancialYear || '';
@@ -788,6 +789,15 @@ export function generateBalanceSheetPDF(
         const display = b.netBalance < 0 ? `(${fmt(Math.abs(b.netBalance))})` : fmt(b.netBalance);
         return hasPY ? [b.account.name, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', display] : [b.account.name, display];
       }), groupRows: [] as number[], pyTotal: assetBalances.reduce((s, b) => s + getPY(b.account.id), 0) };
+
+  // Closing Stock — auto-valued from inventory (matches the on-screen Balance Sheet).
+  if (unpostedClosingStock > 0) {
+    asset.groupRows.push(asset.body.length);
+    const csLabel = language === 'hi' ? 'समापन माल (इन्वेंट्री से)' : 'CLOSING STOCK (FROM INVENTORY)';
+    asset.body.push(hasPY
+      ? [csLabel, '', '', fmt(unpostedClosingStock)]
+      : [csLabel, '', fmt(unpostedClosingStock)]);
+  }
 
   const liabHead = hasPY
     ? [['Capital & Liabilities', pyYear, 'Amount', 'Grand']]
