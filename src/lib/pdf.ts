@@ -499,15 +499,17 @@ export function generateIncomeExpenditurePDF(
   const totalExpenses = expenseItems.reduce((s, i) => s + i.amount, 0);
   const netProfit = totalIncome - totalExpenses;
   const isSurplus = netProfit >= 0;
-  const distributableSurplus = isSurplus ? netProfit - reserveFund : 0;
+  // NCDC: the FULL surplus is carried to the Balance Sheet; fund appropriation is
+  // shown separately (not deducted in the I&E T-account), matching the on-screen I&E.
+  void reserveFund;
+  const surplusToBS = isSurplus ? netProfit : 0;
 
   // Both sides of T-account must show the same grand total
   const grandTotal = isSurplus ? totalIncome : totalExpenses;
 
   const expBody: string[][] = [
     ...expenseItems.map(i => [i.name, fmt(i.amount)]),
-    ...(isSurplus && reserveFund > 0 ? [[`Statutory Reserve Fund (${society.reserveFundPct ?? 25}%)`, fmt(reserveFund)]] : []),
-    ...(isSurplus ? [['Surplus carried to Balance Sheet', fmt(distributableSurplus)]] : [['Deficit carried to Balance Sheet', fmt(Math.abs(netProfit))]]),
+    ...(isSurplus ? [['Surplus carried to Balance Sheet', fmt(surplusToBS)]] : [['Deficit carried to Balance Sheet', fmt(Math.abs(netProfit))]]),
   ];
   const incBody: string[][] = [
     ...incomeItems.map(i => [i.name, fmt(i.amount)]),
