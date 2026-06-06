@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,7 +22,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import type { StockItem, StockMovement } from '@/types';
+import type { StockItem, StockMovement, LedgerAccount } from '@/types';
 
 // ─── Unit definitions ──────────────────────────────────────────────────────────
 
@@ -140,11 +140,10 @@ interface ItemFormProps {
   existingGroups?: string[];
   salesAccounts?: { id: string; name: string; nameHi: string }[];
   purchaseAccounts?: { id: string; name: string; nameHi: string }[];
-  onCreateSalesAccount?: (name: string) => string;
-  onCreatePurchaseAccount?: (name: string) => string;
+  onRequestCreateAccount?: (kind: 'sales' | 'purchase') => void;
 }
 
-const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit, submitLabel, onCancel, existingGroups = [], salesAccounts = [], purchaseAccounts = [], onCreateSalesAccount, onCreatePurchaseAccount }) => (
+const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit, submitLabel, onCancel, existingGroups = [], salesAccounts = [], purchaseAccounts = [], onRequestCreateAccount }) => (
   <form onSubmit={e => e.preventDefault()} className="space-y-4">
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div className="space-y-2">
@@ -240,13 +239,7 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
           value={itemForm.salesAccountId || ''}
           onChange={e => {
             const v = e.target.value;
-            if (v === '__create__') {
-              const name = window.prompt(hi ? 'नए बिक्री खाते का नाम:' : 'New Sales A/c name:');
-              if (name && name.trim() && onCreateSalesAccount) {
-                setItemForm(f => ({ ...f, salesAccountId: onCreateSalesAccount(name.trim()) }));
-              }
-              return;
-            }
+            if (v === '__create__') { onRequestCreateAccount?.('sales'); return; }
             setItemForm(f => ({ ...f, salesAccountId: v }));
           }}
           className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -267,13 +260,7 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
           value={itemForm.purchaseAccountId || ''}
           onChange={e => {
             const v = e.target.value;
-            if (v === '__create__') {
-              const name = window.prompt(hi ? 'नए खरीद खाते का नाम:' : 'New Purchase A/c name:');
-              if (name && name.trim() && onCreatePurchaseAccount) {
-                setItemForm(f => ({ ...f, purchaseAccountId: onCreatePurchaseAccount(name.trim()) }));
-              }
-              return;
-            }
+            if (v === '__create__') { onRequestCreateAccount?.('purchase'); return; }
             setItemForm(f => ({ ...f, purchaseAccountId: v }));
           }}
           className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -388,6 +375,107 @@ const BarcodeScanModal: React.FC<BarcodeScanModalProps> = ({ open, onClose, onDe
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
+// ── Inline "create new Sales/Purchase ledger" with an optional new sub-group ───
+// Posting always goes to a LEDGER (leaf); the group/sub-group is only for report
+// hierarchy (group -> sub-group -> ledger), matching Tally's Ledger-under-Group model.
+const AccountCreateDialog: React.FC<{
+  open: boolean;
+  kind: 'sales' | 'purchase';
+  accounts: LedgerAccount[];
+  addAccount: (data: Omit<LedgerAccount, 'id'>) => LedgerAccount;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+  hi: boolean;
+}> = ({ open, kind, accounts, addAccount, onSelect, onClose, hi }) => {
+  const rootId = kind === 'sales' ? '4100' : '5100';
+  const acctType: LedgerAccount['type'] = kind === 'sales' ? 'income' : 'expense';
+  const obType: 'credit' | 'debit' = kind === 'sales' ? 'credit' : 'debit';
+  const subtype = kind === 'sales' ? 'trading_income' : 'direct_expense';
+
+  const [name, setName] = useState('');
+  const [parentId, setParentId] = useState(rootId);
+  const [newSubgroup, setNewSubgroup] = useState('');
+
+  useEffect(() => {
+    if (open) { setName(''); setParentId(rootId); setNewSubgroup(''); }
+  }, [open, rootId]);
+
+  // All GROUPS in the subtree (root + sub-groups, any depth) for the parent picker.
+  const groups = useMemo(() => {
+    const out: { id: string; label: string }[] = [];
+    const root = accounts.find(a => a.id === rootId);
+    if (root) out.push({ id: root.id, label: (hi && root.nameHi) ? root.nameHi : root.name });
+    const walk = (pid: string, depth: number) => {
+      accounts.filter(a => a.parentId === pid && a.isGroup).forEach(a => {
+        out.push({ id: a.id, label: `${'— '.repeat(depth)}${(hi && a.nameHi) ? a.nameHi : a.name}` });
+        walk(a.id, depth + 1);
+      });
+    };
+    walk(rootId, 1);
+    return out;
+  }, [accounts, rootId, hi]);
+
+  const handleCreate = () => {
+    if (!name.trim()) return;
+    let targetParent = parentId;
+    if (newSubgroup.trim()) {
+      const grp = addAccount({
+        name: newSubgroup.trim(), nameHi: newSubgroup.trim(), type: acctType,
+        openingBalance: 0, openingBalanceType: obType, isGroup: true, parentId,
+      });
+      targetParent = grp.id;
+    }
+    const ledger = addAccount({
+      name: name.trim(), nameHi: name.trim(), type: acctType,
+      openingBalance: 0, openingBalanceType: obType, isGroup: false, parentId: targetParent, subtype,
+    });
+    onSelect(ledger.id);
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {kind === 'sales' ? (hi ? 'नया बिक्री खाता' : 'New Sales A/c') : (hi ? 'नया खरीद खाता' : 'New Purchase A/c')}
+          </DialogTitle>
+          <DialogDescription>
+            {hi
+              ? 'पोस्टिंग खाते (ledger) में होगी; समूह केवल रिपोर्ट की व्यवस्था के लिए है।'
+              : 'Posting goes to the ledger; the group is only for report grouping.'}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>{hi ? 'खाते का नाम' : 'Account name'} *</Label>
+            <Input value={name} onChange={e => setName(e.target.value)}
+              placeholder={hi ? 'जैसे: सरसों तेल बिक्री' : 'e.g. Mustard Oil Sales'} autoFocus />
+          </div>
+          <div className="space-y-1">
+            <Label>{hi ? 'किस समूह में रखें' : 'Place under group'}</Label>
+            <select value={parentId} onChange={e => setParentId(e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+              {groups.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">
+              {hi ? 'या ऊपर चुने समूह के अंदर नया उप-समूह बनाएँ (वैकल्पिक)' : 'Or create a new sub-group inside the selected group (optional)'}
+            </Label>
+            <Input value={newSubgroup} onChange={e => setNewSubgroup(e.target.value)}
+              placeholder={hi ? 'नए उप-समूह का नाम' : 'New sub-group name'} />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={onClose}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
+            <Button onClick={handleCreate} disabled={!name.trim()}>{hi ? 'बनाएँ' : 'Create'}</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const Inventory: React.FC = () => {
   const { language } = useLanguage();
   const {
@@ -427,17 +515,8 @@ const Inventory: React.FC = () => {
     [leafAccountsUnder],
   );
 
-  // Create a new sales/purchase ledger inline (under 4100 / 5100) → returns its id.
-  const createSalesAccount = useCallback((name: string): string => addAccount({
-    name: name.trim(), nameHi: name.trim(), type: 'income',
-    openingBalance: 0, openingBalanceType: 'credit',
-    isGroup: false, parentId: '4100', subtype: 'trading_income',
-  }).id, [addAccount]);
-  const createPurchaseAccount = useCallback((name: string): string => addAccount({
-    name: name.trim(), nameHi: name.trim(), type: 'expense',
-    openingBalance: 0, openingBalanceType: 'debit',
-    isGroup: false, parentId: '5100', subtype: 'direct_expense',
-  }).id, [addAccount]);
+  // Which "+ create new account" dialog is open (triggered by the item dropdowns).
+  const [creatorKind, setCreatorKind] = useState<'sales' | 'purchase' | null>(null);
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -1202,8 +1281,7 @@ const Inventory: React.FC = () => {
             existingGroups={existingGroups}
             salesAccounts={salesAccounts}
             purchaseAccounts={purchaseAccounts}
-            onCreateSalesAccount={createSalesAccount}
-            onCreatePurchaseAccount={createPurchaseAccount}
+            onRequestCreateAccount={setCreatorKind}
           />
         </DialogContent>
       </Dialog>
@@ -1238,11 +1316,24 @@ const Inventory: React.FC = () => {
             existingGroups={existingGroups}
             salesAccounts={salesAccounts}
             purchaseAccounts={purchaseAccounts}
-            onCreateSalesAccount={createSalesAccount}
-            onCreatePurchaseAccount={createPurchaseAccount}
+            onRequestCreateAccount={setCreatorKind}
           />
         </DialogContent>
       </Dialog>
+
+      {/* Inline create Sales/Purchase ledger (+ optional new sub-group) */}
+      <AccountCreateDialog
+        open={creatorKind !== null}
+        kind={creatorKind ?? 'sales'}
+        accounts={accounts}
+        addAccount={addAccount}
+        hi={hi}
+        onClose={() => setCreatorKind(null)}
+        onSelect={(id) => setItemFormWithRef(f => ({
+          ...f,
+          [creatorKind === 'purchase' ? 'purchaseAccountId' : 'salesAccountId']: id,
+        }))}
+      />
 
       {/* Manual Adjustment Dialog */}
       <Dialog
