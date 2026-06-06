@@ -128,3 +128,68 @@ begin
   delete from auth.users where id = v_uid;
   raise notice 'SELFTEST cleaned up OK.';
 end $$;
+
+
+-- ============================================================================
+--  BOOTSTRAP: first admin of a NEW society (used by the registration page).
+--  Same robust auth-row creation as above, but anon-callable AND only allowed
+--  for a society that has NO users yet (mirrors the society_users_bootstrap
+--  policy). Creates a CONFIRMED auth.users + auth.identities + the admin row,
+--  all in one transaction. Never modifies an existing auth user.
+-- ============================================================================
+create or replace function public.app_register_admin(
+  p_email text, p_password text, p_name text, p_society_id text
+)
+returns text
+language plpgsql
+security definer
+set search_path = public, extensions
+as $fn$
+declare
+  v_email text := lower(trim(p_email));
+  v_uid   uuid;
+  v_su_id uuid;
+begin
+  if v_email = '' or position('@' in v_email) = 0 then
+    raise exception 'Valid email required'; end if;
+  if p_password is null or length(p_password) < 6 then
+    raise exception 'Password must be at least 6 characters'; end if;
+  if public.society_has_users(p_society_id) then
+    raise exception 'This society already has users'; end if;   -- bootstrap only
+  if exists (select 1 from auth.users where lower(email) = v_email) then
+    raise exception 'A login already exists for %', v_email; end if;
+  if exists (select 1 from public.society_users where lower(email) = v_email) then
+    raise exception 'A user already exists for %', v_email; end if;
+
+  v_uid := gen_random_uuid();
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password,
+    email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data,
+    confirmation_token, recovery_token, email_change, email_change_token_new,
+    email_change_token_current, phone_change, phone_change_token, reauthentication_token
+  ) values (
+    '00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated',
+    v_email, crypt(p_password, gen_salt('bf')), now(), now(), now(),
+    jsonb_build_object('provider','email','providers', jsonb_build_array('email')),
+    jsonb_build_object('name', coalesce(p_name,'')),
+    '', '', '', '', '', '', '', ''
+  );
+  insert into auth.identities (
+    id, user_id, provider_id, identity_data, provider, created_at, updated_at
+  ) values (
+    gen_random_uuid(), v_uid, v_uid::text,
+    jsonb_build_object('sub', v_uid::text, 'email', v_email,
+                       'email_verified', true, 'phone_verified', false),
+    'email', now(), now()
+  );
+
+  insert into public.society_users (name, email, password, role, society_id, is_active)
+  values (p_name, v_email, p_password, 'admin', p_society_id::uuid, true)
+  returning id into v_su_id;
+
+  return v_su_id::text;
+end;
+$fn$;
+
+revoke all on function public.app_register_admin(text, text, text, text) from public;
+grant execute on function public.app_register_admin(text, text, text, text) to anon, authenticated;

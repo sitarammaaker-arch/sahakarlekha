@@ -112,38 +112,27 @@ const Register: React.FC = () => {
         return;
       }
 
-      // 2a. Create user in Supabase Auth (for password reset, email verification)
-      const { error: authSignUpError } = await supabase.auth.signUp({
-        email: adminEmail,
-        password: adminPassword,
-        options: {
-          data: { name: adminName, society_id: society.id },
-          emailRedirectTo: `${window.location.origin}/login`,
-        },
+      // 2. Create the admin atomically server-side: a CONFIRMED Supabase Auth
+      //    login (+ identity) AND the society_users admin row. This guarantees the
+      //    new admin can sign in (real JWT) and see their data under society-scoped
+      //    RLS — unlike the old auth.signUp, which could leave an unconfirmed or
+      //    broken login that fell back to a no-JWT session. anon may call this only
+      //    for a society that has no users yet (bootstrap guard inside the RPC).
+      const { error: adminError } = await supabase.rpc('app_register_admin', {
+        p_email: adminEmail,
+        p_password: adminPassword,
+        p_name: adminName,
+        p_society_id: society.id,
       });
-      if (authSignUpError) {
-        console.warn('[Register] Supabase Auth signup warning:', authSignUpError.message);
-        // Don't block registration — continue with society_users insert
-      }
 
-      // 2b. Insert admin user in society_users table
-      const { error: userError } = await supabase
-        .from('society_users')
-        .insert({
-          society_id: society.id,
-          name: adminName,
-          email: adminEmail,
-          password: adminPassword,
-          role: 'admin',
-        });
-
-      if (userError) {
-        // Rollback society on user insert failure
+      if (adminError) {
+        // Roll back the society so the user can retry cleanly.
         await supabase.from('societies').delete().eq('id', society.id);
-        if (userError.code === '23505') {
+        const msg = adminError.message || '';
+        if (/already/i.test(msg)) {
           setError('This email is already registered. Please use a different email.');
         } else {
-          setError(userError.message);
+          setError(msg || 'Could not create the admin account. Please try again.');
         }
         setLoading(false);
         return;
