@@ -140,9 +140,11 @@ interface ItemFormProps {
   existingGroups?: string[];
   salesAccounts?: { id: string; name: string; nameHi: string }[];
   purchaseAccounts?: { id: string; name: string; nameHi: string }[];
+  onCreateSalesAccount?: (name: string) => string;
+  onCreatePurchaseAccount?: (name: string) => string;
 }
 
-const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit, submitLabel, onCancel, existingGroups = [], salesAccounts = [], purchaseAccounts = [] }) => (
+const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit, submitLabel, onCancel, existingGroups = [], salesAccounts = [], purchaseAccounts = [], onCreateSalesAccount, onCreatePurchaseAccount }) => (
   <form onSubmit={e => e.preventDefault()} className="space-y-4">
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div className="space-y-2">
@@ -236,13 +238,24 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
         </Label>
         <select
           value={itemForm.salesAccountId || ''}
-          onChange={e => setItemForm(f => ({ ...f, salesAccountId: e.target.value }))}
+          onChange={e => {
+            const v = e.target.value;
+            if (v === '__create__') {
+              const name = window.prompt(hi ? 'नए बिक्री खाते का नाम:' : 'New Sales A/c name:');
+              if (name && name.trim() && onCreateSalesAccount) {
+                setItemForm(f => ({ ...f, salesAccountId: onCreateSalesAccount(name.trim()) }));
+              }
+              return;
+            }
+            setItemForm(f => ({ ...f, salesAccountId: v }));
+          }}
           className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <option value="">{hi ? '— बिक्री खाता चुनें —' : '— Select Sales A/c —'}</option>
           {salesAccounts.map(a => (
-            <option key={a.id} value={a.id}>{a.id} — {hi ? a.nameHi : a.name}</option>
+            <option key={a.id} value={a.id}>{a.id.length <= 6 ? `${a.id} — ` : ''}{hi ? a.nameHi : a.name}</option>
           ))}
+          <option value="__create__">{hi ? '+ नया बिक्री खाता बनाएँ…' : '+ Create new Sales A/c…'}</option>
         </select>
       </div>
       <div className="space-y-2">
@@ -252,13 +265,24 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
         </Label>
         <select
           value={itemForm.purchaseAccountId || ''}
-          onChange={e => setItemForm(f => ({ ...f, purchaseAccountId: e.target.value }))}
+          onChange={e => {
+            const v = e.target.value;
+            if (v === '__create__') {
+              const name = window.prompt(hi ? 'नए खरीद खाते का नाम:' : 'New Purchase A/c name:');
+              if (name && name.trim() && onCreatePurchaseAccount) {
+                setItemForm(f => ({ ...f, purchaseAccountId: onCreatePurchaseAccount(name.trim()) }));
+              }
+              return;
+            }
+            setItemForm(f => ({ ...f, purchaseAccountId: v }));
+          }}
           className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <option value="">{hi ? '— खरीद खाता चुनें —' : '— Select Purchase A/c —'}</option>
           {purchaseAccounts.map(a => (
-            <option key={a.id} value={a.id}>{a.id} — {hi ? a.nameHi : a.name}</option>
+            <option key={a.id} value={a.id}>{a.id.length <= 6 ? `${a.id} — ` : ''}{hi ? a.nameHi : a.name}</option>
           ))}
+          <option value="__create__">{hi ? '+ नया खरीद खाता बनाएँ…' : '+ Create new Purchase A/c…'}</option>
         </select>
       </div>
       <p className="sm:col-span-2 text-[11px] text-blue-800/80 dark:text-blue-200/80">
@@ -375,21 +399,45 @@ const Inventory: React.FC = () => {
     deleteStockItem,
     addStockMovement,
     getEntityLinks,
+    addAccount,
   } = useData();
 
   // Sales income accounts (parent 4100) and Purchases/Direct-expense accounts (parent 5100).
   // Shown in the per-item A/c dropdowns so user can route each stock item to its own ledger
   // line in Trial Balance / Trading A/c / I&E (e.g. Sugar → 4103, Fertilizer → 4101).
+  // All leaf (postable) accounts ANYWHERE under a parent group (recursive), so
+  // manually-created sub-accounts / sub-groups also appear in the dropdowns.
+  const leafAccountsUnder = useCallback((rootId: string) => {
+    const out: typeof accounts = [];
+    const walk = (pid: string) => {
+      accounts.filter(a => (a.parentId || '') === pid).forEach(a => {
+        if (a.isGroup) walk(a.id); else out.push(a);
+      });
+    };
+    walk(rootId);
+    return out;
+  }, [accounts]);
+
   const salesAccounts = useMemo(
-    () => accounts.filter(a => a.parentId === '4100' && !a.isGroup)
-      .map(a => ({ id: a.id, name: a.name, nameHi: a.nameHi })),
-    [accounts],
+    () => leafAccountsUnder('4100').map(a => ({ id: a.id, name: a.name, nameHi: a.nameHi })),
+    [leafAccountsUnder],
   );
   const purchaseAccounts = useMemo(
-    () => accounts.filter(a => a.parentId === '5100' && !a.isGroup)
-      .map(a => ({ id: a.id, name: a.name, nameHi: a.nameHi })),
-    [accounts],
+    () => leafAccountsUnder('5100').map(a => ({ id: a.id, name: a.name, nameHi: a.nameHi })),
+    [leafAccountsUnder],
   );
+
+  // Create a new sales/purchase ledger inline (under 4100 / 5100) → returns its id.
+  const createSalesAccount = useCallback((name: string): string => addAccount({
+    name: name.trim(), nameHi: name.trim(), type: 'income',
+    openingBalance: 0, openingBalanceType: 'credit',
+    isGroup: false, parentId: '4100', subtype: 'trading_income',
+  }).id, [addAccount]);
+  const createPurchaseAccount = useCallback((name: string): string => addAccount({
+    name: name.trim(), nameHi: name.trim(), type: 'expense',
+    openingBalance: 0, openingBalanceType: 'debit',
+    isGroup: false, parentId: '5100', subtype: 'direct_expense',
+  }).id, [addAccount]);
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -1154,6 +1202,8 @@ const Inventory: React.FC = () => {
             existingGroups={existingGroups}
             salesAccounts={salesAccounts}
             purchaseAccounts={purchaseAccounts}
+            onCreateSalesAccount={createSalesAccount}
+            onCreatePurchaseAccount={createPurchaseAccount}
           />
         </DialogContent>
       </Dialog>
@@ -1188,6 +1238,8 @@ const Inventory: React.FC = () => {
             existingGroups={existingGroups}
             salesAccounts={salesAccounts}
             purchaseAccounts={purchaseAccounts}
+            onCreateSalesAccount={createSalesAccount}
+            onCreatePurchaseAccount={createPurchaseAccount}
           />
         </DialogContent>
       </Dialog>
