@@ -471,7 +471,7 @@ const TdsRegister: React.FC = () => {
               <Label>{hi ? 'भुगतान प्रकृति' : 'Nature of Payment'}</Label>
               <Input value={entryForm.natureOfPayment} onChange={e => setEntryForm(f => ({ ...f, natureOfPayment: e.target.value }))} placeholder="e.g. Audit Fee, Contractor Payment" />
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label>{hi ? 'सकल राशि (₹)' : 'Gross Amount (₹)'}</Label>
                 <Input type="number" min={0} value={entryForm.grossAmount || ''} onChange={e => setEntryForm(f => ({ ...f, grossAmount: Number(e.target.value) }))} />

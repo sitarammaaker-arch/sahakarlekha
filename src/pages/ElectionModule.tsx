@@ -189,7 +189,7 @@ export default function ElectionModule() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">{hi ? 'आगामी' : 'Upcoming'}</p><p className="font-bold text-lg text-blue-700">{upcoming.length}</p></CardContent></Card>
         <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">{hi ? 'जारी' : 'Ongoing'}</p><p className="font-bold text-lg text-yellow-700">{ongoing.length}</p></CardContent></Card>
         <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">{hi ? 'पूर्ण' : 'Completed'}</p><p className="font-bold text-lg text-green-700">{completed.length}</p></CardContent></Card>

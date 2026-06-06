@@ -177,7 +177,7 @@ const NominationRegister: React.FC = () => {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-gray-500">{hi ? 'कुल सक्रिय सदस्य' : 'Total Active'}</p>

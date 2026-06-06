@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,82 +10,83 @@ import { DataProvider, useData } from "@/contexts/DataContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-// Pages
-import LandingPage from "./pages/LandingPage";
-import ContactUs from "./pages/ContactUs";
-import AboutUs from "./pages/AboutUs";
-import FAQ from "./pages/FAQ";
-import UserGuide from "./pages/UserGuide";
-import Pricing from "./pages/Pricing";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import CashBook from "./pages/CashBook";
-import BankBook from "./pages/BankBook";
-import Vouchers from "./pages/Vouchers";
-import Ledger from "./pages/Ledger";
-import Members from "./pages/Members";
-import MemberApplication from "./pages/MemberApplication";
-import TrialBalance from "./pages/TrialBalance";
-import ProfitLoss from "./pages/ProfitLoss";
-import TradingAccount from "./pages/TradingAccount";
-import ReceiptsPayments from "./pages/ReceiptsPayments";
-import BalanceSheet from "./pages/BalanceSheet";
-import Reports from "./pages/Reports";
-import SocietySetup from "./pages/SocietySetup";
-import ShareRegister from "./pages/ShareRegister";
-import LoanRegister from "./pages/LoanRegister";
-import AssetRegister from "./pages/AssetRegister";
-import DepreciationSchedule from "./pages/DepreciationSchedule";
-import AuditRegister from "./pages/AuditRegister";
-import DayBook from "./pages/DayBook";
-import LedgerHeads from "./pages/LedgerHeads";
-import Inventory from "./pages/Inventory";
-import SaleManagement from "./pages/SaleManagement";
-import SaleRegister from "./pages/SaleRegister";
-import PurchaseManagement from "./pages/PurchaseManagement";
-import PurchaseRegister from "./pages/PurchaseRegister";
-import SalaryManagement from "./pages/SalaryManagement";
-import Suppliers from "./pages/Suppliers";
-import Customers from "./pages/Customers";
-import DeletedVouchers from "./pages/DeletedVouchers";
-import BankReconciliation from "./pages/BankReconciliation";
-import ReserveFund from "./pages/ReserveFund";
-import ProfitDistribution from "./pages/ProfitDistribution";
-import LoanInterest from "./pages/LoanInterest";
-import CompoundVoucher from "./pages/CompoundVoucher";
-import VoucherApproval from "./pages/VoucherApproval";
-import MeetingRegister from "./pages/MeetingRegister";
-import NominationRegister from "./pages/NominationRegister";
-import Form1MemberList from "./pages/Form1MemberList";
-import AuditCertificate from "./pages/AuditCertificate";
-import BackupRestore from "./pages/BackupRestore";
-import GstSummary from "./pages/GstSummary";
-import AgingAnalysis from "./pages/AgingAnalysis";
-import StockValuation from "./pages/StockValuation";
-import ClosingStockReport from "./pages/ClosingStockReport";
-import BudgetModule from "./pages/BudgetModule";
-import TdsForm16A from "./pages/TdsForm16A";
-import TdsRegister from "./pages/TdsRegister";
-import UserManagement from "./pages/UserManagement";
-import EWayBill from "./pages/EWayBill";
-import HsnMaster from "./pages/HsnMaster";
-import KccLoan from "./pages/KccLoan";
-import ElectionModule from "./pages/ElectionModule";
-import BoardOfDirectors from "./pages/BoardOfDirectors";
-import OpeningBalances from "./pages/OpeningBalances";
-import Register from "./pages/Register";
-import MultiSocietyConsolidation from "./pages/MultiSocietyConsolidation";
-import NabardReport from "./pages/NabardReport";
-import FederationReport from "./pages/FederationReport";
-import RecoverablesRegister from "./pages/RecoverablesRegister";
-import KachiAaratRegister from "./pages/KachiAaratRegister";
-import AuditSchedules from "./pages/AuditSchedules";
-import UniversalImporter from "./pages/UniversalImporter";
-import ResetPassword from "./pages/ResetPassword";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import TermsConditions from "./pages/TermsConditions";
-import NotFound from "./pages/NotFound";
-import SuperAdminDashboard from "./pages/SuperAdminDashboard";
+// Pages — lazy-loaded so each route ships as its own chunk (keeps the initial
+// bundle small; heavy libs like jsPDF/html2canvas/recharts/xlsx load on demand).
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const ContactUs = lazy(() => import("./pages/ContactUs"));
+const AboutUs = lazy(() => import("./pages/AboutUs"));
+const FAQ = lazy(() => import("./pages/FAQ"));
+const UserGuide = lazy(() => import("./pages/UserGuide"));
+const Pricing = lazy(() => import("./pages/Pricing"));
+const Login = lazy(() => import("./pages/Login"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const CashBook = lazy(() => import("./pages/CashBook"));
+const BankBook = lazy(() => import("./pages/BankBook"));
+const Vouchers = lazy(() => import("./pages/Vouchers"));
+const Ledger = lazy(() => import("./pages/Ledger"));
+const Members = lazy(() => import("./pages/Members"));
+const MemberApplication = lazy(() => import("./pages/MemberApplication"));
+const TrialBalance = lazy(() => import("./pages/TrialBalance"));
+const ProfitLoss = lazy(() => import("./pages/ProfitLoss"));
+const TradingAccount = lazy(() => import("./pages/TradingAccount"));
+const ReceiptsPayments = lazy(() => import("./pages/ReceiptsPayments"));
+const BalanceSheet = lazy(() => import("./pages/BalanceSheet"));
+const Reports = lazy(() => import("./pages/Reports"));
+const SocietySetup = lazy(() => import("./pages/SocietySetup"));
+const ShareRegister = lazy(() => import("./pages/ShareRegister"));
+const LoanRegister = lazy(() => import("./pages/LoanRegister"));
+const AssetRegister = lazy(() => import("./pages/AssetRegister"));
+const DepreciationSchedule = lazy(() => import("./pages/DepreciationSchedule"));
+const AuditRegister = lazy(() => import("./pages/AuditRegister"));
+const DayBook = lazy(() => import("./pages/DayBook"));
+const LedgerHeads = lazy(() => import("./pages/LedgerHeads"));
+const Inventory = lazy(() => import("./pages/Inventory"));
+const SaleManagement = lazy(() => import("./pages/SaleManagement"));
+const SaleRegister = lazy(() => import("./pages/SaleRegister"));
+const PurchaseManagement = lazy(() => import("./pages/PurchaseManagement"));
+const PurchaseRegister = lazy(() => import("./pages/PurchaseRegister"));
+const SalaryManagement = lazy(() => import("./pages/SalaryManagement"));
+const Suppliers = lazy(() => import("./pages/Suppliers"));
+const Customers = lazy(() => import("./pages/Customers"));
+const DeletedVouchers = lazy(() => import("./pages/DeletedVouchers"));
+const BankReconciliation = lazy(() => import("./pages/BankReconciliation"));
+const ReserveFund = lazy(() => import("./pages/ReserveFund"));
+const ProfitDistribution = lazy(() => import("./pages/ProfitDistribution"));
+const LoanInterest = lazy(() => import("./pages/LoanInterest"));
+const CompoundVoucher = lazy(() => import("./pages/CompoundVoucher"));
+const VoucherApproval = lazy(() => import("./pages/VoucherApproval"));
+const MeetingRegister = lazy(() => import("./pages/MeetingRegister"));
+const NominationRegister = lazy(() => import("./pages/NominationRegister"));
+const Form1MemberList = lazy(() => import("./pages/Form1MemberList"));
+const AuditCertificate = lazy(() => import("./pages/AuditCertificate"));
+const BackupRestore = lazy(() => import("./pages/BackupRestore"));
+const GstSummary = lazy(() => import("./pages/GstSummary"));
+const AgingAnalysis = lazy(() => import("./pages/AgingAnalysis"));
+const StockValuation = lazy(() => import("./pages/StockValuation"));
+const ClosingStockReport = lazy(() => import("./pages/ClosingStockReport"));
+const BudgetModule = lazy(() => import("./pages/BudgetModule"));
+const TdsForm16A = lazy(() => import("./pages/TdsForm16A"));
+const TdsRegister = lazy(() => import("./pages/TdsRegister"));
+const UserManagement = lazy(() => import("./pages/UserManagement"));
+const EWayBill = lazy(() => import("./pages/EWayBill"));
+const HsnMaster = lazy(() => import("./pages/HsnMaster"));
+const KccLoan = lazy(() => import("./pages/KccLoan"));
+const ElectionModule = lazy(() => import("./pages/ElectionModule"));
+const BoardOfDirectors = lazy(() => import("./pages/BoardOfDirectors"));
+const OpeningBalances = lazy(() => import("./pages/OpeningBalances"));
+const Register = lazy(() => import("./pages/Register"));
+const MultiSocietyConsolidation = lazy(() => import("./pages/MultiSocietyConsolidation"));
+const NabardReport = lazy(() => import("./pages/NabardReport"));
+const FederationReport = lazy(() => import("./pages/FederationReport"));
+const RecoverablesRegister = lazy(() => import("./pages/RecoverablesRegister"));
+const KachiAaratRegister = lazy(() => import("./pages/KachiAaratRegister"));
+const AuditSchedules = lazy(() => import("./pages/AuditSchedules"));
+const UniversalImporter = lazy(() => import("./pages/UniversalImporter"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const TermsConditions = lazy(() => import("./pages/TermsConditions"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
 import { SuperAdminRoute } from "@/components/SuperAdminRoute";
 
 import { preloadHindiFont } from '@/lib/fontLoader';
@@ -128,8 +130,16 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
+// Lightweight fallback shown while a route chunk is being fetched.
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+  </div>
+);
+
 const AppRoutes = () => {
   return (
+    <Suspense fallback={<PageLoader />}>
     <Routes>
       {/* Public Routes */}
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
@@ -217,6 +227,7 @@ const AppRoutes = () => {
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </Suspense>
   );
 };
 

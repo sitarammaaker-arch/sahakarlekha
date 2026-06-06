@@ -83,7 +83,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
         <Input value={form.fatherName} onChange={e => f('fatherName', e.target.value)} placeholder={hi ? 'श्री...' : 'Mr...'} />
       </div>
     </div>
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'आयु' : 'Age'}</Label>
         <Input type="number" value={form.age} onChange={e => f('age', e.target.value)} placeholder="25" min="1" max="120" />
@@ -109,7 +109,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
       <Label className="text-xs">{t('address')}</Label>
       <Textarea value={form.address} onChange={e => f('address', e.target.value)} placeholder={hi ? 'पूरा पता' : 'Full address'} className="h-16" />
     </div>
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'डाकघर' : 'Post Office'}</Label>
         <Input value={form.postOffice} onChange={e => f('postOffice', e.target.value)} />
@@ -123,7 +123,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
         <Input value={form.district} onChange={e => f('district', e.target.value)} />
       </div>
     </div>
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'राज्य' : 'State'}</Label>
         <Input value={form.state} onChange={e => f('state', e.target.value)} />
@@ -161,7 +161,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
         </Select>
       </div>
     </div>
-    <div className="grid grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'अंश संख्या' : 'Shares'}</Label>
         <Input type="number" value={form.shareCount} onChange={e => f('shareCount', e.target.value)} min="0" />
@@ -191,7 +191,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
         <Input value={form.nomineeFatherName} onChange={e => f('nomineeFatherName', e.target.value)} />
       </div>
     </div>
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'सम्बन्ध' : 'Relation'}</Label>
         <Input value={form.nomineeRelation} onChange={e => f('nomineeRelation', e.target.value)} />

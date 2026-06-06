@@ -117,7 +117,7 @@ const LineTable: React.FC<{
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-red-500 hover:bg-red-50"
+                    className="h-9 w-9 text-red-500 hover:bg-red-50"
                     onClick={() => onRemove(line.id)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />

@@ -160,7 +160,7 @@ const RecoverablesRegister: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto p-4 max-w-7xl space-y-4">
+    <div className="mx-auto max-w-7xl space-y-4">
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">

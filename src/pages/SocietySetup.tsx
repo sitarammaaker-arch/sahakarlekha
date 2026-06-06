@@ -336,7 +336,7 @@ const SocietySetup: React.FC = () => {
       </div>
 
       <Tabs defaultValue="basic">
-        <TabsList className="grid w-full grid-cols-5 max-w-3xl">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 max-w-3xl h-auto gap-1">
           <TabsTrigger value="basic" className="gap-2">
             <Building2 className="h-4 w-4" />
             {language === 'hi' ? 'मूल विवरण' : 'Basic Info'}

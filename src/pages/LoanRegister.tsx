@@ -40,7 +40,7 @@ interface LoanFormProps {
 
 const LoanForm: React.FC<LoanFormProps> = ({ form, setForm, hi, members, onSubmit, onCancel }) => (
   <form onSubmit={onSubmit} className="space-y-4">
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="space-y-1 col-span-2">
         <Label>{hi ? 'सदस्य *' : 'Member *'}</Label>
         <Select value={form.memberId} onValueChange={v => setForm(f => ({ ...f, memberId: v }))}>

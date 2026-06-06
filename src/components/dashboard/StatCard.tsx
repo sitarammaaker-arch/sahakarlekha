@@ -47,7 +47,7 @@ export const StatCard: React.FC<StatCardProps> = ({
         <div className="flex items-start justify-between">
           <div>
             <p className="text-sm font-medium text-white/80">{title}</p>
-            <p className="text-3xl font-bold mt-2">{value}</p>
+            <p className="text-2xl sm:text-3xl font-bold mt-2 break-words">{value}</p>
             {subtitle && (
               <p className="text-sm text-white/70 mt-1">{subtitle}</p>
             )}

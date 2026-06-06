@@ -45,7 +45,7 @@ interface AssetFormProps {
 
 const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCancel }) => (
   <form onSubmit={onSubmit} className="space-y-4">
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="space-y-1 col-span-2">
         <Label>{hi ? 'संपत्ति का नाम *' : 'Asset Name *'}</Label>
         <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={hi ? 'जैसे: अलमारी, जीप आदि' : 'e.g. Steel Almirah, Jeep'} />

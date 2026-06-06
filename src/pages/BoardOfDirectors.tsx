@@ -224,7 +224,7 @@ const BoardOfDirectors: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
               <div className="text-center p-2 bg-muted rounded">
                 <p className="font-semibold">{signatories.accountant?.name || '—'}</p>
                 <p className="text-xs text-muted-foreground">{hi ? 'लेखाकार' : 'Accountant'}</p>

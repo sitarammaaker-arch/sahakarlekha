@@ -472,7 +472,7 @@ const Suppliers: React.FC = () => {
                   <Label>{hi ? 'पता पंक्ति 2 / Address Line 2' : 'Address Line 2'}</Label>
                   <Input value={form.addressLine2 || ''} onChange={e => setForm(f => ({ ...f, addressLine2: e.target.value }))} placeholder={hi ? 'क्षेत्र / Locality' : 'Area / Locality'} />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label>{hi ? 'शहर / City' : 'City'}</Label>
                     <Input value={form.city || ''} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="Sirsa" />
@@ -642,7 +642,7 @@ const Suppliers: React.FC = () => {
                     <Input value={form.accountNo || ''} onChange={e => setForm(f => ({ ...f, accountNo: e.target.value }))} placeholder="XXXXXXXXXXXX" />
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label>IFSC</Label>
                     <Input value={form.ifsc || ''} onChange={e => setForm(f => ({ ...f, ifsc: e.target.value.toUpperCase() }))} placeholder="SBIN0XXXXXX" className="font-mono" />
@@ -665,7 +665,7 @@ const Suppliers: React.FC = () => {
                 {hi ? '🟦 उधारी की शर्तें / Credit Terms' : '🟦 Credit Terms'}
               </AccordionTrigger>
               <AccordionContent className="space-y-3 pt-2">
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label>{hi ? 'उधारी दिन (हम पाते हैं)' : 'Credit Days (we get)'}</Label>
                     <Input type="number" min={0} value={form.creditDays ?? 0} onChange={e => setForm(f => ({ ...f, creditDays: Number(e.target.value) || 0 }))} />

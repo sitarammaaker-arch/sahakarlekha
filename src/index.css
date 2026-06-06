@@ -7,7 +7,8 @@
    All colors in HSL format
 */
 
-@import url('https://fonts.googleapis.com/css2?family=Hind:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+/* Fonts are loaded via <link rel="preconnect"/stylesheet> in index.html (faster,
+   non-render-blocking) instead of a CSS @import. */
 
 @layer base {
   :root {
@@ -188,7 +189,7 @@
 
   /* Dashboard stat cards */
   .stat-card {
-    @apply relative overflow-hidden rounded-xl p-6 text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-1;
+    @apply relative overflow-hidden rounded-xl p-4 sm:p-6 text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-1;
   }
 
   .stat-card::before {

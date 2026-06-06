@@ -190,7 +190,7 @@ const ShareRegister: React.FC = () => {
             <DialogTitle>{hi ? 'अंश विवरण संपादित करें' : 'Edit Share Details'} — {editMember?.name}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label>{hi ? 'प्रमाणपत्र सं.' : 'Share Cert. No.'}</Label>
                 <Input value={form.shareCertNo} onChange={e => setForm(f => ({ ...f, shareCertNo: e.target.value }))} placeholder="SC-001" />

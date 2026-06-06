@@ -216,7 +216,7 @@ const VoucherApproval: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-blue-600 hover:bg-blue-50"
+                          className="h-9 w-9 text-blue-600 hover:bg-blue-50"
                           onClick={() => setDetailId(v.id)}
                           title={hi ? 'विवरण देखें' : 'View detail'}
                         >
@@ -227,7 +227,7 @@ const VoucherApproval: React.FC = () => {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-green-600 hover:bg-green-50"
+                              className="h-9 w-9 text-green-600 hover:bg-green-50"
                               onClick={() => handleApprove(v.id)}
                               title={hi ? 'स्वीकृत करें' : 'Approve'}
                             >
@@ -236,7 +236,7 @@ const VoucherApproval: React.FC = () => {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-red-500 hover:bg-red-50"
+                              className="h-9 w-9 text-red-500 hover:bg-red-50"
                               onClick={() => { setRejectId(v.id); setRejectReason(''); }}
                               title={hi ? 'अस्वीकृत करें' : 'Reject'}
                             >

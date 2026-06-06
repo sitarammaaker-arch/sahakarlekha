@@ -242,7 +242,7 @@ const SuperAdminDashboard: React.FC = () => {
       </div>
 
       <Tabs defaultValue="societies">
-        <TabsList>
+        <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="societies" className="gap-2">
             <Building2 className="h-4 w-4" /> All Societies
           </TabsTrigger>

@@ -186,7 +186,7 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
         </SelectContent>
       </Select>
     </div>
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <div className="space-y-2">
         <Label>{hi ? 'प्रारंभिक स्टॉक' : 'Opening Stock'}</Label>
         <Input

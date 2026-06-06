@@ -769,7 +769,7 @@ const Vouchers: React.FC = () => {
                     {voucherType !== 'contra' && (
                       <div className="space-y-3">
                         <Label className="text-base font-semibold">{language === 'hi' ? 'नाम-जमा पंक्तियाँ' : 'Debit / Credit Lines'}</Label>
-                        <div className="rounded-lg border overflow-visible">
+                        <div className="rounded-lg border overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="bg-muted/40 border-b">
@@ -823,7 +823,7 @@ const Vouchers: React.FC = () => {
                                   </td>
                                   <td className="py-1 px-1">
                                     {lines.length > 2 && (
-                                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveLine(line.id)}>
+                                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9 text-destructive" onClick={() => handleRemoveLine(line.id)}>
                                         <Minus className="h-3.5 w-3.5" />
                                       </Button>
                                     )}
@@ -1017,25 +1017,25 @@ const Vouchers: React.FC = () => {
                           </TableCell>
                           <TableCell className="text-center">
                             <div className="flex items-center justify-center gap-1">
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:bg-green-50"
+                              <Button variant="ghost" size="icon" className="h-9 w-9 text-green-600 hover:bg-green-50"
                                 title={language === 'hi' ? 'Voucher PDF' : 'Voucher PDF'}
                                 onClick={() => handlePrintVoucher(v.id)}>
                                 <Printer className="h-4 w-4" />
                               </Button>
                               {canEdit && !cancelled && (
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10"
+                                <Button variant="ghost" size="icon" className="h-9 w-9 text-primary hover:bg-primary/10"
                                   title={language === 'hi' ? 'संपादित करें' : 'Edit'}
                                   onClick={() => openEdit(v)}>
                                   <Pencil className="h-4 w-4" />
                                 </Button>
                               )}
                               {canEdit && (cancelled ? (
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700" title={language === 'hi' ? 'पुनर्स्थापित करें' : 'Restore'}
+                                <Button variant="ghost" size="icon" className="h-9 w-9 text-blue-600 hover:text-blue-700" title={language === 'hi' ? 'पुनर्स्थापित करें' : 'Restore'}
                                   onClick={() => restoreVoucher(v.id)}>
                                   <RotateCcw className="h-4 w-4" />
                                 </Button>
                               ) : (
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
                                   onClick={() => { setCancelId(v.id); setCancelReason(''); }}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
