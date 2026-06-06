@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PackagePlus, Download, FileSpreadsheet, Info } from 'lucide-react';
+import { PackagePlus, Download, FileSpreadsheet, Info, ChevronRight, ChevronDown } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { generatePurchaseRegisterPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
@@ -29,6 +29,12 @@ const PurchaseRegister: React.FC = () => {
   const [fromDate, setFromDate] = useState(fyDates?.start || '');
   const [toDate, setToDate] = useState(fyDates?.end || '');
   const [partyFilter, setPartyFilter] = useState('');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) => setExpanded(prev => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
 
   const filtered = useMemo(() => {
     return purchases
@@ -121,6 +127,7 @@ const PurchaseRegister: React.FC = () => {
       <Card className="shadow-card">
         <CardHeader className="border-b pb-3">
           <CardTitle className="text-base">{hi ? 'क्रय विवरण' : 'Purchase Details'}</CardTitle>
+          <p className="text-xs text-muted-foreground">{hi ? 'किसी बिल पर क्लिक करके उसकी वस्तुओं का विवरण (मात्रा/दर/राशि) देखें।' : 'Click a bill to see its item-wise details (qty / rate / amount).'}</p>
         </CardHeader>
         <CardContent className="pt-4">
           {filtered.length === 0 ? (
@@ -149,20 +156,59 @@ const PurchaseRegister: React.FC = () => {
                 </TableHeader>
                 <TableBody>
                   {filtered.map((p, i) => (
-                    <TableRow key={p.id} className="hover:bg-muted/30">
-                      <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                      <TableCell className="font-mono text-xs">{p.purchaseNo}</TableCell>
-                      <TableCell>{fmtDate(p.date)}</TableCell>
-                      <TableCell className="font-medium">{p.supplierName}</TableCell>
-                      <TableCell className="text-right">{fmtAmt(p.netAmount)}</TableCell>
-                      <TableCell className="text-right">{p.cgstAmount > 0 ? fmtAmt(p.cgstAmount) : '—'}</TableCell>
-                      <TableCell className="text-right">{p.sgstAmount > 0 ? fmtAmt(p.sgstAmount) : '—'}</TableCell>
-                      <TableCell className="text-right">{p.igstAmount > 0 ? fmtAmt(p.igstAmount) : '—'}</TableCell>
-                      <TableCell className="text-right text-amber-700">{p.taxAmount > 0 ? fmtAmt(p.taxAmount) : '—'}</TableCell>
-                      <TableCell className="text-right text-red-600">{(p.tdsAmount || 0) > 0 ? fmtAmt(p.tdsAmount) : '—'}</TableCell>
-                      <TableCell className="text-right font-semibold">{fmtAmt(p.grandTotal)}</TableCell>
-                      <TableCell><span className="text-xs px-1.5 py-0.5 rounded bg-muted">{p.paymentMode}</span></TableCell>
-                    </TableRow>
+                    <React.Fragment key={p.id}>
+                      <TableRow className="hover:bg-muted/30 cursor-pointer" onClick={() => toggleExpand(p.id)}>
+                        <TableCell className="text-muted-foreground">
+                          <span className="inline-flex items-center gap-1">
+                            {p.items?.length ? (expanded.has(p.id) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />) : <span className="w-3.5" />}
+                            {i + 1}
+                          </span>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{p.purchaseNo}</TableCell>
+                        <TableCell>{fmtDate(p.date)}</TableCell>
+                        <TableCell className="font-medium">{p.supplierName}</TableCell>
+                        <TableCell className="text-right">{fmtAmt(p.netAmount)}</TableCell>
+                        <TableCell className="text-right">{p.cgstAmount > 0 ? fmtAmt(p.cgstAmount) : '—'}</TableCell>
+                        <TableCell className="text-right">{p.sgstAmount > 0 ? fmtAmt(p.sgstAmount) : '—'}</TableCell>
+                        <TableCell className="text-right">{p.igstAmount > 0 ? fmtAmt(p.igstAmount) : '—'}</TableCell>
+                        <TableCell className="text-right text-amber-700">{p.taxAmount > 0 ? fmtAmt(p.taxAmount) : '—'}</TableCell>
+                        <TableCell className="text-right text-red-600">{(p.tdsAmount || 0) > 0 ? fmtAmt(p.tdsAmount) : '—'}</TableCell>
+                        <TableCell className="text-right font-semibold">{fmtAmt(p.grandTotal)}</TableCell>
+                        <TableCell><span className="text-xs px-1.5 py-0.5 rounded bg-muted">{p.paymentMode}</span></TableCell>
+                      </TableRow>
+                      {expanded.has(p.id) && (p.items?.length ?? 0) > 0 && (
+                        <TableRow className="bg-muted/20 hover:bg-muted/20">
+                          <TableCell colSpan={12} className="p-0">
+                            <div className="px-8 py-2">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="text-muted-foreground">
+                                    <th className="text-left py-1 w-8">#</th>
+                                    <th className="text-left py-1">{hi ? 'वस्तु' : 'Item'}</th>
+                                    <th className="text-right py-1">{hi ? 'मात्रा' : 'Qty'}</th>
+                                    <th className="text-left py-1 pl-3">{hi ? 'इकाई' : 'Unit'}</th>
+                                    <th className="text-right py-1">{hi ? 'दर' : 'Rate'}</th>
+                                    <th className="text-right py-1">{hi ? 'राशि' : 'Amount'}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {p.items.map((it, j) => (
+                                    <tr key={j} className="border-t border-border/40">
+                                      <td className="py-1 text-muted-foreground">{j + 1}</td>
+                                      <td className="py-1">{it.itemName}</td>
+                                      <td className="py-1 text-right">{it.qty}</td>
+                                      <td className="py-1 pl-3">{it.unit}</td>
+                                      <td className="py-1 text-right">{fmtAmt(it.rate)}</td>
+                                      <td className="py-1 text-right">{fmtAmt(it.amount)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                   ))}
                   <TableRow className="bg-primary/10 font-bold">
                     <TableCell colSpan={4}>{hi ? 'कुल' : 'Total'}</TableCell>
