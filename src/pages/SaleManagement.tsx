@@ -284,10 +284,12 @@ const SaleManagement: React.FC = () => {
         });
         resetForm();
       }
-    } catch {
+    } catch (err) {
       toast({
-        title: language === 'hi' ? 'कोई त्रुटि हुई' : 'An error occurred',
+        title: language === 'hi' ? 'बिक्री पोस्ट नहीं हुई' : 'Sale not posted',
+        description: err instanceof Error ? err.message : undefined,
         variant: 'destructive',
+        duration: 10000,
       });
     }
   };

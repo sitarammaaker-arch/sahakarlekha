@@ -2299,6 +2299,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ── Sales ──────────────────────────────────────────────────────────────────
   const addSale = useCallback((data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>): Sale => {
+    // Enforce per-item Sales A/c (group): block posting if any STOCK item being
+    // sold has no salesAccountId, so sales never silently fall back to '4101'.
+    const unmappedNames = data.items
+      .map(it => stockItems.find(s => s.id === it.itemId))
+      .filter((s): s is NonNullable<typeof s> => !!s && !s.salesAccountId)
+      .map(s => s.name);
+    if (unmappedNames.length > 0) {
+      throw new Error(
+        `इन वस्तुओं को पहले बिक्री खाता (group) असाइन करें: ${unmappedNames.join(', ')} — फिर बिक्री पोस्ट होगी। (Assign a Sales A/c to: ${unmappedNames.join(', ')})`
+      );
+    }
+
     const fy = society.financialYear;
     const maxSaleNum = salesRef.current.filter(s => s.saleNo?.includes(fy)).reduce((max, s) => {
       const m = s.saleNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
@@ -2443,6 +2455,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateSale = useCallback((id: string, data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>): Sale | null => {
     if (society.fyLocked) {
       toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' });
+      return null;
+    }
+    // Enforce per-item Sales A/c (group) BEFORE mutating anything (no data loss).
+    const unmappedNames = data.items
+      .map(it => stockItems.find(s => s.id === it.itemId))
+      .filter((s): s is NonNullable<typeof s> => !!s && !s.salesAccountId)
+      .map(s => s.name);
+    if (unmappedNames.length > 0) {
+      toastRef.current({
+        title: 'बिक्री खाता आवश्यक',
+        description: `इन वस्तुओं को पहले बिक्री खाता (group) असाइन करें: ${unmappedNames.join(', ')}`,
+        variant: 'destructive',
+        duration: 10000,
+      });
       return null;
     }
     const original = salesRef.current.find(s => s.id === id);

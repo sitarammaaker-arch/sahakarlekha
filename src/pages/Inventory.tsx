@@ -232,14 +232,14 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
       <div className="space-y-2">
         <Label className="text-xs font-semibold uppercase text-blue-900 dark:text-blue-200">
           {hi ? 'बिक्री खाता' : 'Sales A/c'}
-          <span className="ml-2 text-[10px] font-normal text-muted-foreground">Optional</span>
+          <span className="ml-2 text-[10px] font-normal text-red-600">{hi ? 'आवश्यक *' : 'Required *'}</span>
         </Label>
         <select
           value={itemForm.salesAccountId || ''}
           onChange={e => setItemForm(f => ({ ...f, salesAccountId: e.target.value }))}
           className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <option value="">{hi ? '— Auto (4101) —' : '— Auto (4101) —'}</option>
+          <option value="">{hi ? '— बिक्री खाता चुनें —' : '— Select Sales A/c —'}</option>
           {salesAccounts.map(a => (
             <option key={a.id} value={a.id}>{a.id} — {hi ? a.nameHi : a.name}</option>
           ))}
@@ -263,8 +263,8 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
       </div>
       <p className="sm:col-span-2 text-[11px] text-blue-800/80 dark:text-blue-200/80">
         {hi
-          ? 'गतिविधि-वार व्यापार खाता (NCDC अनुलग्नक V) के लिए हर वस्तु को उसके खाते से जोड़ें — जैसे "गेहूँ" → बिक्री 4103 / खरीद 5112। न जोड़ने पर खरीद सामान्य 5101 में जाएगी और उस वस्तु का अलग सकल लाभ नहीं बनेगा।'
-          : 'For activity-wise Trading Accounts (NCDC Annexure V), route each item to its own ledger — e.g. "Wheat" → Sales 4103 / Purchase 5112. Unrouted purchases fall into the generic 5101 and that activity gets no separate Gross Profit.'}
+          ? 'हर वस्तु को उसका बिक्री खाता (group) देना अनिवार्य है — जैसे "गेहूँ" → बिक्री 4103। इसी से वह सही समूह में दिखती है और गतिविधि-वार व्यापार खाता (NCDC अनुलग्नक V) बनता है। बिना बिक्री खाते वाली वस्तु की बिक्री पोस्ट नहीं होगी। (खरीद खाता वैकल्पिक; न देने पर खरीद 5101 में जाएगी।)'
+          : 'Assigning a Sales A/c (group) to every item is mandatory — e.g. "Wheat" → Sales 4103 — so it shows under the right group and feeds activity-wise Trading Accounts (NCDC Annexure V). Sales of an item without a Sales A/c will be blocked. (Purchase A/c is optional; if unset, purchases fall into 5101.)'}
       </p>
     </div>
 
@@ -570,6 +570,16 @@ const Inventory: React.FC = () => {
       });
       return;
     }
+    if (!itemForm.salesAccountId) {
+      toast({
+        title: hi ? 'बिक्री खाता आवश्यक है' : 'Sales A/c required',
+        description: hi
+          ? 'हर वस्तु को एक बिक्री खाता (group) देना अनिवार्य है — तभी उसकी बिक्री सही समूह में जाएगी।'
+          : 'Every item must be assigned a Sales A/c (group) so its sales post to the correct group.',
+        variant: 'destructive',
+      });
+      return;
+    }
     addStockItem({
       name: itemForm.name.trim(),
       nameHi: itemForm.nameHi.trim(),
@@ -594,6 +604,16 @@ const Inventory: React.FC = () => {
     if (!item) { console.warn('handleEditItem: no editItem in ref'); return; }
     if (!itemFormRef.current.name.trim()) {
       toast({ title: hi ? 'नाम आवश्यक है' : 'Name is required', variant: 'destructive' });
+      return;
+    }
+    if (!itemFormRef.current.salesAccountId) {
+      toast({
+        title: hi ? 'बिक्री खाता आवश्यक है' : 'Sales A/c required',
+        description: hi
+          ? 'हर वस्तु को एक बिक्री खाता (group) देना अनिवार्य है।'
+          : 'Every item must be assigned a Sales A/c (group).',
+        variant: 'destructive',
+      });
       return;
     }
     const f = itemFormRef.current;
