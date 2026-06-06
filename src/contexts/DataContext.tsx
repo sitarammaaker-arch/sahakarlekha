@@ -1177,7 +1177,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const newObj: AuditObjection = { ...data, id: crypto.randomUUID(), objectionNo, createdAt: new Date().toISOString() };
     auditObjectionsRef.current = [...auditObjectionsRef.current, newObj];
     setAuditObjectionsState(prev => { const updated = [...prev, newObj]; return updated; });
-    supabase.from('audit_objections').upsert(withSoc(newObj)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('audit_objections').upsert(withSoc(newObj)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        auditObjectionsRef.current = auditObjectionsRef.current.filter(o => o.id !== newObj.id);
+        setAuditObjectionsState(prev => prev.filter(o => o.id !== newObj.id));   // RULE 1: roll back
+        toastRef.current({ title: 'सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
     return newObj;
   }, []);
 
@@ -1202,7 +1209,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const newRec: Recoverable = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     recoverablesRef.current = [...recoverablesRef.current, newRec];
     setRecoverablesState(prev => [...prev, newRec]);
-    supabase.from('recoverables').upsert(withSoc(newRec)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('recoverables').upsert(withSoc(newRec)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        recoverablesRef.current = recoverablesRef.current.filter(r => r.id !== newRec.id);
+        setRecoverablesState(prev => prev.filter(r => r.id !== newRec.id));   // RULE 1: roll back
+        toastRef.current({ title: 'सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
     return newRec;
   }, []);
 
@@ -1226,7 +1240,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const newEntry: KachiAaratEntry = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     kachiAaratEntriesRef.current = [...kachiAaratEntriesRef.current, newEntry];
     setKachiAaratEntriesState(prev => [...prev, newEntry]);
-    supabase.from('kachi_aarat_entries').upsert(withSoc(newEntry)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('kachi_aarat_entries').upsert(withSoc(newEntry)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        kachiAaratEntriesRef.current = kachiAaratEntriesRef.current.filter(e => e.id !== newEntry.id);
+        setKachiAaratEntriesState(prev => prev.filter(e => e.id !== newEntry.id));   // RULE 1: roll back
+        toastRef.current({ title: 'सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
     return newEntry;
   }, []);
 
@@ -1788,7 +1809,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const newAsset: Asset = { ...data, id: crypto.randomUUID(), assetNo };
     assetsRef.current = [...assetsRef.current, newAsset];
     setAssetsState(prev => { const updated = [...prev, newAsset]; return updated; });
-    supabase.from('assets').upsert(withSoc(newAsset)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('assets').upsert(withSoc(newAsset)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        assetsRef.current = assetsRef.current.filter(a => a.id !== newAsset.id);
+        setAssetsState(prev => prev.filter(a => a.id !== newAsset.id));   // RULE 1: roll back
+        toastRef.current({ title: 'संपत्ति सेव नहीं हुई', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
     return newAsset;
   }, []);
 
@@ -2963,7 +2991,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const emp: Employee = { ...data, id: crypto.randomUUID(), empNo };
     employeesRef.current = [...employeesRef.current, emp];
     setEmployeesState(prev => { const updated = [...prev, emp]; return updated; });
-    supabase.from('employees').upsert(withSoc(emp)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('employees').upsert(withSoc(emp)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        employeesRef.current = employeesRef.current.filter(e => e.id !== emp.id);
+        setEmployeesState(prev => prev.filter(e => e.id !== emp.id));   // RULE 1: roll back
+        toastRef.current({ title: 'कर्मचारी सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
     return emp;
   }, []);
 
@@ -2993,7 +3028,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const record: SalaryRecord = { ...data, id: crypto.randomUUID(), slipNo, createdAt: new Date().toISOString() };
     salaryRecordsRef.current = [...salaryRecordsRef.current, record];
     setSalaryRecordsState(prev => { const updated = [...prev, record]; return updated; });
-    supabase.from('salary_records').upsert(withSoc(record)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('salary_records').upsert(withSoc(record)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        salaryRecordsRef.current = salaryRecordsRef.current.filter(r => r.id !== record.id);
+        setSalaryRecordsState(prev => prev.filter(r => r.id !== record.id));   // RULE 1: roll back
+        toastRef.current({ title: 'वेतन रिकॉर्ड सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
     return record;
   }, [society.financialYear]);
 
