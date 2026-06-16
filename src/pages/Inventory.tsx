@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { computeStockMap } from '@/lib/stockUtils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -606,19 +607,7 @@ const Inventory: React.FC = () => {
 
   // Compute current stock from movements (openingStock + purchases - sales/adjustments)
   // This is the authoritative quantity — same formula as Stock Valuation uses.
-  const computedStockMap = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const item of stockItems) {
-      let qty = item.openingStock || 0;
-      for (const m of stockMovements) {
-        if (m.itemId !== item.id) continue;
-        if (m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0)) qty += m.qty;
-        else qty -= Math.abs(m.qty);
-      }
-      map[item.id] = Math.max(0, qty);
-    }
-    return map;
-  }, [stockItems, stockMovements]);
+  const computedStockMap = useMemo(() => computeStockMap(stockItems, stockMovements), [stockItems, stockMovements]);
 
   // Derived data
   const totalStockValue = stockItems.reduce(
@@ -811,9 +800,9 @@ const Inventory: React.FC = () => {
       referenceNo: '',
       narration: adjForm.narration || (qty >= 0 ? (hi ? 'स्टॉक में वृद्धि' : 'Stock increase') : (hi ? 'स्टॉक में कमी' : 'Stock decrease')),
     });
-    // Update current stock
-    const newStock = (item.currentStock ?? 0) + qty;
-    updateStockItem(item.id, { currentStock: Math.max(0, newStock) });
+    // currentStock is recomputed authoritatively inside addStockMovement (from
+    // openingStock + all movements, RULE 2) — no separate incremental update here,
+    // which would re-introduce drift by adding to a possibly-stale cached value.
     toast({ title: hi ? 'समायोजन किया गया' : 'Adjustment recorded' });
     setAdjForm(EMPTY_ADJUSTMENT_FORM);
     setIsAdjustOpen(false);

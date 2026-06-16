@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
+import { computeStockMap } from '@/lib/stockUtils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,7 +60,11 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const SaleManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { sales, stockItems, customers, addSale, updateSale, deleteSale, addStockItem, society } = useData();
+  const { sales, stockItems, stockMovements, customers, addSale, updateSale, deleteSale, addStockItem, society } = useData();
+  // Available qty is ALWAYS movement-based (RULE 2). Never read stockItem.currentStock
+  // here — that cache drifts when a purchase voucher is edited/deleted and caused the
+  // "sale shows 120 but stock report shows 0" bug.
+  const stockMap = useMemo(() => computeStockMap(stockItems, stockMovements), [stockItems, stockMovements]);
   const { toast } = useToast();
 
   // ── New Sale form state ───────────────────────────────────────────────────
@@ -227,14 +232,13 @@ const SaleManagement: React.FC = () => {
       const si = stockItems.find(s => s.id === i.itemId);
       if (!si) return false;
       const originalQty = original?.items.find(it => it.itemId === i.itemId)?.qty || 0;
-      const effectiveAvailable = si.currentStock + originalQty;
+      const effectiveAvailable = (stockMap[i.itemId] ?? 0) + originalQty;
       return i.qty > effectiveAvailable;
     });
     if (lowStockItems.length > 0) {
       const names = lowStockItems.map(i => {
-        const si = stockItems.find(s => s.id === i.itemId);
         const originalQty = original?.items.find(it => it.itemId === i.itemId)?.qty || 0;
-        const effectiveAvailable = (si?.currentStock ?? 0) + originalQty;
+        const effectiveAvailable = (stockMap[i.itemId] ?? 0) + originalQty;
         return `${i.itemName} (${language === 'hi' ? 'उपलब्ध' : 'avail'}: ${effectiveAvailable}, ${language === 'hi' ? 'बिक्री' : 'selling'}: ${i.qty})`;
       }).join(', ');
       toast({
@@ -586,8 +590,7 @@ const SaleManagement: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         {(() => {
-                          const si = stockItems.find(s => s.id === item.itemId);
-                          const avail = si?.currentStock ?? 0;
+                          const avail = stockMap[item.itemId] ?? 0;
                           const insufficient = item.itemId && item.qty > avail;
                           return item.itemId ? (
                             <Badge variant="outline" className={cn('text-xs font-mono', insufficient ? 'border-destructive text-destructive bg-destructive/10' : 'border-success text-success bg-success/10')}>
@@ -598,8 +601,7 @@ const SaleManagement: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         {(() => {
-                          const si = stockItems.find(s => s.id === item.itemId);
-                          const avail = si?.currentStock ?? 0;
+                          const avail = stockMap[item.itemId] ?? 0;
                           const insufficient = item.itemId && item.qty > avail;
                           return (
                             <div className="flex items-center gap-1">

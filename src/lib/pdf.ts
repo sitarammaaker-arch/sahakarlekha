@@ -712,27 +712,12 @@ export function generateBalanceSheetPDF(
       const auditGroupNames: Record<string, string> = { '3400': 'CLOSING STOCK', '3300': 'CURRENT ASSETS & CASH/BANK' };
       const groupLabel = auditGroupNames[group.id] || group.name.toUpperCase();
 
-      // Special: Closing Stock (3400) — show stock group-wise from inventory.
-      if (group.id === '3400' && stockItemsData && stockItemsData.length > 0) {
-        const activeStock = stockItemsData.filter(s => s.isActive && s.currentStock > 0);
-        if (activeStock.length > 0) {
-          const stockGroups: Record<string, number> = {};
-          activeStock.forEach(s => {
-            const grp = s.stockGroup || 'General';
-            stockGroups[grp] = (stockGroups[grp] || 0) + s.currentStock * (s.purchaseRate || 0);
-          });
-          const stockTotal = Object.values(stockGroups).reduce((s, v) => s + v, 0);
-          captureLeaves('3400');
-          groupRows.push(body.length);
-          body.push(hasPY
-            ? [groupLabel, gTot.py ? fmt(gTot.py) : '', '', fmt(stockTotal)]
-            : [groupLabel, '', fmt(stockTotal)]);
-          Object.entries(stockGroups).sort(([a], [b]) => a.localeCompare(b)).forEach(([grp, val]) => {
-            body.push(hasPY ? [`  ${grp}`, '—', fmt(val), ''] : [`  ${grp}`, fmt(val), '']);
-          });
-          return;
-        }
-      }
+      // Closing Stock (3400) is intentionally NOT rendered from stockItemsData.currentStock
+      // here — that cache can be stale after a purchase edit/delete (RULE 2) and double
+      // with the unpostedClosingStock row below. Closing stock is shown ONCE, exactly like
+      // the on-screen Balance Sheet: via the journalled 3403 leaf when a closing-stock
+      // journal is posted, else via the movement-based unpostedClosingStock row below.
+      void stockItemsData;
 
       // Group header + recursive children
       groupRows.push(body.length);

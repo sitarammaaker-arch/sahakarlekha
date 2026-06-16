@@ -14,6 +14,7 @@ import type {
   EntityLink,
 } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { computeStock } from '@/lib/stockUtils';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } from '@/lib/storage';
 import { voucherLinesBalance } from '@/lib/validation';
@@ -2324,9 +2325,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const today = new Date().toISOString().split('T')[0];
     setStockItemsState(prev => {
       const item = prev.find(i => i.id === id);
-      // If item has remaining stock, create a write-off journal to keep Trial Balance balanced
-      if (item && item.isActive && item.currentStock > 0) {
-        const amount = Math.round(item.currentStock * item.purchaseRate * 100) / 100;
+      // Write-off uses the AUTHORITATIVE movement-based qty (RULE 2), not the cached
+      // currentStock field — which can be stale after a purchase edit/delete and would
+      // otherwise create a phantom write-off journal for stock that no longer exists.
+      const realQty = item ? computeStock(item, stockMovementsRef.current) : 0;
+      if (item && item.isActive && realQty > 0) {
+        const amount = Math.round(realQty * item.purchaseRate * 100) / 100;
         if (amount > 0) {
           // Dr 5101 (Purchases/Write-off expense) / Cr 3403 (Closing Stock asset) — reverses closing stock asset
           addVoucher({
@@ -2335,7 +2339,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             debitAccountId: '5101',
             creditAccountId: '3403',
             amount,
-            narration: `Stock write-off on deletion: ${item.name} (${item.currentStock} ${item.unit} @ ₹${item.purchaseRate})`,
+            narration: `Stock write-off on deletion: ${item.name} (${realQty} ${item.unit} @ ₹${item.purchaseRate})`,
             createdBy: user?.name ?? 'System',
           });
         }
