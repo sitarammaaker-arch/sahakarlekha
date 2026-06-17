@@ -79,9 +79,17 @@ const BalanceSheet: React.FC = () => {
   const allLiabilityLeaf = trialBalance.filter(b => b.account.type === 'liability' && !b.account.isGroup);
   const allCapLiabLeaf = [...allEquityLeaf, ...allLiabilityLeaf];
   const allAssetLeaf = trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup);
+  // When the closing-stock journal is NOT posted, the Inventory ledger (group 3400) still
+  // carries the OPENING stock (already consumed into gross profit). The real closing stock
+  // is shown once via the injected "Closing Stock (from Inventory)" row (= physical stock).
+  // Drop the stale 3400 leaves from the asset side when unposted, else the sheet carried
+  // BOTH opening and closing stock and was out of balance by the opening amount (Audit #3).
+  const assetLeaves = closingStockPosted
+    ? allAssetLeaf
+    : allAssetLeaf.filter(b => b.account.id !== '3400' && b.account.parentId !== '3400');
 
   // Original total calculations (guaranteed correct — same as old flat BS)
-  const totalAssets = allAssetLeaf.reduce((s, b) => s + b.netBalance, 0) + unpostedStock;
+  const totalAssets = assetLeaves.reduce((s, b) => s + b.netBalance, 0) + unpostedStock;
   const totalLiabilities = allCapLiabLeaf.reduce((s, b) => s + (-b.netBalance), 0) + netProfit;
 
   // ── Balance health diagnostic ──────────────────────────────────────────────
@@ -181,7 +189,7 @@ const BalanceSheet: React.FC = () => {
   };
 
   const liabilityGroups = useMemo(() => buildGroups(allCapLiabLeaf, ['1000', '2000'], true), [trialBalance, accounts, pyBalances]);
-  const assetGroups = useMemo(() => buildGroups(allAssetLeaf, ['3000'], false), [trialBalance, accounts, pyBalances]);
+  const assetGroups = useMemo(() => buildGroups(assetLeaves, ['3000'], false), [trialBalance, accounts, pyBalances, closingStockPosted]);
 
   const pyTotalLiab = liabilityGroups.reduce((s, g) => s + g.pyGrandTotal, 0);
   const pyTotalAsset = assetGroups.reduce((s, g) => s + g.pyGrandTotal, 0);
@@ -218,7 +226,7 @@ const BalanceSheet: React.FC = () => {
       return;
     }
     generateBalanceSheetPDF(
-      trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup),
+      assetLeaves,
       [...trialBalance.filter(b => b.account.type === 'equity' && !b.account.isGroup), ...trialBalance.filter(b => b.account.type === 'liability' && !b.account.isGroup)],
       netProfit, society, language, 0, accounts, stockItems, showLedgers, unpostedStock
     );

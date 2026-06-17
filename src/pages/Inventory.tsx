@@ -799,7 +799,10 @@ const Inventory: React.FC = () => {
       date: adjForm.date,
       itemId: adjForm.itemId,
       type: 'adjustment',
-      qty: Math.abs(qty),
+      // Keep the SIGN: a negative qty must DECREASE stock. The canonical formula
+      // (computeStock) keys increase/decrease off the stored sign — Math.abs() here
+      // turned every "-5" decrease into a "+5" increase, overstating closing stock.
+      qty,
       rate: adjRate,
       amount: Math.abs(qty) * adjRate,
       referenceNo: '',

@@ -81,6 +81,38 @@ export function calcWDVDepreciation(asset: Asset, fy: string, priorAccumDep: num
   return Math.min(dep, depreciableBook);
 }
 
+/** Financial-year string ("YYYY-YY") that a date falls into (April–March). */
+export function fyOfDate(d: Date): string {
+  const y = d.getFullYear();
+  const startY = d.getMonth() >= 3 ? y : y - 1; // month index 3 = April
+  return `${startY}-${String((startY + 1) % 100).padStart(2, '0')}`;
+}
+
+/** The financial year immediately after a "YYYY-YY" string. */
+export function nextFY(fy: string): string {
+  const startY = parseInt(fy.split('-')[0]);
+  return `${startY + 1}-${String((startY + 2) % 100).padStart(2, '0')}`;
+}
+
+/**
+ * Accumulated WDV depreciation for THIS asset across all FYs BEFORE targetFY — replayed
+ * from the asset's own purchase date. The per-category accumulated-depreciation ledger
+ * holds the WHOLE group's depreciation, so deriving one asset's book value from it
+ * over-/under-depreciated every asset that shares a category (Audit #6). SLM is cost-based
+ * and never needs this. Guarded against runaway loops.
+ */
+export function wdvAccumulatedBefore(asset: Asset, targetFY: string): number {
+  if ((asset.depreciationMethod ?? 'SLM') !== 'WDV') return 0;
+  let accum = 0;
+  let cursor = fyOfDate(new Date(asset.purchaseDate));
+  let guard = 0;
+  while (cursor < targetFY && guard++ < 200) {
+    accum += calcWDVDepreciation(asset, cursor, accum);
+    cursor = nextFY(cursor);
+  }
+  return accum;
+}
+
 /**
  * Depreciation amount for the current FY (uses asset's depreciationMethod).
  * Requires priorAccumDep for WDV; pass 0 for SLM (unused).

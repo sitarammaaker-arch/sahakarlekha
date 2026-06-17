@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TrendingDown, Download, FileSpreadsheet, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { generateDepreciationSchedulePDF } from '@/lib/pdf';
-import { calcDepForFY, parseFY, DEP_ACCOUNTS } from '@/lib/depreciation';
+import { calcDepForFY, parseFY, DEP_ACCOUNTS, wdvAccumulatedBefore } from '@/lib/depreciation';
 import { fmtDate } from '@/lib/dateUtils';
 import type { Asset, AssetCategory } from '@/types';
 
@@ -55,26 +55,11 @@ const DepreciationSchedule: React.FC = () => {
 
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
 
-  // Calculate accumulated depreciation for an asset from vouchers (prior to current FY)
-  const getAccumDepPrior = (asset: Asset): number => {
-    const depAcc = DEP_ACCOUNTS[asset.category];
-    if (!depAcc) return 0;
-    const accumId = depAcc.accumId;
-    const acc = accounts.find(a => a.id === accumId);
-    if (!acc) return 0;
-
-    // Opening balance of accumulated dep account
-    let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
-
-    // Add voucher movements to accumulated dep account (prior FYs only)
-    vouchers.filter(v => !v.isDeleted).forEach(v => {
-      if (fyDates && v.date >= fyDates.start) return; // skip current FY vouchers
-      if (v.debitAccountId === accumId) bal -= v.amount;
-      if (v.creditAccountId === accumId) bal += v.amount;
-    });
-
-    return Math.max(0, bal);
-  };
+  // Prior accumulated depreciation for WDV book value — replayed PER ASSET (the category
+  // ledger holds the whole group, which mis-depreciated multi-asset categories, Audit #6).
+  // SLM is cost-based and ignores this, so 0 is fine there.
+  const getAccumDepPrior = (asset: Asset): number =>
+    (asset.depreciationMethod ?? 'SLM') === 'WDV' ? wdvAccumulatedBefore(asset, fy) : 0;
 
   // Full accumulated dep including current FY
   const getAccumDepTotal = (asset: Asset): number => {

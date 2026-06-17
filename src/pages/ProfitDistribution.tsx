@@ -26,7 +26,9 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 // ── Account IDs ─────────────────────────────────────────────────────────────
 const ACC_NET_SURPLUS   = '1208';
 const ACC_DIVIDEND      = '1211'; // Dividend Distribution (equity liability to members)
-const ACC_BONUS_EXP     = '5207'; // Employee Bonus (expense)
+// Employee bonus appropriated FROM surplus is a LIABILITY (payable to staff), NOT the
+// 5207 expense. Crediting the expense reduced total expenses and inflated net profit. #12
+const ACC_BONUS_PAYABLE = '2103'; // Salary/Staff Payable (liability)
 
 const fmt = (n: number) =>
   'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -75,7 +77,15 @@ const ProfitDistribution: React.FC = () => {
     }, 0),
     [vouchers, fy, fundAccountIds]
   );
-  const distributable = netProfit - appropriatedAmt;
+  // Already-posted dividend & bonus are appropriations of surplus too — subtract them so
+  // Distributable stays correct after a refresh (input fields reset; posted vouchers persist). #13
+  const existingDivVoucher   = usePosted(vouchers, ACC_NET_SURPLUS, ACC_DIVIDEND, fy);
+  const existingBonusVoucher = usePosted(vouchers, ACC_NET_SURPLUS, ACC_BONUS_PAYABLE, fy);
+  const divPosted   = !!existingDivVoucher;
+  const bonusPosted = !!existingBonusVoucher;
+  const postedDividend = existingDivVoucher?.amount || 0;
+  const postedBonus    = existingBonusVoucher?.amount || 0;
+  const distributable  = Math.round((netProfit - appropriatedAmt - postedDividend - postedBonus) * 100) / 100;
 
   // ── User inputs ────────────────────────────────────────────────────────────
   const [dividendRate, setDividendRate] = useState('');   // % of share capital
@@ -105,14 +115,8 @@ const ProfitDistribution: React.FC = () => {
   );
   const totalDividend = memberDividends.reduce((s, m) => s + m.dividend, 0);
 
-  // ── Remaining surplus ─────────────────────────────────────────────────────
-  const remaining = Math.round((distributable - totalDividend - bonusAmount) * 100) / 100;
-
-  // ── Posted check ──────────────────────────────────────────────────────────
-  const existingDivVoucher   = usePosted(vouchers, ACC_NET_SURPLUS, ACC_DIVIDEND, fy);
-  const existingBonusVoucher = usePosted(vouchers, ACC_NET_SURPLUS, ACC_BONUS_EXP, fy);
-  const divPosted   = !!existingDivVoucher;
-  const bonusPosted = !!existingBonusVoucher;
+  // ── Remaining surplus (only NEW, not-yet-posted appropriations reduce it further) ──
+  const remaining = Math.round((distributable - (divPosted ? 0 : totalDividend) - (bonusPosted ? 0 : bonusAmount)) * 100) / 100;
 
   // ── Account balance helper ─────────────────────────────────────────────────
   const getBalance = (id: string) => {
@@ -131,9 +135,18 @@ const ProfitDistribution: React.FC = () => {
 
   // ── Post journals ──────────────────────────────────────────────────────────
   // Appropriations (reserve/education) are OPTIONAL — never block dividend/bonus.
-  const canPost = (!divPosted && totalDividend > 0) || (!bonusPosted && bonusAmount > 0);
+  const canPost = ((!divPosted && totalDividend > 0) || (!bonusPosted && bonusAmount > 0)) && remaining >= 0;
 
   const handlePost = () => {
+    // Guard: never let dividend + bonus exceed the distributable surplus (over-appropriation). #13
+    if (remaining < 0) {
+      toast({
+        title: hi ? 'अधिशेष से अधिक वितरण' : 'Exceeds surplus',
+        description: hi ? 'लाभांश + बोनस उपलब्ध वितरण-योग्य अधिशेष से अधिक है।' : 'Dividend + bonus exceed the distributable surplus.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const today = new Date().toISOString().split('T')[0];
     let posted = 0;
 
@@ -155,7 +168,7 @@ const ProfitDistribution: React.FC = () => {
         type: 'journal',
         date: today,
         debitAccountId: ACC_NET_SURPLUS,
-        creditAccountId: ACC_BONUS_EXP,
+        creditAccountId: ACC_BONUS_PAYABLE,
         amount: bonusAmount,
         narration: `Employee Bonus Appropriation — FY ${fy}`,
         createdBy: user?.name ?? 'System',

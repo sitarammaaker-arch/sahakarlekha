@@ -19,7 +19,7 @@ import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } from '@/lib/storage';
 import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
-import { calcDepForFY, DEP_ACCOUNTS, parseFY } from '@/lib/depreciation';
+import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
 
 interface DataContextType {
   vouchers: Voucher[];
@@ -539,7 +539,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if ((purchase.taxAmount ?? 0) > 0) {
               lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: purchase.taxAmount!, narration: `GST ITC: CGST ₹${purchase.cgstAmount||0} + SGST ₹${purchase.sgstAmount||0} + IGST ₹${purchase.igstAmount||0}` });
             }
-            const netPayable = grandTotal - (purchase.tdsAmount || 0);
+            // grandTotal ALREADY nets TDS (= netAmount + tax − tds). The supplier/cash payable
+            // IS grandTotal; the TDS is the separate Cr to 2202 below. Subtracting tds again here
+            // double-counted it and left the voucher short on the Cr side by the TDS amount.
+            const netPayable = grandTotal;
             if (netPayable > 0) {
               lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: netPayable });
             }
@@ -2006,17 +2009,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!depAcc) { skipped++; continue; } // Land or unknown
       if (asset.depreciationPostedFY?.includes(targetFY)) { skipped++; continue; }
 
-      // Accumulated depreciation posted so far (for WDV book value)
-      const accumAcc = currentAccounts.find(a => a.id === depAcc.accumId);
-      let priorAccumDep = 0;
-      if (accumAcc) {
-        let bal = accumAcc.openingBalanceType === 'debit' ? accumAcc.openingBalance : -accumAcc.openingBalance;
-        currentVouchers.forEach(v => {
-          if (v.debitAccountId  === depAcc.accumId) bal += v.amount;
-          if (v.creditAccountId === depAcc.accumId) bal -= v.amount;
-        });
-        priorAccumDep = -bal; // credit-balance accounts return negative; flip to positive
-      }
+      // WDV needs THIS asset's OWN accumulated depreciation (replayed per-asset). The
+      // category ledger (accumId) holds the whole group, so using it over-/under-depreciated
+      // any asset sharing a category (Audit #6). SLM is cost-based and ignores this.
+      const priorAccumDep = (asset.depreciationMethod ?? 'SLM') === 'WDV'
+        ? wdvAccumulatedBefore(asset, targetFY)
+        : 0;
 
       const depAmount = calcDepForFY(asset, targetFY, priorAccumDep);
       if (depAmount <= 0) { skipped++; continue; }
@@ -2079,35 +2077,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // For each line touching Cash/Bank, find the "other" side accounts in the same voucher.
     vouchersToUse.forEach(v => {
       const lines = getVoucherLines(v);
+      const isCashBank = (id: string) => id === ACCOUNT_IDS.CASH || isBankAccount(id, accounts);
+      // Did this voucher move cash/bank IN (a Dr line) and/or OUT (a Cr line)?
+      const hasCashBankDr = lines.some(l => isCashBank(l.accountId) && l.type === 'Dr');
+      const hasCashBankCr = lines.some(l => isCashBank(l.accountId) && l.type === 'Cr');
+      if (!hasCashBankDr && !hasCashBankCr) return; // no cash/bank movement → not an R&P voucher
+
+      // Book each NON-cash counterparty line exactly ONCE. Previously the other side was
+      // re-added per cash/bank line, so a split receipt (Dr Cash 600 / Dr Bank 400 / Cr
+      // Sales 1000) booked Sales twice = 2000. A non-cash Cr with cash/bank debited is a
+      // receipt source; a non-cash Dr with cash/bank credited is a payment use. A pure
+      // Cash↔Bank contra has no non-cash line, so it is still correctly excluded (C-11).
       lines.forEach(l => {
-        const isCashBank = l.accountId === ACCOUNT_IDS.CASH || isBankAccount(l.accountId, accounts);
-        if (!isCashBank) return;
-
-        // Determine other-side lines (contra side)
-        const otherLines = lines.filter(ol => ol.type !== l.type);
-        if (otherLines.length === 0) return;
-        // Audit C-11: an internal Cash↔Bank transfer (the other side is ALSO Cash/Bank)
-        // is NOT a real receipt or payment — it must not inflate the R&P account.
-        const otherIsCashBank = (id: string) => id === ACCOUNT_IDS.CASH || isBankAccount(id, accounts);
-
-        if (l.type === 'Dr') {
-          otherLines.forEach(ol => {
-            if (otherIsCashBank(ol.accountId)) return;
-            const otherAcc = accounts.find(a => a.id === ol.accountId);
-            const name = otherAcc?.name || v.narration || 'Deleted Account';
-            const nameHi = otherAcc?.nameHi || name;
-            if (!receiptMap[ol.accountId]) receiptMap[ol.accountId] = { name, nameHi, amount: 0, nature: natureOf(ol.accountId), glType: glTypeOf(ol.accountId) };
-            receiptMap[ol.accountId].amount += ol.amount;
-          });
-        } else {
-          otherLines.forEach(ol => {
-            if (otherIsCashBank(ol.accountId)) return;
-            const otherAcc = accounts.find(a => a.id === ol.accountId);
-            const name = otherAcc?.name || v.narration || 'Deleted Account';
-            const nameHi = otherAcc?.nameHi || name;
-            if (!paymentMap[ol.accountId]) paymentMap[ol.accountId] = { name, nameHi, amount: 0, nature: natureOf(ol.accountId), glType: glTypeOf(ol.accountId) };
-            paymentMap[ol.accountId].amount += ol.amount;
-          });
+        if (isCashBank(l.accountId)) return;
+        const otherAcc = accounts.find(a => a.id === l.accountId);
+        const name = otherAcc?.name || v.narration || 'Deleted Account';
+        const nameHi = otherAcc?.nameHi || name;
+        if (l.type === 'Cr' && hasCashBankDr) {
+          if (!receiptMap[l.accountId]) receiptMap[l.accountId] = { name, nameHi, amount: 0, nature: natureOf(l.accountId), glType: glTypeOf(l.accountId) };
+          receiptMap[l.accountId].amount += l.amount;
+        } else if (l.type === 'Dr' && hasCashBankCr) {
+          if (!paymentMap[l.accountId]) paymentMap[l.accountId] = { name, nameHi, amount: 0, nature: natureOf(l.accountId), glType: glTypeOf(l.accountId) };
+          paymentMap[l.accountId].amount += l.amount;
         }
       });
     });

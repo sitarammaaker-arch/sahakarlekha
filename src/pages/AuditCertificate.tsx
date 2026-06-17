@@ -52,8 +52,10 @@ const AuditCertificate: React.FC = () => {
   const cashBalance  = getBalance('3301'); // Cash in Hand
   const bankIds = getBankAccountIds(accounts);
   const bankBalance = bankIds.reduce((sum, bid) => sum + getBalance(bid), 0);
+  // Paid-up Share Capital ONLY (1101/1102/1103) — NOT reserves/surplus, which are also
+  // type 'equity' (subtype 'reserve'/'surplus' under 1200) and must stay a separate head.
   const shareCapital = accounts
-    .filter(a => !a.isGroup && a.type === 'equity')
+    .filter(a => !a.isGroup && a.subtype === 'share_capital')
     .reduce((s, a) => {
       const b = getBalance(a.id);
       return s + (b > 0 ? b : 0);
