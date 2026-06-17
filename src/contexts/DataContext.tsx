@@ -31,7 +31,7 @@ interface DataContextType {
 
   addVoucher: (data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }) => Voucher;
   updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => void;
-  cancelVoucher: (id: string, reason: string, deletedBy: string) => void;
+  cancelVoucher: (id: string, reason: string, deletedBy: string) => boolean;
   restoreVoucher: (id: string) => void;
   clearVoucher: (id: string, clearedDate?: string) => void;
   unclearVoucher: (id: string) => void;
@@ -1130,10 +1130,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     syncEntries(updatedVoucher);
   }, []);
 
-  const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string) => {
-    if (guardFYLocked()) return;
+  // Returns true if the voucher was actually cancelled, false if blocked (a guard fired
+  // and showed its own toast). Callers should only show a success message when true.
+  const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string): boolean => {
+    if (guardFYLocked()) return false;
     const current = vouchersRef.current.find(v => v.id === id);
-    if (!current) return;
+    if (!current) return false;
 
     // 🔒 Block deletion of vouchers ACTIVELY linked to a Purchase / Sale parent.
     // If the parent purchase/sale no longer points to THIS voucher (i.e., it's an
@@ -1144,11 +1146,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const isActive = parent && parent.voucherId === current.id;
       if (isActive) {
         toastRef.current({
-          title: 'Voucher delete nahi ho sakta',
-          description: 'Ye voucher Purchase Management se bana hai. Isko Purchase Management → Purchase List se delete karo — stock bhi sahi rahega.',
+          title: 'यहाँ रद्द नहीं होगा',
+          description: 'यह वाउचर Purchase Management से बना है। इसे Purchase Management → Purchase List से delete करें — तभी stock भी सही रहेगा।',
           variant: 'destructive',
         });
-        return;
+        return false;
       }
       // else: orphan/duplicate — allow cancellation
     }
@@ -1157,11 +1159,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const isActive = parent && parent.voucherId === current.id;
       if (isActive) {
         toastRef.current({
-          title: 'Voucher delete nahi ho sakta',
-          description: 'Ye voucher Sale Management se bana hai. Isko Sale Management → Sale List se delete karo — stock bhi sahi rahega.',
+          title: 'यहाँ रद्द नहीं होगा',
+          description: 'यह वाउचर Sale Management से बना है। इसे Sale Management → Sale List से delete करें — तभी stock भी वापस आएगी।',
           variant: 'destructive',
         });
-        return;
+        return false;
       }
       // else: orphan/duplicate — allow cancellation
     }
@@ -1174,7 +1176,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         description: `Ye Salary slip ${linkedSalary.slipNo} ka payment voucher hai. Salary Management → Slip ko unpaid mark karo / delete karo, voucher apne aap reverse ho jayega.`,
         variant: 'destructive',
       });
-      return;
+      return false;
     }
     if (current.memberId && (current.creditAccountId === ACCOUNT_IDS.SHARE_CAP || current.creditAccountId === ACCOUNT_IDS.ADM_FEE)) {
       const kind = current.creditAccountId === ACCOUNT_IDS.SHARE_CAP ? 'Share Capital' : 'Admission Fee';
@@ -1183,7 +1185,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         description: `Ye Member ka auto-generated ${kind} voucher hai. Members page se member ko edit / delete karo.`,
         variant: 'destructive',
       });
-      return;
+      return false;
     }
     // Detect depreciation vouchers by narration pattern + asset link
     if (current.narration && /depreciation/i.test(current.narration)) {
@@ -1194,7 +1196,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           description: `Ye Asset ${linkedAsset.assetNo} ki depreciation entry hai. Assets page → Reverse Depreciation use karo.`,
           variant: 'destructive',
         });
-        return;
+        return false;
       }
     }
 
@@ -1207,6 +1209,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
       else deleteEntries(id); // remove from voucher_entries so cancelled voucher has no SQL-visible impact
     });
+    return true;
   }, []);
 
   const restoreVoucher = useCallback((id: string) => {

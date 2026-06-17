@@ -368,6 +368,14 @@ const Vouchers: React.FC = () => {
   const activeCount = vouchers.filter(v => !v.isDeleted).length;
   const cancelledCount = vouchers.filter(v => v.isDeleted).length;
 
+  // A sale/purchase voucher still actively referenced by its parent CANNOT be cancelled
+  // here — it must be deleted from Sale/Purchase Management so stock + sub-ledger reverse.
+  const cancelTarget = cancelId ? vouchers.find(x => x.id === cancelId) : null;
+  const cancelLinkedActive = !!cancelTarget && (
+    (cancelTarget.refType === 'sale' && sales.find(s => s.id === cancelTarget.refId)?.voucherId === cancelTarget.id) ||
+    (cancelTarget.refType === 'purchase' && purchases.find(p => p.id === cancelTarget.refId)?.voucherId === cancelTarget.id)
+  );
+
   const typeBadgeClass = (type: VoucherType) => {
     if (type === 'receipt') return 'bg-success/20 text-success border-success/30';
     if (type === 'payment') return 'bg-destructive/20 text-destructive border-destructive/30';
@@ -1185,8 +1193,8 @@ const Vouchers: React.FC = () => {
                 <div className="mx-4 mb-2 p-3 bg-orange-50 border border-orange-300 rounded text-sm text-orange-800">
                   ⚠️ <strong>{language === 'hi' ? 'चेतावनी:' : 'Warning:'}</strong>{' '}
                   {language === 'hi'
-                    ? 'यह वाउचर Purchase Management से बना है। इसे यहाँ रद्द करने पर stock नहीं घटेगा। Purchase Management से delete करें।'
-                    : 'This voucher was created by Purchase Management. Cancelling here will NOT reverse stock. Please delete from Purchase Management instead.'}
+                    ? 'यह वाउचर Purchase Management से बना है — इसे यहाँ रद्द नहीं किया जा सकता। Purchase Management → Purchase List से delete करें (तभी stock भी सही रहेगा)।'
+                    : 'This voucher was created by Purchase Management — it cannot be cancelled here. Delete it from Purchase Management → Purchase List (so stock stays correct).'}
                 </div>
               );
               return (
@@ -1205,8 +1213,8 @@ const Vouchers: React.FC = () => {
                 <div className="mx-4 mb-2 p-3 bg-orange-50 border border-orange-300 rounded text-sm text-orange-800">
                   ⚠️ <strong>{language === 'hi' ? 'चेतावनी:' : 'Warning:'}</strong>{' '}
                   {language === 'hi'
-                    ? 'यह वाउचर Sale Management से बना है। इसे यहाँ रद्द करने पर stock वापस नहीं आएगी। Sale Management से delete करें।'
-                    : 'This voucher was created by Sale Management. Cancelling here will NOT restore stock. Please delete from Sale Management instead.'}
+                    ? 'यह वाउचर Sale Management से बना है — इसे यहाँ रद्द नहीं किया जा सकता। Sale Management → Sale List से delete करें (तभी stock वापस आएगी)।'
+                    : 'This voucher was created by Sale Management — it cannot be cancelled here. Delete it from Sale Management → Sale List (so stock is restored).'}
                 </div>
               );
               return (
@@ -1236,12 +1244,12 @@ const Vouchers: React.FC = () => {
               className="bg-destructive text-white hover:bg-destructive/90"
               onClick={() => {
                 if (cancelId && cancelReason.trim()) {
-                  cancelVoucher(cancelId, cancelReason.trim(), user?.name || 'System');
+                  const ok = cancelVoucher(cancelId, cancelReason.trim(), user?.name || 'System');
+                  if (ok) toast({ title: language === 'hi' ? 'वाउचर रद्द किया गया' : 'Voucher cancelled' });
                   setCancelId(null);
-                  toast({ title: language === 'hi' ? 'वाउचर रद्द किया गया' : 'Voucher cancelled' });
                 }
               }}
-              disabled={!cancelReason.trim()}
+              disabled={!cancelReason.trim() || cancelLinkedActive}
             >
               {language === 'hi' ? 'रद्द करें' : 'Cancel Voucher'}
             </AlertDialogAction>
