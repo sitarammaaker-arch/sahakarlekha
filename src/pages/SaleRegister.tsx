@@ -15,16 +15,18 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { generateSaleRegisterPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
 import { parseFY } from '@/lib/depreciation';
+import { getBillReceivedMap, getBillStatus } from '@/lib/billUtils';
 
 const fmtAmt = (n: number) =>
   'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 const SaleRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { society, sales } = useData();
+  const { society, sales, vouchers } = useData();
   const hi = language === 'hi';
   const fy = society.financialYear;
   const fyDates = parseFY(fy);
+  const receivedMap = useMemo(() => getBillReceivedMap(vouchers), [vouchers]);
 
   const [fromDate, setFromDate] = useState(fyDates?.start || '');
   const [toDate, setToDate] = useState(fyDates?.end || '');
@@ -149,6 +151,7 @@ const SaleRegister: React.FC = () => {
                     <TableHead className="text-right">{hi ? 'कुल कर' : 'Tax'}</TableHead>
                     <TableHead className="text-right">{hi ? 'कुल राशि' : 'Grand Total'}</TableHead>
                     <TableHead>{hi ? 'भुगतान' : 'Payment'}</TableHead>
+                    <TableHead>{hi ? 'स्थिति' : 'Status'}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -171,6 +174,16 @@ const SaleRegister: React.FC = () => {
                         <TableCell className="text-right text-amber-700">{s.taxAmount > 0 ? fmtAmt(s.taxAmount) : '—'}</TableCell>
                         <TableCell className="text-right font-semibold">{fmtAmt(s.grandTotal)}</TableCell>
                         <TableCell><span className="text-xs px-1.5 py-0.5 rounded bg-muted">{s.paymentMode}</span></TableCell>
+                        <TableCell>
+                          {s.paymentMode !== 'credit'
+                            ? <span className="text-xs text-success font-medium">{hi ? 'चुकता' : 'Paid'}</span>
+                            : (() => {
+                                const st = getBillStatus(s, receivedMap[s.id] || 0);
+                                const cls = st.status === 'paid' ? 'text-success' : st.status === 'partial' ? 'text-amber-700' : 'text-destructive';
+                                const lbl = st.status === 'paid' ? (hi ? 'चुकता' : 'Paid') : st.status === 'partial' ? (hi ? 'आंशिक' : 'Partial') : (hi ? 'बकाया' : 'Unpaid');
+                                return <span className={`text-xs font-medium ${cls}`}>{lbl}{st.balance > 0.01 ? ` · ${fmtAmt(st.balance)}` : ''}</span>;
+                              })()}
+                        </TableCell>
                       </TableRow>
                       {expanded.has(s.id) && (s.items?.length ?? 0) > 0 && (
                         <TableRow className="bg-muted/20 hover:bg-muted/20">

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, ReactNode, use
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import type {
-  Voucher, VoucherEditSnapshot, VoucherLine, VoucherType, Member, LedgerAccount, SocietySettings,
+  Voucher, VoucherEditSnapshot, VoucherLine, VoucherType, Member, LedgerAccount, SocietySettings, BillAllocation,
   AccountBalance, CashBookEntry, BankBookEntry, MemberLedgerEntry, ReceiptsPaymentsData,
   Loan, Asset, AuditObjection, Recoverable, KachiAaratEntry, P7Entry,
   StockItem, StockMovement,
@@ -94,6 +94,7 @@ interface DataContextType {
   addSale: (data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>) => Sale;
   updateSale: (id: string, data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>) => Sale | null;
   deleteSale: (id: string) => void;
+  addBillReceipt: (data: { customerId: string; date: string; paymentMode: 'cash' | 'bank'; bankAccountId?: string; allocations: { saleId: string; amount: number }[]; narration?: string }) => Voucher | null;
 
   // Purchases
   purchases: Purchase[];
@@ -788,7 +789,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const persistVoucher = (v: Voucher, opts: { onBaseFail: () => void; isUpdate?: boolean }) => {
     // Strip out everything that may live in late-added columns
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { lines, refType, refId, isCleared, clearedDate, editHistory, groupId,
+    const { lines, refType, refId, billAllocations, isCleared, clearedDate, editHistory, groupId,
             approvalStatus, approvalRemarks, approvedBy, approvedAt, ...baseCols } = v;
 
     const handleBaseFailure = (msg: string) => {
@@ -827,6 +828,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (approvedBy !== undefined) extras.approvedBy = approvedBy;
       if (approvedAt !== undefined) extras.approvedAt = approvedAt;
       if (editHistory !== undefined) extras.editHistory = editHistory;
+      if (billAllocations !== undefined) extras.billAllocations = billAllocations;
       if (Object.keys(extras).length === 0) {
         if (!opts.isUpdate) syncEntries(v);
         return;
@@ -953,6 +955,56 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return newVoucher;
   }, [society.financialYear, society.fyLocked, society.fyLockedBy, society.financialYearStart]);
+
+  // ── Bill-wise receipt (Tally "Against Reference"): a customer payment applied to
+  //    one or more open credit bills. Builds a Dr Cash/Bank, Cr Customer receipt
+  //    voucher and tags it with billAllocations; bill balances are DERIVED from
+  //    these allocations (lib/billUtils), so deleting the receipt auto-reverses it.
+  const addBillReceipt = useCallback((data: {
+    customerId: string;
+    date: string;
+    paymentMode: 'cash' | 'bank';
+    bankAccountId?: string;
+    allocations: { saleId: string; amount: number }[];
+    narration?: string;
+  }): Voucher | null => {
+    if (guardFYLocked()) return null;
+    const cust = customers.find(c => c.id === data.customerId);
+    const custAcc = cust?.accountId || '3303';   // Sundry Debtors fallback
+    const allocs = data.allocations.filter(a => a.amount > 0);
+    const total = +allocs.reduce((s, a) => s + a.amount, 0).toFixed(2);
+    if (total <= 0) {
+      toastRef.current({ title: 'राशि डालें', description: 'कम से कम एक बिल के विरुद्ध राशि भरें।', variant: 'destructive' });
+      return null;
+    }
+    const debitAcc = data.paymentMode === 'cash'
+      ? ACCOUNT_IDS.CASH
+      : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    const billAllocations: BillAllocation[] = allocs.map(a => {
+      const sale = salesRef.current.find(s => s.id === a.saleId);
+      return { saleId: a.saleId, saleNo: sale?.saleNo || '', amount: +a.amount.toFixed(2) };
+    });
+    const billList = billAllocations.map(b => b.saleNo).filter(Boolean).join(', ');
+    const narration = `${cust?.name || 'ग्राहक'} से प्राप्त — बिल ${billList} के विरुद्ध${data.narration?.trim() ? ' · ' + data.narration.trim() : ''}`;
+    const lid = () => crypto.randomUUID();
+    const v = addVoucher({
+      type: 'receipt',
+      date: data.date,
+      debitAccountId: debitAcc,
+      creditAccountId: custAcc,
+      amount: total,
+      narration,
+      refType: 'bill-receipt',
+      refId: data.customerId,
+      billAllocations,
+      lines: [
+        { id: lid(), accountId: debitAcc, type: 'Dr', amount: total },
+        { id: lid(), accountId: custAcc, type: 'Cr', amount: total },
+      ],
+      createdBy: user?.name ?? 'System',
+    });
+    return v && v.id ? v : null;
+  }, [customers, accounts, addVoucher, user?.name]);
 
   const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => {
     if (guardFYLocked()) return;
@@ -3639,7 +3691,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       kachiAaratEntries, addKachiAaratEntry, updateKachiAaratEntry, deleteKachiAaratEntry,
       p7Entries, upsertP7Entry, deleteP7Entry,
       addStockItem, updateStockItem, deleteStockItem, addStockMovement,
-      addSale, updateSale, deleteSale,
+      addSale, updateSale, deleteSale, addBillReceipt,
       addPurchase, updatePurchase, deletePurchase,
       addEmployee, updateEmployee, deleteEmployee,
       addSalaryRecord, updateSalaryRecord, deleteSalaryRecord,

@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Wallet, Building2, FileText, BookOpen, Users,
   Scale, TrendingUp, FileSpreadsheet, BarChart3, Settings, LogOut,
   ChevronLeft, ChevronRight, ArrowLeftRight, BookMarked, Landmark, Package, ShieldCheck, CalendarDays,
-  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, Truck, UserCheck, Trash2, CheckCircle2, Shield, Percent, Coins, Layers, Users2, ClipboardList, FileCheck, DatabaseBackup, TrendingDown,
+  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, HandCoins, Truck, UserCheck, Trash2, CheckCircle2, Shield, Percent, Coins, Layers, Users2, ClipboardList, FileCheck, DatabaseBackup, TrendingDown,
   Warehouse, PiggyBank, Receipt, UserCog, FileJson, Wheat, Vote, BookOpenCheck, ScrollText, Hash,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -48,6 +48,7 @@ const operationsNavItems: NavItem[] = [
   { key: 'suppliers', icon: Truck, path: '/suppliers' },
   { key: 'customers', icon: UserCheck, path: '/customers' },
   { key: 'sales', icon: ShoppingCart, path: '/sales' },
+  { key: 'receivePayment', icon: HandCoins, path: '/receive-payment', roles: ['admin', 'accountant'] },
   { key: 'purchases', icon: PackagePlus, path: '/purchases' },
   { key: 'salary', icon: BadgeDollarSign, path: '/salary' },
 ];

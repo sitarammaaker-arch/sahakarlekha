@@ -73,6 +73,7 @@ export const translations: Translations = {
   ledgerHeads: { hi: 'खाता शीर्ष', en: 'Ledger Heads' },
   inventory: { hi: 'माल भंडार', en: 'Inventory' },
   sales: { hi: 'बिक्री', en: 'Sales' },
+  receivePayment: { hi: 'भुगतान प्राप्ति', en: 'Receive Payment' },
   purchases: { hi: 'खरीद', en: 'Purchases' },
   salary: { hi: 'वेतन', en: 'Salary' },
   suppliers: { hi: 'आपूर्तिकर्ता', en: 'Suppliers' },

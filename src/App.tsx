@@ -42,6 +42,7 @@ const DayBook = lazy(() => import("./pages/DayBook"));
 const LedgerHeads = lazy(() => import("./pages/LedgerHeads"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const SaleManagement = lazy(() => import("./pages/SaleManagement"));
+const ReceivePayment = lazy(() => import("./pages/ReceivePayment"));
 const SaleRegister = lazy(() => import("./pages/SaleRegister"));
 const PurchaseManagement = lazy(() => import("./pages/PurchaseManagement"));
 const PurchaseRegister = lazy(() => import("./pages/PurchaseRegister"));
@@ -181,6 +182,7 @@ const AppRoutes = () => {
       <Route path="/ledger-heads" element={<ProtectedRoute><LedgerHeads /></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
       <Route path="/sales" element={<ProtectedRoute><SaleManagement /></ProtectedRoute>} />
+      <Route path="/receive-payment" element={<ProtectedRoute><ReceivePayment /></ProtectedRoute>} />
       <Route path="/sale-register" element={<ProtectedRoute><SaleRegister /></ProtectedRoute>} />
       <Route path="/purchases" element={<ProtectedRoute><PurchaseManagement /></ProtectedRoute>} />
       <Route path="/purchase-register" element={<ProtectedRoute><PurchaseRegister /></ProtectedRoute>} />

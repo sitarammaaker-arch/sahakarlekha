@@ -481,6 +481,10 @@ alter table vouchers add column if not exists lines jsonb default '[]';
 alter table vouchers add column if not exists "refType" text;
 alter table vouchers add column if not exists "refId" text;
 
+-- Vouchers: bill-wise settlement (Tally "Against Reference").
+-- A bill-receipt voucher stores which sale invoices it settles, and by how much.
+alter table vouchers add column if not exists "billAllocations" jsonb;
+
 -- Vouchers: approval workflow + compound grouping columns
 alter table vouchers add column if not exists "groupId" text;
 alter table vouchers add column if not exists "approvalStatus" text default 'approved';

@@ -57,8 +57,17 @@ export interface Voucher {
   approvedAt?: string;
   // Multi-line voucher support (Phase 1 — Path B)
   lines?: VoucherLine[];
-  refType?: string;   // e.g. 'sale', 'purchase'
+  refType?: string;   // e.g. 'sale', 'purchase', 'bill-receipt'
   refId?: string;     // reference to parent sale/purchase id
+  // Bill-wise settlement: a receipt allocated against specific sale invoices
+  billAllocations?: BillAllocation[];
+}
+
+/** One line of a bill-wise receipt: how much of a payment is applied to a sale bill. */
+export interface BillAllocation {
+  saleId: string;
+  saleNo: string;
+  amount: number;
 }
 
 export type ObjectionStatus = 'pending' | 'partial' | 'rectified';
