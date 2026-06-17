@@ -401,6 +401,40 @@ const Vouchers: React.FC = () => {
     downloadExcelSingle(headers, rows, 'vouchers.xlsx', 'Vouchers');
   };
 
+  // ── Bill-wise settlement (Tally "Against Reference") — shared by Aasan & Expert modes ──
+  const billWiseTiles = (
+    <div>
+      <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+        <HandCoins className="h-4 w-4 text-primary" />
+        {language === 'hi' ? 'बिल-वार निपटान (Against Reference)' : 'Bill-wise Settlement (Against Reference)'}
+      </h3>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        <button
+          onClick={() => setBillWiseMode('receive')}
+          className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent bg-success/5 hover:border-success/40 hover:bg-success/10 transition-all text-center"
+        >
+          <span className="text-3xl">🧾</span>
+          <span className="text-sm font-medium text-foreground leading-tight">{language === 'hi' ? 'ग्राहक से वसूली' : 'Receive from Customer'}</span>
+        </button>
+        <button
+          onClick={() => setBillWiseMode('pay')}
+          className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent bg-destructive/5 hover:border-destructive/30 hover:bg-destructive/10 transition-all text-center"
+        >
+          <span className="text-3xl">💵</span>
+          <span className="text-sm font-medium text-foreground leading-tight">{language === 'hi' ? 'आपूर्तिकर्ता को भुगतान' : 'Pay Supplier'}</span>
+        </button>
+      </div>
+    </div>
+  );
+  const billWisePanel = billWiseMode && (
+    <div className="space-y-4">
+      <Button variant="outline" size="sm" className="gap-2" onClick={() => setBillWiseMode(null)}>
+        <ArrowLeft className="h-4 w-4" /> {language === 'hi' ? 'वापस' : 'Back'}
+      </Button>
+      <BillWiseSettlement mode={billWiseMode} compact onDone={() => { setBillWiseMode(null); setActiveTab('list'); }} />
+    </div>
+  );
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -469,42 +503,12 @@ const Vouchers: React.FC = () => {
             </div>
           )}
 
+          {billWisePanel}
+
           {/* ── AASAN MODE ── */}
-          {entryMode === 'aasan' && (
-            billWiseMode ? (
-              <div className="space-y-4">
-                <Button variant="outline" size="sm" className="gap-2" onClick={() => setBillWiseMode(null)}>
-                  <ArrowLeft className="h-4 w-4" /> {language === 'hi' ? 'वापस' : 'Back'}
-                </Button>
-                <BillWiseSettlement mode={billWiseMode} compact onDone={() => { setBillWiseMode(null); setActiveTab('list'); }} />
-              </div>
-            ) : (
+          {entryMode === 'aasan' && !billWiseMode && (
             <div className="space-y-4">
-              {/* Bill-wise settlement quick actions (Tally "Against Reference") — in-voucher */}
-              {!selectedTemplate && (
-                <div>
-                  <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                    <HandCoins className="h-4 w-4 text-primary" />
-                    {language === 'hi' ? 'बिल-वार निपटान (Against Reference)' : 'Bill-wise Settlement (Against Reference)'}
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    <button
-                      onClick={() => setBillWiseMode('receive')}
-                      className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent bg-success/5 hover:border-success/40 hover:bg-success/10 transition-all text-center"
-                    >
-                      <span className="text-3xl">🧾</span>
-                      <span className="text-sm font-medium text-foreground leading-tight">{language === 'hi' ? 'ग्राहक से वसूली' : 'Receive from Customer'}</span>
-                    </button>
-                    <button
-                      onClick={() => setBillWiseMode('pay')}
-                      className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent bg-destructive/5 hover:border-destructive/30 hover:bg-destructive/10 transition-all text-center"
-                    >
-                      <span className="text-3xl">💵</span>
-                      <span className="text-sm font-medium text-foreground leading-tight">{language === 'hi' ? 'आपूर्तिकर्ता को भुगतान' : 'Pay Supplier'}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
+              {!selectedTemplate && billWiseTiles}
               {!selectedTemplate ? (
                 /* Template selection grid */
                 <div className="space-y-4">
@@ -676,11 +680,12 @@ const Vouchers: React.FC = () => {
                 </Card>
               )}
             </div>
-            )
           )}
 
           {/* ── EXPERT MODE ── */}
-          {entryMode === 'expert' && (
+          {entryMode === 'expert' && !billWiseMode && (
+          <div className="space-y-4">
+          {billWiseTiles}
           <Tabs value={voucherType} onValueChange={(v) => { setVoucherType(v as VoucherType); setSavedVoucherNo(null); handleClear(); }}>
             <TabsList className="grid w-full grid-cols-4 max-w-xl">
               <TabsTrigger value="receipt" className="gap-1.5">
@@ -983,6 +988,7 @@ const Vouchers: React.FC = () => {
               </Card>
             </TabsContent>
           </Tabs>
+          </div>
           )}
         </>
       )}
