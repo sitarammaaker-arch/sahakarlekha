@@ -44,8 +44,12 @@ export function computeStockCostRate(
   for (const m of movements) {
     if (m.itemId !== item.id) continue;
     if (m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0)) {
-      qty += Math.abs(m.qty);
-      value += Math.abs(m.amount || 0);
+      const q = Math.abs(m.qty);
+      qty += q;
+      // Value each inward by qty × rate — the SAME basis Stock Valuation (FIFO/Weighted-Avg)
+      // uses — so every report agrees. `m.amount` is unreliable (0 on some imported/older
+      // movements even when the rate is set), which silently zeroed closing value before.
+      value += m.rate ? q * m.rate : Math.abs(m.amount || 0);
     }
   }
   return qty > 0 ? value / qty : (item.purchaseRate || 0);
