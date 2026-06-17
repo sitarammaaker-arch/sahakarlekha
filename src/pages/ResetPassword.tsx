@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Building2, Lock, Eye, EyeOff, CheckCircle2, AlertCircle, Languages } from 'lucide-react';
+import { Lock, Eye, EyeOff, CheckCircle2, AlertCircle, Languages } from 'lucide-react';
 
 const ResetPassword: React.FC = () => {
   const navigate = useNavigate();
@@ -108,8 +108,8 @@ const ResetPassword: React.FC = () => {
 
       {/* Logo */}
       <div className="mb-8 text-center">
-        <div className="h-16 w-16 rounded-xl bg-primary text-primary-foreground flex items-center justify-center mx-auto mb-4">
-          <Building2 className="h-8 w-8" />
+        <div className="h-16 w-16 rounded-xl bg-accent text-accent-foreground flex items-center justify-center mx-auto mb-4 shadow-md">
+          <span className="text-4xl font-bold leading-none">स</span>
         </div>
         <h1 className="text-2xl font-bold text-foreground">समिति लेखा प्रणाली</h1>
       </div>

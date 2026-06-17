@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from '@/components/ui/dialog';
-import { Building2, Lock, Mail, Eye, EyeOff, Languages, AlertCircle, KeyRound, HelpCircle, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, Languages, AlertCircle, KeyRound, HelpCircle, ShieldCheck } from 'lucide-react';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -78,8 +78,8 @@ const Login: React.FC = () => {
         <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-white/5" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full bg-accent/20" />
         <div className="relative z-10 flex flex-col justify-center items-center w-full p-12 text-primary-foreground">
-          <div className="h-24 w-24 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center mb-8">
-            <Building2 className="h-12 w-12" />
+          <div className="h-24 w-24 rounded-2xl bg-accent text-accent-foreground flex items-center justify-center mb-8 shadow-lg">
+            <span className="text-6xl font-bold leading-none">स</span>
           </div>
           <h1 className="text-4xl font-bold text-center mb-4">समिति लेखा प्रणाली</h1>
           <p className="text-xl text-center text-primary-foreground/80 mb-2">
@@ -123,8 +123,8 @@ const Login: React.FC = () => {
 
         {/* Mobile Logo */}
         <div className="lg:hidden mb-8 text-center">
-          <div className="h-16 w-16 rounded-xl bg-primary text-primary-foreground flex items-center justify-center mx-auto mb-4">
-            <Building2 className="h-8 w-8" />
+          <div className="h-16 w-16 rounded-xl bg-accent text-accent-foreground flex items-center justify-center mx-auto mb-4 shadow-md">
+            <span className="text-4xl font-bold leading-none">स</span>
           </div>
           <h1 className="text-2xl font-bold text-foreground">समिति लेखा प्रणाली</h1>
         </div>
