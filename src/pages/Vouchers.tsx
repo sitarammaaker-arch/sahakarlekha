@@ -21,7 +21,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, CheckCircle, RotateCcw, EyeOff, Eye, Pencil, Printer, Zap, Settings2, ArrowLeft, ArrowLeftRight, Search, FileSpreadsheet, Download } from 'lucide-react';
+import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, CheckCircle, RotateCcw, EyeOff, Eye, Pencil, Printer, Zap, Settings2, ArrowLeft, ArrowLeftRight, Search, FileSpreadsheet, Download, HandCoins } from 'lucide-react';
+import BillWiseSettlement from '@/components/BillWiseSettlement';
 import { generateVoucherPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { cn } from '@/lib/utils';
@@ -71,6 +72,8 @@ const Vouchers: React.FC = () => {
     return (localStorage.getItem('sahayata_entry_mode') as EntryMode) || 'aasan';
   });
   const [selectedTemplate, setSelectedTemplate] = useState<typeof VOUCHER_TEMPLATES[0] | null>(null);
+  // Bill-wise settlement (Tally "Against Reference") opened inline within the voucher screen.
+  const [billWiseMode, setBillWiseMode] = useState<'receive' | 'pay' | null>(null);
 
   const switchMode = (mode: EntryMode) => {
     setEntryMode(mode);
@@ -468,7 +471,40 @@ const Vouchers: React.FC = () => {
 
           {/* ── AASAN MODE ── */}
           {entryMode === 'aasan' && (
+            billWiseMode ? (
+              <div className="space-y-4">
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => setBillWiseMode(null)}>
+                  <ArrowLeft className="h-4 w-4" /> {language === 'hi' ? 'वापस' : 'Back'}
+                </Button>
+                <BillWiseSettlement mode={billWiseMode} compact onDone={() => { setBillWiseMode(null); setActiveTab('list'); }} />
+              </div>
+            ) : (
             <div className="space-y-4">
+              {/* Bill-wise settlement quick actions (Tally "Against Reference") — in-voucher */}
+              {!selectedTemplate && (
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                    <HandCoins className="h-4 w-4 text-primary" />
+                    {language === 'hi' ? 'बिल-वार निपटान (Against Reference)' : 'Bill-wise Settlement (Against Reference)'}
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    <button
+                      onClick={() => setBillWiseMode('receive')}
+                      className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent bg-success/5 hover:border-success/40 hover:bg-success/10 transition-all text-center"
+                    >
+                      <span className="text-3xl">🧾</span>
+                      <span className="text-sm font-medium text-foreground leading-tight">{language === 'hi' ? 'ग्राहक से वसूली' : 'Receive from Customer'}</span>
+                    </button>
+                    <button
+                      onClick={() => setBillWiseMode('pay')}
+                      className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent bg-destructive/5 hover:border-destructive/30 hover:bg-destructive/10 transition-all text-center"
+                    >
+                      <span className="text-3xl">💵</span>
+                      <span className="text-sm font-medium text-foreground leading-tight">{language === 'hi' ? 'आपूर्तिकर्ता को भुगतान' : 'Pay Supplier'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
               {!selectedTemplate ? (
                 /* Template selection grid */
                 <div className="space-y-4">
@@ -640,6 +676,7 @@ const Vouchers: React.FC = () => {
                 </Card>
               )}
             </div>
+            )
           )}
 
           {/* ── EXPERT MODE ── */}

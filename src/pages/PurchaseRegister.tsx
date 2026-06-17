@@ -15,16 +15,18 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { generatePurchaseRegisterPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
 import { parseFY } from '@/lib/depreciation';
+import { getBillSettledMap, getBillStatusFor } from '@/lib/billUtils';
 
 const fmtAmt = (n: number) =>
   'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 const PurchaseRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { society, purchases } = useData();
+  const { society, purchases, vouchers } = useData();
   const hi = language === 'hi';
   const fy = society.financialYear;
   const fyDates = parseFY(fy);
+  const settledMap = useMemo(() => getBillSettledMap(vouchers), [vouchers]);
 
   const [fromDate, setFromDate] = useState(fyDates?.start || '');
   const [toDate, setToDate] = useState(fyDates?.end || '');
@@ -152,6 +154,7 @@ const PurchaseRegister: React.FC = () => {
                     <TableHead className="text-right">TDS</TableHead>
                     <TableHead className="text-right">{hi ? 'कुल राशि' : 'Grand Total'}</TableHead>
                     <TableHead>{hi ? 'भुगतान' : 'Payment'}</TableHead>
+                    <TableHead>{hi ? 'स्थिति' : 'Status'}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -175,10 +178,20 @@ const PurchaseRegister: React.FC = () => {
                         <TableCell className="text-right text-red-600">{(p.tdsAmount || 0) > 0 ? fmtAmt(p.tdsAmount) : '—'}</TableCell>
                         <TableCell className="text-right font-semibold">{fmtAmt(p.grandTotal)}</TableCell>
                         <TableCell><span className="text-xs px-1.5 py-0.5 rounded bg-muted">{p.paymentMode}</span></TableCell>
+                        <TableCell>
+                          {p.paymentMode !== 'credit'
+                            ? <span className="text-xs text-success font-medium">{hi ? 'चुकता' : 'Paid'}</span>
+                            : (() => {
+                                const st = getBillStatusFor(p.grandTotal ?? p.netAmount ?? 0, settledMap[p.id] || 0);
+                                const cls = st.status === 'paid' ? 'text-success' : st.status === 'partial' ? 'text-amber-700' : 'text-destructive';
+                                const lbl = st.status === 'paid' ? (hi ? 'चुकता' : 'Paid') : st.status === 'partial' ? (hi ? 'आंशिक' : 'Partial') : (hi ? 'बकाया' : 'Unpaid');
+                                return <span className={`text-xs font-medium ${cls}`}>{lbl}{st.balance > 0.01 ? ` · ${fmtAmt(st.balance)}` : ''}</span>;
+                              })()}
+                        </TableCell>
                       </TableRow>
                       {expanded.has(p.id) && (p.items?.length ?? 0) > 0 && (
                         <TableRow className="bg-muted/20 hover:bg-muted/20">
-                          <TableCell colSpan={12} className="p-0">
+                          <TableCell colSpan={13} className="p-0">
                             <div className="px-8 py-2">
                               <table className="w-full text-xs">
                                 <thead>
@@ -219,6 +232,7 @@ const PurchaseRegister: React.FC = () => {
                     <TableCell className="text-right">{fmtAmt(totals.taxAmount)}</TableCell>
                     <TableCell className="text-right">{fmtAmt(totals.tds)}</TableCell>
                     <TableCell className="text-right">{fmtAmt(totals.grandTotal)}</TableCell>
+                    <TableCell></TableCell>
                     <TableCell></TableCell>
                   </TableRow>
                 </TableBody>

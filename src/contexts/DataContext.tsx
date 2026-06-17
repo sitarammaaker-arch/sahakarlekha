@@ -94,7 +94,8 @@ interface DataContextType {
   addSale: (data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>) => Sale;
   updateSale: (id: string, data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>) => Sale | null;
   deleteSale: (id: string) => void;
-  addBillReceipt: (data: { customerId: string; date: string; paymentMode: 'cash' | 'bank'; bankAccountId?: string; allocations: { saleId: string; amount: number }[]; narration?: string }) => Voucher | null;
+  addBillReceipt: (data: { customerId: string; date: string; paymentMode: 'cash' | 'bank'; bankAccountId?: string; allocations: { saleId: string; amount: number }[]; advance?: number; onAccount?: number; narration?: string }) => Voucher | null;
+  addBillPayment: (data: { supplierId: string; date: string; paymentMode: 'cash' | 'bank'; bankAccountId?: string; allocations: { purchaseId: string; amount: number }[]; advance?: number; onAccount?: number; narration?: string }) => Voucher | null;
 
   // Purchases
   purchases: Purchase[];
@@ -966,26 +967,35 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     paymentMode: 'cash' | 'bank';
     bankAccountId?: string;
     allocations: { saleId: string; amount: number }[];
+    advance?: number;       // money received before/without a specific bill
+    onAccount?: number;     // received in excess of the bills, kept unallocated
     narration?: string;
   }): Voucher | null => {
     if (guardFYLocked()) return null;
     const cust = customers.find(c => c.id === data.customerId);
     const custAcc = cust?.accountId || '3303';   // Sundry Debtors fallback
     const allocs = data.allocations.filter(a => a.amount > 0);
-    const total = +allocs.reduce((s, a) => s + a.amount, 0).toFixed(2);
+    const adv = Math.max(0, +(data.advance || 0));
+    const onAcc = Math.max(0, +(data.onAccount || 0));
+    const total = +(allocs.reduce((s, a) => s + a.amount, 0) + adv + onAcc).toFixed(2);
     if (total <= 0) {
-      toastRef.current({ title: 'राशि डालें', description: 'कम से कम एक बिल के विरुद्ध राशि भरें।', variant: 'destructive' });
+      toastRef.current({ title: 'राशि डालें', description: 'कम से कम एक बिल के विरुद्ध (या अग्रिम) राशि भरें।', variant: 'destructive' });
       return null;
     }
     const debitAcc = data.paymentMode === 'cash'
       ? ACCOUNT_IDS.CASH
       : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
-    const billAllocations: BillAllocation[] = allocs.map(a => {
-      const sale = salesRef.current.find(s => s.id === a.saleId);
-      return { saleId: a.saleId, saleNo: sale?.saleNo || '', amount: +a.amount.toFixed(2) };
-    });
-    const billList = billAllocations.map(b => b.saleNo).filter(Boolean).join(', ');
-    const narration = `${cust?.name || 'ग्राहक'} से प्राप्त — बिल ${billList} के विरुद्ध${data.narration?.trim() ? ' · ' + data.narration.trim() : ''}`;
+    const billAllocations: BillAllocation[] = [
+      ...allocs.map(a => {
+        const sale = salesRef.current.find(s => s.id === a.saleId);
+        return { billId: a.saleId, billNo: sale?.saleNo || '', saleId: a.saleId, saleNo: sale?.saleNo || '', amount: +a.amount.toFixed(2), method: 'against' as const };
+      }),
+      ...(adv > 0 ? [{ amount: +adv.toFixed(2), method: 'advance' as const }] : []),
+      ...(onAcc > 0 ? [{ amount: +onAcc.toFixed(2), method: 'on-account' as const }] : []),
+    ];
+    const billList = billAllocations.filter(b => b.method === 'against').map(b => b.billNo).filter(Boolean).join(', ');
+    const tag = billList ? `बिल ${billList} के विरुद्ध` : (adv > 0 ? 'अग्रिम राशि' : 'On Account');
+    const narration = `${cust?.name || 'ग्राहक'} से प्राप्त — ${tag}${data.narration?.trim() ? ' · ' + data.narration.trim() : ''}`;
     const lid = () => crypto.randomUUID();
     const v = addVoucher({
       type: 'receipt',
@@ -1005,6 +1015,64 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return v && v.id ? v : null;
   }, [customers, accounts, addVoucher, user?.name]);
+
+  // ── Bill-wise payment (supplier side): a payment applied to one or more open credit
+  //    purchase bills (and/or advance/on-account). Builds Dr Supplier, Cr Cash/Bank and
+  //    tags billAllocations; balances are DERIVED (lib/billUtils), mirror of addBillReceipt.
+  const addBillPayment = useCallback((data: {
+    supplierId: string;
+    date: string;
+    paymentMode: 'cash' | 'bank';
+    bankAccountId?: string;
+    allocations: { purchaseId: string; amount: number }[];
+    advance?: number;
+    onAccount?: number;
+    narration?: string;
+  }): Voucher | null => {
+    if (guardFYLocked()) return null;
+    const sup = suppliers.find(s => s.id === data.supplierId);
+    const supAcc = sup?.accountId || '2101';   // Sundry Creditors fallback
+    const allocs = data.allocations.filter(a => a.amount > 0);
+    const adv = Math.max(0, +(data.advance || 0));
+    const onAcc = Math.max(0, +(data.onAccount || 0));
+    const total = +(allocs.reduce((s, a) => s + a.amount, 0) + adv + onAcc).toFixed(2);
+    if (total <= 0) {
+      toastRef.current({ title: 'राशि डालें', description: 'कम से कम एक बिल के विरुद्ध (या अग्रिम) राशि भरें।', variant: 'destructive' });
+      return null;
+    }
+    const creditAcc = data.paymentMode === 'cash'
+      ? ACCOUNT_IDS.CASH
+      : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    const billAllocations: BillAllocation[] = [
+      ...allocs.map(a => {
+        const p = purchasesRef.current.find(x => x.id === a.purchaseId);
+        return { billId: a.purchaseId, billNo: p?.purchaseNo || '', amount: +a.amount.toFixed(2), method: 'against' as const };
+      }),
+      ...(adv > 0 ? [{ amount: +adv.toFixed(2), method: 'advance' as const }] : []),
+      ...(onAcc > 0 ? [{ amount: +onAcc.toFixed(2), method: 'on-account' as const }] : []),
+    ];
+    const billList = billAllocations.filter(b => b.method === 'against').map(b => b.billNo).filter(Boolean).join(', ');
+    const tag = billList ? `बिल ${billList} के विरुद्ध` : (adv > 0 ? 'अग्रिम भुगतान' : 'On Account');
+    const narration = `${sup?.name || 'आपूर्तिकर्ता'} को भुगतान — ${tag}${data.narration?.trim() ? ' · ' + data.narration.trim() : ''}`;
+    const lid = () => crypto.randomUUID();
+    const v = addVoucher({
+      type: 'payment',
+      date: data.date,
+      debitAccountId: supAcc,
+      creditAccountId: creditAcc,
+      amount: total,
+      narration,
+      refType: 'bill-payment',
+      refId: data.supplierId,
+      billAllocations,
+      lines: [
+        { id: lid(), accountId: supAcc, type: 'Dr', amount: total },
+        { id: lid(), accountId: creditAcc, type: 'Cr', amount: total },
+      ],
+      createdBy: user?.name ?? 'System',
+    });
+    return v && v.id ? v : null;
+  }, [suppliers, accounts, addVoucher, user?.name]);
 
   const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => {
     if (guardFYLocked()) return;
@@ -3691,7 +3759,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       kachiAaratEntries, addKachiAaratEntry, updateKachiAaratEntry, deleteKachiAaratEntry,
       p7Entries, upsertP7Entry, deleteP7Entry,
       addStockItem, updateStockItem, deleteStockItem, addStockMovement,
-      addSale, updateSale, deleteSale, addBillReceipt,
+      addSale, updateSale, deleteSale, addBillReceipt, addBillPayment,
       addPurchase, updatePurchase, deletePurchase,
       addEmployee, updateEmployee, deleteEmployee,
       addSalaryRecord, updateSalaryRecord, deleteSalaryRecord,

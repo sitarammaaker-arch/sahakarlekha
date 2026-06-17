@@ -187,7 +187,7 @@ const SaleRegister: React.FC = () => {
                       </TableRow>
                       {expanded.has(s.id) && (s.items?.length ?? 0) > 0 && (
                         <TableRow className="bg-muted/20 hover:bg-muted/20">
-                          <TableCell colSpan={11} className="p-0">
+                          <TableCell colSpan={12} className="p-0">
                             <div className="px-8 py-2">
                               <table className="w-full text-xs">
                                 <thead>

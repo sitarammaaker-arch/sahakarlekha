@@ -63,11 +63,25 @@ export interface Voucher {
   billAllocations?: BillAllocation[];
 }
 
-/** One line of a bill-wise receipt: how much of a payment is applied to a sale bill. */
+/** Tally "Method of Adjustment": settle a specific bill, or hold as advance / on-account. */
+export type BillMethod = 'against' | 'advance' | 'on-account';
+
+/**
+ * One allocation line of a bill-wise receipt/payment voucher.
+ * - method 'against'  → applies `amount` to the bill identified by billId/saleId.
+ * - method 'advance' | 'on-account' → unallocated credit held on the party (no bill id).
+ *
+ * `saleId`/`saleNo` are kept for back-compat with already-saved sales receipts;
+ * `billId`/`billNo` are the generic form (a sale OR purchase id). Use the helpers in
+ * lib/billUtils (allocBillId / allocMethod) rather than reading these directly.
+ */
 export interface BillAllocation {
-  saleId: string;
-  saleNo: string;
+  saleId?: string;
+  saleNo?: string;
+  billId?: string;
+  billNo?: string;
   amount: number;
+  method?: BillMethod;
 }
 
 export type ObjectionStatus = 'pending' | 'partial' | 'rectified';

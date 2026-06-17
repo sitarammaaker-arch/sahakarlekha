@@ -27,6 +27,7 @@ const Ledger = lazy(() => import("./pages/Ledger"));
 const Members = lazy(() => import("./pages/Members"));
 const MemberApplication = lazy(() => import("./pages/MemberApplication"));
 const TrialBalance = lazy(() => import("./pages/TrialBalance"));
+const BillsOutstanding = lazy(() => import("./pages/BillsOutstanding"));
 const ProfitLoss = lazy(() => import("./pages/ProfitLoss"));
 const TradingAccount = lazy(() => import("./pages/TradingAccount"));
 const ReceiptsPayments = lazy(() => import("./pages/ReceiptsPayments"));
@@ -45,6 +46,7 @@ const SaleManagement = lazy(() => import("./pages/SaleManagement"));
 const ReceivePayment = lazy(() => import("./pages/ReceivePayment"));
 const SaleRegister = lazy(() => import("./pages/SaleRegister"));
 const PurchaseManagement = lazy(() => import("./pages/PurchaseManagement"));
+const MakePayment = lazy(() => import("./pages/MakePayment"));
 const PurchaseRegister = lazy(() => import("./pages/PurchaseRegister"));
 const SalaryManagement = lazy(() => import("./pages/SalaryManagement"));
 const Suppliers = lazy(() => import("./pages/Suppliers"));
@@ -167,6 +169,7 @@ const AppRoutes = () => {
       <Route path="/members" element={<ProtectedRoute><Members /></ProtectedRoute>} />
       <Route path="/member-application" element={<ProtectedRoute><MemberApplication /></ProtectedRoute>} />
       <Route path="/trial-balance" element={<ProtectedRoute><TrialBalance /></ProtectedRoute>} />
+      <Route path="/bills-outstanding" element={<ProtectedRoute><BillsOutstanding /></ProtectedRoute>} />
       <Route path="/trading-account" element={<ProtectedRoute><TradingAccount /></ProtectedRoute>} />
       <Route path="/profit-loss" element={<ProtectedRoute><ProfitLoss /></ProtectedRoute>} />
       <Route path="/receipts-payments" element={<ProtectedRoute><ReceiptsPayments /></ProtectedRoute>} />
@@ -185,6 +188,7 @@ const AppRoutes = () => {
       <Route path="/receive-payment" element={<ProtectedRoute><ReceivePayment /></ProtectedRoute>} />
       <Route path="/sale-register" element={<ProtectedRoute><SaleRegister /></ProtectedRoute>} />
       <Route path="/purchases" element={<ProtectedRoute><PurchaseManagement /></ProtectedRoute>} />
+      <Route path="/make-payment" element={<ProtectedRoute><MakePayment /></ProtectedRoute>} />
       <Route path="/purchase-register" element={<ProtectedRoute><PurchaseRegister /></ProtectedRoute>} />
       <Route path="/salary" element={<ProtectedRoute><SalaryManagement /></ProtectedRoute>} />
       <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />

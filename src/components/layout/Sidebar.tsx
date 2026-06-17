@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Wallet, Building2, FileText, BookOpen, Users,
   Scale, TrendingUp, FileSpreadsheet, BarChart3, Settings, LogOut,
   ChevronLeft, ChevronRight, ArrowLeftRight, BookMarked, Landmark, Package, ShieldCheck, CalendarDays,
-  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, HandCoins, Truck, UserCheck, Trash2, CheckCircle2, Shield, Percent, Coins, Layers, Users2, ClipboardList, FileCheck, DatabaseBackup, TrendingDown,
+  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, HandCoins, Banknote, Clock, Truck, UserCheck, Trash2, CheckCircle2, Shield, Percent, Coins, Layers, Users2, ClipboardList, FileCheck, DatabaseBackup, TrendingDown,
   Warehouse, PiggyBank, Receipt, UserCog, FileJson, Wheat, Vote, BookOpenCheck, ScrollText, Hash,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -50,6 +50,7 @@ const operationsNavItems: NavItem[] = [
   { key: 'sales', icon: ShoppingCart, path: '/sales' },
   { key: 'receivePayment', icon: HandCoins, path: '/receive-payment', roles: ['admin', 'accountant'] },
   { key: 'purchases', icon: PackagePlus, path: '/purchases' },
+  { key: 'makePayment', icon: Banknote, path: '/make-payment', roles: ['admin', 'accountant'] },
   { key: 'salary', icon: BadgeDollarSign, path: '/salary' },
 ];
 
@@ -62,6 +63,7 @@ const reportNavItems: NavItem[] = [
   { key: 'reports', icon: BarChart3, path: '/reports' },
   { key: 'saleRegister', icon: ShoppingCart, path: '/sale-register' },
   { key: 'purchaseRegister', icon: PackagePlus, path: '/purchase-register' },
+  { key: 'billsOutstanding', icon: Clock, path: '/bills-outstanding' },
   { key: 'gstSummary', icon: Percent, path: '/gst-summary' },
   { key: 'agingAnalysis', icon: TrendingDown, path: '/aging-analysis' },
   { key: 'tdsForm16A', icon: Receipt, path: '/tds-form16a' },
