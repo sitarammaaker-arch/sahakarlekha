@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, ComponentType } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,86 +10,112 @@ import { DataProvider, useData } from "@/contexts/DataContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
+// Auto-recover from stale-chunk errors after a new deploy. When the app has stayed
+// open across a deploy, an old hashed chunk filename can 404 on the CDN and the
+// dynamic import() rejects → blank screen until a manual refresh. Here we reload the
+// page ONCE (sessionStorage-guarded against loops) to fetch the fresh index.html +
+// chunk map, so the user never has to refresh by hand. The flag resets on the next
+// successful chunk load, so a later deploy can recover the same way.
+function lazyWithRetry<T extends ComponentType<unknown>>(
+  factory: () => Promise<{ default: T }>,
+) {
+  return lazy(async () => {
+    const KEY = 'sl_chunk_reloaded';
+    try {
+      const mod = await factory();
+      sessionStorage.removeItem(KEY);
+      return mod;
+    } catch (err) {
+      if (sessionStorage.getItem(KEY) !== '1') {
+        sessionStorage.setItem(KEY, '1');
+        window.location.reload();
+        return new Promise<{ default: T }>(() => {}); // hold the fallback until reload
+      }
+      throw err; // already retried once — let the ErrorBoundary show a message
+    }
+  });
+}
+
 // Pages — lazy-loaded so each route ships as its own chunk (keeps the initial
 // bundle small; heavy libs like jsPDF/html2canvas/recharts/xlsx load on demand).
-const LandingPage = lazy(() => import("./pages/LandingPage"));
-const ContactUs = lazy(() => import("./pages/ContactUs"));
-const AboutUs = lazy(() => import("./pages/AboutUs"));
-const FAQ = lazy(() => import("./pages/FAQ"));
-const UserGuide = lazy(() => import("./pages/UserGuide"));
-const Pricing = lazy(() => import("./pages/Pricing"));
-const Login = lazy(() => import("./pages/Login"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const CashBook = lazy(() => import("./pages/CashBook"));
-const BankBook = lazy(() => import("./pages/BankBook"));
-const Vouchers = lazy(() => import("./pages/Vouchers"));
-const Ledger = lazy(() => import("./pages/Ledger"));
-const Members = lazy(() => import("./pages/Members"));
-const MemberApplication = lazy(() => import("./pages/MemberApplication"));
-const TrialBalance = lazy(() => import("./pages/TrialBalance"));
-const BillsOutstanding = lazy(() => import("./pages/BillsOutstanding"));
-const ProfitLoss = lazy(() => import("./pages/ProfitLoss"));
-const TradingAccount = lazy(() => import("./pages/TradingAccount"));
-const ReceiptsPayments = lazy(() => import("./pages/ReceiptsPayments"));
-const BalanceSheet = lazy(() => import("./pages/BalanceSheet"));
-const Reports = lazy(() => import("./pages/Reports"));
-const SocietySetup = lazy(() => import("./pages/SocietySetup"));
-const ShareRegister = lazy(() => import("./pages/ShareRegister"));
-const LoanRegister = lazy(() => import("./pages/LoanRegister"));
-const AssetRegister = lazy(() => import("./pages/AssetRegister"));
-const DepreciationSchedule = lazy(() => import("./pages/DepreciationSchedule"));
-const AuditRegister = lazy(() => import("./pages/AuditRegister"));
-const DayBook = lazy(() => import("./pages/DayBook"));
-const LedgerHeads = lazy(() => import("./pages/LedgerHeads"));
-const Inventory = lazy(() => import("./pages/Inventory"));
-const SaleManagement = lazy(() => import("./pages/SaleManagement"));
-const ReceivePayment = lazy(() => import("./pages/ReceivePayment"));
-const SaleRegister = lazy(() => import("./pages/SaleRegister"));
-const PurchaseManagement = lazy(() => import("./pages/PurchaseManagement"));
-const MakePayment = lazy(() => import("./pages/MakePayment"));
-const PurchaseRegister = lazy(() => import("./pages/PurchaseRegister"));
-const SalaryManagement = lazy(() => import("./pages/SalaryManagement"));
-const Suppliers = lazy(() => import("./pages/Suppliers"));
-const Customers = lazy(() => import("./pages/Customers"));
-const DeletedVouchers = lazy(() => import("./pages/DeletedVouchers"));
-const BankReconciliation = lazy(() => import("./pages/BankReconciliation"));
-const ReserveFund = lazy(() => import("./pages/ReserveFund"));
-const ProfitDistribution = lazy(() => import("./pages/ProfitDistribution"));
-const LoanInterest = lazy(() => import("./pages/LoanInterest"));
-const CompoundVoucher = lazy(() => import("./pages/CompoundVoucher"));
-const VoucherApproval = lazy(() => import("./pages/VoucherApproval"));
-const MeetingRegister = lazy(() => import("./pages/MeetingRegister"));
-const NominationRegister = lazy(() => import("./pages/NominationRegister"));
-const Form1MemberList = lazy(() => import("./pages/Form1MemberList"));
-const AuditCertificate = lazy(() => import("./pages/AuditCertificate"));
-const BackupRestore = lazy(() => import("./pages/BackupRestore"));
-const GstSummary = lazy(() => import("./pages/GstSummary"));
-const AgingAnalysis = lazy(() => import("./pages/AgingAnalysis"));
-const StockValuation = lazy(() => import("./pages/StockValuation"));
-const ClosingStockReport = lazy(() => import("./pages/ClosingStockReport"));
-const BudgetModule = lazy(() => import("./pages/BudgetModule"));
-const TdsForm16A = lazy(() => import("./pages/TdsForm16A"));
-const TdsRegister = lazy(() => import("./pages/TdsRegister"));
-const UserManagement = lazy(() => import("./pages/UserManagement"));
-const EWayBill = lazy(() => import("./pages/EWayBill"));
-const HsnMaster = lazy(() => import("./pages/HsnMaster"));
-const KccLoan = lazy(() => import("./pages/KccLoan"));
-const ElectionModule = lazy(() => import("./pages/ElectionModule"));
-const BoardOfDirectors = lazy(() => import("./pages/BoardOfDirectors"));
-const OpeningBalances = lazy(() => import("./pages/OpeningBalances"));
-const Register = lazy(() => import("./pages/Register"));
-const MultiSocietyConsolidation = lazy(() => import("./pages/MultiSocietyConsolidation"));
-const NabardReport = lazy(() => import("./pages/NabardReport"));
-const FederationReport = lazy(() => import("./pages/FederationReport"));
-const RecoverablesRegister = lazy(() => import("./pages/RecoverablesRegister"));
-const KachiAaratRegister = lazy(() => import("./pages/KachiAaratRegister"));
-const AuditSchedules = lazy(() => import("./pages/AuditSchedules"));
-const UniversalImporter = lazy(() => import("./pages/UniversalImporter"));
-const ResetPassword = lazy(() => import("./pages/ResetPassword"));
-const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
-const TermsConditions = lazy(() => import("./pages/TermsConditions"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
+const LandingPage = lazyWithRetry(() => import("./pages/LandingPage"));
+const ContactUs = lazyWithRetry(() => import("./pages/ContactUs"));
+const AboutUs = lazyWithRetry(() => import("./pages/AboutUs"));
+const FAQ = lazyWithRetry(() => import("./pages/FAQ"));
+const UserGuide = lazyWithRetry(() => import("./pages/UserGuide"));
+const Pricing = lazyWithRetry(() => import("./pages/Pricing"));
+const Login = lazyWithRetry(() => import("./pages/Login"));
+const Dashboard = lazyWithRetry(() => import("./pages/Dashboard"));
+const CashBook = lazyWithRetry(() => import("./pages/CashBook"));
+const BankBook = lazyWithRetry(() => import("./pages/BankBook"));
+const Vouchers = lazyWithRetry(() => import("./pages/Vouchers"));
+const Ledger = lazyWithRetry(() => import("./pages/Ledger"));
+const Members = lazyWithRetry(() => import("./pages/Members"));
+const MemberApplication = lazyWithRetry(() => import("./pages/MemberApplication"));
+const TrialBalance = lazyWithRetry(() => import("./pages/TrialBalance"));
+const BillsOutstanding = lazyWithRetry(() => import("./pages/BillsOutstanding"));
+const ProfitLoss = lazyWithRetry(() => import("./pages/ProfitLoss"));
+const TradingAccount = lazyWithRetry(() => import("./pages/TradingAccount"));
+const ReceiptsPayments = lazyWithRetry(() => import("./pages/ReceiptsPayments"));
+const BalanceSheet = lazyWithRetry(() => import("./pages/BalanceSheet"));
+const Reports = lazyWithRetry(() => import("./pages/Reports"));
+const SocietySetup = lazyWithRetry(() => import("./pages/SocietySetup"));
+const ShareRegister = lazyWithRetry(() => import("./pages/ShareRegister"));
+const LoanRegister = lazyWithRetry(() => import("./pages/LoanRegister"));
+const AssetRegister = lazyWithRetry(() => import("./pages/AssetRegister"));
+const DepreciationSchedule = lazyWithRetry(() => import("./pages/DepreciationSchedule"));
+const AuditRegister = lazyWithRetry(() => import("./pages/AuditRegister"));
+const DayBook = lazyWithRetry(() => import("./pages/DayBook"));
+const LedgerHeads = lazyWithRetry(() => import("./pages/LedgerHeads"));
+const Inventory = lazyWithRetry(() => import("./pages/Inventory"));
+const SaleManagement = lazyWithRetry(() => import("./pages/SaleManagement"));
+const ReceivePayment = lazyWithRetry(() => import("./pages/ReceivePayment"));
+const SaleRegister = lazyWithRetry(() => import("./pages/SaleRegister"));
+const PurchaseManagement = lazyWithRetry(() => import("./pages/PurchaseManagement"));
+const MakePayment = lazyWithRetry(() => import("./pages/MakePayment"));
+const PurchaseRegister = lazyWithRetry(() => import("./pages/PurchaseRegister"));
+const SalaryManagement = lazyWithRetry(() => import("./pages/SalaryManagement"));
+const Suppliers = lazyWithRetry(() => import("./pages/Suppliers"));
+const Customers = lazyWithRetry(() => import("./pages/Customers"));
+const DeletedVouchers = lazyWithRetry(() => import("./pages/DeletedVouchers"));
+const BankReconciliation = lazyWithRetry(() => import("./pages/BankReconciliation"));
+const ReserveFund = lazyWithRetry(() => import("./pages/ReserveFund"));
+const ProfitDistribution = lazyWithRetry(() => import("./pages/ProfitDistribution"));
+const LoanInterest = lazyWithRetry(() => import("./pages/LoanInterest"));
+const CompoundVoucher = lazyWithRetry(() => import("./pages/CompoundVoucher"));
+const VoucherApproval = lazyWithRetry(() => import("./pages/VoucherApproval"));
+const MeetingRegister = lazyWithRetry(() => import("./pages/MeetingRegister"));
+const NominationRegister = lazyWithRetry(() => import("./pages/NominationRegister"));
+const Form1MemberList = lazyWithRetry(() => import("./pages/Form1MemberList"));
+const AuditCertificate = lazyWithRetry(() => import("./pages/AuditCertificate"));
+const BackupRestore = lazyWithRetry(() => import("./pages/BackupRestore"));
+const GstSummary = lazyWithRetry(() => import("./pages/GstSummary"));
+const AgingAnalysis = lazyWithRetry(() => import("./pages/AgingAnalysis"));
+const StockValuation = lazyWithRetry(() => import("./pages/StockValuation"));
+const ClosingStockReport = lazyWithRetry(() => import("./pages/ClosingStockReport"));
+const BudgetModule = lazyWithRetry(() => import("./pages/BudgetModule"));
+const TdsForm16A = lazyWithRetry(() => import("./pages/TdsForm16A"));
+const TdsRegister = lazyWithRetry(() => import("./pages/TdsRegister"));
+const UserManagement = lazyWithRetry(() => import("./pages/UserManagement"));
+const EWayBill = lazyWithRetry(() => import("./pages/EWayBill"));
+const HsnMaster = lazyWithRetry(() => import("./pages/HsnMaster"));
+const KccLoan = lazyWithRetry(() => import("./pages/KccLoan"));
+const ElectionModule = lazyWithRetry(() => import("./pages/ElectionModule"));
+const BoardOfDirectors = lazyWithRetry(() => import("./pages/BoardOfDirectors"));
+const OpeningBalances = lazyWithRetry(() => import("./pages/OpeningBalances"));
+const Register = lazyWithRetry(() => import("./pages/Register"));
+const MultiSocietyConsolidation = lazyWithRetry(() => import("./pages/MultiSocietyConsolidation"));
+const NabardReport = lazyWithRetry(() => import("./pages/NabardReport"));
+const FederationReport = lazyWithRetry(() => import("./pages/FederationReport"));
+const RecoverablesRegister = lazyWithRetry(() => import("./pages/RecoverablesRegister"));
+const KachiAaratRegister = lazyWithRetry(() => import("./pages/KachiAaratRegister"));
+const AuditSchedules = lazyWithRetry(() => import("./pages/AuditSchedules"));
+const UniversalImporter = lazyWithRetry(() => import("./pages/UniversalImporter"));
+const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
+const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
+const TermsConditions = lazyWithRetry(() => import("./pages/TermsConditions"));
+const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
+const SuperAdminDashboard = lazyWithRetry(() => import("./pages/SuperAdminDashboard"));
 import { SuperAdminRoute } from "@/components/SuperAdminRoute";
 
 import { preloadHindiFont } from '@/lib/fontLoader';
@@ -142,6 +168,7 @@ const PageLoader = () => (
 
 const AppRoutes = () => {
   return (
+    <ErrorBoundary>
     <Suspense fallback={<PageLoader />}>
     <Routes>
       {/* Public Routes */}
@@ -234,6 +261,7 @@ const AppRoutes = () => {
       <Route path="*" element={<NotFound />} />
     </Routes>
     </Suspense>
+    </ErrorBoundary>
   );
 };
 

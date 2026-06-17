@@ -26,6 +26,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      // A stale-chunk error after a new deploy isn't a real "page crash" — the fix is
+      // simply to reload and fetch the fresh build. Show a reload-first message for it.
+      const msg = this.state.error?.message || '';
+      const isChunkError = /chunk|dynamically imported module|importing a module script failed|failed to fetch/i.test(msg);
       return (
         <div className="min-h-[60vh] flex items-center justify-center p-8">
           <div className="max-w-md w-full text-center space-y-4">
@@ -33,18 +37,28 @@ export class ErrorBoundary extends React.Component<Props, State> {
               <AlertTriangle className="h-8 w-8 text-destructive" />
             </div>
             <h2 className="text-xl font-bold text-foreground">
-              इस पेज में त्रुटि हुई / Page Error
+              {isChunkError ? 'नया version उपलब्ध है / New version available' : 'इस पेज में त्रुटि हुई / Page Error'}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {this.state.error?.message || 'An unexpected error occurred'}
+              {isChunkError
+                ? 'ऐप अपडेट हो गया है — कृपया पेज reload करें। आपका डेटा सुरक्षित है।'
+                : (msg || 'An unexpected error occurred')}
             </p>
             <div className="flex gap-3 justify-center pt-2">
               <button
-                onClick={() => this.setState({ hasError: false, error: null })}
+                onClick={() => window.location.reload()}
                 className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90"
               >
-                पुनः प्रयास / Retry
+                Reload / पेज दोबारा लोड करें
               </button>
+              {!isChunkError && (
+                <button
+                  onClick={() => this.setState({ hasError: false, error: null })}
+                  className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted"
+                >
+                  पुनः प्रयास / Retry
+                </button>
+              )}
               <button
                 onClick={() => { window.location.href = '/dashboard'; }}
                 className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted"
