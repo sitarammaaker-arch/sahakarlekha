@@ -12,7 +12,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { StockMovement, StockItem } from '@/types';
-import { computeStockValue } from '@/lib/stockUtils';
+import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 
 const fmt = (n: number) =>
@@ -91,17 +91,19 @@ export default function StockValuation() {
   const rows: ValuationRow[] = useMemo(() => {
     return activeItems.map(item => {
       const movs = stockMovements.filter(m => m.itemId === item.id);
-      // Use item-level method if set, else use global selector
-      const itemMethod = item.valuationMethod || method;
-      const openingStock = item.openingStock || 0;
-      const openingRate = item.purchaseRate || 0;
-      const result = itemMethod === 'fifo' ? valueFifo(movs, openingStock, openingRate) : valueWeightedAvg(movs, openingStock, openingRate);
+      // Quantity is the ONE canonical movement formula (computeStock) used by every other
+      // report — it nets purchases − sales and clamps at 0. The old FIFO/WA valuers were
+      // order-sensitive: processing a sale BEFORE its purchase (same date) silently dropped
+      // the sale, so an item that was OVER-sold (sold more than bought) wrongly showed stock
+      // still on hand. Value at weighted-average cost (computeStockValue) — consistent everywhere.
+      const qty = computeStock(item, movs);
+      const value = computeStockValue(item, movs);
       return {
         item,
-        qty: result.qty,
-        avgRate: result.avgRate,
-        value: result.value,
-        method: itemMethod === 'fifo' ? 'FIFO' : 'WA',
+        qty,
+        avgRate: qty > 0 ? value / qty : computeStockCostRate(item, movs),
+        value,
+        method: 'WA',
       };
     });
   }, [activeItems, stockMovements, method]);
