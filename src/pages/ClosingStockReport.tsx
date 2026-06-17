@@ -13,7 +13,7 @@ import { Package, Download, FileSpreadsheet, Info } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { generateClosingStockPDF } from '@/lib/pdf';
 import { parseFY } from '@/lib/depreciation';
-import { computeStockCostRate } from '@/lib/stockUtils';
+import { computeStock, computeStockCostRate } from '@/lib/stockUtils';
 
 const fmtV = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -94,10 +94,12 @@ const ClosingStockReport: React.FC = () => {
         const openingRate = item.purchaseRate || 0;
         const openingValue = openingQty * openingRate;
 
-        const closingQty = Math.max(0, openingQty + inwardQty - outwardQty);
-        // Value at weighted-average COST from actual purchases (RULE 2) — NOT the stale
-        // purchaseRate field, which is 0 for some items and silently zeroes closing value.
-        const closingRate = computeStockCostRate(item, fyMovements);
+        // Closing must equal the Trading A/c / Balance Sheet figure for this item — both
+        // use WHOLE-HISTORY (up to FY end) qty × weighted-average cost. Using only FY-scoped
+        // movements gave a different WA rate (and qty) when prior-FY movements exist (Audit #11).
+        const histMovements = stockMovements.filter(m => m.itemId === item.id && m.date <= fyDates.end);
+        const closingQty = computeStock(item, histMovements);
+        const closingRate = computeStockCostRate(item, histMovements);
         const closingValue = closingQty * closingRate;
 
         return {

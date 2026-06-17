@@ -90,6 +90,11 @@ const TdsRegister: React.FC = () => {
       .filter(p => !(p as any).isDeleted && p.tdsAmount > 0)
       .map(p => {
         const supplier = suppliers.find(s => s.id === p.supplierId);
+        // Derive the FY from the purchase DATE, not the society's current FY, so a
+        // cross-year purchase lands in the correct 26Q period (Audit #10).
+        const pd = new Date(p.date);
+        const psy = pd.getMonth() >= 3 ? pd.getFullYear() : pd.getFullYear() - 1;
+        const pfy = `${psy}-${String((psy + 1) % 100).padStart(2, '0')}`;
         return {
           id: `pur-${p.id}`,
           date: p.date,
@@ -102,7 +107,7 @@ const TdsRegister: React.FC = () => {
           tdsRate: p.tdsPct || 0.1,
           tdsAmount: p.tdsAmount,
           quarter: getQuarterFromDate(p.date),
-          financialYear: fy,
+          financialYear: pfy,
           status: 'pending' as const,
           purchaseId: p.id,
           createdAt: p.createdAt,

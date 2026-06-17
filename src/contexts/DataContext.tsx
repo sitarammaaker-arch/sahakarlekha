@@ -2044,11 +2044,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getReceiptsPayments = useCallback((asOnDate?: string): ReceiptsPaymentsData => {
     const cashAccount = accounts.find(a => a.id === ACCOUNT_IDS.CASH);
     const bankIds = getBankAccountIds(accounts);
-    const openingCash = cashAccount?.openingBalance ?? 0;
-    const openingBank = bankIds.reduce((sum, bid) => {
-      const acc = accounts.find(a => a.id === bid);
-      return sum + (acc?.openingBalance ?? 0);
-    }, 0);
+    // Sign the opening by balance type (Dr = +, Cr/overdraft = −), same as closingFor below —
+    // a raw openingBalance showed an overdraft opening as a positive receipt (Audit #5).
+    const signedOpening = (acc?: LedgerAccount) =>
+      acc ? (acc.openingBalanceType === 'debit' ? acc.openingBalance : -acc.openingBalance) : 0;
+    const openingCash = signedOpening(cashAccount);
+    const openingBank = bankIds.reduce((sum, bid) => sum + signedOpening(accounts.find(a => a.id === bid)), 0);
 
     // ── Audit C-11/C-12: classify each R&P line by GL-head type and Capital/Revenue ──
     // NCDC Annexure VII: a Receipts & Payments Account must distinguish CAPITAL

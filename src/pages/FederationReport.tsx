@@ -32,6 +32,10 @@ const fyStart = (fy: string): Date => {
   const year = parseInt(fy.split('-')[0], 10);
   return new Date(year, 3, 1); // 1 April
 };
+const fyEnd = (fy: string): Date => {
+  const year = parseInt(fy.split('-')[0], 10);
+  return new Date(year + 1, 2, 31); // 31 March
+};
 
 const FederationReport: React.FC = () => {
   const { language } = useLanguage();
@@ -63,19 +67,23 @@ const FederationReport: React.FC = () => {
 
   const membershipData = useMemo(() => {
     const fyStartDate = fyStart(society.financialYear);
-    const totalMembers = approvedMembers.length;
+    const fyEndDate = fyEnd(society.financialYear);
 
-    // Members joined in current FY (createdAt >= fyStart)
+    // Joined WITHIN this FY only — bounded by fyEnd, else members who joined in LATER
+    // financial years were wrongly counted as "joined this year" (Audit #15).
     const joined = approvedMembers.filter(m => {
       const d = new Date(m.joinDate || '');
-      return d >= fyStartDate;
+      return d >= fyStartDate && d <= fyEndDate;
     }).length;
 
     // Members left (inactive)
     const left = approvedMembers.filter(m => m.status === 'inactive').length;
 
-    // Opening = total - joined
-    const opening = totalMembers - joined;
+    // Opening = members who already existed at FY start (joined before 1 April)
+    const opening = approvedMembers.filter(m => {
+      const d = new Date(m.joinDate || '');
+      return d < fyStartDate;
+    }).length;
     // Closing = opening + joined - left
     const closing = opening + joined - left;
 
@@ -114,6 +122,16 @@ const FederationReport: React.FC = () => {
       })
       .reduce((s, l) => s + (l.amount - l.repaidAmount), 0);
 
+    // NPA (regular loans): overdue > 90 days, same standard period as KCC. A 1-day-overdue
+    // loan is 'overdue' but NOT NPA — counting it inflated the NPA reported to the registrar (Audit #16).
+    const regularNpa = loans
+      .filter(l => {
+        const due = new Date(l.dueDate);
+        due.setHours(0, 0, 0, 0);
+        return l.status !== 'cleared' && daysBetween(due, today) > 90;
+      })
+      .reduce((s, l) => s + (l.amount - l.repaidAmount), 0);
+
     // KCC NPA amounts
     const kccNpa = kccLoans
       .filter(loan => {
@@ -124,7 +142,7 @@ const FederationReport: React.FC = () => {
       })
       .reduce((s, l) => s + (l.outstandingAmount ?? (l.drawnAmount - l.repaidAmount)), 0);
 
-    const npaAmt = overdue + kccNpa;
+    const npaAmt = regularNpa + kccNpa;
     const totalOutstanding = outstanding + kccLoans.reduce((s, l) => s + (l.outstandingAmount ?? (l.drawnAmount - l.repaidAmount)), 0);
     const npaPct = totalOutstanding > 0 ? (npaAmt / totalOutstanding) * 100 : 0;
 
@@ -136,8 +154,11 @@ const FederationReport: React.FC = () => {
     const ownFunds = accounts
       .filter(a => !a.isGroup && a.type === 'equity')
       .reduce((s, a) => { const b = getBalance(a.id); return s + (b > 0 ? b : 0); }, 0);
+    // Borrowed funds = deposits + loans/borrowings ONLY — not trade payables, statutory
+    // dues, provisions etc. (those are operating liabilities, Audit #17).
     const borrowings = accounts
-      .filter(a => !a.isGroup && a.type === 'liability')
+      .filter(a => !a.isGroup && a.type === 'liability' &&
+        (a.subtype === 'deposit' || a.subtype === 'long_term_loan' || /deposit|fd|rd|loan|borrow|overdraft|\bod\b|\bcc\b/i.test(a.name)))
       .reduce((s, a) => { const b = getBalance(a.id); return s + (b > 0 ? b : 0); }, 0);
     return { ownFunds, borrowings, total: ownFunds + borrowings };
   }, [accounts, vouchers]);

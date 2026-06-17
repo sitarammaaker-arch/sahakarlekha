@@ -64,7 +64,9 @@ export default function GstSummary() {
     const map = new Map<number, GstSlabRow>();
     for (const s of activeSales) {
       const rate = s.cgstPct + s.sgstPct + s.igstPct;
-      if (rate === 0 && s.taxAmount === 0) continue;
+      // Skip ALL zero-tax sales here — they belong to the Nil/Exempt bucket only. Skipping
+      // only rate==0 let a rate-set but zero-tax sale appear in both a slab row AND Nil (Audit #8).
+      if (s.taxAmount === 0) continue;
       const existing = map.get(rate) ?? { rate, taxableAmount: 0, cgst: 0, sgst: 0, igst: 0, total: 0, count: 0 };
       existing.taxableAmount += s.netAmount;
       existing.cgst += s.cgstAmount;
@@ -155,12 +157,19 @@ export default function GstSummary() {
   const hsnSummary = useMemo(() => {
     const map = new Map<string, { hsn: string; description: string; uqc: string; totalQty: number; taxableValue: number; igst: number; cgst: number; sgst: number }>();
     for (const s of activeSales) {
+      // Distribute any invoice discount across items so HSN taxable value sums to the
+      // POST-discount netAmount (and GST to the actual tax). Previously taxableValue used
+      // the pre-discount item amount while GST was scaled by netAmount — both over-stated
+      // by the discount on every discounted invoice (Audit #7).
+      const gross = s.items.reduce((sum, it) => sum + it.qty * it.rate, 0);
+      const scale = gross > 0 ? s.netAmount / gross : 1;
       for (const item of s.items) {
         const hsn = (item as any).hsnCode || 'N/A';
         const existing = map.get(hsn) ?? { hsn, description: item.itemName, uqc: item.unit || 'NOS', totalQty: 0, taxableValue: 0, igst: 0, cgst: 0, sgst: 0 };
         existing.totalQty += item.qty;
-        const ratio = s.netAmount > 0 ? (item.qty * item.rate) / s.netAmount : 0;
-        existing.taxableValue += item.qty * item.rate;
+        const itemNet = item.qty * item.rate * scale;
+        const ratio = s.netAmount > 0 ? itemNet / s.netAmount : 0;
+        existing.taxableValue += itemNet;
         existing.igst += s.igstAmount * ratio;
         existing.cgst += s.cgstAmount * ratio;
         existing.sgst += s.sgstAmount * ratio;
