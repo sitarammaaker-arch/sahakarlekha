@@ -14,7 +14,7 @@ import type {
   EntityLink,
 } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
-import { computeStock, computeStockValue } from '@/lib/stockUtils';
+import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } from '@/lib/storage';
 import { voucherLinesBalance } from '@/lib/validation';
@@ -2436,8 +2436,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // currentStock field — which can be stale after a purchase edit/delete and would
       // otherwise create a phantom write-off journal for stock that no longer exists.
       const realQty = item ? computeStock(item, stockMovementsRef.current) : 0;
+      // Value the write-off at weighted-average COST from movements (RULE 2), not the
+      // stale purchaseRate field — else deleting an item whose purchaseRate is 0 would
+      // post a ₹0 write-off and leave its closing-stock asset on the books forever.
+      const costRate = item ? computeStockCostRate(item, stockMovementsRef.current) : 0;
       if (item && item.isActive && realQty > 0) {
-        const amount = Math.round(realQty * item.purchaseRate * 100) / 100;
+        const amount = Math.round(realQty * costRate * 100) / 100;
         if (amount > 0) {
           // Dr 5101 (Purchases/Write-off expense) / Cr 3403 (Closing Stock asset) — reverses closing stock asset
           addVoucher({
@@ -2446,7 +2450,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             debitAccountId: '5101',
             creditAccountId: '3403',
             amount,
-            narration: `Stock write-off on deletion: ${item.name} (${realQty} ${item.unit} @ ₹${item.purchaseRate})`,
+            narration: `Stock write-off on deletion: ${item.name} (${realQty} ${item.unit} @ ₹${costRate.toFixed(2)})`,
             createdBy: user?.name ?? 'System',
           });
         }

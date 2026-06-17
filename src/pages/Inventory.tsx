@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
-import { computeStockMap } from '@/lib/stockUtils';
+import { computeStockMap, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -610,8 +610,10 @@ const Inventory: React.FC = () => {
   const computedStockMap = useMemo(() => computeStockMap(stockItems, stockMovements), [stockItems, stockMovements]);
 
   // Derived data
+  // Value at weighted-average COST from movements (RULE 2) — same as Stock Valuation /
+  // Trading A/c / Balance Sheet — NOT the stale purchaseRate field (0 for some items).
   const totalStockValue = stockItems.reduce(
-    (sum, item) => sum + (computedStockMap[item.id] ?? 0) * (item.purchaseRate ?? 0),
+    (sum, item) => sum + computeStockValue(item, stockMovements),
     0,
   );
   const lowStockCount = stockItems.filter(item => (computedStockMap[item.id] ?? 0) < 5).length;
@@ -790,13 +792,16 @@ const Inventory: React.FC = () => {
     const qty = Number(adjForm.qty);
     const item = stockItems.find(i => i.id === adjForm.itemId);
     if (!item) return;
+    // Value the adjustment at current weighted-average cost (RULE 2), not the stale
+    // purchaseRate field — so an adjustment doesn't dilute the item's stock value to 0.
+    const adjRate = computeStockCostRate(item, stockMovements);
     addStockMovement({
       date: adjForm.date,
       itemId: adjForm.itemId,
       type: 'adjustment',
       qty: Math.abs(qty),
-      rate: item.purchaseRate ?? 0,
-      amount: Math.abs(qty) * (item.purchaseRate ?? 0),
+      rate: adjRate,
+      amount: Math.abs(qty) * adjRate,
       referenceNo: '',
       narration: adjForm.narration || (qty >= 0 ? (hi ? 'स्टॉक में वृद्धि' : 'Stock increase') : (hi ? 'स्टॉक में कमी' : 'Stock decrease')),
     });
@@ -810,12 +815,12 @@ const Inventory: React.FC = () => {
 
   const handleCSV = () => {
     const headers = ['Item Code', 'Name', 'Name (Hindi)', 'Unit', 'Opening Stock', 'Current Stock', 'Purchase Rate', 'Sale Rate', 'Stock Value', 'Status', 'Barcode'];
-    const rows = filteredItems.map(i => { const cs = computedStockMap[i.id] ?? 0; return [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, cs, i.purchaseRate || 0, i.saleRate || 0, cs * (i.purchaseRate || 0), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']; });
+    const rows = filteredItems.map(i => { const cs = computedStockMap[i.id] ?? 0; return [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, cs, i.purchaseRate || 0, i.saleRate || 0, computeStockValue(i, stockMovements), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']; });
     downloadCSV(headers, rows, 'inventory.csv');
   };
   const handleExcel = () => {
     const headers = ['Item Code', 'Name', 'Name (Hindi)', 'Unit', 'Opening Stock', 'Current Stock', 'Purchase Rate', 'Sale Rate', 'Stock Value', 'Status', 'Barcode'];
-    const rows = filteredItems.map(i => { const cs = computedStockMap[i.id] ?? 0; return [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, cs, i.purchaseRate || 0, i.saleRate || 0, cs * (i.purchaseRate || 0), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']; });
+    const rows = filteredItems.map(i => { const cs = computedStockMap[i.id] ?? 0; return [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, cs, i.purchaseRate || 0, i.saleRate || 0, computeStockValue(i, stockMovements), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']; });
     downloadExcelSingle(headers, rows, 'inventory.xlsx', 'Inventory');
   };
 
@@ -1011,7 +1016,10 @@ const Inventory: React.FC = () => {
                     <TableBody>
                       {filteredItems.map(item => {
                         const effectiveStock = computedStockMap[item.id] ?? 0;
-                        const stockValue = effectiveStock * (item.purchaseRate ?? 0);
+                        // Weighted-average cost rate so the row is self-consistent (rate × qty = value)
+                        // and matches Stock Valuation / Trading A/c even when purchaseRate is 0/unset.
+                        const costRate = computeStockCostRate(item, stockMovements);
+                        const stockValue = effectiveStock * costRate;
                         const isLow = effectiveStock < 5;
                         return (
                           <TableRow key={item.id} className="hover:bg-muted/30">
@@ -1047,7 +1055,7 @@ const Inventory: React.FC = () => {
                                 )}
                               </span>
                             </TableCell>
-                            <TableCell className="text-right">{fmt(item.purchaseRate ?? 0)}</TableCell>
+                            <TableCell className="text-right">{fmt(costRate)}</TableCell>
                             <TableCell className="text-right">{fmt(item.saleRate ?? 0)}</TableCell>
                             <TableCell className="text-right font-semibold">
                               {fmt(stockValue)}
