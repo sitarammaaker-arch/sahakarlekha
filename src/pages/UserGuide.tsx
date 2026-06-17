@@ -20,20 +20,30 @@ import { Button } from '@/components/ui/button';
 import {
   BookOpen, LogIn, LayoutDashboard, Database, FileText,
   Package, BarChart3, ShieldCheck, AlertTriangle, Lightbulb,
-  Keyboard, HelpCircle, ArrowRight, Camera, CheckCircle2,
+  Keyboard, HelpCircle, ArrowRight, CheckCircle2,
   XCircle, Info, Workflow, ListChecks,
 } from 'lucide-react';
 
 /* ──────────────── Helper Components ──────────────── */
 
-const Screenshot: React.FC<{ caption: string }> = ({ caption }) => (
-  <div className="my-4 border-2 border-dashed border-primary/40 bg-primary/5 rounded-lg p-6 flex flex-col items-center justify-center min-h-[140px]">
-    <Camera className="h-8 w-8 text-primary/60 mb-2" />
-    <p className="text-xs text-muted-foreground text-center">
-      <span className="font-semibold text-primary">[SCREENSHOT]</span> {caption}
-    </p>
-  </div>
-);
+// Renders a real screenshot from /public/guide/<file>. If the file is not present
+// yet, it hides itself gracefully (no broken image, no "[SCREENSHOT]" placeholder).
+// Drop the named PNGs into public/guide/ and they appear automatically.
+const Screenshot: React.FC<{ caption: string; file?: string }> = ({ caption, file }) => {
+  const [failed, setFailed] = React.useState(false);
+  if (!file || failed) return null;
+  return (
+    <figure className="my-4 not-prose">
+      <img
+        src={`/guide/${file}`}
+        alt={caption}
+        onError={() => setFailed(true)}
+        className="rounded-lg border shadow-sm w-full"
+      />
+      <figcaption className="mt-2 text-xs text-muted-foreground text-center">{caption}</figcaption>
+    </figure>
+  );
+};
 
 const Step: React.FC<{ n: number; title: string; children: React.ReactNode }> = ({ n, title, children }) => (
   <div className="flex gap-4 my-3">
@@ -102,7 +112,7 @@ const TOC_ITEMS = [
 const UserGuide: React.FC = () => {
   return (
     <PublicLayout>
-      <div className="container mx-auto px-4 py-10 md:py-16 max-w-7xl">
+      <div className="mx-auto px-4 py-10 md:py-16 max-w-7xl">
         {/* Hero */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
@@ -166,13 +176,15 @@ const UserGuide: React.FC = () => {
             {/* ─── 2. GETTING STARTED ─── */}
             <Section id="start" icon={LogIn} title="2. शुरुआत कैसे करें?" subtitle="Login, Dashboard & Menu">
 
+              <Note type="info">📱 <strong>मोबाइल पर भी:</strong> फ़ोन, टैबलेट या कंप्यूटर — किसी भी ब्राउज़र से चलाएँ। कुछ इंस्टॉल करने की ज़रूरत नहीं।</Note>
+
               <h3 className="text-lg font-semibold mb-2">Login प्रक्रिया · Login Process</h3>
               <Step n={1} title="Browser खोलें">Chrome, Edge या कोई भी browser में <code>sahakarlekha.com</code> टाइप करें।</Step>
               <Step n={2} title="Login बटन दबाएँ">ऊपर दाएँ कोने में <strong>Login</strong> button पर क्लिक करें।</Step>
               <Step n={3} title="Email व Password भरें">Registered email ID और password डालें। पहली बार है तो <strong>Register</strong> पर क्लिक करें।</Step>
               <Step n={4} title="Dashboard खुलेगा">Login सफल होने पर Dashboard screen दिखाई देगी।</Step>
 
-              <Screenshot caption="Login Page — Email & Password fields के साथ" />
+              <Screenshot file="login.png" caption="Login Page — Email & Password fields के साथ" />
 
               <h3 className="text-lg font-semibold mt-4 mb-2">Dashboard Overview</h3>
               <p>Dashboard पर 4 मुख्य कार्ड दिखते हैं:</p>
@@ -183,7 +195,7 @@ const UserGuide: React.FC = () => {
                 <li><strong>Net Profit</strong> — कुल आय − कुल व्यय</li>
               </ul>
 
-              <Screenshot caption="Dashboard with Cash, Bank, Members & Profit cards" />
+              <Screenshot file="dashboard.png" caption="Dashboard with Cash, Bank, Members & Profit cards" />
 
               <h3 className="text-lg font-semibold mt-4 mb-2">मेन्यू (Sidebar) की जानकारी</h3>
               <div className="overflow-x-auto not-prose">
@@ -197,6 +209,7 @@ const UserGuide: React.FC = () => {
                     <tr className="border-t"><td className="p-2 font-medium">Members</td><td className="p-2">सदस्य मास्टर व अनुमोदन</td></tr>
                     <tr className="border-t"><td className="p-2 font-medium">Reports</td><td className="p-2">Trial Balance, Balance Sheet, P&amp;L</td></tr>
                     <tr className="border-t"><td className="p-2 font-medium">Inventory / Suppliers</td><td className="p-2">स्टॉक व पार्टी मास्टर</td></tr>
+                    <tr className="border-t"><td className="p-2 font-medium">Sales / Purchases</td><td className="p-2">बिक्री व खरीद की एंट्री (स्टॉक अपने-आप अपडेट)</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -249,11 +262,13 @@ const UserGuide: React.FC = () => {
               <Step n={2} title="+ New दबाएँ">नाम, PAN/GSTIN, पता, फोन भरें।</Step>
               <Step n={3} title="Opening Balance डालें">यदि पुराना लेन-देन बाकी है।</Step>
 
-              <h3 className="text-lg font-semibold mt-6 mb-2">3.5 Godown / Storage Setup</h3>
-              <Step n={1} title="Inventory → Godowns पर जाएँ"/>
-              <Step n={2} title="Godown नाम, पता, capacity भरें"/>
-              <Step n={3} title="Save करें"/>
-              <Note type="success">उदाहरण: <em>"रानिया मुख्य गोदाम − Capacity 5000 क्विंटल"</em></Note>
+              <h3 className="text-lg font-semibold mt-6 mb-2">3.5 Stock Items (माल / वस्तु) सेटअप</h3>
+              <Note type="warning"><strong>अनिवार्य:</strong> हर वस्तु को एक <strong>बिक्री खाता (Sales A/c)</strong> और एक <strong>खरीद खाता (Purchase A/c)</strong> देना ज़रूरी है। बिना खाता दिए वस्तु की बिक्री/खरीद <strong>पोस्ट नहीं होगी</strong>। इसी से रिपोर्ट में हर श्रेणी अलग दिखती है (जैसे "उर्वरक बिक्री", "उपभोक्ता वस्तु बिक्री")।</Note>
+              <Step n={1} title="Inventory खोलें">Sidebar → <strong>Inventory (माल भंडार)</strong></Step>
+              <Step n={2} title="+ नई वस्तु जोड़ें">नाम, इकाई (क्विंटल/किलो/नग), प्रारंभिक स्टॉक, खरीद दर, बिक्री दर भरें।</Step>
+              <Step n={3} title="बिक्री खाता व खरीद खाता चुनें">drop-down से चुनें — चाहें तो वहीं नया खाता/ग्रुप भी बना सकते हैं।</Step>
+              <Step n={4} title="Save करें"/>
+              <Screenshot file="inventory.png" caption="Inventory — नई वस्तु में बिक्री व खरीद खाता अनिवार्य" />
             </Section>
 
             {/* ─── 4. DAILY ENTRIES ─── */}
@@ -296,32 +311,31 @@ const UserGuide: React.FC = () => {
               <p><strong>कब?</strong> Cash ↔ Bank के बीच transfer में।</p>
               <Note type="success"><strong>उदाहरण:</strong> ₹10,000 नकद Bank में जमा → Debit: SBI Bank ₹10,000, Credit: Cash ₹10,000</Note>
 
-              <h3 className="text-lg font-semibold mt-4 mb-2">4.5 Purchase Entry (गेहूं खरीद)</h3>
-              <Note type="info"><strong>मंडी Scenario:</strong> आज समिति ने 100 क्विंटल गेहूं @ ₹2,275 = ₹2,27,500 कुल खरीद की आढ़ती "मेहरचंद ट्रेडर्स" से।</Note>
-              <Step n={1} title="Vouchers → New → Type: Purchase"/>
-              <Step n={2} title="Supplier: मेहरचंद ट्रेडर्स चुनें"/>
-              <Step n={3} title="Item: गेहूं, Quantity: 100, Rate: 2275"/>
-              <Step n={4} title="Godown चुनें"/>
-              <Step n={5} title="Save → Stock अपने आप बढ़ेगा"/>
-              <Screenshot caption="Purchase Entry — गेहूं खरीद मंडी उदाहरण" />
+              <h3 className="text-lg font-semibold mt-4 mb-2">4.5 Purchase Entry (खरीद)</h3>
+              <Note type="info"><strong>मंडी Scenario:</strong> आज समिति ने 100 क्विंटल गेहूं @ ₹2,275 = ₹2,27,500 की खरीद आढ़ती "मेहरचंद ट्रेडर्स" से की।</Note>
+              <Step n={1} title="Purchases खोलें">Sidebar (Operations) → <strong>Purchases (खरीद)</strong> → नई खरीद</Step>
+              <Step n={2} title="Supplier चुनें">मेहरचंद ट्रेडर्स</Step>
+              <Step n={3} title="Item, Quantity, Rate भरें">गेहूं, 100, 2275 — (वस्तु में Purchase A/c पहले से होना चाहिए)</Step>
+              <Step n={4} title="Save → Stock अपने-आप बढ़ेगा">खरीद की वाउचर व स्टॉक एंट्री अपने-आप बन जाती है।</Step>
+              <Screenshot file="purchase.png" caption="Purchase Entry — गेहूं खरीद (मंडी उदाहरण)" />
 
-              <h3 className="text-lg font-semibold mt-4 mb-2">4.6 Sales Entry</h3>
+              <h3 className="text-lg font-semibold mt-4 mb-2">4.6 Sales Entry (बिक्री)</h3>
               <Note type="info"><strong>उदाहरण:</strong> 100 क्विंटल गेहूं HAFED को @ ₹2,400 बेचा = ₹2,40,000</Note>
-              <Step n={1} title="New → Type: Sales"/>
-              <Step n={2} title="Customer: HAFED"/>
-              <Step n={3} title="Item, Qty, Rate, Godown चुनें"/>
-              <Step n={4} title="Save"/>
+              <Step n={1} title="Sales खोलें">Sidebar (Operations) → <strong>Sales (बिक्री)</strong> → नई बिक्री</Step>
+              <Step n={2} title="Customer चुनें">HAFED</Step>
+              <Step n={3} title="Item, Qty, Rate भरें">साथ में उपलब्ध स्टॉक भी दिखता है — (वस्तु में Sales A/c होना चाहिए)</Step>
+              <Step n={4} title="Save → Stock अपने-आप घटेगा"/>
 
-              <h3 className="text-lg font-semibold mt-4 mb-2">4.7 Stock Entry</h3>
-              <p>Stock Adjustment — Damage, Moisture loss, Physical count mismatch ठीक करने के लिए।</p>
-              <Step n={1} title="Inventory → Stock Adjustment"/>
-              <Step n={2} title="Godown, Item, Reason चुनें (Damage/Moisture)"/>
-              <Step n={3} title="Quantity (+/-) डालें"/>
-              <Step n={4} title="Save"/>
+              <h3 className="text-lg font-semibold mt-4 mb-2">4.7 Stock Adjustment (स्टॉक समायोजन)</h3>
+              <p>Damage, नमी (Moisture) हानि, या भौतिक गिनती के अंतर को ठीक करने के लिए।</p>
+              <Step n={1} title="Inventory → Adjustment खोलें"/>
+              <Step n={2} title="वस्तु व कारण चुनें (Damage/Moisture)"/>
+              <Step n={3} title="मात्रा (+/-) डालें"/>
+              <Step n={4} title="Save — स्टॉक अपने-आप अपडेट"/>
             </Section>
 
             {/* ─── 5. STOCK MANAGEMENT ─── */}
-            <Section id="stock" icon={Package} title="5. स्टॉक प्रबंधन" subtitle="Godown-wise Stock, Incoming/Outgoing, Damage Tracking">
+            <Section id="stock" icon={Package} title="5. स्टॉक प्रबंधन" subtitle="Item-wise Stock, Auto Closing Stock, Damage Tracking">
               <pre className="bg-muted p-3 rounded text-xs overflow-x-auto not-prose">{`
                     STOCK FLOW DIAGRAM
 
@@ -339,19 +353,24 @@ const UserGuide: React.FC = () => {
           └──────────┘           └──────────┘     └──────────┘
 `}</pre>
 
-              <h3 className="text-lg font-semibold mt-4 mb-2">5.1 Godown-wise Stock</h3>
-              <p>Inventory → Closing Stock Report — हर गोदाम का अलग stock summary देखें।</p>
-
-              <h3 className="text-lg font-semibold mt-4 mb-2">5.2 Incoming / Outgoing Stock</h3>
+              <h3 className="text-lg font-semibold mt-4 mb-2">5.1 स्टॉक कैसे घटता-बढ़ता है</h3>
               <ul className="list-disc pl-6 space-y-1">
-                <li><strong>Incoming:</strong> Purchase entry → Godown में जुड़ता है</li>
-                <li><strong>Outgoing:</strong> Sales entry → Godown से घटता है</li>
-                <li><strong>Transfer:</strong> Inventory → Stock Transfer (एक godown से दूसरे में)</li>
+                <li><strong>खरीद (Purchase):</strong> स्टॉक अपने-आप बढ़ता है</li>
+                <li><strong>बिक्री (Sales):</strong> स्टॉक अपने-आप घटता है</li>
+                <li><strong>समायोजन (Adjustment):</strong> Damage / नमी / गिनती-अंतर के लिए (+/−)</li>
               </ul>
+              <Note type="info"><strong>स्टॉक की गणना हमेशा movements (खरीद − बिक्री ± समायोजन) से होती है</strong> — इसलिए जो स्टॉक रिपोर्ट में दिखता है, ठीक वही बिक्री स्क्रीन पर "उपलब्ध" भी दिखता है।</Note>
 
-              <h3 className="text-lg font-semibold mt-4 mb-2">5.3 Damage / Moisture Tracking</h3>
-              <Note type="warning"><strong>जरूरी:</strong> हर week Physical verification करें व Stock Adjustment entry डालें। वरना Audit में mismatch होगा।</Note>
-              <Screenshot caption="Stock Adjustment — Damage/Moisture entry" />
+              <h3 className="text-lg font-semibold mt-4 mb-2">5.2 स्टॉक रिपोर्ट व समापन स्टॉक</h3>
+              <ul className="list-disc pl-6 space-y-1">
+                <li><strong>Inventory:</strong> हर वस्तु का वर्तमान स्टॉक, दर व मूल्य</li>
+                <li><strong>Stock Valuation / Closing Stock Report:</strong> श्रेणी-वार स्टॉक मूल्यांकन</li>
+              </ul>
+              <Note type="success"><strong>समापन स्टॉक अब अपने-आप (Tally की तरह):</strong> जब भी बैलेंस शीट या व्यापार खाता देखें, समापन स्टॉक इन्वेंट्री से अपने-आप गणना होकर आ जाता है — कोई "Post Closing Stock" बटन दबाने की ज़रूरत नहीं।</Note>
+
+              <h3 className="text-lg font-semibold mt-4 mb-2">5.3 Damage / नमी ट्रैकिंग</h3>
+              <Note type="warning"><strong>ज़रूरी:</strong> हर सप्ताह भौतिक सत्यापन (Physical verification) करें और अंतर को Stock Adjustment से दर्ज करें — वरना ऑडिट में mismatch आएगा।</Note>
+              <Screenshot file="stock-adjustment.png" caption="Stock Adjustment — Damage/नमी एंट्री" />
             </Section>
 
             {/* ─── 6. REPORTS ─── */}
@@ -378,8 +397,8 @@ const UserGuide: React.FC = () => {
               <Step n={3} title="Date Range डालें (From − To)"/>
               <Step n={4} title="Generate दबाएँ"/>
               <Step n={5} title="PDF / Excel में Export करें"/>
-              <Screenshot caption="Trial Balance Report" />
-              <Screenshot caption="Balance Sheet Report" />
+              <Screenshot file="trial-balance.png" caption="Trial Balance Report" />
+              <Screenshot file="balance-sheet.png" caption="Balance Sheet Report" />
             </Section>
 
             {/* ─── 7. AUDIT ─── */}
@@ -489,6 +508,8 @@ const UserGuide: React.FC = () => {
                   ['Loan Interest auto calculate होता है?', 'हाँ, Loan Interest module से monthly/quarterly accrual post होती है।'],
                   ['Depreciation कैसे पोस्ट करें?', 'Depreciation Schedule → वार्षिक Post Depreciation दबाएँ।'],
                   ['User permissions कैसे सेट करें?', 'User Management page से Admin/Accountant/Viewer roles assign करें।'],
+                  ['आरक्षित निधि (Reserve Fund) का कितना % रखना है?', 'अब यह पूरी तरह आपके हाथ में है (optional) — कोई जबरन 25%/1% नहीं। आप जो % या राशि तय करें, रिपोर्ट उसी पोस्ट की गई राशि के अनुसार दिखेगी।'],
+                  ['क्या यह मोबाइल पर भी चलता है?', 'हाँ — फ़ोन, टैबलेट या कंप्यूटर, किसी भी ब्राउज़र से। फ़ॉर्म व रिपोर्ट मोबाइल पर भी साफ़ दिखते हैं; कुछ भी इंस्टॉल करने की ज़रूरत नहीं।'],
                   ['Password भूल गया?', 'Login page → Forgot Password link → Email reset link।'],
                   ['Technical support के लिए कहाँ संपर्क करें?', 'Contact Us page से message भेजें या support@sahakarlekha.com पर email करें।'],
                 ].map(([q, a], i) => (
