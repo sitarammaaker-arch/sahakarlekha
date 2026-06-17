@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import PublicLayout from '@/components/PublicLayout';
+import { SOCIAL_CHANNELS, SocialIcon } from '@/lib/socials';
 import {
   BookOpen, Shield, Users, BarChart3, FileText, Globe,
   CheckCircle2, ArrowRight, Building2, Milk, Home, Factory,
@@ -182,6 +183,32 @@ const LandingPage: React.FC = () => {
                 मुफ्त पंजीकरण / Free Registration <ArrowRight className="h-5 w-5" />
               </Button>
             </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Community channels — SECONDARY, below the primary Register CTA so it
+          builds trust without leaking conversions away from the main action. */}
+      <section className="py-12 bg-muted/30 border-t">
+        <div className="max-w-4xl mx-auto px-4 text-center">
+          <h3 className="text-xl font-bold text-foreground">हमारे समुदाय से जुड़ें / Join our community</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            हर नया फ़ीचर, टिप और वीडियो सबसे पहले पाएँ — Updates, tips & tutorials.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            {SOCIAL_CHANNELS.map(c => (
+              <a
+                key={c.label}
+                href={c.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={c.label}
+                className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-white text-sm font-semibold shadow-sm transition-transform hover:-translate-y-0.5 ${c.solidBg}`}
+              >
+                <SocialIcon paths={c.paths} className="h-4 w-4" />
+                {c.label}
+              </a>
+            ))}
           </div>
         </div>
       </section>

@@ -6,27 +6,11 @@ import React, { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
+import { SOCIAL_CHANNELS, SocialIcon } from '@/lib/socials';
 
 interface PublicLayoutProps {
   children: React.ReactNode;
 }
-
-// Community / social channels (verified live). Brand glyphs as inline SVG so we
-// don't depend on lucide brand icons. Brand colour shows on hover.
-const SOCIALS: { label: string; href: string; hover: string; icon: React.ReactNode }[] = [
-  {
-    label: 'YouTube', href: 'https://youtube.com/@sahakarlekha', hover: 'hover:bg-[#FF0000]',
-    icon: (<svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8zM9.6 15.6V8.4l6.3 3.6-6.3 3.6z" /></svg>),
-  },
-  {
-    label: 'X (Twitter)', href: 'https://x.com/sahakarlekha', hover: 'hover:bg-black',
-    icon: (<svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M18.9 2H22l-7.6 8.7L23.3 22h-7l-5.5-7.2L4.5 22H1.4l8.1-9.3L.9 2h7.2l5 6.6L18.9 2zm-1.2 18h1.9L6.4 4H4.4l13.3 16z" /></svg>),
-  },
-  {
-    label: 'WhatsApp', href: 'https://whatsapp.com/channel/0029VbCrSqS3QxS5kAk8VJ1A', hover: 'hover:bg-[#25D366]',
-    icon: (<svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M17.6 14.3c-.3-.1-1.7-.8-2-.9-.3-.1-.5-.1-.7.1-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1-1.6-.8-2.6-1.4-3.7-3.2-.3-.5.3-.5.8-1.5.1-.2 0-.4 0-.5 0-.1-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.1.2 2.1 3.3 5.2 4.6.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.2.2-1.4-.1-.2-.3-.2-.5-.3z" /><path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.8 4.9-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2z" /></svg>),
-  },
-];
 
 const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
   const { pathname } = useLocation();
@@ -82,7 +66,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
               <div className="mt-4">
                 <p className="text-xs font-semibold text-foreground mb-2">हमसे जुड़ें / Follow us</p>
                 <div className="flex items-center gap-2">
-                  {SOCIALS.map(s => (
+                  {SOCIAL_CHANNELS.map(s => (
                     <a
                       key={s.label}
                       href={s.href}
@@ -90,9 +74,9 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                       rel="noopener noreferrer"
                       aria-label={s.label}
                       title={s.label}
-                      className={`h-9 w-9 rounded-full bg-muted text-muted-foreground flex items-center justify-center transition-colors hover:text-white ${s.hover}`}
+                      className={`h-9 w-9 rounded-full bg-muted text-muted-foreground flex items-center justify-center transition-colors hover:text-white ${s.hoverBg}`}
                     >
-                      {s.icon}
+                      <SocialIcon paths={s.paths} className="h-4 w-4" />
                     </a>
                   ))}
                 </div>
