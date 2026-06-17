@@ -14,7 +14,7 @@ import type {
   EntityLink,
 } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
-import { computeStock } from '@/lib/stockUtils';
+import { computeStock, computeStockValue } from '@/lib/stockUtils';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } from '@/lib/storage';
 import { voucherLinesBalance } from '@/lib/validation';
@@ -2167,18 +2167,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // so that orphan currentStock left over from old buggy edits/deletes doesn't show as phantom stock.
     // M15: Filter movements by effDate so historical Trading A/c matches its date window.
     const movementsToUse = stockMovements.filter(m => m.date <= effDate);
+    // Value closing stock at weighted-average COST from movements (NOT the stale
+    // purchaseRate field, which is 0 after some imports → silently zeroed closing stock).
     const physicalClosingStock = stockItems
       .filter(s => s.isActive)
-      .reduce((sum, s) => {
-        let qty = s.openingStock || 0;
-        for (const m of movementsToUse) {
-          if (m.itemId !== s.id) continue;
-          if (m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0)) qty += m.qty;
-          else qty -= Math.abs(m.qty);
-        }
-        qty = Math.max(0, qty);
-        return sum + qty * (s.purchaseRate || 0);
-      }, 0);
+      .reduce((sum, s) => sum + computeStockValue(s, movementsToUse), 0);
 
     // Check if the closing-stock journal has been posted for this FY.
     // Audit C-8: the NEW journal credits the dedicated 5150 (Purchases stay gross);
@@ -2307,16 +2300,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // so the journal posts the same number user sees in reports.
     const amount = stockItems
       .filter(s => s.isActive)
-      .reduce((sum, s) => {
-        let qty = s.openingStock || 0;
-        for (const m of stockMovements) {
-          if (m.itemId !== s.id) continue;
-          if (m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0)) qty += m.qty;
-          else qty -= Math.abs(m.qty);
-        }
-        qty = Math.max(0, qty);
-        return sum + qty * (s.purchaseRate || 0);
-      }, 0);
+      .reduce((sum, s) => sum + computeStockValue(s, stockMovements), 0);
 
     if (amount <= 0) return { posted: false, amount: 0, alreadyPosted: false };
 

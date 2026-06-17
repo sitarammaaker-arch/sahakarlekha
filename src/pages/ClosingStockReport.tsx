@@ -13,6 +13,7 @@ import { Package, Download, FileSpreadsheet, Info } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { generateClosingStockPDF } from '@/lib/pdf';
 import { parseFY } from '@/lib/depreciation';
+import { computeStockCostRate } from '@/lib/stockUtils';
 
 const fmtV = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -94,7 +95,9 @@ const ClosingStockReport: React.FC = () => {
         const openingValue = openingQty * openingRate;
 
         const closingQty = Math.max(0, openingQty + inwardQty - outwardQty);
-        const closingRate = item.purchaseRate || 0;
+        // Value at weighted-average COST from actual purchases (RULE 2) — NOT the stale
+        // purchaseRate field, which is 0 for some items and silently zeroes closing value.
+        const closingRate = computeStockCostRate(item, fyMovements);
         const closingValue = closingQty * closingRate;
 
         return {

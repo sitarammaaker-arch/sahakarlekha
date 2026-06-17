@@ -26,6 +26,40 @@ export function computeStock(item: Pick<StockItem, 'id' | 'openingStock'>, movem
 }
 
 /**
+ * Weighted-average unit COST for valuing stock on hand (CLAUDE.md RULE 2).
+ *
+ * Closing-stock VALUE must NOT depend on the mutable `stockItem.purchaseRate` field —
+ * it only snapshots the LAST purchase rate and is 0/stale after imports or some edits,
+ * which silently zeroes closing stock in the Trading A/c, Balance Sheet and Closing Stock
+ * Report while Stock Valuation (movement-based) still shows the real value. Instead derive
+ * the average cost from actual purchase (inward) movements: (opening value + Σ inward value)
+ * / (opening qty + Σ inward qty). Falls back to purchaseRate only when there are no inwards.
+ */
+export function computeStockCostRate(
+  item: Pick<StockItem, 'id' | 'openingStock' | 'purchaseRate'>,
+  movements: StockMovement[],
+): number {
+  let qty = item.openingStock || 0;
+  let value = qty * (item.purchaseRate || 0);
+  for (const m of movements) {
+    if (m.itemId !== item.id) continue;
+    if (m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0)) {
+      qty += Math.abs(m.qty);
+      value += Math.abs(m.amount || 0);
+    }
+  }
+  return qty > 0 ? value / qty : (item.purchaseRate || 0);
+}
+
+/** Closing-stock VALUE at weighted-average cost: clamp(qty, 0) × WA cost rate. */
+export function computeStockValue(
+  item: Pick<StockItem, 'id' | 'openingStock' | 'purchaseRate'>,
+  movements: StockMovement[],
+): number {
+  return computeStock(item, movements) * computeStockCostRate(item, movements);
+}
+
+/**
  * Movement-based quantity for every item, in a single O(items + movements) pass.
  * Returns a map of itemId -> quantity (clamped at 0).
  */
