@@ -225,27 +225,32 @@ const SaleManagement: React.FC = () => {
       return;
     }
 
-    // Stock availability warning (soft — sale still proceeds).
-    // While editing, account for the qty being "given back" (original sale being reverted).
+    // ⛔ HARD STOP: a sale can NEVER exceed available stock (and a 0-stock item can't be
+    // sold at all — available 0 means any qty > 0 is blocked). This is what let the earlier
+    // "sold 90 but only 85 in stock" happen. While editing, the qty being "given back"
+    // (original sale reverted) is added back to availability so a valid edit isn't blocked.
     const original = editingId ? sales.find(s => s.id === editingId) : null;
-    const lowStockItems = validItems.filter(i => {
+    const overSold = validItems.filter(i => {
       const si = stockItems.find(s => s.id === i.itemId);
       if (!si) return false;
       const originalQty = original?.items.find(it => it.itemId === i.itemId)?.qty || 0;
       const effectiveAvailable = (stockMap[i.itemId] ?? 0) + originalQty;
       return i.qty > effectiveAvailable;
     });
-    if (lowStockItems.length > 0) {
-      const names = lowStockItems.map(i => {
+    if (overSold.length > 0) {
+      const names = overSold.map(i => {
         const originalQty = original?.items.find(it => it.itemId === i.itemId)?.qty || 0;
         const effectiveAvailable = (stockMap[i.itemId] ?? 0) + originalQty;
         return `${i.itemName} (${language === 'hi' ? 'उपलब्ध' : 'avail'}: ${effectiveAvailable}, ${language === 'hi' ? 'बिक्री' : 'selling'}: ${i.qty})`;
       }).join(', ');
       toast({
-        title: language === 'hi' ? 'अपर्याप्त स्टॉक चेतावनी' : 'Insufficient Stock Warning',
-        description: names,
-        variant: 'default',
+        title: language === 'hi' ? 'स्टॉक से अधिक बिक्री नहीं हो सकती' : 'Cannot sell more than available stock',
+        description: (language === 'hi'
+          ? 'इन वस्तुओं की मात्रा उपलब्ध स्टॉक से अधिक है — पहले खरीद/स्टॉक जोड़ें: '
+          : 'These exceed available stock — add purchase/stock first: ') + names,
+        variant: 'destructive',
       });
+      return; // block the sale
     }
 
     const payload = {
