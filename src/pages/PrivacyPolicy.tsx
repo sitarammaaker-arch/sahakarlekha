@@ -133,6 +133,26 @@ const SECTIONS = [
   },
   {
     num: 8,
+    icon: UserCheck,
+    title: 'गाइड प्रमाणपत्र — Guide Certificate',
+    content: (
+      <>
+        <p className="text-muted-foreground leading-relaxed">
+          हमारा सीखने वाला गाइड (/guide) पढ़ने के लिए किसी पंजीकरण की आवश्यकता नहीं है। केवल जब आप
+          पूर्णता <strong>प्रमाणपत्र</strong> प्राप्त करना चुनते हैं, तब आपका <strong>नाम व ईमेल</strong> (और वैकल्पिक रूप से
+          समिति का नाम) केवल प्रमाणपत्र जारी करने व उसके सत्यापन के लिए सुरक्षित रखा जाता है। यह आपकी सहमति से ही होता है।
+        </p>
+        <p className="mt-3 text-muted-foreground leading-relaxed">
+          Reading the learning guide requires no registration. Only when you choose to claim the completion
+          <strong> certificate</strong> do we store your <strong>name and email</strong> (and optionally your society name),
+          solely to issue and verify the certificate, and only with your consent. Your email is never shown on the public
+          verification page and is never sold.
+        </p>
+      </>
+    ),
+  },
+  {
+    num: 9,
     icon: Mail,
     title: 'डेटा सुरक्षा अधिकारी — Data Protection Officer',
     content: (

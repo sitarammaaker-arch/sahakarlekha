@@ -961,3 +961,66 @@ as $$
     subscription_notes = p_notes
   where society_id = p_society_id;
 $$;
+
+-- ── STEP 20: guide course completion certificates ────────────────────────────
+-- Lightweight, password-less learner records for the public /guide course.
+-- Reading the course needs no account; only claiming a certificate stores
+-- name + email (a lead) and makes verification server-authoritative.
+create table if not exists guide_certificates (
+  cert_no       text primary key,            -- e.g. SL-20260618-YAF6P7
+  holder_name   text        not null,
+  email         text,
+  society_name  text,
+  parts_passed  int         not null default 0,
+  issued_at     timestamptz not null default now()
+);
+
+-- RLS on, NO policies: direct anon access is denied, so emails / leads are never
+-- selectable from the client. All access goes through the definer RPCs below.
+alter table guide_certificates enable row level security;
+
+-- Issue / re-claim a certificate (anon allowed via security definer).
+create or replace function issue_certificate(
+  p_cert_no      text,
+  p_holder_name  text,
+  p_email        text,
+  p_society_name text,
+  p_parts_passed int
+)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  insert into guide_certificates(cert_no, holder_name, email, society_name, parts_passed)
+  values (
+    p_cert_no,
+    btrim(p_holder_name),
+    nullif(btrim(coalesce(p_email, '')), ''),
+    nullif(btrim(coalesce(p_society_name, '')), ''),
+    coalesce(p_parts_passed, 0)
+  )
+  on conflict (cert_no) do update set
+    holder_name  = excluded.holder_name,
+    email        = coalesce(excluded.email, guide_certificates.email),
+    society_name = coalesce(excluded.society_name, guide_certificates.society_name),
+    parts_passed = greatest(excluded.parts_passed, guide_certificates.parts_passed);
+end;
+$$;
+
+-- Verify a certificate. Returns ONLY non-PII fields (never the email), and only
+-- when the number AND holder name match (case / whitespace insensitive).
+create or replace function verify_certificate(p_cert_no text, p_name text)
+returns table(holder_name text, issued_at timestamptz)
+language sql
+security definer
+as $$
+  select holder_name, issued_at
+  from guide_certificates
+  where upper(replace(cert_no, ' ', '')) = upper(replace(coalesce(p_cert_no, ''), ' ', ''))
+    and lower(btrim(regexp_replace(holder_name, '\s+', ' ', 'g')))
+      = lower(btrim(regexp_replace(coalesce(p_name, ''), '\s+', ' ', 'g')));
+$$;
+
+grant execute on function issue_certificate(text, text, text, text, int) to anon, authenticated;
+grant execute on function verify_certificate(text, text) to anon, authenticated;

@@ -43,6 +43,11 @@ const ContactUs = lazyWithRetry(() => import("./pages/ContactUs"));
 const AboutUs = lazyWithRetry(() => import("./pages/AboutUs"));
 const FAQ = lazyWithRetry(() => import("./pages/FAQ"));
 const UserGuide = lazyWithRetry(() => import("./pages/UserGuide"));
+const GuideHub = lazyWithRetry(() => import("./pages/GuideHub"));
+const GuideChapter = lazyWithRetry(() => import("./pages/GuideChapter"));
+const GuideQuizPage = lazyWithRetry(() => import("./pages/GuideQuizPage"));
+const GuideCertificate = lazyWithRetry(() => import("./pages/GuideCertificate"));
+const GuideVerify = lazyWithRetry(() => import("./pages/GuideVerify"));
 const Pricing = lazyWithRetry(() => import("./pages/Pricing"));
 const Login = lazyWithRetry(() => import("./pages/Login"));
 const Dashboard = lazyWithRetry(() => import("./pages/Dashboard"));
@@ -183,8 +188,13 @@ const AppRoutes = () => {
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsConditions />} />
       <Route path="/faq" element={<FAQ />} />
-      <Route path="/guide" element={<UserGuide />} />
-      <Route path="/help" element={<UserGuide />} />
+      <Route path="/guide" element={<GuideHub />} />
+      <Route path="/guide/quick-start" element={<UserGuide />} />
+      <Route path="/guide/certificate" element={<GuideCertificate />} />
+      <Route path="/guide/verify" element={<GuideVerify />} />
+      <Route path="/guide/quiz/:partId" element={<GuideQuizPage />} />
+      <Route path="/guide/:slug" element={<GuideChapter />} />
+      <Route path="/help" element={<GuideHub />} />
       <Route path="/pricing" element={<Pricing />} />
 
       {/* Protected Routes */}
