@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import { SOCIAL_CHANNELS, SocialIcon } from '@/lib/socials';
 import WhatsAppFab from '@/components/WhatsAppFab';
+import { SOCIETY_TYPES } from '@/content/societyTypes';
 
 interface PublicLayoutProps {
   children: React.ReactNode;
@@ -29,7 +30,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
           <Link to="/" className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-lg">स</div>
             <div>
-              <h1 className="font-bold text-lg text-foreground leading-tight">SahakarLekha</h1>
+              <span className="block font-bold text-lg text-foreground leading-tight">SahakarLekha</span>
               <p className="text-xs text-muted-foreground">सहकारलेखा</p>
             </div>
           </Link>
@@ -96,13 +97,13 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
             </div>
             <div>
               <h4 className="font-semibold text-sm mb-3">Society Types</h4>
-              <ul className="space-y-1 text-sm text-muted-foreground">
-                <li>Marketing & Processing (CMS)</li>
-                <li>Primary Agricultural Credit (PACS)</li>
-                <li>Dairy Cooperative</li>
-                <li>Consumer Cooperative</li>
-                <li>Housing Cooperative</li>
-                <li>Sugar Factory Cooperative</li>
+              <ul className="space-y-1 text-sm">
+                {SOCIETY_TYPES.map(s => (
+                  <li key={s.slug}>
+                    <Link to={`/software/${s.slug}`} className="text-muted-foreground hover:text-primary transition-colors">{s.nameEn}</Link>
+                  </li>
+                ))}
+                <li><Link to="/software" className="text-primary hover:underline">All types / सभी प्रकार →</Link></li>
               </ul>
             </div>
             <div>
