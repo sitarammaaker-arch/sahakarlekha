@@ -6,8 +6,8 @@ import { GUIDE_QUIZZES, type PartQuiz } from './quizzes';
 import type { GuideLang } from './i18n';
 
 export const GUIDE_QUIZZES_EN: Record<string, PartQuiz> = {
-  'bhag-1': {
-    partId: 'bhag-1',
+  'part-1': {
+    partId: 'part-1',
     title: 'Part 1 — Foundations of Accounting',
     questions: [
       {
@@ -36,8 +36,8 @@ export const GUIDE_QUIZZES_EN: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-2': {
-    partId: 'bhag-2',
+  'part-2': {
+    partId: 'part-2',
     title: 'Part 2 — Getting Started with SahakarLekha',
     questions: [
       {
@@ -66,8 +66,8 @@ export const GUIDE_QUIZZES_EN: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-3': {
-    partId: 'bhag-3',
+  'part-3': {
+    partId: 'part-3',
     title: 'Part 3 — Daily Operations',
     questions: [
       {
@@ -96,8 +96,8 @@ export const GUIDE_QUIZZES_EN: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-4': {
-    partId: 'bhag-4',
+  'part-4': {
+    partId: 'part-4',
     title: 'Part 4 — Books & Trial Balance',
     questions: [
       {
@@ -120,8 +120,8 @@ export const GUIDE_QUIZZES_EN: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-5': {
-    partId: 'bhag-5',
+  'part-5': {
+    partId: 'part-5',
     title: 'Part 5 — Final Accounts',
     questions: [
       {
@@ -150,8 +150,8 @@ export const GUIDE_QUIZZES_EN: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-6': {
-    partId: 'bhag-6',
+  'part-6': {
+    partId: 'part-6',
     title: 'Part 6 — Tax Compliance',
     questions: [
       {
@@ -174,8 +174,8 @@ export const GUIDE_QUIZZES_EN: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-7': {
-    partId: 'bhag-7',
+  'part-7': {
+    partId: 'part-7',
     title: 'Part 7 — Specialised Accounting',
     questions: [
       {
@@ -204,8 +204,8 @@ export const GUIDE_QUIZZES_EN: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-8': {
-    partId: 'bhag-8',
+  'part-8': {
+    partId: 'part-8',
     title: 'Part 8 — Year-End & Security',
     questions: [
       {
@@ -228,8 +228,8 @@ export const GUIDE_QUIZZES_EN: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-9': {
-    partId: 'bhag-9',
+  'part-9': {
+    partId: 'part-9',
     title: 'Part 9 — Reference & Practice',
     questions: [
       {

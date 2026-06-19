@@ -1,5 +1,295 @@
 {
+  "redirects": [
+    {
+      "source": "/guide/bhumika",
+      "destination": "/guide/introduction",
+      "permanent": true
+    },
+    {
+      "source": "/guide/samapan",
+      "destination": "/guide/conclusion",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-1",
+      "destination": "/guide/accounting-foundations",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-2",
+      "destination": "/guide/society-setup-and-roles",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-3",
+      "destination": "/guide/chart-of-accounts",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-4",
+      "destination": "/guide/opening-balances",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-5",
+      "destination": "/guide/member-management",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-6",
+      "destination": "/guide/voucher-types",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-7",
+      "destination": "/guide/sales-entries",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-8",
+      "destination": "/guide/purchase-entries",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-9",
+      "destination": "/guide/inventory-management",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-10",
+      "destination": "/guide/bill-wise-settlement",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-11",
+      "destination": "/guide/salary-management",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-12",
+      "destination": "/guide/daybook-and-ledger",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-13",
+      "destination": "/guide/trial-balance",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-14",
+      "destination": "/guide/trading-account",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-15",
+      "destination": "/guide/income-and-expenditure",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-16",
+      "destination": "/guide/balance-sheet",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-17",
+      "destination": "/guide/receipts-and-payments",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-18",
+      "destination": "/guide/gst-management",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-19",
+      "destination": "/guide/tds-and-26q",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-20",
+      "destination": "/guide/depreciation",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-21",
+      "destination": "/guide/stock-valuation",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-22",
+      "destination": "/guide/profit-distribution",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-23",
+      "destination": "/guide/statutory-returns",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-24",
+      "destination": "/guide/year-end-and-fy-lock",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-25",
+      "destination": "/guide/audit-preparation",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-26",
+      "destination": "/guide/data-security-and-backup",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-27",
+      "destination": "/guide/golden-rules",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-28",
+      "destination": "/guide/case-study-full-year",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-29",
+      "destination": "/guide/special-registers",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-30",
+      "destination": "/guide/comprehensive-faq",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-31",
+      "destination": "/guide/msp-procurement-entries",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-32",
+      "destination": "/guide/society-type-entries",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-33",
+      "destination": "/guide/error-rectification-entries",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-34",
+      "destination": "/guide/financial-ratios-and-lifecycle",
+      "permanent": true
+    },
+    {
+      "source": "/guide/adhyay-35",
+      "destination": "/guide/expense-dictionary",
+      "permanent": true
+    },
+    {
+      "source": "/guide/parishisht-a",
+      "destination": "/guide/standard-chart-of-accounts",
+      "permanent": true
+    },
+    {
+      "source": "/guide/parishisht-b",
+      "destination": "/guide/glossary",
+      "permanent": true
+    },
+    {
+      "source": "/guide/parishisht-c",
+      "destination": "/guide/report-to-statutory-form-map",
+      "permanent": true
+    },
+    {
+      "source": "/guide/parishisht-d",
+      "destination": "/guide/quick-reference-card",
+      "permanent": true
+    },
+    {
+      "source": "/guide/parishisht-e",
+      "destination": "/guide/year-end-checklist",
+      "permanent": true
+    },
+    {
+      "source": "/guide/parishisht-f",
+      "destination": "/guide/exercise-answers",
+      "permanent": true
+    },
+    {
+      "source": "/guide/parishisht-g",
+      "destination": "/guide/voucher-entry-quick-reference",
+      "permanent": true
+    },
+    {
+      "source": "/guide/parishisht-h",
+      "destination": "/guide/account-name-glossary",
+      "permanent": true
+    },
+    {
+      "source": "/guide/parishisht-i",
+      "destination": "/guide/troubleshooting-guide",
+      "permanent": true
+    },
+    {
+      "source": "/guide/parishisht-j",
+      "destination": "/guide/society-type-quick-card",
+      "permanent": true
+    },
+    {
+      "source": "/guide/quiz/bhag-1",
+      "destination": "/guide/quiz/part-1",
+      "permanent": true
+    },
+    {
+      "source": "/guide/quiz/bhag-2",
+      "destination": "/guide/quiz/part-2",
+      "permanent": true
+    },
+    {
+      "source": "/guide/quiz/bhag-3",
+      "destination": "/guide/quiz/part-3",
+      "permanent": true
+    },
+    {
+      "source": "/guide/quiz/bhag-4",
+      "destination": "/guide/quiz/part-4",
+      "permanent": true
+    },
+    {
+      "source": "/guide/quiz/bhag-5",
+      "destination": "/guide/quiz/part-5",
+      "permanent": true
+    },
+    {
+      "source": "/guide/quiz/bhag-6",
+      "destination": "/guide/quiz/part-6",
+      "permanent": true
+    },
+    {
+      "source": "/guide/quiz/bhag-7",
+      "destination": "/guide/quiz/part-7",
+      "permanent": true
+    },
+    {
+      "source": "/guide/quiz/bhag-8",
+      "destination": "/guide/quiz/part-8",
+      "permanent": true
+    },
+    {
+      "source": "/guide/quiz/bhag-9",
+      "destination": "/guide/quiz/part-9",
+      "permanent": true
+    },
+    {
+      "source": "/guide/quiz/bhag-10",
+      "destination": "/guide/quiz/part-10",
+      "permanent": true
+    }
+  ],
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
