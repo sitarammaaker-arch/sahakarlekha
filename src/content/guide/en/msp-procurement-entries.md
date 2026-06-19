@@ -2,6 +2,8 @@
 
 > **After this chapter you will be able to:** record MSP procurement; pay farmers with recoveries; bill agency charges; account for gunny bags and driage; handle market fee and HRDF.
 
+> ⚠️ **Rates are illustrative:** MSP, market fee, HRDF, driage limits etc. change from time to time — always check the current official rate. *(Last updated: June 2026)*
+
 ## 31.1 New accounts
 | Code | Account | Category |
 |---|---|---|

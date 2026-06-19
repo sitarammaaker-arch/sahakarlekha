@@ -2,6 +2,8 @@
 
 > **After this chapter you will be able to:** record the distinctive entries of every kind of society — dairy, consumer, weaver, fishery, labour-contract, self-help group, housing.
 
+> ⚠️ **Rates are illustrative:** milk/feed/rent rates are examples only — use your own society's/union's current rate. *(Last updated: June 2026)*
+
 ## 32.1 Dairy society
 Purchase: Dr Milk Purchase / Cr Milk Producers Payable (2403). Union sale: Dr Union (3303) / Cr Milk Sales (4106). Cattle-feed on credit: Dr Member / Cr Feed Sales. Payment made net of the feed recovery.
 > Margin = sale rate − purchase rate (per litre).
