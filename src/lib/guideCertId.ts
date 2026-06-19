@@ -52,10 +52,10 @@ export function verifyCertNumber(number: string, name: string): CertVerifyResult
   return { valid: expected === cleaned, isoDate: iso };
 }
 
-/** Friendly Hindi date from an ISO date. */
-export function formatCertDate(isoDate: string): string {
+/** Friendly date from an ISO date (Hindi or English locale). */
+export function formatCertDate(isoDate: string, lang: 'hi' | 'en' = 'hi'): string {
   try {
-    return new Date(`${isoDate}T00:00:00`).toLocaleDateString('hi-IN', {
+    return new Date(`${isoDate}T00:00:00`).toLocaleDateString(lang === 'en' ? 'en-IN' : 'hi-IN', {
       day: 'numeric',
       month: 'long',
       year: 'numeric',

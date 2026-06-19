@@ -6,9 +6,14 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X } from 'lucide-react';
 import { searchGuide, type GuideSearchHit } from '@/lib/guideSearch';
+import { findEntry } from '@/content/guide';
+import { localizedEntry } from '@/content/guide/i18n';
+import { useGuideLang, useGuideT } from '@/lib/guideLang';
 
 const GuideSearch: React.FC = () => {
   const navigate = useNavigate();
+  const lang = useGuideLang();
+  const t = useGuideT();
   const [q, setQ] = React.useState('');
   const [open, setOpen] = React.useState(false);
   const [active, setActive] = React.useState(0);
@@ -49,9 +54,9 @@ const GuideSearch: React.FC = () => {
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKey}
-          placeholder="गाइड में खोजें — जैसे बिक्री, GST, स्टॉक, मूल्यह्रास…"
+          placeholder={t('hub.search.placeholder')}
           className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
-          aria-label="गाइड में खोजें"
+          aria-label={t('hub.search.placeholder')}
         />
         {q && (
           <button onClick={() => { setQ(''); setOpen(false); }} aria-label="साफ़ करें" className="text-muted-foreground hover:text-foreground">
@@ -63,7 +68,7 @@ const GuideSearch: React.FC = () => {
       {open && q.trim().length >= 2 && (
         <div className="absolute z-30 mt-2 w-full rounded-xl border bg-background shadow-lg overflow-hidden">
           {hits.length === 0 ? (
-            <p className="px-4 py-6 text-center text-sm text-muted-foreground">कोई परिणाम नहीं मिला।</p>
+            <p className="px-4 py-6 text-center text-sm text-muted-foreground">{t('hub.search.none')}</p>
           ) : (
             <ul className="max-h-[60vh] overflow-y-auto py-1">
               {hits.map((h, i) => (
@@ -73,7 +78,7 @@ const GuideSearch: React.FC = () => {
                     onClick={() => go(h.slug)}
                     className={`w-full text-left px-4 py-2.5 transition-colors ${i === active ? 'bg-primary/10' : 'hover:bg-muted/60'}`}
                   >
-                    <p className="text-sm font-semibold text-foreground line-clamp-1">{h.shortTitle}</p>
+                    <p className="text-sm font-semibold text-foreground line-clamp-1">{(() => { const e = findEntry(h.slug); return e ? localizedEntry(e, lang).shortTitle : h.slug; })()}</p>
                     <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{h.snippet}</p>
                   </button>
                 </li>

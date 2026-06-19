@@ -1,7 +1,6 @@
 /**
- * GuideChapter — renders a single book chapter / appendix at /guide/:slug.
- * Shows breadcrumb, in-chapter sub-TOC (## headings), prev/next nav and the
- * styled markdown. Content comes from src/content/guide/<slug>.md.
+ * GuideChapter — a single chapter / appendix at /guide/:slug (bilingual).
+ * Loads English markdown when available, else falls back to Hindi with a note.
  */
 import React from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
@@ -9,30 +8,32 @@ import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import GuideMarkdown, { slugifyHeading } from '@/components/guide/GuideMarkdown';
-import { findEntry, loadGuideRaw, GUIDE_ORDER } from '@/content/guide';
+import LangToggle from '@/components/guide/LangToggle';
+import { findEntry, GUIDE_ORDER } from '@/content/guide';
+import { loadGuideContent, localizedEntry } from '@/content/guide/i18n';
 import { useGuideProgress, toggleGuideDone } from '@/lib/guideProgress';
+import { useGuideLang, useGuideT } from '@/lib/guideLang';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { ChevronLeft, ChevronRight, Clock, List, GraduationCap, Home, CheckCircle2, Circle } from 'lucide-react';
 
 const GuideChapter: React.FC = () => {
   const { slug = '' } = useParams();
+  const lang = useGuideLang();
+  const t = useGuideT();
   const entry = findEntry(slug);
-  const raw = loadGuideRaw(slug);
+  const { content: raw, fallback } = loadGuideContent(slug, lang);
+  const meta = entry ? localizedEntry(entry, lang) : null;
 
-  // scroll to top whenever the chapter changes
-  React.useEffect(() => {
-    window.scrollTo({ top: 0 });
-  }, [slug]);
+  React.useEffect(() => { window.scrollTo({ top: 0 }); }, [slug]);
 
-  // hooks must run unconditionally (before any early return)
   useDocumentMeta({
-    title: entry ? `${entry.shortTitle} — सहकार लेखा गाइड` : undefined,
-    description: entry?.summary || undefined,
+    title: entry && meta ? `${meta.shortTitle} — ${lang === 'en' ? 'SahakarLekha Guide' : 'सहकार लेखा गाइड'}` : undefined,
+    description: meta?.summary || undefined,
     canonicalPath: `/guide/${slug}`,
   });
   const done = useGuideProgress();
 
-  if (!entry || raw == null) {
+  if (!entry || raw == null || !meta) {
     return <Navigate to="/guide" replace />;
   }
 
@@ -47,26 +48,29 @@ const GuideChapter: React.FC = () => {
     return { text, id: slugifyHeading(text) };
   });
 
-  // reading time (Hindi ~130 wpm)
   const words = body.split(/\s+/).filter(Boolean).length;
-  const minutes = Math.max(1, Math.round(words / 130));
+  const minutes = Math.max(1, Math.round(words / (lang === 'en' ? 200 : 130)));
 
-  // prev / next from the flat reading order
   const idx = GUIDE_ORDER.findIndex((e) => e.slug === slug);
-  const prev = idx > 0 ? GUIDE_ORDER[idx - 1] : null;
-  const next = idx >= 0 && idx < GUIDE_ORDER.length - 1 ? GUIDE_ORDER[idx + 1] : null;
+  const prevE = idx > 0 ? findEntry(GUIDE_ORDER[idx - 1].slug) : null;
+  const nextE = idx >= 0 && idx < GUIDE_ORDER.length - 1 ? findEntry(GUIDE_ORDER[idx + 1].slug) : null;
+  const prev = prevE ? { slug: prevE.slug, title: localizedEntry(prevE, lang).shortTitle } : null;
+  const next = nextE ? { slug: nextE.slug, title: localizedEntry(nextE, lang).shortTitle } : null;
 
   return (
     <PublicLayout>
       <div className="mx-auto px-4 py-8 md:py-12 max-w-6xl">
-        {/* Breadcrumb */}
-        <nav className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground mb-6">
-          <Link to="/guide" className="inline-flex items-center gap-1 hover:text-primary">
-            <Home className="h-3.5 w-3.5" /> गाइड
-          </Link>
-          <ChevronRight className="h-3.5 w-3.5" />
-          <span className="text-foreground font-medium line-clamp-1">{entry.shortTitle}</span>
-        </nav>
+        {/* Breadcrumb + language toggle */}
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <nav className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground min-w-0">
+            <Link to="/guide" className="inline-flex items-center gap-1 hover:text-primary">
+              <Home className="h-3.5 w-3.5" /> {t('ch.home')}
+            </Link>
+            <ChevronRight className="h-3.5 w-3.5" />
+            <span className="text-foreground font-medium line-clamp-1">{meta.shortTitle}</span>
+          </nav>
+          <LangToggle className="flex-shrink-0" />
+        </div>
 
         <div className="grid lg:grid-cols-[1fr_240px] gap-8">
           {/* Main */}
@@ -74,13 +78,19 @@ const GuideChapter: React.FC = () => {
             <header className="mb-6 pb-6 border-b">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-3">
                 <GraduationCap className="h-3.5 w-3.5" />
-                {entry.kind === 'appendix' ? 'परिशिष्ट' : entry.kind === 'chapter' ? `अध्याय ${entry.num}` : 'सहकार लेखा गाइड'}
+                {entry.kind === 'appendix' ? t('ch.badge.appendix') : entry.kind === 'chapter' ? t('ch.badge.chapter', { n: entry.num ?? '' }) : t('ch.badge.guide')}
               </div>
-              <h1 className="text-2xl md:text-4xl font-bold text-foreground leading-tight">{entry.shortTitle}</h1>
+              <h1 className="text-2xl md:text-4xl font-bold text-foreground leading-tight">{meta.shortTitle}</h1>
               <div className="flex items-center gap-2 text-sm text-muted-foreground mt-3">
-                <Clock className="h-4 w-4" /> ~{minutes} मिनट पढ़ने में
+                <Clock className="h-4 w-4" /> {t('ch.readtime', { n: minutes })}
               </div>
             </header>
+
+            {fallback && (
+              <div className="mb-5 rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-950/30 text-blue-900 dark:text-blue-100 text-sm px-4 py-2.5">
+                ℹ️ {t('ch.fallback')}
+              </div>
+            )}
 
             <GuideMarkdown source={body} />
 
@@ -92,7 +102,7 @@ const GuideChapter: React.FC = () => {
                 className={`gap-2 ${isDone ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
               >
                 {isDone ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
-                {isDone ? 'पूरा हुआ ✓ (हटाने हेतु दबाएँ)' : 'इस अध्याय को पूरा चिह्नित करें'}
+                {isDone ? t('ch.done') : t('ch.markdone')}
               </Button>
             </div>
 
@@ -104,8 +114,8 @@ const GuideChapter: React.FC = () => {
                     <CardContent className="p-4 flex items-center gap-3">
                       <ChevronLeft className="h-5 w-5 text-primary flex-shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground">पिछला</p>
-                        <p className="font-medium text-foreground line-clamp-1">{prev.shortTitle}</p>
+                        <p className="text-xs text-muted-foreground">{t('ch.prev')}</p>
+                        <p className="font-medium text-foreground line-clamp-1">{prev.title}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -117,8 +127,8 @@ const GuideChapter: React.FC = () => {
                     <CardContent className="p-4 flex items-center gap-3 sm:flex-row-reverse">
                       <ChevronRight className="h-5 w-5 text-primary flex-shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground">अगला</p>
-                        <p className="font-medium text-foreground line-clamp-1">{next.shortTitle}</p>
+                        <p className="text-xs text-muted-foreground">{t('ch.next')}</p>
+                        <p className="font-medium text-foreground line-clamp-1">{next.title}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -133,22 +143,18 @@ const GuideChapter: React.FC = () => {
               <Card>
                 <CardContent className="p-4">
                   <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground mb-3">
-                    <List className="h-3.5 w-3.5" /> इस अध्याय में
+                    <List className="h-3.5 w-3.5" /> {t('ch.inthis')}
                   </p>
                   <nav className="space-y-1 text-sm max-h-[60vh] overflow-y-auto">
                     {sections.map((s) => (
-                      <a
-                        key={s.id}
-                        href={`#${s.id}`}
-                        className="block px-2 py-1 rounded hover:bg-primary/10 hover:text-primary text-muted-foreground transition-colors line-clamp-1"
-                      >
+                      <a key={s.id} href={`#${s.id}`} className="block px-2 py-1 rounded hover:bg-primary/10 hover:text-primary text-muted-foreground transition-colors line-clamp-1">
                         {s.text}
                       </a>
                     ))}
                   </nav>
                   <Link to="/guide">
                     <Button variant="outline" size="sm" className="w-full mt-4 gap-1">
-                      <ChevronLeft className="h-3.5 w-3.5" /> सभी अध्याय
+                      <ChevronLeft className="h-3.5 w-3.5" /> {t('ch.allchapters')}
                     </Button>
                   </Link>
                 </CardContent>

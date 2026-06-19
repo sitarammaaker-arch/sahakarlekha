@@ -1,8 +1,7 @@
 /**
- * GuideHub — the /guide learning hub.
- * Lists the full 30-chapter cooperative-accounting course (भाग → अध्याय),
- * links to the screenshot-based Quick Start, and offers the full PDF book.
- * Public page — no auth required. Same content also ships as the Word/PDF book.
+ * GuideHub — the /guide learning hub (bilingual: हिंदी / English).
+ * Lists the full 30-chapter cooperative-accounting course, links to the
+ * screenshot-based Quick Start, and offers the full PDF book.
  */
 import React from 'react';
 import { Link } from 'react-router-dom';
@@ -11,9 +10,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FRONT_MATTER, GUIDE_PARTS, GUIDE_ORDER } from '@/content/guide';
 import { GUIDE_QUIZZES, QUIZ_PART_IDS } from '@/content/guide/quizzes';
+import { localizedPartTitle, localizedEntry } from '@/content/guide/i18n';
 import GuideSearch from '@/components/guide/GuideSearch';
+import LangToggle from '@/components/guide/LangToggle';
 import { useGuideProgress } from '@/lib/guideProgress';
 import { useGuideQuizzes } from '@/lib/guideQuiz';
+import { useGuideLang, useGuideT } from '@/lib/guideLang';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import {
   BookOpen, GraduationCap, Download, Rocket, ArrowRight, FileText, Layers,
@@ -30,9 +32,7 @@ const ChapterCard: React.FC<{
           {done ? <CheckCircle2 className="h-5 w-5" /> : badge}
         </div>
         <div className="min-w-0">
-          <p className="font-semibold text-foreground leading-snug group-hover:text-primary transition-colors">
-            {title}
-          </p>
+          <p className="font-semibold text-foreground leading-snug group-hover:text-primary transition-colors">{title}</p>
           <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{summary}</p>
         </div>
       </CardContent>
@@ -41,10 +41,16 @@ const ChapterCard: React.FC<{
 );
 
 const GuideHub: React.FC = () => {
+  const lang = useGuideLang();
+  const t = useGuideT();
+
   useDocumentMeta({
-    title: 'सहकार लेखा गाइड — सम्पूर्ण सहकारी लेखांकन कोर्स (हिंदी)',
-    description:
-      'सहकारी समितियों के लिए सम्पूर्ण लेखांकन गाइड — बिक्री, खरीद, स्टॉक, GST/TDS, अंतिम खाते, ऑडिट व वर्षांत। 30 अध्याय, सरल हिंदी, बिल्कुल मुफ़्त।',
+    title: lang === 'en'
+      ? 'SahakarLekha Guide — Complete Cooperative Accounting Course'
+      : 'सहकार लेखा गाइड — सम्पूर्ण सहकारी लेखांकन कोर्स (हिंदी)',
+    description: lang === 'en'
+      ? 'A complete accounting guide for cooperative societies — sales, purchases, stock, GST/TDS, final accounts, audit & year-end. 30 chapters, free.'
+      : 'सहकारी समितियों के लिए सम्पूर्ण लेखांकन गाइड — बिक्री, खरीद, स्टॉक, GST/TDS, अंतिम खाते, ऑडिट व वर्षांत। 30 अध्याय, सरल हिंदी, बिल्कुल मुफ़्त।',
     canonicalPath: '/guide',
   });
 
@@ -52,38 +58,32 @@ const GuideHub: React.FC = () => {
   const passedQuizzes = useGuideQuizzes();
   const quizzesPassed = QUIZ_PART_IDS.filter((id) => passedQuizzes.has(id)).length;
   const totalQuizzes = QUIZ_PART_IDS.length;
-  const allChapterSlugs = GUIDE_PARTS.flatMap((p) =>
-    p.chapters.filter((c) => c.kind === 'chapter').map((c) => c.slug),
-  );
+  const allChapterSlugs = GUIDE_PARTS.flatMap((p) => p.chapters.filter((c) => c.kind === 'chapter').map((c) => c.slug));
   const totalChapters = allChapterSlugs.length;
   const completed = allChapterSlugs.filter((s) => done.has(s)).length;
   const pct = totalChapters ? Math.round((completed / totalChapters) * 100) : 0;
-  // first not-yet-read entry in reading order (skip front matter if already done)
   const resume = GUIDE_ORDER.find((e) => !done.has(e.slug)) ?? GUIDE_ORDER[0];
 
   return (
     <PublicLayout>
       <div className="mx-auto px-4 py-10 md:py-16 max-w-6xl">
+        {/* Language toggle */}
+        <div className="flex justify-end mb-4">
+          <LangToggle />
+        </div>
+
         {/* Hero */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
             <GraduationCap className="h-4 w-4" />
-            सीखें · Complete Learning Course
+            {t('hub.badge')}
           </div>
-          <h1 className="text-3xl md:text-5xl font-bold text-foreground mb-3">
-            सहकार लेखा से सम्पूर्ण Accounting सीखें
-          </h1>
-          <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-            लेखांकन की नींव से लेकर बिक्री, खरीद, स्टॉक, GST/TDS, अंतिम खाते, ऑडिट व वर्षांत तक —
-            <span className="font-semibold text-foreground"> {totalChapters} अध्याय</span> की सरल हिंदी गाइड।
-            हर सदस्य, क्लर्क, लेखाकार व ऑडिटर के लिए — बिल्कुल मुफ़्त, ऑनलाइन।
-          </p>
+          <h1 className="text-3xl md:text-5xl font-bold text-foreground mb-3">{t('hub.title')}</h1>
+          <p className="text-lg text-muted-foreground max-w-3xl mx-auto">{t('hub.desc', { n: totalChapters })}</p>
         </div>
 
         {/* Search */}
-        <div className="mb-8">
-          <GuideSearch />
-        </div>
+        <div className="mb-8"><GuideSearch /></div>
 
         {/* Progress */}
         <Card className="mb-8 bg-muted/30">
@@ -91,9 +91,9 @@ const GuideHub: React.FC = () => {
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-1.5">
                 <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                  <BookMarked className="h-4 w-4 text-primary" /> आपकी प्रगति
+                  <BookMarked className="h-4 w-4 text-primary" /> {t('hub.progress')}
                 </p>
-                <p className="text-sm text-muted-foreground">{completed} / {totalChapters} अध्याय · {pct}%</p>
+                <p className="text-sm text-muted-foreground">{t('hub.progress.count', { done: completed, total: totalChapters, pct })}</p>
               </div>
               <div className="h-2.5 rounded-full bg-muted overflow-hidden">
                 <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
@@ -101,7 +101,7 @@ const GuideHub: React.FC = () => {
             </div>
             <Link to={`/guide/${resume.slug}`} className="flex-shrink-0">
               <Button className="gap-2 w-full sm:w-auto">
-                {completed === 0 ? 'पढ़ना शुरू करें' : completed === totalChapters ? 'फिर से पढ़ें' : 'पढ़ना जारी रखें'}
+                {completed === 0 ? t('hub.start') : completed === totalChapters ? t('hub.reread') : t('hub.continue')}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
@@ -114,13 +114,9 @@ const GuideHub: React.FC = () => {
             <Card className="h-full transition-all hover:border-primary/50 hover:shadow-md">
               <CardContent className="p-5">
                 <Rocket className="h-7 w-7 text-primary mb-2" />
-                <p className="font-bold text-foreground">त्वरित गाइड · Quick Start</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  ऐप कैसे चलाएँ — screenshots व step-by-step क्लिक निर्देश।
-                </p>
-                <span className="inline-flex items-center gap-1 text-primary text-sm mt-2 group-hover:gap-2 transition-all">
-                  खोलें <ArrowRight className="h-3.5 w-3.5" />
-                </span>
+                <p className="font-bold text-foreground">{t('hub.quickstart')}</p>
+                <p className="text-sm text-muted-foreground mt-1">{t('hub.quickstart.desc')}</p>
+                <span className="inline-flex items-center gap-1 text-primary text-sm mt-2 group-hover:gap-2 transition-all">{t('hub.open')} <ArrowRight className="h-3.5 w-3.5" /></span>
               </CardContent>
             </Card>
           </Link>
@@ -129,13 +125,9 @@ const GuideHub: React.FC = () => {
             <Card className="h-full transition-all hover:border-primary/50 hover:shadow-md">
               <CardContent className="p-5">
                 <BookOpen className="h-7 w-7 text-primary mb-2" />
-                <p className="font-bold text-foreground">भूमिका · Introduction</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  यह कोर्स किसके लिए है, कैसे पढ़ें, और तीन सुनहरे सूत्र।
-                </p>
-                <span className="inline-flex items-center gap-1 text-primary text-sm mt-2 group-hover:gap-2 transition-all">
-                  पढ़ें <ArrowRight className="h-3.5 w-3.5" />
-                </span>
+                <p className="font-bold text-foreground">{t('hub.intro')}</p>
+                <p className="text-sm text-muted-foreground mt-1">{t('hub.intro.desc')}</p>
+                <span className="inline-flex items-center gap-1 text-primary text-sm mt-2 group-hover:gap-2 transition-all">{t('hub.read')} <ArrowRight className="h-3.5 w-3.5" /></span>
               </CardContent>
             </Card>
           </Link>
@@ -144,13 +136,9 @@ const GuideHub: React.FC = () => {
             <Card className="h-full transition-all hover:border-primary/50 hover:shadow-md">
               <CardContent className="p-5">
                 <Download className="h-7 w-7 text-primary mb-2" />
-                <p className="font-bold text-foreground">पूरी किताब · PDF</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  सम्पूर्ण {totalChapters}-अध्याय गाइड एक printable PDF में — ऑफ़लाइन पढ़ें/छापें।
-                </p>
-                <span className="inline-flex items-center gap-1 text-primary text-sm mt-2 group-hover:gap-2 transition-all">
-                  डाउनलोड <ArrowRight className="h-3.5 w-3.5" />
-                </span>
+                <p className="font-bold text-foreground">{t('hub.pdf')}</p>
+                <p className="text-sm text-muted-foreground mt-1">{t('hub.pdf.desc', { n: totalChapters })}</p>
+                <span className="inline-flex items-center gap-1 text-primary text-sm mt-2 group-hover:gap-2 transition-all">{t('hub.download')} <ArrowRight className="h-3.5 w-3.5" /></span>
               </CardContent>
             </Card>
           </a>
@@ -162,26 +150,27 @@ const GuideHub: React.FC = () => {
             <section key={part.id}>
               <div className="flex items-center gap-2 mb-4">
                 <Layers className="h-5 w-5 text-primary" />
-                <h2 className="text-xl md:text-2xl font-bold text-foreground">{part.title}</h2>
+                <h2 className="text-xl md:text-2xl font-bold text-foreground">{localizedPartTitle(part, lang)}</h2>
               </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {part.chapters.map((c) => (
-                  <ChapterCard
-                    key={c.slug}
-                    slug={c.slug}
-                    badge={c.kind === 'appendix' ? c.slug.split('-')[1]?.toUpperCase() ?? '·' : String(c.num)}
-                    title={c.shortTitle}
-                    summary={c.summary}
-                    done={done.has(c.slug)}
-                  />
-                ))}
+                {part.chapters.map((c) => {
+                  const m = localizedEntry(c, lang);
+                  return (
+                    <ChapterCard
+                      key={c.slug}
+                      slug={c.slug}
+                      badge={c.kind === 'appendix' ? c.slug.split('-')[1]?.toUpperCase() ?? '·' : String(c.num)}
+                      title={m.shortTitle}
+                      summary={m.summary}
+                      done={done.has(c.slug)}
+                    />
+                  );
+                })}
               </div>
               {GUIDE_QUIZZES[part.id] && (
                 <Link to={`/guide/quiz/${part.id}`} className="group inline-flex items-center gap-2 mt-3 text-sm font-medium text-primary hover:gap-3 transition-all">
-                  {passedQuizzes.has(part.id)
-                    ? <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    : <HelpCircle className="h-4 w-4" />}
-                  {passedQuizzes.has(part.id) ? 'क्विज़ उत्तीर्ण ✓ — दोबारा करें' : `इस भाग की क्विज़ हल करें (${GUIDE_QUIZZES[part.id].questions.length} प्रश्न)`}
+                  {passedQuizzes.has(part.id) ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <HelpCircle className="h-4 w-4" />}
+                  {passedQuizzes.has(part.id) ? t('hub.quiz.passed') : t('hub.quiz.take', { n: GUIDE_QUIZZES[part.id].questions.length })}
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               )}
@@ -195,19 +184,17 @@ const GuideHub: React.FC = () => {
             <CardContent className="p-6 flex flex-col sm:flex-row items-center gap-4">
               <Award className="h-10 w-10 text-primary flex-shrink-0" />
               <div className="flex-1 text-center sm:text-left">
-                <p className="font-bold text-foreground">पूर्णता प्रमाणपत्र</p>
-                <p className="text-sm text-muted-foreground">
-                  सभी {totalQuizzes} भागों की क्विज़ उत्तीर्ण करें और अपना प्रमाणपत्र पाएँ — {quizzesPassed}/{totalQuizzes} पूरे।
-                </p>
+                <p className="font-bold text-foreground">{t('hub.cert.title')}</p>
+                <p className="text-sm text-muted-foreground">{t('hub.cert.desc', { done: quizzesPassed, total: totalQuizzes })}</p>
               </div>
               <div className="flex-shrink-0 flex flex-col items-center gap-1.5">
                 <Link to="/guide/certificate" className="w-full">
                   <Button variant={quizzesPassed === totalQuizzes ? 'default' : 'outline'} className="gap-2 w-full sm:w-auto">
-                    <Award className="h-4 w-4" /> {quizzesPassed === totalQuizzes ? 'प्रमाणपत्र पाएँ' : 'प्रमाणपत्र देखें'}
+                    <Award className="h-4 w-4" /> {quizzesPassed === totalQuizzes ? t('hub.cert.get') : t('hub.cert.view')}
                   </Button>
                 </Link>
                 <Link to="/guide/verify" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
-                  <ShieldCheck className="h-3.5 w-3.5" /> प्रमाणपत्र सत्यापित करें
+                  <ShieldCheck className="h-3.5 w-3.5" /> {t('hub.cert.verify')}
                 </Link>
               </div>
             </CardContent>
@@ -219,13 +206,11 @@ const GuideHub: React.FC = () => {
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-6 md:p-8 text-center">
               <FileText className="h-10 w-10 text-primary mx-auto mb-3" />
-              <h2 className="text-2xl font-bold mb-2">तैयार हैं? अपनी समिति शुरू करें</h2>
-              <p className="text-muted-foreground max-w-2xl mx-auto mb-4">
-                पढ़ते जाइए, साथ-साथ अपनी समिति में अभ्यास कीजिए — सहकार लेखा बिल्कुल मुफ़्त है।
-              </p>
+              <h2 className="text-2xl font-bold mb-2">{t('hub.cta.title')}</h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto mb-4">{t('hub.cta.desc')}</p>
               <div className="flex flex-wrap gap-3 justify-center">
-                <Link to="/register"><Button className="gap-2">अभी शुरू करें <ArrowRight className="h-4 w-4" /></Button></Link>
-                <Link to="/guide/quick-start"><Button variant="outline">त्वरित गाइड</Button></Link>
+                <Link to="/register"><Button className="gap-2">{t('hub.cta.start')} <ArrowRight className="h-4 w-4" /></Button></Link>
+                <Link to="/guide/quick-start"><Button variant="outline">{t('hub.quickstart')}</Button></Link>
                 <Link to="/faq"><Button variant="ghost">FAQ</Button></Link>
               </div>
             </CardContent>

@@ -10,10 +10,13 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle2, XCircle, RotateCcw, Award, ArrowRight } from 'lucide-react';
 import type { PartQuiz } from '@/content/guide/quizzes';
 import { setQuizPassed } from '@/lib/guideQuiz';
+import { useGuideLang, useGuideT } from '@/lib/guideLang';
 
 const PASS_PCT = 70;
 
 const GuideQuiz: React.FC<{ quiz: PartQuiz; nextPath?: string }> = ({ quiz, nextPath }) => {
+  const lang = useGuideLang();
+  const t = useGuideT();
   const [answers, setAnswers] = React.useState<Record<number, number>>({});
   const [submitted, setSubmitted] = React.useState(false);
 
@@ -44,19 +47,19 @@ const GuideQuiz: React.FC<{ quiz: PartQuiz; nextPath?: string }> = ({ quiz, next
             ) : (
               <RotateCcw className="h-10 w-10 text-amber-600 mx-auto mb-2" />
             )}
-            <p className="text-2xl font-bold text-foreground">{correct} / {total} सही · {pct}%</p>
+            <p className="text-2xl font-bold text-foreground">{t('quiz.score', { correct, total, pct })}</p>
             <p className={`mt-1 font-medium ${passed ? 'text-green-700 dark:text-green-300' : 'text-amber-700 dark:text-amber-300'}`}>
-              {passed ? 'बधाई! आपने यह भाग उत्तीर्ण कर लिया ✓' : `उत्तीर्ण होने के लिए ${PASS_PCT}% चाहिए — फिर कोशिश करें।`}
+              {passed ? t('quiz.passed') : t('quiz.failed', { pct: PASS_PCT })}
             </p>
             <div className="flex flex-wrap gap-3 justify-center mt-4">
               <Button variant="outline" onClick={retry} className="gap-2">
-                <RotateCcw className="h-4 w-4" /> फिर से करें
+                <RotateCcw className="h-4 w-4" /> {t('quiz.retry')}
               </Button>
               {passed && nextPath && (
-                <Link to={nextPath}><Button className="gap-2">आगे बढ़ें <ArrowRight className="h-4 w-4" /></Button></Link>
+                <Link to={nextPath}><Button className="gap-2">{t('quiz.gonext')} <ArrowRight className="h-4 w-4" /></Button></Link>
               )}
               {passed && (
-                <Link to="/guide/certificate"><Button variant="secondary" className="gap-2"><Award className="h-4 w-4" /> प्रमाणपत्र</Button></Link>
+                <Link to="/guide/certificate"><Button variant="secondary" className="gap-2"><Award className="h-4 w-4" /> {t('quiz.cert')}</Button></Link>
               )}
             </div>
           </CardContent>
@@ -70,7 +73,7 @@ const GuideQuiz: React.FC<{ quiz: PartQuiz; nextPath?: string }> = ({ quiz, next
             <Card key={qi}>
               <CardContent className="p-4 sm:p-5">
                 <p className="font-semibold text-foreground mb-3">
-                  <span className="text-primary">प्र.{qi + 1}</span> {qq.q}
+                  <span className="text-primary">{t('quiz.qprefix')}{qi + 1}</span> {qq.q}
                 </p>
                 <div className="space-y-2">
                   {qq.options.map((opt, oi) => {
@@ -92,7 +95,7 @@ const GuideQuiz: React.FC<{ quiz: PartQuiz; nextPath?: string }> = ({ quiz, next
                         className={`w-full text-left flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm transition-colors ${style}`}
                       >
                         <span className={`flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center text-xs ${chosen && !submitted ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40'}`}>
-                          {['क', 'ख', 'ग', 'घ'][oi]}
+                          {(lang === 'en' ? ['A', 'B', 'C', 'D'] : ['क', 'ख', 'ग', 'घ'])[oi]}
                         </span>
                         <span className="flex-1">{opt}</span>
                         {submitted && isCorrect && <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />}
@@ -115,9 +118,9 @@ const GuideQuiz: React.FC<{ quiz: PartQuiz; nextPath?: string }> = ({ quiz, next
       {!submitted && (
         <div className="mt-6 flex flex-col items-center gap-2">
           <Button onClick={submit} disabled={!allAnswered} size="lg" className="gap-2">
-            उत्तर जाँचें ({Object.keys(answers).length}/{total})
+            {t('quiz.check', { done: Object.keys(answers).length, total })}
           </Button>
-          {!allAnswered && <p className="text-xs text-muted-foreground">सभी प्रश्नों के उत्तर चुनें।</p>}
+          {!allAnswered && <p className="text-xs text-muted-foreground">{t('quiz.answerall')}</p>}
         </div>
       )}
     </div>
