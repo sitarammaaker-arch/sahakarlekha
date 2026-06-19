@@ -17,7 +17,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import PublicLayout from '@/components/PublicLayout';
-import { SOCIAL_CHANNELS, SocialIcon } from '@/lib/socials';
+import { SOCIAL_CHANNELS, SocialIcon, WHATSAPP_NUMBER } from '@/lib/socials';
 import {
   BookOpen, Shield, Users, BarChart3, FileText, Globe,
   CheckCircle2, XCircle, ArrowRight, Building2, Milk, Home, Factory,
@@ -27,7 +27,7 @@ import {
 
 /* ─── Config (set these as assets become available) ─── */
 const DEMO_VIDEO_ID = '';                 // e.g. 'dQw4w9WgXcQ'
-const WHATSAPP = '';                      // e.g. '919999999999'
+const WHATSAPP = WHATSAPP_NUMBER;          // central number from socials.tsx
 const SAMPLE_REPORT = '/sample-balance-sheet.pdf';
 
 const FEATURES = [

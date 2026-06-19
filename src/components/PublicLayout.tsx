@@ -7,6 +7,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import { SOCIAL_CHANNELS, SocialIcon } from '@/lib/socials';
+import WhatsAppFab from '@/components/WhatsAppFab';
 
 interface PublicLayoutProps {
   children: React.ReactNode;
@@ -123,6 +124,9 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
           </div>
         </div>
       </footer>
+
+      {/* Floating WhatsApp contact — shown on every public page */}
+      <WhatsAppFab />
     </div>
   );
 };
