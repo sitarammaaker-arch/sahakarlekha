@@ -55,6 +55,60 @@
     <priority>0.3</priority>
   </url>
   <url>
+    <loc>https://www.sahakarlekha.com/software</loc>
+    <lastmod>2026-06-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/software/pacs</loc>
+    <lastmod>2026-06-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/software/dairy</loc>
+    <lastmod>2026-06-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/software/marketing</loc>
+    <lastmod>2026-06-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/software/consumer</loc>
+    <lastmod>2026-06-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/software/housing</loc>
+    <lastmod>2026-06-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/software/sugar</loc>
+    <lastmod>2026-06-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/software/labour</loc>
+    <lastmod>2026-06-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/software/multipurpose</loc>
+    <lastmod>2026-06-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://www.sahakarlekha.com/guide</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>weekly</changefreq>
@@ -79,229 +133,283 @@
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/bhumika</loc>
+    <loc>https://www.sahakarlekha.com/guide/introduction</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-1</loc>
+    <loc>https://www.sahakarlekha.com/guide/accounting-foundations</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-2</loc>
+    <loc>https://www.sahakarlekha.com/guide/society-setup-and-roles</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-3</loc>
+    <loc>https://www.sahakarlekha.com/guide/chart-of-accounts</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-4</loc>
+    <loc>https://www.sahakarlekha.com/guide/opening-balances</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-5</loc>
+    <loc>https://www.sahakarlekha.com/guide/member-management</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-6</loc>
+    <loc>https://www.sahakarlekha.com/guide/voucher-types</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-7</loc>
+    <loc>https://www.sahakarlekha.com/guide/sales-entries</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-8</loc>
+    <loc>https://www.sahakarlekha.com/guide/purchase-entries</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-9</loc>
+    <loc>https://www.sahakarlekha.com/guide/inventory-management</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-10</loc>
+    <loc>https://www.sahakarlekha.com/guide/bill-wise-settlement</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-11</loc>
+    <loc>https://www.sahakarlekha.com/guide/salary-management</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-12</loc>
+    <loc>https://www.sahakarlekha.com/guide/daybook-and-ledger</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-13</loc>
+    <loc>https://www.sahakarlekha.com/guide/trial-balance</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-14</loc>
+    <loc>https://www.sahakarlekha.com/guide/trading-account</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-15</loc>
+    <loc>https://www.sahakarlekha.com/guide/income-and-expenditure</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-16</loc>
+    <loc>https://www.sahakarlekha.com/guide/balance-sheet</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-17</loc>
+    <loc>https://www.sahakarlekha.com/guide/receipts-and-payments</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-18</loc>
+    <loc>https://www.sahakarlekha.com/guide/gst-management</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-19</loc>
+    <loc>https://www.sahakarlekha.com/guide/tds-and-26q</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-20</loc>
+    <loc>https://www.sahakarlekha.com/guide/depreciation</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-21</loc>
+    <loc>https://www.sahakarlekha.com/guide/stock-valuation</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-22</loc>
+    <loc>https://www.sahakarlekha.com/guide/profit-distribution</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-23</loc>
+    <loc>https://www.sahakarlekha.com/guide/statutory-returns</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-24</loc>
+    <loc>https://www.sahakarlekha.com/guide/year-end-and-fy-lock</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-25</loc>
+    <loc>https://www.sahakarlekha.com/guide/audit-preparation</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-26</loc>
+    <loc>https://www.sahakarlekha.com/guide/data-security-and-backup</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-27</loc>
+    <loc>https://www.sahakarlekha.com/guide/golden-rules</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-28</loc>
+    <loc>https://www.sahakarlekha.com/guide/case-study-full-year</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-29</loc>
+    <loc>https://www.sahakarlekha.com/guide/special-registers</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/adhyay-30</loc>
+    <loc>https://www.sahakarlekha.com/guide/comprehensive-faq</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/parishisht-a</loc>
+    <loc>https://www.sahakarlekha.com/guide/msp-procurement-entries</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/parishisht-b</loc>
+    <loc>https://www.sahakarlekha.com/guide/society-type-entries</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/parishisht-c</loc>
+    <loc>https://www.sahakarlekha.com/guide/error-rectification-entries</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/parishisht-d</loc>
+    <loc>https://www.sahakarlekha.com/guide/financial-ratios-and-lifecycle</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/parishisht-e</loc>
+    <loc>https://www.sahakarlekha.com/guide/expense-dictionary</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/parishisht-f</loc>
+    <loc>https://www.sahakarlekha.com/guide/standard-chart-of-accounts</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.sahakarlekha.com/guide/samapan</loc>
+    <loc>https://www.sahakarlekha.com/guide/glossary</loc>
+    <lastmod>2026-06-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/guide/report-to-statutory-form-map</loc>
+    <lastmod>2026-06-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/guide/quick-reference-card</loc>
+    <lastmod>2026-06-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/guide/year-end-checklist</loc>
+    <lastmod>2026-06-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/guide/exercise-answers</loc>
+    <lastmod>2026-06-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/guide/voucher-entry-quick-reference</loc>
+    <lastmod>2026-06-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/guide/account-name-glossary</loc>
+    <lastmod>2026-06-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/guide/troubleshooting-guide</loc>
+    <lastmod>2026-06-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/guide/society-type-quick-card</loc>
+    <lastmod>2026-06-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.sahakarlekha.com/guide/conclusion</loc>
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -359,59 +467,5 @@
     <lastmod>2026-06-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
-  </url>
-  <url>
-    <loc>https://www.sahakarlekha.com/software</loc>
-    <lastmod>2026-06-19</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.sahakarlekha.com/software/pacs</loc>
-    <lastmod>2026-06-19</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.sahakarlekha.com/software/dairy</loc>
-    <lastmod>2026-06-19</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.sahakarlekha.com/software/marketing</loc>
-    <lastmod>2026-06-19</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.sahakarlekha.com/software/consumer</loc>
-    <lastmod>2026-06-19</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.sahakarlekha.com/software/housing</loc>
-    <lastmod>2026-06-19</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.sahakarlekha.com/software/sugar</loc>
-    <lastmod>2026-06-19</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.sahakarlekha.com/software/labour</loc>
-    <lastmod>2026-06-19</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.sahakarlekha.com/software/multipurpose</loc>
-    <lastmod>2026-06-19</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
   </url>
 </urlset>

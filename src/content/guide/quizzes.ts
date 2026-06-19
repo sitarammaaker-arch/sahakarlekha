@@ -10,14 +10,14 @@ export interface QuizQuestion {
   explain: string;
 }
 export interface PartQuiz {
-  partId: string; // matches GUIDE_PARTS id, e.g. 'bhag-1'
+  partId: string; // matches GUIDE_PARTS id, e.g. 'part-1'
   title: string;
   questions: QuizQuestion[];
 }
 
 export const GUIDE_QUIZZES: Record<string, PartQuiz> = {
-  'bhag-1': {
-    partId: 'bhag-1',
+  'part-1': {
+    partId: 'part-1',
     title: 'भाग 1 — लेखांकन की नींव',
     questions: [
       {
@@ -46,8 +46,8 @@ export const GUIDE_QUIZZES: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-2': {
-    partId: 'bhag-2',
+  'part-2': {
+    partId: 'part-2',
     title: 'भाग 2 — सहकार लेखा से शुरुआत',
     questions: [
       {
@@ -76,8 +76,8 @@ export const GUIDE_QUIZZES: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-3': {
-    partId: 'bhag-3',
+  'part-3': {
+    partId: 'part-3',
     title: 'भाग 3 — दैनिक संचालन',
     questions: [
       {
@@ -106,8 +106,8 @@ export const GUIDE_QUIZZES: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-4': {
-    partId: 'bhag-4',
+  'part-4': {
+    partId: 'part-4',
     title: 'भाग 4 — बहियाँ व तलपट',
     questions: [
       {
@@ -130,8 +130,8 @@ export const GUIDE_QUIZZES: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-5': {
-    partId: 'bhag-5',
+  'part-5': {
+    partId: 'part-5',
     title: 'भाग 5 — अंतिम खाते',
     questions: [
       {
@@ -160,8 +160,8 @@ export const GUIDE_QUIZZES: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-6': {
-    partId: 'bhag-6',
+  'part-6': {
+    partId: 'part-6',
     title: 'भाग 6 — कर अनुपालन',
     questions: [
       {
@@ -184,8 +184,8 @@ export const GUIDE_QUIZZES: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-7': {
-    partId: 'bhag-7',
+  'part-7': {
+    partId: 'part-7',
     title: 'भाग 7 — विशेष लेखांकन',
     questions: [
       {
@@ -214,8 +214,8 @@ export const GUIDE_QUIZZES: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-8': {
-    partId: 'bhag-8',
+  'part-8': {
+    partId: 'part-8',
     title: 'भाग 8 — वर्षांत व सुरक्षा',
     questions: [
       {
@@ -238,8 +238,8 @@ export const GUIDE_QUIZZES: Record<string, PartQuiz> = {
       },
     ],
   },
-  'bhag-9': {
-    partId: 'bhag-9',
+  'part-9': {
+    partId: 'part-9',
     title: 'भाग 9 — संदर्भ व अभ्यास',
     questions: [
       {
