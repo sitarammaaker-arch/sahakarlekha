@@ -13,7 +13,7 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { SOCIETY_TYPES, findSocietyType } from '@/content/societyTypes';
 import { ArrowRight, CheckCircle2, AlertTriangle, GraduationCap, ShieldCheck, Home } from 'lucide-react';
 
-const SITE = 'https://www.sahakarlekha.com';
+const SITE = 'https://sahakarlekha.com';
 
 const SoftwareLanding: React.FC = () => {
   const { type } = useParams();

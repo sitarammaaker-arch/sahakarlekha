@@ -95,7 +95,7 @@ export function addPageNumbers(doc: jsPDF, font: string, societyName?: string): 
     doc.setFontSize(7);
     doc.setTextColor(120);
     // Soft viral footer: brand + value prop, as a clickable link on every exported report.
-    doc.textWithLink('Generated free with SahakarLekha · sahakarlekha.com', 15, pageH - 6, { url: 'https://www.sahakarlekha.com' });
+    doc.textWithLink('Generated free with SahakarLekha · sahakarlekha.com', 15, pageH - 6, { url: 'https://sahakarlekha.com' });
     doc.text(`Page ${i} of ${total}`, pageW - 15, pageH - 6, { align: 'right' });
     doc.setTextColor(0);
   }

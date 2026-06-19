@@ -6,4 +6,4 @@ Disallow: /backup-restore
 Disallow: /user-management
 Disallow: /super-admin
 
-Sitemap: https://www.sahakarlekha.com/sitemap.xml
+Sitemap: https://sahakarlekha.com/sitemap.xml

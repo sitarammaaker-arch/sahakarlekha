@@ -43,7 +43,7 @@ const GuideChapter: React.FC = () => {
   // Structured data: an Article tied to the Course, plus a breadcrumb trail.
   // (HowTo/FAQ rich results are largely deprecated by Google; Article +
   // BreadcrumbList are the schema types that still earn SERP treatment.)
-  const SITE = 'https://www.sahakarlekha.com';
+  const SITE = 'https://sahakarlekha.com';
   const part = entry ? GUIDE_PARTS.find((p) => p.chapters.some((c) => c.slug === slug)) : null;
   const jsonLd = entry && meta ? [
     {

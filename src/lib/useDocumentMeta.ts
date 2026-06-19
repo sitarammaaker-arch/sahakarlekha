@@ -5,7 +5,7 @@
  */
 import { useEffect } from 'react';
 
-const SITE = 'https://www.sahakarlekha.com';
+const SITE = 'https://sahakarlekha.com';
 
 function ensure(selector: string, create: () => HTMLElement): HTMLElement {
   let el = document.head.querySelector(selector) as HTMLElement | null;

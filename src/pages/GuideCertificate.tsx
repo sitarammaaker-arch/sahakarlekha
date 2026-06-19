@@ -348,8 +348,8 @@ const GuideCertificate: React.FC = () => {
               <a
                 href={`https://wa.me/?text=${encodeURIComponent(
                   lang === 'en'
-                    ? `I completed the SahakarLekha cooperative society accounting course ✅\nCertificate no. ${certNo} — verify: https://www.sahakarlekha.com/guide/verify?id=${certNo}\nLearn it free too: https://www.sahakarlekha.com/guide`
-                    : `मैंने SahakarLekha का सहकारी समिति लेखांकन कोर्स पूरा किया ✅\nप्रमाणपत्र क्रमांक ${certNo} — सत्यापित करें: https://www.sahakarlekha.com/guide/verify?id=${certNo}\nआप भी मुफ़्त सीखें: https://www.sahakarlekha.com/guide`
+                    ? `I completed the SahakarLekha cooperative society accounting course ✅\nCertificate no. ${certNo} — verify: https://sahakarlekha.com/guide/verify?id=${certNo}\nLearn it free too: https://sahakarlekha.com/guide`
+                    : `मैंने SahakarLekha का सहकारी समिति लेखांकन कोर्स पूरा किया ✅\nप्रमाणपत्र क्रमांक ${certNo} — सत्यापित करें: https://sahakarlekha.com/guide/verify?id=${certNo}\nआप भी मुफ़्त सीखें: https://sahakarlekha.com/guide`
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
