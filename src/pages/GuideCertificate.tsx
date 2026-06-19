@@ -17,7 +17,7 @@ import LangToggle from '@/components/guide/LangToggle';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { makeCertNumber, formatCertDate } from '@/lib/guideCertId';
 import { supabase } from '@/lib/supabase';
-import { Award, Printer, CheckCircle2, Circle, ArrowRight, Home, ChevronRight, ShieldCheck, Pencil, Loader2, Download } from 'lucide-react';
+import { Award, Printer, CheckCircle2, Circle, ArrowRight, Home, ChevronRight, ShieldCheck, Pencil, Loader2, Download, MessageCircle } from 'lucide-react';
 
 const NAME_KEY = 'sl_guide_name';
 const EMAIL_KEY = 'sl_guide_email';
@@ -345,6 +345,19 @@ const GuideCertificate: React.FC = () => {
               <Link to={`/guide/verify?id=${encodeURIComponent(certNo)}`}>
                 <Button variant="outline" className="gap-2"><ShieldCheck className="h-4 w-4" /> {t('cert.verify')}</Button>
               </Link>
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(
+                  lang === 'en'
+                    ? `I completed the SahakarLekha cooperative society accounting course ✅\nCertificate no. ${certNo} — verify: https://www.sahakarlekha.com/guide/verify?id=${certNo}\nLearn it free too: https://www.sahakarlekha.com/guide`
+                    : `मैंने SahakarLekha का सहकारी समिति लेखांकन कोर्स पूरा किया ✅\nप्रमाणपत्र क्रमांक ${certNo} — सत्यापित करें: https://www.sahakarlekha.com/guide/verify?id=${certNo}\nआप भी मुफ़्त सीखें: https://www.sahakarlekha.com/guide`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button variant="outline" className="gap-2 border-green-300 text-green-700 hover:bg-green-50 hover:text-green-800">
+                  <MessageCircle className="h-4 w-4" /> {lang === 'en' ? 'Share on WhatsApp' : 'WhatsApp पर शेयर'}
+                </Button>
+              </a>
               <Link to="/guide"><Button variant="ghost">{t('cert.back')}</Button></Link>
             </div>
             <p className="text-center text-xs text-muted-foreground mt-3 no-print">

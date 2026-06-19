@@ -161,6 +161,16 @@ const FAQ: React.FC = () => {
     title: 'अक्सर पूछे जाने वाले प्रश्न (FAQ) — SahakarLekha',
     description: 'क्या यह वाकई मुफ़्त है? ऑडिटर रिपोर्ट स्वीकार करेंगे? डेटा सुरक्षित है? Tally से कैसे आएँ? — SahakarLekha के सभी सामान्य प्रश्नों के उत्तर हिंदी व English में.',
     canonicalPath: '/faq',
+    // FAQPage structured data (all Q&As) → eligible for Google's FAQ rich result.
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: FAQ_CATEGORIES.flatMap((c) => c.items).map((it) => ({
+        '@type': 'Question',
+        name: it.q,
+        acceptedAnswer: { '@type': 'Answer', text: `${it.aHi} / ${it.aEn}` },
+      })),
+    },
   });
   return (
     <PublicLayout>
