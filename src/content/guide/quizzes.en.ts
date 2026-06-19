@@ -252,6 +252,42 @@ export const GUIDE_QUIZZES_EN: Record<string, PartQuiz> = {
       },
     ],
   },
+  'part-10': {
+    partId: 'part-10',
+    title: 'Part 10 — Voucher Entry: In-Depth Reference',
+    questions: [
+      {
+        q: 'At what quantity should an MSP purchase be recorded?',
+        options: ['The farmer’s declared quantity', 'The actual weighment (weighbridge slip)', 'An estimated quantity', 'The gunny-bag count'],
+        answer: 1,
+        explain: 'Always record the purchase on the actual weighment, not the declared quantity — only then do stock and farmer-payable stay correct.',
+      },
+      {
+        q: 'For the society, the procurement charge received from the agency (HAFED) is a?',
+        options: ['Expense', 'Liability', 'Income (receivable from the agency)', 'Capital'],
+        answer: 2,
+        explain: 'MSP purchase and sale are usually equal; the society’s real earning is the charges — income receivable from the agency.',
+      },
+      {
+        q: 'Which is the correct gunny-bag reconciliation formula?',
+        options: ['received = sold + balance', 'received = used + returned + balance', 'used = received + balance', 'balance = received + used'],
+        answer: 1,
+        explain: 'received = used + returned + balance; recover any shortage from the store-keeper.',
+      },
+      {
+        q: 'An electricity/rent security deposit that we paid is a?',
+        options: ['Expense', 'Asset (refundable)', 'Income', 'Liability'],
+        answer: 1,
+        explain: 'A refundable amount is an asset, not an expense — "looks like an expense but is an asset".',
+      },
+      {
+        q: 'What is the Recovery % formula?',
+        options: ['total due ÷ recovered × 100', 'recovered ÷ total due × 100', 'recovered − due', 'due ÷ recovered'],
+        answer: 1,
+        explain: 'Recovery % = (recovered ÷ total due) × 100; 90%+ is good — a key indicator of society health.',
+      },
+    ],
+  },
 };
 
 /** Returns the quiz for a part in the chosen language (falls back to Hindi). */
