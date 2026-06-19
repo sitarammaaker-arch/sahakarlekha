@@ -28,7 +28,11 @@ import {
 /* ─── Config (set these as assets become available) ─── */
 const DEMO_VIDEO_ID = '';                 // e.g. 'dQw4w9WgXcQ'
 const WHATSAPP = WHATSAPP_NUMBER;          // central number from socials.tsx
-const SAMPLE_REPORT = '/sample-balance-sheet.pdf';
+// Sample report is generated on-demand from a fictional demo society — no static asset.
+const handleSampleReport = async () => {
+  const { generateSampleReportPDF } = await import('@/lib/sampleReport');
+  generateSampleReportPDF();
+};
 
 const FEATURES = [
   { icon: BookOpen, title: 'Double-Entry Accounting', titleHi: 'दोहरी प्रविष्टि लेखा', desc: 'Voucher, Cash Book, Bank Book, Day Book, Ledger — complete accounting system' },
@@ -284,9 +288,9 @@ const LandingPage: React.FC = () => {
             )}
           </div>
           <div className="mt-6">
-            <a href={SAMPLE_REPORT} target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" className="gap-2"><Download className="h-4 w-4" /> नमूना रिपोर्ट PDF डाउनलोड करें / Sample report</Button>
-            </a>
+            <Button variant="outline" className="gap-2" onClick={handleSampleReport}>
+              <Download className="h-4 w-4" /> नमूना रिपोर्ट PDF डाउनलोड करें / Sample report
+            </Button>
           </div>
         </div>
       </section>
@@ -425,9 +429,9 @@ const LandingPage: React.FC = () => {
             ))}
           </div>
           <div className="mt-6 text-center">
-            <a href={SAMPLE_REPORT} target="_blank" rel="noopener noreferrer" className="text-primary text-sm font-medium inline-flex items-center gap-1.5 hover:underline">
+            <button onClick={handleSampleReport} className="text-primary text-sm font-medium inline-flex items-center gap-1.5 hover:underline">
               <Download className="h-4 w-4" /> असली RCS-प्रारूप बैलेंस शीट देखें (नमूना PDF)
-            </a>
+            </button>
           </div>
         </div>
       </section>
