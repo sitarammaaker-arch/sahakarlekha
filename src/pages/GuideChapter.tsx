@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import GuideMarkdown, { slugifyHeading } from '@/components/guide/GuideMarkdown';
 import LangToggle from '@/components/guide/LangToggle';
-import { findEntry, GUIDE_ORDER } from '@/content/guide';
+import { findEntry, GUIDE_ORDER, GUIDE_PARTS } from '@/content/guide';
 import { loadGuideContent, localizedEntry } from '@/content/guide/i18n';
 import { useGuideProgress, toggleGuideDone } from '@/lib/guideProgress';
 import { useGuideLang, useGuideT } from '@/lib/guideLang';
@@ -26,6 +26,20 @@ const GuideChapter: React.FC = () => {
 
   React.useEffect(() => { window.scrollTo({ top: 0 }); }, [slug]);
 
+  // Reading-progress bar: how far the reader has scrolled through this chapter.
+  const [readPct, setReadPct] = React.useState(0);
+  React.useEffect(() => {
+    const onScroll = () => {
+      const el = document.documentElement;
+      const max = el.scrollHeight - el.clientHeight;
+      setReadPct(max > 0 ? Math.min(100, Math.max(0, (el.scrollTop / max) * 100)) : 0);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => { window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll); };
+  }, [slug]);
+
   useDocumentMeta({
     title: entry && meta ? `${meta.shortTitle} — ${lang === 'en' ? 'SahakarLekha Guide' : 'सहकार लेखा गाइड'}` : undefined,
     description: meta?.summary || undefined,
@@ -38,6 +52,12 @@ const GuideChapter: React.FC = () => {
   }
 
   const isDone = done.has(slug);
+
+  // Overall course progress (chapters completed) — shown in the chapter header.
+  const allChapterSlugs = GUIDE_PARTS.flatMap((p) => p.chapters.filter((c) => c.kind === 'chapter').map((c) => c.slug));
+  const totalChapters = allChapterSlugs.length;
+  const completedChapters = allChapterSlugs.filter((s) => done.has(s)).length;
+  const coursePct = totalChapters ? Math.round((completedChapters / totalChapters) * 100) : 0;
 
   // strip the leading H1 (the page hero already shows the title)
   const body = raw.replace(/^#\s+.*(\r?\n)+/, '');
@@ -59,6 +79,11 @@ const GuideChapter: React.FC = () => {
 
   return (
     <PublicLayout>
+      {/* Reading-progress bar (scroll position through this chapter) */}
+      <div className="fixed top-0 left-0 right-0 h-1 z-[60] no-print pointer-events-none" aria-hidden="true">
+        <div className="h-full bg-primary transition-[width] duration-75" style={{ width: `${readPct}%` }} />
+      </div>
+
       <div className="mx-auto px-4 py-8 md:py-12 max-w-6xl">
         {/* Breadcrumb + language toggle */}
         <div className="flex items-center justify-between gap-3 mb-6">
@@ -83,6 +108,16 @@ const GuideChapter: React.FC = () => {
               <h1 className="text-2xl md:text-4xl font-bold text-foreground leading-tight">{meta.shortTitle}</h1>
               <div className="flex items-center gap-2 text-sm text-muted-foreground mt-3">
                 <Clock className="h-4 w-4" /> {t('ch.readtime', { n: minutes })}
+              </div>
+              {/* Overall course progress */}
+              <div className="mt-4 max-w-sm">
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                  <span>{t('ch.courseprogress')}</span>
+                  <span>{completedChapters} / {totalChapters} · {coursePct}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${coursePct}%` }} />
+                </div>
               </div>
             </header>
 

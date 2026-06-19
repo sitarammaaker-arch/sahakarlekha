@@ -59,6 +59,7 @@ export const GUIDE_UI: Record<string, { hi: string; en: string }> = {
   'ch.inthis': { hi: 'इस अध्याय में', en: 'In this chapter' },
   'ch.allchapters': { hi: 'सभी अध्याय', en: 'All chapters' },
   'ch.fallback': { hi: 'इस अध्याय का अंग्रेज़ी अनुवाद जल्द आ रहा है — फ़िलहाल हिंदी संस्करण दिखाया जा रहा है।', en: 'The English translation of this chapter is coming soon — showing the Hindi version for now.' },
+  'ch.courseprogress': { hi: 'कोर्स प्रगति', en: 'Course progress' },
   // quiz
   'quiz.breadcrumb': { hi: 'क्विज़', en: 'Quiz' },
   'quiz.badge': { hi: 'क्विज़ · {n} प्रश्न', en: 'Quiz · {n} questions' },
