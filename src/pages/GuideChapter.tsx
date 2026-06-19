@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import GuideMarkdown, { slugifyHeading } from '@/components/guide/GuideMarkdown';
 import LangToggle from '@/components/guide/LangToggle';
 import { findEntry, GUIDE_ORDER, GUIDE_PARTS } from '@/content/guide';
-import { loadGuideContent, localizedEntry } from '@/content/guide/i18n';
+import { loadGuideContent, localizedEntry, localizedPartTitle } from '@/content/guide/i18n';
 import { useGuideProgress, toggleGuideDone } from '@/lib/guideProgress';
 import { useGuideLang, useGuideT } from '@/lib/guideLang';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
@@ -40,10 +40,44 @@ const GuideChapter: React.FC = () => {
     return () => { window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll); };
   }, [slug]);
 
+  // Structured data: an Article tied to the Course, plus a breadcrumb trail.
+  // (HowTo/FAQ rich results are largely deprecated by Google; Article +
+  // BreadcrumbList are the schema types that still earn SERP treatment.)
+  const SITE = 'https://www.sahakarlekha.com';
+  const part = entry ? GUIDE_PARTS.find((p) => p.chapters.some((c) => c.slug === slug)) : null;
+  const jsonLd = entry && meta ? [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: meta.shortTitle,
+      description: meta.summary,
+      inLanguage: lang === 'en' ? 'en' : 'hi',
+      url: `${SITE}/guide/${slug}`,
+      isPartOf: {
+        '@type': 'Course',
+        name: lang === 'en'
+          ? 'Cooperative Society Accounting & Audit — Complete Course'
+          : 'सहकारी समिति लेखांकन व अंकेक्षण — सम्पूर्ण कोर्स',
+        url: `${SITE}/guide`,
+      },
+      ...(part ? { articleSection: localizedPartTitle(part, lang) } : {}),
+      publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: lang === 'en' ? 'Guide' : 'गाइड', item: `${SITE}/guide` },
+        { '@type': 'ListItem', position: 2, name: meta.shortTitle, item: `${SITE}/guide/${slug}` },
+      ],
+    },
+  ] : undefined;
+
   useDocumentMeta({
     title: entry && meta ? `${meta.shortTitle} — ${lang === 'en' ? 'SahakarLekha Guide' : 'सहकार लेखा गाइड'}` : undefined,
     description: meta?.summary || undefined,
     canonicalPath: `/guide/${slug}`,
+    jsonLd,
   });
   const done = useGuideProgress();
 
