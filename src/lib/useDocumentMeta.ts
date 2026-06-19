@@ -35,8 +35,12 @@ export function useDocumentMeta(opts: {
   title?: string;
   description?: string;
   canonicalPath?: string;
+  /** Optional JSON-LD structured data injected as a <script> in <head> while this page is mounted. */
+  jsonLd?: object | object[];
 }) {
-  const { title, description, canonicalPath } = opts;
+  const { title, description, canonicalPath, jsonLd } = opts;
+  // Stringify once so the effect dep is stable across re-renders (inline objects change identity each render).
+  const jsonLdStr = jsonLd ? JSON.stringify(jsonLd) : undefined;
   useEffect(() => {
     const prev: Array<[HTMLElement, string, string | null]> = [];
     const set = (el: HTMLElement, attr: string, value?: string) => {
@@ -67,8 +71,18 @@ export function useDocumentMeta(opts: {
       set(metaByProp('og:url'), 'content', SITE + canonicalPath);
     }
 
+    let scriptEl: HTMLScriptElement | null = null;
+    if (jsonLdStr) {
+      scriptEl = document.createElement('script');
+      scriptEl.type = 'application/ld+json';
+      scriptEl.setAttribute('data-managed-jsonld', '');
+      scriptEl.textContent = jsonLdStr;
+      document.head.appendChild(scriptEl);
+    }
+
     return () => {
       document.title = prevTitle;
+      if (scriptEl && scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
       // restore changed attributes (in reverse so first-seen wins)
       for (let i = prev.length - 1; i >= 0; i--) {
         const [el, attr, old] = prev[i];
@@ -76,5 +90,5 @@ export function useDocumentMeta(opts: {
         else el.setAttribute(attr, old);
       }
     };
-  }, [title, description, canonicalPath]);
+  }, [title, description, canonicalPath, jsonLdStr]);
 }

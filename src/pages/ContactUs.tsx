@@ -4,6 +4,7 @@
  */
 import React, { useState } from 'react';
 import PublicLayout from '@/components/PublicLayout';
+import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +15,11 @@ import { Mail, Phone, MapPin, Clock, Send } from 'lucide-react';
 import { SOCIAL_CHANNELS, SocialIcon } from '@/lib/socials';
 
 const ContactUs: React.FC = () => {
+  useDocumentMeta({
+    title: 'संपर्क करें — SahakarLekha सहकारी लेखा सॉफ्टवेयर सहायता',
+    description: 'SahakarLekha टीम से संपर्क करें — सहायता, डेमो व अपनी सहकारी समिति को ऑनबोर्ड करने के लिए. Contact us for support, a demo, or to onboard your cooperative society.',
+    canonicalPath: '/contact',
+  });
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [societyName, setSocietyName] = useState('');

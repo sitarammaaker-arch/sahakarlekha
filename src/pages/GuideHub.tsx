@@ -52,6 +52,38 @@ const GuideHub: React.FC = () => {
       ? 'A complete accounting guide for cooperative societies — sales, purchases, stock, GST/TDS, final accounts, audit & year-end. 30 chapters, free.'
       : 'सहकारी समितियों के लिए सम्पूर्ण लेखांकन गाइड — बिक्री, खरीद, स्टॉक, GST/TDS, अंतिम खाते, ऑडिट व वर्षांत। 30 अध्याय, सरल हिंदी, बिल्कुल मुफ़्त।',
     canonicalPath: '/guide',
+    // Course structured data → eligible for Google's "Course" rich result.
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'Course',
+      name: lang === 'en'
+        ? 'Cooperative Society Accounting & Audit — Complete Course'
+        : 'सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स',
+      description: lang === 'en'
+        ? 'A free, self-paced course teaching cooperative society accounting from first principles to final accounts, GST/TDS, audit and year-end — 30 chapters with quizzes and a verifiable certificate.'
+        : 'सहकारी समिति लेखांकन सिखाने वाला मुफ़्त, स्व-गति कोर्स — मूल सिद्धांतों से अंतिम खातों, GST/TDS, ऑडिट व वर्षांत तक। 30 अध्याय, क्विज़ व सत्यापन-योग्य प्रमाणपत्र।',
+      url: 'https://www.sahakarlekha.com/guide',
+      inLanguage: lang === 'en' ? 'en' : 'hi',
+      isAccessibleForFree: true,
+      educationalCredentialAwarded: lang === 'en' ? 'Certificate of Completion' : 'पूर्णता प्रमाणपत्र',
+      provider: {
+        '@type': 'Organization',
+        name: 'SahakarLekha',
+        url: 'https://www.sahakarlekha.com',
+      },
+      offers: {
+        '@type': 'Offer',
+        category: 'Free',
+        price: '0',
+        priceCurrency: 'INR',
+      },
+      hasCourseInstance: {
+        '@type': 'CourseInstance',
+        courseMode: 'online',
+        courseWorkload: 'PT10H',
+        inLanguage: lang === 'en' ? 'en' : 'hi',
+      },
+    },
   });
 
   const done = useGuideProgress();

@@ -5,6 +5,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import PublicLayout from '@/components/PublicLayout';
+import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Accordion,
@@ -156,6 +157,11 @@ const FAQ_CATEGORIES: FAQCategory[] = [
 /* ────────────────────────── Component ────────────────────────── */
 
 const FAQ: React.FC = () => {
+  useDocumentMeta({
+    title: 'अक्सर पूछे जाने वाले प्रश्न (FAQ) — SahakarLekha',
+    description: 'क्या यह वाकई मुफ़्त है? ऑडिटर रिपोर्ट स्वीकार करेंगे? डेटा सुरक्षित है? Tally से कैसे आएँ? — SahakarLekha के सभी सामान्य प्रश्नों के उत्तर हिंदी व English में.',
+    canonicalPath: '/faq',
+  });
   return (
     <PublicLayout>
       {/* Hero Header */}

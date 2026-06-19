@@ -5,6 +5,7 @@
  */
 import React from 'react';
 import PublicLayout from '@/components/PublicLayout';
+import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Shield, Database, Lock, Cookie, Globe, UserCheck, Clock, Mail,
@@ -175,6 +176,11 @@ const SECTIONS = [
 ];
 
 const PrivacyPolicy: React.FC = () => {
+  useDocumentMeta({
+    title: 'गोपनीयता नीति — SahakarLekha | Privacy Policy',
+    description: 'SahakarLekha आपकी समिति का डेटा कैसे सुरक्षित रखता है — society-level isolation, एन्क्रिप्शन व DPDP Act 2023 अनुपालन. How SahakarLekha protects your cooperative society data.',
+    canonicalPath: '/privacy',
+  });
   return (
     <PublicLayout>
       {/* Hero Header */}

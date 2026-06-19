@@ -5,6 +5,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import PublicLayout from '@/components/PublicLayout';
+import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import {
   Card,
   CardHeader,
@@ -77,6 +78,11 @@ const COMPARISON: ComparisonRow[] = [
 /* ────────────────────────── Component ────────────────────────── */
 
 const Pricing: React.FC = () => {
+  useDocumentMeta({
+    title: 'मूल्य — SahakarLekha हमेशा मुफ़्त | Free Cooperative Accounting',
+    description: 'SahakarLekha सहकारी समितियों के लिए हमेशा मुफ़्त — कोई छिपा शुल्क नहीं. मुफ़्त बनाम प्रीमियम सुविधाओं की तुलना देखें. Free forever for cooperative societies; compare free vs premium features.',
+    canonicalPath: '/pricing',
+  });
   return (
     <PublicLayout>
       {/* Hero Header */}

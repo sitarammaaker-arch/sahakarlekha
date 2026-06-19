@@ -5,6 +5,7 @@
  */
 import React from 'react';
 import PublicLayout from '@/components/PublicLayout';
+import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   FileText, CheckSquare, UserPlus, ShieldCheck, Database,
@@ -169,6 +170,11 @@ const SECTIONS = [
 ];
 
 const TermsConditions: React.FC = () => {
+  useDocumentMeta({
+    title: 'नियम व शर्तें — SahakarLekha | Terms & Conditions',
+    description: 'SahakarLekha सहकारी लेखा प्लेटफ़ॉर्म के उपयोग की नियम व शर्तें. Terms and conditions for using the SahakarLekha cooperative accounting platform.',
+    canonicalPath: '/terms',
+  });
   return (
     <PublicLayout>
       {/* Hero Header */}

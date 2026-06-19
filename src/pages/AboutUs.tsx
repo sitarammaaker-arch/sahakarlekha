@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import PublicLayout from '@/components/PublicLayout';
+import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Target, Eye, Heart, Users, Shield, BookOpen,
@@ -22,6 +23,11 @@ const COMPLIANCE_ITEMS = [
 ];
 
 const AboutUs: React.FC = () => {
+  useDocumentMeta({
+    title: 'हमारे बारे में — SahakarLekha | सहकारी समिति लेखा सॉफ्टवेयर',
+    description: 'SahakarLekha भारत की सहकारी समितियों के लिए मुफ़्त लेखा प्लेटफ़ॉर्म है — हमारा उद्देश्य, दृष्टि व अनुपालन (RCS, TDS, GST, NABARD). Learn about our mission to digitise cooperative society accounting across India.',
+    canonicalPath: '/about',
+  });
   return (
     <PublicLayout>
       {/* Section 1: Hero Header */}
