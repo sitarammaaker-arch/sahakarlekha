@@ -118,7 +118,7 @@ export default function StockValuation() {
     activeItems.reduce((sum, item) => sum + computeStockValue(item, stockMovements), 0),
     [activeItems, stockMovements]);
 
-  const stockHeaders = ['Sr.', 'Code', 'Item Name', 'HSN/SAC', 'Unit', 'GST %', 'Method', 'Qty', 'Rate (₹)', 'Value (₹)'];
+  const stockHeaders = ['Sr.', 'Code', 'Item Name', 'HSN/SAC', 'Unit', 'GST %', 'Method', 'Qty', 'Rate (Rs.)', 'Value (Rs.)'];
 
   const stockDataRows = () =>
     rows.map((r, i) => [

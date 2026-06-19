@@ -147,8 +147,8 @@ const NabardReport: React.FC = () => {
   }, [accounts, vouchers]);
 
   // ── CSV / Excel Export ───────────────────────────────────────────────────────
-  const npaHeaders = ['Classification', 'No. of Accounts', 'Outstanding Amount (₹)', 'Overdue Amount (₹)'];
-  const loanSummaryHeaders = ['Particulars', 'Amount (₹)'];
+  const npaHeaders = ['Classification', 'No. of Accounts', 'Outstanding Amount (Rs.)', 'Overdue Amount (Rs.)'];
+  const loanSummaryHeaders = ['Particulars', 'Amount (Rs.)'];
 
   const npaDataRows = () =>
     npaData.map(r => [r.classification, r.accounts, fmt(r.outstanding), fmt(r.overdue)]);

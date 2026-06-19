@@ -122,7 +122,7 @@ const NominationRegister: React.FC = () => {
         m.memberId,
         m.name,
         m.phone,
-        `₹${(m.shareCapital || 0).toLocaleString('hi-IN')}`,
+        `Rs. ${(m.shareCapital || 0).toLocaleString('hi-IN')}`,
         m.nomineeName || '—',
         m.nomineeRelation || '—',
         m.nomineePhone || '—',

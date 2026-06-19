@@ -136,7 +136,7 @@ export default function BudgetModule() {
     toast({ title: hi ? 'बजट सहेजा गया' : 'Budget saved' });
   }, [budgets, selectedFY, user, hi, toast, societyId]);
 
-  const budgetHeaders = ['Account', 'Budget (₹)', 'Actual (₹)', 'Variance (₹)', 'Var %', 'Status'];
+  const budgetHeaders = ['Account', 'Budget (Rs.)', 'Actual (Rs.)', 'Variance (Rs.)', 'Var %', 'Status'];
   const budgetDataRows = () =>
     rows.map(r => [
       r.account.name,

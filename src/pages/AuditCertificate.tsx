@@ -21,6 +21,7 @@ import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { addHeader, addPageNumbers, pdfFileName } from '@/lib/pdf';
 import { getBankAccountIds } from '@/lib/storage';
+import { INDIAN_STATES } from '@/lib/constants';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -33,7 +34,10 @@ const AuditCertificate: React.FC = () => {
   const fy = society.financialYear;
 
   // ── Auto-computed figures ─────────────────────────────────────────────────
-  const { totalIncome, totalExpense, netProfit } = useMemo(() => getProfitLoss(), [getProfitLoss]);
+  // NOTE: getProfitLoss() returns `totalExpenses` (plural). Reading `totalExpense`
+  // (singular) gave undefined → "NaN" in the certificate. Use the correct key.
+  const { totalIncome, totalExpenses, netProfit } = useMemo(() => getProfitLoss(), [getProfitLoss]);
+  const stateName = INDIAN_STATES.find(s => s.value === society.state)?.label || society.state || '—';
 
   const getBalance = (id: string) => {
     const acc = accounts.find(a => a.id === id);
@@ -86,7 +90,7 @@ const AuditCertificate: React.FC = () => {
     ['Audit From', auditFrom || '—'],
     ['Audit To', auditTo || '—'],
     ['Total Income', totalIncome],
-    ['Total Expenditure', totalExpense],
+    ['Total Expenditure', totalExpenses],
     [netProfit >= 0 ? 'Net Surplus' : 'Net Deficit', Math.abs(netProfit)],
     ['Cash Balance', parseFloat(cashBookBal) || 0],
     ['Bank Balance', parseFloat(bankBookBal) || 0],
@@ -126,7 +130,7 @@ const AuditCertificate: React.FC = () => {
     line(`Society Name:       ${society.name}`, 0, true);
     line(`Registration No.:   ${society.registrationNo || '—'}`);
     line(`Address:            ${society.address || '—'}`);
-    line(`District:           ${society.district || '—'}, State: ${society.state || '—'}`);
+    line(`District:           ${society.district || '—'}, State: ${stateName}`);
     line(`Financial Year:     ${fy}  (${auditFrom || '—'} to ${auditTo || '—'})`);
     line(`Audit Date:         ${fmtDate(auditDate)}`);
     space();
@@ -142,14 +146,14 @@ const AuditCertificate: React.FC = () => {
       y += 5.5;
     };
 
-    row('Total Income (Receipts)', `₹ ${fmt(totalIncome)}`);
-    row('Total Expenditure (Payments)', `₹ ${fmt(totalExpense)}`);
+    row('Total Income (Receipts)', `Rs. ${fmt(totalIncome)}`);
+    row('Total Expenditure (Payments)', `Rs. ${fmt(totalExpenses)}`);
     doc.setFont('helvetica', 'bold');
-    row(netProfit >= 0 ? 'Net Surplus' : 'Net Deficit', `₹ ${fmt(Math.abs(netProfit))}`);
+    row(netProfit >= 0 ? 'Net Surplus' : 'Net Deficit', `Rs. ${fmt(Math.abs(netProfit))}`);
     doc.setFont('helvetica', 'normal');
-    row('Cash in Hand (as per Cash Book)', `₹ ${fmt(parseFloat(cashBookBal) || 0)}`);
-    row('Balance at Bank', `₹ ${fmt(parseFloat(bankBookBal) || 0)}`);
-    row('Share Capital (Paid-up)', `₹ ${fmt(shareCapital)}`);
+    row('Cash in Hand (as per Cash Book)', `Rs. ${fmt(parseFloat(cashBookBal) || 0)}`);
+    row('Balance at Bank', `Rs. ${fmt(parseFloat(bankBookBal) || 0)}`);
+    row('Share Capital (Paid-up)', `Rs. ${fmt(shareCapital)}`);
     row('Total Active Members', String(totalMembersCount));
     space();
 
@@ -293,7 +297,7 @@ const AuditCertificate: React.FC = () => {
           <CardContent className="pt-4 space-y-3">
             <p className="font-semibold text-sm text-gray-700">{hi ? 'वित्तीय विवरण' : 'Financial Summary'}</p>
             <ReadonlyRow label={hi ? 'कुल आय' : 'Total Income'} value={`₹ ${fmt(totalIncome)}`} />
-            <ReadonlyRow label={hi ? 'कुल व्यय' : 'Total Expenditure'} value={`₹ ${fmt(totalExpense)}`} />
+            <ReadonlyRow label={hi ? 'कुल व्यय' : 'Total Expenditure'} value={`₹ ${fmt(totalExpenses)}`} />
             <ReadonlyRow
               label={netProfit >= 0 ? (hi ? 'शुद्ध अधिशेष' : 'Net Surplus') : (hi ? 'शुद्ध घाटा' : 'Net Deficit')}
               value={`₹ ${fmt(Math.abs(netProfit))}`}

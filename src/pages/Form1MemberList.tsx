@@ -108,7 +108,7 @@ const Form1MemberList: React.FC = () => {
       startY: y,
       head: [[
         'S.No.', 'Member No.', 'Name', "Father's / Spouse Name", 'Address',
-        'Phone', 'Join Date', 'Type', 'Shares', 'Share Capital (₹)',
+        'Phone', 'Join Date', 'Type', 'Shares', 'Share Capital (Rs.)',
         'Nominee', 'Relation', 'Status',
       ]],
       body: filtered.map((m, i) => [
