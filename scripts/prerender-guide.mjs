@@ -21,6 +21,7 @@ const DIST = resolve(ROOT, 'dist');
 const TEMPLATE = resolve(DIST, 'index.html');
 const MANIFEST = resolve(ROOT, 'scripts', 'guide-manifest.json');
 const SOCIETY_TYPES = resolve(ROOT, 'src', 'content', 'societyTypes.tsx');
+const STATES_FILE = resolve(ROOT, 'src', 'content', 'states.ts');
 const COURSE = 'सहकारी समिति लेखांकन व अंकेक्षण — सम्पूर्ण कोर्स';
 
 const esc = (s) =>
@@ -95,6 +96,30 @@ function softwarePages() {
   return pages;
 }
 
+// ---- state routes (parsed from states.ts — single source of truth) ----
+function statePages() {
+  const pages = [];
+  if (existsSync(STATES_FILE)) {
+    const src = readFileSync(STATES_FILE, 'utf-8');
+    const re = /slug:\s*'([^']+)'[\s\S]*?metaTitle:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?metaDescription:\s*'((?:[^'\\]|\\.)*)'/g;
+    let m;
+    while ((m = re.exec(src))) {
+      const [, slug, title, description] = m;
+      const url = `${SITE}/cooperative-software/${slug}`;
+      pages.push({
+        path: `/cooperative-software/${slug}`,
+        title,
+        description,
+        jsonLd: [crumb([
+          { name: 'Software', item: `${SITE}/software` },
+          { name: title, item: url },
+        ])],
+      });
+    }
+  }
+  return pages;
+}
+
 function transform(template, page) {
   const url = SITE + page.path;
   let html = template;
@@ -120,7 +145,7 @@ try {
     process.exit(0);
   }
   const template = readFileSync(TEMPLATE, 'utf-8');
-  const pages = [...guidePages(), ...softwarePages()];
+  const pages = [...guidePages(), ...softwarePages(), ...statePages()];
   let n = 0;
   for (const page of pages) {
     if (!page || !page.path) continue;

@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { SOCIETY_TYPES, findSocietyType } from '@/content/societyTypes';
+import { STATES } from '@/content/states';
 import { ArrowRight, CheckCircle2, AlertTriangle, GraduationCap, ShieldCheck, Home } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
@@ -70,6 +71,19 @@ const HubPage: React.FC = () => {
           <Link to="/register"><Button className="gap-2">मुफ़्त रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
           <Link to="/guide"><Button variant="outline" className="gap-2"><GraduationCap className="h-4 w-4" /> सीखें (मुफ़्त गाइड)</Button></Link>
         </div>
+
+        {STATES.length > 0 && (
+          <div className="mt-12 pt-6 border-t">
+            <p className="text-sm font-semibold text-muted-foreground mb-3">राज्य के अनुसार</p>
+            <div className="flex flex-wrap gap-2">
+              {STATES.map((s) => (
+                <Link key={s.slug} to={`/cooperative-software/${s.slug}`} className="text-sm px-3 py-1.5 rounded-full border bg-muted/40 text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
+                  {s.nameHi}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </PublicLayout>
   );

@@ -51,6 +51,7 @@ const GuideCertificate = lazyWithRetry(() => import("./pages/GuideCertificate"))
 const GuideVerify = lazyWithRetry(() => import("./pages/GuideVerify"));
 const Pricing = lazyWithRetry(() => import("./pages/Pricing"));
 const SoftwareLanding = lazyWithRetry(() => import("./pages/SoftwareLanding"));
+const StateLanding = lazyWithRetry(() => import("./pages/StateLanding"));
 const Login = lazyWithRetry(() => import("./pages/Login"));
 const Dashboard = lazyWithRetry(() => import("./pages/Dashboard"));
 const CashBook = lazyWithRetry(() => import("./pages/CashBook"));
@@ -201,6 +202,7 @@ const AppRoutes = () => {
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/software" element={<SoftwareLanding />} />
       <Route path="/software/:type" element={<SoftwareLanding />} />
+      <Route path="/cooperative-software/:state" element={<StateLanding />} />
 
       {/* Protected Routes */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
