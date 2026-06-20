@@ -2093,15 +2093,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Sales 1000) booked Sales twice = 2000. A non-cash Cr with cash/bank debited is a
       // receipt source; a non-cash Dr with cash/bank credited is a payment use. A pure
       // Cash↔Bank contra has no non-cash line, so it is still correctly excluded (C-11).
+      // R&P is cash-basis. A voucher's NET cash movement equals (its non-cash Cr
+      // legs) − (its non-cash Dr legs), because the voucher itself balances. So book
+      // EVERY non-cash Cr leg as a receipt (source of funds) and EVERY non-cash Dr leg
+      // as a payment (use of funds), regardless of which side cash/bank sat on. This
+      // nets compound legs correctly and keeps R&P balanced. Example — an audit fee
+      // paid net of TDS (Dr Audit 10,000 / Cr Bank 9,000 / Cr TDS-Payable 1,000):
+      // books Audit 10,000 payment + TDS-Payable 1,000 receipt = ₹9,000 net cash, which
+      // is exactly what left the bank. The earlier `&& hasCashBankDr/Cr` conditions
+      // dropped the TDS leg, overstating the payment by the TDS amount and unbalancing
+      // the statement. (A pure cash↔bank contra has no non-cash leg → still excluded.)
       lines.forEach(l => {
         if (isCashBank(l.accountId)) return;
         const otherAcc = accounts.find(a => a.id === l.accountId);
         const name = otherAcc?.name || v.narration || 'Deleted Account';
         const nameHi = otherAcc?.nameHi || name;
-        if (l.type === 'Cr' && hasCashBankDr) {
+        if (l.type === 'Cr') {
           if (!receiptMap[l.accountId]) receiptMap[l.accountId] = { name, nameHi, amount: 0, nature: natureOf(l.accountId), glType: glTypeOf(l.accountId) };
           receiptMap[l.accountId].amount += l.amount;
-        } else if (l.type === 'Dr' && hasCashBankCr) {
+        } else {
           if (!paymentMap[l.accountId]) paymentMap[l.accountId] = { name, nameHi, amount: 0, nature: natureOf(l.accountId), glType: glTypeOf(l.accountId) };
           paymentMap[l.accountId].amount += l.amount;
         }
