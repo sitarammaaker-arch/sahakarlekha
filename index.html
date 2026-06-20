@@ -20,6 +20,15 @@
     <meta name="google-site-verification" content="EzgWqgpeIk8vBa_O9-1Z5xvhUp8eYB12UIdpPDAnhFk" />
     <link rel="canonical" href="https://sahakarlekha.com/" />
 
+    <!-- Google Analytics (GA4). page_view is sent from the app on every route change (src/lib/analytics.ts), so send_page_view is off here to avoid double counting. -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-PB8FG0M5ET"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-PB8FG0M5ET', { send_page_view: false });
+    </script>
+
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://sahakarlekha.com/" />

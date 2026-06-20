@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DataProvider, useData } from "@/contexts/DataContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { usePageTracking } from "@/lib/analytics";
 
 // Auto-recover from stale-chunk errors after a new deploy. When the app has stayed
 // open across a deploy, an old hashed chunk filename can 404 on the CDN and the
@@ -173,6 +174,7 @@ const PageLoader = () => (
 );
 
 const AppRoutes = () => {
+  usePageTracking();
   return (
     <ErrorBoundary>
     <Suspense fallback={<PageLoader />}>
