@@ -70,10 +70,10 @@ const SECTIONS = [
     content: (
       <>
         <p className="text-muted-foreground leading-relaxed">
-          हम केवल प्रमाणीकरण के लिए आवश्यक सत्र कुकीज़ का उपयोग करते हैं। कोई तृतीय-पक्ष ट्रैकिंग कुकीज़, विज्ञापन कुकीज़ या एनालिटिक्स ट्रैकर नहीं हैं।
+          हम प्रमाणीकरण के लिए आवश्यक सत्र कुकीज़, और साइट के उपयोग को समझने (कौन-से पेज देखे जाते हैं) हेतु Google Analytics (GA4) की एनालिटिक्स कुकीज़ का उपयोग करते हैं। हम कोई विज्ञापन कुकीज़ उपयोग नहीं करते और आपका डेटा नहीं बेचते। आपका लेखांकन/वित्तीय डेटा Analytics के साथ साझा नहीं किया जाता — केवल अनाम, समग्र पेज-उपयोग की जानकारी।
         </p>
         <p className="mt-3 text-muted-foreground leading-relaxed">
-          We use only essential session cookies for authentication. There are no third-party tracking cookies, no advertising cookies, and no analytics trackers. Session cookies expire on logout or after 7 days of inactivity.
+          We use essential session cookies for authentication, plus Google Analytics (GA4) cookies to understand aggregate, anonymous site usage (which pages are visited) so we can improve the product. We do not use advertising cookies and never sell your data. Your accounting/financial data is never shared with Analytics — only anonymous, aggregate page-usage information. Session cookies expire on logout or after 7 days of inactivity.
         </p>
       </>
     ),
@@ -91,6 +91,7 @@ const SECTIONS = [
           <li><strong>Supabase</strong> — Database and authentication</li>
           <li><strong>Vercel</strong> — Application hosting and deployment</li>
           <li><strong>Google Fonts</strong> — Typography (no user data shared)</li>
+          <li><strong>Google Analytics (GA4)</strong> — Anonymous, aggregate usage analytics (page views) to improve the product; no personal or accounting data is shared</li>
         </ul>
         <p className="mt-3 text-muted-foreground leading-relaxed">
           No data is shared with these providers beyond what is technically necessary to deliver the service.
