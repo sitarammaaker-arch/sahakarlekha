@@ -1208,7 +1208,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = prev.map(v => v.id === id ? cancelledVoucher : v);
       return updated;
     });
-    supabase.from('vouchers').upsert(withSoc(cancelledVoucher)).then(({ error }) => {
+    // Soft-delete via a TARGETED update of only the delete columns. Upserting the
+    // whole voucher object fails with a schema-cache error when it carries any
+    // late-added column the table lacks (RULE 1) — which silently left cancelled
+    // vouchers un-synced (the "Save failed" on delete).
+    supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelledVoucher.deletedAt, deletedBy, deletedReason: reason }).eq('id', id).then(({ error }) => {
       if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
       else deleteEntries(id); // remove from voucher_entries so cancelled voucher has no SQL-visible impact
     });
@@ -2620,7 +2624,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             );
             linkedIds.forEach(vid => {
               const cancelled = updated.find(x => x.id === vid);
-              if (cancelled) supabase.from('vouchers').upsert(cancelled).then(({ error }) => {
+              if (cancelled) supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', vid).then(({ error }) => {
                 if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
                 else deleteEntries(vid); // cascade: remove from voucher_entries so SQL reports see the cancellation
               });
@@ -2706,7 +2710,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         );
         linkedIds.forEach(vid => {
           const cancelled = updated.find(x => x.id === vid);
-          if (cancelled) supabase.from('vouchers').upsert(cancelled).then(({ error }) => {
+          if (cancelled) supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', vid).then(({ error }) => {
             if (error) console.error('Voucher cancel sync:', error.message);
             else deleteEntries(vid);
           });
@@ -2927,7 +2931,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             );
             linkedIds.forEach(vid => {
               const cancelled = updated.find(x => x.id === vid);
-              if (cancelled) supabase.from('vouchers').upsert(cancelled).then(({ error }) => {
+              if (cancelled) supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', vid).then(({ error }) => {
                 if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
                 else deleteEntries(vid); // cascade: remove from voucher_entries so SQL reports see the cancellation
               });
@@ -3017,7 +3021,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         );
         linkedIds.forEach(vid => {
           const cancelled = updated.find(x => x.id === vid);
-          if (cancelled) supabase.from('vouchers').upsert(cancelled).then(({ error }) => {
+          if (cancelled) supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', vid).then(({ error }) => {
             if (error) console.error('Voucher cancel sync:', error.message);
             else deleteEntries(vid); // cascade: remove from voucher_entries
           });
@@ -3186,7 +3190,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (v && !v.isDeleted) {
         const cancelled = { ...v, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy: 'System', deletedReason: `Salary slip ${oldRecord.slipNo} marked unpaid` };
         setVouchersState(prev => prev.map(x => x.id === v.id ? cancelled : x));
-        supabase.from('vouchers').upsert(withSoc(cancelled)).then(({ error }) => {
+        supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', v.id).then(({ error }) => {
           if (error) console.error('Salary voucher cancel sync:', error.message);
           else deleteEntries(v.id);
         });
@@ -3253,7 +3257,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (v && !v.isDeleted) {
         const cancelled = { ...v, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy: 'System', deletedReason: `Salary slip ${record.slipNo} deleted` };
         setVouchersState(prev => prev.map(x => x.id === v.id ? cancelled : x));
-        supabase.from('vouchers').upsert(withSoc(cancelled)).then(({ error }) => {
+        supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', v.id).then(({ error }) => {
           if (error) console.error('Salary voucher cancel sync:', error.message);
           else deleteEntries(v.id);
         });
