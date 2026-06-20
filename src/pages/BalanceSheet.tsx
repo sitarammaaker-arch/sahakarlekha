@@ -79,12 +79,18 @@ const BalanceSheet: React.FC = () => {
   const allLiabilityLeaf = trialBalance.filter(b => b.account.type === 'liability' && !b.account.isGroup);
   const allCapLiabLeaf = [...allEquityLeaf, ...allLiabilityLeaf];
   const allAssetLeaf = trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup);
-  // When the closing-stock journal is NOT posted, the Inventory ledger (group 3400) still
-  // carries the OPENING stock (already consumed into gross profit). The real closing stock
-  // is shown once via the injected "Closing Stock (from Inventory)" row (= physical stock).
-  // Drop the stale 3400 leaves from the asset side when unposted, else the sheet carried
-  // BOTH opening and closing stock and was out of balance by the opening amount (Audit #3).
-  const assetLeaves = closingStockPosted
+  // When the closing-stock journal is NOT posted but inventory items DO carry a physical
+  // closing stock, the Inventory ledger (group 3400) still shows the stale OPENING stock
+  // (already consumed into gross profit). In that case drop the 3400 leaves and show the
+  // real closing stock once via the injected "Closing Stock (from Inventory)" row
+  // (= physicalClosingStock), else the sheet carried BOTH opening and closing stock and
+  // was out by the opening amount (Audit #3).
+  // BUT when there are no inventory items (unpostedStock === 0), the 3400 ledger balance
+  // IS the closing stock (opening == closing, nothing moved) and nothing gets injected to
+  // replace it — so KEEP the 3400 leaves, else the sheet drops the stock and is out of
+  // balance by that amount (RULE 2: BS closing stock must match the Trading A/c, which
+  // reads the same 3400 ledger balance).
+  const assetLeaves = (closingStockPosted || unpostedStock === 0)
     ? allAssetLeaf
     : allAssetLeaf.filter(b => b.account.id !== '3400' && b.account.parentId !== '3400');
 
