@@ -473,7 +473,7 @@ export function generateTrialBalancePDF(balances: AccountBalance[], society: Soc
   doc.setFont(font, 'normal');
   doc.setTextColor(tbBalanced ? 22 : 220, tbBalanced ? 163 : 38, tbBalanced ? 74 : 38);
   doc.text(
-    tbBalanced ? '✓ Trial Balance is Balanced — Debit total equals Credit total.' : `✗ Trial Balance is NOT balanced. Difference: ${fmt(Math.abs(totalDebit - totalCredit))}`,
+    tbBalanced ? 'Trial Balance is Balanced - Debit total equals Credit total.' : `Trial Balance is NOT balanced. Difference: ${fmt(Math.abs(totalDebit - totalCredit))}`,
     15, tbFinalY
   );
   doc.setTextColor(0);
