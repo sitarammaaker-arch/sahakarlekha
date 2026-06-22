@@ -155,6 +155,18 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
+  /* Text selection — use a TRANSLUCENT highlight (no explicit text color) so the
+     selected text keeps its own colour and stays readable on BOTH light surfaces
+     (dark text) and the deep-blue Total/header bands (white text, bg-primary).
+     The browser default is an opaque light-blue highlight that made white text on
+     those dark bands disappear when clicked/selected — reported across the portal. */
+  ::selection {
+    background-color: hsl(215 85% 55% / 0.35);
+  }
+  ::-moz-selection {
+    background-color: hsl(215 85% 55% / 0.35);
+  }
+
   /* Large readable text for non-technical users */
   h1 {
     @apply text-3xl font-bold tracking-tight;
