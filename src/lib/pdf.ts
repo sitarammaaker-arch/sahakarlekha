@@ -329,7 +329,7 @@ export function generateCashBookPDF(
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 253] },
-    columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+    columnStyles: { 3: { halign: 'right', cellWidth: 28 }, 4: { halign: 'right', cellWidth: 28 }, 5: { halign: 'right', cellWidth: 28 } },
     didParseCell: rightAlignAmountColumns(3, 4, 5),
   });
 
@@ -376,7 +376,7 @@ export function generateBankBookPDF(
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 253] },
-    columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+    columnStyles: { 3: { halign: 'right', cellWidth: 28 }, 4: { halign: 'right', cellWidth: 28 }, 5: { halign: 'right', cellWidth: 28 } },
     didParseCell: rightAlignAmountColumns(3, 4, 5),
   });
 
@@ -878,7 +878,7 @@ export function generateLedgerPDF(
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 253] },
-    columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+    columnStyles: { 3: { halign: 'right', cellWidth: 28 }, 4: { halign: 'right', cellWidth: 28 }, 5: { halign: 'right', cellWidth: 28 } },
     didParseCell: rightAlignAmountColumns(3, 4, 5),
   });
 
@@ -930,7 +930,7 @@ export function generateMemberPassbookPDF(
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 250, 253] },
-    columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+    columnStyles: { 3: { halign: 'right', cellWidth: 28 }, 4: { halign: 'right', cellWidth: 28 }, 5: { halign: 'right', cellWidth: 28 } },
     didParseCell: rightAlignAmountColumns(3, 4, 5),
   });
 
