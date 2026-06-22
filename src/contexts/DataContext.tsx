@@ -1098,6 +1098,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         : current.editHistory,
     };
 
+    // If a SIMPLE (≤2-line) voucher's Dr/Cr account or amount was edited via the
+    // single-entry edit form — which sends debitAccountId/creditAccountId/amount but
+    // NOT `lines` — rebuild the two lines so the edit actually reaches REPORTS, which
+    // read `lines` (getVoucherLines), not the legacy fields. Without this, editing the
+    // debit/credit account updated only the legacy fields while the stale `lines` kept
+    // the OLD direction, so the List/Trial Balance/Ledger silently ignored the change —
+    // and the row could even show Dr/Cr reversed vs the edit dialog. Compound vouchers
+    // (>2 lines) are left untouched: the single-entry form can't represent them.
+    const wasSimple = !current.lines || current.lines.length <= 2;
+    const touchedDrCr = data.debitAccountId !== undefined || data.creditAccountId !== undefined || data.amount !== undefined;
+    if (wasSimple && data.lines === undefined && touchedDrCr) {
+      const dr = updatedVoucher.debitAccountId, cr = updatedVoucher.creditAccountId, amt = updatedVoucher.amount;
+      if (dr && cr && amt > 0) {
+        updatedVoucher.lines = [
+          { id: crypto.randomUUID(), accountId: dr, type: 'Dr', amount: amt },
+          { id: crypto.randomUUID(), accountId: cr, type: 'Cr', amount: amt },
+        ];
+      }
+    }
+
     // ── Double-entry balance guard on edit (Audit C-1/C-2) ───────────────────
     // Block an edit that would leave a multi-line voucher materially unbalanced.
     if (updatedVoucher.lines && updatedVoucher.lines.length > 0) {
