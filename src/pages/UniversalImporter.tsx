@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -8,9 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import {
   Download, Upload, CheckCircle2, XCircle, AlertTriangle,
-  FileSpreadsheet, Users, BookOpen, ArrowRight, Info
+  FileSpreadsheet, Users, BookOpen, ArrowRight, Info, FileText
 } from 'lucide-react';
-import { LedgerAccount, Member } from '@/types';
+import { LedgerAccount, Member, VoucherType } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -122,12 +123,58 @@ Bank - SBI,115000,Debit
 Share Capital,500000,Credit
 Reserve Fund,80000,Credit`;
 
+const VOUCHERS_TEMPLATE = `date,type,debit_account,credit_account,amount,narration,reference
+(YYYY-MM-DD),(receipt/payment/journal/contra/sale/purchase),(Debit खाता — system में exact नाम),(Credit खाता — exact नाम),(राशि रुपये),(विवरण),(बाहरी ref जैसे गेट-पास नं — दोबारा import पर duplicate रोकता है)
+2025-04-15,purchase,Govt Procurement Purchase,MSP Payable to Farmers,45500,MSP गेहूँ खरीद - किसान राम कुमार,GP-1001
+2025-04-20,payment,MSP Payable to Farmers,Bank Accounts,45500,किसान भुगतान RTGS - राम कुमार,GP-1001-PAY
+2025-04-15,purchase,Govt Procurement Purchase,MSP Payable to Farmers,30000,MSP गेहूँ खरीद - किसान सुरेश,GP-1002`;
+
 // ─── Validators ───────────────────────────────────────────────────────────────
 
 const VALID_ACCOUNT_TYPES = ['asset', 'liability', 'income', 'expense', 'equity'];
 const VALID_BALANCE_TYPES = ['debit', 'credit'];
 const VALID_MEMBER_TYPES = ['member', 'nominal'];
 const VALID_STATUS = ['active', 'inactive'];
+const VALID_VOUCHER_TYPES = ['receipt', 'payment', 'journal', 'contra', 'sale', 'purchase'];
+
+// Validate one bulk-voucher row. Mirrors the double-entry guard in addVoucher so
+// bad rows are caught in PREVIEW (and skipped) rather than firing per-row toasts at
+// import time. Duplicate detection (by `reference`) is handled at import, like Members.
+function validateVoucherRow(
+  row: Record<string, string>,
+  accounts: LedgerAccount[],
+  fyStart: string,
+  fyEnd: string,
+  rowNum: number,
+): RowError[] {
+  const errors: RowError[] = [];
+  const isExample = (v?: string) => !v || v.trim() === '' || v.trim().startsWith('(');
+  const findAcc = (n: string) => accounts.find(a => !a.isGroup && a.name.toLowerCase().trim() === n.toLowerCase().trim());
+
+  const d = (row.date || '').trim();
+  if (isExample(d)) errors.push({ row: rowNum, field: 'date', message: `Row ${rowNum}: date खाली/example है (YYYY-MM-DD चाहिए)` });
+  else if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || isNaN(Date.parse(d))) errors.push({ row: rowNum, field: 'date', message: `Row ${rowNum}: date "${d}" गलत — YYYY-MM-DD format में लिखें` });
+  else if (fyStart && (d < fyStart || d > fyEnd)) errors.push({ row: rowNum, field: 'date', message: `Row ${rowNum}: date ${d} चालू वित्त वर्ष (${fyStart} से ${fyEnd}) के बाहर है` });
+
+  const t = (row.type || '').toLowerCase().trim();
+  if (isExample(row.type)) errors.push({ row: rowNum, field: 'type', message: `Row ${rowNum}: type खाली/example है` });
+  else if (!VALID_VOUCHER_TYPES.includes(t)) errors.push({ row: rowNum, field: 'type', message: `Row ${rowNum}: type "${row.type}" गलत — ${VALID_VOUCHER_TYPES.join('/')} में से एक` });
+
+  const dn = (row.debit_account || '').trim();
+  const cn = (row.credit_account || '').trim();
+  if (isExample(dn)) errors.push({ row: rowNum, field: 'debit_account', message: `Row ${rowNum}: debit_account खाली/example है` });
+  else if (!findAcc(dn)) errors.push({ row: rowNum, field: 'debit_account', message: `Row ${rowNum}: debit_account "${dn}" system में नहीं मिला (Ledger Heads से exact नाम लें)` });
+  if (isExample(cn)) errors.push({ row: rowNum, field: 'credit_account', message: `Row ${rowNum}: credit_account खाली/example है` });
+  else if (!findAcc(cn)) errors.push({ row: rowNum, field: 'credit_account', message: `Row ${rowNum}: credit_account "${cn}" system में नहीं मिला` });
+  if (!isExample(dn) && !isExample(cn) && dn.toLowerCase().trim() === cn.toLowerCase().trim())
+    errors.push({ row: rowNum, field: 'credit_account', message: `Row ${rowNum}: debit और credit खाता एक ही नहीं हो सकते` });
+
+  const amt = parseFloat(row.amount);
+  if (isExample(row.amount)) errors.push({ row: rowNum, field: 'amount', message: `Row ${rowNum}: amount खाली/example है` });
+  else if (isNaN(amt) || amt <= 0) errors.push({ row: rowNum, field: 'amount', message: `Row ${rowNum}: amount "${row.amount}" 0 से बड़ा valid number होना चाहिए` });
+
+  return errors;
+}
 
 function validateAccountRow(row: Record<string, string>, rowNum: number): RowError[] {
   const errors: RowError[] = [];
@@ -183,7 +230,8 @@ function validateObRow(row: Record<string, string>, accounts: LedgerAccount[], r
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const UniversalImporter: React.FC = () => {
-  const { accounts, members, addAccount, addMember } = useData();
+  const { accounts, members, vouchers, addAccount, addMember, addVoucher, society } = useData();
+  const { user } = useAuth();
   const { toast } = useToast();
 
   // Accounts tab state
@@ -200,6 +248,11 @@ const UniversalImporter: React.FC = () => {
   const [obPreview, setObPreview] = useState<PreviewRow[] | null>(null);
   const [obImporting, setObImporting] = useState(false);
   const obFileRef = useRef<HTMLInputElement>(null);
+
+  // Vouchers tab state
+  const [voucherPreview, setVoucherPreview] = useState<PreviewRow[] | null>(null);
+  const [voucherImporting, setVoucherImporting] = useState(false);
+  const voucherFileRef = useRef<HTMLInputElement>(null);
 
   // ── Parse helpers ──
 
@@ -397,6 +450,73 @@ const UniversalImporter: React.FC = () => {
     });
   }
 
+  // ── Vouchers (bulk) ──
+
+  async function handleVoucherFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const parsed = await parseFileToRows(file);
+      if (parsed.length < 3) {
+        toast({ title: 'File खाली है', description: 'कम से कम 1 data row होनी चाहिए', variant: 'destructive' });
+        return;
+      }
+      const headers = parsed[0].map(h => h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, ''));
+      const fyStart = society.financialYearStart;
+      const fyEnd = `20${society.financialYear.split('-')[1]}-03-31`;
+      setVoucherPreview(buildPreviewFromParsed(parsed, headers, (row, rowNum) => validateVoucherRow(row, accounts, fyStart, fyEnd, rowNum)));
+    } catch { toast({ title: 'File parse error', description: 'Valid CSV या Excel file upload करें', variant: 'destructive' }); }
+    e.target.value = '';
+  }
+
+  function handleVoucherImport() {
+    if (!voucherPreview) return;
+    if (society.fyLocked) {
+      toast({ title: 'FY Locked', description: 'वित्त वर्ष audit-locked है — नई entries नहीं जोड़ी जा सकतीं।', variant: 'destructive' });
+      return;
+    }
+    const validRows = voucherPreview.filter(r => r.status === 'ok');
+    if (validRows.length === 0) {
+      toast({ title: 'Import नहीं हो सकता', description: 'सभी rows में errors हैं। पहले file fix करें।', variant: 'destructive' });
+      return;
+    }
+    setVoucherImporting(true);
+    // Idempotency: skip rows whose `reference` was already bulk-imported (re-uploading
+    // the same file won't double-post). `seen` also dedupes repeats WITHIN this file.
+    const seen = new Set(vouchers.filter(v => v.refType === 'bulk-import' && v.refId).map(v => v.refId!));
+    let imported = 0, skipped = 0, failed = 0;
+    for (const row of validRows) {
+      const ref = (row.data.reference || '').trim();
+      const hasRef = ref !== '' && !ref.startsWith('(');
+      if (hasRef && seen.has(ref)) { skipped++; continue; }
+      const dr = accounts.find(a => !a.isGroup && a.name.toLowerCase().trim() === row.data.debit_account.toLowerCase().trim());
+      const cr = accounts.find(a => !a.isGroup && a.name.toLowerCase().trim() === row.data.credit_account.toLowerCase().trim());
+      if (!dr || !cr) { failed++; continue; }
+      const v = addVoucher({
+        type: row.data.type.toLowerCase() as VoucherType,
+        date: row.data.date.trim(),
+        debitAccountId: dr.id,
+        creditAccountId: cr.id,
+        amount: parseFloat(row.data.amount) || 0,
+        narration: (row.data.narration || '').trim(),
+        createdBy: user?.name || 'Bulk Import',
+        ...(hasRef ? { refType: 'bulk-import', refId: ref } : {}),
+      });
+      if (!v.id) { failed++; continue; } // FY-lock / imbalance guard returned a dummy
+      if (hasRef) seen.add(ref);
+      imported++;
+    }
+    setVoucherImporting(false);
+    setVoucherPreview(null);
+    const parts = [];
+    if (skipped) parts.push(`${skipped} पहले से import थे (skip)`);
+    if (failed) parts.push(`${failed} fail हुए`);
+    toast({
+      title: `${imported} वाउचर Import हुए`,
+      description: parts.length ? parts.join(' · ') : 'सभी वाउचर successfully बन गए। Vouchers / Day Book से verify करें।',
+    });
+  }
+
   // ── Preview Table Component ──
 
   const PreviewTable: React.FC<{
@@ -513,7 +633,7 @@ const UniversalImporter: React.FC = () => {
       </Card>
 
       <Tabs defaultValue="accounts">
-        <TabsList className="grid grid-cols-3 w-full max-w-lg">
+        <TabsList className="grid grid-cols-4 w-full max-w-2xl">
           <TabsTrigger value="accounts" className="gap-1">
             <BookOpen className="h-4 w-4" /> Accounts
           </TabsTrigger>
@@ -522,6 +642,9 @@ const UniversalImporter: React.FC = () => {
           </TabsTrigger>
           <TabsTrigger value="opening" className="gap-1">
             <FileSpreadsheet className="h-4 w-4" /> Opening Bal.
+          </TabsTrigger>
+          <TabsTrigger value="vouchers" className="gap-1">
+            <FileText className="h-4 w-4" /> Vouchers
           </TabsTrigger>
         </TabsList>
 
@@ -893,6 +1016,92 @@ const UniversalImporter: React.FC = () => {
                       >
                         Cancel
                       </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Tab 4: Vouchers (bulk transactions) ── */}
+        <TabsContent value="vouchers" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Bulk Voucher Import</CardTitle>
+              <CardDescription>
+                एक ही तरह के बहुत सारे वाउचर एक साथ डालें — जैसे MSP खरीद के हज़ारों वाउचर।
+                हर पंक्ति = एक वाउचर (एक Debit, एक Credit). Accounts पहले से बने होने चाहिए।
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Step 1 */}
+              <div className="space-y-2">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">1</span>
+                  Template Download करें
+                </p>
+                <div className="ml-7 flex gap-2 flex-wrap">
+                  <Button variant="outline" size="sm" className="gap-2"
+                    onClick={() => downloadExcelTemplate('vouchers_template.xlsx', VOUCHERS_TEMPLATE)}>
+                    <Download className="h-4 w-4" /> Excel (.xlsx) Download करें
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-2 text-muted-foreground"
+                    onClick={() => downloadTemplate('vouchers_template.csv', VOUCHERS_TEMPLATE)}>
+                    <Download className="h-4 w-4" /> CSV Download करें
+                  </Button>
+                </div>
+              </div>
+
+              {/* Template format info */}
+              <div className="ml-7 bg-muted rounded-lg p-3 text-xs space-y-1">
+                <p className="font-medium mb-1">Template Columns:</p>
+                <p><span className="font-medium text-primary">date</span> — YYYY-MM-DD (चालू वित्त वर्ष के भीतर)</p>
+                <p><span className="font-medium text-primary">type</span> — receipt / payment / journal / contra / sale / purchase</p>
+                <p><span className="font-medium text-primary">debit_account</span> · <span className="font-medium text-primary">credit_account</span> — System में मौजूद <strong>exact</strong> नाम (Ledger Heads से लें)</p>
+                <p><span className="font-medium text-primary">amount</span> — राशि (numbers only); हर वाउचर अपने-आप balanced (Dr = Cr)</p>
+                <p><span className="font-medium text-primary">narration</span> — विवरण (जैसे किसान का नाम) · <span className="font-medium text-primary">reference</span> — बाहरी ref (गेट-पास नं)</p>
+                <p className="text-orange-700 mt-1">⚠️ same <strong>reference</strong> दोबारा upload करने पर वह वाउचर skip होगा (duplicate नहीं बनेगा)।</p>
+              </div>
+
+              {/* Step 2 */}
+              <div className="space-y-2">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">2</span>
+                  CSV / Excel Upload करें
+                </p>
+                <div className="ml-7">
+                  <input ref={voucherFileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleVoucherFile} />
+                  <Button variant="outline" size="sm" className="gap-2" onClick={() => voucherFileRef.current?.click()}>
+                    <Upload className="h-4 w-4" /> CSV / Excel File चुनें
+                  </Button>
+                </div>
+              </div>
+
+              {/* Step 3: Preview */}
+              {voucherPreview && (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium flex items-center gap-2">
+                    <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">3</span>
+                    Preview — confirm करके Import करें
+                  </p>
+                  <div className="ml-7 space-y-3">
+                    <PreviewTable
+                      preview={voucherPreview}
+                      columns={['date', 'type', 'debit_account', 'credit_account', 'amount', 'narration', 'reference']}
+                      labels={{
+                        date: 'Date', type: 'Type', debit_account: 'Debit', credit_account: 'Credit',
+                        amount: 'Amount', narration: 'Narration', reference: 'Ref',
+                      }}
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" className="gap-2"
+                        disabled={voucherImporting || voucherPreview.filter(r => r.status === 'ok').length === 0}
+                        onClick={handleVoucherImport}>
+                        <CheckCircle2 className="h-4 w-4" />
+                        {voucherImporting ? 'Import हो रहा है…' : `${voucherPreview.filter(r => r.status === 'ok').length} वाउचर Import करें`}
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setVoucherPreview(null)}>Cancel</Button>
                     </div>
                   </div>
                 </div>
