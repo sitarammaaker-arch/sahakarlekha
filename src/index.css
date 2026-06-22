@@ -167,6 +167,17 @@
     background-color: hsl(215 85% 55% / 0.35);
   }
 
+  /* Dark "Total"/header table bands use bg-primary + white text. The shadcn
+     TableRow base applies `hover:bg-muted/50` and `data-[state=selected]:bg-muted`
+     — a LIGHT background — so hovering or clicking such a band turned its
+     background light and made the white text disappear (reported across the
+     portal's report totals). Keep these dark bands dark on hover/selected so the
+     white text stays readable. */
+  tr.bg-primary:hover,
+  tr.bg-primary[data-state="selected"] {
+    background-color: hsl(var(--primary)) !important;
+  }
+
   /* Large readable text for non-technical users */
   h1 {
     @apply text-3xl font-bold tracking-tight;
