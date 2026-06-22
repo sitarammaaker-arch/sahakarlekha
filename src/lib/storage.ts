@@ -286,7 +286,7 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5605', name: 'Penalty / Fine',             nameHi: 'जुर्माना / दंड व्यय',      type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600', subtype: 'statutory_expense' },
 
   // ── Suspense ─────────────────────────────────────────────────────────────
-  { id: '9999', name: 'Suspense Account',           nameHi: 'संदिग्ध खाता',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, subtype: 'suspense' },
+  { id: '9999', name: 'Suspense Account',           nameHi: 'संदिग्ध खाता',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'suspense' },
 ];
 
 // ── PACS (Primary Agricultural Credit Society) Chart of Accounts ─────────────
@@ -411,7 +411,7 @@ export const PACS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5605', name: 'Penalty / Fine',             nameHi: 'जुर्माना / दंड व्यय',      type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600', subtype: 'statutory_expense' },
 
   // ── Suspense ─────────────────────────────────────────────────────────────
-  { id: '9999', name: 'Suspense Account',           nameHi: 'संदिग्ध खाता',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, subtype: 'suspense' },
+  { id: '9999', name: 'Suspense Account',           nameHi: 'संदिग्ध खाता',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'suspense' },
 ];
 
 // ── Consumer Cooperative Society Chart of Accounts ────────────────────────────
@@ -556,7 +556,7 @@ export const CONSUMER_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5605', name: 'Penalty / Fine',             nameHi: 'जुर्माना / दंड व्यय',      type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600', subtype: 'statutory_expense' },
 
   // ── Suspense ─────────────────────────────────────────────────────────────
-  { id: '9999', name: 'Suspense Account',           nameHi: 'संदिग्ध खाता',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, subtype: 'suspense' },
+  { id: '9999', name: 'Suspense Account',           nameHi: 'संदिग्ध खाता',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'suspense' },
 ];
 
 import { DAIRY_SOCIETY_ACCOUNTS } from './templates/dairy';

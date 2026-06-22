@@ -126,5 +126,5 @@ export const DAIRY_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5601', name: 'GST Expense',                nameHi: 'GST व्यय',                 type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600' },
   { id: '5603', name: 'Income Tax',                 nameHi: 'आयकर व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600' },
   { id: '5604', name: 'Interest on Borrowings',     nameHi: 'उधार पर ब्याज',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600' },
-  { id: '9999', name: 'Suspense Account',           nameHi: 'संदिग्ध खाता',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false },
+  { id: '9999', name: 'Suspense Account',           nameHi: 'संदिग्ध खाता',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'suspense' },
 ];
