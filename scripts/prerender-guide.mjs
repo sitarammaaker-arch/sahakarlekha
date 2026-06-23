@@ -1,4 +1,4 @@
-// Post-build prerender for public SEO routes (/guide/* and /software/*).
+// Post-build prerender for public SEO routes (/guide/*, /software/*, /blog/*).
 //
 // The app is a client-rendered SPA, so crawlers / WhatsApp / social scrapers that
 // do NOT run JS would otherwise see the homepage <title>/OG tags on every page.
@@ -22,6 +22,7 @@ const TEMPLATE = resolve(DIST, 'index.html');
 const MANIFEST = resolve(ROOT, 'scripts', 'guide-manifest.json');
 const SOCIETY_TYPES = resolve(ROOT, 'src', 'content', 'societyTypes.tsx');
 const STATES_FILE = resolve(ROOT, 'src', 'content', 'states.ts');
+const BLOG_FILE = resolve(ROOT, 'src', 'content', 'blog', 'index.ts');
 const COURSE = 'सहकारी समिति लेखांकन व अंकेक्षण — सम्पूर्ण कोर्स';
 
 const esc = (s) =>
@@ -120,6 +121,53 @@ function statePages() {
   return pages;
 }
 
+// ---- blog routes (parsed from src/content/blog/index.ts — single source of truth) ----
+function blogPages() {
+  const pages = [
+    {
+      path: '/blog',
+      title: 'सहकार लेखा ब्लॉग — सहकारी समिति लेखांकन, ऑडिट व प्रबंधन',
+      description: 'सहकारी समितियों के लिए डिजिटल लेखांकन, वाउचर एंट्री, ऑडिट, अनुपालन व प्रबंधन पर सरल हिन्दी लेख।',
+      jsonLd: [crumb([{ name: 'ब्लॉग', item: `${SITE}/blog` }])],
+    },
+  ];
+  if (existsSync(BLOG_FILE)) {
+    const src = readFileSync(BLOG_FILE, 'utf-8');
+    // per post, in declared order: slug, metaTitle, metaDescription, date
+    const re = /slug:\s*'([^']+)'[\s\S]*?metaTitle:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?metaDescription:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?date:\s*'([^']+)'/g;
+    let m;
+    while ((m = re.exec(src))) {
+      const [, slug, title, description, date] = m;
+      const url = `${SITE}/blog/${slug}`;
+      pages.push({
+        path: `/blog/${slug}`,
+        title,
+        description,
+        jsonLd: [
+          {
+            '@context': 'https://schema.org',
+            '@type': 'BlogPosting',
+            headline: title,
+            description,
+            inLanguage: 'hi',
+            url,
+            mainEntityOfPage: url,
+            datePublished: date,
+            dateModified: date,
+            author: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
+            publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
+          },
+          crumb([
+            { name: 'ब्लॉग', item: `${SITE}/blog` },
+            { name: title, item: url },
+          ]),
+        ],
+      });
+    }
+  }
+  return pages;
+}
+
 function transform(template, page) {
   const url = SITE + page.path;
   let html = template;
@@ -145,7 +193,7 @@ try {
     process.exit(0);
   }
   const template = readFileSync(TEMPLATE, 'utf-8');
-  const pages = [...guidePages(), ...softwarePages(), ...statePages()];
+  const pages = [...guidePages(), ...softwarePages(), ...statePages(), ...blogPages()];
   let n = 0;
   for (const page of pages) {
     if (!page || !page.path) continue;
@@ -154,7 +202,7 @@ try {
     writeFileSync(resolve(outDir, 'index.html'), transform(template, page), 'utf-8');
     n++;
   }
-  console.log(`[prerender] wrote ${n} static pages (guide + software).`);
+  console.log(`[prerender] wrote ${n} static pages (guide + software + blog).`);
 } catch (err) {
   console.warn('[prerender] skipped due to error:', err && err.message ? err.message : err);
   process.exit(0); // never block the build
