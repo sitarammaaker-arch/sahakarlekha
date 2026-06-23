@@ -35,7 +35,7 @@ export interface BlogPost {
 // Reverse-chronological is enforced by sorting on `date` below.
 export const BLOG_POSTS: BlogPost[] = [
   {
-    slug: 'sadasya-share-register-lekhankan',
+    slug: 'member-and-share-accounting',
     metaTitle: 'सदस्य व शेयर रजिस्टर: सहकारी समिति में सही लेखांकन | SahakarLekha',
     metaDescription: 'शेयर पूँजी, प्रवेश शुल्क और लाभांश का पारदर्शी हिसाब कैसे रखें — सदस्य-भरोसा बढ़ाने वाली गाइड।',
     date: '2026-06-18',
@@ -47,7 +47,7 @@ export const BLOG_POSTS: BlogPost[] = [
     tags: ['सदस्य', 'शेयर पूँजी', 'लाभांश'],
   },
   {
-    slug: 'rin-byaj-lekhankan-pacs',
+    slug: 'loan-and-interest-accounting',
     metaTitle: 'ऋण व ब्याज लेखांकन: PACS व समितियों के लिए गाइड | SahakarLekha',
     metaDescription: 'सदस्य ऋण, KCC और ब्याज की सही गणना व रिकॉर्डिंग — वसूली व NPA निगरानी सहित।',
     date: '2026-06-17',
@@ -59,7 +59,7 @@ export const BLOG_POSTS: BlogPost[] = [
     tags: ['ऋण', 'ब्याज', 'KCC', 'NPA'],
   },
   {
-    slug: 'inventory-stock-prabandhan',
+    slug: 'inventory-and-stock-management',
     metaTitle: 'इन्वेंटरी व स्टॉक प्रबंधन: मार्केटिंग व उपभोक्ता समितियों के लिए | SahakarLekha',
     metaDescription: 'खरीद-बिक्री, स्टॉक वैल्यूएशन और क्लोज़िंग स्टॉक का सटीक हिसाब — फैंटम बैलेंस से बचें।',
     date: '2026-06-16',
@@ -71,7 +71,7 @@ export const BLOG_POSTS: BlogPost[] = [
     tags: ['इन्वेंटरी', 'स्टॉक', 'closing stock'],
   },
   {
-    slug: 'bank-reconciliation-brs-guide',
+    slug: 'bank-reconciliation-guide',
     metaTitle: 'बैंक समाधान (BRS) कैसे करें: सहकारी समिति गाइड | SahakarLekha',
     metaDescription: 'बैंक स्टेटमेंट और बही का मिलान आसानी से — अंतर कैसे ढूँढें और ठीक करें।',
     date: '2026-06-15',
@@ -83,7 +83,7 @@ export const BLOG_POSTS: BlogPost[] = [
     tags: ['बैंक समाधान', 'BRS', 'मिलान'],
   },
   {
-    slug: 'vittiya-reports-kaise-padhe',
+    slug: 'how-to-read-financial-reports',
     metaTitle: 'वित्तीय रिपोर्ट्स कैसे पढ़ें: Trial Balance से Balance Sheet तक | SahakarLekha',
     metaDescription: 'ट्रायल बैलेंस, लाभ-हानि, प्राप्ति-भुगतान और बैलेंस शीट को आसान हिन्दी में पढ़ना सीखें।',
     date: '2026-06-14',
@@ -95,7 +95,7 @@ export const BLOG_POSTS: BlogPost[] = [
     tags: ['रिपोर्ट', 'तलपट', 'बैलेंस शीट'],
   },
   {
-    slug: 'sahakari-audit-taiyari-checklist',
+    slug: 'audit-preparation-checklist',
     metaTitle: 'सहकारी समिति ऑडिट की तैयारी: संपूर्ण चेकलिस्ट | SahakarLekha',
     metaDescription: 'ऑडिट से पहले क्या तैयार रखें, कौन-सी रिपोर्ट चाहिए और audit paras कैसे घटाएँ — व्यावहारिक चेकलिस्ट।',
     date: '2026-06-13',
@@ -107,7 +107,7 @@ export const BLOG_POSTS: BlogPost[] = [
     tags: ['ऑडिट', 'चेकलिस्ट', 'अनुपालन'],
   },
   {
-    slug: 'aam-lekhankan-galtiyan',
+    slug: 'common-accounting-mistakes',
     metaTitle: 'सहकारी समितियों की 10 आम लेखांकन गलतियाँ और बचाव | SahakarLekha',
     metaDescription: 'जो गलतियाँ हर साल ऑडिट में पकड़ी जाती हैं — और उन्हें रोकने के आसान तरीके।',
     date: '2026-06-12',
@@ -119,7 +119,7 @@ export const BLOG_POSTS: BlogPost[] = [
     tags: ['गलतियाँ', 'ऑडिट', 'बचाव'],
   },
   {
-    slug: 'sahakari-erp-ka-bhavishya',
+    slug: 'future-of-cooperative-erp',
     metaTitle: 'सहकारी ERP का भविष्य: डिजिटल सहकारिता की ओर | SahakarLekha',
     metaDescription: 'क्लाउड, AI और एकीकृत रिपोर्टिंग सहकारी क्षेत्र को कैसे बदलेंगे — और समितियाँ अभी क्या करें।',
     date: '2026-06-11',
@@ -143,7 +143,7 @@ export const BLOG_POSTS: BlogPost[] = [
     tags: ['वाउचर', 'रसीद-भुगतान', 'डबल-एंट्री'],
   },
   {
-    slug: 'sahakari-lekhankan-mool-baten',
+    slug: 'cooperative-accounting-basics',
     metaTitle: 'सहकारी लेखांकन की मूल बातें: शुरुआत से समझें | SahakarLekha',
     metaDescription: 'डबल-एंट्री, खातों के पाँच प्रकार, डेबिट-क्रेडिट और लेखांकन समीकरण — नए सचिव व लेखाकार के लिए आसान हिन्दी गाइड।',
     date: '2026-06-21',
@@ -155,7 +155,7 @@ export const BLOG_POSTS: BlogPost[] = [
     tags: ['बुनियाद', 'डेबिट-क्रेडिट', 'लेखांकन चक्र'],
   },
   {
-    slug: 'sahakari-samiti-digital-lekhankan-zaroorat',
+    slug: 'digital-accounting-for-cooperatives',
     metaTitle: 'सहकारी समितियों को डिजिटल लेखांकन की ज़रूरत क्यों है? | SahakarLekha',
     metaDescription: 'मैनुअल बहीखाते की कमियाँ, ऑडिट की दिक्कतें और डिजिटल लेखांकन के लाभ — जानिए सहकारी समितियाँ अब भी डिजिटल अकाउंटिंग क्यों अपनाएँ।',
     date: '2026-06-23',
