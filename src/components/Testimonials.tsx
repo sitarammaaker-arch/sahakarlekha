@@ -52,6 +52,7 @@ const Testimonials: React.FC = () => {
     '@type': 'SoftwareApplication',
     name: 'SahakarLekha',
     url: SITE,
+    image: `${SITE}/og-image.png`,
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'INR' },
@@ -67,6 +68,7 @@ const Testimonials: React.FC = () => {
       author: { '@type': 'Person', name: r.name || 'एक सदस्य' },
       reviewRating: { '@type': 'Rating', ratingValue: String(r.rating), bestRating: '5' },
       reviewBody: r.message,
+      ...(r.created_at ? { datePublished: r.created_at.slice(0, 10) } : {}),
     })),
   } : undefined;
   useDocumentMeta({ jsonLd });
