@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import GuideMarkdown, { slugifyHeading } from '@/components/guide/GuideMarkdown';
 import HelpfulWidget from '@/components/HelpfulWidget';
+import EmailCapture from '@/components/EmailCapture';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findPost, loadBlogRaw, readingMinutes, relatedPosts, BLOG_ORDER } from '@/content/blog';
 import { ACCENTS, formatDate } from '@/components/blog/blogTheme';
@@ -197,6 +198,9 @@ const BlogPost: React.FC = () => {
 
             {/* Was this helpful? */}
             <HelpfulWidget />
+
+            {/* Lead magnet — audit checklist */}
+            <EmailCapture className="my-8" />
 
             {/* Share again */}
             <div className="mt-8 flex justify-center"><ShareBar url={url} title={post.title} /></div>

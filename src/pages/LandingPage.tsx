@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import PublicLayout from '@/components/PublicLayout';
 import Testimonials from '@/components/Testimonials';
+import EmailCapture from '@/components/EmailCapture';
 import { SOCIAL_CHANNELS, SocialIcon, WHATSAPP_NUMBER } from '@/lib/socials';
 import {
   BookOpen, Shield, Users, BarChart3, FileText, Globe,
@@ -464,6 +465,13 @@ const LandingPage: React.FC = () => {
               <Button variant="outline" className="gap-2"><MessageCircle className="h-4 w-4" /> WhatsApp पर शेयर करें</Button>
             </a>
           </div>
+        </div>
+      </section>
+
+      {/* ───────── LEAD MAGNET ───────── */}
+      <section className="py-14 bg-background">
+        <div className="max-w-2xl mx-auto px-4">
+          <EmailCapture />
         </div>
       </section>
 
