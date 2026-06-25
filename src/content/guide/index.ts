@@ -46,17 +46,17 @@ export const GUIDE_PARTS: GuidePart[] = [
       },
       {
         "slug": "chart-of-accounts",
-        "title": "अध्याय 3 — खाता-शीर्ष (Chart of Accounts)",
-        "shortTitle": "खाता-शीर्ष (Chart of Accounts)",
+        "title": "अध्याय 3 — लेजर हेड (Chart of Accounts)",
+        "shortTitle": "लेजर हेड (Chart of Accounts)",
         "summary": "इस अध्याय के बाद आप: समूह व उप-खाते का फ़र्क; कोड प्रणाली; मानक चार्ट; नया खाता जोड़ना।",
         "kind": "chapter",
         "num": 3
       },
       {
         "slug": "opening-balances",
-        "title": "अध्याय 4 — प्रारंभिक शेष (Opening Balances)",
-        "shortTitle": "प्रारंभिक शेष (Opening Balances)",
-        "summary": "इस अध्याय के बाद आप: पिछले वर्ष का समापन इस वर्ष के प्रारंभ में लाना; Dr=Cr मिलान; \"तुलन-पत्र क्यों नहीं मिल रहा\" की जड़।",
+        "title": "अध्याय 4 — ओपनिंग बैलेंस (Opening Balances)",
+        "shortTitle": "ओपनिंग बैलेंस (Opening Balances)",
+        "summary": "इस अध्याय के बाद आप: पिछले वर्ष का समापन इस वर्ष के प्रारंभ में लाना; Dr=Cr मिलान; \"बैलेंस शीट क्यों नहीं मिल रहा\" की जड़।",
         "kind": "chapter",
         "num": 4
       },
@@ -64,7 +64,7 @@ export const GUIDE_PARTS: GuidePart[] = [
         "slug": "member-management",
         "title": "अध्याय 5 — सदस्य व सदस्यता प्रबंधन",
         "shortTitle": "सदस्य व सदस्यता प्रबंधन",
-        "summary": "इस अध्याय के बाद आप: सदस्य जोड़ना व अनुमोदन; शेयर पूँजी व प्रवेश शुल्क की अलग प्रविष्टि; सदस्य-बही; निकासी पर शेयर-वापसी।",
+        "summary": "इस अध्याय के बाद आप: सदस्य जोड़ना व अनुमोदन; शेयर पूँजी व प्रवेश शुल्क की अलग एंट्री; सदस्य-बही; निकासी पर शेयर-वापसी।",
         "kind": "chapter",
         "num": 5
       }
@@ -94,15 +94,15 @@ export const GUIDE_PARTS: GuidePart[] = [
         "slug": "purchase-entries",
         "title": "अध्याय 8 — खरीद प्रबंधन (Purchases)",
         "shortTitle": "खरीद प्रबंधन (Purchases)",
-        "summary": "इस अध्याय के बाद आप: नकद/उधार खरीद; GST इनपुट क्रेडिट; TDS कटौती (एक बार); क्रय रजिस्टर।",
+        "summary": "इस अध्याय के बाद आप: नकद/उधार खरीद; GST इनपुट क्रेडिट; TDS कटौती (एक बार); खरीद रजिस्टर।",
         "kind": "chapter",
         "num": 8
       },
       {
         "slug": "inventory-management",
-        "title": "अध्याय 9 — माल भंडार (Inventory)",
-        "shortTitle": "माल भंडार (Inventory)",
-        "summary": "इस अध्याय के बाद आप: वस्तु/समूह/opening; स्टॉक मूवमेंट; एक-सूत्र नियम; भारित-औसत मूल्य।",
+        "title": "अध्याय 9 — स्टॉक (Inventory)",
+        "shortTitle": "स्टॉक (Inventory)",
+        "summary": "इस अध्याय के बाद आप: वस्तु/समूह/opening; स्टॉक मूवमेंट; एक-सूत्र नियम; वेटेड एवरेज मूल्य।",
         "kind": "chapter",
         "num": 9
       },
@@ -118,7 +118,7 @@ export const GUIDE_PARTS: GuidePart[] = [
         "slug": "salary-management",
         "title": "अध्याय 11 — वेतन प्रबंधन (Salary)",
         "shortTitle": "वेतन प्रबंधन (Salary)",
-        "summary": "इस अध्याय के बाद आप: कर्मचारी मास्टर व slip; सकल/कटौती/शुद्ध; वेतन की प्रविष्टि; EPF/ESI/PT/TDS जमा।",
+        "summary": "इस अध्याय के बाद आप: कर्मचारी मास्टर व slip; सकल/कटौती/शुद्ध; वेतन की एंट्री; EPF/ESI/PT/TDS जमा।",
         "kind": "chapter",
         "num": 11
       }
@@ -126,21 +126,21 @@ export const GUIDE_PARTS: GuidePart[] = [
   },
   {
     "id": "part-4",
-    "title": "भाग 4 — बहियाँ व तलपट",
+    "title": "भाग 4 — बहियाँ व ट्रायल बैलेंस",
     "chapters": [
       {
         "slug": "daybook-and-ledger",
-        "title": "अध्याय 12 — रोज़नामचा (Day Book) व खाता-बही (Ledger)",
-        "shortTitle": "रोज़नामचा (Day Book) व खाता-बही (Ledger)",
-        "summary": "इस अध्याय के बाद आप: Day Book पढ़ना; किसी खाते की बही व चालू-शेष; खोज/छानना; ऑडिट-ट्रेल।",
+        "title": "अध्याय 12 — डे बुक (Day Book) व लेजर (Ledger)",
+        "shortTitle": "डे बुक (Day Book) व लेजर (Ledger)",
+        "summary": "इस अध्याय के बाद आप: Day Book पढ़ना; किसी खाते की बही व चालू बैलेंस; खोज/छानना; ऑडिट-ट्रेल।",
         "kind": "chapter",
         "num": 12
       },
       {
         "slug": "trial-balance",
-        "title": "अध्याय 13 — तलपट (Trial Balance)",
-        "shortTitle": "तलपट (Trial Balance)",
-        "summary": "इस अध्याय के बाद आप: तलपट बनाना व पढ़ना; Dr=Cr का महत्व; NCDC दो-खंड प्रारूप; न मिलने पर निदान।",
+        "title": "अध्याय 13 — ट्रायल बैलेंस (Trial Balance)",
+        "shortTitle": "ट्रायल बैलेंस (Trial Balance)",
+        "summary": "इस अध्याय के बाद आप: ट्रायल बैलेंस बनाना व पढ़ना; Dr=Cr का महत्व; NCDC दो-खंड प्रारूप; न मिलने पर निदान।",
         "kind": "chapter",
         "num": 13
       }
@@ -154,30 +154,30 @@ export const GUIDE_PARTS: GuidePart[] = [
         "slug": "trading-account",
         "title": "अध्याय 14 — व्यापार खाता (Trading Account)",
         "shortTitle": "व्यापार खाता (Trading Account)",
-        "summary": "इस अध्याय के बाद आप: सकल लाभ; प्रारंभिक+खरीद−समापन; गतिविधि-वार ब्योरा; समापन-स्टॉक का सही मूल्य।",
+        "summary": "इस अध्याय के बाद आप: ग्रॉस प्रॉफ़िट; प्रारंभिक+खरीद−समापन; गतिविधि-वार ब्योरा; क्लोज़िंग स्टॉक का सही मूल्य।",
         "kind": "chapter",
         "num": 14
       },
       {
         "slug": "income-and-expenditure",
-        "title": "अध्याय 15 — आय-व्यय खाता (Income & Expenditure)",
-        "shortTitle": "आय-व्यय खाता (Income & Expenditure)",
-        "summary": "इस अध्याय के बाद आप: शुद्ध अधिशेष/घाटा; सकल लाभ का अंतरण; प्रत्यक्ष व अप्रत्यक्ष व्यय; पूँजी बनाम राजस्व।",
+        "title": "अध्याय 15 — आमदनी-खर्च खाता (Income & Expenditure)",
+        "shortTitle": "आमदनी-खर्च खाता (Income & Expenditure)",
+        "summary": "इस अध्याय के बाद आप: नेट प्रॉफ़िट/घाटा; ग्रॉस प्रॉफ़िट का अंतरण; प्रत्यक्ष व अप्रत्यक्ष व्यय; पूँजी बनाम राजस्व।",
         "kind": "chapter",
         "num": 15
       },
       {
         "slug": "balance-sheet",
-        "title": "अध्याय 16 — तुलन-पत्र (Balance Sheet)",
-        "shortTitle": "तुलन-पत्र (Balance Sheet)",
-        "summary": "इस अध्याय के बाद आप: संपत्ति=देयता+पूँजी; समापन-स्टॉक की एकल गणना; डबल-काउंट से बचाव; पढ़ना।",
+        "title": "अध्याय 16 — बैलेंस शीट (Balance Sheet)",
+        "shortTitle": "बैलेंस शीट (Balance Sheet)",
+        "summary": "इस अध्याय के बाद आप: संपत्ति=देनदारी+पूँजी; क्लोज़िंग स्टॉक की एकल गणना; डबल-काउंट से बचाव; पढ़ना।",
         "kind": "chapter",
         "num": 16
       },
       {
         "slug": "receipts-and-payments",
-        "title": "अध्याय 17 — प्राप्ति व भुगतान खाता (Receipts & Payments)",
-        "shortTitle": "प्राप्ति व भुगतान खाता (Receipts & Payments)",
+        "title": "अध्याय 17 — रसीद-भुगतान खाता (Receipts & Payments)",
+        "shortTitle": "रसीद-भुगतान खाता (Receipts & Payments)",
         "summary": "इस अध्याय के बाद आप: नकदी-आधार सारांश; पूँजी बनाम राजस्व; कोंट्रा का बहिष्करण; प्रारंभिक/समापन नकद-बैंक।",
         "kind": "chapter",
         "num": 17
@@ -198,8 +198,8 @@ export const GUIDE_PARTS: GuidePart[] = [
       },
       {
         "slug": "tds-and-26q",
-        "title": "अध्याय 19 — TDS व त्रैमासिक रिटर्न (26Q)",
-        "shortTitle": "TDS व त्रैमासिक रिटर्न (26Q)",
+        "title": "अध्याय 19 — TDS व क्वार्टरली रिटर्न (26Q)",
+        "shortTitle": "TDS व क्वार्टरली रिटर्न (26Q)",
         "summary": "इस अध्याय के बाद आप: TDS कब/कितना; एक-बार कटौती; देय TDS जमा; TDS रजिस्टर व 26Q तिमाही।",
         "kind": "chapter",
         "num": 19
@@ -212,33 +212,33 @@ export const GUIDE_PARTS: GuidePart[] = [
     "chapters": [
       {
         "slug": "depreciation",
-        "title": "अध्याय 20 — मूल्यह्रास (Depreciation)",
-        "shortTitle": "मूल्यह्रास (Depreciation)",
-        "summary": "इस अध्याय के बाद आप: SLM व WDV; प्रति-संपत्ति WDV; संचित ह्रास; जर्नल; तुलन-पत्र पर असर।",
+        "title": "अध्याय 20 — डेप्रिसिएशन (Depreciation)",
+        "shortTitle": "डेप्रिसिएशन (Depreciation)",
+        "summary": "इस अध्याय के बाद आप: SLM व WDV; प्रति-संपत्ति WDV; कुल डेप्रिसिएशन; जर्नल; बैलेंस शीट पर असर।",
         "kind": "chapter",
         "num": 20
       },
       {
         "slug": "stock-valuation",
-        "title": "अध्याय 21 — स्टॉक मूल्यांकन (Stock Valuation)",
-        "shortTitle": "स्टॉक मूल्यांकन (Stock Valuation)",
-        "summary": "इस अध्याय के बाद आप: FIFO/भारित-औसत; canonical मात्रा×लागत; क्रम-असंवेदनशील मूल्य; \"₹0 क्यों\" का निदान।",
+        "title": "अध्याय 21 — स्टॉक वैल्यूएशन (Stock Valuation)",
+        "shortTitle": "स्टॉक वैल्यूएशन (Stock Valuation)",
+        "summary": "इस अध्याय के बाद आप: FIFO/वेटेड एवरेज; canonical मात्रा×लागत; क्रम-असंवेदनशील मूल्य; \"₹0 क्यों\" का निदान।",
         "kind": "chapter",
         "num": 21
       },
       {
         "slug": "profit-distribution",
-        "title": "अध्याय 22 — लाभ-विनियोग (Profit Distribution)",
-        "shortTitle": "लाभ-विनियोग (Profit Distribution)",
-        "summary": "इस अध्याय के बाद आप: वैधानिक संचय 25%; लाभांश व बोनस; संरक्षण-छूट; वितरण-योग्य अधिशेष; अति-विनियोग रोक।",
+        "title": "अध्याय 22 — लाभ का बँटवारा (Profit Distribution)",
+        "shortTitle": "लाभ का बँटवारा (Profit Distribution)",
+        "summary": "इस अध्याय के बाद आप: रिज़र्व फंड 25%; डिविडेंड व बोनस; व्यवहार बोनस; बाँटने लायक लाभ; अति-बँटवारा रोक।",
         "kind": "chapter",
         "num": 22
       },
       {
         "slug": "statutory-returns",
-        "title": "अध्याय 23 — सांविधिक रिटर्न व संघ रिपोर्ट",
-        "shortTitle": "सांविधिक रिटर्न व संघ रिपोर्ट",
-        "summary": "इस अध्याय के बाद आप: Federation रिपोर्ट; सदस्य-वृद्धि (FY-सीमा); NPA वर्गीकरण; उधार-निधि; सांविधिक प्रपत्र।",
+        "title": "अध्याय 23 — कानूनी रिटर्न व संघ रिपोर्ट",
+        "shortTitle": "कानूनी रिटर्न व संघ रिपोर्ट",
+        "summary": "इस अध्याय के बाद आप: Federation रिपोर्ट; सदस्य-वृद्धि (FY-सीमा); NPA वर्गीकरण; उधार-फंड; कानूनी प्रपत्र।",
         "kind": "chapter",
         "num": 23
       }
@@ -246,13 +246,13 @@ export const GUIDE_PARTS: GuidePart[] = [
   },
   {
     "id": "part-8",
-    "title": "भाग 8 — वर्षांत व सुरक्षा",
+    "title": "भाग 8 — साल के अंत व सुरक्षा",
     "chapters": [
       {
         "slug": "year-end-and-fy-lock",
-        "title": "अध्याय 24 — वर्षांत प्रक्रिया व FY-लॉक",
-        "shortTitle": "वर्षांत प्रक्रिया व FY-लॉक",
-        "summary": "इस अध्याय के बाद आप: वर्षांत-चेकलिस्ट; समापन-स्टॉक जर्नल; FY-लॉक; शेष आगे ले जाना।",
+        "title": "अध्याय 24 — साल के अंत प्रक्रिया व FY-लॉक",
+        "shortTitle": "साल के अंत प्रक्रिया व FY-लॉक",
+        "summary": "इस अध्याय के बाद आप: साल के अंत-चेकलिस्ट; क्लोज़िंग स्टॉक जर्नल; FY-लॉक; शेष आगे ले जाना।",
         "kind": "chapter",
         "num": 24
       },
@@ -290,14 +290,14 @@ export const GUIDE_PARTS: GuidePart[] = [
         "slug": "case-study-full-year",
         "title": "अध्याय 28 — समग्र केस-स्टडी: रानिया सहकारी समिति (पूर्ण वर्ष)",
         "shortTitle": "समग्र केस-स्टडी: रानिया सहकारी समिति (पूर्ण वर्ष)",
-        "summary": "उद्देश्य: एक पूरे वर्ष का लेखांकन — प्रारंभिक शेष से अंतिम खातों व विनियोग तक — एक सूत्र में, जो ₹5,42,500 पर मिलता है।",
+        "summary": "उद्देश्य: एक पूरे वर्ष का लेखांकन — ओपनिंग बैलेंस से अंतिम खातों व बँटवारा तक — एक सूत्र में, जो ₹5,42,500 पर मिलता है।",
         "kind": "chapter",
         "num": 28
       },
       {
         "slug": "special-registers",
-        "title": "अध्याय 29 — विशिष्ट रजिस्टर व अभिलेख",
-        "shortTitle": "विशिष्ट रजिस्टर व अभिलेख",
+        "title": "अध्याय 29 — विशिष्ट रजिस्टर व रिकॉर्ड",
+        "shortTitle": "विशिष्ट रजिस्टर व रिकॉर्ड",
         "summary": "इस अध्याय के बाद आप: सदस्य, शेयर, ऋण, स्टॉक, वेतन, GST/TDS रजिस्टर; उनका उद्देश्य व मिलान।",
         "kind": "chapter",
         "num": 29
@@ -378,8 +378,8 @@ export const GUIDE_PARTS: GuidePart[] = [
       },
       {
         "slug": "report-to-statutory-form-map",
-        "title": "परिशिष्ट C — रिपोर्ट → सांविधिक प्रपत्र मानचित्र",
-        "shortTitle": "रिपोर्ट → सांविधिक प्रपत्र मानचित्र",
+        "title": "परिशिष्ट C — रिपोर्ट → कानूनी प्रपत्र मानचित्र",
+        "shortTitle": "रिपोर्ट → कानूनी प्रपत्र मानचित्र",
         "summary": "",
         "kind": "appendix"
       },
@@ -392,8 +392,8 @@ export const GUIDE_PARTS: GuidePart[] = [
       },
       {
         "slug": "year-end-checklist",
-        "title": "परिशिष्ट E — वर्षांत चेकलिस्ट (प्रिंट-योग्य)",
-        "shortTitle": "वर्षांत चेकलिस्ट (प्रिंट-योग्य)",
+        "title": "परिशिष्ट E — साल के अंत चेकलिस्ट (प्रिंट-योग्य)",
+        "shortTitle": "साल के अंत चेकलिस्ट (प्रिंट-योग्य)",
         "summary": "",
         "kind": "appendix"
       },
@@ -415,7 +415,7 @@ export const GUIDE_PARTS: GuidePart[] = [
         "slug": "account-name-glossary",
         "title": "परिशिष्ट H — खाता-नाम कोश (हिंदी ↔ English)",
         "shortTitle": "खाता-नाम कोश (हिंदी ↔ English)",
-        "summary": "सॉफ़्टवेयर/रिपोर्ट में सही अंग्रेज़ी नाम। श्रेणी: सं=संपत्ति, दे=देयता, पूँ=पूँजी, आ=आय, व्य=व्यय।",
+        "summary": "सॉफ़्टवेयर/रिपोर्ट में सही अंग्रेज़ी नाम। श्रेणी: सं=संपत्ति, दे=देनदारी, पूँ=पूँजी, आ=आय, व्य=व्यय।",
         "kind": "appendix"
       },
       {
@@ -439,7 +439,7 @@ export const BACK_MATTER: GuideEntry = {
   "slug": "conclusion",
   "title": "समापन — एक अंतिम शब्द",
   "shortTitle": "समापन",
-  "summary": "💡 तीन सूत्र, फिर से: (1) ऐप औज़ार है, समझ आपकी — सहकार लेखा गणना करता है, पर सही प्रविष्टि व सही वर्गीकरण आप तय करते हैं। (2) छोटी सही आदतें किताबें बचाती हैं — रोज़ प्रविष्टि, माह-अंत मिलान, समय पर कर, नियमित बैकअप। (3) पारदर्शिता ही सहकारिता है — हर सदस्य का भरोसा सही, खुले, मिलते हुए खातों से बनता है।",
+  "summary": "💡 तीन सूत्र, फिर से: (1) ऐप औज़ार है, समझ आपकी — सहकार लेखा गणना करता है, पर सही एंट्री व सही वर्गीकरण आप तय करते हैं। (2) छोटी सही आदतें किताबें बचाती हैं — रोज़ एंट्री, माह-अंत मिलान, समय पर कर, नियमित बैकअप। (3) पारदर्शिता ही सहकारिता है — हर सदस्य का भरोसा सही, खुले, मिलते हुए खातों से बनता है।",
   "kind": "back"
 };
 
@@ -462,13 +462,13 @@ export const GUIDE_ORDER: { slug: string; shortTitle: string; title: string }[] 
   },
   {
     "slug": "chart-of-accounts",
-    "shortTitle": "खाता-शीर्ष (Chart of Accounts)",
-    "title": "अध्याय 3 — खाता-शीर्ष (Chart of Accounts)"
+    "shortTitle": "लेजर हेड (Chart of Accounts)",
+    "title": "अध्याय 3 — लेजर हेड (Chart of Accounts)"
   },
   {
     "slug": "opening-balances",
-    "shortTitle": "प्रारंभिक शेष (Opening Balances)",
-    "title": "अध्याय 4 — प्रारंभिक शेष (Opening Balances)"
+    "shortTitle": "ओपनिंग बैलेंस (Opening Balances)",
+    "title": "अध्याय 4 — ओपनिंग बैलेंस (Opening Balances)"
   },
   {
     "slug": "member-management",
@@ -492,8 +492,8 @@ export const GUIDE_ORDER: { slug: string; shortTitle: string; title: string }[] 
   },
   {
     "slug": "inventory-management",
-    "shortTitle": "माल भंडार (Inventory)",
-    "title": "अध्याय 9 — माल भंडार (Inventory)"
+    "shortTitle": "स्टॉक (Inventory)",
+    "title": "अध्याय 9 — स्टॉक (Inventory)"
   },
   {
     "slug": "bill-wise-settlement",
@@ -507,13 +507,13 @@ export const GUIDE_ORDER: { slug: string; shortTitle: string; title: string }[] 
   },
   {
     "slug": "daybook-and-ledger",
-    "shortTitle": "रोज़नामचा (Day Book) व खाता-बही (Ledger)",
-    "title": "अध्याय 12 — रोज़नामचा (Day Book) व खाता-बही (Ledger)"
+    "shortTitle": "डे बुक (Day Book) व लेजर (Ledger)",
+    "title": "अध्याय 12 — डे बुक (Day Book) व लेजर (Ledger)"
   },
   {
     "slug": "trial-balance",
-    "shortTitle": "तलपट (Trial Balance)",
-    "title": "अध्याय 13 — तलपट (Trial Balance)"
+    "shortTitle": "ट्रायल बैलेंस (Trial Balance)",
+    "title": "अध्याय 13 — ट्रायल बैलेंस (Trial Balance)"
   },
   {
     "slug": "trading-account",
@@ -522,18 +522,18 @@ export const GUIDE_ORDER: { slug: string; shortTitle: string; title: string }[] 
   },
   {
     "slug": "income-and-expenditure",
-    "shortTitle": "आय-व्यय खाता (Income & Expenditure)",
-    "title": "अध्याय 15 — आय-व्यय खाता (Income & Expenditure)"
+    "shortTitle": "आमदनी-खर्च खाता (Income & Expenditure)",
+    "title": "अध्याय 15 — आमदनी-खर्च खाता (Income & Expenditure)"
   },
   {
     "slug": "balance-sheet",
-    "shortTitle": "तुलन-पत्र (Balance Sheet)",
-    "title": "अध्याय 16 — तुलन-पत्र (Balance Sheet)"
+    "shortTitle": "बैलेंस शीट (Balance Sheet)",
+    "title": "अध्याय 16 — बैलेंस शीट (Balance Sheet)"
   },
   {
     "slug": "receipts-and-payments",
-    "shortTitle": "प्राप्ति व भुगतान खाता (Receipts & Payments)",
-    "title": "अध्याय 17 — प्राप्ति व भुगतान खाता (Receipts & Payments)"
+    "shortTitle": "रसीद-भुगतान खाता (Receipts & Payments)",
+    "title": "अध्याय 17 — रसीद-भुगतान खाता (Receipts & Payments)"
   },
   {
     "slug": "gst-management",
@@ -542,33 +542,33 @@ export const GUIDE_ORDER: { slug: string; shortTitle: string; title: string }[] 
   },
   {
     "slug": "tds-and-26q",
-    "shortTitle": "TDS व त्रैमासिक रिटर्न (26Q)",
-    "title": "अध्याय 19 — TDS व त्रैमासिक रिटर्न (26Q)"
+    "shortTitle": "TDS व क्वार्टरली रिटर्न (26Q)",
+    "title": "अध्याय 19 — TDS व क्वार्टरली रिटर्न (26Q)"
   },
   {
     "slug": "depreciation",
-    "shortTitle": "मूल्यह्रास (Depreciation)",
-    "title": "अध्याय 20 — मूल्यह्रास (Depreciation)"
+    "shortTitle": "डेप्रिसिएशन (Depreciation)",
+    "title": "अध्याय 20 — डेप्रिसिएशन (Depreciation)"
   },
   {
     "slug": "stock-valuation",
-    "shortTitle": "स्टॉक मूल्यांकन (Stock Valuation)",
-    "title": "अध्याय 21 — स्टॉक मूल्यांकन (Stock Valuation)"
+    "shortTitle": "स्टॉक वैल्यूएशन (Stock Valuation)",
+    "title": "अध्याय 21 — स्टॉक वैल्यूएशन (Stock Valuation)"
   },
   {
     "slug": "profit-distribution",
-    "shortTitle": "लाभ-विनियोग (Profit Distribution)",
-    "title": "अध्याय 22 — लाभ-विनियोग (Profit Distribution)"
+    "shortTitle": "लाभ का बँटवारा (Profit Distribution)",
+    "title": "अध्याय 22 — लाभ का बँटवारा (Profit Distribution)"
   },
   {
     "slug": "statutory-returns",
-    "shortTitle": "सांविधिक रिटर्न व संघ रिपोर्ट",
-    "title": "अध्याय 23 — सांविधिक रिटर्न व संघ रिपोर्ट"
+    "shortTitle": "कानूनी रिटर्न व संघ रिपोर्ट",
+    "title": "अध्याय 23 — कानूनी रिटर्न व संघ रिपोर्ट"
   },
   {
     "slug": "year-end-and-fy-lock",
-    "shortTitle": "वर्षांत प्रक्रिया व FY-लॉक",
-    "title": "अध्याय 24 — वर्षांत प्रक्रिया व FY-लॉक"
+    "shortTitle": "साल के अंत प्रक्रिया व FY-लॉक",
+    "title": "अध्याय 24 — साल के अंत प्रक्रिया व FY-लॉक"
   },
   {
     "slug": "audit-preparation",
@@ -592,8 +592,8 @@ export const GUIDE_ORDER: { slug: string; shortTitle: string; title: string }[] 
   },
   {
     "slug": "special-registers",
-    "shortTitle": "विशिष्ट रजिस्टर व अभिलेख",
-    "title": "अध्याय 29 — विशिष्ट रजिस्टर व अभिलेख"
+    "shortTitle": "विशिष्ट रजिस्टर व रिकॉर्ड",
+    "title": "अध्याय 29 — विशिष्ट रजिस्टर व रिकॉर्ड"
   },
   {
     "slug": "comprehensive-faq",
@@ -637,8 +637,8 @@ export const GUIDE_ORDER: { slug: string; shortTitle: string; title: string }[] 
   },
   {
     "slug": "report-to-statutory-form-map",
-    "shortTitle": "रिपोर्ट → सांविधिक प्रपत्र मानचित्र",
-    "title": "परिशिष्ट C — रिपोर्ट → सांविधिक प्रपत्र मानचित्र"
+    "shortTitle": "रिपोर्ट → कानूनी प्रपत्र मानचित्र",
+    "title": "परिशिष्ट C — रिपोर्ट → कानूनी प्रपत्र मानचित्र"
   },
   {
     "slug": "quick-reference-card",
@@ -647,8 +647,8 @@ export const GUIDE_ORDER: { slug: string; shortTitle: string; title: string }[] 
   },
   {
     "slug": "year-end-checklist",
-    "shortTitle": "वर्षांत चेकलिस्ट (प्रिंट-योग्य)",
-    "title": "परिशिष्ट E — वर्षांत चेकलिस्ट (प्रिंट-योग्य)"
+    "shortTitle": "साल के अंत चेकलिस्ट (प्रिंट-योग्य)",
+    "title": "परिशिष्ट E — साल के अंत चेकलिस्ट (प्रिंट-योग्य)"
   },
   {
     "slug": "exercise-answers",
