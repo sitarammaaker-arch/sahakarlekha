@@ -35,6 +35,18 @@ export interface BlogPost {
 // Reverse-chronological is enforced by sorting on `date` below.
 export const BLOG_POSTS: BlogPost[] = [
   {
+    slug: 'profit-distribution-and-reserves',
+    metaTitle: 'लाभ-विनियोग: वैधानिक संचय, लाभांश व बोनस का सही लेखांकन | SahakarLekha',
+    metaDescription: 'सहकारी समिति में शुद्ध अधिशेष का विनियोग — वैधानिक संचय, लाभांश, बोनस व वितरण-योग्य अधिशेष की सही गणना व प्रविष्टि।',
+    date: '2026-06-25',
+    category: 'वर्षांत व वितरण',
+    title: 'लाभ-विनियोग: सहकारी समिति में वैधानिक संचय, लाभांश व बोनस',
+    shortTitle: 'लाभ-विनियोग व वैधानिक संचय',
+    excerpt: 'शुद्ध अधिशेष का सही क्रम में विनियोग — वैधानिक संचय, लाभांश, बोनस और अति-विनियोग से बचाव।',
+    accent: 'amber',
+    tags: ['लाभ-विनियोग', 'लाभांश', 'वैधानिक संचय'],
+  },
+  {
     slug: 'member-and-share-accounting',
     metaTitle: 'सदस्य व शेयर रजिस्टर: सहकारी समिति में सही लेखांकन | SahakarLekha',
     metaDescription: 'शेयर पूँजी, प्रवेश शुल्क और लाभांश का पारदर्शी हिसाब कैसे रखें — सदस्य-भरोसा बढ़ाने वाली गाइड।',
