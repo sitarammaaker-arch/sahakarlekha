@@ -5,12 +5,13 @@
  * "how can we improve?" box. Fail-soft on errors (RULE 1: no fake success).
  */
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { trackEvent } from '@/lib/analytics';
-import { ThumbsUp, ThumbsDown, CheckCircle2 } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, CheckCircle2, ArrowRight } from 'lucide-react';
 
 const HelpfulWidget: React.FC = () => {
   const { toast } = useToast();
@@ -48,8 +49,15 @@ const HelpfulWidget: React.FC = () => {
 
   if (done) {
     return (
-      <div className="my-8 rounded-xl border bg-primary/5 px-5 py-4 flex items-center justify-center gap-2 text-sm text-foreground">
-        <CheckCircle2 className="h-5 w-5 text-primary" /> आपकी राय के लिए धन्यवाद! 🙏
+      <div className="my-8 rounded-xl border bg-primary/5 px-5 py-4 flex flex-col sm:flex-row items-center justify-center gap-3 text-sm text-foreground text-center">
+        <span className="inline-flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-primary" /> आपकी राय के लिए धन्यवाद! 🙏</span>
+        <Link
+          to="/register"
+          onClick={() => trackEvent('cta_click', { location: 'helpful_thanks', target: 'register' })}
+          className="inline-flex items-center gap-1 font-medium text-primary hover:gap-1.5 transition-all"
+        >
+          अपनी समिति का खाता मुफ्त डिजिटल कीजिए <ArrowRight className="h-4 w-4" />
+        </Link>
       </div>
     );
   }

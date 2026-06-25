@@ -5,13 +5,16 @@
  * they appear on the homepage via the public_reviews() RPC.
  */
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { trackEvent } from '@/lib/analytics';
-import { Star, CheckCircle2 } from 'lucide-react';
+import { Star, CheckCircle2, ArrowRight, MessageCircle } from 'lucide-react';
+
+const SHARE_TEXT = 'SahakarLekha — सहकारी समितियों के लिए मुफ्त, आधुनिक लेखा सॉफ्टवेयर। देखें: https://sahakarlekha.com';
 
 const RatingWidget: React.FC<{ className?: string }> = ({ className = '' }) => {
   const { toast } = useToast();
@@ -60,6 +63,20 @@ const RatingWidget: React.FC<{ className?: string }> = ({ className = '' }) => {
         <CheckCircle2 className="h-9 w-9 text-primary mx-auto mb-2" />
         <p className="font-bold text-foreground">धन्यवाद! 🙏</p>
         <p className="text-sm text-muted-foreground mt-1">आपकी रेटिंग मिल गई — समीक्षा के बाद यह यहाँ दिखेगी।</p>
+        <div className="flex flex-wrap gap-3 justify-center mt-4">
+          <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'rating_thanks', target: 'register' })}>
+            <Button size="sm" className="gap-1.5">मुफ्त शुरू करें <ArrowRight className="h-3.5 w-3.5" /></Button>
+          </Link>
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent(SHARE_TEXT)}`}
+            target="_blank" rel="noopener noreferrer"
+            onClick={() => trackEvent('cta_click', { location: 'rating_thanks', target: 'whatsapp_share' })}
+          >
+            <Button size="sm" variant="outline" className="gap-1.5 border-green-300 text-green-700 hover:bg-green-50 hover:text-green-800">
+              <MessageCircle className="h-3.5 w-3.5" /> WhatsApp पर शेयर
+            </Button>
+          </a>
+        </div>
       </div>
     );
   }

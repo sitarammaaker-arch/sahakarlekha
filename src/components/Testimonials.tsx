@@ -39,12 +39,23 @@ const Testimonials: React.FC = () => {
     return () => { alive = false; };
   }, []);
 
+  const rated = reviews.filter(r => typeof r.rating === 'number');
+  const avg = rated.length ? rated.reduce((s, r) => s + (r.rating || 0), 0) / rated.length : 0;
+
   return (
     <section className="py-16 bg-muted/30">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-10">
           <h2 className="text-2xl md:text-3xl font-bold text-foreground">हमारे उपयोगकर्ता क्या कहते हैं</h2>
           <p className="mt-2 text-sm sm:text-base text-muted-foreground">सहकारी समितियों, सचिवों व लेखाकारों के असली अनुभव।</p>
+          {rated.length > 0 && (
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-50 dark:bg-amber-950/30 px-4 py-1.5">
+              <Stars n={Math.round(avg)} />
+              <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                {avg.toFixed(1)} / 5 · {rated.length}+ समीक्षाएँ
+              </span>
+            </div>
+          )}
         </div>
 
         {reviews.length > 0 && (
