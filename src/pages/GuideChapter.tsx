@@ -57,7 +57,7 @@ const GuideChapter: React.FC = () => {
         '@type': 'Course',
         name: lang === 'en'
           ? 'Cooperative Society Accounting & Audit — Complete Course'
-          : 'सहकारी समिति लेखांकन व अंकेक्षण — सम्पूर्ण कोर्स',
+          : 'सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स',
         url: `${SITE}/guide`,
       },
       ...(part ? { articleSection: localizedPartTitle(part, lang) } : {}),

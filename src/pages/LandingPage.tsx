@@ -57,15 +57,15 @@ const SOCIETY_TYPES = [
 const STATS = [
   { value: '8', label: 'Society Types', labelHi: 'समिति प्रकार' },
   { value: '36', label: 'States & UTs', labelHi: 'राज्य/केंद्रशासित' },
-  { value: '150+', label: 'Account Heads', labelHi: 'खाता शीर्ष' },
+  { value: '150+', label: 'Account Heads', labelHi: 'लेजर हेड' },
   { value: '100%', label: 'Free', labelHi: 'मुफ्त' },
 ];
 
 const TOUR = [
   { shot: 'voucher.png', title: 'आसान वाउचर एंट्री', titleEn: 'Easy voucher entry', desc: 'रसीद, भुगतान, जर्नल, कोंट्रा — एक-क्लिक टेम्पलेट; Dr=Cr अपने-आप जाँच।' },
-  { shot: 'trial-balance.png', title: 'एक-क्लिक ट्रायल बैलन्स व रिपोर्ट', titleEn: 'One-click Trial Balance & reports', desc: 'ट्रायल बैलन्स, बैलेंस सीट, आय-व्यय — RCS दो-खंड प्रारूप में, सीधे PDF।' },
-  { shot: 'member-register.png', title: 'सदस्य, शेयर व ऋण रजिस्टर', titleEn: 'Member, share & loan registers', desc: 'शेयर रजिस्टर, ऋण रजिस्टर, लाभ-विनियोग — सहकारी नियमानुसार।' },
-  { shot: 'certificate.png', title: 'ऑडिट प्रमाणपत्र व अनुपालन', titleEn: 'Audit certificate & compliance', desc: 'संचय निधि (धारा 65), FY-लॉक, ऑडिट प्रमाणपत्र — ऑडिट तैयार।' },
+  { shot: 'trial-balance.png', title: 'एक-क्लिक ट्रायल बैलेंस व रिपोर्ट', titleEn: 'One-click Trial Balance & reports', desc: 'ट्रायल बैलेंस, बैलेंस शीट, आमदनी-खर्च — RCS दो-खंड प्रारूप में, सीधे PDF।' },
+  { shot: 'member-register.png', title: 'सदस्य, शेयर व ऋण रजिस्टर', titleEn: 'Member, share & loan registers', desc: 'शेयर रजिस्टर, ऋण रजिस्टर, लाभ का बँटवारा — सहकारी नियमानुसार।' },
+  { shot: 'certificate.png', title: 'ऑडिट प्रमाणपत्र व अनुपालन', titleEn: 'Audit certificate & compliance', desc: 'रिज़र्व फंड (धारा 65), FY-लॉक, ऑडिट प्रमाणपत्र — ऑडिट तैयार।' },
 ];
 
 const TALLY_ROWS = [
@@ -126,7 +126,7 @@ const MockDashboard: React.FC = () => (
       <span className="ml-3 text-[11px] text-muted-foreground">sahakarlekha.com · Dashboard</span>
     </div>
     <div className="p-4 grid grid-cols-3 gap-3">
-      {[['नकद · Cash', '₹ 4,09,000'], ['सदस्य · Members', '112'], ['अधिशेष · Surplus', '₹ 11,000']].map(([k, v]) => (
+      {[['नकद · Cash', '₹ 4,09,000'], ['सदस्य · Members', '112'], ['लाभ · Surplus', '₹ 11,000']].map(([k, v]) => (
         <div key={k} className="rounded-lg border bg-primary/5 p-3">
           <p className="text-[10px] text-muted-foreground">{k}</p>
           <p className="text-sm font-bold text-primary mt-1">{v}</p>
@@ -165,7 +165,7 @@ const LandingPage: React.FC = () => {
               अपनी समिति का ऑडिट अब हफ़्तों नहीं, <span className="text-primary">केवल दिनों में पूरा करें</span>।
             </h1>
             <p className="mt-4 text-base lg:text-lg text-muted-foreground max-w-xl mx-auto lg:mx-0">
-              भारत का <strong className="text-foreground">एकमात्र सहकारी-विशेष</strong> लेखा सॉफ्टवेयर — ट्रायल बैलन्स, बैलेंस सीट, TDS 26Q, GST व RCS ऑडिट-प्रारूप, सब एक क्लिक में।
+              भारत का <strong className="text-foreground">एकमात्र सहकारी-विशेष</strong> लेखा सॉफ्टवेयर — ट्रायल बैलेंस, बैलेंस शीट, TDS 26Q, GST व RCS ऑडिट-प्रारूप, सब एक क्लिक में।
               <br /><span className="text-sm">India's only cooperative-specific accounting platform. Hindi + English. Free forever.</span>
             </p>
             <div className="mt-7 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">

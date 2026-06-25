@@ -23,7 +23,7 @@ const MANIFEST = resolve(ROOT, 'scripts', 'guide-manifest.json');
 const SOCIETY_TYPES = resolve(ROOT, 'src', 'content', 'societyTypes.tsx');
 const STATES_FILE = resolve(ROOT, 'src', 'content', 'states.ts');
 const BLOG_FILE = resolve(ROOT, 'src', 'content', 'blog', 'index.ts');
-const COURSE = 'सहकारी समिति लेखांकन व अंकेक्षण — सम्पूर्ण कोर्स';
+const COURSE = 'सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स';
 
 const esc = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
