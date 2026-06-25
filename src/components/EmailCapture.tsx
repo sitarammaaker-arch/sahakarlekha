@@ -1,31 +1,41 @@
 /**
- * EmailCapture — lead magnet opt-in. Visitor gives email (with explicit
- * marketing consent) and instantly gets the Audit Preparation Checklist PDF;
- * the email is also saved to `leads` and a welcome email is sent via /api/subscribe.
+ * EmailCapture — topic-matched lead magnet opt-in. Visitor gives email (with
+ * explicit marketing consent) and instantly gets the chosen checklist PDF; the
+ * email is also saved to `leads` and a welcome email is sent via /api/subscribe.
  *
- * Value-first: the PDF is always generated client-side so the visitor gets the
- * magnet even if the network calls hiccup. Consent is required (DPDP-friendly).
+ * Value-first: the PDF is generated client-side FIRST so the download is instant
+ * and never blocked by the network. Consent is required (DPDP-friendly). A
+ * per-magnet localStorage flag remembers a download so we don't ask again.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { trackEvent } from '@/lib/analytics';
-import { generateAuditChecklistPDF } from '@/lib/auditChecklist';
+import { MAGNETS, generateMagnet, type MagnetKey } from '@/lib/leadMagnets';
 import { FileCheck2, CheckCircle2, Download, ArrowRight } from 'lucide-react';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const SOURCE = 'audit-checklist';
 
-const EmailCapture: React.FC<{ className?: string }> = ({ className = '' }) => {
+const EmailCapture: React.FC<{ magnet?: MagnetKey; className?: string }> = ({
+  magnet = 'audit-checklist',
+  className = '',
+}) => {
   const { toast } = useToast();
+  const m = MAGNETS[magnet] || MAGNETS['audit-checklist'];
+  const lsKey = 'sl_lead_' + magnet;
+
   const [email, setEmail] = useState('');
   const [consent, setConsent] = useState(false);
   const [company, setCompany] = useState(''); // honeypot
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    try { if (localStorage.getItem(lsKey)) setDone(true); } catch { /* ignore */ }
+  }, [lsKey]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,24 +51,24 @@ const EmailCapture: React.FC<{ className?: string }> = ({ className = '' }) => {
     setSubmitting(true);
     const mail = email.trim();
 
-    // 1) Deliver value FIRST — generate the PDF locally (no network needed),
-    //    so the download is instant and never blocked by a slow request.
+    // 1) Deliver value FIRST — generate the PDF locally (no network needed).
     try {
-      generateAuditChecklistPDF();
-      trackEvent('lead_magnet_download', { source: SOURCE });
+      generateMagnet(magnet);
+      trackEvent('lead_magnet_download', { source: magnet });
     } catch {
       toast({ title: 'डाउनलोड नहीं हो सका', description: 'कृपया फिर कोशिश करें।', variant: 'destructive' });
       setSubmitting(false);
       return;
     }
+    try { localStorage.setItem(lsKey, '1'); } catch { /* ignore */ }
     setDone(true);
     setSubmitting(false);
 
     // 2) Background (fire-and-forget): save the lead + send the welcome email.
     const page = typeof window !== 'undefined' ? window.location.href : null;
     supabase.from('leads')
-      .insert([{ email: mail, source: SOURCE, marketing_consent: true, page_url: page }])
-      .then(({ error }) => { if (!error) trackEvent('email_signup', { source: SOURCE }); }, () => {});
+      .insert([{ email: mail, source: magnet, marketing_consent: true, page_url: page }])
+      .then(({ error }) => { if (!error) trackEvent('email_signup', { source: magnet }); }, () => {});
     fetch('/api/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -70,11 +80,10 @@ const EmailCapture: React.FC<{ className?: string }> = ({ className = '' }) => {
     return (
       <div className={`rounded-2xl border bg-primary/5 p-6 text-center ${className}`}>
         <CheckCircle2 className="h-10 w-10 text-primary mx-auto mb-2" />
-        <p className="font-bold text-foreground">चेकलिस्ट डाउनलोड हो रही है ✓</p>
+        <p className="font-bold text-foreground">चेकलिस्ट तैयार है ✓</p>
         <p className="text-sm text-muted-foreground mt-1">
-          अगर डाउनलोड न दिखे तो
-          <button onClick={() => generateAuditChecklistPDF()} className="text-primary underline underline-offset-2 mx-1">यहाँ क्लिक करें</button>।
-          एक स्वागत-ईमेल भी आपके inbox में भेजी गई है।
+          डाउनलोड न दिखे तो
+          <button onClick={() => generateMagnet(magnet)} className="text-primary underline underline-offset-2 mx-1">यहाँ क्लिक करें</button>।
         </p>
         <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'leadmagnet_thanks', target: 'register' })}>
           <Button className="gap-1.5 mt-4">अपनी समिति मुफ्त डिजिटल कीजिए <ArrowRight className="h-4 w-4" /></Button>
@@ -90,10 +99,8 @@ const EmailCapture: React.FC<{ className?: string }> = ({ className = '' }) => {
           <FileCheck2 className="h-6 w-6 text-primary" />
         </div>
         <div>
-          <p className="font-bold text-foreground leading-snug">मुफ्त: ऑडिट-तैयारी चेकलिस्ट 📋</p>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            ऑडिट से पहले क्या तैयार रखें, आम आपत्तियाँ व उनका बचाव — 1-पेज प्रिंट-योग्य PDF।
-          </p>
+          <p className="font-bold text-foreground leading-snug">{m.uiTitle}</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{m.uiBlurb}</p>
         </div>
       </div>
 
@@ -104,7 +111,7 @@ const EmailCapture: React.FC<{ className?: string }> = ({ className = '' }) => {
             placeholder="आपका ईमेल / your email" className="flex-1"
           />
           <Button type="submit" className="gap-1.5" disabled={submitting}>
-            <Download className="h-4 w-4" /> {submitting ? 'भेज रहे हैं…' : 'मुफ्त चेकलिस्ट पाएँ'}
+            <Download className="h-4 w-4" /> {submitting ? 'भेज रहे हैं…' : 'मुफ्त PDF पाएँ'}
           </Button>
         </div>
         <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">

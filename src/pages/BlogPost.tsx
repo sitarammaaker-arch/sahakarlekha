@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import GuideMarkdown, { slugifyHeading } from '@/components/guide/GuideMarkdown';
 import HelpfulWidget from '@/components/HelpfulWidget';
 import EmailCapture from '@/components/EmailCapture';
+import { magnetForCategory } from '@/lib/leadMagnets';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findPost, loadBlogRaw, readingMinutes, relatedPosts, BLOG_ORDER } from '@/content/blog';
 import { ACCENTS, formatDate } from '@/components/blog/blogTheme';
@@ -124,6 +125,13 @@ const BlogPost: React.FC = () => {
     return { text, id: slugifyHeading(text) };
   });
 
+  // Topic-matched lead magnet + a mid-article opt-in (split the body at a heading).
+  const mag = magnetForCategory(post.category);
+  const hIdx = Array.from(body.matchAll(/^##\s+/gm)).map((mm) => mm.index || 0);
+  const midPos = hIdx.length >= 4 ? hIdx[Math.floor(hIdx.length / 2)] : -1;
+  const bodyTop = midPos > 0 ? body.slice(0, midPos) : body;
+  const bodyBottom = midPos > 0 ? body.slice(midPos) : '';
+
   const related = relatedPosts(slug, 3);
   const idx = BLOG_ORDER.findIndex((p) => p.slug === slug);
   const prev = idx > 0 ? BLOG_ORDER[idx - 1] : null;
@@ -179,7 +187,9 @@ const BlogPost: React.FC = () => {
               <ShareBar url={url} title={post.title} />
             </div>
 
-            <GuideMarkdown source={body} />
+            <GuideMarkdown source={bodyTop} />
+            {midPos > 0 && <EmailCapture magnet={mag} className="my-8" />}
+            {bodyBottom && <GuideMarkdown source={bodyBottom} />}
 
             {/* Inline CTA */}
             <Card className="mt-10 bg-primary/5 border-primary/20">
@@ -199,8 +209,8 @@ const BlogPost: React.FC = () => {
             {/* Was this helpful? */}
             <HelpfulWidget />
 
-            {/* Lead magnet — audit checklist */}
-            <EmailCapture className="my-8" />
+            {/* Lead magnet — topic-matched checklist */}
+            <EmailCapture magnet={mag} className="my-8" />
 
             {/* Share again */}
             <div className="mt-8 flex justify-center"><ShareBar url={url} title={post.title} /></div>
