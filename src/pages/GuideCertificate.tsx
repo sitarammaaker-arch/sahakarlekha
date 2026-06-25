@@ -16,6 +16,7 @@ import { useGuideLang, useGuideT } from '@/lib/guideLang';
 import LangToggle from '@/components/guide/LangToggle';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { makeCertNumber, formatCertDate } from '@/lib/guideCertId';
+import RatingWidget from '@/components/RatingWidget';
 import { supabase } from '@/lib/supabase';
 import { Award, Printer, CheckCircle2, Circle, ArrowRight, Home, ChevronRight, ShieldCheck, Pencil, Loader2, Download, MessageCircle } from 'lucide-react';
 
@@ -363,6 +364,11 @@ const GuideCertificate: React.FC = () => {
             <p className="text-center text-xs text-muted-foreground mt-3 no-print">
               {t('cert.filename')} <span className="font-mono">Sahakar-Lekha-Certificate-{certNo}.pdf</span>
             </p>
+
+            {/* Happy-moment ask: rate the course */}
+            <div className="mt-10 max-w-lg mx-auto no-print">
+              <RatingWidget />
+            </div>
           </>
         )}
       </div>
