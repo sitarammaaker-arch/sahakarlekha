@@ -4,6 +4,7 @@
  * Shows all registered societies + subscription management.
  */
 import React, { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,7 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import {
   Building2, Shield, Users, CreditCard, RefreshCw, Lock, Unlock,
-  AlertTriangle, CheckCircle2, Clock, Search, Edit2, BarChart3,
+  AlertTriangle, CheckCircle2, Clock, Search, Edit2, BarChart3, Inbox,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -213,7 +214,12 @@ const SuperAdminDashboard: React.FC = () => {
           </h1>
           <p className="text-sm text-gray-500">Logged in as {user?.email}</p>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <Link to="/super-admin/feedback">
+            <Button variant="outline" size="sm" className="gap-2">
+              <Inbox className="h-3.5 w-3.5" /> Feedback Inbox
+            </Button>
+          </Link>
           <Button variant="outline" size="sm" onClick={loadSocieties} className="gap-2">
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </Button>

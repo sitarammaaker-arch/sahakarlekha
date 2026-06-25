@@ -10,9 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
+import { useToast } from '@/hooks/use-toast';
 import { Mail, Phone, MapPin, Clock, Send } from 'lucide-react';
-import { SOCIAL_CHANNELS, SocialIcon } from '@/lib/socials';
+import { SOCIAL_CHANNELS, SocialIcon, WHATSAPP_NUMBER } from '@/lib/socials';
+import { supabase } from '@/lib/supabase';
 
 const ContactUs: React.FC = () => {
   useDocumentMeta({
@@ -20,22 +21,49 @@ const ContactUs: React.FC = () => {
     description: 'SahakarLekha टीम से संपर्क करें — सहायता, डेमो व अपनी सहकारी समिति को ऑनबोर्ड करने के लिए. Contact us for support, a demo, or to onboard your cooperative society.',
     canonicalPath: '/contact',
   });
+  const { toast } = useToast();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [societyName, setSocietyName] = useState('');
   const [message, setMessage] = useState('');
+  const [company, setCompany] = useState(''); // honeypot — humans never see/fill this
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (company) return; // bot filled the hidden field — silently drop
     if (!name.trim() || !email.trim() || !message.trim()) {
-      toast.error('कृपया सभी आवश्यक फ़ील्ड भरें / Please fill all required fields');
+      toast({ title: 'अधूरी जानकारी', description: 'कृपया नाम, ईमेल व संदेश भरें / Please fill name, email & message', variant: 'destructive' });
       return;
     }
-    toast.success('संदेश भेजा गया! / Message sent successfully!');
-    setName('');
-    setEmail('');
-    setSocietyName('');
-    setMessage('');
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.from('feedback').insert([{
+        type: 'message',
+        name: name.trim(),
+        email: email.trim(),
+        society_name: societyName.trim() || null,
+        message: message.trim(),
+        page_url: typeof window !== 'undefined' ? window.location.href : null,
+      }]);
+      if (error) throw error;
+      toast({ title: 'संदेश भेज दिया गया ✓', description: 'हम 24 घंटे में जवाब देंगे। / We reply within 24 hours.' });
+      setName('');
+      setEmail('');
+      setSocietyName('');
+      setMessage('');
+    } catch (err) {
+      // RULE 1: never show a fake success. Tell the user it did not save and
+      // give a reliable fallback channel.
+      toast({
+        title: 'संदेश सेव नहीं हो सका',
+        description: 'कृपया WhatsApp +91 94679 18545 या support@sahakarlekha.com पर भेजें। / Could not send — please use WhatsApp or email.',
+        variant: 'destructive',
+        duration: 11000,
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -81,9 +109,9 @@ const ContactUs: React.FC = () => {
                     <Phone className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-foreground">Phone / फोन</h3>
-                    <p className="text-sm text-muted-foreground">फोन द्वारा संपर्क</p>
-                    <p className="mt-1 text-sm font-medium text-foreground">+91-XXXXX-XXXXX</p>
+                    <h3 className="font-semibold text-foreground">WhatsApp / फोन</h3>
+                    <p className="text-sm text-muted-foreground">WhatsApp पर तुरंत संपर्क</p>
+                    <a href={`https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-sm font-medium text-primary hover:underline">+91 94679 18545</a>
                   </div>
                 </CardContent>
               </Card>
@@ -170,9 +198,20 @@ const ContactUs: React.FC = () => {
                     />
                   </div>
 
-                  <Button type="submit" className="w-full gap-2">
+                  {/* Honeypot: hidden from humans, bots tend to fill it */}
+                  <input
+                    type="text"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    aria-hidden="true"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+                  />
+
+                  <Button type="submit" className="w-full gap-2" disabled={submitting}>
                     <Send className="h-4 w-4" />
-                    संदेश भेजें / Send Message
+                    {submitting ? 'भेज रहे हैं… / Sending…' : 'संदेश भेजें / Send Message'}
                   </Button>
                 </form>
               </CardContent>

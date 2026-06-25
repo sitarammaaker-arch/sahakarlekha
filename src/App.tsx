@@ -126,6 +126,7 @@ const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
 const TermsConditions = lazyWithRetry(() => import("./pages/TermsConditions"));
 const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
 const SuperAdminDashboard = lazyWithRetry(() => import("./pages/SuperAdminDashboard"));
+const SuperAdminFeedback = lazyWithRetry(() => import("./pages/SuperAdminFeedback"));
 import { SuperAdminRoute } from "@/components/SuperAdminRoute";
 
 import { preloadHindiFont } from '@/lib/fontLoader';
@@ -277,6 +278,7 @@ const AppRoutes = () => {
 
       {/* Super Admin (Platform Owner) */}
       <Route path="/super-admin" element={<SuperAdminRoute><MainLayout><SuperAdminDashboard /></MainLayout></SuperAdminRoute>} />
+      <Route path="/super-admin/feedback" element={<SuperAdminRoute><MainLayout><SuperAdminFeedback /></MainLayout></SuperAdminRoute>} />
 
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />
