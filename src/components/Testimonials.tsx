@@ -5,9 +5,12 @@
  */
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { Card, CardContent } from '@/components/ui/card';
 import RatingWidget from '@/components/RatingWidget';
 import { Star, Quote } from 'lucide-react';
+
+const SITE = 'https://sahakarlekha.com';
 
 interface Review {
   id: string;
@@ -41,6 +44,32 @@ const Testimonials: React.FC = () => {
 
   const rated = reviews.filter(r => typeof r.rating === 'number');
   const avg = rated.length ? rated.reduce((s, r) => s + (r.rating || 0), 0) / rated.length : 0;
+
+  // SEO: SoftwareApplication + AggregateRating + Review JSON-LD → eligible for
+  // ★ rich results. Only emitted when real, on-page reviews exist (Google policy).
+  const jsonLd = rated.length > 0 ? {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'SahakarLekha',
+    url: SITE,
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'INR' },
+    aggregateRating: {
+      '@type': 'AggregateRating',
+      ratingValue: avg.toFixed(1),
+      reviewCount: String(rated.length),
+      bestRating: '5',
+      worstRating: '1',
+    },
+    review: rated.filter(r => r.message).slice(0, 5).map(r => ({
+      '@type': 'Review',
+      author: { '@type': 'Person', name: r.name || 'एक सदस्य' },
+      reviewRating: { '@type': 'Rating', ratingValue: String(r.rating), bestRating: '5' },
+      reviewBody: r.message,
+    })),
+  } : undefined;
+  useDocumentMeta({ jsonLd });
 
   return (
     <section className="py-16 bg-muted/30">
