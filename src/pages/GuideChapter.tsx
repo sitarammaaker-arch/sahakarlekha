@@ -8,6 +8,7 @@ import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import GuideMarkdown, { slugifyHeading } from '@/components/guide/GuideMarkdown';
+import HelpfulWidget from '@/components/HelpfulWidget';
 import LangToggle from '@/components/guide/LangToggle';
 import { findEntry, GUIDE_ORDER, GUIDE_PARTS } from '@/content/guide';
 import { loadGuideContent, localizedEntry, localizedPartTitle } from '@/content/guide/i18n';
@@ -174,6 +175,9 @@ const GuideChapter: React.FC = () => {
                 {isDone ? t('ch.done') : t('ch.markdone')}
               </Button>
             </div>
+
+            {/* Was this helpful? */}
+            <HelpfulWidget />
 
             {/* Prev / Next */}
             <div className="grid sm:grid-cols-2 gap-3 mt-12 pt-6 border-t">

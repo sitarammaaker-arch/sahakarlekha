@@ -9,6 +9,7 @@ import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import GuideMarkdown, { slugifyHeading } from '@/components/guide/GuideMarkdown';
+import HelpfulWidget from '@/components/HelpfulWidget';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findPost, loadBlogRaw, readingMinutes, relatedPosts, BLOG_ORDER } from '@/content/blog';
 import { ACCENTS, formatDate } from '@/components/blog/blogTheme';
@@ -193,6 +194,9 @@ const BlogPost: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Was this helpful? */}
+            <HelpfulWidget />
 
             {/* Share again */}
             <div className="mt-8 flex justify-center"><ShareBar url={url} title={post.title} /></div>
