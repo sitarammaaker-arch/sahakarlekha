@@ -35,6 +35,7 @@ interface FeedbackRow {
   page_url: string | null;
   user_email: string | null;
   status: string;
+  is_public: boolean;
 }
 
 // In-memory only (cleared on full reload / tab close). Never written to disk.
@@ -111,6 +112,21 @@ const SuperAdminFeedback: React.FC = () => {
     if (error) {
       setRows(prev); // rollback — never leave the UI out of sync with the DB
       toast({ title: 'अपडेट नहीं हुआ', description: 'स्थिति बदली नहीं जा सकी, फिर कोशिश करें।', variant: 'destructive' });
+    }
+  };
+
+  const setPublic = async (id: string, val: boolean) => {
+    if (!sessionPw) return;
+    const prev = rows;
+    setRows(rs => rs.map(r => (r.id === id ? { ...r, is_public: val } : r)));
+    const { error } = await supabase.rpc('admin_feedback_set_public', {
+      p_email: email, p_password: sessionPw, p_id: id, p_is_public: val,
+    });
+    if (error) {
+      setRows(prev);
+      toast({ title: 'अपडेट नहीं हुआ', description: 'प्रकाशन-स्थिति बदली नहीं जा सकी।', variant: 'destructive' });
+    } else if (val) {
+      toast({ title: 'होमपेज पर प्रकाशित ✓', description: 'यह रिव्यू अब वेबसाइट पर दिखेगा।' });
     }
   };
 
@@ -237,6 +253,16 @@ const SuperAdminFeedback: React.FC = () => {
                     )}
                     {r.status !== 'new' && (
                       <Button variant="ghost" size="sm" className="h-8" onClick={() => setStatus(r.id, 'new')}>नया रखें</Button>
+                    )}
+                    {r.type === 'review' && (
+                      <Button
+                        variant={r.is_public ? 'default' : 'outline'}
+                        size="sm"
+                        className={`gap-1 h-8 ${r.is_public ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
+                        onClick={() => setPublic(r.id, !r.is_public)}
+                      >
+                        <Star className="h-3.5 w-3.5" /> {r.is_public ? 'होमपेज पर है ✓' : 'होमपेज पर दिखाएँ'}
+                      </Button>
                     )}
                   </div>
                 </CardContent>

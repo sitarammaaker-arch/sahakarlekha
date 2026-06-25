@@ -17,6 +17,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import PublicLayout from '@/components/PublicLayout';
+import Testimonials from '@/components/Testimonials';
 import { SOCIAL_CHANNELS, SocialIcon, WHATSAPP_NUMBER } from '@/lib/socials';
 import {
   BookOpen, Shield, Users, BarChart3, FileText, Globe,
@@ -465,6 +466,9 @@ const LandingPage: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* ───────── TESTIMONIALS / REVIEWS ───────── */}
+      <Testimonials />
 
       {/* ───────── FINAL CTA ───────── */}
       <section className="py-16 bg-primary text-white">
