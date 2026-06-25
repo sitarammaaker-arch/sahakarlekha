@@ -1,18 +1,25 @@
 /**
  * SuperAdminFeedback — platform-owner inbox for everything submitted via the
  * public Contact form, ratings/reviews and in-app bug/suggestion reports
- * (all rows in the `feedback` table). Read/update is RLS-restricted to active
- * platform admins (see supabase/migrations/002_feedback.sql).
+ * (all rows in the `feedback` table).
+ *
+ * Platform-admin sessions here are often JWT-less, so we read/update through
+ * SECURITY DEFINER RPCs (admin_feedback_list / admin_feedback_set_status) that
+ * re-verify the admin via email+password — see migration 003_feedback_admin_rpc.sql.
+ * The password is held in memory only (module var) for the session; never persisted.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
-  Inbox, RefreshCw, ArrowLeft, Mail, Building2, Clock, Star,
+  Inbox, RefreshCw, ArrowLeft, Mail, Building2, Clock, Star, Lock,
   CheckCircle2, Eye, AlertTriangle, MessageSquare, Bug, Lightbulb,
 } from 'lucide-react';
 
@@ -29,6 +36,9 @@ interface FeedbackRow {
   user_email: string | null;
   status: string;
 }
+
+// In-memory only (cleared on full reload / tab close). Never written to disk.
+let sessionPw: string | null = null;
 
 const TYPE_META: Record<string, { label: string; icon: React.ElementType; cls: string }> = {
   message:    { label: 'संदेश',  icon: MessageSquare, cls: 'bg-blue-100 text-blue-800' },
@@ -54,42 +64,92 @@ function fmt(d: string) {
 }
 
 const SuperAdminFeedback: React.FC = () => {
+  const { user } = useAuth();
   const { toast } = useToast();
+  const email = user?.email || '';
+
   const [rows, setRows] = useState<FeedbackRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
+  const [authed, setAuthed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [pw, setPw] = useState('');
+  const [gateErr, setGateErr] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('new');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (password: string) => {
     setLoading(true);
-    setErr(null);
+    setGateErr(null);
     try {
-      const { data, error } = await supabase
-        .from('feedback')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500);
+      const { data, error } = await supabase.rpc('admin_feedback_list', {
+        p_email: email,
+        p_password: password,
+      });
       if (error) throw error;
+      sessionPw = password;
+      setAuthed(true);
       setRows((data as FeedbackRow[]) || []);
     } catch (e) {
-      setErr('संदेश लोड नहीं हो सके। पक्का करें कि आप platform-admin के रूप में लॉग-इन हैं और माइग्रेशन 002_feedback.sql चल चुका है।');
+      sessionPw = null;
+      setAuthed(false);
+      setGateErr('लॉग-इन सत्यापित नहीं हुआ — पक्का करें कि यह आपके platform-admin का सही पासवर्ड है, और माइग्रेशन 003 चल चुका है।');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [email]);
 
-  useEffect(() => { load(); }, [load]);
+  // Auto-load if we already verified earlier this session.
+  useEffect(() => {
+    if (sessionPw) load(sessionPw);
+  }, [load]);
 
   const setStatus = async (id: string, status: string) => {
+    if (!sessionPw) return;
     const prev = rows;
     setRows(rs => rs.map(r => (r.id === id ? { ...r, status } : r)));
-    const { error } = await supabase.from('feedback').update({ status }).eq('id', id);
+    const { error } = await supabase.rpc('admin_feedback_set_status', {
+      p_email: email, p_password: sessionPw, p_id: id, p_status: status,
+    });
     if (error) {
-      setRows(prev); // rollback — never leave UI out of sync with the DB
+      setRows(prev); // rollback — never leave the UI out of sync with the DB
       toast({ title: 'अपडेट नहीं हुआ', description: 'स्थिति बदली नहीं जा सकी, फिर कोशिश करें।', variant: 'destructive' });
     }
   };
 
+  // ── Password gate ───────────────────────────────────────────────
+  if (!authed) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-10">
+        <Link to="/super-admin" className="text-sm text-muted-foreground inline-flex items-center gap-1 mb-4 hover:text-primary">
+          <ArrowLeft className="h-4 w-4" /> डैशबोर्ड
+        </Link>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 mb-1">
+              <Lock className="h-5 w-5 text-primary" />
+              <h1 className="text-xl font-bold text-foreground">Feedback Inbox</h1>
+            </div>
+            <p className="text-sm text-muted-foreground mb-5">
+              सुरक्षा के लिए अपना platform-admin पासवर्ड डालें। (यह सिर्फ़ इसी सत्र के लिए, मेमोरी में रहेगा।)
+            </p>
+            <form onSubmit={(e) => { e.preventDefault(); if (pw) load(pw); }} className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="adminpw">पासवर्ड ({email || 'admin'})</Label>
+                <Input id="adminpw" type="password" value={pw} autoFocus
+                  onChange={(e) => setPw(e.target.value)} placeholder="••••••••" />
+              </div>
+              {gateErr && (
+                <p className="text-sm text-red-600 flex items-start gap-1.5"><AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" /> {gateErr}</p>
+              )}
+              <Button type="submit" className="w-full" disabled={loading || !pw}>
+                {loading ? 'जाँच रहे हैं…' : 'खोलें'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ── Inbox ───────────────────────────────────────────────────────
   const visible = rows.filter(r => statusFilter === 'all' || r.status === statusFilter);
   const newCount = rows.filter(r => r.status === 'new').length;
 
@@ -105,13 +165,12 @@ const SuperAdminFeedback: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <Link to="/super-admin"><Button variant="ghost" size="sm" className="gap-1"><ArrowLeft className="h-4 w-4" /> डैशबोर्ड</Button></Link>
-          <Button variant="outline" size="sm" className="gap-1" onClick={load} disabled={loading}>
+          <Button variant="outline" size="sm" className="gap-1" onClick={() => sessionPw && load(sessionPw)} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> रिफ्रेश
           </Button>
         </div>
       </div>
 
-      {/* Status filter */}
       <div className="flex flex-wrap gap-2 mb-5">
         {STATUS_FILTERS.map(f => (
           <button
@@ -127,14 +186,6 @@ const SuperAdminFeedback: React.FC = () => {
           </button>
         ))}
       </div>
-
-      {err && (
-        <Card className="border-red-300 bg-red-50 dark:bg-red-950/20 mb-4">
-          <CardContent className="p-4 flex items-start gap-2 text-sm text-red-800 dark:text-red-200">
-            <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" /> {err}
-          </CardContent>
-        </Card>
-      )}
 
       {loading ? (
         <p className="text-sm text-muted-foreground py-10 text-center">लोड हो रहा है…</p>
