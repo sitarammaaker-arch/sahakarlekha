@@ -4,6 +4,7 @@ import { Header } from './Header';
 import { cn } from '@/lib/utils';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { KeyboardShortcutsHelp } from '@/components/KeyboardShortcutsHelp';
+import FeedbackFab from '@/components/FeedbackFab';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -50,6 +51,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           {children}
         </div>
       </main>
+
+      <FeedbackFab />
     </div>
   );
 };
