@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { trackEvent } from '@/lib/analytics';
 import { Star, CheckCircle2 } from 'lucide-react';
 
 const RatingWidget: React.FC<{ className?: string }> = ({ className = '' }) => {
@@ -39,6 +40,7 @@ const RatingWidget: React.FC<{ className?: string }> = ({ className = '' }) => {
         page_url: typeof window !== 'undefined' ? window.location.href : null,
       }]);
       if (error) throw error;
+      trackEvent('rating_submit', { rating, page: typeof window !== 'undefined' ? window.location.pathname : '' });
       setDone(true);
     } catch {
       toast({

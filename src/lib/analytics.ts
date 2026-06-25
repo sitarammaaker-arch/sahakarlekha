@@ -16,6 +16,16 @@ declare global {
   }
 }
 
+/**
+ * Fire a GA4 custom event. Fire-and-forget; no-op if gtag hasn't loaded.
+ * Only pass non-PII params (counts, verdicts, page paths, types) — never names/emails.
+ */
+export function trackEvent(name: string, params?: Record<string, unknown>) {
+  if (typeof window.gtag === 'function') {
+    window.gtag('event', name, params || {});
+  }
+}
+
 export function usePageTracking() {
   const location = useLocation();
   useEffect(() => {

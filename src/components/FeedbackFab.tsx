@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
+import { trackEvent } from '@/lib/analytics';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -45,6 +46,7 @@ export const FeedbackFab: React.FC = () => {
         page_url: typeof window !== 'undefined' ? window.location.href : null,
       }]);
       if (error) throw error;
+      trackEvent('feedback_submit', { kind });
       toast({ title: 'भेज दिया गया ✓', description: 'आपकी बात हम तक पहुँच गई — धन्यवाद!' });
       setMessage('');
       setOpen(false);

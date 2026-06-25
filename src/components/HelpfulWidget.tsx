@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { trackEvent } from '@/lib/analytics';
 import { ThumbsUp, ThumbsDown, CheckCircle2 } from 'lucide-react';
 
 const HelpfulWidget: React.FC = () => {
@@ -36,6 +37,7 @@ const HelpfulWidget: React.FC = () => {
       }]);
       if (error) throw error;
       try { localStorage.setItem(key, verdict); } catch { /* ignore */ }
+      trackEvent('helpful_vote', { verdict, page: path });
       setDone(true);
     } catch {
       toast({ title: 'दर्ज नहीं हो सका', description: 'कृपया थोड़ी देर बाद फिर कोशिश करें।', variant: 'destructive' });

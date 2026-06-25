@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Mail, Phone, MapPin, Clock, Send } from 'lucide-react';
 import { SOCIAL_CHANNELS, SocialIcon, WHATSAPP_NUMBER } from '@/lib/socials';
 import { supabase } from '@/lib/supabase';
+import { trackEvent } from '@/lib/analytics';
 
 const ContactUs: React.FC = () => {
   useDocumentMeta({
@@ -47,6 +48,7 @@ const ContactUs: React.FC = () => {
         page_url: typeof window !== 'undefined' ? window.location.href : null,
       }]);
       if (error) throw error;
+      trackEvent('contact_submit', {});
       toast({ title: 'संदेश भेज दिया गया ✓', description: 'हम 24 घंटे में जवाब देंगे। / We reply within 24 hours.' });
       setName('');
       setEmail('');
