@@ -3,16 +3,19 @@
  * "kaise kare" articles by category. Distinct from /guide (LEARN) and /blog (narrative).
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { HELP_TASKS, HELP_CATEGORIES } from '@/content/help';
-import { LifeBuoy, Clock, ArrowRight } from 'lucide-react';
+import { LifeBuoy, Clock, ArrowRight, Search as SearchIcon } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
 
 const HelpHub: React.FC = () => {
+  const navigate = useNavigate();
+  const [q, setQ] = React.useState('');
+  const onSearch = (e: React.FormEvent) => { e.preventDefault(); const v = q.trim(); if (v) navigate(`/search?q=${encodeURIComponent(v)}`); };
   useDocumentMeta({
     title: 'मदद केंद्र (Help Center) — कैसे करें | SahakarLekha',
     description: 'सहकारी समिति लेखांकन के रोज़मर्रा के काम — Member कैसे जोड़ें, Opening Balance कैसे डालें, Voucher कैसे करें — आसान स्टेप-बाय-स्टेप, सीधे app में करने के लिंक सहित।',
@@ -42,6 +45,15 @@ const HelpHub: React.FC = () => {
           <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
             हर काम के लिए छोटा, सीधा स्टेप-बाय-स्टेप — और हर लेख से सीधे SahakarLekha में वही काम करने का लिंक।
           </p>
+          {/* Site-wide search entry */}
+          <form onSubmit={onSearch} className="relative max-w-xl mx-auto mt-6">
+            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <input
+              type="search" value={q} onChange={(e) => setQ(e.target.value)}
+              placeholder="खोजें: member kaise jode, ट्रायल बैलेंस, loan entry…"
+              className="w-full rounded-xl border border-border bg-background pl-12 pr-4 py-3 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
+          </form>
         </div>
       </section>
 

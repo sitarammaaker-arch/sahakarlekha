@@ -50,6 +50,7 @@ const HelpHub = lazyWithRetry(() => import("./pages/HelpHub"));
 const HelpArticle = lazyWithRetry(() => import("./pages/HelpArticle"));
 const CookbookHub = lazyWithRetry(() => import("./pages/CookbookHub"));
 const CookbookEntry = lazyWithRetry(() => import("./pages/CookbookEntry"));
+const SiteSearch = lazyWithRetry(() => import("./pages/SiteSearch"));
 const GuideQuizPage = lazyWithRetry(() => import("./pages/GuideQuizPage"));
 const GuideCertificate = lazyWithRetry(() => import("./pages/GuideCertificate"));
 const GuideVerify = lazyWithRetry(() => import("./pages/GuideVerify"));
@@ -209,6 +210,7 @@ const AppRoutes = () => {
       <Route path="/help/:slug" element={<HelpArticle />} />
       <Route path="/cookbook" element={<CookbookHub />} />
       <Route path="/cookbook/:slug" element={<CookbookEntry />} />
+      <Route path="/search" element={<SiteSearch />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/software" element={<SoftwareLanding />} />
       <Route path="/software/:type" element={<SoftwareLanding />} />
