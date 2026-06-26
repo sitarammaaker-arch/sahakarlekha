@@ -24,19 +24,19 @@ import { HelpCircle, ArrowRight } from 'lucide-react';
 
 /* ────────────────────────── FAQ Data ────────────────────────── */
 
-interface FAQItem {
+export interface FAQItem {
   q: string;
   aHi: string;
   aEn: string;
 }
 
-interface FAQCategory {
+export interface FAQCategory {
   value: string;
   label: string;
   items: FAQItem[];
 }
 
-const FAQ_CATEGORIES: FAQCategory[] = [
+export const FAQ_CATEGORIES: FAQCategory[] = [
   {
     value: 'getting-started',
     label: 'शुरुआत / Getting Started',

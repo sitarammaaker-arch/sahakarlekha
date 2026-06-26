@@ -12,8 +12,9 @@ import { HELP_TASKS } from '@/content/help';
 import { COOKBOOK_ENTRIES } from '@/content/cookbook';
 import { GUIDE_ORDER, findEntry } from '@/content/guide';
 import { BLOG_POSTS } from '@/content/blog';
+import { FAQ_CATEGORIES } from '@/pages/FAQ';
 
-export type SearchType = 'help' | 'cookbook' | 'guide' | 'blog';
+export type SearchType = 'help' | 'cookbook' | 'guide' | 'blog' | 'faq';
 
 export interface SearchDoc {
   id: string;
@@ -32,6 +33,7 @@ export const TYPE_LABEL: Record<SearchType, string> = {
   cookbook: 'एंट्री कुकबुक',
   guide: 'गाइड',
   blog: 'ब्लॉग',
+  faq: 'सामान्य प्रश्न (FAQ)',
 };
 
 // Synonym groups — variants (Devanagari / roman / common typos / abbreviations) that
@@ -102,6 +104,15 @@ function buildIndex(): SearchDoc[] {
       id: `blog:${b.slug}`, type: 'blog', title: b.title, url: `/blog/${b.slug}`,
       snippet: b.excerpt, category: b.category,
       haystack: norm([b.title, b.excerpt, b.category, ...b.tags].join(' ')),
+    });
+  }
+  for (const cat of FAQ_CATEGORIES) {
+    cat.items.forEach((it, i) => {
+      docs.push({
+        id: `faq:${cat.value}-${i}`, type: 'faq', title: it.q, url: '/faq',
+        snippet: it.aHi, category: cat.label,
+        haystack: norm([it.q, it.aHi, it.aEn, cat.label].join(' ')),
+      });
     });
   }
   INDEX = docs;
