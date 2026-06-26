@@ -5,6 +5,25 @@ must be applied to every code change, not just the immediate task.
 
 ---
 
+## GOVERNING DOCUMENTS (read before non-trivial work)
+
+These define the product's law and workflow. The RULES below (RULE 1–8) are the
+data-integrity and encoding subset; the Constitution generalises them.
+
+- **[CONSTITUTION.md](CONSTITUTION.md)** — Product Constitution SSOT v1.0. Supreme
+  law: vision, principles, Product Laws **L1–L14**, Decision Framework, and the
+  **Claude Code Operating Rules** (Appendix C) — run that pre-flight checklist
+  before implementing anything. RULES 1–8 here map to Laws L1–L6/L11/L12.
+- **[DELIVERY-FRAMEWORK.md](DELIVERY-FRAMEWORK.md)** — how every feature ships:
+  classify (T0–T4 + modifiers) → gates G0–G4. Data-integrity-touching changes
+  (save/report/delete/inventory) carry the most-enforced modifier.
+- **[PRODUCT-AUDIT-2026-06.md](PRODUCT-AUDIT-2026-06.md)** — 2026-06-26 codebase
+  audit vs. the above; prioritized backlog (P0–P3) and roadmap. **Phase 0
+  (data-integrity remediation: L1 rollback, L5 FY-guard, L3 cascades) is the
+  approved active priority.** Re-verify file:line cites before acting.
+
+---
+
 ## RULE 1 — Local state must NEVER diverge silently from Supabase
 
 This is the most important invariant in the project.
