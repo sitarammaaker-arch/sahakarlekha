@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
+import { trackEvent } from '@/lib/analytics';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -287,6 +288,7 @@ const Vouchers: React.FC = () => {
     });
     setSavedVoucherNo(v.voucherNo);
     toast({ title: language === 'hi' ? 'वाउचर सहेजा गया' : 'Voucher saved', description: v.voucherNo });
+    if (v.id) trackEvent('voucher_created', { type: v.type, mode: 'expert' });
     handleClear();
   };
 
@@ -317,6 +319,7 @@ const Vouchers: React.FC = () => {
       });
       setSavedVoucherNo(v.voucherNo);
       toast({ title: language === 'hi' ? 'कोंट्रा वाउचर सहेजा गया' : 'Contra Voucher saved', description: v.voucherNo });
+    if (v.id) trackEvent('voucher_created', { type: v.type, mode: 'contra' });
       handleClear();
       return;
     }
@@ -348,6 +351,7 @@ const Vouchers: React.FC = () => {
     });
     setSavedVoucherNo(v.voucherNo);
     toast({ title: language === 'hi' ? 'वाउचर सहेजा गया' : 'Voucher saved', description: `${v.voucherNo}` });
+    if (v.id) trackEvent('voucher_created', { type: v.type, mode: 'simple' });
     handleClear();
   };
 

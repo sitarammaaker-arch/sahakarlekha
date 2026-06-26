@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
+import { trackEvent } from '@/lib/analytics';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -76,6 +77,7 @@ const SocietySetup: React.FC = () => {
       title: language === 'hi' ? 'सहेजा गया' : 'Saved',
       description: language === 'hi' ? 'समिति विवरण अपडेट हो गया' : 'Society details updated successfully',
     });
+    trackEvent('society_setup_saved', { tab: 'basic' });
   };
 
   const handleSaveFY = () => {

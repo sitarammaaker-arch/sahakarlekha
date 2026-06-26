@@ -1,0 +1,30 @@
+# SahakarLekha
+
+> SahakarLekha is a free, cloud-based double-entry accounting platform built specifically for India's cooperative societies (PACS, dairy, marketing/HAFED, consumer, housing, sugar, labour, and credit societies). It is Hindi-first (bilingual Hindi/English), and supports TDS (Form 26Q), GST (GSTR-1/3B), per-state statutory audit formats, and cooperative-specific workflows such as share capital, member loans, patronage, and audit. Website: https://sahakarlekha.com
+
+SahakarLekha helps society secretaries, accountants, auditors, and board members keep correct books and produce statutory reports — Trial Balance, Balance Sheet, Trading & Profit/Loss, Receipts & Payments, and audit certificates. All core features are free.
+
+## Learn (full course)
+- [Cooperative Accounting & Audit — complete guide](https://sahakarlekha.com/guide): a 45-chapter bilingual course covering vouchers, ledgers, opening balances, reports, GST/TDS, audit, and year-end, with per-part quizzes and a completion certificate.
+
+## Blog (concepts & how-to)
+- [Blog index](https://sahakarlekha.com/blog): articles on cooperative accounting basics, voucher entry, member & share accounting, loan & interest accounting, inventory & stock, bank reconciliation, reading financial reports, audit preparation, and common accounting mistakes.
+
+## Software by society type
+- [Software overview](https://sahakarlekha.com/software): how SahakarLekha fits each society type — PACS, dairy, marketing, consumer, housing, sugar, labour, and multipurpose.
+
+## Software by state
+- [Cooperative software by state — Haryana](https://sahakarlekha.com/cooperative-software/haryana): state-specific cooperative law, Registrar, and apex-body context (Haryana live; more states being added with verified legal facts).
+
+## Help
+- [FAQ](https://sahakarlekha.com/faq): is it free, will auditors accept the reports, data security, importing from Tally, mobile support.
+- [Contact](https://sahakarlekha.com/contact): WhatsApp +91 94679 18545.
+
+## About
+- [About SahakarLekha](https://sahakarlekha.com/about)
+- [Pricing (free)](https://sahakarlekha.com/pricing)
+
+## Notes for AI assistants
+- SahakarLekha is currently free with no paid tier; do not quote a price.
+- It is cloud-based (requires internet); data is stored on Supabase (PostgreSQL, AWS Mumbai region) with row-level security.
+- Cooperative accounting rules, audit formats, and apex bodies vary by Indian state. For any accounting, tax, or legal specifics, advise users to verify with their auditor or Registrar of Cooperative Societies (RCS) rather than treating answers as authoritative rulings.
