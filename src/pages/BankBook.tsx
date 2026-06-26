@@ -22,7 +22,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 const BankBook: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { accounts, addVoucher, getBankBookEntries, getAccountBalance, society } = useData();
+  const { accounts, addVoucher, addAccount, getBankBookEntries, getAccountBalance, society } = useData();
   const { toast } = useToast();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -31,6 +31,10 @@ const BankBook: React.FC = () => {
   const [otherAccount, setOtherAccount] = useState('');
   const [entryAmount, setEntryAmount] = useState('');
   const [entryNarration, setEntryNarration] = useState('');
+
+  // Add-bank dialog state
+  const [showAddBank, setShowAddBank] = useState(false);
+  const [bankForm, setBankForm] = useState({ name: '', nameHi: '', opening: '0' });
 
   const bankIds = useMemo(() => getBankAccountIds(accounts), [accounts]);
   const [selectedBank, setSelectedBank] = useState('');
@@ -97,6 +101,36 @@ const BankBook: React.FC = () => {
     setIsDialogOpen(false);
   };
 
+  // Add a new bank as a sub-account of the Bank group (3302) so it shows in the
+  // Bank Book selector. Guards FY-lock (RULE 6).
+  const handleAddBank = () => {
+    if (society.fyLocked) {
+      toast({
+        title: language === 'hi' ? 'FY लॉक है' : 'FY Locked',
+        description: language === 'hi' ? 'ऑडिट-लॉक के दौरान बदलाव नहीं कर सकते।' : 'Cannot modify while the Financial Year is audit-locked.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!bankForm.name.trim()) {
+      toast({ title: language === 'hi' ? 'बैंक का नाम आवश्यक है' : 'Bank name is required', variant: 'destructive' });
+      return;
+    }
+    const acc = addAccount({
+      name: bankForm.name.trim(),
+      nameHi: bankForm.nameHi.trim() || bankForm.name.trim(),
+      type: 'asset',
+      openingBalance: parseFloat(bankForm.opening) || 0,
+      openingBalanceType: 'debit',
+      isSystem: false,
+      parentId: ACCOUNT_IDS.BANK,
+    });
+    setSelectedBank(acc.id);
+    setBankForm({ name: '', nameHi: '', opening: '0' });
+    setShowAddBank(false);
+    toast({ title: language === 'hi' ? 'बैंक खाता जोड़ा गया ✓' : 'Bank account added ✓', description: acc.name });
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -119,6 +153,35 @@ const BankBook: React.FC = () => {
               <FileSpreadsheet className="h-4 w-4" />CSV
             </Button>
           </div>
+          <Dialog open={showAddBank} onOpenChange={setShowAddBank}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="gap-2"><CreditCard className="h-4 w-4" />{language === 'hi' ? 'नया बैंक' : 'Add Bank'}</Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>{language === 'hi' ? 'नया बैंक खाता जोड़ें' : 'Add New Bank Account'}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>{language === 'hi' ? 'बैंक का नाम (English)' : 'Bank name (English)'} *</Label>
+                  <Input value={bankForm.name} onChange={e => setBankForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. SBI — Main Branch" />
+                </div>
+                <div className="space-y-2">
+                  <Label>{language === 'hi' ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
+                  <Input value={bankForm.nameHi} onChange={e => setBankForm(f => ({ ...f, nameHi: e.target.value }))} placeholder="जैसे SBI — मुख्य शाखा" />
+                </div>
+                <div className="space-y-2">
+                  <Label>{language === 'hi' ? 'प्रारंभिक शेष (₹)' : 'Opening Balance (₹)'}</Label>
+                  <Input type="number" value={bankForm.opening} onChange={e => setBankForm(f => ({ ...f, opening: e.target.value }))} min="0" />
+                  <p className="text-xs text-muted-foreground">{language === 'hi' ? 'खाता खोलते समय बैंक में मौजूद राशि (न हो तो 0)।' : 'Amount currently in the bank (0 if none).'}</p>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setShowAddBank(false)}>{t('cancel')}</Button>
+                  <Button onClick={handleAddBank}><Plus className="h-4 w-4 mr-1" />{language === 'hi' ? 'जोड़ें' : 'Add'}</Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2"><Plus className="h-4 w-4" />{language === 'hi' ? 'नई प्रविष्टि' : 'New Entry'}</Button>
