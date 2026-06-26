@@ -333,6 +333,15 @@ export function findHelpTask(slug: string): HelpTask | null {
   return HELP_TASKS.find((t) => t.slug === slug) ?? null;
 }
 
+/**
+ * Contextual help: the task whose deep-link points at this app route (the reverse
+ * of the PLG CTA). Lets an in-app screen link OUT to its matching how-to, closing
+ * the acquisition↔activation↔support loop from one place (no per-page edits).
+ */
+export function helpForRoute(pathname: string): HelpTask | null {
+  return HELP_TASKS.find((t) => t.deepLink.route === pathname) ?? null;
+}
+
 /** Distinct categories in first-seen order, for the hub. */
 export const HELP_CATEGORIES: string[] = HELP_TASKS.reduce<string[]>((acc, t) => {
   if (!acc.includes(t.category)) acc.push(t.category);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Languages, Bell, User, Settings, HelpCircle, Menu, LogOut, Search, Landmark, ShieldAlert, XCircle, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GlobalSearch } from '@/components/GlobalSearch';
+import { helpForRoute } from '@/content/help';
 
 interface HeaderProps {
   sidebarCollapsed: boolean;
@@ -28,6 +29,8 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
   const { user, logout } = useAuth();
   const { society, loans, auditObjections, vouchers } = useData();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const ctxHelp = helpForRoute(pathname); // matching how-to for the current screen, if any
   const [searchOpen, setSearchOpen] = useState(false);
 
   // Live notification data
@@ -185,9 +188,16 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Help — hidden on mobile to prevent avatar overflow */}
-            <Button variant="ghost" size="icon" className="hidden sm:flex">
+            {/* Contextual help — opens this screen's how-to (or the hub) in a new tab,
+                so the user keeps their place in the app. Highlighted when a match exists. */}
+            <Button
+              variant="ghost" size="icon"
+              className={cn('hidden sm:flex relative', ctxHelp && 'text-primary')}
+              title={ctxHelp ? `कैसे करें: ${ctxHelp.title}` : (language === 'hi' ? 'मदद केंद्र' : 'Help Center')}
+              onClick={() => window.open(ctxHelp ? `/help/${ctxHelp.slug}` : '/help', '_blank', 'noopener')}
+            >
               <HelpCircle className="h-5 w-5" />
+              {ctxHelp && <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary" />}
             </Button>
 
             {/* User Menu */}
@@ -217,7 +227,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
                   {t('settings')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.open('/help', '_blank', 'noopener')}>
                   <HelpCircle className="h-4 w-4 mr-2" />
                   {language === 'hi' ? 'सहायता' : 'Help'}
                 </DropdownMenuItem>
