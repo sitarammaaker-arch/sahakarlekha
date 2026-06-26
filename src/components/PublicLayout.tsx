@@ -114,6 +114,8 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                 <li><Link to="/guide" className="text-muted-foreground hover:text-primary transition-colors">How-To Guide / उपयोग गाइड</Link></li>
                 <li><Link to="/blog" className="text-muted-foreground hover:text-primary transition-colors">Blog / ब्लॉग</Link></li>
                 <li><Link to="/help" className="text-muted-foreground hover:text-primary transition-colors">Help Center / मदद केंद्र</Link></li>
+                <li><Link to="/cookbook" className="text-muted-foreground hover:text-primary transition-colors">Entry Cookbook / एंट्री कुकबुक</Link></li>
+                <li><Link to="/search" className="text-muted-foreground hover:text-primary transition-colors">Search / खोजें</Link></li>
                 <li><Link to="/faq" className="text-muted-foreground hover:text-primary transition-colors">FAQ / सामान्य प्रश्न</Link></li>
                 <li><Link to="/contact" className="text-muted-foreground hover:text-primary transition-colors">Contact / संपर्क</Link></li>
                 <li><Link to="/privacy" className="text-muted-foreground hover:text-primary transition-colors">Privacy Policy / गोपनीयता</Link></li>

@@ -24,6 +24,7 @@ const SOCIETY_TYPES = resolve(ROOT, 'src', 'content', 'societyTypes.tsx');
 const STATES_FILE = resolve(ROOT, 'src', 'content', 'states.ts');
 const BLOG_FILE = resolve(ROOT, 'src', 'content', 'blog', 'index.ts');
 const HELP_FILE = resolve(ROOT, 'src', 'content', 'help', 'index.ts');
+const COOKBOOK_FILE = resolve(ROOT, 'src', 'content', 'cookbook', 'index.ts');
 const COURSE ='सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स';
 
 const esc = (s) =>
@@ -203,6 +204,40 @@ function helpPages() {
   return pages;
 }
 
+// ---- cookbook routes (parsed from src/content/cookbook/index.ts — REFERENCE layer) ----
+function cookbookPages() {
+  const pages = [
+    {
+      path: '/cookbook',
+      title: 'एंट्री कुकबुक (Accounting Entries) — कौन-सी एंट्री कैसे करें | SahakarLekha',
+      description: 'सहकारी समिति की आम journal entries — बिक्री-खरीद, शेयर पूँजी, ऋण-ब्याज, वेतन, डेप्रिसिएशन, क्लोज़िंग स्टॉक, HAFED कमीशन — हर एक का Dr/Cr उदाहरण सहित।',
+      jsonLd: [crumb([{ name: 'एंट्री कुकबुक', item: `${SITE}/cookbook` }])],
+    },
+  ];
+  if (existsSync(COOKBOOK_FILE)) {
+    const src = readFileSync(COOKBOOK_FILE, 'utf-8');
+    const re = /slug:\s*'([^']+)'[\s\S]*?metaTitle:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?metaDescription:\s*'((?:[^'\\]|\\.)*)'/g;
+    let m;
+    while ((m = re.exec(src))) {
+      const [, slug, title, description] = m;
+      const url = `${SITE}/cookbook/${slug}`;
+      pages.push({
+        path: `/cookbook/${slug}`,
+        title,
+        description,
+        jsonLd: [
+          { '@context': 'https://schema.org', '@type': 'Article', headline: title, description, inLanguage: 'hi', url, publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE } },
+          crumb([
+            { name: 'एंट्री कुकबुक', item: `${SITE}/cookbook` },
+            { name: title, item: url },
+          ]),
+        ],
+      });
+    }
+  }
+  return pages;
+}
+
 // ---- sitemap.xml (build-time, from the SAME route sources as the prerender) ----
 // Regenerates the DEPLOYED dist/sitemap.xml so it can never drift from the actual
 // built routes (the hand file had stale /guide/quiz/bhag-N slugs + missing part-10).
@@ -277,7 +312,7 @@ try {
     process.exit(0);
   }
   const template = readFileSync(TEMPLATE, 'utf-8');
-  const pages = [...guidePages(), ...softwarePages(), ...statePages(), ...blogPages(), ...helpPages()];
+  const pages = [...guidePages(), ...softwarePages(), ...statePages(), ...blogPages(), ...helpPages(), ...cookbookPages()];
   let n = 0;
   for (const page of pages) {
     if (!page || !page.path) continue;
