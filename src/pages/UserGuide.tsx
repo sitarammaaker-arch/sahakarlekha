@@ -45,7 +45,7 @@ const Screenshot: React.FC<{ caption: string; file?: string }> = ({ caption, fil
   );
 };
 
-const Step: React.FC<{ n: number; title: string; children: React.ReactNode }> = ({ n, title, children }) => (
+const Step: React.FC<{ n: number; title: string; children?: React.ReactNode }> = ({ n, title, children }) => (
   <div className="flex gap-4 my-3">
     <div className="flex-shrink-0 w-9 h-9 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center text-sm">
       {n}

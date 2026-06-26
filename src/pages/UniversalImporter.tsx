@@ -270,7 +270,7 @@ const UniversalImporter: React.FC = () => {
       const errors = validate(row, rowNum);
       return {
         rowNum,
-        status: errors.length > 0 ? 'error' : 'ok',
+        status: (errors.length > 0 ? 'error' : 'ok') as RowStatus,
         errors,
         data: row,
       };

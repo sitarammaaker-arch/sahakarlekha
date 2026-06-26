@@ -51,7 +51,7 @@ export default function OpeningBalances() {
   const balanceAccounts = useMemo(() =>
     accounts.filter(a =>
       a.type === 'asset' || a.type === 'liability' || a.type === 'equity'
-    ).sort((a, b) => (a.code || '').localeCompare(b.code || '')),
+    ).sort((a, b) => (a.id || '').localeCompare(b.id || '')),
     [accounts]);
 
   const filtered = useMemo(() => {
@@ -201,7 +201,7 @@ export default function OpeningBalances() {
                   const type = entry?.type || (acct.type === 'asset' ? 'debit' : 'credit');
                   return (
                     <TableRow key={acct.id}>
-                      <TableCell className="font-mono text-xs">{acct.code}</TableCell>
+                      <TableCell className="font-mono text-xs">{acct.id}</TableCell>
                       <TableCell className="font-medium text-sm">{acct.name}</TableCell>
                       <TableCell>
                         <span className={`px-1.5 py-0.5 rounded text-xs ${

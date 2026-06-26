@@ -87,6 +87,20 @@ const AskAssistant: React.FC = () => {
               <CardContent className="p-5">
                 <p className="font-bold text-lg text-foreground">{top.title}</p>
                 {top.snippet && <p className="text-foreground mt-2 leading-relaxed">{top.snippet}</p>}
+                {top.lines && top.lines.length > 0 && (
+                  <table className="w-full text-sm mt-3 border rounded-lg overflow-hidden">
+                    <tbody>
+                      {top.lines.map((l, i) => (
+                        <tr key={i} className="border-b last:border-0">
+                          <td className={`py-1.5 px-3 text-foreground ${l.type === 'Cr' ? 'pl-8' : ''}`}>{l.account}</td>
+                          <td className="py-1.5 px-3 text-right w-14">
+                            <span className={`text-xs font-semibold ${l.type === 'Dr' ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{l.type}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
                 <Link to={top.url} className="inline-flex items-center gap-1 text-primary font-semibold mt-3 hover:underline">
                   पूरा पढ़ें <ArrowRight className="h-4 w-4" />
                 </Link>

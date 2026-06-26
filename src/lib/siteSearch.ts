@@ -12,7 +12,7 @@ import { HELP_TASKS } from '@/content/help';
 import { COOKBOOK_ENTRIES } from '@/content/cookbook';
 import { GUIDE_ORDER, findEntry } from '@/content/guide';
 import { BLOG_POSTS } from '@/content/blog';
-import { FAQ_CATEGORIES } from '@/pages/FAQ';
+import { FAQ_CATEGORIES } from '@/content/faq';
 
 export type SearchType = 'help' | 'cookbook' | 'guide' | 'blog' | 'faq';
 
@@ -23,6 +23,8 @@ export interface SearchDoc {
   url: string;
   snippet: string;
   category?: string;
+  /** for cookbook docs: the Dr/Cr posting, so an answer can show it inline */
+  lines?: { account: string; type: 'Dr' | 'Cr' }[];
   /** lowercased searchable haystack */
   haystack: string;
 }
@@ -97,6 +99,7 @@ function buildIndex(): SearchDoc[] {
     docs.push({
       id: `cookbook:${e.slug}`, type: 'cookbook', title: e.title, url: `/cookbook/${e.slug}`,
       snippet: e.scenario, category: e.category,
+      lines: e.lines.map((l) => ({ account: l.account, type: l.type })),
       haystack: norm([e.title, e.intent, e.category, e.scenario, ...e.lines.map((l) => l.account)].join(' ')),
     });
   }

@@ -223,6 +223,7 @@ const CompoundVoucher: React.FC = () => {
         amount,
         narration: narration || (dr.narration || cr.narration || 'Compound Journal Entry'),
         createdBy: user?.name ?? 'System',
+        createdAt: new Date().toISOString(),
         groupId,
       };
       addVoucher(v);

@@ -185,6 +185,11 @@ const LandingPage: React.FC = () => {
             <p className="mt-3 text-xs text-muted-foreground text-center lg:text-left">
               ✓ कोई कार्ड नहीं · ✓ डेटा कभी भी निर्यात करें · ✓ कोई लॉक-इन नहीं
             </p>
+            {/* Ask entry — grounded answers from help/cookbook/guide, no signup needed */}
+            <Link to="/ask" className="mt-5 flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors max-w-xl mx-auto lg:mx-0">
+              <Sparkles className="h-4 w-4 text-primary shrink-0" />
+              <span className="truncate">कोई सवाल? पूछें — "member kaise jode", "GST जमा की एंट्री"…</span>
+            </Link>
           </div>
 
           <div className="relative">

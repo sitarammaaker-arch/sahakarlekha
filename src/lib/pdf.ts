@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { RowInput } from 'jspdf-autotable';
-import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord } from '@/types';
+import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord, Voucher } from '@/types';
 import { ACCOUNT_IDS } from '@/lib/storage';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { fmtDate } from '@/lib/dateUtils';
@@ -1161,7 +1161,7 @@ export function generateAuditRegisterPDF(objections: AuditObjection[], society: 
 }
 
 export function generateDayBookPDF(
-  entries: { id: string; date: string; voucherNo: string; type: string; debitAccountId: string; creditAccountId: string; amount: number; narration?: string }[],
+  entries: Voucher[],
   accounts: LedgerAccount[],
   society: SocietySettings,
   fromDate: string,
@@ -1721,15 +1721,15 @@ export function generateBudgetPDF(params: {
   const buildBody = (rows: BudgetRow[]) =>
     rows.map(r => [r.name, fmtN(r.budget), fmtN(r.actual), `${r.varPct.toFixed(1)}%`, r.status]);
 
-  const tableOpts = (headColor: number[], bodyData: BudgetRow[], totalBudget: number, totalActual: number, y: number) => ({
+  const tableOpts = (headColor: [number, number, number], bodyData: BudgetRow[], totalBudget: number, totalActual: number, y: number) => ({
     startY: y,
     head: [['Account', 'Budget (Rs.)', 'Actual (Rs.)', 'Var %', 'Status']],
     body: buildBody(bodyData),
     foot: [['Total', fmtN(totalBudget), fmtN(totalActual), '', '']],
     styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: headColor, textColor: 255, fontStyle: 'bold' as const },
-    footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' as const },
-    alternateRowStyles: { fillColor: [248, 250, 253] },
+    footStyles: { fillColor: [41, 82, 163] as [number, number, number], textColor: 255, fontStyle: 'bold' as const },
+    alternateRowStyles: { fillColor: [248, 250, 253] as [number, number, number] },
     columnStyles: { 1: { halign: 'right' as const }, 2: { halign: 'right' as const }, 3: { halign: 'right' as const } },
     didParseCell: rightAlignAmountColumns(1, 2, 3),
   });

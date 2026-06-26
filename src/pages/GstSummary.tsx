@@ -248,7 +248,7 @@ export default function GstSummary() {
   // GSTR-3B JSON export
   const handleGstr3bJson = () => {
     const payload = {
-      gstin: society.gstNo || 'GSTIN_NOT_SET',
+      gstin: society.gstin || 'GSTIN_NOT_SET',
       ret_period: fromDate.slice(0, 7).replace('-', ''),
       sup_details: {
         osup_det: { txval: outwardTaxable.taxable, iamt: outwardTaxable.igst, camt: outwardTaxable.cgst, samt: outwardTaxable.sgst, csamt: 0 },
@@ -275,7 +275,7 @@ export default function GstSummary() {
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `GSTR3B_${society.gstNo || 'society'}_${fromDate.slice(0,7)}.json`;
+    a.href = url; a.download = `GSTR3B_${society.gstin || 'society'}_${fromDate.slice(0,7)}.json`;
     a.click(); URL.revokeObjectURL(url);
   };
 
@@ -287,7 +287,7 @@ export default function GstSummary() {
     doc.text('FORM GSTR-3B', w / 2, 14, { align: 'center' });
     doc.setFontSize(9); doc.setFont('helvetica', 'normal');
     doc.text(`[See rule 61(5)]`, w / 2, 20, { align: 'center' });
-    doc.text(`GSTIN: ${society.gstNo || 'N/A'}  |  ${society.name}  |  Period: ${fromDate} to ${toDate}`, w / 2, 26, { align: 'center' });
+    doc.text(`GSTIN: ${society.gstin || 'N/A'}  |  ${society.name}  |  Period: ${fromDate} to ${toDate}`, w / 2, 26, { align: 'center' });
 
     autoTable(doc, {
       startY: 34,
@@ -344,7 +344,7 @@ export default function GstSummary() {
       columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
     });
 
-    doc.save(`GSTR3B_${society.gstNo || 'society'}_${fromDate.slice(0, 7)}.pdf`);
+    doc.save(`GSTR3B_${society.gstin || 'society'}_${fromDate.slice(0, 7)}.pdf`);
   };
 
   // GSTR-1 JSON export (NIC format)
@@ -411,7 +411,7 @@ export default function GstSummary() {
     const payload = {
       version: 'GST3.0.4',
       hash: 'hash',
-      gstin: society.gstNo || 'GSTIN_NOT_SET',
+      gstin: society.gstin || 'GSTIN_NOT_SET',
       fp,
       b2b: b2bArr,
       b2cs: b2csArr,
@@ -422,7 +422,7 @@ export default function GstSummary() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `GSTR1_${society.gstNo || 'society'}_${fromDate.slice(0, 7)}.json`;
+    a.download = `GSTR1_${society.gstin || 'society'}_${fromDate.slice(0, 7)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -434,7 +434,7 @@ export default function GstSummary() {
     doc.setFontSize(14); doc.setFont('helvetica', 'bold');
     doc.text('FORM GSTR-1', w / 2, 14, { align: 'center' });
     doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    doc.text(`GSTIN: ${society.gstNo || 'N/A'}  |  ${society.name}  |  Period: ${fromDate} to ${toDate}`, w / 2, 22, { align: 'center' });
+    doc.text(`GSTIN: ${society.gstin || 'N/A'}  |  ${society.name}  |  Period: ${fromDate} to ${toDate}`, w / 2, 22, { align: 'center' });
 
     // B2B table
     doc.setFontSize(10); doc.setFont('helvetica', 'bold');
@@ -470,7 +470,7 @@ export default function GstSummary() {
       });
     }
 
-    doc.save(`GSTR1_${society.gstNo || 'society'}_${fromDate.slice(0, 7)}.pdf`);
+    doc.save(`GSTR1_${society.gstin || 'society'}_${fromDate.slice(0, 7)}.pdf`);
   };
 
   const handleDownload = () => {

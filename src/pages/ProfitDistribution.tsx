@@ -199,6 +199,8 @@ const ProfitDistribution: React.FC = () => {
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const { startY, font } = addHeader(doc, 'Profit Distribution Statement', society, `Financial Year: ${fy}`, { reportCode: 'PD' });
+    const marginL = 14; // autoTable default left margin (mm)
+    let y = startY;
 
     // Part A — Appropriation Summary
     autoTable(doc, {

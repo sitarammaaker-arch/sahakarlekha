@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
 import { SOCIETY_TEMPLATES } from '@/lib/storage';
+import type { SocietyType } from '@/types';
 
 const SocietySetup: React.FC = () => {
   const { t, language } = useLanguage();
@@ -436,7 +437,7 @@ const SocietySetup: React.FC = () => {
                   <Label>{language === 'hi' ? 'समिति का प्रकार' : 'Society Type'}</Label>
                   <Select
                     value={form.societyType}
-                    onValueChange={v => setForm(f => ({ ...f, societyType: v }))}
+                    onValueChange={v => setForm(f => ({ ...f, societyType: v as SocietyType }))}
                   >
                     <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>

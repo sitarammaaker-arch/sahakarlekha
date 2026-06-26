@@ -759,7 +759,7 @@ export const setCounters = (c: VoucherCounters): void => set(KEYS.counters, c);
 const VCTR_PREFIX = 'sahayata_vctr_';
 
 export const getNextVoucherNo = (
-  type: 'receipt' | 'payment' | 'journal' | 'contra',
+  type: VoucherType,
   financialYear: string,
   existingVouchers: { voucherNo?: string }[] = []
 ): string => {
