@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
+import { trackEvent } from '@/lib/analytics';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -308,6 +309,7 @@ const Members: React.FC = () => {
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
     });
     toast({ title: hi ? 'सदस्य जोड़ा गया' : 'Member added' });
+    trackEvent('member_added');
     setForm(EMPTY_FORM);
     setIsAddOpen(false);
   };
