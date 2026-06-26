@@ -17,7 +17,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
-import { KccLoan, CropSeasonType } from '@/types';
+import type { KccLoan, CropSeasonType } from '@/types';
 import { kccLoanSelect, kccLoanInsert, kccLoanUpdate } from '@/lib/supabaseService';
 
 const fmt = (n: number) =>
@@ -96,24 +96,23 @@ export default function KccLoan() {
     const repaid = Number(form.repaidAmount) || 0;
 
     const loanAccount = accounts.find(a =>
-      a.code === '3313' || a.name.toLowerCase().includes('kcc') || a.name.toLowerCase().includes('crop loan')
+      a.id === '3313' || a.name.toLowerCase().includes('kcc') || a.name.toLowerCase().includes('crop loan')
     );
-    const cashAccount = accounts.find(a => a.code === '3301');
+    const cashAccount = accounts.find(a => a.id === '3301');
 
     let voucherId: string | undefined;
     if (drawn > 0 && loanAccount && cashAccount) {
       try {
-        voucherId = await new Promise<string>((res) => {
-          addVoucher({
-            date: form.disbursementDate,
-            type: 'payment',
-            debitAccountId: loanAccount.id,
-            creditAccountId: cashAccount.id,
-            amount: drawn,
-            narration: `KCC Loan disbursed to ${form.memberName} — ${form.cropName} (${hi ? seasonLabel[form.cropSeason].hi : seasonLabel[form.cropSeason].en})`,
-            createdBy: user?.name || '',
-          }).then((v: any) => res(v?.id || ''));
+        const v = addVoucher({
+          date: form.disbursementDate,
+          type: 'payment',
+          debitAccountId: loanAccount.id,
+          creditAccountId: cashAccount.id,
+          amount: drawn,
+          narration: `KCC Loan disbursed to ${form.memberName} — ${form.cropName} (${hi ? seasonLabel[form.cropSeason].hi : seasonLabel[form.cropSeason].en})`,
+          createdBy: user?.name || '',
         });
+        voucherId = v?.id || undefined;
       } catch { /* ignore voucher errors */ }
     }
 
@@ -201,7 +200,7 @@ export default function KccLoan() {
       ]),
       styles: { fontSize: 7.5 },
       headStyles: { fillColor: [39, 174, 96] },
-      columnStyles: rightAlignAmountColumns(5, 6, 7, 8),
+      didParseCell: rightAlignAmountColumns(5, 6, 7, 8),
     });
 
     const sigNames = getSignatoryNames(society);

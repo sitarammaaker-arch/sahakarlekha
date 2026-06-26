@@ -208,6 +208,7 @@ export type AccountSubtype =
   | 'share_capital' | 'reserve' | 'surplus'
   | 'fixed_asset' | 'accumulated_dep' | 'investment' | 'current_asset' | 'inventory' | 'cash_bank'
   | 'long_term_loan' | 'current_liability' | 'statutory_liability' | 'deposit'
+  | 'closing_stock'
   | 'trading_income' | 'commission_income' | 'scheme_income' | 'other_income'
   | 'direct_expense' | 'employee_expense' | 'admin_expense' | 'operational_expense' | 'depreciation_expense' | 'statutory_expense'
   | 'suspense';

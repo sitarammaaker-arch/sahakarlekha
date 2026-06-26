@@ -210,9 +210,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .maybeSingle();
 
       if (adminData) {
+        const admin = adminData as { name?: string };
         const u: User = {
           id: email,
-          name: adminData.name || email.split('@')[0],
+          name: admin.name || email.split('@')[0],
           email,
           role: 'admin',
           societyId: 'PLATFORM',

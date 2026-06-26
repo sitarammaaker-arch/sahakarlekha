@@ -69,7 +69,7 @@ const BankReconciliation: React.FC = () => {
 
   const bankIds = useMemo(() => getBankAccountIds(accounts), [accounts]);
   const [selectedBank, setSelectedBank] = useState('');
-  const activeBankId = selectedBank || bankIds[0] || activeBankId;
+  const activeBankId = selectedBank || bankIds[0] || '';
 
   const bankAccount = accounts.find(a => a.id === activeBankId);
 
