@@ -71,6 +71,15 @@ const SYNONYMS: string[][] = [
 
 const norm = (s: string) => s.toLowerCase().trim();
 
+// Grammatical particles that carry no search value and are often absent from the
+// content haystack — removing them keeps AND-matching from failing on phrases like
+// "GST जमा की एंट्री" (the "की" would otherwise exclude every real answer).
+const STOPWORDS = new Set([
+  'की', 'का', 'के', 'को', 'में', 'से', 'पर', 'और', 'या', 'है', 'हैं', 'कि', 'एक',
+  'यह', 'वह', 'हो', 'तो', 'भी', 'पे', 'ने',
+  'the', 'a', 'an', 'of', 'to', 'in', 'is', 'for', 'on', 'how', 'do', 'i', 'my',
+]);
+
 /** Build the search index once (module-level, so it is computed lazily on first use). */
 let INDEX: SearchDoc[] | null = null;
 function buildIndex(): SearchDoc[] {
@@ -144,7 +153,7 @@ function editDistance(a: string, b: string): number {
 export function search(query: string, limit = 30): SearchResult[] {
   const q = norm(query);
   if (q.length < 2) return [];
-  const tokens = q.split(/\s+/).filter((t) => t.length >= 2);
+  const tokens = q.split(/\s+/).filter((t) => t.length >= 2 && !STOPWORDS.has(t));
   if (!tokens.length) return [];
   const docs = buildIndex();
   const results: SearchResult[] = [];
