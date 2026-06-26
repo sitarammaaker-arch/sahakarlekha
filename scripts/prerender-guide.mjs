@@ -168,6 +168,55 @@ function blogPages() {
   return pages;
 }
 
+// ---- sitemap.xml (build-time, from the SAME route sources as the prerender) ----
+// Regenerates the DEPLOYED dist/sitemap.xml so it can never drift from the actual
+// built routes (the hand file had stale /guide/quiz/bhag-N slugs + missing part-10).
+// split_guide.py and the committed public/sitemap.xml are left untouched — vite
+// copies public/sitemap.xml into dist/, then this overwrites the dist copy.
+function buildSitemap(dynamicPages) {
+  const today = new Date().toISOString().slice(0, 10);
+  // Static public routes (always present; not prerendered).
+  const STATIC = [
+    { path: '/', changefreq: 'weekly', priority: '1.0' },
+    { path: '/register', changefreq: 'monthly', priority: '0.9' },
+    { path: '/login', changefreq: 'monthly', priority: '0.8' },
+    { path: '/about', changefreq: 'monthly', priority: '0.5' },
+    { path: '/pricing', changefreq: 'monthly', priority: '0.7' },
+    { path: '/faq', changefreq: 'monthly', priority: '0.6' },
+    { path: '/contact', changefreq: 'monthly', priority: '0.6' },
+    { path: '/privacy', changefreq: 'yearly', priority: '0.3' },
+    { path: '/terms', changefreq: 'yearly', priority: '0.3' },
+    // Guide hub + landing routes (chapters themselves come from guidePages()).
+    { path: '/guide', changefreq: 'weekly', priority: '0.9' },
+    { path: '/guide/quick-start', changefreq: 'monthly', priority: '0.7' },
+    { path: '/guide/certificate', changefreq: 'monthly', priority: '0.5' },
+    { path: '/guide/verify', changefreq: 'monthly', priority: '0.5' },
+  ];
+  // One quiz per guide Part (currently 10). Canonical slugs are part-N (bhag-N 301s here).
+  for (let i = 1; i <= 10; i++) STATIC.push({ path: `/guide/quiz/part-${i}`, changefreq: 'monthly', priority: '0.4' });
+
+  const rank = (path) => {
+    if (path === '/blog') return { changefreq: 'weekly', priority: '0.9' };
+    if (path === '/software') return { changefreq: 'weekly', priority: '0.8' };
+    if (path.startsWith('/blog/')) return { changefreq: 'monthly', priority: '0.8' };
+    if (path.startsWith('/software/') || path.startsWith('/cooperative-software/')) return { changefreq: 'monthly', priority: '0.8' };
+    if (path.startsWith('/guide/')) return { changefreq: 'monthly', priority: '0.7' };
+    return { changefreq: 'monthly', priority: '0.6' };
+  };
+
+  const all = [
+    ...STATIC,
+    ...dynamicPages.filter((p) => p && p.path).map((p) => ({ path: p.path, ...rank(p.path) })),
+  ];
+  const seen = new Set();
+  const urls = all.filter((u) => (seen.has(u.path) ? false : (seen.add(u.path), true)));
+
+  const body = urls.map((u) =>
+    `  <url>\n    <loc>${SITE}${u.path}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>${u.changefreq}</changefreq>\n    <priority>${u.priority}</priority>\n  </url>`
+  ).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`;
+}
+
 function transform(template, page) {
   const url = SITE + page.path;
   let html = template;
@@ -203,6 +252,14 @@ try {
     n++;
   }
   console.log(`[prerender] wrote ${n} static pages (guide + software + blog).`);
+  try {
+    const sitemap = buildSitemap(pages);
+    writeFileSync(resolve(DIST, 'sitemap.xml'), sitemap, 'utf-8');
+    const count = (sitemap.match(/<loc>/g) || []).length;
+    console.log(`[prerender] regenerated dist/sitemap.xml (${count} URLs)`);
+  } catch (e) {
+    console.warn('[prerender] sitemap generation skipped:', e && e.message ? e.message : e);
+  }
 } catch (err) {
   console.warn('[prerender] skipped due to error:', err && err.message ? err.message : err);
   process.exit(0); // never block the build
