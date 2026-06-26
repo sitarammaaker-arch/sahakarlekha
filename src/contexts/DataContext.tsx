@@ -1275,25 +1275,43 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return updated;
     });
     supabase.from('vouchers').upsert(withSoc(restoredVoucher)).then(({ error }) => {
-      if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
+      if (error) {
+        console.error('DB sync error:', error.message);
+        setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back to deleted state
+        toastRef.current({ title: 'रिस्टोर सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
       else syncEntries(restoredVoucher); // re-populate voucher_entries so SQL reports see it again
     });
   }, []);
 
   const clearVoucher = useCallback((id: string, clearedDate?: string) => {
+    if (guardFYLocked()) return;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
     const cleared = { ...current, isCleared: true, clearedDate: clearedDate ?? new Date().toISOString().split('T')[0] };
     setVouchersState(prev => { const updated = prev.map(v => v.id === id ? cleared : v); return updated; });
-    supabase.from('vouchers').upsert(withSoc(cleared)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('vouchers').upsert(withSoc(cleared)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
+        toastRef.current({ title: 'क्लियर सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
   }, []);
 
   const unclearVoucher = useCallback((id: string) => {
+    if (guardFYLocked()) return;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
     const uncleared = { ...current, isCleared: false, clearedDate: undefined };
     setVouchersState(prev => { const updated = prev.map(v => v.id === id ? uncleared : v); return updated; });
-    supabase.from('vouchers').upsert(withSoc(uncleared)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('vouchers').upsert(withSoc(uncleared)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
+        toastRef.current({ title: 'अनक्लियर सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
   }, []);
 
   const approveVoucher = useCallback((id: string, approvedBy: string) => {
@@ -1303,7 +1321,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updated = { ...current, approvalStatus: 'approved' as const, approvedBy, approvedAt: new Date().toISOString() };
     setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); return u; });
     supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => {
-      if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
+      if (error) {
+        console.error('DB sync error:', error.message);
+        setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
+        toastRef.current({ title: 'अप्रूवल सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
       else syncEntries(updated); // mirror to voucher_entries so SQL reports see the approved entries
     });
   }, [society.fyLocked]);
@@ -1315,12 +1337,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updated = { ...current, approvalStatus: 'rejected' as const, approvalRemarks: reason, approvedBy: rejectedBy, approvedAt: new Date().toISOString() };
     setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); return u; });
     supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => {
-      if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
+      if (error) {
+        console.error('DB sync error:', error.message);
+        setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
+        toastRef.current({ title: 'रिजेक्ट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
       else deleteEntries(id); // rejected vouchers shouldn't impact SQL reports
     });
   }, [society.fyLocked]);
 
   const addAuditObjection = useCallback((data: Omit<AuditObjection, 'id' | 'objectionNo' | 'createdAt'>): AuditObjection => {
+    if (guardFYLocked()) return { ...data, id: '' } as unknown as AuditObjection;
     const maxNum = auditObjectionsRef.current.filter(o => o.objectionNo?.includes(data.auditYear)).reduce((max, o) => {
       const m = o.objectionNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
     }, 0);
@@ -1340,11 +1367,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateAuditObjection = useCallback((id: string, data: Partial<AuditObjection>) => {
-    setAuditObjectionsState(prev => {
-      const updated = prev.map(o => o.id === id ? { ...o, ...data } : o);
-      const updated_obj = updated.find(o => o.id === id);
-      if (updated_obj) supabase.from('audit_objections').upsert(updated_obj).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-      return updated;
+    if (guardFYLocked()) return;
+    const before = auditObjectionsRef.current.find(o => o.id === id);
+    if (!before) return;
+    const updated = { ...before, ...data };
+    setAuditObjectionsState(prev => prev.map(o => o.id === id ? updated : o));
+    supabase.from('audit_objections').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        setAuditObjectionsState(prev => prev.map(o => o.id === id ? before : o));   // RULE 1: roll back to prior state
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
     });
   }, []);
 
@@ -1357,6 +1390,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ── Recoverables (HAFED Proforma 2) ────────────────────────────────────────
   const addRecoverable = useCallback((data: Omit<Recoverable, 'id' | 'createdAt'>): Recoverable => {
+    if (guardFYLocked()) return { ...data, id: '' } as unknown as Recoverable;
     const newRec: Recoverable = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     recoverablesRef.current = [...recoverablesRef.current, newRec];
     setRecoverablesState(prev => [...prev, newRec]);
@@ -1372,11 +1406,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateRecoverable = useCallback((id: string, data: Partial<Recoverable>) => {
-    setRecoverablesState(prev => {
-      const updated = prev.map(r => r.id === id ? { ...r, ...data } : r);
-      const upd = updated.find(r => r.id === id);
-      if (upd) supabase.from('recoverables').upsert(withSoc(upd)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-      return updated;
+    if (guardFYLocked()) return;
+    const before = recoverablesRef.current.find(r => r.id === id);
+    if (!before) return;
+    const updated = { ...before, ...data };
+    setRecoverablesState(prev => prev.map(r => r.id === id ? updated : r));
+    supabase.from('recoverables').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        setRecoverablesState(prev => prev.map(r => r.id === id ? before : r));   // RULE 1: roll back to prior state
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
     });
   }, []);
 
@@ -1388,6 +1428,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ── Kachi Aarat (HAFED Proforma 8) ─────────────────────────────────────────
   const addKachiAaratEntry = useCallback((data: Omit<KachiAaratEntry, 'id' | 'createdAt'>): KachiAaratEntry => {
+    if (guardFYLocked()) return { ...data, id: '' } as unknown as KachiAaratEntry;
     const newEntry: KachiAaratEntry = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     kachiAaratEntriesRef.current = [...kachiAaratEntriesRef.current, newEntry];
     setKachiAaratEntriesState(prev => [...prev, newEntry]);
@@ -1403,11 +1444,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateKachiAaratEntry = useCallback((id: string, data: Partial<KachiAaratEntry>) => {
-    setKachiAaratEntriesState(prev => {
-      const updated = prev.map(e => e.id === id ? { ...e, ...data } : e);
-      const upd = updated.find(e => e.id === id);
-      if (upd) supabase.from('kachi_aarat_entries').upsert(withSoc(upd)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-      return updated;
+    if (guardFYLocked()) return;
+    const before = kachiAaratEntriesRef.current.find(e => e.id === id);
+    if (!before) return;
+    const updated = { ...before, ...data };
+    setKachiAaratEntriesState(prev => prev.map(e => e.id === id ? updated : e));
+    supabase.from('kachi_aarat_entries').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        setKachiAaratEntriesState(prev => prev.map(e => e.id === id ? before : e));   // RULE 1: roll back to prior state
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
     });
   }, []);
 
@@ -1424,6 +1471,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const id = data.id || existing?.id || crypto.randomUUID();
     const createdAt = existing?.createdAt || new Date().toISOString();
     const entry: P7Entry = { ...(existing || {} as P7Entry), ...data, id, createdAt };
+    if (guardFYLocked()) return entry;
     setP7EntriesState(prev => {
       const filtered = prev.filter(e => e.id !== id);
       return [...filtered, entry];
@@ -1440,6 +1488,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const addMember = useCallback((data: Omit<Member, 'id'>): Member => {
+    if (guardFYLocked()) return { ...data, id: '' } as Member;
     const newMember: Member = { ...data, id: crypto.randomUUID() };
     setMembersState(prev => {
       const updated = [...prev, newMember];
@@ -1471,6 +1520,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.financialYear]);
 
   const updateMember = useCallback((id: string, data: Partial<Member>) => {
+    if (guardFYLocked()) return;
     const oldMember = membersRef.current.find(m => m.id === id);
     if (!oldMember) return;
     const updatedMember = { ...oldMember, ...data };
@@ -1478,7 +1528,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = prev.map(m => m.id === id ? updatedMember : m);
       return updated;
     });
-    supabase.from('members').upsert(withSoc(updatedMember)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('members').upsert(withSoc(updatedMember)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        setMembersState(prev => prev.map(m => m.id === id ? oldMember : m));   // RULE 1: roll back to prior state
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
     // Helper: re-sync a member's auto-voucher (Share Capital / Admission Fee).
     // Updates amount + narration + lines AND syncs voucher_entries so SQL reports match.
     // If the voucher was cancelled earlier, warn the user instead of silently no-op.
@@ -1574,6 +1630,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const addAccount = useCallback((data: Omit<LedgerAccount, 'id'>): LedgerAccount => {
+    if (guardFYLocked()) return { ...data, id: '' } as LedgerAccount;
     const newAccount: LedgerAccount = { ...data, id: crypto.randomUUID() };
     setAccountsState(prev => {
       const updated = [...prev, newAccount];
@@ -1584,10 +1641,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateAccount = useCallback((id: string, data: Partial<LedgerAccount>) => {
+    if (guardFYLocked()) return;
     setAccountsState(prev => {
+      const before = prev.find(a => a.id === id);
       const updated = prev.map(a => a.id === id ? { ...a, ...data } : a);
       const updatedAccount = updated.find(a => a.id === id);
-      if (updatedAccount) supabase.from('accounts').upsert(updatedAccount).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+      if (updatedAccount && before) supabase.from('accounts').upsert(withSoc(updatedAccount)).then(({ error }) => {
+        if (error) {
+          console.error('DB sync error:', error.message);
+          setAccountsState(p => p.map(a => a.id === id ? before : a));   // RULE 1: roll back to prior state
+          toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        }
+      });
       return updated;
     });
   }, []);
@@ -1911,6 +1976,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [members, activeVouchers]);
 
   const addLoan = useCallback((data: Omit<Loan, 'id' | 'loanNo' | 'createdAt'>): Loan => {
+    if (guardFYLocked()) return { ...data, id: '' } as unknown as Loan;
     const fy = society.financialYear;
     const maxNum = loansRef.current.filter(l => l.loanNo?.includes(fy)).reduce((max, l) => {
       const m = l.loanNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
@@ -1960,22 +2026,42 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.financialYear, accounts, addVoucher, user?.name]);
 
   const updateLoan = useCallback((id: string, data: Partial<Loan>) => {
-    setLoansState(prev => {
-      const updated = prev.map(l => l.id === id ? { ...l, ...data } : l);
-      const updatedLoan = updated.find(l => l.id === id);
-      if (updatedLoan) supabase.from('loans').upsert(updatedLoan).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-      return updated;
+    if (guardFYLocked()) return;
+    const before = loansRef.current.find(l => l.id === id);
+    if (!before) return;
+    const updated = { ...before, ...data };
+    setLoansState(prev => prev.map(l => l.id === id ? updated : l));
+    supabase.from('loans').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        setLoansState(prev => prev.map(l => l.id === id ? before : l));   // RULE 1: roll back to prior state
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
     });
   }, []);
 
   const deleteLoan = useCallback((id: string) => {
     if (guardFYLocked()) return;
+    const loan = loansRef.current.find(l => l.id === id);
     setLoansState(prev => { const updated = prev.filter(l => l.id !== id); return updated; });
     supabase.from('loans').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // RULE 3: soft-cancel the auto-generated disbursement voucher (matched by the unique loanNo
+    // in its narration) so no ghost "Loans & Advances" asset lingers in Trial Balance / Balance Sheet.
+    if (loan?.loanNo) {
+      const now = new Date().toISOString();
+      const linkedIds = new Set(vouchersRef.current.filter(v => !v.isDeleted && v.memberId === loan.memberId && v.narration?.includes(loan.loanNo)).map(v => v.id));
+      if (linkedIds.size > 0) {
+        const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Loan deleted' } : v;
+        vouchersRef.current = vouchersRef.current.map(cancel);
+        setVouchersState(prev => prev.map(cancel));
+        linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) console.error('Loan voucher cancel sync:', error.message); else deleteEntries(vid); }));
+      }
+    }
     console.info(`[AUDIT-DELETE] Loan id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
   const addAsset = useCallback((data: Omit<Asset, 'id' | 'assetNo'>): Asset => {
+    if (guardFYLocked()) return { ...data, id: '' } as unknown as Asset;
     const maxNum = assetsRef.current.reduce((max, a) => {
       const m = a.assetNo?.match(/AST\/(\d+)/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
     }, 0);
@@ -1995,18 +2081,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateAsset = useCallback((id: string, data: Partial<Asset>) => {
-    setAssetsState(prev => {
-      const updated = prev.map(a => a.id === id ? { ...a, ...data } : a);
-      const updatedAsset = updated.find(a => a.id === id);
-      if (updatedAsset) supabase.from('assets').upsert(updatedAsset).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-      return updated;
+    if (guardFYLocked()) return;
+    const before = assetsRef.current.find(a => a.id === id);
+    if (!before) return;
+    const updated = { ...before, ...data };
+    setAssetsState(prev => prev.map(a => a.id === id ? updated : a));
+    supabase.from('assets').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        setAssetsState(prev => prev.map(a => a.id === id ? before : a));   // RULE 1: roll back to prior state
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
     });
   }, []);
 
   const deleteAsset = useCallback((id: string) => {
     if (guardFYLocked()) return;
+    const asset = assetsRef.current.find(a => a.id === id);
     setAssetsState(prev => { const updated = prev.filter(a => a.id !== id); return updated; });
     supabase.from('assets').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // RULE 3: soft-cancel any depreciation journal(s) auto-posted for this asset (matched by its
+    // unique assetNo in the narration) so no orphan depreciation expense / accumulated-dep lingers.
+    if (asset?.assetNo) {
+      const now = new Date().toISOString();
+      const linkedIds = new Set(vouchersRef.current.filter(v => !v.isDeleted && v.narration?.includes(asset.assetNo)).map(v => v.id));
+      if (linkedIds.size > 0) {
+        const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Asset deleted' } : v;
+        vouchersRef.current = vouchersRef.current.map(cancel);
+        setVouchersState(prev => prev.map(cancel));
+        linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) console.error('Asset depreciation voucher cancel sync:', error.message); else deleteEntries(vid); }));
+      }
+    }
     console.info(`[AUDIT-DELETE] Asset id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
@@ -2015,6 +2120,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Skips assets already posted, with zero rate, Land category, or disposed.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const postDepreciation = useCallback((fy?: string): { posted: number; skipped: number } => {
+    if (guardFYLocked()) return { posted: 0, skipped: 0 };
     const targetFY  = fy || society.financialYear;
     const fyDates   = parseFY(targetFY);
     if (!fyDates) return { posted: 0, skipped: 0 };
@@ -2313,6 +2419,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [getTrialBalance, stockItems, stockMovements, activeVouchers, society.financialYear]);
 
   const postClosingStock = useCallback((fy?: string): { posted: boolean; amount: number; alreadyPosted: boolean } => {
+    if (guardFYLocked()) return { posted: false, amount: 0, alreadyPosted: false };
     const currentFY = fy ?? society.financialYear;
     // Check if already posted — accept the NEW (Cr 5150) or LEGACY (Cr 5101) journal.
     const alreadyPosted = activeVouchers.some(v =>
@@ -2398,12 +2505,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Step 2: update the late-added columns (stockGroup, salesAccountId, purchaseAccountId,
   // p4Category, valuationMethod) separately. If user hasn't run the ALTER TABLE migration
   // yet, only step 2 fails — local state stays consistent and base save still works.
-  const persistStockItem = (item: StockItem) => {
+  const persistStockItem = (item: StockItem, opts?: { onBaseFail?: () => void }) => {
     const { salesAccountId, purchaseAccountId, stockGroup, p4Category, valuationMethod, ...baseCols } = item;
     supabase.from('stock_items').upsert(withSoc(baseCols)).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message);
-        toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' });
+        opts?.onBaseFail?.();   // RULE 1: roll back local state
+        toastRef.current({ title: 'स्टॉक आइटम सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara save karein.`, variant: 'destructive', duration: 12000 });
         return;
       }
       const extras: Record<string, unknown> = {};
@@ -2429,6 +2537,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const addStockItem = useCallback((data: Omit<StockItem, 'id' | 'itemCode'>): StockItem => {
+    if (guardFYLocked()) return { ...data, id: '' } as unknown as StockItem;
     // Derive next item code from existing items (not localStorage counter) to prevent duplicates
     let newItem: StockItem;
     setStockItemsState(prev => {
@@ -2438,17 +2547,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }, 0);
       const itemCode = `ITM/${String(maxNum + 1).padStart(3, '0')}`;
       newItem = { ...data, id: crypto.randomUUID(), itemCode };
-      persistStockItem(newItem);
+      persistStockItem(newItem, { onBaseFail: () => setStockItemsState(p => p.filter(i => i.id !== newItem.id)) });
       return [...prev, newItem];
     });
     return newItem!;
   }, []);
 
   const updateStockItem = useCallback((id: string, data: Partial<StockItem>) => {
+    if (guardFYLocked()) return;
     setStockItemsState(prev => {
+      const before = prev.find(i => i.id === id);
       const updated = prev.map(i => i.id === id ? { ...i, ...data } : i);
       const updatedItem = updated.find(i => i.id === id);
-      if (updatedItem) persistStockItem(updatedItem);
+      if (updatedItem && before) persistStockItem(updatedItem, { onBaseFail: () => setStockItemsState(p => p.map(i => i.id === id ? before : i)) });
       return updated;
     });
   }, []);
@@ -2498,6 +2609,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [addVoucher, user?.name]);
 
   const addStockMovement = useCallback((data: Omit<StockMovement, 'id' | 'createdAt'>) => {
+    if (guardFYLocked()) return;
     const movement: StockMovement = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     stockMovementsRef.current = [...stockMovementsRef.current, movement];
     setStockMovementsState(prev => [...prev, movement]);
@@ -2529,6 +2641,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ── Sales ──────────────────────────────────────────────────────────────────
   const addSale = useCallback((data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>): Sale => {
+    if (guardFYLocked()) return { ...data, id: '' } as unknown as Sale;
     // Enforce per-item Sales A/c (group): block posting if any STOCK item being
     // sold has no salesAccountId, so sales never silently fall back to '4101'.
     const unmappedNames = data.items
@@ -2828,6 +2941,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ── Purchases ──────────────────────────────────────────────────────────────
   const addPurchase = useCallback((data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>): Purchase => {
+    if (guardFYLocked()) return { ...data, id: '' } as unknown as Purchase;
     // Enforce per-item Purchase A/c (group): block posting if any STOCK item being
     // purchased has no purchaseAccountId, so purchases never silently fall to '5101'.
     const unmappedNames = data.items
@@ -3148,6 +3262,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ── Employees ──────────────────────────────────────────────────────────────
   const addEmployee = useCallback((data: Omit<Employee, 'id' | 'empNo'>): Employee => {
+    if (guardFYLocked()) return { ...data, id: '' } as unknown as Employee;
     const maxEmpNum = employeesRef.current.reduce((max, e) => {
       const m = e.empNo?.match(/EMP\/(\d+)/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
     }, 0);
@@ -3167,11 +3282,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateEmployee = useCallback((id: string, data: Partial<Employee>) => {
-    setEmployeesState(prev => {
-      const updated = prev.map(e => e.id === id ? { ...e, ...data } : e);
-      const updatedEmp = updated.find(e => e.id === id);
-      if (updatedEmp) supabase.from('employees').upsert(updatedEmp).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-      return updated;
+    if (guardFYLocked()) return;
+    const before = employeesRef.current.find(e => e.id === id);
+    if (!before) return;
+    const updated = { ...before, ...data };
+    setEmployeesState(prev => prev.map(e => e.id === id ? updated : e));
+    supabase.from('employees').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        setEmployeesState(prev => prev.map(e => e.id === id ? before : e));   // RULE 1: roll back to prior state
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
     });
   }, []);
 
@@ -3184,6 +3305,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ── Salary Records ─────────────────────────────────────────────────────────
   const addSalaryRecord = useCallback((data: Omit<SalaryRecord, 'id' | 'slipNo' | 'createdAt'>): SalaryRecord => {
+    if (guardFYLocked()) return { ...data, id: '' } as unknown as SalaryRecord;
     const fy = society.financialYear;
     const maxSlipNum = salaryRecordsRef.current.filter(r => r.slipNo?.includes(fy)).reduce((max, r) => {
       const m = r.slipNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
@@ -3204,6 +3326,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.financialYear]);
 
   const updateSalaryRecord = useCallback((id: string, data: Partial<SalaryRecord>) => {
+    if (guardFYLocked()) return;
     const oldRecord = salaryRecordsRef.current.find(r => r.id === id);
     if (!oldRecord) return;
     const merged = { ...oldRecord, ...data };
@@ -3273,8 +3396,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     salaryRecordsRef.current = salaryRecordsRef.current.map(r => r.id === id ? merged : r);
     setSalaryRecordsState(prev => prev.map(r => r.id === id ? merged : r));
-    supabase.from('salary_records').upsert(merged).then(({ error }) => {
-      if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
+    supabase.from('salary_records').upsert(withSoc(merged)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message);
+        salaryRecordsRef.current = salaryRecordsRef.current.map(r => r.id === id ? oldRecord : r);
+        setSalaryRecordsState(prev => prev.map(r => r.id === id ? oldRecord : r));   // RULE 1: roll back to prior state
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
     });
   }, [employees, accounts, addVoucher]);
 
@@ -3359,6 +3487,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const addSupplier = useCallback((data: Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'createdAt'>): Supplier => {
+    if (guardFYLocked()) return { ...data, id: '' } as unknown as Supplier;
     const accountId = crypto.randomUUID();
     // Auto-create ledger account under Sundry Creditors (2101)
     const newAccount: LedgerAccount = {
@@ -3393,6 +3522,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateSupplier = useCallback((id: string, data: Partial<Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'createdAt'>>) => {
+    if (guardFYLocked()) return;
     const before = suppliersRef.current.find(s => s.id === id);
     if (!before) return;
     const updated: Supplier = { ...before, ...data };
@@ -3516,6 +3646,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const addCustomer = useCallback((data: Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'createdAt'>): Customer => {
+    if (guardFYLocked()) return { ...data, id: '' } as unknown as Customer;
     const accountId = crypto.randomUUID();
     // Auto-create ledger account under Sundry Debtors (3303)
     const newAccount: LedgerAccount = {
@@ -3550,6 +3681,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateCustomer = useCallback((id: string, data: Partial<Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'createdAt'>>) => {
+    if (guardFYLocked()) return;
     const before = customersRef.current.find(c => c.id === id);
     if (!before) return;
     const updated: Customer = { ...before, ...data };
