@@ -23,7 +23,8 @@ const MANIFEST = resolve(ROOT, 'scripts', 'guide-manifest.json');
 const SOCIETY_TYPES = resolve(ROOT, 'src', 'content', 'societyTypes.tsx');
 const STATES_FILE = resolve(ROOT, 'src', 'content', 'states.ts');
 const BLOG_FILE = resolve(ROOT, 'src', 'content', 'blog', 'index.ts');
-const COURSE = 'सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स';
+const HELP_FILE = resolve(ROOT, 'src', 'content', 'help', 'index.ts');
+const COURSE ='सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स';
 
 const esc = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -168,6 +169,40 @@ function blogPages() {
   return pages;
 }
 
+// ---- help routes (parsed from src/content/help/index.ts — the DO layer) ----
+function helpPages() {
+  const pages = [
+    {
+      path: '/help',
+      title: 'मदद केंद्र (Help Center) — कैसे करें | SahakarLekha',
+      description: 'सहकारी समिति लेखांकन के रोज़मर्रा के काम — Member कैसे जोड़ें, Opening Balance कैसे डालें, Voucher कैसे करें — आसान स्टेप-बाय-स्टेप।',
+      jsonLd: [crumb([{ name: 'मदद केंद्र', item: `${SITE}/help` }])],
+    },
+  ];
+  if (existsSync(HELP_FILE)) {
+    const src = readFileSync(HELP_FILE, 'utf-8');
+    const re = /slug:\s*'([^']+)'[\s\S]*?metaTitle:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?metaDescription:\s*'((?:[^'\\]|\\.)*)'/g;
+    let m;
+    while ((m = re.exec(src))) {
+      const [, slug, title, description] = m;
+      const url = `${SITE}/help/${slug}`;
+      pages.push({
+        path: `/help/${slug}`,
+        title,
+        description,
+        jsonLd: [
+          { '@context': 'https://schema.org', '@type': 'Article', headline: title, description, inLanguage: 'hi', url, publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE } },
+          crumb([
+            { name: 'मदद केंद्र', item: `${SITE}/help` },
+            { name: title, item: url },
+          ]),
+        ],
+      });
+    }
+  }
+  return pages;
+}
+
 // ---- sitemap.xml (build-time, from the SAME route sources as the prerender) ----
 // Regenerates the DEPLOYED dist/sitemap.xml so it can never drift from the actual
 // built routes (the hand file had stale /guide/quiz/bhag-N slugs + missing part-10).
@@ -242,7 +277,7 @@ try {
     process.exit(0);
   }
   const template = readFileSync(TEMPLATE, 'utf-8');
-  const pages = [...guidePages(), ...softwarePages(), ...statePages(), ...blogPages()];
+  const pages = [...guidePages(), ...softwarePages(), ...statePages(), ...blogPages(), ...helpPages()];
   let n = 0;
   for (const page of pages) {
     if (!page || !page.path) continue;

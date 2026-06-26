@@ -46,6 +46,8 @@ const FAQ = lazyWithRetry(() => import("./pages/FAQ"));
 const UserGuide = lazyWithRetry(() => import("./pages/UserGuide"));
 const GuideHub = lazyWithRetry(() => import("./pages/GuideHub"));
 const GuideChapter = lazyWithRetry(() => import("./pages/GuideChapter"));
+const HelpHub = lazyWithRetry(() => import("./pages/HelpHub"));
+const HelpArticle = lazyWithRetry(() => import("./pages/HelpArticle"));
 const GuideQuizPage = lazyWithRetry(() => import("./pages/GuideQuizPage"));
 const GuideCertificate = lazyWithRetry(() => import("./pages/GuideCertificate"));
 const GuideVerify = lazyWithRetry(() => import("./pages/GuideVerify"));
@@ -201,7 +203,8 @@ const AppRoutes = () => {
       <Route path="/guide/verify" element={<GuideVerify />} />
       <Route path="/guide/quiz/:partId" element={<GuideQuizPage />} />
       <Route path="/guide/:slug" element={<GuideChapter />} />
-      <Route path="/help" element={<GuideHub />} />
+      <Route path="/help" element={<HelpHub />} />
+      <Route path="/help/:slug" element={<HelpArticle />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/software" element={<SoftwareLanding />} />
       <Route path="/software/:type" element={<SoftwareLanding />} />
