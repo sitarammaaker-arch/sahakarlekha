@@ -14,6 +14,7 @@ import EmailCapture from '@/components/EmailCapture';
 import { magnetForCategory } from '@/lib/leadMagnets';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findPost, loadBlogRaw, readingMinutes, relatedPosts, BLOG_ORDER } from '@/content/blog';
+import { guideForBlog } from '@/content/crossLinks';
 import { ACCENTS, formatDate } from '@/components/blog/blogTheme';
 import {
   Home, ChevronRight, ChevronLeft, Calendar, Clock, List, ArrowRight,
@@ -133,6 +134,7 @@ const BlogPost: React.FC = () => {
   const bodyBottom = midPos > 0 ? body.slice(midPos) : '';
 
   const related = relatedPosts(slug, 3);
+  const deepGuide = guideForBlog(slug);
   const idx = BLOG_ORDER.findIndex((p) => p.slug === slug);
   const prev = idx > 0 ? BLOG_ORDER[idx - 1] : null;
   const next = idx >= 0 && idx < BLOG_ORDER.length - 1 ? BLOG_ORDER[idx + 1] : null;
@@ -190,6 +192,18 @@ const BlogPost: React.FC = () => {
             <GuideMarkdown source={bodyTop} />
             {midPos > 0 && <EmailCapture magnet={mag} className="my-8" />}
             {bodyBottom && <GuideMarkdown source={bodyBottom} />}
+
+            {/* Canonical-by-intent: link to the in-depth guide chapter (L7) */}
+            {deepGuide && (
+              <Link to={`/guide/${deepGuide.slug}`} className="mt-8 block">
+                <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors">
+                  <CardContent className="p-5">
+                    <p className="text-xs font-semibold text-primary uppercase tracking-wide">📖 पूरा गहराई से समझें · गाइड</p>
+                    <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{deepGuide.shortTitle} <ArrowRight className="h-4 w-4" /></p>
+                  </CardContent>
+                </Card>
+              </Link>
+            )}
 
             {/* Inline CTA */}
             <Card className="mt-10 bg-primary/5 border-primary/20">

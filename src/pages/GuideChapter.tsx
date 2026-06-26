@@ -11,6 +11,7 @@ import GuideMarkdown, { slugifyHeading } from '@/components/guide/GuideMarkdown'
 import HelpfulWidget from '@/components/HelpfulWidget';
 import LangToggle from '@/components/guide/LangToggle';
 import { findEntry, GUIDE_ORDER, GUIDE_PARTS } from '@/content/guide';
+import { blogForGuide } from '@/content/crossLinks';
 import { loadGuideContent, localizedEntry, localizedPartTitle } from '@/content/guide/i18n';
 import { useGuideProgress, toggleGuideDone } from '@/lib/guideProgress';
 import { useGuideLang, useGuideT } from '@/lib/guideLang';
@@ -24,6 +25,7 @@ const GuideChapter: React.FC = () => {
   const entry = findEntry(slug);
   const { content: raw, fallback } = loadGuideContent(slug, lang);
   const meta = entry ? localizedEntry(entry, lang) : null;
+  const quickBlog = blogForGuide(slug);
 
   React.useEffect(() => { window.scrollTo({ top: 0 }); }, [slug]);
 
@@ -163,6 +165,18 @@ const GuideChapter: React.FC = () => {
             )}
 
             <GuideMarkdown source={body} />
+
+            {/* Canonical-by-intent: link to the short narrative blog post (L7) */}
+            {quickBlog && (
+              <Link to={`/blog/${quickBlog.slug}`} className="mt-8 block">
+                <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors">
+                  <CardContent className="p-5">
+                    <p className="text-xs font-semibold text-primary uppercase tracking-wide">📝 क्विक how-to · ब्लॉग</p>
+                    <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{quickBlog.shortTitle} <ChevronRight className="h-4 w-4" /></p>
+                  </CardContent>
+                </Card>
+              </Link>
+            )}
 
             {/* Mark complete */}
             <div className="mt-10 flex justify-center">
