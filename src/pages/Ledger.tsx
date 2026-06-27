@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/table';
 import { AccountPicker } from '@/components/AccountPicker';
 import { BookOpen, Download, Calendar, FileText, FileSpreadsheet } from 'lucide-react';
-import GlossaryHint from '@/components/glossary/GlossaryHint';
 import { generateLedgerPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
@@ -184,9 +183,8 @@ const Ledger: React.FC = () => {
             <BookOpen className="h-7 w-7 text-primary" />
             {t('ledger')}
           </h1>
-          <p className="text-muted-foreground flex items-center gap-2">
+          <p className="text-muted-foreground">
             {language === 'hi' ? 'खाता बही - विस्तृत खाता विवरण' : 'General Ledger — Detailed Account Statement'}
-            <GlossaryHint slug="ledger" label={language === 'hi' ? 'खाता बही क्या है?' : 'What is a Ledger?'} />
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">

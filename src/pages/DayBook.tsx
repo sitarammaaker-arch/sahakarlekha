@@ -12,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { BookOpen, Download, Filter, Wallet, Pencil, Save, X, FileSpreadsheet } from 'lucide-react';
-import GlossaryHint from '@/components/glossary/GlossaryHint';
 import { generateDayBookPDF } from '@/lib/pdf';
 import { useToast } from '@/hooks/use-toast';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
@@ -216,9 +215,8 @@ const DayBook: React.FC = () => {
               <BookOpen className="h-7 w-7 text-primary" />
               {language === 'hi' ? 'रोजनामचा' : 'Day Book'}
             </h1>
-            <p className="text-muted-foreground flex items-center gap-2">
+            <p className="text-muted-foreground">
               {language === 'hi' ? 'सभी लेनदेन का दिनवार विवरण' : 'Day-wise chronological record of all transactions'}
-              <GlossaryHint slug="day-book" label={language === 'hi' ? 'रोज़नामचा क्या है?' : 'What is a Day Book?'} />
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">

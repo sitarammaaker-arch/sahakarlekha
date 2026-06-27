@@ -11,6 +11,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { linkifyText, newLinkifyState } from '@/lib/glossaryLinkify';
 
 /* Stable slug for heading anchors — keeps Devanagari letters, used by both
    the renderer (id=) and the chapter sub-TOC (href=). Must stay deterministic. */
@@ -127,12 +128,31 @@ const components: React.ComponentProps<typeof ReactMarkdown>['components'] = {
   td: ({ children }) => <td className="p-2.5 align-top border border-border">{children}</td>,
 };
 
-const GuideMarkdown: React.FC<{ source: string }> = ({ source }) => (
-  <div className="text-[0.95rem]">
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-      {source}
-    </ReactMarkdown>
-  </div>
-);
+/**
+ * GuideMarkdown — set `linkGlossary` to auto-link the first mention of each glossary
+ * term in body text (paragraphs + list items only). Memoized so it does not re-run the
+ * linkifier on unrelated parent re-renders (e.g. the blog reading-progress bar).
+ */
+const GuideMarkdown: React.FC<{ source: string; linkGlossary?: boolean }> = ({ source, linkGlossary }) => {
+  let comps = components;
+  if (linkGlossary) {
+    // Fresh per render → page-level "once per term" dedup; React.memo keeps renders to prop changes.
+    const state = newLinkifyState(8);
+    const proc = (children: React.ReactNode) =>
+      React.Children.map(children, (c) => (typeof c === 'string' ? linkifyText(c, state) : c));
+    comps = {
+      ...components,
+      p: ({ children }) => <p className="my-3 leading-relaxed text-foreground/90">{proc(children)}</p>,
+      li: ({ children }) => <li className="leading-relaxed">{proc(children)}</li>,
+    };
+  }
+  return (
+    <div className="text-[0.95rem]">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={comps}>
+        {source}
+      </ReactMarkdown>
+    </div>
+  );
+};
 
-export default GuideMarkdown;
+export default React.memo(GuideMarkdown);

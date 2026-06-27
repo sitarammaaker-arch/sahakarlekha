@@ -14,7 +14,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { FileSpreadsheet, Download, Calendar, ExternalLink } from 'lucide-react';
-import GlossaryHint from '@/components/glossary/GlossaryHint';
 import { generateBalanceSheetPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
@@ -364,10 +363,7 @@ const BalanceSheet: React.FC = () => {
             <FileSpreadsheet className="h-7 w-7 text-primary" />
             {t('balanceSheet')}
           </h1>
-          <p className="text-muted-foreground flex items-center gap-2">
-            {hi ? 'तुलन पत्र - वित्तीय स्थिति विवरण' : 'Statement of Financial Position'}
-            <GlossaryHint slug="accounting-equation" label={hi ? 'Assets = Liabilities + Capital?' : 'Accounting equation?'} />
-          </p>
+          <p className="text-muted-foreground">{hi ? 'तुलन पत्र - वित्तीय स्थिति विवरण' : 'Statement of Financial Position'}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2" onClick={handlePDF}><Download className="h-4 w-4" />PDF</Button>

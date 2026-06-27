@@ -192,9 +192,9 @@ const BlogPost: React.FC = () => {
               <ShareBar url={url} title={post.title} />
             </div>
 
-            <GuideMarkdown source={bodyTop} />
+            <GuideMarkdown source={bodyTop} linkGlossary />
             {midPos > 0 && <EmailCapture magnet={mag} className="my-8" />}
-            {bodyBottom && <GuideMarkdown source={bodyBottom} />}
+            {bodyBottom && <GuideMarkdown source={bodyBottom} linkGlossary />}
 
             {/* Canonical-by-intent: link to the in-depth guide chapter (L7) */}
             {deepGuide && (

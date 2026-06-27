@@ -271,6 +271,42 @@ export function filterGlossary(query: string): GlossaryEntry[] {
   });
 }
 
+/**
+ * Module route → related glossary slugs. Drives the in-app context-help bar shown on
+ * EVERY module via MainLayout (one integration point, no per-module edits). Only slugs
+ * that resolve to an ACTIVE glossary term render; unknown routes show nothing.
+ */
+export const MODULE_TERMS: Record<string, string[]> = {
+  '/vouchers': ['voucher', 'debit', 'credit', 'double-entry'],
+  '/compound-voucher': ['voucher', 'double-entry'],
+  '/cash-book': ['cash-book', 'cash'],
+  '/bank-book': ['bank-book', 'bank-account', 'cheque'],
+  '/bank-reconciliation': ['bank-statement', 'bank-book'],
+  '/ledger': ['ledger', 'ledger-account', 'posting'],
+  '/ledger-heads': ['account', 'books-of-account'],
+  '/day-book': ['day-book', 'journal'],
+  '/trial-balance': ['double-entry', 'ledger'],
+  '/balance-sheet': ['accounting-equation', 'asset', 'liability', 'capital'],
+  '/profit-loss': ['income', 'expense', 'how-to-read-financial-reports'],
+  '/trading-account': ['income', 'expense', 'how-to-read-financial-reports'],
+  '/receipts-payments': ['cash-book', 'how-to-read-financial-reports'],
+  '/reports': ['how-to-read-financial-reports'],
+  '/dashboard': ['accounting', 'accounting-cycle', 'how-to-read-financial-reports'],
+  '/members': ['membership', 'member', 'nominal-member'],
+  '/member-application': ['membership', 'member'],
+  '/share-register': ['share', 'paid-up-capital', 'face-value'],
+  '/society-setup': ['society-setup', 'society-types', 'financial-year'],
+  '/opening-balances': ['financial-year', 'accounting-equation'],
+  '/backup-restore': ['data-backup'],
+};
+
+/** Resolve the active glossary terms for a module route (filters out any non-active slugs). */
+export function termsForRoute(pathname: string): GlossaryEntry[] {
+  const slugs = MODULE_TERMS[pathname];
+  if (!slugs) return [];
+  return slugs.map((s) => findTerm(s)).filter((e): e is GlossaryEntry => e != null);
+}
+
 /** Up to `n` related glossary terms for a "learning path" (active refs first, then same category). */
 export function learningPath(slug: string, n = 6): GlossaryEntry[] {
   const self = findTerm(slug);

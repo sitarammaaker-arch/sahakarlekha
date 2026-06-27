@@ -164,7 +164,7 @@ const GuideChapter: React.FC = () => {
               </div>
             )}
 
-            <GuideMarkdown source={body} />
+            <GuideMarkdown source={body} linkGlossary />
 
             {/* Canonical-by-intent: link to the short narrative blog post (L7) */}
             {quickBlog && (

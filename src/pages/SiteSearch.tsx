@@ -9,29 +9,36 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { trackEvent } from '@/lib/analytics';
 import { search, TYPE_LABEL, type SearchType } from '@/lib/siteSearch';
-import { Search as SearchIcon, ArrowRight } from 'lucide-react';
+import { allGlossary } from '@/content/glossary';
+import { Search as SearchIcon, ArrowRight, BookOpen } from 'lucide-react';
 import { WHATSAPP_NUMBER } from '@/lib/socials';
 
 const TYPE_ORDER: SearchType[] = ['glossary', 'help', 'faq', 'cookbook', 'guide', 'blog'];
+
+// A few high-value glossary terms suggested when the box is empty.
+const SUGGESTED_SLUGS = ['voucher', 'cash-book', 'ledger', 'double-entry', 'bank-book', 'membership', 'share', 'financial-year', 'accounting', 'society-setup'];
 
 const SiteSearch: React.FC = () => {
   const [params, setParams] = useSearchParams();
   const q = params.get('q') ?? '';
   const [input, setInput] = React.useState(q);
+  // Live results as the user types (deferred keeps typing responsive on big indexes).
+  const deferred = React.useDeferredValue(input.trim());
 
   useDocumentMeta({
-    title: q ? `"${q}" — खोज परिणाम | SahakarLekha` : 'खोजें — SahakarLekha मदद, कुकबुक, गाइड व ब्लॉग',
-    description: 'सहकारी समिति लेखांकन से जुड़ा कुछ भी खोजें — मदद लेख, एंट्री कुकबुक, गाइड अध्याय और ब्लॉग, एक साथ।',
+    title: q ? `"${q}" — खोज परिणाम | SahakarLekha` : 'खोजें — SahakarLekha मदद, कुकबुक, गाइड, ब्लॉग व शब्दकोश',
+    description: 'सहकारी समिति लेखांकन से जुड़ा कुछ भी खोजें — मदद लेख, एंट्री कुकबुक, गाइड अध्याय, ब्लॉग और शब्दकोश, एक साथ।',
     canonicalPath: '/search',
   });
 
   React.useEffect(() => { setInput(q); }, [q]);
 
-  const results = React.useMemo(() => (q ? search(q) : []), [q]);
+  const results = React.useMemo(() => (deferred ? search(deferred) : []), [deferred]);
+  const suggested = React.useMemo(() => allGlossary().filter((g) => SUGGESTED_SLUGS.includes(g.slug)), []);
 
-  // Fire a search event when the committed query changes (debounced via the URL).
+  // Fire a search event when the committed (URL) query changes — for analytics + shareable URLs.
   React.useEffect(() => {
-    if (q) trackEvent('site_search', { q, results: results.length });
+    if (q) trackEvent('site_search', { q, results: search(q).length });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
@@ -59,9 +66,9 @@ const SiteSearch: React.FC = () => {
           />
         </form>
 
-        {q && (
-          <p className="text-sm text-muted-foreground mt-4">
-            "<span className="text-foreground font-medium">{q}</span>" के लिए {results.length} परिणाम
+        {deferred && (
+          <p className="text-sm text-muted-foreground mt-4" aria-live="polite">
+            "<span className="text-foreground font-medium">{deferred}</span>" के लिए {results.length} परिणाम
           </p>
         )}
 
@@ -87,19 +94,37 @@ const SiteSearch: React.FC = () => {
         </div>
 
         {/* Empty / no-results states */}
-        {q && results.length === 0 && (
+        {deferred && results.length === 0 && (
           <div className="mt-10 text-center">
             <p className="text-muted-foreground">कोई परिणाम नहीं मिला।</p>
             <p className="text-sm text-muted-foreground mt-2">
-              अलग शब्दों में आज़माएँ, या{' '}
+              अलग शब्दों में आज़माएँ, <Link to="/glossary" className="text-primary hover:underline">शब्दकोश देखें</Link>, या{' '}
               <a href={`https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">WhatsApp पर पूछें</a>।
             </p>
           </div>
         )}
-        {!q && (
-          <div className="mt-8 grid sm:grid-cols-2 gap-3">
-            <Link to="/help"><Card className="hover:bg-primary/5"><CardContent className="p-4"><p className="font-medium text-foreground">मदद केंद्र — कैसे करें →</p></CardContent></Card></Link>
-            <Link to="/cookbook"><Card className="hover:bg-primary/5"><CardContent className="p-4"><p className="font-medium text-foreground">एंट्री कुकबुक — Dr/Cr →</p></CardContent></Card></Link>
+        {!deferred && (
+          <div className="mt-8 space-y-6">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Link to="/help"><Card className="hover:bg-primary/5"><CardContent className="p-4"><p className="font-medium text-foreground">मदद केंद्र — कैसे करें →</p></CardContent></Card></Link>
+              <Link to="/cookbook"><Card className="hover:bg-primary/5"><CardContent className="p-4"><p className="font-medium text-foreground">एंट्री कुकबुक — Dr/Cr →</p></CardContent></Card></Link>
+            </div>
+            {/* Suggested glossary terms */}
+            <div>
+              <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary mb-3">
+                <BookOpen className="h-3.5 w-3.5" /> लोकप्रिय शब्द · शब्दकोश
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {suggested.map((g) => (
+                  <Link key={g.slug} to={`/glossary/${g.slug}`} className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-full border bg-card hover:border-primary/50 hover:text-primary transition-colors">
+                    {g.hindiName || g.title}
+                  </Link>
+                ))}
+                <Link to="/glossary" className="inline-flex items-center gap-1 text-sm px-3 py-1.5 text-primary hover:underline">
+                  पूरा शब्दकोश <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            </div>
           </div>
         )}
       </div>

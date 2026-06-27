@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { KeyboardShortcutsHelp } from '@/components/KeyboardShortcutsHelp';
 import FeedbackFab from '@/components/FeedbackFab';
+import ModuleGlossaryBar from '@/components/glossary/ModuleGlossaryBar';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -48,6 +49,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         )}
       >
         <div className="p-4 md:p-6">
+          <ModuleGlossaryBar />
           {children}
         </div>
       </main>

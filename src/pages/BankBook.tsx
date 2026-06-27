@@ -14,7 +14,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AccountPicker } from '@/components/AccountPicker';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Building2, Download, CreditCard, FileSpreadsheet } from 'lucide-react';
-import GlossaryHint from '@/components/glossary/GlossaryHint';
 import { useToast } from '@/hooks/use-toast';
 import { generateBankBookPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
@@ -140,10 +139,7 @@ const BankBook: React.FC = () => {
             <Building2 className="h-7 w-7 text-info" />
             {t('bankBook')}
           </h1>
-          <p className="text-muted-foreground flex items-center gap-2">
-            {language === 'hi' ? 'बैंक खाता लेनदेन का विवरण' : 'Bank account transactions record'}
-            <GlossaryHint slug="bank-book" label={language === 'hi' ? 'बैंक बही क्या है?' : 'What is a Bank Book?'} />
-          </p>
+          <p className="text-muted-foreground">{language === 'hi' ? 'बैंक खाता लेनदेन का विवरण' : 'Bank account transactions record'}</p>
         </div>
         <div className="flex gap-2">
           <div className="flex gap-2 flex-wrap">

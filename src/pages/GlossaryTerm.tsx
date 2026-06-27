@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import GuideMarkdown from '@/components/guide/GuideMarkdown';
+import HelpfulWidget from '@/components/HelpfulWidget';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findTerm, learningPath, allGlossary } from '@/content/glossary';
 import {
@@ -212,6 +213,9 @@ const GlossaryTerm: React.FC = () => {
             </div>
           </Field>
         )}
+
+        {/* Was this helpful? — feedback into the inbox (reuses the blog/guide widget) */}
+        <HelpfulWidget />
 
         {/* Register CTA */}
         <Card className="mt-10 bg-primary/5 border-primary/20">

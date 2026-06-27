@@ -10,7 +10,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BookMarked, Download, Search, Edit, Users } from 'lucide-react';
-import GlossaryHint from '@/components/glossary/GlossaryHint';
 import { useToast } from '@/hooks/use-toast';
 import { generateShareRegisterPDF } from '@/lib/pdf';
 import type { Member } from '@/types';
@@ -73,9 +72,8 @@ const ShareRegister: React.FC = () => {
             <BookMarked className="h-7 w-7 text-primary" />
             {hi ? 'अंश रजिस्टर' : 'Share Register'}
           </h1>
-          <p className="text-muted-foreground flex items-center gap-2">
+          <p className="text-muted-foreground">
             {hi ? 'सदस्यों का अंश पूंजी एवं नामांकन विवरण' : 'Member share capital & nominee details'}
-            <GlossaryHint slug="share" label={hi ? 'अंश/शेयर क्या है?' : 'What is a Share?'} />
           </p>
         </div>
         <div className="flex gap-2">
