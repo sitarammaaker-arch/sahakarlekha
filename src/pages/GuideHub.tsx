@@ -191,7 +191,7 @@ const GuideHub: React.FC = () => {
                     <ChapterCard
                       key={c.slug}
                       slug={c.slug}
-                      badge={c.kind === 'appendix' ? c.slug.split('-')[1]?.toUpperCase() ?? '·' : String(c.num)}
+                      badge={c.kind === 'appendix' ? (c.title.match(/(?:परिशिष्ट|Appendix)\s+([A-Z])/)?.[1] ?? '·') : String(c.num)}
                       title={m.shortTitle}
                       summary={m.summary}
                       done={done.has(c.slug)}
