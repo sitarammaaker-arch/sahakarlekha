@@ -35,6 +35,126 @@ export interface BlogPost {
 // Reverse-chronological is enforced by sorting on `date` below.
 export const BLOG_POSTS: BlogPost[] = [
   {
+    slug: 'gst-for-cooperatives',
+    metaTitle: 'GST सहकारी समिति के लिए: आसान गाइड | SahakarLekha',
+    metaDescription: 'आउटपुट/इनपुट GST, ITC, GSTR-1/2B/3B और रियायती बिल पर सही कर — सहकारी समिति के लिए आसान GST गाइड।',
+    date: '2026-06-30',
+    category: 'कर अनुपालन',
+    title: 'GST सहकारी समिति के लिए: आसान गाइड',
+    shortTitle: 'GST सहकारी समिति के लिए',
+    excerpt: 'आउटपुट-इनपुट GST, ITC मिलान और मासिक फ़ाइलिंग — GST को सहकारी समिति के नज़रिये से आसान बनाइए।',
+    accent: 'sky',
+    tags: ['GST', 'ITC', 'कर'],
+  },
+  {
+    slug: 'tds-and-26q-for-societies',
+    metaTitle: 'TDS और 26Q: सहकारी समिति के लिए सरल गाइड | SahakarLekha',
+    metaDescription: 'TDS कब-कितना काटें, समय पर जमा, और तिमाही 26Q — सहकारी समिति के लिए आसान TDS गाइड।',
+    date: '2026-07-07',
+    category: 'कर अनुपालन',
+    title: 'TDS और 26Q: सहकारी समिति के लिए सरल गाइड',
+    shortTitle: 'TDS और 26Q गाइड',
+    excerpt: 'किन भुगतानों पर TDS, सही कटौती-जमा, और तिमाही 26Q — उदाहरण सहित आसान भाषा में।',
+    accent: 'amber',
+    tags: ['TDS', '26Q', 'कर'],
+  },
+  {
+    slug: 'depreciation-explained',
+    metaTitle: 'डेप्रिसिएशन (घिसाई) कैसे करें: आसान समझ | SahakarLekha',
+    metaDescription: 'SLM बनाम WDV, डेप्रिसिएशन की एंट्री और शेड्यूल — सही लाभ व बैलेंस शीट के लिए आसान गाइड।',
+    date: '2026-07-14',
+    category: 'लेखांकन मूल बातें',
+    title: 'डेप्रिसिएशन (घिसाई) कैसे करें: आसान समझ',
+    shortTitle: 'डेप्रिसिएशन कैसे करें',
+    excerpt: 'संपत्तियों की घटती कीमत हर साल कैसे दर्ज करें — SLM/WDV, एंट्री और शेड्यूल सरल भाषा में।',
+    accent: 'violet',
+    tags: ['डेप्रिसिएशन', 'संपत्ति'],
+  },
+  {
+    slug: 'year-end-closing-and-fy-lock',
+    metaTitle: 'वर्षांत प्रक्रिया व FY-लॉक: साल कैसे बंद करें | SahakarLekha',
+    metaDescription: 'साल बंद करने की चेकलिस्ट — समायोजन, अंतिम खाते, FY-लॉक — और closing से opening की सही कड़ी।',
+    date: '2026-07-21',
+    category: 'मुनाफ़ा व बँटवारा',
+    title: 'वर्षांत प्रक्रिया व FY-लॉक: साल कैसे बंद करें',
+    shortTitle: 'वर्षांत व FY-लॉक',
+    excerpt: 'वर्षांत की चेकलिस्ट, अंतिम खाते और FY-लॉक — साल को साफ़, स्थिर व ऑडिट-रेडी बंद कीजिए।',
+    accent: 'emerald',
+    tags: ['वर्षांत', 'FY-लॉक'],
+  },
+  {
+    slug: 'opening-balances-new-society',
+    metaTitle: 'ओपनिंग बैलेंस: नई समिति या नए साल की सही शुरुआत | SahakarLekha',
+    metaDescription: 'हर खाते का सही शुरुआती शेष व Dr=Cr — तुलन-पत्र पहले दिन से मिले, इसका आसान तरीका।',
+    date: '2026-07-28',
+    category: 'लेखांकन मूल बातें',
+    title: 'ओपनिंग बैलेंस: नई समिति या नए साल की सही शुरुआत',
+    shortTitle: 'ओपनिंग बैलेंस कैसे डालें',
+    excerpt: 'सही ओपनिंग बैलेंस = साल भर सही खाते। Dr=Cr कैसे मिलाएँ, उदाहरण सहित।',
+    accent: 'rose',
+    tags: ['ओपनिंग बैलेंस', 'शुरुआत'],
+  },
+  {
+    slug: 'kcc-crop-loan-accounting',
+    metaTitle: 'KCC व फसल ऋण लेखांकन: PACS के लिए गाइड | SahakarLekha',
+    metaDescription: 'KCC ऋण को संपत्ति, ब्याज को आय, अनुदान अलग, और वसूली/NPA की निगरानी — PACS के लिए आसान गाइड।',
+    date: '2026-08-04',
+    category: 'सदस्य व ऋण',
+    title: 'KCC व फसल ऋण लेखांकन: PACS के लिए गाइड',
+    shortTitle: 'KCC व फसल ऋण लेखांकन',
+    excerpt: 'KCC ऋण, ब्याज, ब्याज-सहायता और वसूली/NPA — किसान-ऋण का सही हिसाब आसान भाषा में।',
+    accent: 'indigo',
+    tags: ['KCC', 'फसल ऋण', 'PACS'],
+  },
+  {
+    slug: 'salary-and-payroll-accounting',
+    metaTitle: 'वेतन व पेरोल लेखांकन: EPF, ESI व TDS सहित | SahakarLekha',
+    metaDescription: 'सकल-शुद्ध वेतन, EPF/ESI/TDS कटौतियाँ और उनकी समय पर जमा — सहकारी समिति के लिए आसान पेरोल गाइड।',
+    date: '2026-08-11',
+    category: 'लेखांकन मूल बातें',
+    title: 'वेतन व पेरोल लेखांकन: EPF, ESI व TDS सहित',
+    shortTitle: 'वेतन व पेरोल लेखांकन',
+    excerpt: 'सकल बनाम शुद्ध वेतन, हर कटौती की अलग देनदारी, और समय पर जमा — उदाहरण सहित।',
+    accent: 'amber',
+    tags: ['वेतन', 'EPF', 'ESI'],
+  },
+  {
+    slug: 'data-security-and-backup',
+    metaTitle: 'डेटा सुरक्षा व बैकअप: समिति का हिसाब कभी न खोएँ | SahakarLekha',
+    metaDescription: 'लोकल बनाम क्लाउड, भूमिका-नियंत्रण, नियमित बैकअप व निर्यात — समिति के डेटा को सुरक्षित रखने की गाइड।',
+    date: '2026-08-18',
+    category: 'डिजिटल लेखांकन',
+    title: 'डेटा सुरक्षा व बैकअप: समिति का हिसाब कभी न खोएँ',
+    shortTitle: 'डेटा सुरक्षा व बैकअप',
+    excerpt: 'क्लाउड बैकअप, भूमिका-आधारित पहुँच और निर्यात — ताकि समिति का हिसाब कभी न खोए।',
+    accent: 'sky',
+    tags: ['सुरक्षा', 'बैकअप', 'क्लाउड'],
+  },
+  {
+    slug: 'nabard-and-federation-returns',
+    metaTitle: 'NABARD व फेडरेशन रिटर्न: सहकारी समिति की रिपोर्टिंग | SahakarLekha',
+    metaDescription: 'सदस्य-वृद्धि, पूँजी, ऋण-वसूली, NPA व संघ प्रपत्र — साफ़ खातों से NABARD/फेडरेशन रिपोर्ट आसान।',
+    date: '2026-08-25',
+    category: 'ऑडिट व अनुपालन',
+    title: 'NABARD व फेडरेशन रिटर्न: सहकारी समिति की रिपोर्टिंग',
+    shortTitle: 'NABARD व फेडरेशन रिटर्न',
+    excerpt: 'ये रिपोर्ट साफ़ खातों का स्वाभाविक नतीजा हैं — कौन-सा डेटा, और कैसे आसान बनाएँ।',
+    accent: 'violet',
+    tags: ['NABARD', 'फेडरेशन', 'रिटर्न'],
+  },
+  {
+    slug: 'cooperative-society-types-guide',
+    metaTitle: 'सहकारी समिति के प्रकार: किसके लिए कौन-सा सेटअप | SahakarLekha',
+    metaDescription: 'PACS, दुग्ध, उपभोक्ता, मार्केटिंग, बहुउद्देशीय — हर प्रकार की समिति की खास लेखांकन-ज़रूरत व सही सेटअप।',
+    date: '2026-09-01',
+    category: 'डिजिटल लेखांकन',
+    title: 'सहकारी समिति के प्रकार: किसके लिए कौन-सा सेटअप',
+    shortTitle: 'सहकारी समिति के प्रकार',
+    excerpt: 'हर प्रकार की समिति की अलग ज़रूरत — और जो बुनियाद सबमें समान रहती है।',
+    accent: 'emerald',
+    tags: ['समिति प्रकार', 'PACS', 'सेटअप'],
+  },
+  {
     slug: 'profit-distribution-and-reserves',
     metaTitle: 'सहकारी समिति में लाभ का बँटवारा: रिज़र्व, डिविडेंड और बोनस | SahakarLekha',
     metaDescription: 'सहकारी समिति में नेट प्रॉफ़िट किस क्रम में बाँटें — पहले रिज़र्व फंड, फिर डिविडेंड और बोनस, और ज़रूरत से ज़्यादा बाँटने से बचाव।',
@@ -187,8 +307,25 @@ export function loadBlogRaw(slug: string): string | null {
   return RAW['./' + slug + '.md'] ?? null;
 }
 
-/** Posts sorted newest-first (the canonical order for index + prev/next). */
+/** Posts sorted newest-first (ALL posts, incl. future-scheduled). */
 export const BLOG_ORDER: BlogPost[] = [...BLOG_POSTS].sort((a, b) => (a.date < b.date ? 1 : -1));
+
+/** Today as YYYY-MM-DD (local). Recomputed at call time so scheduled posts
+ *  auto-reveal in the browser once their date arrives — no rebuild needed. */
+export function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** A post is "live" once its publish date is today or earlier. */
+export function isPublished(p: BlogPost): boolean {
+  return p.date <= todayISO();
+}
+
+/** Published posts only, newest-first — the public reading order (index, prev/next). */
+export function publishedOrder(): BlogPost[] {
+  return BLOG_ORDER.filter(isPublished);
+}
 
 export function findPost(slug: string): BlogPost | null {
   return BLOG_POSTS.find((p) => p.slug === slug) ?? null;
@@ -203,11 +340,11 @@ export function readingMinutes(slug: string): number {
   return Math.max(1, Math.round(words / 130));
 }
 
-/** Up to `n` related posts (same category first, then newest others). */
+/** Up to `n` related posts (published only; same category first, then newest). */
 export function relatedPosts(slug: string, n = 2): BlogPost[] {
   const self = findPost(slug);
   if (!self) return [];
-  const others = BLOG_ORDER.filter((p) => p.slug !== slug);
+  const others = publishedOrder().filter((p) => p.slug !== slug);
   const sameCat = others.filter((p) => p.category === self.category);
   const rest = others.filter((p) => p.category !== self.category);
   return [...sameCat, ...rest].slice(0, n);

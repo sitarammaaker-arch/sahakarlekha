@@ -8,7 +8,7 @@ import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
-import { BLOG_ORDER, readingMinutes, type BlogPost } from '@/content/blog';
+import { publishedOrder, readingMinutes, type BlogPost } from '@/content/blog';
 import { ACCENTS, formatDate } from '@/components/blog/blogTheme';
 import { ArrowRight, Calendar, Clock, Newspaper, Rss, ArrowUpRight } from 'lucide-react';
 
@@ -43,6 +43,7 @@ const Meta: React.FC<{ post: BlogPost; className?: string }> = ({ post, classNam
 );
 
 const BlogIndex: React.FC = () => {
+  const posts = publishedOrder();
   useDocumentMeta({
     title: 'सहकार लेखा ब्लॉग — सहकारी समिति लेखांकन, ऑडिट व प्रबंधन',
     description: 'सहकारी समितियों के लिए डिजिटल लेखांकन, वाउचर एंट्री, ऑडिट, अनुपालन व प्रबंधन पर सरल हिन्दी लेख — PACS, मार्केटिंग, उपभोक्ता व बहुउद्देशीय समितियों के लिए।',
@@ -55,7 +56,7 @@ const BlogIndex: React.FC = () => {
       url: `${SITE}/blog`,
       inLanguage: 'hi',
       publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
-      blogPost: BLOG_ORDER.map((p) => ({
+      blogPost: posts.map((p) => ({
         '@type': 'BlogPosting',
         headline: p.title,
         description: p.metaDescription,
@@ -65,9 +66,9 @@ const BlogIndex: React.FC = () => {
     },
   });
 
-  const categories = React.useMemo(() => ['सभी', ...Array.from(new Set(BLOG_ORDER.map((p) => p.category)))], []);
+  const categories = React.useMemo(() => ['सभी', ...Array.from(new Set(posts.map((p) => p.category)))], []);
   const [active, setActive] = React.useState('सभी');
-  const filtered = active === 'सभी' ? BLOG_ORDER : BLOG_ORDER.filter((p) => p.category === active);
+  const filtered = active === 'सभी' ? posts : posts.filter((p) => p.category === active);
 
   const featured = filtered[0];
   const rest = filtered.slice(1);

@@ -1,0 +1,29 @@
+name: Scheduled rebuild (publish drip)
+
+# Triggers a Vercel rebuild daily so scheduled (future-dated) blog posts get their
+# static HTML + sitemap entry on time. The blog INDEX reveals posts client-side on
+# their date already; this keeps the prerendered pages and sitemap in sync for SEO.
+#
+# One-time setup (you):
+#   1. Vercel → Project → Settings → Git → Deploy Hooks → create a hook (branch: main).
+#   2. Copy its URL → GitHub repo → Settings → Secrets and variables → Actions →
+#      New repository secret → name: VERCEL_DEPLOY_HOOK, value: <the hook URL>.
+
+on:
+  schedule:
+    - cron: '30 3 * * *'   # daily 03:30 UTC (09:00 IST)
+  workflow_dispatch: {}      # allow manual run from the Actions tab
+
+jobs:
+  redeploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel deploy hook
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "VERCEL_DEPLOY_HOOK secret not set — nothing to do."
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK" && echo "Triggered Vercel rebuild."

@@ -266,6 +266,6 @@ export function generateMagnet(key: MagnetKey): void {
 /** Pick the most relevant magnet for a blog category. */
 export function magnetForCategory(category?: string): MagnetKey {
   if (category === 'इन्वेंटरी') return 'inventory-checklist';
-  // (No GST-specific blog category yet — gst-checklist is available via the prop.)
+  if (category === 'कर अनुपालन') return 'gst-checklist';
   return 'audit-checklist';
 }

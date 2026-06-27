@@ -138,8 +138,10 @@ function blogPages() {
     // per post, in declared order: slug, metaTitle, metaDescription, date
     const re = /slug:\s*'([^']+)'[\s\S]*?metaTitle:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?metaDescription:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?date:\s*'([^']+)'/g;
     let m;
+    const today = new Date().toISOString().slice(0, 10);
     while ((m = re.exec(src))) {
       const [, slug, title, description, date] = m;
+      if (date > today) continue; // scheduled (future-dated) post — not live yet
       const url = `${SITE}/blog/${slug}`;
       pages.push({
         path: `/blog/${slug}`,

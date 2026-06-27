@@ -13,7 +13,7 @@ import HelpfulWidget from '@/components/HelpfulWidget';
 import EmailCapture from '@/components/EmailCapture';
 import { magnetForCategory } from '@/lib/leadMagnets';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
-import { findPost, loadBlogRaw, readingMinutes, relatedPosts, BLOG_ORDER } from '@/content/blog';
+import { findPost, loadBlogRaw, readingMinutes, relatedPosts, publishedOrder, isPublished } from '@/content/blog';
 import { guideForBlog } from '@/content/crossLinks';
 import { ACCENTS, formatDate } from '@/components/blog/blogTheme';
 import {
@@ -112,7 +112,9 @@ const BlogPost: React.FC = () => {
     jsonLd,
   });
 
-  if (!post || raw == null) {
+  // Unknown post, missing body, or a still-scheduled (future-dated) post → bounce
+  // to the index. Scheduled posts stay hidden until their publish date arrives.
+  if (!post || raw == null || !isPublished(post)) {
     return <Navigate to="/blog" replace />;
   }
 
@@ -135,9 +137,10 @@ const BlogPost: React.FC = () => {
 
   const related = relatedPosts(slug, 3);
   const deepGuide = guideForBlog(slug);
-  const idx = BLOG_ORDER.findIndex((p) => p.slug === slug);
-  const prev = idx > 0 ? BLOG_ORDER[idx - 1] : null;
-  const next = idx >= 0 && idx < BLOG_ORDER.length - 1 ? BLOG_ORDER[idx + 1] : null;
+  const pub = publishedOrder();
+  const idx = pub.findIndex((p) => p.slug === slug);
+  const prev = idx > 0 ? pub[idx - 1] : null;
+  const next = idx >= 0 && idx < pub.length - 1 ? pub[idx + 1] : null;
 
   return (
     <PublicLayout>
