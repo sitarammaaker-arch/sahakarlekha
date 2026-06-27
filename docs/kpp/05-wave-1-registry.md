@@ -449,9 +449,32 @@ Each KI's `evidence_id` = paired `EV-######` (same numeric suffix) in [KAE 03](.
   C ≈ 7% (compliance — SME), D ≈ 5% (legal — SME + jurisdiction).
 - **By evidence:** `E2†` (internal corroboration, pending primary+SME) majority; `NEV` on all B/C/D
   treatments & all legal items.
-- **Status:** all `planned`; **0 `active`** until [07 gates](07-quality-gates.md) pass (definition + SME where required).
-- **Next:** populate Wave-1 **Level-A definitions** (no SME blocker) → advance those to `active`; queue
-  B/C/D for SME. Waves 2–3 per [02](02-wave-1-plan.md).
+- **Status (updated 2026-06-27):** **50 `active`** (Wave-1A, see below); **306 `planned`**. The 50 are the
+  highest-value **Level-A** items, fully populated with definitions and links in
+  [`wave-1-active/`](wave-1-active/00-index.md) and passing the [07 gates](07-quality-gates.md). All B/C/D
+  items remain `planned` pending SME (E3).
+- **Next:** continue Level-A definitions for the remaining ~160 Level-A KIs; queue B/C/D for SME; Waves 2–3 per [02](02-wave-1-plan.md).
+
+---
+
+## Activation log — Wave-1A (`planned` → `active`, 2026-06-27)
+
+**50 Level-A KIs activated.** Full records: [`wave-1-active/00-index.md`](wave-1-active/00-index.md).
+
+| Group | Activated KI ids | Count |
+|---|---|---|
+| Cooperative Basics | 000001, 000002, 000004, 000007, 000009, 000010, 000014, 000021 | 8 |
+| Accounting Foundations | 000025–000029, 000033–000040, 000046, 000047, 000049, 000050 | 17 |
+| Vouchers/Ledger/Books | 000048, 000055, 000079, 000080, 000086, 000099, 000101 | 7 |
+| Cash Account & Bank | 000100, 000113, 000114, 000116, 000118, 000121 | 6 |
+| Members & Shares | 000131, 000134, 000153, 000157, 000158 | 5 |
+| Financial Statements | 000212 | 1 |
+| Software / SaaS | 000303, 000305, 000306, 000322 | 4 |
+| Help / FAQ | 000325, 000341 | 2 |
+| **Total** | | **50** |
+
+> Only Level-A (educational/product) items were activated — **no** accounting treatments, legal advice,
+> tax rates, or jurisdiction-specific compliance (those need SME → E3). Activation stopped at 50 by design.
 
 ---
 
