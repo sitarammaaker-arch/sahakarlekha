@@ -15,6 +15,7 @@ import { magnetForCategory } from '@/lib/leadMagnets';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findPost, loadBlogRaw, readingMinutes, relatedPosts, publishedOrder, isPublished } from '@/content/blog';
 import { guideForBlog } from '@/content/crossLinks';
+import { calculatorForArticle } from '@/content/calculators';
 import { ACCENTS, formatDate } from '@/components/blog/blogTheme';
 import {
   Home, ChevronRight, ChevronLeft, Calendar, Clock, List, ArrowRight,
@@ -137,6 +138,7 @@ const BlogPost: React.FC = () => {
 
   const related = relatedPosts(slug, 3);
   const deepGuide = guideForBlog(slug);
+  const pairedCalc = calculatorForArticle(slug);
   const pub = publishedOrder();
   const idx = pub.findIndex((p) => p.slug === slug);
   const prev = idx > 0 ? pub[idx - 1] : null;
@@ -203,6 +205,18 @@ const BlogPost: React.FC = () => {
                   <CardContent className="p-5">
                     <p className="text-xs font-semibold text-primary uppercase tracking-wide">📖 पूरा गहराई से समझें · गाइड</p>
                     <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{deepGuide.shortTitle} <ArrowRight className="h-4 w-4" /></p>
+                  </CardContent>
+                </Card>
+              </Link>
+            )}
+
+            {/* Paired calculator (topic cluster) */}
+            {pairedCalc && (
+              <Link to={`/tools/${pairedCalc.slug}`} className="mt-6 block">
+                <Card className="border-sky-300/50 bg-sky-50 dark:bg-sky-950/20 hover:bg-sky-100 dark:hover:bg-sky-950/40 transition-colors">
+                  <CardContent className="p-5">
+                    <p className="text-xs font-semibold text-sky-700 dark:text-sky-300 uppercase tracking-wide">🧮 तुरंत गणना करें · कैलकुलेटर</p>
+                    <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{pairedCalc.hindiName} <ArrowRight className="h-4 w-4" /></p>
                   </CardContent>
                 </Card>
               </Link>

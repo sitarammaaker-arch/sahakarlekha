@@ -16,7 +16,7 @@ import GuideMarkdown from '@/components/guide/GuideMarkdown';
 import HelpfulWidget from '@/components/HelpfulWidget';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findTerm } from '@/content/glossary';
-import type { CalcConfig } from '@/content/calculators';
+import { relatedCalculators, type CalcConfig } from '@/content/calculators';
 import {
   Home, ChevronRight, Calculator as CalcIcon, ArrowRight, Sigma, BookOpen, Lightbulb,
   AlertTriangle, Link2, FileText, MonitorPlay, Printer, ShieldCheck, GraduationCap, HelpCircle,
@@ -70,6 +70,25 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
         { '@type': 'ListItem', position: 3, name: config.englishName, item: url },
       ],
     },
+    // HowTo — how to use this calculator (steps from its inputs)
+    {
+      '@context': 'https://schema.org',
+      '@type': 'HowTo',
+      name: `${config.hindiName} कैसे इस्तेमाल करें`,
+      inLanguage: 'hi',
+      step: [
+        ...config.inputs.map((inp, i) => ({ '@type': 'HowToStep', position: i + 1, name: `${inp.label} भरें`, text: `${inp.label}${inp.sub ? ' — ' + inp.sub : ''}।` })),
+        { '@type': 'HowToStep', position: config.inputs.length + 1, name: 'परिणाम देखें', text: 'परिणाम तुरंत दिख जाता है — कोई बटन दबाने की ज़रूरत नहीं।' },
+      ],
+    },
+    // FAQPage — for rich results + People Also Ask
+    ...(config.faqs && config.faqs.length
+      ? [{
+          '@context': 'https://schema.org',
+          '@type': 'FAQPage',
+          mainEntity: config.faqs.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+        }]
+      : []),
   ];
 
   useDocumentMeta({
@@ -80,6 +99,8 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
   });
 
   const glossaryTerms = config.relatedGlossary.map((s) => findTerm(s)).filter((t): t is NonNullable<typeof t> => t != null);
+  const relatedCalcs = relatedCalculators(config.slug);
+  const paired = config.relatedArticles[0];        // primary paired educational article (deep-dive)
   const toneCls = (t?: string) => (t === 'good' ? 'text-emerald-600' : t === 'bad' ? 'text-destructive' : 'text-primary');
 
   return (
@@ -194,11 +215,40 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
           </div>
         )}
 
+        {/* Paired educational article — deep dive (cluster spoke) */}
+        {paired && (
+          <Link to={`/blog/${paired.slug}`} className="mt-6 block">
+            <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors">
+              <CardContent className="p-4 flex items-center gap-3">
+                <BookOpen className="h-5 w-5 text-primary flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wide">पूरा गहराई से समझें · लेख</p>
+                  <p className="font-semibold text-foreground mt-0.5 flex items-center gap-1">{paired.title} <ArrowRight className="h-4 w-4" /></p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        )}
+
         {/* Formula / Explanation / Example / Mistakes */}
         <Section icon={<Sigma className="h-4 w-4 text-violet-500" />} title="सूत्र"><GuideMarkdown source={config.formula} /></Section>
         <Section icon={<BookOpen className="h-4 w-4 text-primary" />} title="समझाइश"><GuideMarkdown source={config.explanation} /></Section>
         <Section icon={<Lightbulb className="h-4 w-4 text-amber-500" />} title="उदाहरण"><GuideMarkdown source={config.example} /></Section>
         <Section icon={<AlertTriangle className="h-4 w-4 text-amber-500" />} title="आम गलतियाँ"><GuideMarkdown source={config.mistakes} /></Section>
+
+        {/* FAQ */}
+        {config.faqs && config.faqs.length > 0 && (
+          <Section icon={<HelpCircle className="h-4 w-4 text-sky-500" />} title="अक्सर पूछे जाने वाले प्रश्न">
+            <div className="space-y-3">
+              {config.faqs.map((f, i) => (
+                <div key={i} className="rounded-lg border bg-card p-3">
+                  <p className="font-semibold text-foreground text-sm">{f.q}</p>
+                  <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{f.a}</p>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
 
         {/* Related glossary */}
         {glossaryTerms.length > 0 && (
@@ -238,10 +288,59 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
           </Section>
         )}
 
-        {/* Other calculators */}
-        <Section icon={<GraduationCap className="h-4 w-4 text-teal-600" />} title="और कैलकुलेटर">
-          <Link to="/tools" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">सभी कैलकुलेटर देखें <ArrowRight className="h-3.5 w-3.5" /></Link>
+        {/* Learning path (cluster spine) */}
+        <Section icon={<GraduationCap className="h-4 w-4 text-teal-600" />} title="सीखने का रास्ता">
+          <ol className="space-y-2">
+            {glossaryTerms[0] && (
+              <li>
+                <Link to={`/glossary/${glossaryTerms[0].slug}`} className="group flex items-center gap-3 p-3 rounded-lg border bg-card hover:border-primary/50 transition-colors">
+                  <span className="h-6 w-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
+                  <span className="text-sm text-foreground group-hover:text-primary">पहले समझें: <b>{glossaryTerms[0].hindiName || glossaryTerms[0].title}</b> (शब्दकोश)</span>
+                </Link>
+              </li>
+            )}
+            <li>
+              <div className="flex items-center gap-3 p-3 rounded-lg border border-primary/40 bg-primary/5">
+                <span className="h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center flex-shrink-0">{glossaryTerms[0] ? 2 : 1}</span>
+                <span className="text-sm text-foreground">अभी गणना करें: <b>{config.hindiName}</b> (इसी पेज पर)</span>
+              </div>
+            </li>
+            {paired && (
+              <li>
+                <Link to={`/blog/${paired.slug}`} className="group flex items-center gap-3 p-3 rounded-lg border bg-card hover:border-primary/50 transition-colors">
+                  <span className="h-6 w-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">{glossaryTerms[0] ? 3 : 2}</span>
+                  <span className="text-sm text-foreground group-hover:text-primary">गहराई से पढ़ें: <b>{paired.title}</b></span>
+                </Link>
+              </li>
+            )}
+            {relatedCalcs[0] && (
+              <li>
+                <Link to={`/tools/${relatedCalcs[0].slug}`} className="group flex items-center gap-3 p-3 rounded-lg border bg-card hover:border-primary/50 transition-colors">
+                  <span className="h-6 w-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">{(glossaryTerms[0] ? 1 : 0) + (paired ? 1 : 0) + 2}</span>
+                  <span className="text-sm text-foreground group-hover:text-primary">आगे आज़माएँ: <b>{relatedCalcs[0].hindiName}</b></span>
+                </Link>
+              </li>
+            )}
+          </ol>
         </Section>
+
+        {/* Related calculators (cluster) */}
+        {relatedCalcs.length > 0 && (
+          <Section icon={<CalcIcon className="h-4 w-4 text-indigo-500" />} title="जुड़े कैलकुलेटर">
+            <div className="grid sm:grid-cols-2 gap-2">
+              {relatedCalcs.map((rc) => (
+                <Link key={rc.slug} to={`/tools/${rc.slug}`} className="group flex items-center justify-between gap-2 p-3 rounded-lg border bg-card hover:border-primary/50 transition-colors">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground group-hover:text-primary line-clamp-1">{rc.hindiName}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-1">{rc.englishName}</p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary flex-shrink-0" />
+                </Link>
+              ))}
+            </div>
+            <Link to="/tools" className="inline-flex items-center gap-1 text-sm text-primary hover:underline mt-3">सभी कैलकुलेटर देखें <ArrowRight className="h-3.5 w-3.5" /></Link>
+          </Section>
+        )}
 
         {/* Was this helpful */}
         <HelpfulWidget />

@@ -141,14 +141,14 @@ function buildIndex(): SearchDoc[] {
       haystack: norm([g.title, g.hindiName, g.englishName, g.category, g.definition, ...g.keywords].join(' ')),
     });
   }
-  // Calculators (Calculator Engine registry) — searchable + linked.
+  // Calculators (Calculator Engine registry) — searchable + linked; FAQ questions deepen recall.
   for (const c of CALCULATORS) {
     docs.push({
       id: `calculator:${c.slug}`, type: 'calculator',
       title: `${c.hindiName} · ${c.englishName}`,
       url: `/tools/${c.slug}`,
       snippet: c.intro, category: c.category,
-      haystack: norm([c.title, c.hindiName, c.englishName, c.category, c.intro, ...c.keywords].join(' ')),
+      haystack: norm([c.title, c.hindiName, c.englishName, c.category, c.intro, ...c.keywords, ...(c.faqs?.map((f) => f.q) ?? [])].join(' ')),
     });
   }
   INDEX = docs;
@@ -188,7 +188,7 @@ export function search(query: string, limit = 30): SearchResult[] {
   for (const doc of docs) {
     const title = norm(doc.title);
     // strip surrounding punctuation so the typo fallback matches e.g. "(depreciation)"
-    const words = doc.haystack.split(/\s+/).map((w) => w.replace(/[^a-z0-9ऀ-ॿ]/g, '')).filter(Boolean);
+    const words = doc.haystack.split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean);
     let score = 0;
     let matchedTokens = 0;
 

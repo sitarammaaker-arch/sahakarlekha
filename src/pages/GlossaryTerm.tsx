@@ -14,9 +14,10 @@ import GuideMarkdown from '@/components/guide/GuideMarkdown';
 import HelpfulWidget from '@/components/HelpfulWidget';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findTerm, learningPath, allGlossary } from '@/content/glossary';
+import { calculatorsForGlossary } from '@/content/calculators';
 import {
   Home, ChevronRight, BookOpen, ArrowRight, Lightbulb, AlertTriangle, Link2,
-  GraduationCap, MonitorPlay, FileText, ShieldCheck, Languages, Compass,
+  GraduationCap, MonitorPlay, FileText, ShieldCheck, Languages, Compass, Calculator as CalcIcon,
 } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
@@ -85,6 +86,7 @@ const GlossaryTerm: React.FC = () => {
 
   const path = learningPath(slug);
   const internalNonModule = term.internalLinks.filter((l) => !term.modules.includes(l));
+  const calcs = calculatorsForGlossary(slug);
 
   return (
     <PublicLayout>
@@ -173,6 +175,19 @@ const GlossaryTerm: React.FC = () => {
               {term.modules.map((m) => (
                 <Link key={m} to={m}>
                   <Button variant="outline" size="sm" className="gap-1">{routeLabel(m)} <ArrowRight className="h-3.5 w-3.5" /></Button>
+                </Link>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        {/* Related calculators (reverse link from the calculator engine) */}
+        {calcs.length > 0 && (
+          <Field icon={<CalcIcon className="h-4 w-4 text-indigo-500" />} title="जुड़ा कैलकुलेटर">
+            <div className="flex flex-wrap gap-2">
+              {calcs.map((c) => (
+                <Link key={c.slug} to={`/tools/${c.slug}`} className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-full border bg-card hover:border-primary/50 hover:text-primary transition-colors">
+                  {c.hindiName} <ArrowRight className="h-3 w-3" />
                 </Link>
               ))}
             </div>

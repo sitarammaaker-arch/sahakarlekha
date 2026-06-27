@@ -33,6 +33,7 @@ export interface CalcInput {
 export interface CalcStat { label: string; value: string; primary?: boolean; tone?: 'good' | 'bad' | 'neutral' }
 export interface CalcTable { head: string[]; rows: string[][] }
 export interface CalcResult { ok: boolean; stats: CalcStat[]; table?: CalcTable; note?: string }
+export interface CalcFaq { q: string; a: string }
 
 export interface CalcConfig {
   slug: string;
@@ -55,6 +56,8 @@ export interface CalcConfig {
   relatedArticles: { slug: string; title: string }[];
   relatedHelp?: { slug: string; title: string }[];
   relatedModules: { route: string; label: string }[];
+  faqs?: CalcFaq[];                          // → FAQ section + FAQPage JSON-LD
+  related?: string[];                        // related calculator slugs (cluster)
   nev?: boolean;          // statutory-adjacent (rates user-entered) → show note
 }
 
@@ -416,6 +419,91 @@ export const CALCULATORS: CalcConfig[] = [
   },
 ];
 
+/* ── Topic-cluster data: FAQs (FAQPage schema) + related calculators ──
+   Kept as maps and attached below so the compute configs above stay compact. */
+const FAQS: Record<string, CalcFaq[]> = {
+  'depreciation-calculator': [
+    { q: 'SLM और WDV में क्या फर्क है?', a: 'SLM में हर साल मूल लागत पर बराबर मूल्यह्रास होता है; WDV में हर साल घटते बही मूल्य पर — इसलिए शुरुआती साल ज़्यादा घटता है।' },
+    { q: 'क्या कोई तय मूल्यह्रास दर है?', a: 'यह कैलकुलेटर कोई वैधानिक दर तय नहीं करता — सही दर आप अपने नियमों/CA के अनुसार स्वयं डालते हैं।' },
+    { q: 'अवशिष्ट मूल्य क्या होता है?', a: 'संपत्ति की अनुमानित अंतिम कीमत; SLM में बही मूल्य इससे नीचे नहीं जाता।' },
+  ],
+  'simple-interest-calculator': [
+    { q: 'साधारण और चक्रवृद्धि ब्याज में फर्क?', a: 'साधारण ब्याज सिर्फ़ मूलधन पर लगता है; चक्रवृद्धि में हर अवधि का ब्याज मूलधन में जुड़कर अगली बार ब्याज पर भी ब्याज देता है।' },
+    { q: 'समय महीनों में हो तो कैसे डालें?', a: 'समय वर्षों में डालें — 6 महीने = 0.5 वर्ष।' },
+    { q: 'साधारण ब्याज का सूत्र क्या है?', a: 'ब्याज = (मूलधन × दर × समय) ÷ 100; कुल राशि = मूलधन + ब्याज।' },
+  ],
+  'compound-interest-calculator': [
+    { q: 'चक्रवृद्धि की संख्या (n) क्या है?', a: 'एक साल में कितनी बार ब्याज जुड़ता है — वार्षिक=1, छमाही=2, तिमाही=4, मासिक=12।' },
+    { q: 'बार-बार चक्रवृद्धि से क्या होता है?', a: 'जितनी ज़्यादा बार चक्रवृद्धि, अंतिम राशि उतनी थोड़ी ज़्यादा होती है।' },
+    { q: 'क्या यह जमा/FD के लिए सही है?', a: 'यह शैक्षिक गणना है; वास्तविक दर व शर्तें अपने बैंक/नियमों से देखें।' },
+  ],
+  'share-capital-calculator': [
+    { q: 'अधिकृत, निर्गमित व चुकता का क्रम?', a: 'अधिकृत ≥ निर्गमित ≥ चुकता। बैलेंस शीट पर असली आँकड़ा चुकता पूँजी है।' },
+    { q: 'सदस्य की अंश पूँजी कैसे निकलती है?', a: 'अंकित मूल्य × धारित अंशों की संख्या।' },
+    { q: 'क्या यह वैधानिक गणना है?', a: 'नहीं, यह शैक्षिक है — विशिष्ट प्रावधानों के लिए अपने नियम/उपविधि देखें।' },
+  ],
+  'gst-calculator': [
+    { q: 'Exclusive और Inclusive में फर्क?', a: 'Exclusive में राशि कर रहित होती है (कर जोड़ना है); Inclusive में राशि में कर पहले से शामिल होता है (अलग करना है)।' },
+    { q: 'CGST और SGST कैसे बँटते हैं?', a: 'राज्य के भीतर लेन-देन में GST आम तौर पर आधा CGST व आधा SGST में बँटता है।' },
+    { q: 'सही GST दर कौन-सी है?', a: 'यह कैलकुलेटर कोई दर नहीं सुझाता; सही दर आइटम/नियमों के अनुसार आप डालें और अपने CA से पुष्टि करें।' },
+  ],
+  'tds-calculator': [
+    { q: 'TDS किस पर कटता है?', a: 'यह भुगतान के प्रकार पर निर्भर है और लागू होना नियमों पर — यह कैलकुलेटर कोई दर नहीं सुझाता।' },
+    { q: 'TDS का सूत्र क्या है?', a: 'TDS = भुगतान राशि × दर% ÷ 100; शुद्ध भुगतान = राशि − TDS।' },
+    { q: 'सही दर कहाँ से लें?', a: 'सही दर व अनुभाग अपने CA या आधिकारिक नियमों से पक्का करें।' },
+  ],
+  'loan-emi-calculator': [
+    { q: 'EMI में क्या-क्या शामिल होता है?', a: 'हर महीने की समान किस्त में मूलधन और ब्याज दोनों होते हैं — शुरुआती किस्तों में ब्याज का हिस्सा ज़्यादा।' },
+    { q: 'वार्षिक दर को मासिक कैसे करें?', a: 'वार्षिक दर ÷ 12 ÷ 100 = मासिक दर।' },
+    { q: 'amortization तालिका क्या दिखाती है?', a: 'हर साल कितना मूलधन चुका, कितना ब्याज गया और शेष कितना बचा।' },
+  ],
+  'cash-difference-calculator': [
+    { q: 'short और excess में फर्क?', a: 'भौतिक नकद बही से कम हो = कमी (short); ज़्यादा हो = अधिकता (excess)।' },
+    { q: 'अंतर मिले तो क्या करें?', a: 'तुरंत जाँचें — यह छूटी/गलत एंट्री या रिसाव का संकेत है, इसे टालें नहीं।' },
+    { q: 'क्या रोकड़ शेष ऋणात्मक हो सकता है?', a: 'नहीं; ऋणात्मक रोकड़ हमेशा किसी गलती का संकेत है।' },
+  ],
+  'percentage-calculator': [
+    { q: '% वृद्धि और % अंतर में फर्क?', a: '% वृद्धि किसी मान को बढ़ाती है; % अंतर दो मानों के बीच का बदलाव दिखाता है।' },
+    { q: 'किसी हिस्से का प्रतिशत कैसे निकालें?', a: '(हिस्सा ÷ कुल) × 100।' },
+    { q: 'प्रतिशत के सूत्र क्या हैं?', a: 'वृद्धि: A+(A×B÷100); कमी: A−(A×B÷100); अंतर: ((B−A)÷|A|)×100।' },
+  ],
+  'working-capital-calculator': [
+    { q: 'कार्यशील पूँजी क्या बताती है?', a: 'अल्पकालीन ज़रूरतें पूरी करने के लिए कितनी "खाली" पूँजी है — चालू परिसंपत्ति − चालू देयता।' },
+    { q: 'चालू अनुपात कितना अच्छा माना जाता है?', a: 'आम तौर पर 1 से ऊपर बेहतर माना जाता है (शैक्षिक मार्गदर्शन)।' },
+    { q: 'ऋणात्मक कार्यशील पूँजी का मतलब?', a: 'चालू देयता परिसंपत्ति से ज़्यादा है — नकदी पर ध्यान देने का संकेत।' },
+  ],
+};
+const RELATED: Record<string, string[]> = {
+  'depreciation-calculator': ['working-capital-calculator', 'share-capital-calculator'],
+  'simple-interest-calculator': ['compound-interest-calculator', 'loan-emi-calculator'],
+  'compound-interest-calculator': ['simple-interest-calculator', 'loan-emi-calculator'],
+  'share-capital-calculator': ['working-capital-calculator', 'depreciation-calculator'],
+  'gst-calculator': ['tds-calculator', 'percentage-calculator'],
+  'tds-calculator': ['gst-calculator', 'percentage-calculator'],
+  'loan-emi-calculator': ['simple-interest-calculator', 'compound-interest-calculator'],
+  'cash-difference-calculator': ['percentage-calculator', 'working-capital-calculator'],
+  'percentage-calculator': ['working-capital-calculator', 'gst-calculator'],
+  'working-capital-calculator': ['percentage-calculator', 'depreciation-calculator'],
+};
+CALCULATORS.forEach((c) => { c.faqs = FAQS[c.slug] ?? []; c.related = RELATED[c.slug] ?? []; });
+
 export function findCalculator(slug: string): CalcConfig | null {
   return CALCULATORS.find((c) => c.slug === slug) ?? null;
+}
+
+/** Related calculators for the cluster (resolved configs). */
+export function relatedCalculators(slug: string): CalcConfig[] {
+  const c = findCalculator(slug);
+  if (!c || !c.related) return [];
+  return c.related.map((s) => findCalculator(s)).filter((x): x is CalcConfig => x != null);
+}
+
+/** Reverse map: calculators that reference a given glossary term (for glossary → calculator links). */
+export function calculatorsForGlossary(termSlug: string): CalcConfig[] {
+  return CALCULATORS.filter((c) => c.relatedGlossary.includes(termSlug));
+}
+
+/** Reverse map: the calculator paired with a blog article (for article → calculator callouts). */
+export function calculatorForArticle(articleSlug: string): CalcConfig | null {
+  return CALCULATORS.find((c) => c.relatedArticles.some((a) => a.slug === articleSlug)) ?? null;
 }
