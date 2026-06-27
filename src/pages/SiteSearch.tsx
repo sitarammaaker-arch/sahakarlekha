@@ -13,7 +13,7 @@ import { allGlossary } from '@/content/glossary';
 import { Search as SearchIcon, ArrowRight, BookOpen } from 'lucide-react';
 import { WHATSAPP_NUMBER } from '@/lib/socials';
 
-const TYPE_ORDER: SearchType[] = ['glossary', 'help', 'faq', 'cookbook', 'guide', 'blog'];
+const TYPE_ORDER: SearchType[] = ['glossary', 'calculator', 'help', 'faq', 'cookbook', 'guide', 'blog'];
 
 // A few high-value glossary terms suggested when the box is empty.
 const SUGGESTED_SLUGS = ['voucher', 'cash-book', 'ledger', 'double-entry', 'bank-book', 'membership', 'share', 'financial-year', 'accounting', 'society-setup'];

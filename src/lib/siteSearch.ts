@@ -14,8 +14,9 @@ import { GUIDE_ORDER, findEntry } from '@/content/guide';
 import { BLOG_POSTS } from '@/content/blog';
 import { FAQ_CATEGORIES } from '@/content/faq';
 import { allGlossary } from '@/content/glossary';
+import { CALCULATORS } from '@/content/calculators';
 
-export type SearchType = 'help' | 'cookbook' | 'guide' | 'blog' | 'faq' | 'glossary';
+export type SearchType = 'help' | 'cookbook' | 'guide' | 'blog' | 'faq' | 'glossary' | 'calculator';
 
 export interface SearchDoc {
   id: string;
@@ -38,6 +39,7 @@ export const TYPE_LABEL: Record<SearchType, string> = {
   blog: 'ब्लॉग',
   faq: 'सामान्य प्रश्न (FAQ)',
   glossary: 'शब्दकोश',
+  calculator: 'कैलकुलेटर',
 };
 
 // Synonym groups — variants (Devanagari / roman / common typos / abbreviations) that
@@ -137,6 +139,16 @@ function buildIndex(): SearchDoc[] {
       url: `/glossary/${g.slug}`,
       snippet: g.definition, category: g.category,
       haystack: norm([g.title, g.hindiName, g.englishName, g.category, g.definition, ...g.keywords].join(' ')),
+    });
+  }
+  // Calculators (Calculator Engine registry) — searchable + linked.
+  for (const c of CALCULATORS) {
+    docs.push({
+      id: `calculator:${c.slug}`, type: 'calculator',
+      title: `${c.hindiName} · ${c.englishName}`,
+      url: `/tools/${c.slug}`,
+      snippet: c.intro, category: c.category,
+      haystack: norm([c.title, c.hindiName, c.englishName, c.category, c.intro, ...c.keywords].join(' ')),
     });
   }
   INDEX = docs;

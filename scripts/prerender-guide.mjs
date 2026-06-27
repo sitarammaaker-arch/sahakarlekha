@@ -26,6 +26,7 @@ const BLOG_FILE = resolve(ROOT, 'src', 'content', 'blog', 'index.ts');
 const HELP_FILE = resolve(ROOT, 'src', 'content', 'help', 'index.ts');
 const COOKBOOK_FILE = resolve(ROOT, 'src', 'content', 'cookbook', 'index.ts');
 const GLOSSARY_DIR = resolve(ROOT, 'docs', 'kpp', 'wave-1-active');
+const CALC_FILE = resolve(ROOT, 'src', 'content', 'calculators', 'index.ts');
 const COURSE ='सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स';
 
 const esc = (s) =>
@@ -289,6 +290,47 @@ function glossaryPages() {
   return pages;
 }
 
+// ---- calculator routes (parsed from src/content/calculators/index.ts — single source of truth) ----
+function calculatorPages() {
+  const pages = [
+    {
+      path: '/tools',
+      title: 'सहकारी लेखांकन कैलकुलेटर (Calculators) — मुफ्त | SahakarLekha',
+      description: 'ब्याज, EMI, मूल्यह्रास, GST, TDS, अंश पूँजी, रोकड़ अंतर, प्रतिशत व कार्यशील पूँजी — सहकारी समिति के लिए मुफ्त, आसान कैलकुलेटर।',
+      jsonLd: [crumb([{ name: 'कैलकुलेटर', item: `${SITE}/tools` }])],
+    },
+  ];
+  if (existsSync(CALC_FILE)) {
+    const src = readFileSync(CALC_FILE, 'utf-8');
+    // per calculator: slug, metaTitle, metaDescription in order. Tempered `(?!slug:)` so an
+    // inner slug: (relatedArticles/relatedHelp) never bridges to the NEXT config's meta.
+    const re = /slug:\s*'([^']+)'(?:(?!slug:)[\s\S])*?metaTitle:\s*'((?:[^'\\]|\\.)*)'(?:(?!slug:)[\s\S])*?metaDescription:\s*'((?:[^'\\]|\\.)*)'/g;
+    let m;
+    while ((m = re.exec(src))) {
+      const [, slug, title, description] = m;
+      const url = `${SITE}/tools/${slug}`;
+      pages.push({
+        path: `/tools/${slug}`,
+        title,
+        description,
+        jsonLd: [
+          {
+            '@context': 'https://schema.org', '@type': 'WebApplication', name: title, description,
+            inLanguage: 'hi', url, applicationCategory: 'FinanceApplication', operatingSystem: 'Web',
+            isAccessibleForFree: true, offers: { '@type': 'Offer', price: '0', priceCurrency: 'INR' },
+            publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
+          },
+          crumb([
+            { name: 'कैलकुलेटर', item: `${SITE}/tools` },
+            { name: title, item: url },
+          ]),
+        ],
+      });
+    }
+  }
+  return pages;
+}
+
 // ---- sitemap.xml (build-time, from the SAME route sources as the prerender) ----
 // Regenerates the DEPLOYED dist/sitemap.xml so it can never drift from the actual
 // built routes (the hand file had stale /guide/quiz/bhag-N slugs + missing part-10).
@@ -320,6 +362,8 @@ function buildSitemap(dynamicPages) {
     if (path === '/blog') return { changefreq: 'weekly', priority: '0.9' };
     if (path === '/software') return { changefreq: 'weekly', priority: '0.8' };
     if (path === '/glossary') return { changefreq: 'weekly', priority: '0.8' };
+    if (path === '/tools') return { changefreq: 'weekly', priority: '0.8' };
+    if (path.startsWith('/tools/')) return { changefreq: 'monthly', priority: '0.7' };
     if (path.startsWith('/blog/')) return { changefreq: 'monthly', priority: '0.8' };
     if (path.startsWith('/software/') || path.startsWith('/cooperative-software/')) return { changefreq: 'monthly', priority: '0.8' };
     if (path.startsWith('/glossary/')) return { changefreq: 'monthly', priority: '0.6' };
@@ -367,7 +411,7 @@ try {
     process.exit(0);
   }
   const template = readFileSync(TEMPLATE, 'utf-8');
-  const pages = [...guidePages(), ...softwarePages(), ...statePages(), ...blogPages(), ...helpPages(), ...cookbookPages(), ...glossaryPages()];
+  const pages = [...guidePages(), ...softwarePages(), ...statePages(), ...blogPages(), ...helpPages(), ...cookbookPages(), ...glossaryPages(), ...calculatorPages()];
   let n = 0;
   for (const page of pages) {
     if (!page || !page.path) continue;
@@ -376,7 +420,7 @@ try {
     writeFileSync(resolve(outDir, 'index.html'), transform(template, page), 'utf-8');
     n++;
   }
-  console.log(`[prerender] wrote ${n} static pages (guide + software + blog + glossary).`);
+  console.log(`[prerender] wrote ${n} static pages (guide + software + blog + glossary + tools).`);
   try {
     const sitemap = buildSitemap(pages);
     writeFileSync(resolve(DIST, 'sitemap.xml'), sitemap, 'utf-8');

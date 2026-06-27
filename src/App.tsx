@@ -62,6 +62,8 @@ const BlogIndex = lazyWithRetry(() => import("./pages/BlogIndex"));
 const BlogPost = lazyWithRetry(() => import("./pages/BlogPost"));
 const Glossary = lazyWithRetry(() => import("./pages/Glossary"));
 const GlossaryTerm = lazyWithRetry(() => import("./pages/GlossaryTerm"));
+const CalculatorHub = lazyWithRetry(() => import("./pages/CalculatorHub"));
+const CalculatorPage = lazyWithRetry(() => import("./pages/CalculatorPage"));
 const Login = lazyWithRetry(() => import("./pages/Login"));
 const Dashboard = lazyWithRetry(() => import("./pages/Dashboard"));
 const CashBook = lazyWithRetry(() => import("./pages/CashBook"));
@@ -223,6 +225,8 @@ const AppRoutes = () => {
       <Route path="/blog/:slug" element={<BlogPost />} />
       <Route path="/glossary" element={<Glossary />} />
       <Route path="/glossary/:slug" element={<GlossaryTerm />} />
+      <Route path="/tools" element={<CalculatorHub />} />
+      <Route path="/tools/:slug" element={<CalculatorPage />} />
 
       {/* Protected Routes */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
