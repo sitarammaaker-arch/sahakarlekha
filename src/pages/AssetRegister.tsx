@@ -90,7 +90,7 @@ const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCa
         <Input type="number" min="0" value={form.usefulLife} onChange={e => setForm(f => ({ ...f, usefulLife: e.target.value }))} placeholder="10" />
       </div>
       <div className="space-y-1">
-        <Label>{hi ? 'अवशिष्ट मूल्य (₹)' : 'Residual Value (₹)'}</Label>
+        <Label>{hi ? 'सैल्वेज वैल्यू (₹)' : 'Residual Value (₹)'}</Label>
         <Input type="number" min="0" value={form.residualValue} onChange={e => setForm(f => ({ ...f, residualValue: e.target.value }))} placeholder="0" />
       </div>
       <div className="space-y-1">
@@ -212,7 +212,7 @@ const AssetRegister: React.FC = () => {
       if (result.posted === 0) {
         toast({ title: hi ? 'कोई ह्रास नहीं जोड़ा गया' : 'No depreciation posted', description: hi ? `${result.skipped} संपत्तियां छोड़ी गईं (पहले से पोस्ट/शून्य दर/भूमि)` : `${result.skipped} assets skipped (already posted / zero rate / Land)` });
       } else {
-        toast({ title: hi ? `ह्रास पोस्ट हुआ — ${result.posted} संपत्तियां` : `Depreciation posted — ${result.posted} asset(s)`, description: hi ? `वित्तीय वर्ष ${currentFY} के लिए जर्नल प्रविष्टियां बनाई गईं` : `Journal entries created for FY ${currentFY}` });
+        toast({ title: hi ? `ह्रास पोस्ट हुआ — ${result.posted} संपत्तियां` : `Depreciation posted — ${result.posted} asset(s)`, description: hi ? `वित्तीय वर्ष ${currentFY} के लिए जर्नल एंट्रियां बनाई गईं` : `Journal entries created for FY ${currentFY}` });
       }
     }, 100);
   };

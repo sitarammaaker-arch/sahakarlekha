@@ -620,10 +620,10 @@ const FederationReport: React.FC = () => {
               </thead>
               <tbody>
                 <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'शुद्ध लाभ / (हानि)' : 'Net Profit / (Loss)'}</td><td className="border px-3 py-2 text-right font-semibold">{fmt(plData.netProfit)}</td></tr>
-                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'वैधानिक संचय निधि' : 'Statutory Reserve Fund'}</td><td className="border px-3 py-2 text-right">{fmt(plData.statutoryReserve)}</td></tr>
-                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'शिक्षा निधि' : 'Education Fund'}</td><td className="border px-3 py-2 text-right">{fmt(plData.educationFund)}</td></tr>
+                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'रिज़र्व फंड' : 'Statutory Reserve Fund'}</td><td className="border px-3 py-2 text-right">{fmt(plData.statutoryReserve)}</td></tr>
+                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'शिक्षा फंड' : 'Education Fund'}</td><td className="border px-3 py-2 text-right">{fmt(plData.educationFund)}</td></tr>
                 <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'डिविडेंड' : 'Dividend'}</td><td className="border px-3 py-2 text-right">{fmt(plData.dividendFund)}</td></tr>
-                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'अन्य निधि आवंटन' : 'Other Fund Appropriations'}</td><td className="border px-3 py-2 text-right">{fmt(plData.otherAppropriations)}</td></tr>
+                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'अन्य फंड आवंटन' : 'Other Fund Appropriations'}</td><td className="border px-3 py-2 text-right">{fmt(plData.otherAppropriations)}</td></tr>
                 <tr className="font-bold bg-muted"><td className="border px-3 py-2">{hi ? 'शेष राशि (आगे ले जाने हेतु)' : 'Balance carried forward'}</td><td className="border px-3 py-2 text-right">{fmt(plData.balance)}</td></tr>
               </tbody>
             </table>
@@ -660,7 +660,7 @@ const FederationReport: React.FC = () => {
 
           <div className="space-y-2">
             <p className="text-sm font-medium text-muted-foreground">
-              {hi ? 'वैधानिक अनुपालन (केवल प्रदर्शन)' : 'Statutory Compliance (Display Only)'}
+              {hi ? 'कानूनी अनुपालन (केवल प्रदर्शन)' : 'Statutory Compliance (Display Only)'}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
               {[

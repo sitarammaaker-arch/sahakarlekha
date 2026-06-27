@@ -92,10 +92,10 @@ const SocietySetup: React.FC = () => {
   const handleToggleFYLock = () => {
     if (society.fyLocked) {
       updateSociety({ fyLocked: false, fyLockedAt: undefined, fyLockedBy: undefined });
-      toast({ title: language === 'hi' ? 'वित्तीय वर्ष अनलॉक किया गया' : 'Financial Year Unlocked', description: language === 'hi' ? 'अब नई प्रविष्टियां की जा सकती हैं।' : 'New entries are now allowed.' });
+      toast({ title: language === 'hi' ? 'वित्तीय वर्ष अनलॉक किया गया' : 'Financial Year Unlocked', description: language === 'hi' ? 'अब नई एंट्रियां की जा सकती हैं।' : 'New entries are now allowed.' });
     } else {
       updateSociety({ fyLocked: true, fyLockedAt: new Date().toISOString().split('T')[0], fyLockedBy: 'Admin' });
-      toast({ title: language === 'hi' ? 'वित्तीय वर्ष लॉक किया गया' : `FY ${society.financialYear} Locked`, description: language === 'hi' ? 'अब इस वर्ष में कोई नई प्रविष्टि नहीं हो सकती।' : 'No new vouchers can be added to this financial year.' });
+      toast({ title: language === 'hi' ? 'वित्तीय वर्ष लॉक किया गया' : `FY ${society.financialYear} Locked`, description: language === 'hi' ? 'अब इस वर्ष में कोई नई एंट्री नहीं हो सकती।' : 'No new vouchers can be added to this financial year.' });
     }
   };
 
@@ -236,7 +236,7 @@ const SocietySetup: React.FC = () => {
     toast({
       title: language === 'hi' ? `वित्त वर्ष ${newFY} प्रारंभ हुआ` : `Rolled over to FY ${newFY}`,
       description: language === 'hi'
-        ? `पिछले वर्ष ${society.financialYear} के शेष सहेजे गए। अब ${newFY} में प्रविष्टियां करें।`
+        ? `पिछले वर्ष ${society.financialYear} के शेष सहेजे गए। अब ${newFY} में एंट्रियां करें।`
         : `Closing balances of ${society.financialYear} saved as previous year data. Start entries for ${newFY}.`,
     });
   };
@@ -466,7 +466,7 @@ const SocietySetup: React.FC = () => {
                   <p className="text-xs text-muted-foreground">{language === 'hi' ? 'स्थायी खाता संख्या' : 'Permanent Account Number'}</p>
                 </div>
                 <div className="space-y-2">
-                  <Label>{language === 'hi' ? 'संचय निधि (%)' : 'Reserve Fund %'}</Label>
+                  <Label>{language === 'hi' ? 'रिज़र्व फंड (%)' : 'Reserve Fund %'}</Label>
                   <Input
                     type="number"
                     min={0}
@@ -636,10 +636,10 @@ const SocietySetup: React.FC = () => {
                     <p className="text-sm text-muted-foreground mt-1">
                       {society.fyLocked
                         ? (language === 'hi'
-                          ? `वित्तीय वर्ष ${society.financialYear} लॉक है। कोई नई प्रविष्टि नहीं हो सकती। लॉक: ${society.fyLockedAt || ''}`
+                          ? `वित्तीय वर्ष ${society.financialYear} लॉक है। कोई नई एंट्री नहीं हो सकती। लॉक: ${society.fyLockedAt || ''}`
                           : `FY ${society.financialYear} is locked. No new entries allowed. Locked on: ${society.fyLockedAt || ''}`)
                         : (language === 'hi'
-                          ? 'लॉक करने के बाद इस वित्तीय वर्ष में कोई नई वाउचर प्रविष्टि नहीं हो सकती।'
+                          ? 'लॉक करने के बाद इस वित्तीय वर्ष में कोई नई वाउचर एंट्री नहीं हो सकती।'
                           : 'Locking prevents any new voucher entries for this financial year. Use after audit completion.')}
                     </p>
                   </div>
@@ -679,7 +679,7 @@ const SocietySetup: React.FC = () => {
                           language === 'hi' ? `BS शेष → पिछले वर्ष की शेष राशि (${society.financialYear})` : `BS closing balances saved as previous year (${society.financialYear})`,
                           language === 'hi' ? 'आय-व्यय खाता डेटा → तुलना हेतु सहेजा जाएगा' : 'I&E data saved for year-on-year comparison',
                           language === 'hi' ? 'रसीद-भुगतान डेटा → तुलना हेतु सहेजा जाएगा' : 'R&P data saved for comparison column',
-                          language === 'hi' ? 'FY लॉक हटेगा — नई प्रविष्टियां संभव होंगी' : 'FY lock cleared — new entries allowed in new year',
+                          language === 'hi' ? 'FY लॉक हटेगा — नई एंट्रियां संभव होंगी' : 'FY lock cleared — new entries allowed in new year',
                         ].map((item, i) => (
                           <div key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <CheckCircle2 className="h-3 w-3 text-success shrink-0" />
@@ -796,7 +796,7 @@ const SocietySetup: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <Label>{language === 'hi' ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
-                    <Input value={newAccForm.nameHi} onChange={e => setNewAccForm(f => ({ ...f, nameHi: e.target.value }))} placeholder="e.g. ऋण निधि" />
+                    <Input value={newAccForm.nameHi} onChange={e => setNewAccForm(f => ({ ...f, nameHi: e.target.value }))} placeholder="e.g. ऋण फंड" />
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -845,7 +845,7 @@ const SocietySetup: React.FC = () => {
                   <CardTitle>{language === 'hi' ? 'पिछले वर्ष की शेष राशि' : 'Previous Year Closing Balances'}</CardTitle>
                   <CardDescription className="mt-1">
                     {language === 'hi'
-                      ? 'बैलेंस शीट में पिछले वर्ष के आंकड़े दर्ज करें (वैधानिक तुलनात्मक स्तंभ के लिए)'
+                      ? 'बैलेंस शीट में पिछले वर्ष के आंकड़े दर्ज करें (कानूनी तुलनात्मक कॉलम के लिए)'
                       : 'Enter previous year closing figures for the Balance Sheet comparison column (statutory requirement)'}
                   </CardDescription>
                 </div>
@@ -1066,7 +1066,7 @@ const SocietySetup: React.FC = () => {
                     language === 'hi' ? `वर्तमान बैलेंस शीट शेष → पिछले वर्ष (${society.financialYear}) डेटा में सहेजेगा` : `Save current Balance Sheet closing balances as ${society.financialYear} previous year data`,
                     language === 'hi' ? `आय-व्यय और रसीद-भुगतान → तुलना के लिए सहेजेगा` : `Save I&E and R&P figures for year-on-year comparison columns`,
                     language === 'hi' ? `वित्त वर्ष ${parseInt(society.financialYear.split('-')[0]) + 1}-${String(parseInt(society.financialYear.split('-')[1]) + 1).slice(-2)} शुरू करेगा` : `Switch to FY ${parseInt(society.financialYear.split('-')[0]) + 1}-${String(parseInt(society.financialYear.split('-')[1]) + 1).slice(-2)}`,
-                    language === 'hi' ? `FY ऑडिट लॉक हटाएगा — नई प्रविष्टियां संभव होंगी` : `Clear the audit lock — new entries allowed in the new year`,
+                    language === 'hi' ? `FY ऑडिट लॉक हटाएगा — नई एंट्रियां संभव होंगी` : `Clear the audit lock — new entries allowed in the new year`,
                   ].map((item, i) => (
                     <li key={i} className="flex items-start gap-2">
                       <CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" />

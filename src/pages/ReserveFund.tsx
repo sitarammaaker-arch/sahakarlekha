@@ -130,7 +130,7 @@ const ReserveFund: React.FC = () => {
     setConfirmOpen(false);
     toast({
       title: hi
-        ? `${posted} जर्नल प्रविष्टियाँ सफलतापूर्वक पोस्ट की गईं`
+        ? `${posted} जर्नल एंट्रियाँ सफलतापूर्वक पोस्ट की गईं`
         : `${posted} journal entries posted successfully`,
     });
   };
@@ -144,7 +144,7 @@ const ReserveFund: React.FC = () => {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {hi ? 'निधि आवंटन (अधिशेष से)' : 'Fund Appropriation (from Surplus)'}
+            {hi ? 'फंड आवंटन (सरप्लस से)' : 'Fund Appropriation (from Surplus)'}
           </h1>
           <p className="text-sm text-gray-500">{society.name} · {hi ? 'वित्तीय वर्ष' : 'FY'} {fy}</p>
         </div>
@@ -161,7 +161,7 @@ const ReserveFund: React.FC = () => {
         <Info className="h-4 w-4 mt-0.5 shrink-0" />
         <span>
           {hi
-            ? 'निधि आवंटन पूरी तरह वैकल्पिक है। नीचे हर निधि के लिए शुद्ध लाभ का % या एक निश्चित ₹ राशि चुनें (0 रखने पर वह निधि छूट जाएगी)। सामान्य सुझाव: संचय निधि 25%, शिक्षा निधि 1% — पर आप कुछ भी चुन सकते हैं।'
+            ? 'फंड आवंटन पूरी तरह वैकल्पिक है। नीचे हर फंड के लिए शुद्ध लाभ का % या एक निश्चित ₹ राशि चुनें (0 रखने पर वह फंड छूट जाएगी)। सामान्य सुझाव: रिज़र्व फंड 25%, शिक्षा फंड 1% — पर आप कुछ भी चुन सकते हैं।'
             : 'Fund appropriation is entirely optional. For each fund below, set a % of net surplus or a fixed ₹ amount (leave 0 to skip). Common suggestion: Reserve 25%, Education 1% — but you may choose anything.'}
         </span>
       </div>
@@ -170,7 +170,7 @@ const ReserveFund: React.FC = () => {
       {netProfit <= 0 && (
         <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          {hi ? 'शुद्ध अधिशेष शून्य या ऋणात्मक है — आवंटन आवश्यक नहीं।' : 'Net surplus is zero or negative — no appropriation needed.'}
+          {hi ? 'नेट सरप्लस शून्य या ऋणात्मक है — आवंटन आवश्यक नहीं।' : 'Net surplus is zero or negative — no appropriation needed.'}
         </div>
       )}
 
@@ -178,11 +178,11 @@ const ReserveFund: React.FC = () => {
         {/* ── Fund appropriation inputs ── */}
         <Card>
           <CardHeader className="py-3">
-            <CardTitle className="text-base">{hi ? 'निधि आवंटन' : 'Fund Appropriation'}</CardTitle>
+            <CardTitle className="text-base">{hi ? 'फंड आवंटन' : 'Fund Appropriation'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-600">{hi ? 'शुद्ध अधिशेष (P&L)' : 'Net Surplus (P&L)'}</span>
+              <span className="text-gray-600">{hi ? 'नेट सरप्लस (P&L)' : 'Net Surplus (P&L)'}</span>
               <span className={`font-semibold ${netProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                 {fmt(netProfit)}
               </span>
@@ -226,7 +226,7 @@ const ReserveFund: React.FC = () => {
               <span className="font-medium text-orange-700">{fmt(totalAppropriated)}</span>
             </div>
             <div className="flex justify-between font-bold text-base border-t pt-2">
-              <span>{hi ? 'वितरण योग्य अधिशेष' : 'Distributable Surplus'}</span>
+              <span>{hi ? 'वितरण योग्य सरप्लस' : 'Distributable Surplus'}</span>
               <span className={afterAppropriation >= 0 ? 'text-green-700' : 'text-red-600'}>
                 {fmt(afterAppropriation)}
               </span>
@@ -237,11 +237,11 @@ const ReserveFund: React.FC = () => {
         {/* ── Current balances + Post ── */}
         <Card>
           <CardHeader className="py-3">
-            <CardTitle className="text-base">{hi ? 'निधि वर्तमान शेष' : 'Current Fund Balances'}</CardTitle>
+            <CardTitle className="text-base">{hi ? 'फंड वर्तमान शेष' : 'Current Fund Balances'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-600">{hi ? 'शुद्ध अधिशेष खाता (1208)' : 'Net Surplus Account (1208)'}</span>
+              <span className="text-gray-600">{hi ? 'नेट सरप्लस खाता (1208)' : 'Net Surplus Account (1208)'}</span>
               <span className="font-semibold">{fmt(getBalance(ACC_NET_SURPLUS))}</span>
             </div>
             {fundAccounts
@@ -256,7 +256,7 @@ const ReserveFund: React.FC = () => {
               {netProfit <= 0 ? (
                 <div className="flex items-center gap-2 text-amber-700 text-xs">
                   <AlertTriangle className="h-3 w-3 shrink-0" />
-                  {hi ? 'शुद्ध अधिशेष शून्य या ऋणात्मक है — आवंटन आवश्यक नहीं' : 'Net surplus is zero or negative — no appropriation needed'}
+                  {hi ? 'नेट सरप्लस शून्य या ऋणात्मक है — आवंटन आवश्यक नहीं' : 'Net surplus is zero or negative — no appropriation needed'}
                 </div>
               ) : canPost ? (
                 <Button onClick={() => setConfirmOpen(true)} className="w-full bg-green-700 hover:bg-green-800">
@@ -270,7 +270,7 @@ const ReserveFund: React.FC = () => {
                 </div>
               ) : (
                 <div className="text-xs text-gray-500">
-                  {hi ? 'पोस्ट करने के लिए किसी निधि में राशि/% डालें।' : 'Enter a % or amount in a fund to post.'}
+                  {hi ? 'पोस्ट करने के लिए किसी फंड में राशि/% डालें।' : 'Enter a % or amount in a fund to post.'}
                 </div>
               )}
             </div>
@@ -284,7 +284,7 @@ const ReserveFund: React.FC = () => {
           <CardHeader className="py-3">
             <CardTitle className="text-base text-green-700 flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
-              {hi ? 'पोस्ट की गई जर्नल प्रविष्टियाँ' : 'Posted Appropriation Journals'}
+              {hi ? 'पोस्ट की गई जर्नल एंट्रियाँ' : 'Posted Appropriation Journals'}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
@@ -316,10 +316,10 @@ const ReserveFund: React.FC = () => {
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{hi ? 'निधि आवंटन पोस्ट करें?' : 'Post Fund Appropriation?'}</AlertDialogTitle>
+            <AlertDialogTitle>{hi ? 'फंड आवंटन पोस्ट करें?' : 'Post Fund Appropriation?'}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
-                <p>{hi ? 'निम्नलिखित जर्नल प्रविष्टियाँ बनाई जाएंगी:' : 'The following journal entries will be created:'}</p>
+                <p>{hi ? 'निम्नलिखित जर्नल एंट्रियाँ बनाई जाएंगी:' : 'The following journal entries will be created:'}</p>
                 {pendingFunds.map(f => {
                   const inp = getInput(f.id);
                   return (

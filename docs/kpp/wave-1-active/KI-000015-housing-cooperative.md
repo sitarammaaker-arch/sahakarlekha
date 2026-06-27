@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is the society that runs a housing colony or building: members pay maintenance, and the society looks after common areas, funds, and records.
 
-**Hindi explanation (आसान हिंदी):** आवास सहकारी समिति सदस्यों द्वारा मिलकर मकान/भवन बनाने, खरीदने या उसका प्रबंधन करने के लिए बनती है। यह सदस्यों से रखरखाव (maintenance) लेती है, साझा निधि रखती है और साझा संपत्ति की देखभाल करती है।
+**Hindi explanation (आसान हिंदी):** आवास सहकारी समिति सदस्यों द्वारा मिलकर मकान/भवन बनाने, खरीदने या उसका प्रबंधन करने के लिए बनती है। यह सदस्यों से रखरखाव (maintenance) लेती है, साझा फंड रखती है और साझा संपत्ति की देखभाल करती है।
 
 **English explanation:** A members' cooperative that develops or manages housing, centred on maintenance dues, sinking/common funds, and shared-asset upkeep.
 

@@ -1188,7 +1188,7 @@ const Inventory: React.FC = () => {
               <CardTitle className="text-lg">
                 {hi ? 'स्टॉक आवाजाही' : 'Stock Movements'}
                 <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  ({filteredMovements.length} {hi ? 'प्रविष्टियां' : 'entries'})
+                  ({filteredMovements.length} {hi ? 'एंट्रियां' : 'entries'})
                 </span>
               </CardTitle>
             </CardHeader>

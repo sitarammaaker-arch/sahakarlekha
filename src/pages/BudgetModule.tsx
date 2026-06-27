@@ -319,7 +319,7 @@ function BudgetEditorDialog({ open, onClose, accounts, existing, hi, onSave }: {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{hi ? 'बजट प्रविष्टि' : 'Budget Entry'}</DialogTitle>
+          <DialogTitle>{hi ? 'बजट एंट्री' : 'Budget Entry'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">{hi ? 'प्रत्येक खाते के लिए बजट राशि दर्ज करें (0 छोड़ें अगर शामिल नहीं करना)' : 'Enter budget amount for each account (leave 0 to exclude)'}</p>

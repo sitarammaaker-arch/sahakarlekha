@@ -193,7 +193,7 @@ export default function StockValuation() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{hi ? 'स्टॉक मूल्यांकन' : 'Stock Valuation'}</h1>
+          <h1 className="text-2xl font-bold">{hi ? 'स्टॉक वैल्यूएशन' : 'Stock Valuation'}</h1>
           <p className="text-muted-foreground text-sm">{hi ? 'FIFO / भारित औसत विधि से स्टॉक का मूल्य' : 'Inventory value using FIFO or Weighted Average method'}</p>
         </div>
         <div className="flex gap-2 flex-wrap">

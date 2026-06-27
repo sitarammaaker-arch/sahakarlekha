@@ -4,7 +4,7 @@ topic_id: C049
 research_id: SMRD:C049
 evidence_id: EV-000186
 title: Debit & Credit Columns (Trial Balance)
-hindi_name: नाम व जमा स्तंभ (ट्रायल बैलेंस)
+hindi_name: नाम व जमा कॉलम (ट्रायल बैलेंस)
 english_name: Debit & Credit Columns
 category: Financial Statements
 knowledge_type: definitional
@@ -19,13 +19,13 @@ last_updated: 2026-06-27
 review_schedule: 2027-06-27
 ---
 
-# KI-000186 · Debit & Credit Columns (नाम व जमा स्तंभ)
+# KI-000186 · Debit & Credit Columns (नाम व जमा कॉलम)
 
 **Definition:** In a trial balance, the debit and credit columns list each account's closing balance on its correct side — debit balances in one column, credit balances in the other — and the two column totals must be equal.
 
 **Plain-language explanation:** A trial balance has two columns; every account's balance goes in the Dr or Cr column, and the two totals should match.
 
-**Hindi explanation (आसान हिंदी):** ट्रायल बैलेंस (trial balance) में नाम (Debit) और जमा (Credit) दो स्तंभ होते हैं; हर खाते का क्लोज़िंग बैलेंस अपने सही पक्ष में लिखा जाता है — नाम-शेष एक स्तंभ में, जमा-शेष दूसरे में। दोनों स्तंभों का योग बराबर होना चाहिए।
+**Hindi explanation (आसान हिंदी):** ट्रायल बैलेंस (trial balance) में नाम (Debit) और जमा (Credit) दो कॉलम होते हैं; हर खाते का क्लोज़िंग बैलेंस अपने सही पक्ष में लिखा जाता है — नाम-शेष एक कॉलम में, जमा-शेष दूसरे में। दोनों स्तंभों का योग बराबर होना चाहिए।
 
 **English explanation:** The two-column structure of the trial balance; equal column totals are the visible proof that double-entry has been maintained.
 
@@ -39,16 +39,16 @@ review_schedule: 2027-06-27
 
 **Internal links:** /guide/trial-balance · /trial-balance
 
-**Suggested FAQ:** "ट्रायल बैलेंस के दो स्तंभ क्यों बराबर होते हैं?"
-**Suggested article title:** "ट्रायल बैलेंस के नाम-जमा स्तंभ — Dr=Cr का प्रमाण"
+**Suggested FAQ:** "ट्रायल बैलेंस के दो कॉलम क्यों बराबर होते हैं?"
+**Suggested article title:** "ट्रायल बैलेंस के नाम-जमा कॉलम — Dr=Cr का प्रमाण"
 **Suggested help page:** "Trial Balance कैसे देखें"
-**Suggested glossary entry:** नाम-जमा स्तंभ · Debit & Credit Columns — ट्रायल बैलेंस के दो स्तंभ जिनके योग बराबर होते हैं।
+**Suggested glossary entry:** नाम-जमा कॉलम · Debit & Credit Columns — ट्रायल बैलेंस के दो कॉलम जिनके योग बराबर होते हैं।
 **Suggested video title:** "Trial Balance के दो column कैसे मिलते हैं?"
 **Suggested downloadable asset:** — (not applicable)
 **Suggested calculator:** — (not applicable)
 **Suggested software module:** /trial-balance
 
-**Search intent:** informational — "trial balance debit credit columns / नाम जमा स्तंभ"
+**Search intent:** informational — "trial balance debit credit columns / नाम जमा कॉलम"
 **User persona:** ACC, EMP
 **Learning objectives:**
 - Explain the two-column trial balance and equal totals.

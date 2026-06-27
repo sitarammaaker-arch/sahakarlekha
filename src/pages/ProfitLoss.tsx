@@ -155,7 +155,7 @@ const ProfitLoss: React.FC = () => {
               <div>
                 <p className="text-sm text-muted-foreground">
                   {isSurplus
-                    ? (hi ? 'अधिशेष (Surplus)' : 'Surplus')
+                    ? (hi ? 'सरप्लस (Surplus)' : 'Surplus')
                     : (hi ? 'घाटा (Deficit)' : 'Deficit')}
                 </p>
                 <p className={cn('text-2xl font-bold', isSurplus ? 'text-success' : 'text-destructive')}>
@@ -178,16 +178,16 @@ const ProfitLoss: React.FC = () => {
             <CardContent className="pt-4 pb-4">
               <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
                 {hi
-                  ? `⚖️ अधिशेष का आवंटन अभी पोस्ट नहीं हुआ (वैकल्पिक)। आप "संचय निधि" पृष्ठ पर संचय/शिक्षा निधि में कोई भी % या राशि चुनकर आवंटित कर सकते हैं। नीचे केवल सामान्य सुझाव (25%/1%) दिखाया गया है।`
+                  ? `⚖️ सरप्लस का आवंटन अभी पोस्ट नहीं हुआ (वैकल्पिक)। आप "रिज़र्व फंड" पृष्ठ पर रिज़र्व/शिक्षा फंड में कोई भी % या राशि चुनकर आवंटित कर सकते हैं। नीचे केवल सामान्य सुझाव (25%/1%) दिखाया गया है।`
                   : `⚖️ Surplus appropriation not yet posted (optional). On the Reserve Fund page you can allocate any % or amount to Reserve/Education funds. The figures below are only the common suggestion (25%/1%).`}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
                 <span className="font-medium">
-                  {hi ? 'अनुमानित संचय निधि (25%)' : 'Indicative Reserve (25%)'}:{' '}
+                  {hi ? 'अनुमानित रिज़र्व फंड (25%)' : 'Indicative Reserve (25%)'}:{' '}
                   <strong className="text-amber-700 dark:text-amber-300">{fmt(indicativeReserve)}</strong>
                 </span>
                 <span className="font-medium">
-                  {hi ? 'अनुमानित शिक्षा निधि (1%)' : 'Indicative Education (1%)'}:{' '}
+                  {hi ? 'अनुमानित शिक्षा फंड (1%)' : 'Indicative Education (1%)'}:{' '}
                   <strong className="text-amber-700 dark:text-amber-300">{fmt(indicativeEducation)}</strong>
                 </span>
                 <Button size="sm" className="ml-auto gap-2 bg-amber-600 hover:bg-amber-700" onClick={() => navigate('/reserve-fund')}>
@@ -207,19 +207,19 @@ const ProfitLoss: React.FC = () => {
               {/* Formal appropriation account: Net Surplus less statutory transfers = balance c/d. */}
               <div className="mt-2 max-w-md text-sm space-y-1">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">{hi ? 'वर्ष का शुद्ध अधिशेष' : 'Net Surplus for the year'}</span>
+                  <span className="text-muted-foreground">{hi ? 'वर्ष का नेट सरप्लस' : 'Net Surplus for the year'}</span>
                   <strong>{fmt(netProfit)}</strong>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">{hi ? 'घटाएँ: वैधानिक संचय निधि (1201)' : 'Less: Statutory Reserve Fund (1201)'}</span>
+                  <span className="text-muted-foreground">{hi ? 'घटाएँ: रिज़र्व फंड (1201)' : 'Less: Statutory Reserve Fund (1201)'}</span>
                   <span className="text-green-700 dark:text-green-300">({fmt(postedReserve)})</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">{hi ? 'घटाएँ: शिक्षा निधि (1203)' : 'Less: Education Fund (1203)'}</span>
+                  <span className="text-muted-foreground">{hi ? 'घटाएँ: शिक्षा फंड (1203)' : 'Less: Education Fund (1203)'}</span>
                   <span className="text-green-700 dark:text-green-300">({fmt(postedEducation)})</span>
                 </div>
                 <div className="flex justify-between border-t pt-1 font-semibold">
-                  <span>{hi ? 'अवितरित अधिशेष c/d (बैलेंस शीट में)' : 'Undistributed Surplus c/d (to Balance Sheet)'}</span>
+                  <span>{hi ? 'बिना बाँटा सरप्लस c/d (बैलेंस शीट में)' : 'Undistributed Surplus c/d (to Balance Sheet)'}</span>
                   <strong className="text-success">{fmt(undistributedSurplus)}</strong>
                 </div>
               </div>
@@ -279,7 +279,7 @@ const ProfitLoss: React.FC = () => {
                   {isSurplus ? (
                     <TableRow className="bg-success/10 font-semibold">
                       <TableCell className="text-success">
-                        {hi ? 'शुद्ध अधिशेष (बैलेंस शीट में)' : 'Net Surplus (to Balance Sheet)'}
+                        {hi ? 'नेट सरप्लस (बैलेंस शीट में)' : 'Net Surplus (to Balance Sheet)'}
                       </TableCell>
                       {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyIE && pyIE.netProfit >= 0 ? fmt(pyIE.netProfit) : '—'}</TableCell>}
                       <TableCell className="text-right text-success">{fmt(netProfit)}</TableCell>

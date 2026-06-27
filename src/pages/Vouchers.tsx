@@ -234,7 +234,7 @@ const Vouchers: React.FC = () => {
       icon: RefreshCw,
       bgColor: 'bg-info',
       label: language === 'hi' ? 'जर्नल वाउचर' : 'Journal Voucher',
-      description: language === 'hi' ? 'समायोजन प्रविष्टि के लिए' : 'For adjustment entries',
+      description: language === 'hi' ? 'समायोजन एंट्री के लिए' : 'For adjustment entries',
     },
     contra: {
       icon: ArrowLeftRight,
@@ -456,7 +456,7 @@ const Vouchers: React.FC = () => {
             {t('vouchers')}
           </h1>
           <p className="text-muted-foreground">
-            {language === 'hi' ? 'वाउचर प्रविष्टि प्रणाली' : 'Voucher Entry System'}
+            {language === 'hi' ? 'वाउचर एंट्री प्रणाली' : 'Voucher Entry System'}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -488,7 +488,7 @@ const Vouchers: React.FC = () => {
             </button>
           </div>
           <Button variant={activeTab === 'entry' ? 'default' : 'outline'} onClick={() => setActiveTab('entry')}>
-            {language === 'hi' ? 'नई प्रविष्टि' : 'New Entry'}
+            {language === 'hi' ? 'नई एंट्री' : 'New Entry'}
           </Button>
           <Button variant={activeTab === 'list' ? 'default' : 'outline'} onClick={() => setActiveTab('list')}>
             {language === 'hi' ? 'सूची' : 'List'} ({activeCount})

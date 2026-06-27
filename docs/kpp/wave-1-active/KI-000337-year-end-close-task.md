@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is the year-end task: make sure everything is entered and reconciled, produce the final reports, and lock the year so it can't change — then next year opens from the right figures.
 
-**Hindi explanation (आसान हिंदी):** साल बंद करना साल के अंत का काम है — यह पक्का करना कि सभी एंट्री हो चुकीं व मिलान हो गया, अंतिम खाते तैयार करना, और साल को लॉक करना ताकि आँकड़े ऑडिट के लिए स्थिर रहें और अगले साल के opening में सही जुड़ें। (इस प्रक्रिया का विस्तृत/सांविधिक पक्ष अलग, validation-योग्य विषय है।)
+**Hindi explanation (आसान हिंदी):** साल बंद करना साल के अंत का काम है — यह पक्का करना कि सभी एंट्री हो चुकीं व मिलान हो गया, अंतिम खाते तैयार करना, और साल को लॉक करना ताकि आँकड़े ऑडिट के लिए स्थिर रहें और अगले साल के opening में सही जुड़ें। (इस प्रक्रिया का विस्तृत/कानूनी पक्ष अलग, validation-योग्य विषय है।)
 
 **English explanation:** The step-by-step year-end task (finalise → final accounts → lock); a clean close makes audit smooth and next year's opening correct.
 

@@ -22,7 +22,7 @@ const demoVouchers: Voucher[] = [
     voucherNo: 'RV/2024/001',
     type: 'receipt',
     date: '2024-01-10',
-    particulars: 'सदस्य अंश जमा - राम प्रसाद',
+    particulars: 'सदस्य शेयर जमा - राम प्रसाद',
     amount: 5000,
   },
   {
@@ -46,7 +46,7 @@ const demoVouchers: Voucher[] = [
     voucherNo: 'JV/2024/003',
     type: 'journal',
     date: '2024-01-09',
-    particulars: 'समायोजन प्रविष्टि',
+    particulars: 'समायोजन एंट्री',
     amount: 2000,
   },
   {

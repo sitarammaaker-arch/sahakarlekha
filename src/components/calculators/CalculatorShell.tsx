@@ -125,7 +125,7 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
         {config.nev && (
           <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
             <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-            <span>दर/लागू होना आप स्वयं डालते हैं — यह कोई वैधानिक दर नहीं सुझाता। सही दर के लिए अपने CA/नियमों से पुष्टि करें (Needs Expert Validation)।</span>
+            <span>दर/लागू होना आप स्वयं डालते हैं — यह कोई कानूनी दर नहीं सुझाता। सही दर के लिए अपने CA/नियमों से पुष्टि करें (Needs Expert Validation)।</span>
           </div>
         )}
 

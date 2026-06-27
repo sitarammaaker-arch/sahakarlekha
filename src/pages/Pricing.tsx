@@ -27,7 +27,7 @@ import { CheckCircle2, X, ArrowRight, Star } from 'lucide-react';
 /* ────────────────────────── Data ────────────────────────── */
 
 const FREE_FEATURES = [
-  'Double-Entry Accounting (दोहरी प्रविष्टि)',
+  'Double-Entry Accounting (दोहरी एंट्री)',
   'All Financial Reports (सभी वित्तीय रिपोर्ट)',
   'TDS Register & 26Q Export',
   'GST Summary (GSTR-1/3B)',

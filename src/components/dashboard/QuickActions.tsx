@@ -39,7 +39,7 @@ const quickActions: QuickAction[] = [
   },
   {
     key: 'cashEntry',
-    label: 'नकद प्रविष्टि',
+    label: 'नकद एंट्री',
     icon: Wallet,
     path: '/cash-book',
     variant: 'primary',

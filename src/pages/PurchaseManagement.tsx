@@ -420,7 +420,7 @@ const PurchaseManagement: React.FC = () => {
               <Pencil className="h-4 w-4 text-amber-700" />
               <span className="text-amber-800 font-medium text-sm">
                 {language === 'hi'
-                  ? `संपादन मोड — पुरानी प्रविष्टि बदली जाएगी, स्टॉक एडजस्ट होगा`
+                  ? `संपादन मोड — पुरानी एंट्री बदली जाएगी, स्टॉक एडजस्ट होगा`
                   : `Editing mode — original entry will be replaced, stock will be re-adjusted`}
               </span>
               <Button
@@ -681,14 +681,14 @@ const PurchaseManagement: React.FC = () => {
                 {taxAmount > 0 && (
                   <p className="text-xs text-muted-foreground">
                     {language === 'hi'
-                      ? `* GST के लिए अलग जर्नल प्रविष्टि स्वतः बनेगी (Dr GST Input / Cr ${supplierName || 'आपूर्तिकर्ता'})`
+                      ? `* GST के लिए अलग जर्नल एंट्री स्वतः बनेगी (Dr GST Input / Cr ${supplierName || 'आपूर्तिकर्ता'})`
                       : `* Separate journal entry will be auto-created for GST (Dr GST Input / Cr ${supplierName || 'Supplier'})`}
                   </p>
                 )}
                 {tdsAmount > 0 && (
                   <p className="text-xs text-muted-foreground">
                     {language === 'hi'
-                      ? `* TDS के लिए अलग जर्नल प्रविष्टि स्वतः बनेगी (Dr ${supplierName || 'आपूर्तिकर्ता'} / Cr TDS देय)`
+                      ? `* TDS के लिए अलग जर्नल एंट्री स्वतः बनेगी (Dr ${supplierName || 'आपूर्तिकर्ता'} / Cr TDS देय)`
                       : `* Separate journal entry will be auto-created for TDS (Dr ${supplierName || 'Supplier'} / Cr TDS Payable)`}
                   </p>
                 )}

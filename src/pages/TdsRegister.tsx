@@ -139,7 +139,7 @@ const TdsRegister: React.FC = () => {
     setEntries(prev => [...prev, entry]);
     setShowAddEntry(false);
     setEntryForm(EMPTY_ENTRY());
-    toast({ title: hi ? 'TDS प्रविष्टि जोड़ी गई' : 'TDS entry added' });
+    toast({ title: hi ? 'TDS एंट्री जोड़ी गई' : 'TDS entry added' });
   };
 
   // Add challan
@@ -242,7 +242,7 @@ const TdsRegister: React.FC = () => {
           <CardContent className="pt-4 pb-4">
             <p className="text-xs text-muted-foreground">{hi ? 'कुल TDS काटा' : 'Total Deducted'}</p>
             <p className="text-xl font-bold text-blue-700">{fmt(totalDeducted)}</p>
-            <p className="text-xs text-muted-foreground">{quarterEntries.length} {hi ? 'प्रविष्टियां' : 'entries'}</p>
+            <p className="text-xs text-muted-foreground">{quarterEntries.length} {hi ? 'एंट्रियां' : 'entries'}</p>
           </CardContent>
         </Card>
         <Card className="bg-green-50 border-green-200">
@@ -286,7 +286,7 @@ const TdsRegister: React.FC = () => {
         <TabsList>
           <TabsTrigger value="entries" className="gap-1">
             <FileText className="h-4 w-4" />
-            {hi ? 'TDS प्रविष्टियां' : 'TDS Entries'} ({quarterEntries.length})
+            {hi ? 'TDS एंट्रियां' : 'TDS Entries'} ({quarterEntries.length})
           </TabsTrigger>
           <TabsTrigger value="challans" className="gap-1">
             <CheckCircle2 className="h-4 w-4" />
@@ -322,7 +322,7 @@ const TdsRegister: React.FC = () => {
                   {quarterEntries.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                        {hi ? 'इस तिमाही में कोई TDS प्रविष्टि नहीं' : 'No TDS entries for this quarter'}
+                        {hi ? 'इस तिमाही में कोई TDS एंट्री नहीं' : 'No TDS entries for this quarter'}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -379,7 +379,7 @@ const TdsRegister: React.FC = () => {
                       <div key={sec.value} className={`p-3 rounded-lg border ${secTotal > 0 ? 'bg-primary/5 border-primary/20' : 'bg-muted/30'}`}>
                         <p className="text-xs font-medium">{sec.value}</p>
                         <p className="text-sm font-bold">{fmt(secTotal)}</p>
-                        <p className="text-xs text-muted-foreground">{secEntries.length} {hi ? 'प्रविष्टियां' : 'entries'}</p>
+                        <p className="text-xs text-muted-foreground">{secEntries.length} {hi ? 'एंट्रियां' : 'entries'}</p>
                       </div>
                     );
                   })}
@@ -444,7 +444,7 @@ const TdsRegister: React.FC = () => {
       <Dialog open={showAddEntry} onOpenChange={setShowAddEntry}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{hi ? 'TDS प्रविष्टि जोड़ें' : 'Add TDS Entry'}</DialogTitle>
+            <DialogTitle>{hi ? 'TDS एंट्री जोड़ें' : 'Add TDS Entry'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">

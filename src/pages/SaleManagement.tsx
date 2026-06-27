@@ -443,7 +443,7 @@ const SaleManagement: React.FC = () => {
               <Pencil className="h-4 w-4 text-amber-700" />
               <span className="text-amber-800 font-medium text-sm">
                 {language === 'hi'
-                  ? `संपादन मोड — पुरानी प्रविष्टि बदली जाएगी, स्टॉक एडजस्ट होगा`
+                  ? `संपादन मोड — पुरानी एंट्री बदली जाएगी, स्टॉक एडजस्ट होगा`
                   : `Editing mode — original entry will be replaced, stock will be re-adjusted`}
               </span>
               <Button

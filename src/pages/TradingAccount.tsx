@@ -240,7 +240,7 @@ const TradingAccount: React.FC = () => {
                   {openingStockItems.length === 0 && purchaseItems.length === 0 && directExpItems.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={2} className="text-center text-muted-foreground py-8">
-                        {hi ? 'कोई प्रविष्टि नहीं' : 'No entries'}
+                        {hi ? 'कोई एंट्री नहीं' : 'No entries'}
                       </TableCell>
                     </TableRow>
                   )}
@@ -323,7 +323,7 @@ const TradingAccount: React.FC = () => {
                   {salesItems.length === 0 && closingStockItems.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={2} className="text-center text-muted-foreground py-8">
-                        {hi ? 'कोई बिक्री प्रविष्टि नहीं' : 'No sales entries'}
+                        {hi ? 'कोई बिक्री एंट्री नहीं' : 'No sales entries'}
                       </TableCell>
                     </TableRow>
                   )}

@@ -302,11 +302,11 @@ const AuditSchedules: React.FC = () => {
           {' · '}
           {hi ? 'वित्तीय वर्ष' : 'FY'} {fy}
           {' · '}
-          {hi ? 'संचय निधि' : 'Reserve Fund'}: {society.reserveFundPct ?? 25}%
+          {hi ? 'रिज़र्व फंड' : 'Reserve Fund'}: {society.reserveFundPct ?? 25}%
           {' · '}
-          {hi ? 'शिक्षा निधि' : 'Education Fund'}: {format.educationFundPct}%
+          {hi ? 'शिक्षा फंड' : 'Education Fund'}: {format.educationFundPct}%
           {' · '}
-          {hi ? 'सहकारी विकास निधि' : 'Coop Dev Fund'}: {format.coopDevFundPct}%
+          {hi ? 'सहकारी विकास फंड' : 'Coop Dev Fund'}: {format.coopDevFundPct}%
         </div>
       </div>
 

@@ -62,7 +62,7 @@ const CashBook: React.FC = () => {
       narration: entryNarration,
       createdBy: user?.name || 'System',
     });
-    toast({ title: language === 'hi' ? 'प्रविष्टि सहेजी गई' : 'Entry saved' });
+    toast({ title: language === 'hi' ? 'एंट्री सहेजी गई' : 'Entry saved' });
     setOtherAccount('');
     setEntryAmount('');
     setEntryNarration('');
@@ -134,11 +134,11 @@ const CashBook: React.FC = () => {
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2"><Plus className="h-4 w-4" />{language === 'hi' ? 'नई प्रविष्टि' : 'New Entry'}</Button>
+              <Button className="gap-2"><Plus className="h-4 w-4" />{language === 'hi' ? 'नई एंट्री' : 'New Entry'}</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle>{language === 'hi' ? 'नई नकद प्रविष्टि' : 'New Cash Entry'}</DialogTitle>
+                <DialogTitle>{language === 'hi' ? 'नई नकद एंट्री' : 'New Cash Entry'}</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleAddEntry} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -245,7 +245,7 @@ const CashBook: React.FC = () => {
 
       <Card className="shadow-card">
         <CardHeader>
-          <CardTitle className="text-lg">{language === 'hi' ? 'नकद बही विवरण' : 'Cash Book Details'}</CardTitle>
+          <CardTitle className="text-lg">{language === 'hi' ? 'कैश बुक विवरण' : 'Cash Book Details'}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="rounded-lg border overflow-x-auto">

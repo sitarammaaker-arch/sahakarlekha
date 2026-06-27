@@ -175,7 +175,7 @@ const Reports: React.FC = () => {
           <CardContent className="pt-5 pb-4">
             <div className="flex items-center gap-2 mb-1">
               <IndianRupee className="h-4 w-4 text-primary" />
-              <p className="text-xs text-muted-foreground">{language === 'hi' ? 'अधिशेष' : 'Net Surplus'}</p>
+              <p className="text-xs text-muted-foreground">{language === 'hi' ? 'सरप्लस' : 'Net Surplus'}</p>
             </div>
             <p className={cn('text-xl font-bold', netProfit >= 0 ? 'text-primary' : 'text-orange-500')}>{fmt(netProfit)}</p>
           </CardContent>

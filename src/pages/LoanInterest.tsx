@@ -50,7 +50,7 @@ const getPeriodLabel = (mode: 'monthly' | 'quarterly' | 'annual', fromDate: stri
   const to   = fmtDate(toDate);
   const labels: Record<string, { hi: string; en: string }> = {
     monthly:   { hi: 'मासिक ब्याज',   en: 'Monthly Interest'   },
-    quarterly: { hi: 'त्रैमासिक ब्याज', en: 'Quarterly Interest' },
+    quarterly: { hi: 'क्वार्टरली ब्याज', en: 'Quarterly Interest' },
     annual:    { hi: 'वार्षिक ब्याज',  en: 'Annual Interest'    },
   };
   return `${labels[mode][hi ? 'hi' : 'en']} (${from} → ${to})`;
@@ -299,7 +299,7 @@ const LoanInterest: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="monthly">{hi ? 'मासिक' : 'Monthly'}</SelectItem>
-                  <SelectItem value="quarterly">{hi ? 'त्रैमासिक' : 'Quarterly'}</SelectItem>
+                  <SelectItem value="quarterly">{hi ? 'क्वार्टरली' : 'Quarterly'}</SelectItem>
                   <SelectItem value="annual">{hi ? 'वार्षिक' : 'Annual'}</SelectItem>
                 </SelectContent>
               </Select>
@@ -422,7 +422,7 @@ const LoanInterest: React.FC = () => {
           <CardHeader className="py-3">
             <CardTitle className="text-base text-green-700 flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
-              {hi ? 'पोस्ट जर्नल प्रविष्टियाँ (इस अवधि)' : 'Posted Journals (this period)'}
+              {hi ? 'पोस्ट जर्नल एंट्रियाँ (इस अवधि)' : 'Posted Journals (this period)'}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">

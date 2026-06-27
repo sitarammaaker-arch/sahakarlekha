@@ -428,7 +428,7 @@ const NabardReport: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'स्वयं के फंड (शेयर कैपिटल + संचय)' : 'Own Funds (Share Capital + Reserves)'}</td><td className="border px-3 py-2 text-right">{fmt(workingCapital.ownFunds)}</td></tr>
+                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'स्वयं के फंड (शेयर कैपिटल + रिज़र्व)' : 'Own Funds (Share Capital + Reserves)'}</td><td className="border px-3 py-2 text-right">{fmt(workingCapital.ownFunds)}</td></tr>
                 <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'उधार लिए गए फंड (जमा + बैंक उधार)' : 'Borrowed Funds (Deposits + Bank Borrowings)'}</td><td className="border px-3 py-2 text-right">{fmt(workingCapital.borrowedFunds)}</td></tr>
                 <tr className="font-bold bg-muted"><td className="border px-3 py-2">{hi ? 'कुल वर्किंग कैपिटल' : 'Total Working Capital'}</td><td className="border px-3 py-2 text-right">{fmt(workingCapital.total)}</td></tr>
               </tbody>

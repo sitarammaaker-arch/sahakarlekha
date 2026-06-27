@@ -281,7 +281,7 @@ const LoanRegister: React.FC = () => {
             </p>
             <p className="text-sm text-destructive/80 mt-0.5">
               {hi
-                ? `बकाया ऋण (${fmt(totalOutstanding)}) शेयर पूंजी + संचय (${fmt(sec32Limit.base)}) के 10 गुना (${fmt(sec32Limit.limit)}) से अधिक है।`
+                ? `बकाया ऋण (${fmt(totalOutstanding)}) शेयर कैपिटल + रिज़र्व (${fmt(sec32Limit.base)}) के 10 गुना (${fmt(sec32Limit.limit)}) से अधिक है।`
                 : `Outstanding loans (${fmt(totalOutstanding)}) exceed 10× of Share Capital + Reserves (${fmt(sec32Limit.limit)}). Base: Share Capital ${fmt(sec32Limit.shareCapital)} + Reserves ${fmt(sec32Limit.reserves)}.`}
             </p>
           </div>

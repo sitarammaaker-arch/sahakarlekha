@@ -519,7 +519,7 @@ const MultiSocietyConsolidation: React.FC = () => {
     { label: { hi: 'कैपिटल एवं स्वामित्व',  en: 'Capital & Equity'   }, key: 'totalEquity'      },
     { label: { hi: 'कुल आय',               en: 'Total Income'       }, key: 'totalIncome'      },
     { label: { hi: 'कुल व्यय',             en: 'Total Expenditure'  }, key: 'totalExpenditure' },
-    { label: { hi: 'शुद्ध अधिशेष',        en: 'Net Surplus'        }, key: 'netSurplus', highlight: true, surplusColor: true },
+    { label: { hi: 'नेट सरप्लस',        en: 'Net Surplus'        }, key: 'netSurplus', highlight: true, surplusColor: true },
   ];
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -915,7 +915,7 @@ const MultiSocietyConsolidation: React.FC = () => {
               bg: 'bg-red-50',
             },
             {
-              label: hi ? 'शुद्ध अधिशेष'  : 'Net Surplus',
+              label: hi ? 'नेट सरप्लस'  : 'Net Surplus',
               value: fmt(consolidated.netSurplus),
               cls: consolidated.netSurplus >= 0 ? 'text-green-700' : 'text-red-700',
               bg: consolidated.netSurplus >= 0 ? 'bg-green-50' : 'bg-red-50',

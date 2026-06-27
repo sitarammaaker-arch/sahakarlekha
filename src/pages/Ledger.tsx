@@ -295,7 +295,7 @@ const Ledger: React.FC = () => {
                 {entries.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                      {language === 'hi' ? 'कोई प्रविष्टि नहीं मिली' : 'No entries found'}
+                      {language === 'hi' ? 'कोई एंट्री नहीं मिली' : 'No entries found'}
                     </TableCell>
                   </TableRow>
                 ) : (

@@ -100,9 +100,9 @@ const Dashboard: React.FC = () => {
     const advisories: Advisory[] = [];
 
     if (netProfit > 0 && !reservePosted)
-      advisories.push({ severity: 'info', en: `Optional: post a Reserve Fund / Education Fund appropriation on the Reserve Fund page (choose any % or amount)`, hi: `वैकल्पिक: "संचय निधि" पृष्ठ पर संचय/शिक्षा निधि आवंटन पोस्ट कर सकते हैं (कोई भी % या राशि)` });
+      advisories.push({ severity: 'info', en: `Optional: post a Reserve Fund / Education Fund appropriation on the Reserve Fund page (choose any % or amount)`, hi: `वैकल्पिक: "रिज़र्व फंड" पृष्ठ पर रिज़र्व/शिक्षा फंड आवंटन पोस्ट कर सकते हैं (कोई भी % या राशि)` });
     if (!bsTallied)
-      advisories.push({ severity: 'critical', en: 'Balance Sheet is not balanced — check for missing or duplicate journal entries', hi: 'बैलेंस शीट असंतुलित है — अपूर्ण या दोहरी जर्नल प्रविष्टियां जांचें' });
+      advisories.push({ severity: 'critical', en: 'Balance Sheet is not balanced — check for missing or duplicate journal entries', hi: 'बैलेंस शीट असंतुलित है — अपूर्ण या दोहरी जर्नल एंट्रियां जांचें' });
     if (!sec32Ok)
       advisories.push({ severity: 'critical', en: `Loan portfolio exceeds Sec 32 limit (${sec32Pct.toFixed(0)}% utilized) — pause new loans or increase member share capital`, hi: `ऋण पोर्टफोलियो धारा 32 सीमा से अधिक (${sec32Pct.toFixed(0)}% उपयोग) — नए ऋण रोकें या शेयर कैपिटल बढ़ाएं` });
     else if (sec32Pct >= 80 && loanLimit > 0)
@@ -455,7 +455,7 @@ const Dashboard: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             {[
               {
-                label: language === 'hi' ? `${society.reserveFundPct ?? 25}% संचय निधि` : `${society.reserveFundPct ?? 25}% Reserve Fund`,
+                label: language === 'hi' ? `${society.reserveFundPct ?? 25}% रिज़र्व फंड` : `${society.reserveFundPct ?? 25}% Reserve Fund`,
                 ok: complianceChecks.netProfit <= 0 || complianceChecks.reservePosted,
                 na: complianceChecks.netProfit <= 0,
               },

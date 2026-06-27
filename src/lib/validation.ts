@@ -72,7 +72,7 @@ export function validateVoucher(
       );
     } else if (drAcc.isGroup) {
       errors.push(
-        `"${drAcc.name}" एक समूह खाता है — इसमें सीधे प्रविष्टि नहीं हो सकती / "${drAcc.name}" is a group account, cannot post transactions`
+        `"${drAcc.name}" एक समूह खाता है — इसमें सीधे एंट्री नहीं हो सकती / "${drAcc.name}" is a group account, cannot post transactions`
       );
     }
   }
@@ -88,7 +88,7 @@ export function validateVoucher(
       );
     } else if (crAcc.isGroup) {
       errors.push(
-        `"${crAcc.name}" एक समूह खाता है — इसमें सीधे प्रविष्टि नहीं हो सकती / "${crAcc.name}" is a group account, cannot post transactions`
+        `"${crAcc.name}" एक समूह खाता है — इसमें सीधे एंट्री नहीं हो सकती / "${crAcc.name}" is a group account, cannot post transactions`
       );
     }
   }

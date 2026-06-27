@@ -52,7 +52,7 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
     label: 'लेखा / Accounting',
     items: [
       {
-        q: 'दोहरी प्रविष्टि कैसे काम करती है? / How does double-entry work?',
+        q: 'दोहरी एंट्री कैसे काम करती है? / How does double-entry work?',
         aHi: 'हर लेन-देन में डेबिट और क्रेडिट दोनों दर्ज होते हैं। सिस्टम स्वचालित रूप से सुनिश्चित करता है कि Dr = Cr। Cash Book, Bank Book, Day Book सब स्वतः अपडेट होते हैं।',
         aEn: 'Every transaction records both debit and credit. The system automatically ensures Dr = Cr. Cash Book, Bank Book, Day Book all update automatically.',
       },
@@ -63,12 +63,12 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
       },
       {
         q: 'Opening Balance कैसे डालें? / How to enter opening balances?',
-        aHi: 'Settings → Opening Balances पर जाएं। प्रत्येक खाते के लिए प्रारंभिक शेष (Dr/Cr) दर्ज करें। सुनिश्चित करें कि कुल Dr = कुल Cr।',
+        aHi: 'Settings → Opening Balances पर जाएं। प्रत्येक खाते के लिए ओपनिंग बैलेंस (Dr/Cr) दर्ज करें। सुनिश्चित करें कि कुल Dr = कुल Cr।',
         aEn: 'Go to Settings → Opening Balances. Enter the opening balance (Dr/Cr) for each account. Ensure total Dr = total Cr.',
       },
       {
         q: 'Tally से डेटा कैसे लाएं? / How to import from Tally?',
-        aHi: 'Universal Importer टूल का उपयोग करें। Tally से CSV एक्सपोर्ट करें, फिर SahakarLekha में इम्पोर्ट करें। वाउचर, सदस्य, और खाता शीर्ष सभी इम्पोर्ट किए जा सकते हैं।',
+        aHi: 'Universal Importer टूल का उपयोग करें। Tally से CSV एक्सपोर्ट करें, फिर SahakarLekha में इम्पोर्ट करें। वाउचर, सदस्य, और लेजर हेड सभी इम्पोर्ट किए जा सकते हैं।',
         aEn: 'Use the Universal Importer tool. Export CSV from Tally, then import into SahakarLekha. Vouchers, members, and account heads can all be imported.',
       },
     ],

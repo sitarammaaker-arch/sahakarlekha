@@ -37,7 +37,7 @@ const handleSampleReport = async () => {
 };
 
 const FEATURES = [
-  { icon: BookOpen, title: 'Double-Entry Accounting', titleHi: 'दोहरी प्रविष्टि लेखा', desc: 'Voucher, Cash Book, Bank Book, Day Book, Ledger — complete accounting system' },
+  { icon: BookOpen, title: 'Double-Entry Accounting', titleHi: 'दोहरी एंट्री लेखा', desc: 'Voucher, Cash Book, Bank Book, Day Book, Ledger — complete accounting system' },
   { icon: BarChart3, title: 'Financial Reports', titleHi: 'वित्तीय रिपोर्ट', desc: 'Trial Balance, Balance Sheet, I&E, R&P, Trading Account — one-click PDF' },
   { icon: FileText, title: 'TDS 26Q + GST', titleHi: 'TDS 26Q + GST', desc: 'TDS Register, Form 26Q export for TRACES, GSTR-1/3B, e-Way Bill' },
   { icon: Shield, title: 'Audit Compliance', titleHi: 'ऑडिट अनुपालन', desc: 'Reserve Fund (Sec 65), Sec 32 Loan Limit, FY Lock, Audit Certificate' },
@@ -86,7 +86,7 @@ const SECURITY = [
   { icon: Lock, title: 'सुरक्षित व अलग डेटा', titleEn: 'Encrypted & isolated', desc: 'समिति-स्तरीय सुरक्षा (RLS) — कोई दूसरी समिति आपके खाते कभी नहीं देख सकती।' },
   { icon: Database, title: 'स्वतः बैकअप', titleEn: 'Automatic backups', desc: 'क्लाउड में सुरक्षित; जब चाहें PDF/Excel में पूरा डेटा निर्यात करें।' },
   { icon: RefreshCw, title: 'आपका डेटा, आपका अधिकार', titleEn: 'Your data, your control', desc: 'कभी भी सब कुछ डाउनलोड करें — कोई लॉक-इन नहीं, डेटा कभी बेचा नहीं जाता।' },
-  { icon: Shield, title: 'पूरा ऑडिट-ट्रेल', titleEn: 'Full audit trail', desc: 'हर प्रविष्टि किसने/कब बनाई-बदली; रद्द भी कारण सहित — ऑडिट में पारदर्शी।' },
+  { icon: Shield, title: 'पूरा ऑडिट-ट्रेल', titleEn: 'Full audit trail', desc: 'हर एंट्री किसने/कब बनाई-बदली; रद्द भी कारण सहित — ऑडिट में पारदर्शी।' },
 ];
 
 /* Add real, consented quotes here to activate the testimonials section.

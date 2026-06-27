@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** Capital is the society's "own money" that belongs to the members — their shares plus the reserves built up over time.
 
-**Hindi explanation (आसान हिंदी):** कैपिटल यानी समिति का "अपना धन" जो सदस्यों का होता है — मुख्यतः शेयर कैपिटल (शेयर) और समय के साथ बनी आरक्षित निधि व अधिशेष। यह दिखाती है कि समिति अपने सदस्यों/मालिकों को कितना देय है। बैलेंस शीट में यह कैपिटल व आरक्षित पक्ष में आती है।
+**Hindi explanation (आसान हिंदी):** कैपिटल यानी समिति का "अपना धन" जो सदस्यों का होता है — मुख्यतः शेयर कैपिटल (शेयर) और समय के साथ बनी आरक्षित फंड व सरप्लस। यह दिखाती है कि समिति अपने सदस्यों/मालिकों को कितना देय है। बैलेंस शीट में यह कैपिटल व आरक्षित पक्ष में आती है।
 
 **English explanation:** The owners' (members') residual interest in the society: share capital plus reserves and retained surplus.
 
@@ -42,7 +42,7 @@ review_schedule: 2027-06-27
 **Suggested FAQ:** "कैपिटल (capital) क्या होती है?"
 **Suggested article title:** "कैपिटल क्या है — सदस्यों का अपना धन"
 **Suggested help page:** — (concept supporting share/reserve setup)
-**Suggested glossary entry:** कैपिटल · Capital — सदस्यों का स्वामित्व हिस्सा (शेयर कैपिटल + आरक्षित + अधिशेष)।
+**Suggested glossary entry:** कैपिटल · Capital — सदस्यों का स्वामित्व हिस्सा (शेयर कैपिटल + आरक्षित + सरप्लस)।
 **Suggested video title:** "Capital क्या होती है? आसान भाषा में"
 **Suggested downloadable asset:** "Accounting equation — 1-pager (PDF)"
 **Suggested calculator:** — (not applicable)

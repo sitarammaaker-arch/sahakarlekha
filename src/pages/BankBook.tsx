@@ -94,7 +94,7 @@ const BankBook: React.FC = () => {
       narration: entryNarration,
       createdBy: user?.name || 'System',
     });
-    toast({ title: language === 'hi' ? 'प्रविष्टि सहेजी गई' : 'Entry saved' });
+    toast({ title: language === 'hi' ? 'एंट्री सहेजी गई' : 'Entry saved' });
     setOtherAccount('');
     setEntryAmount('');
     setEntryNarration('');
@@ -171,7 +171,7 @@ const BankBook: React.FC = () => {
                   <Input value={bankForm.nameHi} onChange={e => setBankForm(f => ({ ...f, nameHi: e.target.value }))} placeholder="जैसे SBI — मुख्य शाखा" />
                 </div>
                 <div className="space-y-2">
-                  <Label>{language === 'hi' ? 'प्रारंभिक शेष (₹)' : 'Opening Balance (₹)'}</Label>
+                  <Label>{language === 'hi' ? 'ओपनिंग बैलेंस (₹)' : 'Opening Balance (₹)'}</Label>
                   <Input type="number" value={bankForm.opening} onChange={e => setBankForm(f => ({ ...f, opening: e.target.value }))} min="0" />
                   <p className="text-xs text-muted-foreground">{language === 'hi' ? 'खाता खोलते समय बैंक में मौजूद राशि (न हो तो 0)।' : 'Amount currently in the bank (0 if none).'}</p>
                 </div>
@@ -184,11 +184,11 @@ const BankBook: React.FC = () => {
           </Dialog>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2"><Plus className="h-4 w-4" />{language === 'hi' ? 'नई प्रविष्टि' : 'New Entry'}</Button>
+              <Button className="gap-2"><Plus className="h-4 w-4" />{language === 'hi' ? 'नई एंट्री' : 'New Entry'}</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle>{language === 'hi' ? 'नई बैंक प्रविष्टि' : 'New Bank Entry'}</DialogTitle>
+                <DialogTitle>{language === 'hi' ? 'नई बैंक एंट्री' : 'New Bank Entry'}</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleAddEntry} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -291,7 +291,7 @@ const BankBook: React.FC = () => {
 
       <Card className="shadow-card">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg">{language === 'hi' ? 'बैंक बही विवरण' : 'Bank Book Details'}</CardTitle>
+          <CardTitle className="text-lg">{language === 'hi' ? 'बैंक बुक विवरण' : 'Bank Book Details'}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="rounded-lg border overflow-x-auto">

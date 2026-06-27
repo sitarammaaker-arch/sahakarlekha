@@ -67,7 +67,7 @@ const CalculatorHub: React.FC = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="कैलकुलेटर खोजें — EMI, GST, ब्याज, डेप्रिसिएशन…" aria-label="कैलकुलेटर खोजें" className="pl-9 h-12 bg-white text-foreground" />
           </div>
-          <p className="text-white/70 text-xs mt-3 inline-flex items-center gap-1"><Sparkles className="h-3.5 w-3.5" /> {CALCULATORS.length} कैलकुलेटर · कोई वैधानिक दर तय नहीं (आप डालते हैं)</p>
+          <p className="text-white/70 text-xs mt-3 inline-flex items-center gap-1"><Sparkles className="h-3.5 w-3.5" /> {CALCULATORS.length} कैलकुलेटर · कोई कानूनी दर तय नहीं (आप डालते हैं)</p>
         </div>
       </header>
 

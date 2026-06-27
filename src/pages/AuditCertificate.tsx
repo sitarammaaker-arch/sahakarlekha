@@ -299,7 +299,7 @@ const AuditCertificate: React.FC = () => {
             <ReadonlyRow label={hi ? 'कुल आय' : 'Total Income'} value={`₹ ${fmt(totalIncome)}`} />
             <ReadonlyRow label={hi ? 'कुल व्यय' : 'Total Expenditure'} value={`₹ ${fmt(totalExpenses)}`} />
             <ReadonlyRow
-              label={netProfit >= 0 ? (hi ? 'शुद्ध अधिशेष' : 'Net Surplus') : (hi ? 'शुद्ध घाटा' : 'Net Deficit')}
+              label={netProfit >= 0 ? (hi ? 'नेट सरप्लस' : 'Net Surplus') : (hi ? 'शुद्ध घाटा' : 'Net Deficit')}
               value={`₹ ${fmt(Math.abs(netProfit))}`}
               highlight
             />

@@ -259,7 +259,7 @@ const CompoundVoucher: React.FC = () => {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {hi ? 'संयुक्त वाउचर प्रविष्टि (बहु-पंक्ति)' : 'Compound Voucher Entry (Multi-line)'}
+            {hi ? 'संयुक्त वाउचर एंट्री (बहु-पंक्ति)' : 'Compound Voucher Entry (Multi-line)'}
           </h1>
           <p className="text-sm text-gray-500">
             {hi ? 'अनेक Dr + अनेक Cr पंक्तियाँ — Journal Only' : 'N Debit + N Credit lines — Journal Only'}

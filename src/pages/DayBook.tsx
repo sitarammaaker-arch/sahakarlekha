@@ -259,7 +259,7 @@ const DayBook: React.FC = () => {
             <CardContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground">{language === 'hi' ? 'कुल वाउचर' : 'Total Entries'}</p>
               <p className="text-xl font-bold text-primary">{entries.length}</p>
-              <p className="text-xs text-muted-foreground">{language === 'hi' ? 'प्रविष्टियां' : 'transactions'}</p>
+              <p className="text-xs text-muted-foreground">{language === 'hi' ? 'एंट्रियां' : 'transactions'}</p>
             </CardContent>
           </Card>
         </div>
@@ -285,7 +285,7 @@ const DayBook: React.FC = () => {
                 </Button>
               )}
               <div className="ml-auto flex gap-6 text-sm text-muted-foreground">
-                <span>{language === 'hi' ? 'नकद प्रारंभिक शेष' : 'Opening Cash'}: <strong>{fmt(cashOB)}</strong></span>
+                <span>{language === 'hi' ? 'नकद ओपनिंग बैलेंस' : 'Opening Cash'}: <strong>{fmt(cashOB)}</strong></span>
               </div>
             </div>
           </CardContent>
@@ -296,7 +296,7 @@ const DayBook: React.FC = () => {
           <Card className="shadow-card">
             <CardContent className="py-16 text-center text-muted-foreground">
               <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-lg">{language === 'hi' ? 'कोई प्रविष्टि नहीं मिली' : 'No entries found'}</p>
+              <p className="text-lg">{language === 'hi' ? 'कोई एंट्री नहीं मिली' : 'No entries found'}</p>
               <p className="text-sm mt-1">{language === 'hi' ? 'फ़िल्टर बदलें या वाउचर जोड़ें' : 'Adjust date filter or add vouchers'}</p>
             </CardContent>
           </Card>

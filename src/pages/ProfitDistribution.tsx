@@ -141,8 +141,8 @@ const ProfitDistribution: React.FC = () => {
     // Guard: never let dividend + bonus exceed the distributable surplus (over-appropriation). #13
     if (remaining < 0) {
       toast({
-        title: hi ? 'अधिशेष से अधिक वितरण' : 'Exceeds surplus',
-        description: hi ? 'डिविडेंड + बोनस उपलब्ध वितरण-योग्य अधिशेष से अधिक है।' : 'Dividend + bonus exceed the distributable surplus.',
+        title: hi ? 'सरप्लस से अधिक वितरण' : 'Exceeds surplus',
+        description: hi ? 'डिविडेंड + बोनस उपलब्ध वितरण-योग्य सरप्लस से अधिक है।' : 'Dividend + bonus exceed the distributable surplus.',
         variant: 'destructive',
       });
       return;
@@ -179,7 +179,7 @@ const ProfitDistribution: React.FC = () => {
     setConfirmOpen(false);
     toast({
       title: hi
-        ? `${posted} जर्नल प्रविष्टियाँ पोस्ट की गईं`
+        ? `${posted} जर्नल एंट्रियाँ पोस्ट की गईं`
         : `${posted} journal entries posted`,
     });
   };
@@ -295,7 +295,7 @@ const ProfitDistribution: React.FC = () => {
         <Info className="h-4 w-4 mt-0.5 shrink-0" />
         <span>
           {hi
-            ? 'निधि आवंटन (संचय/शिक्षा) वैकल्पिक है — "संचय निधि" पृष्ठ पर जितना चाहें (% या राशि) पोस्ट करें। उसके बाद बची हुई वितरण-योग्य राशि को डिविडेंड व बोनस के रूप में बाँटें।'
+            ? 'फंड आवंटन (रिज़र्व/शिक्षा) वैकल्पिक है — "रिज़र्व फंड" पृष्ठ पर जितना चाहें (% या राशि) पोस्ट करें। उसके बाद बची हुई वितरण-योग्य राशि को डिविडेंड व बोनस के रूप में बाँटें।'
             : 'Fund appropriations (reserve/education) are optional — post whatever you like (% or amount) on the Reserve Fund page. The remaining distributable surplus can then be shared as dividend and bonus.'}
         </span>
       </div>
@@ -304,7 +304,7 @@ const ProfitDistribution: React.FC = () => {
       {netProfit <= 0 && (
         <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          {hi ? 'शुद्ध अधिशेष शून्य या ऋणात्मक है — वितरण संभव नहीं।' : 'Net surplus is zero or negative — distribution not applicable.'}
+          {hi ? 'नेट सरप्लस शून्य या ऋणात्मक है — वितरण संभव नहीं।' : 'Net surplus is zero or negative — distribution not applicable.'}
         </div>
       )}
 
@@ -313,21 +313,21 @@ const ProfitDistribution: React.FC = () => {
         <Card>
           <CardHeader className="py-3">
             <CardTitle className="text-base">
-              {hi ? 'अधिशेष आवंटन विवरण' : 'Surplus Appropriation'}
+              {hi ? 'सरप्लस आवंटन विवरण' : 'Surplus Appropriation'}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm space-y-1">
             <Row
-              label={hi ? 'शुद्ध अधिशेष (P&L)' : 'Net Surplus (P&L)'}
+              label={hi ? 'नेट सरप्लस (P&L)' : 'Net Surplus (P&L)'}
               value={fmt(netProfit)}
               valueClass={netProfit >= 0 ? 'text-green-700 font-semibold' : 'text-red-600 font-semibold'}
             />
             <div className="border-t pt-2 space-y-1">
-              <Row label={hi ? 'घटाएं: निधि आवंटन (पोस्ट)' : 'Less: Fund Appropriations (posted)'}
+              <Row label={hi ? 'घटाएं: फंड आवंटन (पोस्ट)' : 'Less: Fund Appropriations (posted)'}
                    value={`(${fmt(appropriatedAmt)})`} valueClass="text-orange-600" />
             </div>
             <div className="border-t pt-2 border-b pb-2">
-              <Row label={hi ? 'वितरण योग्य अधिशेष' : 'Distributable Surplus'}
+              <Row label={hi ? 'वितरण योग्य सरप्लस' : 'Distributable Surplus'}
                    value={fmt(distributable)}
                    valueClass={distributable >= 0 ? 'text-blue-700 font-bold text-base' : 'text-red-600 font-bold text-base'} />
             </div>
@@ -407,7 +407,7 @@ const ProfitDistribution: React.FC = () => {
             <div className="pt-2">
               {distributable <= 0 ? (
                 <p className="text-xs text-amber-600">
-                  {hi ? 'वितरण योग्य अधिशेष नहीं है।' : 'No distributable surplus available.'}
+                  {hi ? 'वितरण योग्य सरप्लस नहीं है।' : 'No distributable surplus available.'}
                 </p>
               ) : canPost ? (
                 <Button
@@ -484,7 +484,7 @@ const ProfitDistribution: React.FC = () => {
           <CardHeader className="py-3">
             <CardTitle className="text-base text-green-700 flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
-              {hi ? 'पोस्ट जर्नल प्रविष्टियाँ' : 'Posted Journals'}
+              {hi ? 'पोस्ट जर्नल एंट्रियाँ' : 'Posted Journals'}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
@@ -521,7 +521,7 @@ const ProfitDistribution: React.FC = () => {
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
-                <p>{hi ? 'निम्नलिखित जर्नल प्रविष्टियाँ बनाई जाएंगी:' : 'The following journal entries will be created:'}</p>
+                <p>{hi ? 'निम्नलिखित जर्नल एंट्रियाँ बनाई जाएंगी:' : 'The following journal entries will be created:'}</p>
                 {!divPosted && totalDividend > 0 && (
                   <div className="bg-gray-50 rounded p-2 font-mono text-xs">
                     Dr 1208 Net Surplus &nbsp;{fmt(totalDividend)}<br />

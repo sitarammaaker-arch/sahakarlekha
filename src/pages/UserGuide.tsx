@@ -97,7 +97,7 @@ const TOC_ITEMS = [
   { id: 'intro',    label: '1. परिचय (Introduction)' },
   { id: 'start',    label: '2. शुरुआत (Getting Started)' },
   { id: 'master',   label: '3. मास्टर सेटअप (Master Setup)' },
-  { id: 'entries',  label: '4. दैनिक प्रविष्टियाँ (Daily Entries)' },
+  { id: 'entries',  label: '4. दैनिक एंट्रियाँ (Daily Entries)' },
   { id: 'stock',    label: '5. स्टॉक प्रबंधन (Stock)' },
   { id: 'reports',  label: '6. रिपोर्ट्स (Reports)' },
   { id: 'audit',    label: '7. ऑडिट (Audit)' },
@@ -272,7 +272,7 @@ const UserGuide: React.FC = () => {
             </Section>
 
             {/* ─── 4. DAILY ENTRIES ─── */}
-            <Section id="entries" icon={FileText} title="4. दैनिक लेखा प्रविष्टियाँ" subtitle="Receipt, Payment, Journal, Contra, Purchase, Sales, Stock">
+            <Section id="entries" icon={FileText} title="4. दैनिक लेखा एंट्रियाँ" subtitle="Receipt, Payment, Journal, Contra, Purchase, Sales, Stock">
 
               <h3 className="text-lg font-semibold mb-2">लेखा चक्र (Accounting Cycle)</h3>
               <pre className="bg-muted p-3 rounded text-xs overflow-x-auto not-prose">{`
@@ -364,7 +364,7 @@ const UserGuide: React.FC = () => {
               <h3 className="text-lg font-semibold mt-4 mb-2">5.2 स्टॉक रिपोर्ट व समापन स्टॉक</h3>
               <ul className="list-disc pl-6 space-y-1">
                 <li><strong>Inventory:</strong> हर वस्तु का वर्तमान स्टॉक, दर व मूल्य</li>
-                <li><strong>Stock Valuation / Closing Stock Report:</strong> श्रेणी-वार स्टॉक मूल्यांकन</li>
+                <li><strong>Stock Valuation / Closing Stock Report:</strong> श्रेणी-वार स्टॉक वैल्यूएशन</li>
               </ul>
               <Note type="success"><strong>समापन स्टॉक अब अपने-आप (Tally की तरह):</strong> जब भी बैलेंस शीट या व्यापार खाता देखें, समापन स्टॉक इन्वेंट्री से अपने-आप गणना होकर आ जाता है — कोई "Post Closing Stock" बटन दबाने की ज़रूरत नहीं।</Note>
 
@@ -508,7 +508,7 @@ const UserGuide: React.FC = () => {
                   ['Loan Interest auto calculate होता है?', 'हाँ, Loan Interest module से monthly/quarterly accrual post होती है।'],
                   ['Depreciation कैसे पोस्ट करें?', 'Depreciation Schedule → वार्षिक Post Depreciation दबाएँ।'],
                   ['User permissions कैसे सेट करें?', 'User Management page से Admin/Accountant/Viewer roles assign करें।'],
-                  ['आरक्षित निधि (Reserve Fund) का कितना % रखना है?', 'अब यह पूरी तरह आपके हाथ में है (optional) — कोई जबरन 25%/1% नहीं। आप जो % या राशि तय करें, रिपोर्ट उसी पोस्ट की गई राशि के अनुसार दिखेगी।'],
+                  ['आरक्षित फंड (Reserve Fund) का कितना % रखना है?', 'अब यह पूरी तरह आपके हाथ में है (optional) — कोई जबरन 25%/1% नहीं। आप जो % या राशि तय करें, रिपोर्ट उसी पोस्ट की गई राशि के अनुसार दिखेगी।'],
                   ['क्या यह मोबाइल पर भी चलता है?', 'हाँ — फ़ोन, टैबलेट या कंप्यूटर, किसी भी ब्राउज़र से। फ़ॉर्म व रिपोर्ट मोबाइल पर भी साफ़ दिखते हैं; कुछ भी इंस्टॉल करने की ज़रूरत नहीं।'],
                   ['Password भूल गया?', 'Login page → Forgot Password link → Email reset link।'],
                   ['Technical support के लिए कहाँ संपर्क करें?', 'Contact Us page से message भेजें या support@sahakarlekha.com पर email करें।'],
