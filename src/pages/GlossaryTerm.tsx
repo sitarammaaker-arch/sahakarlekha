@@ -87,7 +87,7 @@ const GlossaryTerm: React.FC = () => {
 
   return (
     <PublicLayout>
-      <div className="mx-auto max-w-3xl px-4 py-8 md:py-10">
+      <main className="mx-auto max-w-3xl px-4 py-8 md:py-10">
         {/* Breadcrumb */}
         <nav className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground mb-5" aria-label="breadcrumb">
           <Link to="/" className="inline-flex items-center gap-1 hover:text-primary"><Home className="h-3.5 w-3.5" /> होम</Link>
@@ -125,13 +125,13 @@ const GlossaryTerm: React.FC = () => {
           {term.hindi && (
             <Card><CardContent className="p-4">
               <p className="text-xs font-semibold text-primary mb-1">हिन्दी में</p>
-              <p className="text-sm leading-relaxed text-foreground/90">{term.hindi}</p>
+              <p lang="hi" className="text-sm leading-relaxed text-foreground/90">{term.hindi}</p>
             </CardContent></Card>
           )}
           {term.english && (
             <Card><CardContent className="p-4">
               <p className="text-xs font-semibold text-primary mb-1">In English</p>
-              <p className="text-sm leading-relaxed text-foreground/90">{term.english}</p>
+              <p lang="en" className="text-sm leading-relaxed text-foreground/90">{term.english}</p>
             </CardContent></Card>
           )}
         </div>
@@ -178,8 +178,8 @@ const GlossaryTerm: React.FC = () => {
           </Field>
         )}
 
-        {/* Related knowledge: guide/blog/faq + downloads (internal links) */}
-        {(internalNonModule.length > 0 || term.suggestedFaq || term.suggestedDownload || term.suggestedVideo) && (
+        {/* Related knowledge: guide/blog/faq (only real, navigable links — no dead "coming soon") */}
+        {(internalNonModule.length > 0 || term.suggestedFaq) && (
           <Field icon={<FileText className="h-4 w-4 text-indigo-500" />} title="और पढ़ें / जुड़ी सामग्री">
             <div className="space-y-2 text-sm">
               {internalNonModule.map((l) => (
@@ -191,16 +191,6 @@ const GlossaryTerm: React.FC = () => {
                 <Link to="/faq" className="flex items-center gap-2 text-primary hover:underline">
                   <ArrowRight className="h-3.5 w-3.5" /> सामान्य प्रश्न: {term.suggestedFaq}
                 </Link>
-              )}
-              {term.suggestedDownload && (
-                <p className="flex items-center gap-2 text-muted-foreground">
-                  <FileText className="h-3.5 w-3.5" /> डाउनलोड (जल्द): {term.suggestedDownload}
-                </p>
-              )}
-              {term.suggestedVideo && (
-                <p className="flex items-center gap-2 text-muted-foreground">
-                  <MonitorPlay className="h-3.5 w-3.5" /> वीडियो (जल्द): {term.suggestedVideo}
-                </p>
               )}
             </div>
           </Field>
@@ -241,7 +231,7 @@ const GlossaryTerm: React.FC = () => {
           {term.lastUpdated && <span>अंतिम अद्यतन: {term.lastUpdated}</span>}
           <span className="font-mono opacity-70">{term.id}</span>
         </div>
-      </div>
+      </main>
     </PublicLayout>
   );
 };

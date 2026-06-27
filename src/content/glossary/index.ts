@@ -62,7 +62,13 @@ export interface GlossaryEntry {
 }
 
 /* Raw KI markdown, keyed by absolute path. Root-relative glob → reads the docs folder
-   (the KI source of truth) directly; only the 50 active KIs match KI-*.md. */
+   (the KI source of truth) directly; only the active KIs match KI-*.md.
+   SCALABILITY NOTE: `eager` bundles every matched .md into a shared chunk that any page
+   importing this module (the glossary pages, site search, and the in-module GlossaryHint)
+   pulls in. Fine at the current ~50 entries (~20 KB gzip). Past a few hundred KIs, switch
+   to a build-time generated compact JSON index (slug/title/shortDef) for hints+search and
+   lazy-load full bodies only on the term page — keeps the KI files the single source while
+   shrinking the shared bundle. */
 const RAW = import.meta.glob('/docs/kpp/wave-1-active/KI-*.md', {
   query: '?raw',
   import: 'default',
@@ -85,6 +91,21 @@ function parseFrontmatter(src: string): { fm: Record<string, string>; body: stri
 function fmList(v?: string): string[] {
   if (!v) return [];
   return v.replace(/^\[|\]$/g, '').split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+/**
+ * Strip inline markdown so a field renders cleanly as plain text everywhere it is
+ * NOT run through a markdown renderer (definition callout, cards, meta description,
+ * JSON-LD, tooltips, search). KI bodies use **bold**, *italic*, `code`, [[KI-..]],
+ * and [text](url) — none of which should ever show as literal asterisks/brackets.
+ */
+export function plainText(s: string): string {
+  return (s || '')
+    .replace(/\[\[[^\]]*\]\]/g, '')              // [[KI-0001]]
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')      // [text](url) → text
+    .replace(/[*_`]/g, '')                        // bold / italic / code markers
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /** Split a KI body into { label → content } sections keyed on `**Label:**` markers. */
@@ -180,14 +201,14 @@ function buildEntry(path: string, raw: string): GlossaryEntry | null {
     status: fm.status || 'active',
     lastUpdated: fm.last_updated || '',
     reviewSchedule: fm.review_schedule || '',
-    definition: getSection(sections, 'definition'),
-    plain: getSection(sections, 'plain-language explanation'),
-    hindi: getSection(sections, 'hindi explanation'),
-    english: getSection(sections, 'english explanation'),
-    why: getSection(sections, 'why it matters'),
-    misconceptions: getSection(sections, 'common misconceptions'),
+    definition: plainText(getSection(sections, 'definition')),
+    plain: plainText(getSection(sections, 'plain-language explanation')),
+    hindi: plainText(getSection(sections, 'hindi explanation')),
+    english: plainText(getSection(sections, 'english explanation')),
+    why: plainText(getSection(sections, 'why it matters')),
+    misconceptions: getSection(sections, 'common misconceptions'), // rendered via markdown (keeps bullets/bold)
     learningObjectives: getSection(sections, 'learning objectives'),
-    searchIntent: getSection(sections, 'search intent'),
+    searchIntent: plainText(getSection(sections, 'search intent')),
     related,
     internalLinks,
     modules,
@@ -220,6 +241,12 @@ export function allGlossary(): GlossaryEntry[] {
 
 export function findTerm(slug: string): GlossaryEntry | null {
   return ENTRIES.find((e) => e.slug === slug) ?? null;
+}
+
+/** First sentence of a term's (already plain) definition — for tooltips/hover cards. */
+export function shortDefinition(e: GlossaryEntry, max = 200): string {
+  const first = e.definition.split(/(?<=[।.])\s/)[0] || e.definition;
+  return first.length > max ? first.slice(0, max).trimEnd() + '…' : first;
 }
 
 /** Entries grouped A–Z by English initial (for the index page). */

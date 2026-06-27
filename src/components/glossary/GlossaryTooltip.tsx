@@ -13,7 +13,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from '@/components/ui/hover-card';
-import { findTerm } from '@/content/glossary';
+import { findTerm, shortDefinition } from '@/content/glossary';
 
 interface Props {
   slug: string;
@@ -27,8 +27,7 @@ const GlossaryTooltip: React.FC<Props> = ({ slug, children, className }) => {
   if (!term) return <>{children}</>;
 
   const label = children ?? term.hindiName ?? term.title;
-  // First sentence of the definition keeps the hover card short.
-  const mini = (term.definition.split(/(?<=।)|(?<=\.)\s/)[0] || term.definition).slice(0, 180);
+  const mini = shortDefinition(term, 180);
 
   return (
     <HoverCard openDelay={120} closeDelay={80}>

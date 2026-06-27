@@ -12,7 +12,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { HelpCircle, ArrowRight, BookOpen } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { findTerm } from '@/content/glossary';
+import { findTerm, shortDefinition } from '@/content/glossary';
 
 interface Props {
   slug: string;
@@ -25,7 +25,7 @@ const GlossaryHint: React.FC<Props> = ({ slug, label, className }) => {
   const term = findTerm(slug);
   if (!term) return null;
 
-  const mini = (term.definition.split(/(?<=।)|(?<=\.)\s/)[0] || term.definition).slice(0, 220);
+  const mini = shortDefinition(term, 220);
 
   return (
     <Popover>

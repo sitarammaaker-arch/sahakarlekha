@@ -16,10 +16,10 @@ const SITE = 'https://sahakarlekha.com';
 
 const Glossary: React.FC = () => {
   const [q, setQ] = React.useState('');
-  const all = allGlossary();
-  const filtered = q.trim() ? filterGlossary(q) : null;
-  const groups = glossaryByLetter();
-  const letters = groups.map((g) => g.letter);
+  const all = React.useMemo(() => allGlossary(), []);
+  const groups = React.useMemo(() => glossaryByLetter(), []);
+  const letters = React.useMemo(() => groups.map((g) => g.letter), [groups]);
+  const filtered = React.useMemo(() => (q.trim() ? filterGlossary(q) : null), [q]);
 
   const jsonLd = [
     {
@@ -90,12 +90,12 @@ const Glossary: React.FC = () => {
         </div>
       </header>
 
-      <div className="mx-auto max-w-5xl px-4 py-10">
+      <main className="mx-auto max-w-5xl px-4 py-10">
         {/* A–Z jump bar (hidden while searching) */}
         {!filtered && (
-          <nav className="flex flex-wrap gap-1.5 mb-8 justify-center" aria-label="A to Z">
+          <nav className="flex flex-wrap gap-1.5 mb-8 justify-center" aria-label="अक्षर के अनुसार जाएँ">
             {letters.map((l) => (
-              <a key={l} href={`#letter-${l}`} className="h-8 w-8 rounded-md border flex items-center justify-center text-sm font-semibold text-muted-foreground hover:bg-primary hover:text-white hover:border-primary transition-colors">
+              <a key={l} href={`#letter-${l}`} aria-label={`अक्षर ${l} पर जाएँ`} className="h-8 w-8 rounded-md border flex items-center justify-center text-sm font-semibold text-muted-foreground hover:bg-primary hover:text-white hover:border-primary transition-colors">
                 {l}
               </a>
             ))}
@@ -130,7 +130,7 @@ const Glossary: React.FC = () => {
             </div>
           </section>
         ))}
-      </div>
+      </main>
     </PublicLayout>
   );
 };

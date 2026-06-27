@@ -265,7 +265,9 @@ function glossaryPages() {
     const hindi = field('hindi_name');
     const en = field('english_name') || field('title');
     const name = hindi ? `${hindi} (${en})` : en;
-    const def = (src.match(/\*\*Definition:\*\*\s*(.+)/) || [])[1]?.trim() || '';
+    const rawDef = (src.match(/\*\*Definition:\*\*\s*(.+)/) || [])[1]?.trim() || '';
+    // strip inline markdown (**bold**, *italic*, `code`, [[KI-..]]) so meta/JSON-LD read cleanly
+    const def = rawDef.replace(/\[\[[^\]]*\]\]/g, '').replace(/[*_`]/g, '').replace(/\s+/g, ' ').trim();
     const url = `${SITE}/glossary/${slug}`;
     pages.push({
       path: `/glossary/${slug}`,
@@ -351,7 +353,9 @@ function transform(template, page) {
   sub(/<meta name="twitter:title"[^>]*>/, `<meta name="twitter:title" content="${esc(page.title)}" />`);
   sub(/<meta name="twitter:description"[^>]*>/, `<meta name="twitter:description" content="${esc(page.description)}" />`);
   if (page.jsonLd && page.jsonLd.length) {
-    const ld = `<script type="application/ld+json">${JSON.stringify(page.jsonLd)}</script>\n  </head>`;
+    // Escape "<" so a value containing "</script>" can never break out of the tag (safe JSON-in-HTML).
+    const json = JSON.stringify(page.jsonLd).replace(/</g, '\\u003c');
+    const ld = `<script type="application/ld+json">${json}</script>\n  </head>`;
     html = html.replace('</head>', ld);
   }
   return html;
