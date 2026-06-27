@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is the simple task of entering a new member into the software — name, details, and shares — so they appear in the member register.
 
-**Hindi explanation (आसान हिंदी):** सदस्य जोड़ना यानी सॉफ्टवेयर में समिति के रजिस्टर में नया सदस्य दर्ज करना — उसका नाम व बुनियादी जानकारी, अंश (शेयर) की जानकारी, और कोई प्रारंभिक बकाया डालना। इससे समिति का सदस्य-रिकॉर्ड पूरा व अद्यतन रहता है।
+**Hindi explanation (आसान हिंदी):** सदस्य जोड़ना यानी सॉफ्टवेयर में समिति के रजिस्टर में नया सदस्य दर्ज करना — उसका नाम व बुनियादी जानकारी, शेयर की जानकारी, और कोई प्रारंभिक बकाया डालना। इससे समिति का सदस्य-रिकॉर्ड पूरा व अद्यतन रहता है।
 
 **English explanation:** The step-by-step task of registering a new member, the first thing most societies do after setup.
 

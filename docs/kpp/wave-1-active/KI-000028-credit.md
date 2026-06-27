@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** "Credit" is the right-hand side of an entry. What you credit depends on the account type — for example, income earned, or money going out of cash.
 
-**Hindi explanation (आसान हिंदी):** "जमा" (Credit/Cr) किसी खाते की एंट्री का दायाँ पक्ष है। मोटे तौर पर — देयता/पूँजी/आय बढ़े तो "जमा" किया जाता है, और परिसंपत्ति/खर्च घटे तो भी "जमा"। किसे जमा करना है, यह खाते के प्रकार पर निर्भर करता है। हर एंट्री में नाम के बराबर जमा होना चाहिए।
+**Hindi explanation (आसान हिंदी):** "जमा" (Credit/Cr) किसी खाते की एंट्री का दायाँ पक्ष है। मोटे तौर पर — लायबिलिटी/कैपिटल/आय बढ़े तो "जमा" किया जाता है, और एसेट/खर्च घटे तो भी "जमा"। किसे जमा करना है, यह खाते के प्रकार पर निर्भर करता है। हर एंट्री में नाम के बराबर जमा होना चाहिए।
 
 **English explanation:** The right-hand entry in double-entry bookkeeping; its effect depends on the account type, and it always equals the matching debit.
 

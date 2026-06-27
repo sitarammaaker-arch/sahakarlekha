@@ -4,7 +4,7 @@ topic_id: C061
 research_id: SMRD:C061
 evidence_id: EV-000163
 title: Share Certificate
-hindi_name: अंश प्रमाण-पत्र
+hindi_name: शेयर सर्टिफिकेट
 english_name: Share Certificate
 category: Share Capital
 knowledge_type: definitional
@@ -19,13 +19,13 @@ last_updated: 2026-06-27
 review_schedule: 2027-06-27
 ---
 
-# KI-000163 · Share Certificate (अंश प्रमाण-पत्र)
+# KI-000163 · Share Certificate (शेयर सर्टिफिकेट)
 
 **Definition:** A share certificate is the document the society issues to a member as proof of the shares they hold — stating the member's name, number of shares, and value — evidencing their ownership stake.
 
 **Plain-language explanation:** It is the certificate a member gets showing how many shares they own in the society — their proof of membership/ownership.
 
-**Hindi explanation (आसान हिंदी):** अंश प्रमाण-पत्र वह दस्तावेज़ है जो समिति किसी सदस्य को उसके धारित अंशों के प्रमाण के रूप में देती है — जिसमें सदस्य का नाम, अंशों की संख्या और मूल्य लिखा होता है। यह सदस्य के स्वामित्व-हिस्से का सबूत है।
+**Hindi explanation (आसान हिंदी):** शेयर सर्टिफिकेट वह दस्तावेज़ है जो समिति किसी सदस्य को उसके धारित शेयरों के प्रमाण के रूप में देती है — जिसमें सदस्य का नाम, शेयरों की संख्या और मूल्य लिखा होता है। यह सदस्य के स्वामित्व-हिस्से का सबूत है।
 
 **English explanation:** The society-issued proof of a member's shareholding; recorded alongside the share register.
 
@@ -39,16 +39,16 @@ review_schedule: 2027-06-27
 
 **Internal links:** /guide/member-management · /share-register
 
-**Suggested FAQ:** "अंश प्रमाण-पत्र क्या होता है?"
-**Suggested article title:** "अंश प्रमाण-पत्र — सदस्य के स्वामित्व का सबूत"
+**Suggested FAQ:** "शेयर सर्टिफिकेट क्या होता है?"
+**Suggested article title:** "शेयर सर्टिफिकेट — सदस्य के स्वामित्व का सबूत"
 **Suggested help page:** — (supports share register)
-**Suggested glossary entry:** अंश प्रमाण-पत्र · Share Certificate — सदस्य के धारित अंशों का प्रमाण-दस्तावेज़।
+**Suggested glossary entry:** शेयर सर्टिफिकेट · Share Certificate — सदस्य के धारित शेयरों का प्रमाण-दस्तावेज़।
 **Suggested video title:** "Share Certificate क्या होता है?"
 **Suggested downloadable asset:** — (statutory format is a separate, validation-needed item)
 **Suggested calculator:** — (not applicable)
 **Suggested software module:** /share-register
 
-**Search intent:** informational — "share certificate meaning / अंश प्रमाण-पत्र"
+**Search intent:** informational — "share certificate meaning / शेयर सर्टिफिकेट"
 **User persona:** SEC, MEM, ACC
 **Learning objectives:**
 - Define a share certificate.

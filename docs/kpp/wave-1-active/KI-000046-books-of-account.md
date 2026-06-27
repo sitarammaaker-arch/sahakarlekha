@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** They are the society's official "registers" where all money entries live — the source from which every report and audit is built.
 
-**Hindi explanation (आसान हिंदी):** लेखा-बही वे रिकॉर्ड हैं जिनमें समिति अपने सभी लेन-देन रखती है — मुख्यतः रोकड़ बही, बैंक बही, रोज़नामचा (day book), जर्नल और खाता बही (ledger)। इन्हीं से रिपोर्ट और ऑडिट तैयार होते हैं। आसान शब्दों में — समिति की "हिसाब की किताबें"।
+**Hindi explanation (आसान हिंदी):** लेखा-बही वे रिकॉर्ड हैं जिनमें समिति अपने सभी लेन-देन रखती है — मुख्यतः कैश बुक, बैंक बुक, डे बुक (day book), जर्नल और लेजर (ledger)। इन्हीं से रिपोर्ट और ऑडिट तैयार होते हैं। आसान शब्दों में — समिति की "हिसाब की किताबें"।
 
 **English explanation:** The set of primary records (cash/bank/day book, journal, ledger) that capture transactions and feed the financial statements.
 

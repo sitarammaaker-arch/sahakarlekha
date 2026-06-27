@@ -225,7 +225,7 @@ const BalanceSheet: React.FC = () => {
     const diff = Math.abs(totalLiabilities - totalAssets);
     if (diff >= 1) {
       toast({
-        title: hi ? 'तुलन पत्र असंतुलित है' : 'Balance Sheet is not balanced',
+        title: hi ? 'बैलेंस शीट असंतुलित है' : 'Balance Sheet is not balanced',
         description: hi ? `अंतर: Rs. ${diff.toFixed(0)}` : `Difference: Rs. ${diff.toFixed(0)}`,
         variant: 'destructive',
       });
@@ -297,7 +297,7 @@ const BalanceSheet: React.FC = () => {
                 return (
                   <TableRow key={b.account.id} className="hover:bg-muted/30 cursor-pointer"
                     onClick={() => navigate(`/ledger?account=${b.account.id}`)}
-                    title={hi ? 'खाता बही देखें' : 'View Ledger'}
+                    title={hi ? 'लेजर देखें' : 'View Ledger'}
                   >
                     {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyAmount !== 0 ? fmt(pyAmount) : '—'}</TableCell>}
                     <TableCell className="text-sm group" style={{ paddingLeft: padLeft }}>
@@ -322,7 +322,7 @@ const BalanceSheet: React.FC = () => {
             <TableRow className={netProfit > 0 ? 'bg-success/10 font-bold' : 'bg-destructive/10 font-bold'}>
               {hasPY && <TableCell></TableCell>}
               <TableCell className={`font-bold uppercase text-sm ${netProfit > 0 ? 'text-success' : 'text-destructive'}`}>
-                {hi ? 'लाभ-हानि खाता' : 'Profit & Loss A/c'}
+                {hi ? 'प्रॉफ़िट एंड लॉस खाता' : 'Profit & Loss A/c'}
               </TableCell>
               <TableCell></TableCell>
               <TableCell className={`text-right font-bold ${netProfit > 0 ? 'text-success' : 'text-destructive'}`}>
@@ -363,7 +363,7 @@ const BalanceSheet: React.FC = () => {
             <FileSpreadsheet className="h-7 w-7 text-primary" />
             {t('balanceSheet')}
           </h1>
-          <p className="text-muted-foreground">{hi ? 'तुलन पत्र - वित्तीय स्थिति विवरण' : 'Statement of Financial Position'}</p>
+          <p className="text-muted-foreground">{hi ? 'बैलेंस शीट - वित्तीय स्थिति विवरण' : 'Statement of Financial Position'}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2" onClick={handlePDF}><Download className="h-4 w-4" />PDF</Button>
@@ -386,7 +386,7 @@ const BalanceSheet: React.FC = () => {
             )}
             {asOnDate !== fyEndDate && (
               <span className="text-xs text-amber-600 font-medium">
-                {hi ? '⚠ अंतरिम तुलन पत्र' : '⚠ Interim Balance Sheet'}
+                {hi ? '⚠ अंतरिम बैलेंस शीट' : '⚠ Interim Balance Sheet'}
               </span>
             )}
             {/* Summary ⇄ Detailed: collapse the long ledger lists into group totals. */}
@@ -415,7 +415,7 @@ const BalanceSheet: React.FC = () => {
 
       <Card className="shadow-card">
         <CardHeader className="border-b text-center">
-          <CardTitle className="text-xl">{hi ? 'तुलन पत्र' : 'Balance Sheet'}</CardTitle>
+          <CardTitle className="text-xl">{hi ? 'बैलेंस शीट' : 'Balance Sheet'}</CardTitle>
           <p className="text-sm text-muted-foreground">{hi ? society.nameHi : society.name}</p>
           <p className="text-sm text-muted-foreground">
             {hi ? `${fmtDate(asOnDate)} को` : `As at ${fmtDate(asOnDate)}`}
@@ -423,7 +423,7 @@ const BalanceSheet: React.FC = () => {
         </CardHeader>
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {renderSide(liabilityGroups, 'Capital & Liabilities', 'पूंजी एवं देयताएं', totalLiabilities, pyTotalLiab, true)}
+            {renderSide(liabilityGroups, 'Capital & Liabilities', 'कैपिटल एवं लायबिलिटीज़', totalLiabilities, pyTotalLiab, true)}
             {renderSide(assetGroups, 'Assets', 'संपत्तियां', totalAssets, pyTotalAsset, false)}
           </div>
 
@@ -431,7 +431,7 @@ const BalanceSheet: React.FC = () => {
             <p className="text-sm text-muted-foreground mb-2">{hi ? 'सत्यापन' : 'Verification'}</p>
             <div className="flex justify-center gap-8 flex-wrap">
               <div>
-                <span className="text-muted-foreground">{hi ? 'कुल देयताएं' : 'Total Liabilities'}:</span>{' '}
+                <span className="text-muted-foreground">{hi ? 'कुल लायबिलिटीज़' : 'Total Liabilities'}:</span>{' '}
                 <span className="font-bold">{fmt(totalLiabilities)}</span>
               </div>
               <div>
@@ -454,11 +454,11 @@ const BalanceSheet: React.FC = () => {
                   {hi ? `अंतर: ${fmt(Math.abs(totalLiabilities - totalAssets))} — संभावित कारण:` : `Difference: ${fmt(Math.abs(totalLiabilities - totalAssets))} — likely cause:`}
                 </p>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">{hi ? 'प्रारंभिक शेष (Opening) — कुल डेबिट' : 'Opening balances — total Debit'}</span>
+                  <span className="text-muted-foreground">{hi ? 'ओपनिंग बैलेंस (Opening) — कुल डेबिट' : 'Opening balances — total Debit'}</span>
                   <span>{fmt(sumOpenDr)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">{hi ? 'प्रारंभिक शेष (Opening) — कुल क्रेडिट' : 'Opening balances — total Credit'}</span>
+                  <span className="text-muted-foreground">{hi ? 'ओपनिंग बैलेंस (Opening) — कुल क्रेडिट' : 'Opening balances — total Credit'}</span>
                   <span>{fmt(sumOpenCr)}</span>
                 </div>
                 {Math.abs(openingGap) >= 1 && (
@@ -476,14 +476,14 @@ const BalanceSheet: React.FC = () => {
                 <p className="text-xs text-muted-foreground pt-1">
                   {Math.abs(openingGap) >= 1
                     ? (hi
-                        ? 'ठीक करें: Society Setup → Opening Balances में जाएँ और कुल डेबिट = कुल क्रेडिट करें (यह अंतर आमतौर पर किसी एक खाते के प्रारंभिक शेष का बिना-जोड़ा हिस्सा होता है, जैसे प्रवेश शुल्क)।'
+                        ? 'ठीक करें: Society Setup → Opening Balances में जाएँ और कुल डेबिट = कुल क्रेडिट करें (यह अंतर आमतौर पर किसी एक खाते के ओपनिंग बैलेंस का बिना-जोड़ा हिस्सा होता है, जैसे प्रवेश शुल्क)।'
                         : 'Fix: open Society Setup → Opening Balances and make total Debit = total Credit (this gap is usually one account\'s unmatched opening balance, e.g. Admission Fee).')
                     : Math.abs(txnGap) >= 1
                       ? (hi
                           ? 'ठीक करें: कोई पुराना voucher असंतुलित है (Dr=Cr लागू होने से पहले बना)। Trial Balance पर भी यही अंतर दिखेगा — उस voucher को खोजकर सुधारें।'
                           : 'Fix: a legacy voucher is unbalanced (created before Dr=Cr enforcement). The Trial Balance shows the same gap — find and correct that voucher.')
                       : (hi
-                          ? 'खाते संतुलित हैं पर तुलन पत्र नहीं — समापन माल (closing stock) पोस्टिंग जाँचें।'
+                          ? 'खाते संतुलित हैं पर बैलेंस शीट नहीं — समापन माल (closing stock) पोस्टिंग जाँचें।'
                           : 'Ledger ties but the sheet does not — check the closing-stock posting.')}
                 </p>
               </div>

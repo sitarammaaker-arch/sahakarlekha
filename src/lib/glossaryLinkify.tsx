@@ -18,7 +18,7 @@ interface Needle { re: RegExp; slug: string; }
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/* Precompiled, longest-first so multi-word terms ("रोकड़ बही") win over "रोकड़". */
+/* Precompiled, longest-first so multi-word terms ("कैश बुक") win over "कैश". */
 const NEEDLES: Needle[] = (() => {
   const list = allGlossary()
     .filter((e) => e.hindiName && e.hindiName.length >= 2)

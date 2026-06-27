@@ -4,7 +4,7 @@ topic_id: C064
 research_id: SMRD:C064
 evidence_id: EV-000141
 title: Nominee
-hindi_name: नामांकित व्यक्ति (नॉमिनी)
+hindi_name: नॉमिनी
 english_name: Nominee
 category: Members
 knowledge_type: definitional
@@ -19,13 +19,13 @@ last_updated: 2026-06-27
 review_schedule: 2027-06-27
 ---
 
-# KI-000141 · Nominee (नामांकित व्यक्ति)
+# KI-000141 · Nominee (नॉमिनी)
 
 **Definition:** A nominee is the person a member names to receive the member's share/deposit/benefit from the society in the event of the member's death — recorded in advance so the society knows whom to deal with.
 
 **Plain-language explanation:** A nominee is the person a member chooses in advance to receive their money/shares from the society if the member passes away.
 
-**Hindi explanation (आसान हिंदी):** नामांकित व्यक्ति (नॉमिनी) वह व्यक्ति है जिसे सदस्य पहले से चुन लेता है, ताकि सदस्य की मृत्यु की स्थिति में उसका अंश/जमा/लाभ समिति से उसी को मिले। यह पहले से दर्ज होता है, जिससे समिति को पता रहता है कि किससे व्यवहार करना है।
+**Hindi explanation (आसान हिंदी):** नॉमिनी वह व्यक्ति है जिसे सदस्य पहले से चुन लेता है, ताकि सदस्य की मृत्यु की स्थिति में उसका शेयर/जमा/लाभ समिति से उसी को मिले। यह पहले से दर्ज होता है, जिससे समिति को पता रहता है कि किससे व्यवहार करना है।
 
 **English explanation:** The pre-recorded person to receive a deceased member's dues; nomination simplifies and speeds settlement. *(Exact legal effect of nomination is a separate, validation-needed topic.)*
 
@@ -40,7 +40,7 @@ review_schedule: 2027-06-27
 **Internal links:** /guide/member-management · /nomination-register
 
 **Suggested FAQ:** "नॉमिनी (nominee) कौन होता है?"
-**Suggested article title:** "नामांकित व्यक्ति (Nominee) — क्यों ज़रूरी है"
+**Suggested article title:** "नॉमिनी (Nominee) — क्यों ज़रूरी है"
 **Suggested help page:** — (supports nomination register)
 **Suggested glossary entry:** नॉमिनी · Nominee — सदस्य द्वारा पहले से चुना गया, मृत्यु पर दुएँ पाने वाला व्यक्ति।
 **Suggested video title:** "नॉमिनी क्यों दर्ज करें?"

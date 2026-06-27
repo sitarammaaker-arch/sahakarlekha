@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It lets you upload your existing lists (from Excel or old software) in one go, instead of typing everything again.
 
-**Hindi explanation (आसान हिंदी):** यूनिवर्सल इम्पोर्टर एक उपकरण है जो मौजूदा डेटा (सदस्य, खाते, प्रारंभिक शेष, लेन-देन) को स्प्रेडशीट या किसी पुराने सिस्टम से एक साथ (bulk) सॉफ्टवेयर में ले आता है — ताकि डिजिटल शुरुआत करने वाली समिति को सब कुछ हाथ से दोबारा न डालना पड़े।
+**Hindi explanation (आसान हिंदी):** यूनिवर्सल इम्पोर्टर एक उपकरण है जो मौजूदा डेटा (सदस्य, खाते, ओपनिंग बैलेंस, लेन-देन) को स्प्रेडशीट या किसी पुराने सिस्टम से एक साथ (bulk) सॉफ्टवेयर में ले आता है — ताकि डिजिटल शुरुआत करने वाली समिति को सब कुछ हाथ से दोबारा न डालना पड़े।
 
 **English explanation:** A bulk-import tool that speeds migration from Excel/other systems into SahakarLekha, easing the move to digital.
 

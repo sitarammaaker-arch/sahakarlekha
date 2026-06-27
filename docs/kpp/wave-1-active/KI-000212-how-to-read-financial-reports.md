@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is the skill of looking at the society's reports and quickly grasping three things: what it has and owes, whether it made a surplus, and how cash moved — without needing to be an accountant.
 
-**Hindi explanation (आसान हिंदी):** वित्तीय रिपोर्ट पढ़ना यानी यह समझना कि हर मुख्य रिपोर्ट क्या बताती है — बैलेंस शीट दिखाती है समिति के पास क्या है और क्या देना है; आय-व्यय रिपोर्ट दिखाती है लाभ हुआ या घाटा; और प्राप्ति-भुगतान दिखाती है नकद कैसे आया-गया। आसान शब्दों में — बिना लेखाकार बने, रिपोर्ट को एक नज़र में समझना।
+**Hindi explanation (आसान हिंदी):** वित्तीय रिपोर्ट पढ़ना यानी यह समझना कि हर मुख्य रिपोर्ट क्या बताती है — बैलेंस शीट दिखाती है समिति के पास क्या है और क्या देना है; आय-व्यय रिपोर्ट दिखाती है लाभ हुआ या घाटा; और रसीद-भुगतान दिखाती है नकद कैसे आया-गया। आसान शब्दों में — बिना लेखाकार बने, रिपोर्ट को एक नज़र में समझना।
 
 **English explanation:** A non-accountant's guide to interpreting the core statements so a chairman, member, or secretary can judge the society's health at a glance.
 

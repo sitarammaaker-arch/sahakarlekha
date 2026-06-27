@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** A member is both an owner and a customer of the society — they hold a share, get a vote, use the services, and share the results.
 
-**Hindi explanation (आसान हिंदी):** सदस्य वह व्यक्ति है जिसे समिति ने अपने नियमों के अनुसार जोड़ा हो। सदस्य समिति का अंश (शेयर) रखता है, उसकी सेवाएँ इस्तेमाल करता है, फैसलों में वोट देता है, और लाभ-ज़िम्मेदारी दोनों में हिस्सेदार होता है। आसान शब्दों में — सदस्य ही समिति का मालिक भी है और ग्राहक भी।
+**Hindi explanation (आसान हिंदी):** सदस्य वह व्यक्ति है जिसे समिति ने अपने नियमों के अनुसार जोड़ा हो। सदस्य समिति का शेयर रखता है, उसकी सेवाएँ इस्तेमाल करता है, फैसलों में वोट देता है, और लाभ-ज़िम्मेदारी दोनों में हिस्सेदार होता है। आसान शब्दों में — सदस्य ही समिति का मालिक भी है और ग्राहक भी।
 
 **English explanation:** The basic unit of a cooperative: an admitted shareholder who uses the society, votes in it, and shares its surplus and obligations.
 
@@ -42,7 +42,7 @@ review_schedule: 2027-06-27
 **Suggested FAQ:** "समिति का सदस्य कौन होता है?"
 **Suggested article title:** "सहकारी समिति में सदस्य कौन — अधिकार व ज़िम्मेदारी"
 **Suggested help page:** "Member कैसे जोड़ें"
-**Suggested glossary entry:** सदस्य · Member — नियमानुसार जोड़ा गया अंशधारक जो समिति का मालिक व उपयोगकर्ता दोनों है।
+**Suggested glossary entry:** सदस्य · Member — नियमानुसार जोड़ा गया शेयरधारक जो समिति का मालिक व उपयोगकर्ता दोनों है।
 **Suggested video title:** "सहकारी समिति का सदस्य कौन? आसान समझ"
 **Suggested downloadable asset:** "Member rights & duties — 1-pager (PDF)"
 **Suggested calculator:** — (not applicable)

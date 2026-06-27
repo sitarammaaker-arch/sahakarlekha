@@ -4,7 +4,7 @@ topic_id: C030
 research_id: SMRD:C030
 evidence_id: EV-000043
 title: Going Concern
-hindi_name: चालू व्यवसाय (गोइंग कंसर्न)
+hindi_name: गोइंग कंसर्न
 english_name: Going Concern
 category: Accounting Foundations
 knowledge_type: definitional
@@ -19,13 +19,13 @@ last_updated: 2026-06-27
 review_schedule: 2027-06-27
 ---
 
-# KI-000043 · Going Concern (चालू व्यवसाय)
+# KI-000043 · Going Concern (गोइंग कंसर्न)
 
 **Definition:** Going concern is the accounting assumption that a society will continue operating for the foreseeable future — so its accounts are prepared on the basis that it is not about to close down or sell off its assets.
 
 **Plain-language explanation:** Unless there is a clear reason to think otherwise, accounts assume the society will keep running normally next year — that is the "going concern" idea.
 
-**Hindi explanation (आसान हिंदी):** "चालू व्यवसाय" (going concern) यह मान्यता है कि समिति आने वाले समय में सामान्य रूप से चलती रहेगी। इसी आधार पर उसके खाते बनाए जाते हैं — यह नहीं माना जाता कि समिति अभी बंद होने या संपत्तियाँ बेच देने वाली है।
+**Hindi explanation (आसान हिंदी):** "गोइंग कंसर्न" (going concern) यह मान्यता है कि समिति आने वाले समय में सामान्य रूप से चलती रहेगी। इसी आधार पर उसके खाते बनाए जाते हैं — यह नहीं माना जाता कि समिति अभी बंद होने या संपत्तियाँ बेच देने वाली है।
 
 **English explanation:** A fundamental accounting assumption that the entity will continue in operation, shaping how assets and liabilities are valued and presented.
 
@@ -40,15 +40,15 @@ review_schedule: 2027-06-27
 **Internal links:** /guide/accounting-foundations · /guide/audit-preparation
 
 **Suggested FAQ:** "गोइंग कंसर्न (going concern) क्या होता है?"
-**Suggested article title:** "चालू व्यवसाय (Going Concern) — एक बुनियादी मान्यता"
+**Suggested article title:** "गोइंग कंसर्न (Going Concern) — एक बुनियादी मान्यता"
 **Suggested help page:** — (concept)
-**Suggested glossary entry:** चालू व्यवसाय · Going Concern — संस्था के चलते रहने की मान्यता।
+**Suggested glossary entry:** गोइंग कंसर्न · Going Concern — संस्था के चलते रहने की मान्यता।
 **Suggested video title:** "Going Concern आसान भाषा में"
 **Suggested downloadable asset:** — (not applicable)
 **Suggested calculator:** — (not applicable)
 **Suggested software module:** — (conceptual)
 
-**Search intent:** informational — "going concern meaning / चालू व्यवसाय"
+**Search intent:** informational — "going concern meaning / गोइंग कंसर्न"
 **User persona:** ACC, AUD
 **Learning objectives:**
 - Define the going-concern assumption.

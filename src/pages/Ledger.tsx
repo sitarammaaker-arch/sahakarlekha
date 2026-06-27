@@ -88,7 +88,7 @@ const Ledger: React.FC = () => {
       id: 'ob',
       date: fromDate || `${society.financialYear.split('-')[0]}-04-01`,
       voucherNo: 'OB',
-      particulars: lang === 'hi' ? 'प्रारंभिक शेष' : 'Opening Balance',
+      particulars: lang === 'hi' ? 'ओपनिंग बैलेंस' : 'Opening Balance',
       debit: obBalance >= 0 ? obBalance : 0,
       credit: obBalance < 0 ? Math.abs(obBalance) : 0,
       balance: Math.abs(obBalance),
@@ -138,7 +138,7 @@ const Ledger: React.FC = () => {
   const accountTypeBadge = (type: string) => {
     const map: Record<string, { label: string; cls: string }> = {
       asset:     { label: language === 'hi' ? 'संपत्ति' : 'Asset',     cls: 'bg-blue-100 text-blue-700' },
-      liability: { label: language === 'hi' ? 'देयता' : 'Liability',   cls: 'bg-yellow-100 text-yellow-700' },
+      liability: { label: language === 'hi' ? 'लायबिलिटी' : 'Liability',   cls: 'bg-yellow-100 text-yellow-700' },
       income:    { label: language === 'hi' ? 'आय' : 'Income',         cls: 'bg-green-100 text-green-700' },
       expense:   { label: language === 'hi' ? 'व्यय' : 'Expense',      cls: 'bg-red-100 text-red-700' },
     };
@@ -184,7 +184,7 @@ const Ledger: React.FC = () => {
             {t('ledger')}
           </h1>
           <p className="text-muted-foreground">
-            {language === 'hi' ? 'खाता बही - विस्तृत खाता विवरण' : 'General Ledger — Detailed Account Statement'}
+            {language === 'hi' ? 'लेजर - विस्तृत खाता विवरण' : 'General Ledger — Detailed Account Statement'}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">

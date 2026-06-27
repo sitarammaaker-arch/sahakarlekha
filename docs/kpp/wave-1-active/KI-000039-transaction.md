@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** A transaction is any single money event worth recording — something came in, went out, or changed hands.
 
-**Hindi explanation (आसान हिंदी):** लेन-देन कोई भी आर्थिक घटना है जिसमें पैसा या पैसे के बराबर मूल्य शामिल हो — जैसे रोकड़ मिलना, खर्च चुकाना, कर्ज़ देना, या माल खरीदना। हर ऐसा लेन-देन समिति अपनी बही में दर्ज करती है। आसान शब्दों में — "हिसाब में लिखने लायक पैसे की घटना"।
+**Hindi explanation (आसान हिंदी):** लेन-देन कोई भी आर्थिक घटना है जिसमें पैसा या पैसे के बराबर मूल्य शामिल हो — जैसे कैश मिलना, खर्च चुकाना, कर्ज़ देना, या माल खरीदना। हर ऐसा लेन-देन समिति अपनी बही में दर्ज करती है। आसान शब्दों में — "हिसाब में लिखने लायक पैसे की घटना"।
 
 **English explanation:** The basic recordable event of accounting; each transaction becomes one entry (voucher) in the books.
 

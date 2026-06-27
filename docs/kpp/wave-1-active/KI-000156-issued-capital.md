@@ -4,7 +4,7 @@ topic_id: C062
 research_id: SMRD:C062
 evidence_id: EV-000156
 title: Issued Capital
-hindi_name: निर्गमित पूँजी
+hindi_name: इश्यूड कैपिटल
 english_name: Issued Capital
 category: Share Capital
 knowledge_type: definitional
@@ -19,13 +19,13 @@ last_updated: 2026-06-27
 review_schedule: 2027-06-27
 ---
 
-# KI-000156 · Issued Capital (निर्गमित पूँजी)
+# KI-000156 · Issued Capital (इश्यूड कैपिटल)
 
 **Definition:** Issued capital is the value of shares the society has actually offered/allotted to members — sitting between authorised capital (the ceiling) and paid-up capital (what members have actually paid).
 
 **Plain-language explanation:** It is the value of shares the society has given out to members — more than what's been paid up if some money is still due, and never above the authorised limit.
 
-**Hindi explanation (आसान हिंदी):** निर्गमित पूँजी उन अंशों का मूल्य है जो समिति ने वास्तव में सदस्यों को जारी/आवंटित किए हैं। यह अधिकृत पूँजी (ऊपरी सीमा) और चुकता पूँजी (जो सदस्यों ने सचमुच चुकाई) के बीच होती है।
+**Hindi explanation (आसान हिंदी):** इश्यूड कैपिटल उन शेयरों का मूल्य है जो समिति ने वास्तव में सदस्यों को जारी/आवंटित किए हैं। यह ऑथराइज़्ड कैपिटल (ऊपरी सीमा) और पेड-अप कैपिटल (जो सदस्यों ने सचमुच चुकाई) के बीच होती है।
 
 **English explanation:** The portion of authorised capital allotted to members; paid-up capital is the part of issued capital actually received.
 
@@ -39,16 +39,16 @@ review_schedule: 2027-06-27
 
 **Internal links:** /guide/member-management · /share-register
 
-**Suggested FAQ:** "निर्गमित पूँजी (issued capital) क्या होती है?"
-**Suggested article title:** "निर्गमित पूँजी — अधिकृत व चुकता के बीच"
+**Suggested FAQ:** "इश्यूड कैपिटल (issued capital) क्या होती है?"
+**Suggested article title:** "इश्यूड कैपिटल — अधिकृत व चुकता के बीच"
 **Suggested help page:** — (supports share register)
-**Suggested glossary entry:** निर्गमित पूँजी · Issued Capital — सदस्यों को जारी किए गए अंशों का मूल्य।
+**Suggested glossary entry:** इश्यूड कैपिटल · Issued Capital — सदस्यों को जारी किए गए शेयरों का मूल्य।
 **Suggested video title:** "Issued Capital क्या होती है?"
 **Suggested downloadable asset:** — (not applicable)
 **Suggested calculator:** — (not applicable)
 **Suggested software module:** /share-register
 
-**Search intent:** informational — "issued capital meaning / निर्गमित पूँजी"
+**Search intent:** informational — "issued capital meaning / इश्यूड कैपिटल"
 **User persona:** ACC, SEC
 **Learning objectives:**
 - Define issued capital.

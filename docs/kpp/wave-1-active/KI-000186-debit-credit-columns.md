@@ -4,7 +4,7 @@ topic_id: C049
 research_id: SMRD:C049
 evidence_id: EV-000186
 title: Debit & Credit Columns (Trial Balance)
-hindi_name: नाम व जमा स्तंभ (तलपट)
+hindi_name: नाम व जमा स्तंभ (ट्रायल बैलेंस)
 english_name: Debit & Credit Columns
 category: Financial Statements
 knowledge_type: definitional
@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** A trial balance has two columns; every account's balance goes in the Dr or Cr column, and the two totals should match.
 
-**Hindi explanation (आसान हिंदी):** तलपट (trial balance) में नाम (Debit) और जमा (Credit) दो स्तंभ होते हैं; हर खाते का समापन शेष अपने सही पक्ष में लिखा जाता है — नाम-शेष एक स्तंभ में, जमा-शेष दूसरे में। दोनों स्तंभों का योग बराबर होना चाहिए।
+**Hindi explanation (आसान हिंदी):** ट्रायल बैलेंस (trial balance) में नाम (Debit) और जमा (Credit) दो स्तंभ होते हैं; हर खाते का क्लोज़िंग बैलेंस अपने सही पक्ष में लिखा जाता है — नाम-शेष एक स्तंभ में, जमा-शेष दूसरे में। दोनों स्तंभों का योग बराबर होना चाहिए।
 
 **English explanation:** The two-column structure of the trial balance; equal column totals are the visible proof that double-entry has been maintained.
 
@@ -39,10 +39,10 @@ review_schedule: 2027-06-27
 
 **Internal links:** /guide/trial-balance · /trial-balance
 
-**Suggested FAQ:** "तलपट के दो स्तंभ क्यों बराबर होते हैं?"
-**Suggested article title:** "तलपट के नाम-जमा स्तंभ — Dr=Cr का प्रमाण"
+**Suggested FAQ:** "ट्रायल बैलेंस के दो स्तंभ क्यों बराबर होते हैं?"
+**Suggested article title:** "ट्रायल बैलेंस के नाम-जमा स्तंभ — Dr=Cr का प्रमाण"
 **Suggested help page:** "Trial Balance कैसे देखें"
-**Suggested glossary entry:** नाम-जमा स्तंभ · Debit & Credit Columns — तलपट के दो स्तंभ जिनके योग बराबर होते हैं।
+**Suggested glossary entry:** नाम-जमा स्तंभ · Debit & Credit Columns — ट्रायल बैलेंस के दो स्तंभ जिनके योग बराबर होते हैं।
 **Suggested video title:** "Trial Balance के दो column कैसे मिलते हैं?"
 **Suggested downloadable asset:** — (not applicable)
 **Suggested calculator:** — (not applicable)

@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is the task of adding a new bank in the software (name + opening balance) so you can record that bank's deposits and withdrawals.
 
-**Hindi explanation (आसान हिंदी):** बैंक खाता जोड़ना यानी बही में नया बैंक सेट करना — बैंक/शाखा का नाम और उसका प्रारंभिक शेष डालना — ताकि उस बैंक की जमा-निकासी रोकड़ व अन्य बैंकों से अलग दर्ज व मिलान (reconcile) हो सके। SahakarLekha में Bank Book से "+ नया बैंक" द्वारा यह जोड़ा जाता है।
+**Hindi explanation (आसान हिंदी):** बैंक खाता जोड़ना यानी बही में नया बैंक सेट करना — बैंक/शाखा का नाम और उसका ओपनिंग बैलेंस डालना — ताकि उस बैंक की जमा-निकासी कैश व अन्य बैंकों से अलग दर्ज व मिलान (reconcile) हो सके। SahakarLekha में Bank Book से "+ नया बैंक" द्वारा यह जोड़ा जाता है।
 
 **English explanation:** The step-by-step task of registering a new bank account (name + opening balance) so it is tracked and reconciled on its own.
 

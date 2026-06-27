@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is the booklet (or statement) the bank gives showing your account's deposits, withdrawals, and balance — used to match against your own bank book.
 
-**Hindi explanation (आसान हिंदी):** पासबुक बैंक द्वारा दी गई वह पुस्तिका/रिकॉर्ड है जिसमें समिति के खाते की जमा, निकासी और शेष दर्ज होते हैं। यह बैंक का अपना संस्करण है, जिसे समिति की बैंक बही से मिलाकर (reconcile) जाँचा जाता है।
+**Hindi explanation (आसान हिंदी):** पासबुक बैंक द्वारा दी गई वह पुस्तिका/रिकॉर्ड है जिसमें समिति के खाते की जमा, निकासी और शेष दर्ज होते हैं। यह बैंक का अपना संस्करण है, जिसे समिति की बैंक बुक से मिलाकर (reconcile) जाँचा जाता है।
 
 **English explanation:** The bank's printed record of the account; like a bank statement, it is compared with the society's bank book during reconciliation.
 
@@ -39,11 +39,11 @@ review_schedule: 2027-06-27
 
 **Internal links:** /guide/receipts-and-payments · /bank-reconciliation
 
-**Suggested FAQ:** "पासबुक और बैंक बही में क्या अंतर है?"
+**Suggested FAQ:** "पासबुक और बैंक बुक में क्या अंतर है?"
 **Suggested article title:** "पासबुक — बैंक का अपना रिकॉर्ड"
 **Suggested help page:** "Bank Reconciliation कैसे करें"
 **Suggested glossary entry:** पासबुक · Passbook — बैंक द्वारा दिया गया खाता-रिकॉर्ड।
-**Suggested video title:** "पासबुक को बैंक बही से कैसे मिलाएँ?"
+**Suggested video title:** "पासबुक को बैंक बुक से कैसे मिलाएँ?"
 **Suggested downloadable asset:** — (not applicable)
 **Suggested calculator:** — (not applicable)
 **Suggested software module:** /bank-reconciliation

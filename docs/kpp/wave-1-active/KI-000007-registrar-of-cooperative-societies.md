@@ -4,7 +4,7 @@ topic_id: C007
 research_id: SMRD:C007
 evidence_id: EV-000007
 title: Registrar of Cooperative Societies (RCS)
-hindi_name: सहकारी समिति पंजीयक
+hindi_name: सहकारी समिति रजिस्ट्रार
 english_name: Registrar of Cooperative Societies
 category: Cooperative Basics
 knowledge_type: definitional
@@ -19,13 +19,13 @@ last_updated: 2026-06-27
 review_schedule: 2027-06-27
 ---
 
-# KI-000007 · Registrar of Cooperative Societies (पंजीयक, RCS)
+# KI-000007 · Registrar of Cooperative Societies (रजिस्ट्रार, RCS)
 
 **Definition:** The Registrar of Cooperative Societies (RCS) is the government authority that registers, regulates, and supervises cooperative societies — handling registration, audit oversight, statutory filings, and overall compliance within its jurisdiction.
 
 **Plain-language explanation:** The RCS is the official "office" a society answers to — it registers the society and oversees that it follows the cooperative law.
 
-**Hindi explanation (आसान हिंदी):** पंजीयक (RCS) सरकारी अधिकारी/कार्यालय है जो सहकारी समितियों का पंजीकरण करता है और उन पर निगरानी रखता है। समिति का रजिस्ट्रेशन, ऑडिट की देख-रेख, सालाना रिटर्न और नियमों का पालन — ये सब इसी कार्यालय के अधीन आते हैं। समिति को कई काम इसी कार्यालय में जमा करने होते हैं।
+**Hindi explanation (आसान हिंदी):** रजिस्ट्रार (RCS) सरकारी अधिकारी/कार्यालय है जो सहकारी समितियों का पंजीकरण करता है और उन पर निगरानी रखता है। समिति का रजिस्ट्रेशन, ऑडिट की देख-रेख, सालाना रिटर्न और नियमों का पालन — ये सब इसी कार्यालय के अधीन आते हैं। समिति को कई काम इसी कार्यालय में जमा करने होते हैं।
 
 **English explanation:** The state/central regulator for cooperatives: registers societies and supervises their compliance, audit, and statutory filings.
 
@@ -39,16 +39,16 @@ review_schedule: 2027-06-27
 
 **Internal links:** /guide/society-setup-and-roles · /guide/statutory-returns
 
-**Suggested FAQ:** "RCS / सहकारी पंजीयक क्या काम करता है?"
-**Suggested article title:** "सहकारी पंजीयक (RCS) की भूमिका — समिति को क्या-क्या देना होता है"
+**Suggested FAQ:** "RCS / सहकारी रजिस्ट्रार क्या काम करता है?"
+**Suggested article title:** "सहकारी रजिस्ट्रार (RCS) की भूमिका — समिति को क्या-क्या देना होता है"
 **Suggested help page:** — (educational)
-**Suggested glossary entry:** पंजीयक · Registrar (RCS) — सहकारी समितियों का पंजीकरण व निगरानी करने वाला सरकारी प्राधिकरण।
+**Suggested glossary entry:** रजिस्ट्रार · Registrar (RCS) — सहकारी समितियों का पंजीकरण व निगरानी करने वाला सरकारी प्राधिकरण।
 **Suggested video title:** "RCS क्या है और समिति का इससे क्या रिश्ता?"
 **Suggested downloadable asset:** — (links to compliance calendar, which is a separate gated item)
 **Suggested calculator:** — (not applicable)
 **Suggested software module:** /reports
 
-**Search intent:** informational — "RCS full form / सहकारी पंजीयक भूमिका"
+**Search intent:** informational — "RCS full form / सहकारी रजिस्ट्रार भूमिका"
 **User persona:** SEC, CHR, AUD
 **Learning objectives:**
 - State what the RCS is and does.

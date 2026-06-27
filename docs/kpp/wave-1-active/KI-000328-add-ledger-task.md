@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is the task of making a new account (like "Rent" or "Bank — SBI") under the right group, so you can post entries to it.
 
-**Hindi explanation (आसान हिंदी):** खाता बनाना यानी बही में सही समूह के अंतर्गत एक नया खाता शीर्ष बनाना — जैसे कोई नया खर्च शीर्ष, बैंक खाता, या आपूर्तिकर्ता — ताकि उसके सामने लेन-देन दर्ज हो सकें। पहले देख लें कि मानक चार्ट में वह खाता पहले से तो नहीं है।
+**Hindi explanation (आसान हिंदी):** खाता बनाना यानी बही में सही समूह के अंतर्गत एक नया लेजर हेड बनाना — जैसे कोई नया खर्च शीर्ष, बैंक खाता, या आपूर्तिकर्ता — ताकि उसके सामने लेन-देन दर्ज हो सकें। पहले देख लें कि मानक चार्ट में वह खाता पहले से तो नहीं है।
 
 **English explanation:** The step-by-step task of opening a ledger account under the right group; check the standard chart first to avoid duplicates.
 

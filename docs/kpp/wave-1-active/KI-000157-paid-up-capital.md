@@ -4,7 +4,7 @@ topic_id: C062
 research_id: SMRD:C062
 evidence_id: EV-000157
 title: Paid-Up Capital
-hindi_name: चुकता पूँजी
+hindi_name: पेड-अप कैपिटल
 english_name: Paid-Up Capital
 category: Share Capital
 knowledge_type: definitional
@@ -19,13 +19,13 @@ last_updated: 2026-06-27
 review_schedule: 2027-06-27
 ---
 
-# KI-000157 · Paid-Up Capital (चुकता पूँजी)
+# KI-000157 · Paid-Up Capital (पेड-अप कैपिटल)
 
 **Definition:** Paid-up capital is the total amount members have actually paid towards their shares — the real share money received by the society, as opposed to amounts merely promised or authorised.
 
 **Plain-language explanation:** Paid-up capital is the share money members have genuinely paid in — the actual capital sitting with the society.
 
-**Hindi explanation (आसान हिंदी):** चुकता पूँजी वह कुल राशि है जो सदस्यों ने अपने अंशों के बदले वास्तव में चुका दी है — यानी समिति को सच में मिली अंश राशि, न कि केवल वादा की गई या स्वीकृत राशि। आसान शब्दों में — "जो शेयर पैसा सचमुच जमा हो चुका है"।
+**Hindi explanation (आसान हिंदी):** पेड-अप कैपिटल वह कुल राशि है जो सदस्यों ने अपने शेयरों के बदले वास्तव में चुका दी है — यानी समिति को सच में मिली शेयर राशि, न कि केवल वादा की गई या स्वीकृत राशि। आसान शब्दों में — "जो शेयर पैसा सचमुच जमा हो चुका है"।
 
 **English explanation:** The portion of share capital actually received from members; a key figure on the liabilities/capital side of the balance sheet.
 
@@ -39,16 +39,16 @@ review_schedule: 2027-06-27
 
 **Internal links:** /guide/member-management · /share-register
 
-**Suggested FAQ:** "चुकता पूँजी (paid-up capital) क्या होती है?"
-**Suggested article title:** "चुकता पूँजी क्या है — असली शेयर पैसा"
+**Suggested FAQ:** "पेड-अप कैपिटल (paid-up capital) क्या होती है?"
+**Suggested article title:** "पेड-अप कैपिटल क्या है — असली शेयर पैसा"
 **Suggested help page:** — (supports share register)
-**Suggested glossary entry:** चुकता पूँजी · Paid-Up Capital — सदस्यों द्वारा वास्तव में चुकाई गई अंश राशि।
+**Suggested glossary entry:** पेड-अप कैपिटल · Paid-Up Capital — सदस्यों द्वारा वास्तव में चुकाई गई शेयर राशि।
 **Suggested video title:** "Paid-up Capital क्या होती है?"
 **Suggested downloadable asset:** — (not applicable)
 **Suggested calculator:** — (not applicable)
 **Suggested software module:** /share-register
 
-**Search intent:** informational — "paid up capital meaning / चुकता पूँजी"
+**Search intent:** informational — "paid up capital meaning / पेड-अप कैपिटल"
 **User persona:** ACC, SEC, CHR
 **Learning objectives:**
 - Define paid-up capital.

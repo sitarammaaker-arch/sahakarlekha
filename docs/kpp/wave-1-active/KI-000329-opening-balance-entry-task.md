@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is the task of putting in each account's starting figure so the software begins from where your old records left off — and the debit and credit sides must match.
 
-**Hindi explanation (आसान हिंदी):** ओपनिंग बैलेंस डालना यानी जब समिति सॉफ्टवेयर पर शुरू करती है (या नया साल शुरू होता है) तब हर खाते का प्रारंभिक शेष दर्ज करना — ताकि बही पिछली समापन स्थिति से सही ढंग से आगे चले। ध्यान रखें कि कुल नाम (Dr) = कुल जमा (Cr) मिले।
+**Hindi explanation (आसान हिंदी):** ओपनिंग बैलेंस डालना यानी जब समिति सॉफ्टवेयर पर शुरू करती है (या नया साल शुरू होता है) तब हर खाते का ओपनिंग बैलेंस दर्ज करना — ताकि बही पिछली समापन स्थिति से सही ढंग से आगे चले। ध्यान रखें कि कुल नाम (Dr) = कुल जमा (Cr) मिले।
 
 **English explanation:** The step-by-step task of recording starting balances so the new books tie to the prior closing; the opening must balance (Dr = Cr).
 

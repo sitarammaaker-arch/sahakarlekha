@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is the simple starting checklist: sign up, set up the society, add your accounts and members, put in opening balances, and make your first entry.
 
-**Hindi explanation (आसान हिंदी):** "शुरुआत कैसे करें" नए उपयोगकर्ता के लिए सुझाया गया पहला रास्ता है — रजिस्टर करें, समिति सेटअप करें, ज़रूरी खाते (ledger heads) व सदस्य जोड़ें, प्रारंभिक शेष (opening balance) डालें, और पहला वाउचर बनाएँ। इससे जल्दी ही काम-लायक बहीखाता तैयार हो जाता है। आसान शब्दों में — "कहाँ से और किस क्रम में शुरू करें"।
+**Hindi explanation (आसान हिंदी):** "शुरुआत कैसे करें" नए उपयोगकर्ता के लिए सुझाया गया पहला रास्ता है — रजिस्टर करें, समिति सेटअप करें, ज़रूरी खाते (ledger heads) व सदस्य जोड़ें, ओपनिंग बैलेंस (opening balance) डालें, और पहला वाउचर बनाएँ। इससे जल्दी ही काम-लायक बहीखाता तैयार हो जाता है। आसान शब्दों में — "कहाँ से और किस क्रम में शुरू करें"।
 
 **English explanation:** The onboarding sequence that takes a new user from sign-up to a functioning set of books in a few logical steps.
 

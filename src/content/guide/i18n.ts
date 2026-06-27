@@ -29,7 +29,7 @@ export const GUIDE_UI: Record<string, { hi: string; en: string }> = {
   'hub.pdf': { hi: 'पूरी किताब · PDF', en: 'Full Book · PDF' },
   'hub.pdf.desc': { hi: 'सम्पूर्ण {n}-अध्याय गाइड एक printable PDF में — ऑफ़लाइन पढ़ें/छापें।', en: 'The complete {n}-chapter guide in one printable PDF — read/print offline.' },
   'hub.download': { hi: 'डाउनलोड', en: 'Download' },
-  'hub.search.placeholder': { hi: 'गाइड में खोजें — जैसे बिक्री, GST, स्टॉक, मूल्यह्रास…', en: 'Search the guide — e.g. sales, GST, stock, depreciation…' },
+  'hub.search.placeholder': { hi: 'गाइड में खोजें — जैसे बिक्री, GST, स्टॉक, डेप्रिसिएशन…', en: 'Search the guide — e.g. sales, GST, stock, depreciation…' },
   'hub.search.none': { hi: 'कोई परिणाम नहीं मिला।', en: 'No results found.' },
   'hub.progress': { hi: 'आपकी प्रगति', en: 'Your progress' },
   'hub.progress.count': { hi: '{done} / {total} अध्याय · {pct}%', en: '{done} / {total} chapters · {pct}%' },

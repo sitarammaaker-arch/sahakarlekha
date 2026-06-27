@@ -42,7 +42,7 @@ review_schedule: 2027-06-27
 **Suggested FAQ:** "सहकारी समिति और कंपनी में क्या अंतर है?"
 **Suggested article title:** "सहकारी समिति बनाम कंपनी — मुख्य अंतर आसान भाषा में"
 **Suggested help page:** — (educational)
-**Suggested glossary entry:** सहकारी बनाम कंपनी · Cooperative vs Company — स्वामित्व व उद्देश्य का अंतर (लोग बनाम पूँजी)।
+**Suggested glossary entry:** सहकारी बनाम कंपनी · Cooperative vs Company — स्वामित्व व उद्देश्य का अंतर (लोग बनाम कैपिटल)।
 **Suggested video title:** "सहकारी समिति vs कंपनी — फर्क समझें"
 **Suggested downloadable asset:** "Cooperative vs Company — comparison table (PDF)"
 **Suggested calculator:** — (not applicable)

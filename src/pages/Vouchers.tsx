@@ -222,7 +222,7 @@ const Vouchers: React.FC = () => {
       icon: ArrowDownLeft,
       bgColor: 'bg-success',
       label: language === 'hi' ? 'रसीद वाउचर' : 'Receipt Voucher',
-      description: language === 'hi' ? 'नकद/बैंक प्राप्ति के लिए' : 'For cash/bank receipts',
+      description: language === 'hi' ? 'नकद/बैंक रसीद के लिए' : 'For cash/bank receipts',
     },
     payment: {
       icon: ArrowUpRight,
@@ -968,7 +968,7 @@ const Vouchers: React.FC = () => {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          {language === 'hi' ? 'यह लेनदेन सदस्य के खाता बही में दिखेगा' : 'This transaction will appear in the member\'s share ledger'}
+                          {language === 'hi' ? 'यह लेनदेन सदस्य के लेजर में दिखेगा' : 'This transaction will appear in the member\'s share ledger'}
                         </p>
                       </div>
                     )}

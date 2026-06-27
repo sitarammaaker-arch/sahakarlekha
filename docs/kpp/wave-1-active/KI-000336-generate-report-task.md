@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is the simple task of opening the reports area, picking the report and the dates, and viewing or downloading it.
 
-**Hindi explanation (आसान हिंदी):** रिपोर्ट निकालना यानी सॉफ्टवेयर से कोई वित्तीय विवरण या रजिस्टर तैयार करना — रिपोर्ट (तलपट, बैलेंस शीट, रोकड़ बही आदि) और अवधि चुनना, फिर उसे देखना, प्रिंट करना या export करना। डिजिटल का सबसे बड़ा फ़ायदा — रिपोर्ट एक क्लिक पर।
+**Hindi explanation (आसान हिंदी):** रिपोर्ट निकालना यानी सॉफ्टवेयर से कोई वित्तीय विवरण या रजिस्टर तैयार करना — रिपोर्ट (ट्रायल बैलेंस, बैलेंस शीट, कैश बुक आदि) और अवधि चुनना, फिर उसे देखना, प्रिंट करना या export करना। डिजिटल का सबसे बड़ा फ़ायदा — रिपोर्ट एक क्लिक पर।
 
 **English explanation:** The step-by-step task of producing reports on demand — the big payoff of digital accounting (reports in one click instead of manual preparation).
 

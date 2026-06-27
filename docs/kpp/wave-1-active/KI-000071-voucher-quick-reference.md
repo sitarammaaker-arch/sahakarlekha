@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is a cheat sheet: money in → receipt, money out → payment, cash↔bank → contra, adjustments → journal. Pick the right voucher fast.
 
-**Hindi explanation (आसान हिंदी):** वाउचर एंट्री त्वरित संदर्भ एक छोटी "किस काम के लिए कौन-सा वाउचर" गाइड है — पैसा मिला → रसीद (receipt), पैसा गया → भुगतान (payment), रोकड़↔बैंक → contra, समायोजन → journal। इससे उपयोगकर्ता बिना अटके सही वाउचर चुन लेता है।
+**Hindi explanation (आसान हिंदी):** वाउचर एंट्री त्वरित संदर्भ एक छोटी "किस काम के लिए कौन-सा वाउचर" गाइड है — पैसा मिला → रसीद (receipt), पैसा गया → भुगतान (payment), कैश↔बैंक → contra, समायोजन → journal। इससे उपयोगकर्ता बिना अटके सही वाउचर चुन लेता है।
 
 **English explanation:** A quick map from everyday situations to the correct voucher type — the fastest way for new staff to enter transactions correctly.
 

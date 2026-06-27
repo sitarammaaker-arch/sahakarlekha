@@ -63,7 +63,7 @@ const SYNONYMS: string[][] = [
   ['audit', 'ऑडिट', 'ankekshan', 'अंकेक्षण'],
   ['gst', 'जीएसटी'],
   ['tds', 'टीडीएस', '26q'],
-  ['share', 'sheyar', 'शेयर', 'capital', 'पूँजी', 'punji', 'punji'],
+  ['share', 'sheyar', 'शेयर', 'capital', 'कैपिटल', 'पूँजी', 'पूंजी', 'punji', 'शेयर कैपिटल', 'अंश पूँजी'],
   ['dividend', 'डिविडेंड', 'labhansh', 'लाभांश'],
   ['reserve', 'रिज़र्व', 'sanchay'],
   ['reconciliation', 'brs', 'समाधान', 'reconcile', 'milan', 'मिलान'],
@@ -72,7 +72,10 @@ const SYNONYMS: string[][] = [
   ['report', 'रिपोर्ट'],
   ['society', 'samiti', 'समिति'],
   ['profit', 'munafa', 'मुनाफ़ा', 'labh', 'लाभ'],
-  ['cashbook', 'cash book', 'रोकड़', 'rokad'],
+  ['cashbook', 'cash book', 'कैश बुक', 'रोकड़ बही', 'रोकड़', 'कैश', 'rokad'],
+  ['daybook', 'day book', 'डे बुक', 'rojnamcha', 'रोज़नामचा'],
+  ['liability', 'लायबिलिटी', 'देयता', 'denadari', 'देनदारी'],
+  ['asset', 'एसेट', 'sampatti', 'संपत्ति', 'परिसंपत्ति'],
 ];
 
 const norm = (s: string) => s.toLowerCase().trim();

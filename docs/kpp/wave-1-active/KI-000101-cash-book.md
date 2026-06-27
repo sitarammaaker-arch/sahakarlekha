@@ -4,7 +4,7 @@ topic_id: C105
 research_id: SMRD:C105
 evidence_id: EV-000101
 title: Cash Book
-hindi_name: रोकड़ बही
+hindi_name: कैश बुक
 english_name: Cash Book
 category: Cash
 knowledge_type: definitional
@@ -19,13 +19,13 @@ last_updated: 2026-06-27
 review_schedule: 2027-06-27
 ---
 
-# KI-000101 · Cash Book (रोकड़ बही)
+# KI-000101 · Cash Book (कैश बुक)
 
 **Definition:** A cash book is the book that records all cash receipts and cash payments in date order and shows the cash balance in hand at any time.
 
 **Plain-language explanation:** The cash book is the running record of all cash coming in and going out, so you always know how much cash the society should have.
 
-**Hindi explanation (आसान हिंदी):** रोकड़ बही वह बही है जिसमें सारे नकद प्राप्ति (receipt) और नकद भुगतान (payment) तारीख के क्रम में लिखे जाते हैं, और किसी भी समय हाथ में रोकड़ का शेष दिखता है। आसान शब्दों में — "नकद का चलता-फिरता हिसाब"। इससे पता रहता है कि समिति के पास कितनी रोकड़ होनी चाहिए।
+**Hindi explanation (आसान हिंदी):** कैश बुक वह बही है जिसमें सारे नकद रसीद (receipt) और नकद भुगतान (payment) तारीख के क्रम में लिखे जाते हैं, और किसी भी समय हाथ में कैश का शेष दिखता है। आसान शब्दों में — "नकद का चलता-फिरता हिसाब"। इससे पता रहता है कि समिति के पास कितनी कैश होनी चाहिए।
 
 **English explanation:** A book of original entry for cash that doubles as a ledger account for cash — recording receipts and payments and revealing the cash balance.
 
@@ -39,16 +39,16 @@ review_schedule: 2027-06-27
 
 **Internal links:** /guide/receipts-and-payments · /cash-book
 
-**Suggested FAQ:** "रोकड़ बही (cash book) क्या होती है?"
-**Suggested article title:** "रोकड़ बही क्या है — नकद का सही रिकॉर्ड"
+**Suggested FAQ:** "कैश बुक (cash book) क्या होती है?"
+**Suggested article title:** "कैश बुक क्या है — नकद का सही रिकॉर्ड"
 **Suggested help page:** "Cash Book कैसे देखें"
-**Suggested glossary entry:** रोकड़ बही · Cash Book — नकद प्राप्ति-भुगतान व रोकड़ शेष की बही।
+**Suggested glossary entry:** कैश बुक · Cash Book — नकद रसीद-भुगतान व कैश शेष की बही।
 **Suggested video title:** "Cash Book कैसे काम करती है?"
 **Suggested downloadable asset:** "Cash book — format (Excel)"
 **Suggested calculator:** — (not applicable)
 **Suggested software module:** /cash-book
 
-**Search intent:** informational + problem-solving — "cash book / रोकड़ बही kaise dekhe"
+**Search intent:** informational + problem-solving — "cash book / कैश बुक kaise dekhe"
 **User persona:** EMP, ACC, SEC
 **Learning objectives:**
 - Define the cash book and what it records.

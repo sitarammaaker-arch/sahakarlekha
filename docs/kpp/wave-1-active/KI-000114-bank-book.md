@@ -4,7 +4,7 @@ topic_id: C106
 research_id: SMRD:C106
 evidence_id: EV-000114
 title: Bank Book
-hindi_name: बैंक बही
+hindi_name: बैंक बुक
 english_name: Bank Book
 category: Bank
 knowledge_type: definitional
@@ -19,13 +19,13 @@ last_updated: 2026-06-27
 review_schedule: 2027-06-27
 ---
 
-# KI-000114 · Bank Book (बैंक बही)
+# KI-000114 · Bank Book (बैंक बुक)
 
 **Definition:** A bank book is the book that records all bank receipts and payments for each bank account in date order, showing the bank balance as per the society's records.
 
 **Plain-language explanation:** The bank book is the running record of every deposit and withdrawal through a bank, showing what the books say the bank balance is.
 
-**Hindi explanation (आसान हिंदी):** बैंक बही वह बही है जिसमें हर बैंक खाते की जमा (receipt) और निकासी (payment) तारीख के क्रम में लिखी जाती है, और जिसमें समिति के रिकॉर्ड के अनुसार बैंक शेष दिखता है। आसान शब्दों में — "बैंक की हलचल का चलता हिसाब"।
+**Hindi explanation (आसान हिंदी):** बैंक बुक वह बही है जिसमें हर बैंक खाते की जमा (receipt) और निकासी (payment) तारीख के क्रम में लिखी जाती है, और जिसमें समिति के रिकॉर्ड के अनुसार बैंक शेष दिखता है। आसान शब्दों में — "बैंक की हलचल का चलता हिसाब"।
 
 **English explanation:** The bank counterpart of the cash book; records bank transactions and shows the book balance, later reconciled with the bank statement.
 
@@ -39,16 +39,16 @@ review_schedule: 2027-06-27
 
 **Internal links:** /guide/receipts-and-payments · /bank-book
 
-**Suggested FAQ:** "बैंक बही (bank book) क्या होती है?"
-**Suggested article title:** "बैंक बही क्या है — बैंक का सही रिकॉर्ड"
+**Suggested FAQ:** "बैंक बुक (bank book) क्या होती है?"
+**Suggested article title:** "बैंक बुक क्या है — बैंक का सही रिकॉर्ड"
 **Suggested help page:** "Bank Book से बैंक जोड़ें"
-**Suggested glossary entry:** बैंक बही · Bank Book — बैंक जमा-निकासी व बैंक शेष की बही।
+**Suggested glossary entry:** बैंक बुक · Bank Book — बैंक जमा-निकासी व बैंक शेष की बही।
 **Suggested video title:** "Bank Book कैसे काम करती है?"
 **Suggested downloadable asset:** — (covered by bank reconciliation template, separate item)
 **Suggested calculator:** — (not applicable)
 **Suggested software module:** /bank-book
 
-**Search intent:** informational — "bank book meaning / बैंक बही"
+**Search intent:** informational — "bank book meaning / बैंक बुक"
 **User persona:** EMP, ACC, SEC
 **Learning objectives:**
 - Define the bank book and what it records.

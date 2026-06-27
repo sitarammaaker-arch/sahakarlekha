@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is the start-to-finish routine of accounting that runs every year: write entries, group them, check they tally, adjust, make reports, and close the year.
 
-**Hindi explanation (आसान हिंदी):** लेखांकन चक्र वह तय क्रम है जो लेन-देन से शुरू होकर अंतिम खातों तक जाता है — एंट्री (वाउचर) → खाता बही में पोस्ट → तलपट (trial balance) → समायोजन → वित्तीय विवरण → साल बंद। यही चक्र हर वित्तीय वर्ष में दोहराया जाता है। आसान शब्दों में — "हिसाब का सालभर का रास्ता"।
+**Hindi explanation (आसान हिंदी):** लेखांकन चक्र वह तय क्रम है जो लेन-देन से शुरू होकर अंतिम खातों तक जाता है — एंट्री (वाउचर) → लेजर में पोस्ट → ट्रायल बैलेंस (trial balance) → समायोजन → वित्तीय विवरण → साल बंद। यही चक्र हर वित्तीय वर्ष में दोहराया जाता है। आसान शब्दों में — "हिसाब का सालभर का रास्ता"।
 
 **English explanation:** The recurring workflow of accounting from transaction to closing, repeated each period — the map that connects daily entries to year-end statements.
 

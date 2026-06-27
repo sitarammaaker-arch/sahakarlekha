@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is the list the bank gives you of everything that happened in your account — used to check against the society's own bank book.
 
-**Hindi explanation (आसान हिंदी):** बैंक स्टेटमेंट बैंक का अपना रिकॉर्ड है जिसमें एक अवधि के दौरान समिति के बैंक खाते की सारी जमा, निकासी, शुल्क और बैंक के अनुसार अंतिम शेष दिखते हैं। इसे समिति की बैंक बही से मिलाकर (reconcile) देखा जाता है। आसान शब्दों में — "बैंक की तरफ़ से दिया गया हिसाब"।
+**Hindi explanation (आसान हिंदी):** बैंक स्टेटमेंट बैंक का अपना रिकॉर्ड है जिसमें एक अवधि के दौरान समिति के बैंक खाते की सारी जमा, निकासी, शुल्क और बैंक के अनुसार अंतिम शेष दिखते हैं। इसे समिति की बैंक बुक से मिलाकर (reconcile) देखा जाता है। आसान शब्दों में — "बैंक की तरफ़ से दिया गया हिसाब"।
 
 **English explanation:** The bank-issued record of account activity; compared against the society's bank book during reconciliation to explain any differences.
 
@@ -40,7 +40,7 @@ review_schedule: 2027-06-27
 **Internal links:** /guide/receipts-and-payments · /bank-reconciliation
 
 **Suggested FAQ:** "बैंक स्टेटमेंट किसलिए चाहिए?"
-**Suggested article title:** "बैंक स्टेटमेंट क्या है — बैंक बही से मिलान का आधार"
+**Suggested article title:** "बैंक स्टेटमेंट क्या है — बैंक बुक से मिलान का आधार"
 **Suggested help page:** "Bank Reconciliation कैसे करें"
 **Suggested glossary entry:** बैंक स्टेटमेंट · Bank Statement — बैंक का जारी किया गया खाता-विवरण।
 **Suggested video title:** "बैंक स्टेटमेंट को बही से कैसे मिलाएँ?"

@@ -4,7 +4,7 @@ topic_id: C062
 research_id: SMRD:C062
 evidence_id: EV-000158
 title: Face Value
-hindi_name: अंकित मूल्य
+hindi_name: फेस वैल्यू
 english_name: Face Value
 category: Share Capital
 knowledge_type: definitional
@@ -19,13 +19,13 @@ last_updated: 2026-06-27
 review_schedule: 2027-06-27
 ---
 
-# KI-000158 · Face Value (अंकित मूल्य)
+# KI-000158 · Face Value (फेस वैल्यू)
 
 **Definition:** Face value is the fixed nominal value printed on each share (for example ₹10 or ₹100), used to compute a member's share capital as face value × number of shares held.
 
 **Plain-language explanation:** Face value is the set price of one share. Multiply it by how many shares a member holds to get their share capital.
 
-**Hindi explanation (आसान हिंदी):** अंकित मूल्य (face value) हर अंश का तय मूल्य है (जैसे ₹10 या ₹100)। किसी सदस्य की अंश पूँजी निकालने के लिए — अंकित मूल्य × सदस्य के अंशों की संख्या। आसान शब्दों में — "एक शेयर की तय कीमत"।
+**Hindi explanation (आसान हिंदी):** फेस वैल्यू (face value) हर शेयर का तय मूल्य है (जैसे ₹10 या ₹100)। किसी सदस्य की शेयर कैपिटल निकालने के लिए — फेस वैल्यू × सदस्य के शेयरों की संख्या। आसान शब्दों में — "एक शेयर की तय कीमत"।
 
 **English explanation:** The nominal per-share value set by the society; the basis for calculating share capital amounts.
 
@@ -39,16 +39,16 @@ review_schedule: 2027-06-27
 
 **Internal links:** /guide/member-management · /share-register
 
-**Suggested FAQ:** "अंश का अंकित मूल्य (face value) क्या होता है?"
-**Suggested article title:** "अंकित मूल्य क्या है — एक शेयर की तय कीमत"
+**Suggested FAQ:** "शेयर का फेस वैल्यू (face value) क्या होता है?"
+**Suggested article title:** "फेस वैल्यू क्या है — एक शेयर की तय कीमत"
 **Suggested help page:** — (supports share register)
-**Suggested glossary entry:** अंकित मूल्य · Face Value — प्रति अंश का तय नाममात्र मूल्य।
+**Suggested glossary entry:** फेस वैल्यू · Face Value — प्रति शेयर का तय नाममात्र मूल्य।
 **Suggested video title:** "Face Value क्या होता है?"
 **Suggested downloadable asset:** — (not applicable)
 **Suggested calculator:** — (a share-capital helper may use it; tool is a separate item)
 **Suggested software module:** /share-register
 
-**Search intent:** informational — "face value of share / अंकित मूल्य"
+**Search intent:** informational — "face value of share / फेस वैल्यू"
 **User persona:** ACC, SEC, MEM
 **Learning objectives:**
 - Define face value of a share.

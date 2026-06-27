@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** A society often has more than one bank account; the software tracks each one separately, with its own balance and reconciliation.
 
-**Hindi explanation (आसान हिंदी):** कई बैंक खातों का प्रबंधन यानी बही में एक साथ कई बैंक खाते रखना — हर एक की अपनी बैंक बही, शेष और मिलान (reconciliation)। अधिकांश समितियों के एक से ज़्यादा बैंक/शाखा में खाते होते हैं, इसलिए यह ज़रूरी है।
+**Hindi explanation (आसान हिंदी):** कई बैंक खातों का प्रबंधन यानी बही में एक साथ कई बैंक खाते रखना — हर एक की अपनी बैंक बुक, शेष और मिलान (reconciliation)। अधिकांश समितियों के एक से ज़्यादा बैंक/शाखा में खाते होते हैं, इसलिए यह ज़रूरी है।
 
 **English explanation:** Tracking multiple bank accounts independently in one set of books — each reconciled on its own — which SahakarLekha supports.
 

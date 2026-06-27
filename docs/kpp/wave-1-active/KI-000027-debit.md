@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** "Debit" is simply the left-hand side of an entry. What you debit depends on the type of account — for example, money coming into cash, or an expense being incurred.
 
-**Hindi explanation (आसान हिंदी):** "नाम" (Debit/Dr) किसी खाते की एंट्री का बायाँ पक्ष है। मोटे तौर पर — परिसंपत्ति या खर्च बढ़े तो उसे "नाम" किया जाता है, और देयता/पूँजी/आय घटे तो भी "नाम"। किस चीज़ को नाम करना है, यह खाते के प्रकार पर निर्भर करता है। (विस्तृत नियम golden rules में।)
+**Hindi explanation (आसान हिंदी):** "नाम" (Debit/Dr) किसी खाते की एंट्री का बायाँ पक्ष है। मोटे तौर पर — एसेट या खर्च बढ़े तो उसे "नाम" किया जाता है, और लायबिलिटी/कैपिटल/आय घटे तो भी "नाम"। किस चीज़ को नाम करना है, यह खाते के प्रकार पर निर्भर करता है। (विस्तृत नियम golden rules में।)
 
 **English explanation:** The left-hand entry in double-entry bookkeeping; its effect (increase or decrease) depends on the account type.
 

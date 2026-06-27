@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is shifting your existing data from Tally or Excel into the new software once, so you continue from where you were instead of starting blank.
 
-**Hindi explanation (आसान हिंदी):** Tally/Excel से माइग्रेशन यानी समिति के मौजूदा रिकॉर्ड (मास्टर, प्रारंभिक शेष, और इतिहास) को पुराने उपकरण से नए सॉफ्टवेयर में एक बार स्थानांतरित करना — आम तौर पर पुराने सिस्टम से export करके नए में bulk import द्वारा। इससे आप शून्य से नहीं, बल्कि जहाँ थे वहीं से आगे बढ़ते हैं।
+**Hindi explanation (आसान हिंदी):** Tally/Excel से माइग्रेशन यानी समिति के मौजूदा रिकॉर्ड (मास्टर, ओपनिंग बैलेंस, और इतिहास) को पुराने उपकरण से नए सॉफ्टवेयर में एक बार स्थानांतरित करना — आम तौर पर पुराने सिस्टम से export करके नए में bulk import द्वारा। इससे आप शून्य से नहीं, बल्कि जहाँ थे वहीं से आगे बढ़ते हैं।
 
 **English explanation:** A one-time data move (export → import) from a prior tool into SahakarLekha, so the society keeps its history and continues smoothly.
 

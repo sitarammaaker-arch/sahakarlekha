@@ -203,7 +203,7 @@ const UserGuide: React.FC = () => {
                   <thead className="bg-muted"><tr><th className="text-left p-2">मेन्यू</th><th className="text-left p-2">कार्य</th></tr></thead>
                   <tbody>
                     <tr className="border-t"><td className="p-2 font-medium">Dashboard</td><td className="p-2">समग्र स्थिति देखना</td></tr>
-                    <tr className="border-t"><td className="p-2 font-medium">Cash Book / Bank Book</td><td className="p-2">रोकड़ बही व बैंक बही</td></tr>
+                    <tr className="border-t"><td className="p-2 font-medium">Cash Book / Bank Book</td><td className="p-2">कैश बुक व बैंक बुक</td></tr>
                     <tr className="border-t"><td className="p-2 font-medium">Vouchers</td><td className="p-2">रसीद, भुगतान, जर्नल, कॉन्ट्रा entries</td></tr>
                     <tr className="border-t"><td className="p-2 font-medium">Ledger Heads</td><td className="p-2">खाता शीर्षक मास्टर</td></tr>
                     <tr className="border-t"><td className="p-2 font-medium">Members</td><td className="p-2">सदस्य मास्टर व अनुमोदन</td></tr>
@@ -235,7 +235,7 @@ const UserGuide: React.FC = () => {
                   <tbody>
                     <tr className="border-t"><td className="p-2">Assets (संपत्ति)</td><td className="p-2">Cash, Bank, Stock, Fixed Assets</td><td className="p-2">Debit</td></tr>
                     <tr className="border-t"><td className="p-2">Liabilities (देनदारी)</td><td className="p-2">Loans, Sundry Creditors</td><td className="p-2">Credit</td></tr>
-                    <tr className="border-t"><td className="p-2">Equity (पूंजी)</td><td className="p-2">Share Capital, Reserve Fund</td><td className="p-2">Credit</td></tr>
+                    <tr className="border-t"><td className="p-2">Equity (कैपिटल)</td><td className="p-2">Share Capital, Reserve Fund</td><td className="p-2">Credit</td></tr>
                     <tr className="border-t"><td className="p-2">Income (आय)</td><td className="p-2">Sales, Interest Received</td><td className="p-2">Credit</td></tr>
                     <tr className="border-t"><td className="p-2">Expense (खर्च)</td><td className="p-2">Salary, Rent, Electricity</td><td className="p-2">Debit</td></tr>
                   </tbody>
@@ -288,7 +288,7 @@ const UserGuide: React.FC = () => {
 `}</pre>
 
               <h3 className="text-lg font-semibold mt-4 mb-2">4.1 Receipt Entry (रसीद)</h3>
-              <p><strong>कब करें?</strong> जब कोई पैसा आए — जैसे सदस्य से Share Capital, Loan किस्त वापसी, ब्याज प्राप्ति।</p>
+              <p><strong>कब करें?</strong> जब कोई पैसा आए — जैसे सदस्य से Share Capital, Loan किस्त वापसी, ब्याज रसीद।</p>
               <Step n={1} title="Vouchers → + New Voucher"/>
               <Step n={2} title="Type: Receipt चुनें"/>
               <Step n={3} title="Date डालें"/>

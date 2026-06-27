@@ -28,7 +28,7 @@ const CalculatorHub: React.FC = () => {
       '@context': 'https://schema.org',
       '@type': 'CollectionPage',
       name: 'सहकारी लेखांकन कैलकुलेटर — SahakarLekha',
-      description: 'सहकारी समिति के लिए मुफ्त कैलकुलेटर — ब्याज, EMI, मूल्यह्रास, GST, TDS, अंश पूँजी, प्रतिशत व अधिक।',
+      description: 'सहकारी समिति के लिए मुफ्त कैलकुलेटर — ब्याज, EMI, डेप्रिसिएशन, GST, TDS, शेयर कैपिटल, प्रतिशत व अधिक।',
       inLanguage: 'hi',
       url: `${SITE}/tools`,
       hasPart: CALCULATORS.map((c) => ({ '@type': 'WebApplication', name: c.englishName, url: `${SITE}/tools/${c.slug}` })),
@@ -45,7 +45,7 @@ const CalculatorHub: React.FC = () => {
 
   useDocumentMeta({
     title: 'सहकारी लेखांकन कैलकुलेटर (Calculators) — मुफ्त | SahakarLekha',
-    description: 'ब्याज, EMI, मूल्यह्रास, GST, TDS, अंश पूँजी, रोकड़ अंतर, प्रतिशत व कार्यशील पूँजी — सहकारी समिति के लिए मुफ्त, आसान कैलकुलेटर, सूत्र व समझाइश सहित।',
+    description: 'ब्याज, EMI, डेप्रिसिएशन, GST, TDS, शेयर कैपिटल, कैश अंतर, प्रतिशत व वर्किंग कैपिटल — सहकारी समिति के लिए मुफ्त, आसान कैलकुलेटर, सूत्र व समझाइश सहित।',
     canonicalPath: '/tools',
     jsonLd,
   });
@@ -62,10 +62,10 @@ const CalculatorHub: React.FC = () => {
             <span className="text-white">कैलकुलेटर</span>
           </nav>
           <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight">सहकारी लेखांकन कैलकुलेटर</h1>
-          <p className="text-white/90 text-lg mt-3 max-w-2xl">ब्याज, EMI, मूल्यह्रास, GST, TDS और अधिक — मुफ्त, तुरंत, सूत्र व समझाइश सहित।</p>
+          <p className="text-white/90 text-lg mt-3 max-w-2xl">ब्याज, EMI, डेप्रिसिएशन, GST, TDS और अधिक — मुफ्त, तुरंत, सूत्र व समझाइश सहित।</p>
           <div className="mt-6 relative max-w-xl">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="कैलकुलेटर खोजें — EMI, GST, ब्याज, मूल्यह्रास…" aria-label="कैलकुलेटर खोजें" className="pl-9 h-12 bg-white text-foreground" />
+            <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="कैलकुलेटर खोजें — EMI, GST, ब्याज, डेप्रिसिएशन…" aria-label="कैलकुलेटर खोजें" className="pl-9 h-12 bg-white text-foreground" />
           </div>
           <p className="text-white/70 text-xs mt-3 inline-flex items-center gap-1"><Sparkles className="h-3.5 w-3.5" /> {CALCULATORS.length} कैलकुलेटर · कोई वैधानिक दर तय नहीं (आप डालते हैं)</p>
         </div>

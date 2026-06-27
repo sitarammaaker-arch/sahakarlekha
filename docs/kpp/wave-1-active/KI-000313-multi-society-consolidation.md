@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It lets one login handle many societies, each with its own books, while still seeing a combined picture — handy for federations and shared accountants.
 
-**Hindi explanation (आसान हिंदी):** बहु-समिति समेकन यानी कई समितियों को एक ही जगह से संभालना व देखना — संघ, शीर्ष संस्था, या कई समितियों को संभालने वाले लेखाकार/अंकेक्षक के लिए उपयोगी। हर समिति की बही अलग रहती है, पर उन्हें साथ-साथ देखा जा सकता है।
+**Hindi explanation (आसान हिंदी):** बहु-समिति समेकन यानी कई समितियों को एक ही जगह से संभालना व देखना — संघ, शीर्ष संस्था, या कई समितियों को संभालने वाले लेखाकार/ऑडिटर के लिए उपयोगी। हर समिति की बही अलग रहती है, पर उन्हें साथ-साथ देखा जा सकता है।
 
 **English explanation:** Managing multiple societies from one place with separate books but a combined view — for federations and multi-society professionals.
 

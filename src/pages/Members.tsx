@@ -164,11 +164,11 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
     </div>
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       <div className="space-y-1">
-        <Label className="text-xs">{hi ? 'अंश संख्या' : 'Shares'}</Label>
+        <Label className="text-xs">{hi ? 'शेयर संख्या' : 'Shares'}</Label>
         <Input type="number" value={form.shareCount} onChange={e => f('shareCount', e.target.value)} min="0" />
       </div>
       <div className="space-y-1">
-        <Label className="text-xs">{hi ? 'प्रति अंश' : 'Face Value'}</Label>
+        <Label className="text-xs">{hi ? 'प्रति शेयर' : 'Face Value'}</Label>
         <Input type="number" value={form.shareFaceValue} onChange={e => f('shareFaceValue', e.target.value)} min="0" step="0.01" />
       </div>
       <div className="space-y-1">
@@ -212,7 +212,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
         <Input value={form.nomineeOccupation} onChange={e => f('nomineeOccupation', e.target.value)} />
       </div>
       <div className="space-y-1">
-        <Label className="text-xs">{hi ? 'नामांकित अंश' : 'Nominee Shares'}</Label>
+        <Label className="text-xs">{hi ? 'नामांकित शेयर' : 'Nominee Shares'}</Label>
         <Input type="number" value={form.nomineeShares} onChange={e => f('nomineeShares', e.target.value)} min="0" />
       </div>
     </div>
@@ -648,7 +648,7 @@ const Members: React.FC = () => {
                 ...(viewMember.state ? [[hi ? 'राज्य' : 'State', viewMember.state]] : []),
                 ...(viewMember.pinCode ? [[hi ? 'पिन कोड' : 'Pin Code', viewMember.pinCode]] : []),
                 ...(viewMember.paymentMode ? [[hi ? 'भुगतान माध्यम' : 'Payment Mode', viewMember.paymentMode]] : []),
-                ...(viewMember.shareCount ? [[hi ? 'अंश संख्या' : 'Shares', String(viewMember.shareCount)]] : []),
+                ...(viewMember.shareCount ? [[hi ? 'शेयर संख्या' : 'Shares', String(viewMember.shareCount)]] : []),
                 ...(viewMember.nomineeName ? [[hi ? 'नामांकित' : 'Nominee', viewMember.nomineeName]] : []),
                 ...(viewMember.nomineeRelation ? [[hi ? 'सम्बन्ध' : 'Relation', viewMember.nomineeRelation]] : []),
                 ...(viewMember.nomineePhone ? [[hi ? 'नामांकित फ़ोन' : 'Nominee Phone', viewMember.nomineePhone]] : []),
@@ -678,7 +678,7 @@ const Members: React.FC = () => {
                   <SheetTitle className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <BookOpen className="h-5 w-5 text-primary" />
-                      {hi ? 'सदस्य खाता बही' : 'Member Share Ledger'}
+                      {hi ? 'सदस्य लेजर' : 'Member Share Ledger'}
                     </div>
                     <Button
                       size="sm"

@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is the home screen showing the most important numbers at a glance — cash, bank, members, surplus — so you know the society's status instantly.
 
-**Hindi explanation (आसान हिंदी):** डैशबोर्ड सॉफ्टवेयर का मुख्य (होम) स्क्रीन है जो समिति के ज़रूरी आँकड़े एक नज़र में दिखाता है — रोकड़ व बैंक शेष, सदस्य, आय/व्यय, बकाया। इससे नेतृत्व बिना हर रिपोर्ट खोले समिति की स्थिति तुरंत देख लेता है।
+**Hindi explanation (आसान हिंदी):** डैशबोर्ड सॉफ्टवेयर का मुख्य (होम) स्क्रीन है जो समिति के ज़रूरी आँकड़े एक नज़र में दिखाता है — कैश व बैंक शेष, सदस्य, आय/व्यय, बकाया। इससे नेतृत्व बिना हर रिपोर्ट खोले समिति की स्थिति तुरंत देख लेता है।
 
 **English explanation:** A summary home screen of key metrics, giving managers and the board a quick health view of the society.
 

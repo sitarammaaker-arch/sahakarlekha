@@ -47,7 +47,7 @@ const Glossary: React.FC = () => {
 
   useDocumentMeta({
     title: 'सहकारी लेखांकन शब्दकोश (Glossary) — हर शब्द आसान भाषा में | SahakarLekha',
-    description: 'रोकड़ बही से बैलेंस शीट तक — सहकारी समिति लेखांकन के मुख्य शब्दों का आसान हिन्दी व English शब्दकोश। हर शब्द से जुड़ी गाइड, मदद व सॉफ्टवेयर तक पहुँचें।',
+    description: 'कैश बुक से बैलेंस शीट तक — सहकारी समिति लेखांकन के मुख्य शब्दों का आसान हिन्दी व English शब्दकोश। हर शब्द से जुड़ी गाइड, मदद व सॉफ्टवेयर तक पहुँचें।',
     canonicalPath: '/glossary',
     jsonLd,
   });
@@ -79,7 +79,7 @@ const Glossary: React.FC = () => {
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="शब्द खोजें — रोकड़ बही, voucher, खाता, debit…"
+              placeholder="शब्द खोजें — कैश बुक, voucher, खाता, debit…"
               aria-label="शब्दकोश में खोजें"
               className="pl-9 h-12 bg-white text-foreground"
             />

@@ -24,11 +24,11 @@ const SITE = 'https://sahakarlekha.com';
 
 /* A human label for an in-app route, for "related module / links" buttons. */
 const ROUTE_LABELS: Record<string, string> = {
-  '/vouchers': 'वाउचर', '/cash-book': 'रोकड़ बही', '/bank-book': 'बैंक बही',
-  '/ledger': 'खाता बही', '/ledger-heads': 'लेजर हेड', '/day-book': 'रोज़नामचा',
+  '/vouchers': 'वाउचर', '/cash-book': 'कैश बुक', '/bank-book': 'बैंक बुक',
+  '/ledger': 'लेजर', '/ledger-heads': 'लेजर हेड', '/day-book': 'डे बुक',
   '/members': 'सदस्य', '/member-application': 'सदस्य आवेदन', '/share-register': 'शेयर रजिस्टर',
   '/balance-sheet': 'बैलेंस शीट', '/profit-loss': 'लाभ-हानि', '/trial-balance': 'ट्रायल बैलेंस',
-  '/receipts-payments': 'प्राप्ति-भुगतान', '/reports': 'रिपोर्ट', '/dashboard': 'डैशबोर्ड',
+  '/receipts-payments': 'रसीद-भुगतान', '/reports': 'रिपोर्ट', '/dashboard': 'डैशबोर्ड',
   '/society-setup': 'समिति सेटअप', '/backup-restore': 'बैकअप व रिस्टोर', '/bank-reconciliation': 'बैंक समाधान',
   '/register': 'मुफ्त रजिस्टर', '/software': 'सॉफ्टवेयर', '/pricing': 'मूल्य',
   '/guide': 'गाइड', '/blog': 'ब्लॉग', '/faq': 'सामान्य प्रश्न', '/ask': 'पूछें',

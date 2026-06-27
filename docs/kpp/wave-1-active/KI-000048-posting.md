@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** Posting means copying each entry into the right account's page, so every account's running total stays up to date.
 
-**Hindi explanation (आसान हिंदी):** पोस्टिंग का मतलब है — जर्नल/वाउचर की एंट्री को संबंधित खाता बही (ledger) के खातों में चढ़ाना, ताकि हर खाते में उसके सारे लेन-देन इकट्ठा हों और शेष (balance) सही दिखे। आसान शब्दों में — एंट्री को सही "खाते के पन्ने" पर ले जाना।
+**Hindi explanation (आसान हिंदी):** पोस्टिंग का मतलब है — जर्नल/वाउचर की एंट्री को संबंधित लेजर (ledger) के खातों में चढ़ाना, ताकि हर खाते में उसके सारे लेन-देन इकट्ठा हों और शेष (balance) सही दिखे। आसान शब्दों में — एंट्री को सही "खाते के पन्ने" पर ले जाना।
 
 **English explanation:** Moving a recorded entry into its ledger account(s); in software this happens automatically the moment a voucher is saved.
 
@@ -42,7 +42,7 @@ review_schedule: 2027-06-27
 **Suggested FAQ:** "पोस्टिंग (posting) क्या होती है?"
 **Suggested article title:** "पोस्टिंग क्या है — एंट्री से खाते तक"
 **Suggested help page:** — (concept; supports ledger view)
-**Suggested glossary entry:** पोस्टिंग · Posting — वाउचर/जर्नल एंट्री को खाता बही में चढ़ाना।
+**Suggested glossary entry:** पोस्टिंग · Posting — वाउचर/जर्नल एंट्री को लेजर में चढ़ाना।
 **Suggested video title:** "Posting क्या होती है? आसान भाषा में"
 **Suggested downloadable asset:** — (covered by ledger concept)
 **Suggested calculator:** — (not applicable)

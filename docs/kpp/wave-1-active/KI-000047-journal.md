@@ -4,7 +4,7 @@ topic_id: C027
 research_id: SMRD:C027
 evidence_id: EV-000047
 title: Journal
-hindi_name: जर्नल / रोज़नामचा
+hindi_name: जर्नल / डे बुक
 english_name: Journal
 category: Accounting Foundations
 knowledge_type: definitional
@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** The journal is the "first note" of a transaction — written in order of date, showing which account is debited and which is credited, before it moves to the ledger.
 
-**Hindi explanation (आसान हिंदी):** जर्नल वह पहली बही है जिसमें हर लेन-देन सबसे पहले तारीख के क्रम में लिखा जाता है — जिसमें यह दिखता है कि किस खाते को "नाम" (Dr) और किसे "जमा" (Cr) करना है। इसके बाद यही एंट्री खाता बही (ledger) में पोस्ट होती है। आसान शब्दों में — लेन-देन का "पहला रिकॉर्ड"।
+**Hindi explanation (आसान हिंदी):** जर्नल वह पहली बही है जिसमें हर लेन-देन सबसे पहले तारीख के क्रम में लिखा जाता है — जिसमें यह दिखता है कि किस खाते को "नाम" (Dr) और किसे "जमा" (Cr) करना है। इसके बाद यही एंट्री लेजर (ledger) में पोस्ट होती है। आसान शब्दों में — लेन-देन का "पहला रिकॉर्ड"।
 
 **English explanation:** The book of original entry: transactions are journalised (with debit and credit) chronologically, then posted to ledger accounts.
 

@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** It is the society's money kept in a bank — and the matching account in the books that records every deposit and withdrawal.
 
-**Hindi explanation (आसान हिंदी):** बैंक खाता वह खाता है जो समिति किसी बैंक में रखती है। लेखांकन में यह एक परिसंपत्ति खाता है, जिसमें उस बैंक में जमा और निकासी सब दर्ज होती है। आसान शब्दों में — बैंक में रखा समिति का पैसा और बही में उसका हिसाब।
+**Hindi explanation (आसान हिंदी):** बैंक खाता वह खाता है जो समिति किसी बैंक में रखती है। लेखांकन में यह एक एसेट खाता है, जिसमें उस बैंक में जमा और निकासी सब दर्ज होती है। आसान शब्दों में — बैंक में रखा समिति का पैसा और बही में उसका हिसाब।
 
 **English explanation:** A society's account at a bank, mirrored by an asset ledger account that records deposits and withdrawals for that bank.
 
@@ -42,8 +42,8 @@ review_schedule: 2027-06-27
 **Suggested FAQ:** "बैंक खाता लेखांकन में कैसे रखा जाता है?"
 **Suggested article title:** "बैंक खाता — समिति का बैंक पैसा कैसे ट्रैक करें"
 **Suggested help page:** "Bank Book से बैंक जोड़ें"
-**Suggested glossary entry:** बैंक खाता · Bank Account — बैंक में रखे पैसे का परिसंपत्ति खाता।
-**Suggested video title:** "बैंक खाता बही में कैसे चलता है?"
+**Suggested glossary entry:** बैंक खाता · Bank Account — बैंक में रखे पैसे का एसेट खाता।
+**Suggested video title:** "बैंक लेजर में कैसे चलता है?"
 **Suggested downloadable asset:** — (covered by bank book)
 **Suggested calculator:** — (not applicable)
 **Suggested software module:** /bank-book

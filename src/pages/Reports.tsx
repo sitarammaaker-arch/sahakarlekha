@@ -52,7 +52,7 @@ const Reports: React.FC = () => {
     {
       key: 'cashBook',
       title: 'Cash Book Report',
-      titleHi: 'नकद बही रिपोर्ट',
+      titleHi: 'कैश बुक रिपोर्ट',
       description: 'Daily cash transactions with opening and closing balance',
       descriptionHi: 'प्रारंभिक व अंतिम शेष के साथ दैनिक नकद लेनदेन',
       icon: Wallet,
@@ -62,7 +62,7 @@ const Reports: React.FC = () => {
     {
       key: 'bankBook',
       title: 'Bank Book Report',
-      titleHi: 'बैंक बही रिपोर्ट',
+      titleHi: 'बैंक बुक रिपोर्ट',
       description: 'Bank account statement with cheque details',
       descriptionHi: 'चेक विवरण के साथ बैंक खाता विवरण',
       icon: Building2,
@@ -72,7 +72,7 @@ const Reports: React.FC = () => {
     {
       key: 'ledger',
       title: 'General Ledger',
-      titleHi: 'खाता बही',
+      titleHi: 'लेजर',
       description: 'Account-wise detailed transactions',
       descriptionHi: 'खाता-वार विस्तृत लेनदेन',
       icon: BookOpen,
@@ -92,7 +92,7 @@ const Reports: React.FC = () => {
     {
       key: 'trialBalance',
       title: 'Trial Balance',
-      titleHi: 'तलपट',
+      titleHi: 'ट्रायल बैलेंस',
       description: 'Summary of all ledger balances',
       descriptionHi: 'सभी खातों के शेष का सारांश',
       icon: Scale,
@@ -112,9 +112,9 @@ const Reports: React.FC = () => {
     {
       key: 'receiptsPayments',
       title: 'Receipts & Payments',
-      titleHi: 'प्राप्ति एवं भुगतान',
+      titleHi: 'रसीद एवं भुगतान',
       description: 'Cash and bank receipts & payments summary',
-      descriptionHi: 'नकद व बैंक प्राप्ति एवं भुगतान सारांश',
+      descriptionHi: 'नकद व बैंक रसीद एवं भुगतान सारांश',
       icon: IndianRupee,
       path: '/receipts-payments',
       color: 'text-success bg-success/10 border-success/30',
@@ -122,9 +122,9 @@ const Reports: React.FC = () => {
     {
       key: 'balanceSheet',
       title: 'Balance Sheet',
-      titleHi: 'तुलन पत्र',
+      titleHi: 'बैलेंस शीट',
       description: 'Assets and liabilities statement',
-      descriptionHi: 'संपत्ति व देयता विवरण',
+      descriptionHi: 'संपत्ति व लायबिलिटी विवरण',
       icon: FileSpreadsheet,
       path: '/balance-sheet',
       color: 'text-primary bg-primary/10 border-primary/30',
@@ -132,10 +132,10 @@ const Reports: React.FC = () => {
   ];
 
   const auditLinks = [
-    { labelEn: 'Balance Sheet', labelHi: 'तुलन पत्र', icon: FileSpreadsheet, path: '/balance-sheet' },
+    { labelEn: 'Balance Sheet', labelHi: 'बैलेंस शीट', icon: FileSpreadsheet, path: '/balance-sheet' },
     { labelEn: 'Member List', labelHi: 'सदस्य सूची', icon: Users, path: '/members' },
     { labelEn: 'Audit Register', labelHi: 'ऑडिट रजिस्टर', icon: ShieldCheck, path: '/audit-register' },
-    { labelEn: 'Trial Balance', labelHi: 'तलपट', icon: Scale, path: '/trial-balance' },
+    { labelEn: 'Trial Balance', labelHi: 'ट्रायल बैलेंस', icon: Scale, path: '/trial-balance' },
   ];
 
   return (

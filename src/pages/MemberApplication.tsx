@@ -226,20 +226,20 @@ const MemberApplication: React.FC = () => {
         {/* Share & Fee Details */}
         <Card className="mb-4">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">{hi ? 'अंश एवं शुल्क विवरण' : 'Share & Fee Details'}</CardTitle>
+            <CardTitle className="text-base">{hi ? 'शेयर एवं शुल्क विवरण' : 'Share & Fee Details'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>{hi ? 'अंशों की संख्या' : 'Number of Shares'}</Label>
+                <Label>{hi ? 'शेयरों की संख्या' : 'Number of Shares'}</Label>
                 <Input type="number" value={form.shareCount} onChange={e => f('shareCount', e.target.value)} placeholder="10" min="1" />
               </div>
               <div className="space-y-2">
-                <Label>{hi ? 'प्रति अंश मूल्य (₹)' : 'Face Value per Share (₹)'}</Label>
+                <Label>{hi ? 'प्रति शेयर मूल्य (₹)' : 'Face Value per Share (₹)'}</Label>
                 <Input type="number" value={form.shareFaceValue} onChange={e => f('shareFaceValue', e.target.value)} placeholder="100" min="1" step="0.01" />
               </div>
               <div className="space-y-2">
-                <Label>{hi ? 'अंश पूँजी (₹)' : 'Share Capital (₹)'}</Label>
+                <Label>{hi ? 'शेयर कैपिटल (₹)' : 'Share Capital (₹)'}</Label>
                 <Input type="number" value={form.shareCapital} onChange={e => f('shareCapital', e.target.value)} placeholder="1000" min="0" step="0.01" />
               </div>
             </div>
@@ -266,7 +266,7 @@ const MemberApplication: React.FC = () => {
         {/* Nominee Details */}
         <Card className="mb-4">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">{hi ? 'नामांकित व्यक्ति (Nominee) विवरण' : 'Nominee Details'}</CardTitle>
+            <CardTitle className="text-base">{hi ? 'नॉमिनी (Nominee) विवरण' : 'Nominee Details'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -299,7 +299,7 @@ const MemberApplication: React.FC = () => {
                 <Textarea value={form.nomineeAddress} onChange={e => f('nomineeAddress', e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>{hi ? 'नामांकित के अंश' : 'Nominee Shares'}</Label>
+                <Label>{hi ? 'नामांकित के शेयर' : 'Nominee Shares'}</Label>
                 <Input type="number" value={form.nomineeShares} onChange={e => f('nomineeShares', e.target.value)} min="0" />
                 <div className="space-y-2 mt-2">
                   <Label>{hi ? 'नामांकित का फ़ोन' : 'Nominee Phone'}</Label>

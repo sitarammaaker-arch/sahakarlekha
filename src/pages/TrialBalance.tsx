@@ -145,7 +145,7 @@ const TrialBalance: React.FC = () => {
             <Scale className="h-7 w-7 text-primary" />
             {t('trialBalance')}
           </h1>
-          <p className="text-muted-foreground">{language === 'hi' ? 'खातों का तलपट' : 'Trial Balance of Accounts'}</p>
+          <p className="text-muted-foreground">{language === 'hi' ? 'खातों का ट्रायल बैलेंस' : 'Trial Balance of Accounts'}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2" onClick={() => generateTrialBalancePDF(balances, society, asOnDate, language)}>
@@ -163,13 +163,13 @@ const TrialBalance: React.FC = () => {
       {isBalanced ? (
         <Alert className="bg-success/10 border-success/30">
           <CheckCircle className="h-5 w-5 text-success" />
-          <AlertTitle className="text-success">{language === 'hi' ? 'तलपट संतुलित है' : 'Trial Balance is Balanced'}</AlertTitle>
+          <AlertTitle className="text-success">{language === 'hi' ? 'ट्रायल बैलेंस संतुलित है' : 'Trial Balance is Balanced'}</AlertTitle>
           <AlertDescription>{language === 'hi' ? 'डेबिट और क्रेडिट बराबर हैं। खाते सही हैं।' : 'Debit and Credit totals match. Accounts are correct.'}</AlertDescription>
         </Alert>
       ) : (
         <Alert variant="destructive">
           <AlertTriangle className="h-5 w-5" />
-          <AlertTitle>{language === 'hi' ? 'तलपट असंतुलित है!' : 'Trial Balance is NOT Balanced!'}</AlertTitle>
+          <AlertTitle>{language === 'hi' ? 'ट्रायल बैलेंस असंतुलित है!' : 'Trial Balance is NOT Balanced!'}</AlertTitle>
           <AlertDescription>
             {language === 'hi' ? `अंतर: ${fmt(Math.abs(totalDebit - totalCredit))}` : `Difference: ${fmt(Math.abs(totalDebit - totalCredit))}`}
           </AlertDescription>
@@ -191,7 +191,7 @@ const TrialBalance: React.FC = () => {
       <Card className="shadow-card">
         <CardHeader className="border-b">
           <div className="text-center">
-            <CardTitle className="text-xl">{language === 'hi' ? 'तलपट' : 'Trial Balance'}</CardTitle>
+            <CardTitle className="text-xl">{language === 'hi' ? 'ट्रायल बैलेंस' : 'Trial Balance'}</CardTitle>
             <p className="text-sm text-muted-foreground mt-1">{language === 'hi' ? society.nameHi : society.name}</p>
             <p className="text-sm text-muted-foreground">{language === 'hi' ? 'दिनांक' : 'As on'}: {fmtDate(asOnDate)}</p>
           </div>
@@ -199,7 +199,7 @@ const TrialBalance: React.FC = () => {
         <CardContent className="pt-0">
           <p className="text-xs text-muted-foreground mb-2">
             {language === 'hi'
-              ? 'NCDC अनुलग्नक-I प्रारूप: दो खंड — (I) देयताएं एवं आय, (II) संपत्ति एवं व्यय। समापन डेबिट = समापन क्रेडिट होने पर तलपट संतुलित है।'
+              ? 'NCDC अनुलग्नक-I प्रारूप: दो खंड — (I) देयताएं एवं आय, (II) संपत्ति एवं व्यय। समापन डेबिट = समापन क्रेडिट होने पर ट्रायल बैलेंस संतुलित है।'
               : 'NCDC Annexure-I format: two sections — (I) Liabilities & Income, (II) Assets & Expenditure. Balanced when total Closing Dr = total Closing Cr.'}
           </p>
           <div className="rounded-lg border overflow-x-auto">
@@ -208,10 +208,10 @@ const TrialBalance: React.FC = () => {
                 <TableRow className="bg-muted/50">
                   <TableHead className="font-semibold w-12">{language === 'hi' ? 'क्र.' : 'S.No.'}</TableHead>
                   <TableHead className="font-semibold">{language === 'hi' ? 'खाते का नाम' : 'Account Name'}</TableHead>
-                  <TableHead className="font-semibold text-right">{language === 'hi' ? 'प्रारंभिक शेष' : 'Opening'}</TableHead>
+                  <TableHead className="font-semibold text-right">{language === 'hi' ? 'ओपनिंग बैलेंस' : 'Opening'}</TableHead>
                   <TableHead className="font-semibold text-right">{t('debit')} (₹)</TableHead>
                   <TableHead className="font-semibold text-right">{t('credit')} (₹)</TableHead>
-                  <TableHead className="font-semibold text-right">{language === 'hi' ? 'समापन शेष' : 'Closing'}</TableHead>
+                  <TableHead className="font-semibold text-right">{language === 'hi' ? 'क्लोज़िंग बैलेंस' : 'Closing'}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

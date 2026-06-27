@@ -25,7 +25,7 @@ review_schedule: 2027-06-27
 
 **Plain-language explanation:** An account is a labelled "folder" for one thing (like Cash). Every entry touching that thing goes into its folder, so you can always see its total.
 
-**Hindi explanation (आसान हिंदी):** खाता एक रिकॉर्ड है जिसमें किसी एक चीज़ — जैसे रोकड़, बैंक, कोई सदस्य, या कोई खर्च — के सारे लेन-देन एक जगह रखे जाते हैं। इसमें उस चीज़ का बढ़ना, घटना और मौजूदा शेष दिखता है। आसान शब्दों में — हर चीज़ का अलग "खाता/फ़ोल्डर"।
+**Hindi explanation (आसान हिंदी):** खाता एक रिकॉर्ड है जिसमें किसी एक चीज़ — जैसे कैश, बैंक, कोई सदस्य, या कोई खर्च — के सारे लेन-देन एक जगह रखे जाते हैं। इसमें उस चीज़ का बढ़ना, घटना और मौजूदा शेष दिखता है। आसान शब्दों में — हर चीज़ का अलग "खाता/फ़ोल्डर"।
 
 **English explanation:** The basic unit of recording: a heading under which all related transactions are collected to show its balance.
 

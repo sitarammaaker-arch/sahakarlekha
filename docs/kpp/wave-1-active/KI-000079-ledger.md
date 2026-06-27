@@ -4,7 +4,7 @@ topic_id: C032
 research_id: SMRD:C032
 evidence_id: EV-000079
 title: Ledger
-hindi_name: खाता बही
+hindi_name: लेजर
 english_name: Ledger
 category: Ledger Concepts
 knowledge_type: definitional
@@ -19,13 +19,13 @@ last_updated: 2026-06-27
 review_schedule: 2027-06-27
 ---
 
-# KI-000079 · Ledger (खाता बही)
+# KI-000079 · Ledger (लेजर)
 
 **Definition:** A ledger is the book that holds all the accounts of a society, where posted entries are grouped account-wise to show each account's transactions and closing balance.
 
 **Plain-language explanation:** The ledger is the master book of all accounts — open any account and you see every entry and its balance in one place.
 
-**Hindi explanation (आसान हिंदी):** खाता बही (ledger) वह मुख्य बही है जिसमें समिति के सारे खाते रखे जाते हैं। हर खाते में उसकी सभी एंट्री और मौजूदा शेष एक साथ दिखता है। आसान शब्दों में — सब खातों की "मास्टर किताब"। किसी भी खाते को खोलो तो उसका पूरा लेन-देन और बैलेंस मिल जाता है।
+**Hindi explanation (आसान हिंदी):** लेजर (ledger) वह मुख्य बही है जिसमें समिति के सारे खाते रखे जाते हैं। हर खाते में उसकी सभी एंट्री और मौजूदा शेष एक साथ दिखता है। आसान शब्दों में — सब खातों की "मास्टर किताब"। किसी भी खाते को खोलो तो उसका पूरा लेन-देन और बैलेंस मिल जाता है।
 
 **English explanation:** The principal book of accounts; posting collects each account's entries here so balances can be read and a trial balance prepared.
 
@@ -39,16 +39,16 @@ review_schedule: 2027-06-27
 
 **Internal links:** /guide/daybook-and-ledger · /ledger
 
-**Suggested FAQ:** "खाता बही (ledger) क्या होती है?"
-**Suggested article title:** "खाता बही क्या है — सब खातों की मास्टर किताब"
+**Suggested FAQ:** "लेजर (ledger) क्या होती है?"
+**Suggested article title:** "लेजर क्या है — सब खातों की मास्टर किताब"
 **Suggested help page:** "Ledger (खाता) कैसे बनाएं"
-**Suggested glossary entry:** खाता बही · Ledger — समिति के सभी खातों व उनके शेष रखने वाली मुख्य बही।
+**Suggested glossary entry:** लेजर · Ledger — समिति के सभी खातों व उनके शेष रखने वाली मुख्य बही।
 **Suggested video title:** "Ledger क्या होती है? आसान भाषा में"
 **Suggested downloadable asset:** — (covered by COA starter list)
 **Suggested calculator:** — (not applicable)
 **Suggested software module:** /ledger
 
-**Search intent:** informational — "ledger in accounting / खाता बही"
+**Search intent:** informational — "ledger in accounting / लेजर"
 **User persona:** EMP, ACC
 **Learning objectives:**
 - Define the ledger and what it groups.
