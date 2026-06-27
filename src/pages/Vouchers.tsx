@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { VoucherType, VoucherLine } from '@/types';
 import { Plus, Minus } from 'lucide-react';
+import GlossaryHint from '@/components/glossary/GlossaryHint';
 import { getNextVoucherNo, VOUCHER_TEMPLATES, ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import type { LedgerAccount } from '@/types';
 import { validateVoucher } from '@/lib/validation';
@@ -455,8 +456,9 @@ const Vouchers: React.FC = () => {
             <FileText className="h-7 w-7 text-primary" />
             {t('vouchers')}
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground flex items-center gap-2">
             {language === 'hi' ? 'वाउचर प्रविष्टि प्रणाली' : 'Voucher Entry System'}
+            <GlossaryHint slug="voucher" label={language === 'hi' ? 'वाउचर क्या है?' : 'What is a Voucher?'} />
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">

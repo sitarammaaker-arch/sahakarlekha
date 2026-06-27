@@ -22,6 +22,7 @@ import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import type { EntityLink } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList } from 'lucide-react';
+import GlossaryHint from '@/components/glossary/GlossaryHint';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MemberType, CasteCategory } from '@/types';
 import { useToast } from '@/hooks/use-toast';
@@ -471,7 +472,10 @@ const Members: React.FC = () => {
             <Users className="h-7 w-7 text-accent" />
             {t('members')}
           </h1>
-          <p className="text-muted-foreground">{hi ? 'समिति सदस्यों का प्रबंधन' : 'Manage society members'}</p>
+          <p className="text-muted-foreground flex items-center gap-2">
+            {hi ? 'समिति सदस्यों का प्रबंधन' : 'Manage society members'}
+            <GlossaryHint slug="membership" label={hi ? 'सदस्य कौन होता है?' : 'Who is a member?'} />
+          </p>
         </div>
         <div className="flex gap-2">
           {canEdit && (

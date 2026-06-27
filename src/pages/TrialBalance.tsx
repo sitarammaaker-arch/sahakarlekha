@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Scale, Download, CheckCircle, AlertTriangle, Calendar, FileSpreadsheet } from 'lucide-react';
+import GlossaryHint from '@/components/glossary/GlossaryHint';
 import { cn } from '@/lib/utils';
 import { generateTrialBalancePDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
@@ -145,7 +146,10 @@ const TrialBalance: React.FC = () => {
             <Scale className="h-7 w-7 text-primary" />
             {t('trialBalance')}
           </h1>
-          <p className="text-muted-foreground">{language === 'hi' ? 'खातों का तलपट' : 'Trial Balance of Accounts'}</p>
+          <p className="text-muted-foreground flex items-center gap-2">
+            {language === 'hi' ? 'खातों का तलपट' : 'Trial Balance of Accounts'}
+            <GlossaryHint slug="double-entry" label={language === 'hi' ? 'Dr = Cr क्यों मिलता है?' : 'Why Dr = Cr?'} />
+          </p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2" onClick={() => generateTrialBalancePDF(balances, society, asOnDate, language)}>
