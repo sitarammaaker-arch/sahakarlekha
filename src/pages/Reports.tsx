@@ -21,6 +21,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import GlossaryHint from '@/components/glossary/GlossaryHint';
 
 interface ReportCard {
   key: string;
@@ -146,8 +147,9 @@ const Reports: React.FC = () => {
           <BarChart3 className="h-7 w-7 text-primary" />
           {t('reports')}
         </h1>
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground flex items-center gap-2">
           {language === 'hi' ? 'सभी वित्तीय रिपोर्ट एक स्थान पर' : 'All financial reports in one place'}
+          <GlossaryHint slug="how-to-read-financial-reports" label={language === 'hi' ? 'रिपोर्ट कैसे पढ़ें?' : 'How to read reports?'} />
         </p>
       </div>
 

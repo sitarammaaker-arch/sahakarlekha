@@ -13,8 +13,9 @@ import { COOKBOOK_ENTRIES } from '@/content/cookbook';
 import { GUIDE_ORDER, findEntry } from '@/content/guide';
 import { BLOG_POSTS } from '@/content/blog';
 import { FAQ_CATEGORIES } from '@/content/faq';
+import { allGlossary } from '@/content/glossary';
 
-export type SearchType = 'help' | 'cookbook' | 'guide' | 'blog' | 'faq';
+export type SearchType = 'help' | 'cookbook' | 'guide' | 'blog' | 'faq' | 'glossary';
 
 export interface SearchDoc {
   id: string;
@@ -36,6 +37,7 @@ export const TYPE_LABEL: Record<SearchType, string> = {
   guide: 'गाइड',
   blog: 'ब्लॉग',
   faq: 'सामान्य प्रश्न (FAQ)',
+  glossary: 'शब्दकोश',
 };
 
 // Synonym groups — variants (Devanagari / roman / common typos / abbreviations) that
@@ -125,6 +127,16 @@ function buildIndex(): SearchDoc[] {
         snippet: it.aHi, category: cat.label,
         haystack: norm([it.q, it.aHi, it.aEn, cat.label].join(' ')),
       });
+    });
+  }
+  // Glossary terms (generated from active Knowledge Items) — searchable in hi/en/mixed.
+  for (const g of allGlossary()) {
+    docs.push({
+      id: `glossary:${g.slug}`, type: 'glossary',
+      title: g.hindiName ? `${g.hindiName} · ${g.englishName}` : g.title,
+      url: `/glossary/${g.slug}`,
+      snippet: g.definition, category: g.category,
+      haystack: norm([g.title, g.hindiName, g.englishName, g.category, g.definition, ...g.keywords].join(' ')),
     });
   }
   INDEX = docs;

@@ -11,7 +11,7 @@
 //   - software routes: parsed from src/content/societyTypes.tsx (single source of truth)
 // Fail-soft: any problem logs a warning and exits 0 so a build is never blocked.
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,6 +25,7 @@ const STATES_FILE = resolve(ROOT, 'src', 'content', 'states.ts');
 const BLOG_FILE = resolve(ROOT, 'src', 'content', 'blog', 'index.ts');
 const HELP_FILE = resolve(ROOT, 'src', 'content', 'help', 'index.ts');
 const COOKBOOK_FILE = resolve(ROOT, 'src', 'content', 'cookbook', 'index.ts');
+const GLOSSARY_DIR = resolve(ROOT, 'docs', 'kpp', 'wave-1-active');
 const COURSE ='सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स';
 
 const esc = (s) =>
@@ -240,6 +241,52 @@ function cookbookPages() {
   return pages;
 }
 
+// ---- glossary routes (generated from ACTIVE Knowledge Items — single source of truth) ----
+// Reads /docs/kpp/wave-1-active/KI-*.md (the same files the app's glossary adapter reads),
+// so the prerendered head + sitemap can never drift from the live glossary.
+function glossaryPages() {
+  const pages = [
+    {
+      path: '/glossary',
+      title: 'सहकारी लेखांकन शब्दकोश (Glossary) — हर शब्द आसान भाषा में | SahakarLekha',
+      description: 'रोकड़ बही से बैलेंस शीट तक — सहकारी समिति लेखांकन के मुख्य शब्दों का आसान हिन्दी व English शब्दकोश।',
+      jsonLd: [crumb([{ name: 'शब्दकोश', item: `${SITE}/glossary` }])],
+    },
+  ];
+  if (!existsSync(GLOSSARY_DIR)) return pages;
+  const files = readdirSync(GLOSSARY_DIR).filter((f) => /^KI-\d+.*\.md$/.test(f));
+  for (const file of files) {
+    const src = readFileSync(resolve(GLOSSARY_DIR, file), 'utf-8');
+    const fm = src.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!fm) continue;
+    const field = (k) => (fm[1].match(new RegExp(`^${k}:\\s*(.*)$`, 'm')) || [])[1]?.trim() || '';
+    if (field('status') && field('status') !== 'active') continue;
+    const slug = file.replace(/^KI-\d+-/, '').replace(/\.md$/, '');
+    const hindi = field('hindi_name');
+    const en = field('english_name') || field('title');
+    const name = hindi ? `${hindi} (${en})` : en;
+    const def = (src.match(/\*\*Definition:\*\*\s*(.+)/) || [])[1]?.trim() || '';
+    const url = `${SITE}/glossary/${slug}`;
+    pages.push({
+      path: `/glossary/${slug}`,
+      title: `${name} — सहकारी लेखांकन शब्दकोश | SahakarLekha`,
+      description: def.slice(0, 158),
+      jsonLd: [
+        {
+          '@context': 'https://schema.org', '@type': 'DefinedTerm', name, description: def,
+          inLanguage: 'hi', url, termCode: field('knowledge_id'),
+          inDefinedTermSet: { '@type': 'DefinedTermSet', name: 'SahakarLekha Glossary', url: `${SITE}/glossary` },
+        },
+        crumb([
+          { name: 'शब्दकोश', item: `${SITE}/glossary` },
+          { name: en, item: url },
+        ]),
+      ],
+    });
+  }
+  return pages;
+}
+
 // ---- sitemap.xml (build-time, from the SAME route sources as the prerender) ----
 // Regenerates the DEPLOYED dist/sitemap.xml so it can never drift from the actual
 // built routes (the hand file had stale /guide/quiz/bhag-N slugs + missing part-10).
@@ -270,8 +317,10 @@ function buildSitemap(dynamicPages) {
   const rank = (path) => {
     if (path === '/blog') return { changefreq: 'weekly', priority: '0.9' };
     if (path === '/software') return { changefreq: 'weekly', priority: '0.8' };
+    if (path === '/glossary') return { changefreq: 'weekly', priority: '0.8' };
     if (path.startsWith('/blog/')) return { changefreq: 'monthly', priority: '0.8' };
     if (path.startsWith('/software/') || path.startsWith('/cooperative-software/')) return { changefreq: 'monthly', priority: '0.8' };
+    if (path.startsWith('/glossary/')) return { changefreq: 'monthly', priority: '0.6' };
     if (path.startsWith('/guide/')) return { changefreq: 'monthly', priority: '0.7' };
     return { changefreq: 'monthly', priority: '0.6' };
   };
@@ -314,7 +363,7 @@ try {
     process.exit(0);
   }
   const template = readFileSync(TEMPLATE, 'utf-8');
-  const pages = [...guidePages(), ...softwarePages(), ...statePages(), ...blogPages(), ...helpPages(), ...cookbookPages()];
+  const pages = [...guidePages(), ...softwarePages(), ...statePages(), ...blogPages(), ...helpPages(), ...cookbookPages(), ...glossaryPages()];
   let n = 0;
   for (const page of pages) {
     if (!page || !page.path) continue;
@@ -323,7 +372,7 @@ try {
     writeFileSync(resolve(outDir, 'index.html'), transform(template, page), 'utf-8');
     n++;
   }
-  console.log(`[prerender] wrote ${n} static pages (guide + software + blog).`);
+  console.log(`[prerender] wrote ${n} static pages (guide + software + blog + glossary).`);
   try {
     const sitemap = buildSitemap(pages);
     writeFileSync(resolve(DIST, 'sitemap.xml'), sitemap, 'utf-8');

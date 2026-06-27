@@ -8,7 +8,8 @@
     "build": "vite build && node scripts/prerender-guide.mjs",
     "build:dev": "vite build --mode development && node scripts/prerender-guide.mjs",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "validate:glossary": "node scripts/validate-glossary.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -1,0 +1,256 @@
+/**
+ * KI-Powered Glossary — Knowledge Adapter.
+ *
+ * The glossary is GENERATED from the ACTIVE Knowledge Items (KPP Wave-1A), which
+ * live as markdown in /docs/kpp/wave-1-active/KI-*.md. Those KI files are the single
+ * source of truth — this module only READS and ADAPTS them into GlossaryEntry shapes.
+ * It never stores its own copy of a definition (no duplication of knowledge).
+ *
+ * Pipeline:  KI markdown (frontmatter + body)  →  parse  →  GlossaryEntry  →  pages.
+ * Adding/activating a KI .md file automatically adds a glossary term — no manual writing.
+ */
+
+export interface RelatedRef {
+  id: string;      // KI-000004
+  label: string;   // "Member"
+  slug?: string;   // resolved slug if that KI is active (so we can link it)
+}
+
+export interface GlossaryEntry {
+  // identity (reused from the KI — never minted here)
+  id: string;            // KI-000001
+  slug: string;          // cooperative-society (from filename)
+  topicId: string;       // SCOS cluster (C001)
+  evidenceId: string;    // KAE evidence (EV-000001)
+  // naming
+  title: string;
+  hindiName: string;
+  englishName: string;
+  // classification
+  category: string;
+  knowledgeType: string;
+  difficulty: string;
+  personas: string[];
+  jurisdiction: string;
+  // governance
+  evidenceLevel: string;
+  readiness: string;     // A | B | C | D
+  status: string;        // active
+  lastUpdated: string;
+  reviewSchedule: string;
+  // body fields (definition is the single source of truth)
+  definition: string;
+  plain: string;
+  hindi: string;
+  english: string;
+  why: string;
+  misconceptions: string;        // markdown bullet list
+  learningObjectives: string;    // markdown bullet list
+  searchIntent: string;
+  related: RelatedRef[];
+  internalLinks: string[];       // in-app routes (e.g. /guide/introduction)
+  modules: string[];             // related software module routes
+  suggestedFaq?: string;
+  suggestedArticle?: string;
+  suggestedHelp?: string;
+  suggestedVideo?: string;
+  suggestedDownload?: string;
+  suggestedCalculator?: string;
+  // derived
+  keywords: string[];            // lowercased searchable tokens
+  initial: string;               // first letter for A–Z grouping (English)
+}
+
+/* Raw KI markdown, keyed by absolute path. Root-relative glob → reads the docs folder
+   (the KI source of truth) directly; only the 50 active KIs match KI-*.md. */
+const RAW = import.meta.glob('/docs/kpp/wave-1-active/KI-*.md', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+
+/* ---- minimal frontmatter + body parsing (no extra deps) ---- */
+
+function parseFrontmatter(src: string): { fm: Record<string, string>; body: string } {
+  const m = src.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+  if (!m) return { fm: {}, body: src };
+  const fm: Record<string, string> = {};
+  for (const line of m[1].split(/\r?\n/)) {
+    const kv = line.match(/^([a-z_]+):\s*(.*)$/i);
+    if (kv) fm[kv[1].trim()] = kv[2].trim();
+  }
+  return { fm, body: m[2] };
+}
+
+function fmList(v?: string): string[] {
+  if (!v) return [];
+  return v.replace(/^\[|\]$/g, '').split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+/** Split a KI body into { label → content } sections keyed on `**Label:**` markers. */
+function parseSections(body: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const re = /\*\*([^*\n]+?):\*\*/g;
+  const marks: { label: string; start: number; end: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body))) {
+    marks.push({ label: m[1].trim(), start: m.index, end: m.index + m[0].length });
+  }
+  for (let i = 0; i < marks.length; i++) {
+    const next = i + 1 < marks.length ? marks[i + 1].start : body.length;
+    const text = body.slice(marks[i].end, next).trim();
+    out[marks[i].label] = text;
+  }
+  return out;
+}
+
+/** Normalise a label so `Hindi explanation (आसान हिंदी)` → `hindi explanation`. */
+const labelKey = (s: string) => s.replace(/\([^)]*\)/g, '').trim().toLowerCase();
+
+function getSection(sections: Record<string, string>, key: string): string {
+  const want = key.toLowerCase();
+  for (const k of Object.keys(sections)) {
+    if (labelKey(k) === want) return sections[k];
+  }
+  return '';
+}
+
+/** Routes appear as `/foo` tokens, often separated by `·`. */
+function parseRoutes(text: string): string[] {
+  return Array.from(text.matchAll(/(^|[\s·])(\/[a-z0-9/:_-]+)/gi)).map((mm) => mm[2]);
+}
+
+/** Related concepts: `[[KI-000004]] Member · [[KI-000002]] ...` */
+function parseRelated(text: string): RelatedRef[] {
+  const out: RelatedRef[] = [];
+  const re = /\[\[(KI-\d+)\]\]\s*([^·\n]*)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    out.push({ id: m[1], label: m[2].replace(/\(planned\)/i, '').trim() });
+  }
+  return out;
+}
+
+function buildEntry(path: string, raw: string): GlossaryEntry | null {
+  const { fm, body } = parseFrontmatter(raw);
+  if (!fm.knowledge_id || (fm.status && fm.status !== 'active')) return null;
+  const file = path.split('/').pop() || '';
+  const slug = file.replace(/^KI-\d+-/, '').replace(/\.md$/, '');
+  const sections = parseSections(body);
+
+  const title = fm.title || fm.english_name || slug;
+  const hindiName = fm.hindi_name || '';
+  const englishName = fm.english_name || title;
+  const category = fm.category || '';
+
+  const related = parseRelated(getSection(sections, 'related concepts'));
+  const internalLinks = parseRoutes(getSection(sections, 'internal links'));
+  const modules = parseRoutes(getSection(sections, 'suggested software module'));
+
+  const clean = (s: string) => s.replace(/^—.*$/, '').trim(); // "— (not applicable)" → ""
+
+  const keywords = Array.from(
+    new Set(
+      [title, hindiName, englishName, category, slug.replace(/-/g, ' ')]
+        .join(' ')
+        .toLowerCase()
+        .split(/[\s/—·,()]+/)
+        .filter((t) => t.length >= 2),
+    ),
+  );
+
+  const initialSrc = (englishName || title).replace(/[^A-Za-z]/g, '');
+  const initial = initialSrc ? initialSrc[0].toUpperCase() : '#';
+
+  return {
+    id: fm.knowledge_id,
+    slug,
+    topicId: fm.topic_id || '',
+    evidenceId: fm.evidence_id || '',
+    title,
+    hindiName,
+    englishName,
+    category,
+    knowledgeType: fm.knowledge_type || 'definitional',
+    difficulty: fm.difficulty || 'beginner',
+    personas: fmList(fm.user_persona),
+    jurisdiction: fm.jurisdiction || 'CENTRAL',
+    evidenceLevel: fm.evidence_level || '',
+    readiness: fm.content_readiness || 'A',
+    status: fm.status || 'active',
+    lastUpdated: fm.last_updated || '',
+    reviewSchedule: fm.review_schedule || '',
+    definition: getSection(sections, 'definition'),
+    plain: getSection(sections, 'plain-language explanation'),
+    hindi: getSection(sections, 'hindi explanation'),
+    english: getSection(sections, 'english explanation'),
+    why: getSection(sections, 'why it matters'),
+    misconceptions: getSection(sections, 'common misconceptions'),
+    learningObjectives: getSection(sections, 'learning objectives'),
+    searchIntent: getSection(sections, 'search intent'),
+    related,
+    internalLinks,
+    modules,
+    suggestedFaq: clean(getSection(sections, 'suggested faq')) || undefined,
+    suggestedArticle: clean(getSection(sections, 'suggested article title')) || undefined,
+    suggestedHelp: clean(getSection(sections, 'suggested help page')) || undefined,
+    suggestedVideo: clean(getSection(sections, 'suggested video title')) || undefined,
+    suggestedDownload: clean(getSection(sections, 'suggested downloadable asset')) || undefined,
+    suggestedCalculator: clean(getSection(sections, 'suggested calculator')) || undefined,
+    keywords,
+    initial,
+  };
+}
+
+/* Build once at module load. */
+const ENTRIES: GlossaryEntry[] = Object.entries(RAW)
+  .map(([path, raw]) => buildEntry(path, raw))
+  .filter((e): e is GlossaryEntry => e != null)
+  .sort((a, b) => a.englishName.localeCompare(b.englishName));
+
+/* id → slug map so related-concept refs to OTHER active KIs become links. */
+const ID_TO_SLUG = new Map<string, string>(ENTRIES.map((e) => [e.id, e.slug]));
+for (const e of ENTRIES) {
+  for (const r of e.related) r.slug = ID_TO_SLUG.get(r.id);
+}
+
+export function allGlossary(): GlossaryEntry[] {
+  return ENTRIES;
+}
+
+export function findTerm(slug: string): GlossaryEntry | null {
+  return ENTRIES.find((e) => e.slug === slug) ?? null;
+}
+
+/** Entries grouped A–Z by English initial (for the index page). */
+export function glossaryByLetter(): { letter: string; items: GlossaryEntry[] }[] {
+  const map = new Map<string, GlossaryEntry[]>();
+  for (const e of ENTRIES) {
+    const arr = map.get(e.initial) || [];
+    arr.push(e);
+    map.set(e.initial, arr);
+  }
+  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([letter, items]) => ({ letter, items }));
+}
+
+/** Lightweight client filter: matches title/hindi/english/keywords + simple typo tolerance. */
+export function filterGlossary(query: string): GlossaryEntry[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return ENTRIES;
+  const toks = q.split(/\s+/).filter(Boolean);
+  return ENTRIES.filter((e) => {
+    const hay = `${e.title} ${e.hindiName} ${e.englishName} ${e.keywords.join(' ')} ${e.category}`.toLowerCase();
+    return toks.every((t) => hay.includes(t) || (t.length >= 4 && e.keywords.some((k) => k.startsWith(t.slice(0, 4)))));
+  });
+}
+
+/** Up to `n` related glossary terms for a "learning path" (active refs first, then same category). */
+export function learningPath(slug: string, n = 6): GlossaryEntry[] {
+  const self = findTerm(slug);
+  if (!self) return [];
+  const out: GlossaryEntry[] = [];
+  const push = (e?: GlossaryEntry | null) => { if (e && e.slug !== slug && !out.find((x) => x.slug === e.slug)) out.push(e); };
+  for (const r of self.related) if (r.slug) push(findTerm(r.slug));
+  for (const e of ENTRIES) if (e.category === self.category) push(e);
+  return out.slice(0, n);
+}

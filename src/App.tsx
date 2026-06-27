@@ -60,6 +60,8 @@ const SoftwareLanding = lazyWithRetry(() => import("./pages/SoftwareLanding"));
 const StateLanding = lazyWithRetry(() => import("./pages/StateLanding"));
 const BlogIndex = lazyWithRetry(() => import("./pages/BlogIndex"));
 const BlogPost = lazyWithRetry(() => import("./pages/BlogPost"));
+const Glossary = lazyWithRetry(() => import("./pages/Glossary"));
+const GlossaryTerm = lazyWithRetry(() => import("./pages/GlossaryTerm"));
 const Login = lazyWithRetry(() => import("./pages/Login"));
 const Dashboard = lazyWithRetry(() => import("./pages/Dashboard"));
 const CashBook = lazyWithRetry(() => import("./pages/CashBook"));
@@ -219,6 +221,8 @@ const AppRoutes = () => {
       <Route path="/cooperative-software/:state" element={<StateLanding />} />
       <Route path="/blog" element={<BlogIndex />} />
       <Route path="/blog/:slug" element={<BlogPost />} />
+      <Route path="/glossary" element={<Glossary />} />
+      <Route path="/glossary/:slug" element={<GlossaryTerm />} />
 
       {/* Protected Routes */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

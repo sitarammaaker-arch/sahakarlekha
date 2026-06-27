@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { generateCashBookPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import GlossaryHint from '@/components/glossary/GlossaryHint';
 
 const CashBook: React.FC = () => {
   const { t, language } = useLanguage();
@@ -118,7 +119,10 @@ const CashBook: React.FC = () => {
             <Wallet className="h-7 w-7 text-primary" />
             {t('cashBook')}
           </h1>
-          <p className="text-muted-foreground">{language === 'hi' ? 'दैनिक नकद लेनदेन का विवरण' : 'Daily cash transactions record'}</p>
+          <p className="text-muted-foreground flex items-center gap-2">
+            {language === 'hi' ? 'दैनिक नकद लेनदेन का विवरण' : 'Daily cash transactions record'}
+            <GlossaryHint slug="cash-book" label={language === 'hi' ? 'रोकड़ बही क्या है?' : 'What is a Cash Book?'} />
+          </p>
         </div>
         <div className="flex gap-2">
           <div className="flex gap-2 flex-wrap">

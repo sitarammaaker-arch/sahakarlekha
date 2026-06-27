@@ -12,7 +12,7 @@ import { search, TYPE_LABEL, type SearchType } from '@/lib/siteSearch';
 import { Search as SearchIcon, ArrowRight } from 'lucide-react';
 import { WHATSAPP_NUMBER } from '@/lib/socials';
 
-const TYPE_ORDER: SearchType[] = ['help', 'faq', 'cookbook', 'guide', 'blog'];
+const TYPE_ORDER: SearchType[] = ['glossary', 'help', 'faq', 'cookbook', 'guide', 'blog'];
 
 const SiteSearch: React.FC = () => {
   const [params, setParams] = useSearchParams();
