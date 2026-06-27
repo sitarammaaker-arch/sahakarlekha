@@ -505,18 +505,18 @@ const FederationReport: React.FC = () => {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
-            {hi ? '3. अंश पूंजी' : '3. Share Capital'}
+            {hi ? '3. शेयर कैपिटल' : '3. Share Capital'}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="text-center p-4 bg-blue-50 rounded-lg border">
               <div className="text-2xl font-bold text-blue-700">{shareData.sharesIssued.toLocaleString('en-IN')}</div>
-              <div className="text-sm text-muted-foreground mt-1">{hi ? 'जारी किए गए कुल अंश' : 'Total Shares Issued'}</div>
+              <div className="text-sm text-muted-foreground mt-1">{hi ? 'जारी किए गए कुल शेयर' : 'Total Shares Issued'}</div>
             </div>
             <div className="text-center p-4 bg-green-50 rounded-lg border">
               <div className="text-2xl font-bold text-green-700">₹{fmt(shareData.paidUp)}</div>
-              <div className="text-sm text-muted-foreground mt-1">{hi ? 'कुल चुकता पूंजी' : 'Total Paid-up Capital'}</div>
+              <div className="text-sm text-muted-foreground mt-1">{hi ? 'कुल पेड-अप कैपिटल' : 'Total Paid-up Capital'}</div>
             </div>
           </div>
         </CardContent>
@@ -580,7 +580,7 @@ const FederationReport: React.FC = () => {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
-            {hi ? '6. कार्यशील पूंजी' : '6. Working Capital'}
+            {hi ? '6. वर्किंग कैपिटल' : '6. Working Capital'}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -595,7 +595,7 @@ const FederationReport: React.FC = () => {
               <tbody>
                 <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'स्वयं के फंड (इक्विटी)' : 'Total Own Funds (Equity)'}</td><td className="border px-3 py-2 text-right">{fmt(wcData.ownFunds)}</td></tr>
                 <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'कुल उधार (देनदारियां)' : 'Total Borrowings (Liabilities)'}</td><td className="border px-3 py-2 text-right">{fmt(wcData.borrowings)}</td></tr>
-                <tr className="font-bold bg-muted"><td className="border px-3 py-2">{hi ? 'कुल कार्यशील पूंजी' : 'Total Working Capital'}</td><td className="border px-3 py-2 text-right">{fmt(wcData.total)}</td></tr>
+                <tr className="font-bold bg-muted"><td className="border px-3 py-2">{hi ? 'कुल वर्किंग कैपिटल' : 'Total Working Capital'}</td><td className="border px-3 py-2 text-right">{fmt(wcData.total)}</td></tr>
               </tbody>
             </table>
           </div>
@@ -622,7 +622,7 @@ const FederationReport: React.FC = () => {
                 <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'शुद्ध लाभ / (हानि)' : 'Net Profit / (Loss)'}</td><td className="border px-3 py-2 text-right font-semibold">{fmt(plData.netProfit)}</td></tr>
                 <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'वैधानिक संचय निधि' : 'Statutory Reserve Fund'}</td><td className="border px-3 py-2 text-right">{fmt(plData.statutoryReserve)}</td></tr>
                 <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'शिक्षा निधि' : 'Education Fund'}</td><td className="border px-3 py-2 text-right">{fmt(plData.educationFund)}</td></tr>
-                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'लाभांश' : 'Dividend'}</td><td className="border px-3 py-2 text-right">{fmt(plData.dividendFund)}</td></tr>
+                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'डिविडेंड' : 'Dividend'}</td><td className="border px-3 py-2 text-right">{fmt(plData.dividendFund)}</td></tr>
                 <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'अन्य निधि आवंटन' : 'Other Fund Appropriations'}</td><td className="border px-3 py-2 text-right">{fmt(plData.otherAppropriations)}</td></tr>
                 <tr className="font-bold bg-muted"><td className="border px-3 py-2">{hi ? 'शेष राशि (आगे ले जाने हेतु)' : 'Balance carried forward'}</td><td className="border px-3 py-2 text-right">{fmt(plData.balance)}</td></tr>
               </tbody>
@@ -669,7 +669,7 @@ const FederationReport: React.FC = () => {
                 hi ? 'उप-नियमों का पालन किया गया' : 'Bye-laws Complied',
                 hi ? 'AGM आयोजित की गई' : 'AGM Conducted',
                 hi ? 'सदस्य रजिस्टर अद्यतन' : 'Member Register Updated',
-                hi ? 'अंश रजिस्टर अद्यतन' : 'Share Register Updated',
+                hi ? 'शेयर रजिस्टर अद्यतन' : 'Share Register Updated',
               ].map(item => (
                 <div key={item} className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded">
                   <span className="text-green-600 font-bold">✓</span>

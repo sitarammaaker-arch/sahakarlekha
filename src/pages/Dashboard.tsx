@@ -102,9 +102,9 @@ const Dashboard: React.FC = () => {
     if (netProfit > 0 && !reservePosted)
       advisories.push({ severity: 'info', en: `Optional: post a Reserve Fund / Education Fund appropriation on the Reserve Fund page (choose any % or amount)`, hi: `वैकल्पिक: "संचय निधि" पृष्ठ पर संचय/शिक्षा निधि आवंटन पोस्ट कर सकते हैं (कोई भी % या राशि)` });
     if (!bsTallied)
-      advisories.push({ severity: 'critical', en: 'Balance Sheet is not balanced — check for missing or duplicate journal entries', hi: 'तुलन पत्र असंतुलित है — अपूर्ण या दोहरी जर्नल प्रविष्टियां जांचें' });
+      advisories.push({ severity: 'critical', en: 'Balance Sheet is not balanced — check for missing or duplicate journal entries', hi: 'बैलेंस शीट असंतुलित है — अपूर्ण या दोहरी जर्नल प्रविष्टियां जांचें' });
     if (!sec32Ok)
-      advisories.push({ severity: 'critical', en: `Loan portfolio exceeds Sec 32 limit (${sec32Pct.toFixed(0)}% utilized) — pause new loans or increase member share capital`, hi: `ऋण पोर्टफोलियो धारा 32 सीमा से अधिक (${sec32Pct.toFixed(0)}% उपयोग) — नए ऋण रोकें या शेयर पूंजी बढ़ाएं` });
+      advisories.push({ severity: 'critical', en: `Loan portfolio exceeds Sec 32 limit (${sec32Pct.toFixed(0)}% utilized) — pause new loans or increase member share capital`, hi: `ऋण पोर्टफोलियो धारा 32 सीमा से अधिक (${sec32Pct.toFixed(0)}% उपयोग) — नए ऋण रोकें या शेयर कैपिटल बढ़ाएं` });
     else if (sec32Pct >= 80 && loanLimit > 0)
       advisories.push({ severity: 'warning', en: `Loan utilisation at ${sec32Pct.toFixed(0)}% of Sec 32 limit — approaching regulatory ceiling`, hi: `ऋण उपयोग धारा 32 सीमा का ${sec32Pct.toFixed(0)}% — नियामक सीमा के निकट` });
     if (overdueCount > 0)
@@ -123,7 +123,7 @@ const Dashboard: React.FC = () => {
         v.narration.includes(fy)
       );
       if (!divPosted)
-        advisories.push({ severity: 'info', en: `Net profit of ₹${netProfit.toLocaleString('en-IN')} is available — consider distributing dividend to members`, hi: `₹${netProfit.toLocaleString('en-IN')} शुद्ध लाभ उपलब्ध — सदस्यों को लाभांश वितरण पर विचार करें` });
+        advisories.push({ severity: 'info', en: `Net profit of ₹${netProfit.toLocaleString('en-IN')} is available — consider distributing dividend to members`, hi: `₹${netProfit.toLocaleString('en-IN')} शुद्ध लाभ उपलब्ध — सदस्यों को डिविडेंड वितरण पर विचार करें` });
     }
     if (advisories.length === 0)
       advisories.push({ severity: 'info', en: 'All compliance checks passed — cooperative is in good financial health', hi: 'सभी अनुपालन जांचें पास — सहकारी संस्था की वित्तीय स्थिति उत्तम है' });
@@ -460,7 +460,7 @@ const Dashboard: React.FC = () => {
                 na: complianceChecks.netProfit <= 0,
               },
               {
-                label: language === 'hi' ? 'तुलन पत्र संतुलित' : 'Balance Sheet Tallied',
+                label: language === 'hi' ? 'बैलेंस शीट संतुलित' : 'Balance Sheet Tallied',
                 ok: complianceChecks.bsTallied,
                 na: false,
               },

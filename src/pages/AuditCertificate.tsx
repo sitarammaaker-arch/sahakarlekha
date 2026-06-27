@@ -304,14 +304,14 @@ const AuditCertificate: React.FC = () => {
               highlight
             />
             <div className="space-y-1">
-              <Label className="text-xs">{hi ? 'नकद शेष (नकद बही)' : 'Cash Balance (Cash Book)'}</Label>
+              <Label className="text-xs">{hi ? 'नकद शेष (कैश बुक)' : 'Cash Balance (Cash Book)'}</Label>
               <Input type="number" value={cashBookBal} onChange={e => setCashBookBal(e.target.value)} className="h-8 text-sm" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">{hi ? 'बैंक शेष' : 'Bank Balance'}</Label>
               <Input type="number" value={bankBookBal} onChange={e => setBankBookBal(e.target.value)} className="h-8 text-sm" />
             </div>
-            <ReadonlyRow label={hi ? 'अंश पूंजी' : 'Share Capital'} value={`₹ ${fmt(shareCapital)}`} />
+            <ReadonlyRow label={hi ? 'शेयर कैपिटल' : 'Share Capital'} value={`₹ ${fmt(shareCapital)}`} />
             <ReadonlyRow label={hi ? 'सक्रिय सदस्य' : 'Active Members'} value={String(totalMembersCount)} />
           </CardContent>
         </Card>

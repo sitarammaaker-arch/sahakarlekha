@@ -13,8 +13,8 @@ interface Translations {
 export const translations: Translations = {
   // Navigation
   dashboard: { hi: 'डैशबोर्ड', en: 'Dashboard' },
-  cashBook: { hi: 'नकद बही', en: 'Cash Book' },
-  bankBook: { hi: 'बैंक बही', en: 'Bank Book' },
+  cashBook: { hi: 'कैश बुक', en: 'Cash Book' },
+  bankBook: { hi: 'बैंक बुक', en: 'Bank Book' },
   dayBook: { hi: 'डे बुक', en: 'Day Book' },
   vouchers: { hi: 'वाउचर', en: 'Vouchers' },
   ledger: { hi: 'लेजर', en: 'Ledger' },
@@ -74,7 +74,7 @@ export const translations: Translations = {
   ledgerHeads: { hi: 'लेजर हेड', en: 'Ledger Heads' },
   inventory: { hi: 'इन्वेंटरी', en: 'Inventory' },
   sales: { hi: 'बिक्री', en: 'Sales' },
-  receivePayment: { hi: 'भुगतान प्राप्ति', en: 'Receive Payment' },
+  receivePayment: { hi: 'भुगतान रसीद', en: 'Receive Payment' },
   purchases: { hi: 'खरीद', en: 'Purchases' },
   makePayment: { hi: 'भुगतान करें', en: 'Make Payment' },
   salary: { hi: 'वेतन', en: 'Salary' },
@@ -105,7 +105,7 @@ export const translations: Translations = {
   particulars: { hi: 'विवरण', en: 'Particulars' },
   voucherNo: { hi: 'वाउचर नं.', en: 'Voucher No.' },
   narration: { hi: 'विवरण', en: 'Narration' },
-  openingBalance: { hi: 'प्रारंभिक शेष', en: 'Opening Balance' },
+  openingBalance: { hi: 'ओपनिंग बैलेंस', en: 'Opening Balance' },
   closingBalance: { hi: 'अंतिम शेष', en: 'Closing Balance' },
   
   // Dashboard
@@ -120,7 +120,7 @@ export const translations: Translations = {
   // Members
   memberId: { hi: 'सदस्य आईडी', en: 'Member ID' },
   memberName: { hi: 'सदस्य का नाम', en: 'Member Name' },
-  shareCapital: { hi: 'अंश पूंजी', en: 'Share Capital' },
+  shareCapital: { hi: 'शेयर कैपिटल', en: 'Share Capital' },
   address: { hi: 'पता', en: 'Address' },
   phone: { hi: 'फोन', en: 'Phone' },
   

@@ -237,7 +237,7 @@ const NominationRegister: React.FC = () => {
                 <TableHead>{hi ? 'सदस्य आईडी' : 'Member ID'}</TableHead>
                 <TableHead>{hi ? 'सदस्य नाम' : 'Member Name'}</TableHead>
                 <TableHead>{hi ? 'फोन' : 'Phone'}</TableHead>
-                <TableHead className="text-right">{hi ? 'अंश पूंजी' : 'Share Capital'}</TableHead>
+                <TableHead className="text-right">{hi ? 'शेयर कैपिटल' : 'Share Capital'}</TableHead>
                 <TableHead>{hi ? 'नामिती नाम' : 'Nominee Name'}</TableHead>
                 <TableHead>{hi ? 'संबंध' : 'Relation'}</TableHead>
                 <TableHead>{hi ? 'नामिती फोन' : 'Nominee Phone'}</TableHead>

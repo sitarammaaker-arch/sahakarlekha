@@ -70,10 +70,10 @@ const ShareRegister: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <BookMarked className="h-7 w-7 text-primary" />
-            {hi ? 'अंश रजिस्टर' : 'Share Register'}
+            {hi ? 'शेयर रजिस्टर' : 'Share Register'}
           </h1>
           <p className="text-muted-foreground">
-            {hi ? 'सदस्यों का अंश पूंजी एवं नामांकन विवरण' : 'Member share capital & nominee details'}
+            {hi ? 'सदस्यों का शेयर कैपिटल एवं नामांकन विवरण' : 'Member share capital & nominee details'}
           </p>
         </div>
         <div className="flex gap-2">
@@ -93,13 +93,13 @@ const ShareRegister: React.FC = () => {
         </Card>
         <Card className="bg-success/10 border-success/20">
           <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-muted-foreground">{hi ? 'कुल अंश पूंजी' : 'Total Share Capital'}</p>
+            <p className="text-xs text-muted-foreground">{hi ? 'कुल शेयर कैपिटल' : 'Total Share Capital'}</p>
             <p className="text-xl font-bold text-success">{fmt(totalCapital)}</p>
           </CardContent>
         </Card>
         <Card className="bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-700">
           <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-muted-foreground">{hi ? 'कुल अंश' : 'Total Shares'}</p>
+            <p className="text-xs text-muted-foreground">{hi ? 'कुल शेयर' : 'Total Shares'}</p>
             <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{totalShares}</p>
           </CardContent>
         </Card>
@@ -125,7 +125,7 @@ const ShareRegister: React.FC = () => {
       {/* Register Table */}
       <Card className="shadow-card">
         <CardHeader className="border-b text-center py-4">
-          <CardTitle className="text-lg">{hi ? 'अंश रजिस्टर' : 'Share Register'}</CardTitle>
+          <CardTitle className="text-lg">{hi ? 'शेयर रजिस्टर' : 'Share Register'}</CardTitle>
           <p className="text-sm text-muted-foreground">{hi ? society.nameHi : society.name}</p>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
@@ -136,9 +136,9 @@ const ShareRegister: React.FC = () => {
                 <TableHead>{hi ? 'नाम' : 'Name'}</TableHead>
                 <TableHead>{hi ? 'पिता/पति' : 'Father/Husband'}</TableHead>
                 <TableHead className="whitespace-nowrap">{hi ? 'प्रमाणपत्र सं.' : 'Cert. No.'}</TableHead>
-                <TableHead className="text-right whitespace-nowrap">{hi ? 'अंश संख्या' : 'Shares'}</TableHead>
-                <TableHead className="text-right whitespace-nowrap">{hi ? 'मूल्य/अंश' : 'Face Value'}</TableHead>
-                <TableHead className="text-right whitespace-nowrap">{hi ? 'कुल पूंजी' : 'Total Capital'}</TableHead>
+                <TableHead className="text-right whitespace-nowrap">{hi ? 'शेयर संख्या' : 'Shares'}</TableHead>
+                <TableHead className="text-right whitespace-nowrap">{hi ? 'मूल्य/शेयर' : 'Face Value'}</TableHead>
+                <TableHead className="text-right whitespace-nowrap">{hi ? 'कुल कैपिटल' : 'Total Capital'}</TableHead>
                 <TableHead>{hi ? 'नामांकित' : 'Nominee'}</TableHead>
                 <TableHead>{hi ? 'संबंध' : 'Relation'}</TableHead>
                 <TableHead>{hi ? 'स्थिति' : 'Status'}</TableHead>
@@ -187,7 +187,7 @@ const ShareRegister: React.FC = () => {
       <Dialog open={!!editMember} onOpenChange={open => !open && setEditMember(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{hi ? 'अंश विवरण संपादित करें' : 'Edit Share Details'} — {editMember?.name}</DialogTitle>
+            <DialogTitle>{hi ? 'शेयर विवरण संपादित करें' : 'Edit Share Details'} — {editMember?.name}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -196,11 +196,11 @@ const ShareRegister: React.FC = () => {
                 <Input value={form.shareCertNo} onChange={e => setForm(f => ({ ...f, shareCertNo: e.target.value }))} placeholder="SC-001" />
               </div>
               <div className="space-y-1">
-                <Label>{hi ? 'अंश संख्या' : 'No. of Shares'}</Label>
+                <Label>{hi ? 'शेयर संख्या' : 'No. of Shares'}</Label>
                 <Input type="number" min="0" value={form.shareCount} onChange={e => setForm(f => ({ ...f, shareCount: e.target.value }))} placeholder="10" />
               </div>
               <div className="space-y-1">
-                <Label>{hi ? 'मूल्य/अंश (₹)' : 'Face Value (₹)'}</Label>
+                <Label>{hi ? 'मूल्य/शेयर (₹)' : 'Face Value (₹)'}</Label>
                 <Input type="number" min="0" value={form.shareFaceValue} onChange={e => setForm(f => ({ ...f, shareFaceValue: e.target.value }))} placeholder="100" />
               </div>
             </div>

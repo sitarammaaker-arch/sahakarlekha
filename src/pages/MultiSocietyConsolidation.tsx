@@ -515,8 +515,8 @@ const MultiSocietyConsolidation: React.FC = () => {
 
   const financialRows: FinancialRowDef[] = [
     { label: { hi: 'कुल संपत्ति',           en: 'Total Assets'       }, key: 'totalAssets'      },
-    { label: { hi: 'कुल देयताएं',           en: 'Total Liabilities'  }, key: 'totalLiabilities' },
-    { label: { hi: 'पूंजी एवं स्वामित्व',  en: 'Capital & Equity'   }, key: 'totalEquity'      },
+    { label: { hi: 'कुल लायबिलिटीज़',           en: 'Total Liabilities'  }, key: 'totalLiabilities' },
+    { label: { hi: 'कैपिटल एवं स्वामित्व',  en: 'Capital & Equity'   }, key: 'totalEquity'      },
     { label: { hi: 'कुल आय',               en: 'Total Income'       }, key: 'totalIncome'      },
     { label: { hi: 'कुल व्यय',             en: 'Total Expenditure'  }, key: 'totalExpenditure' },
     { label: { hi: 'शुद्ध अधिशेष',        en: 'Net Surplus'        }, key: 'netSurplus', highlight: true, surplusColor: true },
@@ -840,7 +840,7 @@ const MultiSocietyConsolidation: React.FC = () => {
                       {hi ? 'सक्रिय सदस्य' : 'Active Members'}
                     </TableHead>
                     <TableHead className="text-right font-bold text-gray-700">
-                      {hi ? 'कुल अंश पूंजी' : 'Total Share Capital'}
+                      {hi ? 'कुल शेयर कैपिटल' : 'Total Share Capital'}
                     </TableHead>
                     <TableHead className="text-right font-bold text-gray-700">
                       {hi ? 'बकाया ऋण' : 'Loans Outstanding'}
@@ -891,13 +891,13 @@ const MultiSocietyConsolidation: React.FC = () => {
               bg: 'bg-blue-50',
             },
             {
-              label: hi ? 'कुल देयताएं'    : 'Total Liabilities',
+              label: hi ? 'कुल लायबिलिटीज़'    : 'Total Liabilities',
               value: fmt(consolidated.totalLiabilities),
               cls: 'text-orange-700',
               bg: 'bg-orange-50',
             },
             {
-              label: hi ? 'पूंजी'          : 'Capital & Equity',
+              label: hi ? 'कैपिटल'          : 'Capital & Equity',
               value: fmt(consolidated.totalEquity),
               cls: 'text-purple-700',
               bg: 'bg-purple-50',

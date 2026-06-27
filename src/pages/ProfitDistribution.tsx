@@ -142,7 +142,7 @@ const ProfitDistribution: React.FC = () => {
     if (remaining < 0) {
       toast({
         title: hi ? 'अधिशेष से अधिक वितरण' : 'Exceeds surplus',
-        description: hi ? 'लाभांश + बोनस उपलब्ध वितरण-योग्य अधिशेष से अधिक है।' : 'Dividend + bonus exceed the distributable surplus.',
+        description: hi ? 'डिविडेंड + बोनस उपलब्ध वितरण-योग्य अधिशेष से अधिक है।' : 'Dividend + bonus exceed the distributable surplus.',
         variant: 'destructive',
       });
       return;
@@ -295,7 +295,7 @@ const ProfitDistribution: React.FC = () => {
         <Info className="h-4 w-4 mt-0.5 shrink-0" />
         <span>
           {hi
-            ? 'निधि आवंटन (संचय/शिक्षा) वैकल्पिक है — "संचय निधि" पृष्ठ पर जितना चाहें (% या राशि) पोस्ट करें। उसके बाद बची हुई वितरण-योग्य राशि को लाभांश व बोनस के रूप में बाँटें।'
+            ? 'निधि आवंटन (संचय/शिक्षा) वैकल्पिक है — "संचय निधि" पृष्ठ पर जितना चाहें (% या राशि) पोस्ट करें। उसके बाद बची हुई वितरण-योग्य राशि को डिविडेंड व बोनस के रूप में बाँटें।'
             : 'Fund appropriations (reserve/education) are optional — post whatever you like (% or amount) on the Reserve Fund page. The remaining distributable surplus can then be shared as dividend and bonus.'}
         </span>
       </div>
@@ -332,7 +332,7 @@ const ProfitDistribution: React.FC = () => {
                    valueClass={distributable >= 0 ? 'text-blue-700 font-bold text-base' : 'text-red-600 font-bold text-base'} />
             </div>
             <div className="border-b pb-2 space-y-1">
-              <Row label={hi ? `घटाएं: लाभांश (${dividendRatePct}%)` : `Less: Dividend (${dividendRatePct}%)`}
+              <Row label={hi ? `घटाएं: डिविडेंड (${dividendRatePct}%)` : `Less: Dividend (${dividendRatePct}%)`}
                    value={`(${fmt(totalDividend)})`} valueClass="text-orange-600" />
               <Row label={hi ? 'घटाएं: कर्मचारी बोनस' : 'Less: Employee Bonus'}
                    value={`(${fmt(bonusAmount)})`} valueClass="text-orange-600" />
@@ -356,7 +356,7 @@ const ProfitDistribution: React.FC = () => {
             {/* Dividend rate */}
             <div className="space-y-1">
               <Label className="text-sm">
-                {hi ? 'लाभांश दर (% अंश पूंजी पर)' : 'Dividend Rate (% on Share Capital)'}
+                {hi ? 'डिविडेंड दर (% शेयर कैपिटल पर)' : 'Dividend Rate (% on Share Capital)'}
               </Label>
               <div className="flex items-center gap-2">
                 <Input
@@ -375,7 +375,7 @@ const ProfitDistribution: React.FC = () => {
               </div>
               <p className="text-xs text-gray-500">
                 {hi
-                  ? `कुल अंश पूंजी: ${fmt(totalShareCapital)} | ${activeMembers.length} सक्रिय सदस्य`
+                  ? `कुल शेयर कैपिटल: ${fmt(totalShareCapital)} | ${activeMembers.length} सक्रिय सदस्य`
                   : `Total share capital: ${fmt(totalShareCapital)} | ${activeMembers.length} active members`}
               </p>
             </div>
@@ -398,7 +398,7 @@ const ProfitDistribution: React.FC = () => {
 
             {/* Fund balances */}
             <div className="text-xs text-gray-500 space-y-0.5 border-t pt-3">
-              <p>{hi ? 'लाभांश खाता शेष' : 'Dividend Account (1211)'}:{' '}
+              <p>{hi ? 'डिविडेंड खाता शेष' : 'Dividend Account (1211)'}:{' '}
                 <span className="font-medium text-gray-700">{fmt(getBalance(ACC_DIVIDEND))}</span>
               </p>
             </div>
@@ -435,7 +435,7 @@ const ProfitDistribution: React.FC = () => {
           <CardHeader className="py-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Users className="h-4 w-4 text-blue-600" />
-              {hi ? 'सदस्यवार लाभांश विवरण' : 'Member-wise Dividend'}
+              {hi ? 'सदस्यवार डिविडेंड विवरण' : 'Member-wise Dividend'}
               {divPosted && (
                 <Badge className="ml-2 bg-green-100 text-green-800 border-green-300 text-xs">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
@@ -451,8 +451,8 @@ const ProfitDistribution: React.FC = () => {
                   <TableHead className="w-12">#</TableHead>
                   <TableHead>{hi ? 'सदस्य आईडी' : 'Member ID'}</TableHead>
                   <TableHead>{hi ? 'नाम' : 'Name'}</TableHead>
-                  <TableHead className="text-right">{hi ? 'अंश पूंजी' : 'Share Capital'}</TableHead>
-                  <TableHead className="text-right">{hi ? `लाभांश @ ${dividendRatePct}%` : `Dividend @ ${dividendRatePct}%`}</TableHead>
+                  <TableHead className="text-right">{hi ? 'शेयर कैपिटल' : 'Share Capital'}</TableHead>
+                  <TableHead className="text-right">{hi ? `डिविडेंड @ ${dividendRatePct}%` : `Dividend @ ${dividendRatePct}%`}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

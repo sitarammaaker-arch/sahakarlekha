@@ -224,7 +224,7 @@ const Form1MemberList: React.FC = () => {
         </Select>
         <span className="text-xs text-gray-400 ml-auto">
           {filtered.length} {hi ? 'सदस्य' : 'members'} ·
-          {hi ? ' अंश पूंजी:' : ' Share Capital:'} ₹{totalShareCapital.toLocaleString('hi-IN')}
+          {hi ? ' शेयर कैपिटल:' : ' Share Capital:'} ₹{totalShareCapital.toLocaleString('hi-IN')}
         </span>
       </div>
 
@@ -253,8 +253,8 @@ const Form1MemberList: React.FC = () => {
                 <TableHead className="text-white">{hi ? 'पता' : 'Address'}</TableHead>
                 <TableHead className="text-white">{hi ? 'फोन' : 'Phone'}</TableHead>
                 <TableHead className="text-white">{hi ? 'सदस्यता तिथि' : 'Join Date'}</TableHead>
-                <TableHead className="text-white text-right">{hi ? 'अंश' : 'Shares'}</TableHead>
-                <TableHead className="text-white text-right">{hi ? 'अंश पूंजी' : 'Share Capital'}</TableHead>
+                <TableHead className="text-white text-right">{hi ? 'शेयर' : 'Shares'}</TableHead>
+                <TableHead className="text-white text-right">{hi ? 'शेयर कैपिटल' : 'Share Capital'}</TableHead>
                 <TableHead className="text-white">{hi ? 'नामिती' : 'Nominee'}</TableHead>
                 <TableHead className="text-white">{hi ? 'स्थिति' : 'Status'}</TableHead>
               </TableRow>

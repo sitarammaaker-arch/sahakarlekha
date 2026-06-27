@@ -219,7 +219,7 @@ const ProfitLoss: React.FC = () => {
                   <span className="text-green-700 dark:text-green-300">({fmt(postedEducation)})</span>
                 </div>
                 <div className="flex justify-between border-t pt-1 font-semibold">
-                  <span>{hi ? 'अवितरित अधिशेष c/d (तुलन पत्र में)' : 'Undistributed Surplus c/d (to Balance Sheet)'}</span>
+                  <span>{hi ? 'अवितरित अधिशेष c/d (बैलेंस शीट में)' : 'Undistributed Surplus c/d (to Balance Sheet)'}</span>
                   <strong className="text-success">{fmt(undistributedSurplus)}</strong>
                 </div>
               </div>
@@ -279,7 +279,7 @@ const ProfitLoss: React.FC = () => {
                   {isSurplus ? (
                     <TableRow className="bg-success/10 font-semibold">
                       <TableCell className="text-success">
-                        {hi ? 'शुद्ध अधिशेष (तुलन पत्र में)' : 'Net Surplus (to Balance Sheet)'}
+                        {hi ? 'शुद्ध अधिशेष (बैलेंस शीट में)' : 'Net Surplus (to Balance Sheet)'}
                       </TableCell>
                       {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyIE && pyIE.netProfit >= 0 ? fmt(pyIE.netProfit) : '—'}</TableCell>}
                       <TableCell className="text-right text-success">{fmt(netProfit)}</TableCell>
@@ -287,7 +287,7 @@ const ProfitLoss: React.FC = () => {
                   ) : (
                     <TableRow className="bg-destructive/10 font-semibold">
                       <TableCell className="text-destructive">
-                        {hi ? 'घाटा (तुलन पत्र में)' : 'Deficit (to Balance Sheet)'}
+                        {hi ? 'घाटा (बैलेंस शीट में)' : 'Deficit (to Balance Sheet)'}
                       </TableCell>
                       {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyIE && pyIE.netProfit < 0 ? fmt(Math.abs(pyIE.netProfit)) : '—'}</TableCell>}
                       <TableCell className="text-right text-destructive">{fmt(Math.abs(netProfit))}</TableCell>

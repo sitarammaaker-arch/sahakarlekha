@@ -415,7 +415,7 @@ const NabardReport: React.FC = () => {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
-            {hi ? 'अनुभाग D — कार्यशील पूंजी विवरण' : 'Section D — Working Capital Statement'}
+            {hi ? 'अनुभाग D — वर्किंग कैपिटल विवरण' : 'Section D — Working Capital Statement'}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -428,9 +428,9 @@ const NabardReport: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'स्वयं के फंड (अंश पूंजी + संचय)' : 'Own Funds (Share Capital + Reserves)'}</td><td className="border px-3 py-2 text-right">{fmt(workingCapital.ownFunds)}</td></tr>
+                <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'स्वयं के फंड (शेयर कैपिटल + संचय)' : 'Own Funds (Share Capital + Reserves)'}</td><td className="border px-3 py-2 text-right">{fmt(workingCapital.ownFunds)}</td></tr>
                 <tr className="hover:bg-muted/50"><td className="border px-3 py-2">{hi ? 'उधार लिए गए फंड (जमा + बैंक उधार)' : 'Borrowed Funds (Deposits + Bank Borrowings)'}</td><td className="border px-3 py-2 text-right">{fmt(workingCapital.borrowedFunds)}</td></tr>
-                <tr className="font-bold bg-muted"><td className="border px-3 py-2">{hi ? 'कुल कार्यशील पूंजी' : 'Total Working Capital'}</td><td className="border px-3 py-2 text-right">{fmt(workingCapital.total)}</td></tr>
+                <tr className="font-bold bg-muted"><td className="border px-3 py-2">{hi ? 'कुल वर्किंग कैपिटल' : 'Total Working Capital'}</td><td className="border px-3 py-2 text-right">{fmt(workingCapital.total)}</td></tr>
               </tbody>
             </table>
           </div>

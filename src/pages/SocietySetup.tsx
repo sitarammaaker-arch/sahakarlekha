@@ -108,7 +108,7 @@ const SocietySetup: React.FC = () => {
     });
     toast({
       title: language === 'hi' ? 'सहेजा गया' : 'Saved',
-      description: language === 'hi' ? 'प्रारंभिक शेष अपडेट हो गया' : 'Opening balances updated',
+      description: language === 'hi' ? 'ओपनिंग बैलेंस अपडेट हो गया' : 'Opening balances updated',
     });
   };
 
@@ -350,7 +350,7 @@ const SocietySetup: React.FC = () => {
           </TabsTrigger>
           <TabsTrigger value="opening" className="gap-1 text-xs sm:text-sm">
             <Wallet className="h-4 w-4" />
-            {language === 'hi' ? 'प्रारंभिक शेष' : 'Opening Balance'}
+            {language === 'hi' ? 'ओपनिंग बैलेंस' : 'Opening Balance'}
           </TabsTrigger>
           <TabsTrigger value="prevyear" className="gap-1 text-xs sm:text-sm">
             <History className="h-4 w-4" />
@@ -678,7 +678,7 @@ const SocietySetup: React.FC = () => {
                         {[
                           language === 'hi' ? `BS शेष → पिछले वर्ष की शेष राशि (${society.financialYear})` : `BS closing balances saved as previous year (${society.financialYear})`,
                           language === 'hi' ? 'आय-व्यय खाता डेटा → तुलना हेतु सहेजा जाएगा' : 'I&E data saved for year-on-year comparison',
-                          language === 'hi' ? 'प्राप्ति-भुगतान डेटा → तुलना हेतु सहेजा जाएगा' : 'R&P data saved for comparison column',
+                          language === 'hi' ? 'रसीद-भुगतान डेटा → तुलना हेतु सहेजा जाएगा' : 'R&P data saved for comparison column',
                           language === 'hi' ? 'FY लॉक हटेगा — नई प्रविष्टियां संभव होंगी' : 'FY lock cleared — new entries allowed in new year',
                         ].map((item, i) => (
                           <div key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -727,7 +727,7 @@ const SocietySetup: React.FC = () => {
             <CardContent className="space-y-6">
               {[
                 { label: language === 'hi' ? 'संपत्ति खाते' : 'Asset Accounts', list: assetAccounts },
-                { label: language === 'hi' ? 'देयता खाते' : 'Liability Accounts', list: liabilityAccounts },
+                { label: language === 'hi' ? 'लायबिलिटी खाते' : 'Liability Accounts', list: liabilityAccounts },
                 { label: language === 'hi' ? 'आय खाते' : 'Income Accounts', list: incomeAccounts },
                 { label: language === 'hi' ? 'व्यय खाते' : 'Expense Accounts', list: expenseAccounts },
               ].map(group => group.list.length > 0 && (
@@ -805,7 +805,7 @@ const SocietySetup: React.FC = () => {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="asset">{language === 'hi' ? 'संपत्ति' : 'Asset'}</SelectItem>
-                      <SelectItem value="liability">{language === 'hi' ? 'देयता' : 'Liability'}</SelectItem>
+                      <SelectItem value="liability">{language === 'hi' ? 'लायबिलिटी' : 'Liability'}</SelectItem>
                       <SelectItem value="income">{language === 'hi' ? 'आय' : 'Income'}</SelectItem>
                       <SelectItem value="expense">{language === 'hi' ? 'व्यय' : 'Expense'}</SelectItem>
                     </SelectContent>
@@ -813,7 +813,7 @@ const SocietySetup: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>{language === 'hi' ? 'प्रारंभिक शेष' : 'Opening Balance'}</Label>
+                    <Label>{language === 'hi' ? 'ओपनिंग बैलेंस' : 'Opening Balance'}</Label>
                     <Input type="number" value={newAccForm.openingBalance} onChange={e => setNewAccForm(f => ({ ...f, openingBalance: e.target.value }))} min="0" />
                   </div>
                   <div className="space-y-2">
@@ -845,7 +845,7 @@ const SocietySetup: React.FC = () => {
                   <CardTitle>{language === 'hi' ? 'पिछले वर्ष की शेष राशि' : 'Previous Year Closing Balances'}</CardTitle>
                   <CardDescription className="mt-1">
                     {language === 'hi'
-                      ? 'तुलन पत्र में पिछले वर्ष के आंकड़े दर्ज करें (वैधानिक तुलनात्मक स्तंभ के लिए)'
+                      ? 'बैलेंस शीट में पिछले वर्ष के आंकड़े दर्ज करें (वैधानिक तुलनात्मक स्तंभ के लिए)'
                       : 'Enter previous year closing figures for the Balance Sheet comparison column (statutory requirement)'}
                   </CardDescription>
                 </div>
@@ -854,7 +854,7 @@ const SocietySetup: React.FC = () => {
                   size="sm"
                   className="gap-2 text-blue-700 border-blue-300 hover:bg-blue-50"
                   onClick={handleFillFromCurrentClosing}
-                  title={language === 'hi' ? 'वर्तमान वर्ष के समापन शेष से भरें' : 'Pre-fill from current year closing balances'}
+                  title={language === 'hi' ? 'वर्तमान वर्ष के क्लोज़िंग बैलेंस से भरें' : 'Pre-fill from current year closing balances'}
                 >
                   <History className="h-4 w-4" />
                   {language === 'hi' ? 'वर्तमान शेष से भरें' : 'Fill from Current Closing'}
@@ -873,7 +873,7 @@ const SocietySetup: React.FC = () => {
 
               {[
                 { label: language === 'hi' ? 'संपत्ति खाते' : 'Asset Accounts', list: assetAccounts },
-                { label: language === 'hi' ? 'देयता खाते' : 'Liability Accounts', list: liabilityAccounts },
+                { label: language === 'hi' ? 'लायबिलिटी खाते' : 'Liability Accounts', list: liabilityAccounts },
                 { label: language === 'hi' ? 'आय खाते' : 'Income Accounts', list: incomeAccounts },
                 { label: language === 'hi' ? 'व्यय खाते' : 'Expense Accounts', list: expenseAccounts },
               ].map(group => group.list.length > 0 && (
@@ -1063,8 +1063,8 @@ const SocietySetup: React.FC = () => {
                 </p>
                 <ul className="space-y-1.5 text-muted-foreground">
                   {[
-                    language === 'hi' ? `वर्तमान तुलन पत्र शेष → पिछले वर्ष (${society.financialYear}) डेटा में सहेजेगा` : `Save current Balance Sheet closing balances as ${society.financialYear} previous year data`,
-                    language === 'hi' ? `आय-व्यय और प्राप्ति-भुगतान → तुलना के लिए सहेजेगा` : `Save I&E and R&P figures for year-on-year comparison columns`,
+                    language === 'hi' ? `वर्तमान बैलेंस शीट शेष → पिछले वर्ष (${society.financialYear}) डेटा में सहेजेगा` : `Save current Balance Sheet closing balances as ${society.financialYear} previous year data`,
+                    language === 'hi' ? `आय-व्यय और रसीद-भुगतान → तुलना के लिए सहेजेगा` : `Save I&E and R&P figures for year-on-year comparison columns`,
                     language === 'hi' ? `वित्त वर्ष ${parseInt(society.financialYear.split('-')[0]) + 1}-${String(parseInt(society.financialYear.split('-')[1]) + 1).slice(-2)} शुरू करेगा` : `Switch to FY ${parseInt(society.financialYear.split('-')[0]) + 1}-${String(parseInt(society.financialYear.split('-')[1]) + 1).slice(-2)}`,
                     language === 'hi' ? `FY ऑडिट लॉक हटाएगा — नई प्रविष्टियां संभव होंगी` : `Clear the audit lock — new entries allowed in the new year`,
                   ].map((item, i) => (
