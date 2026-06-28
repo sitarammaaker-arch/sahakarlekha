@@ -27,7 +27,7 @@ const QUALITY_RESULTS = [
 ];
 
 export default function ProcurementLots() {
-  const { procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, addFarmer, addProcurementLot, recordQualityInspection } = useData();
+  const { procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, addFarmer, addProcurementLot, recordQualityInspection, generateJForm } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -64,6 +64,11 @@ export default function ProcurementLots() {
     if (moistureValue === '' || !(m >= 0)) { toast({ title: hi ? 'नमी मान दर्ज करें' : 'Enter a valid moisture value', variant: 'destructive' }); return; }
     const qt = recordQualityInspection({ lotId: qualityLotId, result: qualityResult, moisture: m, inspectedBy: inspector.trim() || undefined });
     if (qt.id) { toast({ title: hi ? 'क्वालिटी दर्ज हुई' : 'Quality recorded', description: `${resultLabel(qualityResult)} · ${m}%` }); setQualityOpen(false); }
+  };
+  const lotJForm = (lotId: string) => procurementJForms.find(j => j.lotId === lotId);
+  const handleGenerateJForm = (lotId: string) => {
+    const jf = generateJForm({ lotId });
+    if (jf.id) toast({ title: hi ? 'J-Form बना' : 'J-Form generated', description: `${jf.documentNo} · ₹${jf.net.amount}` });
   };
 
   const saveFarmer = () => {
@@ -163,10 +168,16 @@ export default function ProcurementLots() {
                     {lotMoisture(l.id) ? ` · ${hi ? 'नमी' : 'Moisture'} ${lotMoisture(l.id)!.moisture.value}%` : ''}
                   </div>
                 )}
+                {lotJForm(l.id) && (
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    J-Form: {lotJForm(l.id)!.documentNo} · ₹{lotJForm(l.id)!.net.amount}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Badge variant="secondary">{l.operationalStatus}</Badge>
                 {!lotQuality(l.id) && <Button size="sm" variant="outline" onClick={() => openQuality(l.id)}>{hi ? 'क्वालिटी' : 'Quality'}</Button>}
+                {!lotJForm(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateJForm(l.id)}>J-Form</Button>}
               </div>
             </div>
           ))}

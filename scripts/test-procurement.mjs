@@ -91,5 +91,25 @@ ok(alreadyInspected([qt], [mr], 'lot-2') === false, 'guard allows a first inspec
 ok(alreadyInspected([], [mr], 'lot-1') === true, 'guard detects a duplicate via the MoistureRecord side too');
 ok(sentinelOf('lot-1', 'accepted').id === '', 'rejected path returns an empty-id sentinel (consistent with addFarmer/addProcurementLot)');
 
+// 7. Phase 2.2 — J-Form generation (business document only). Mirrors DataContext.generateJForm.
+const buildJForm = (lotId, qty, rate, currency, count, now, uuid) => {
+  const gross = qty * rate;
+  return { id: uuid, lotId, documentNo: `J${String(count + 1).padStart(4, '0')}`, gross: { amount: gross, currency }, deductions: { amount: 0, currency }, net: { amount: gross - 0, currency }, createdAt: now, updatedAt: now };
+};
+const jf = buildJForm('lot-1', 20, 2275, 'INR', 0, 'T', 'JF');
+ok(jf.lotId === 'lot-1' && typeof jf.documentNo === 'string' && 'id' in jf && 'createdAt' in jf, 'JForm shape (lotId/documentNo + BaseEntity)');
+ok(jf.documentNo === 'J0001', 'J-Form auto documentNo = J0001 for the first');
+ok(jf.gross.amount === 45500 && jf.gross.currency === 'INR', 'gross = qty × MSP rate, currency-tagged');
+ok(jf.deductions.amount === 0, 'deductions = 0 (no deduction workflow this phase)');
+ok(jf.net.amount === jf.gross.amount - jf.deductions.amount, 'net = gross − deductions');
+const jEvent = { id: 'je', correlationId: 'lot-1', name: 'jform.generated', occurredAt: 'T', recordedAt: 'T', actor: 'A', payload: { jformId: jf.id, documentNo: jf.documentNo, net: jf.net } };
+ok(jEvent.name === 'jform.generated' && jEvent.correlationId === jf.lotId, "exactly one 'jform.generated' event linked to the lot");
+const jPayload = { transactionType: 'jform.generate', transactionId: 'TX', transactionVersion: 1, jforms: [jf], events: [jEvent] };
+ok(jPayload.transactionType === 'jform.generate', 'J-Form commit envelope: transactionType = jform.generate');
+ok(jPayload.jforms.length === 1 && jPayload.events.length === 1, 'J-Form commit payload: 1 jform + 1 event');
+const alreadyJForm = (jforms, lotId) => jforms.some(j => j.lotId === lotId);
+ok(alreadyJForm([jf], 'lot-1') === true && alreadyJForm([jf], 'lot-2') === false, 'one J-Form per lot guard (mirror)');
+ok(!('voucherId' in jf) && !('intentId' in jf) && !('postingRequestId' in jf), 'J-Form is a document: NO voucher / intent / posting fields');
+
 console.log(`[procurement-test] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

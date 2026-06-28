@@ -1220,6 +1220,31 @@ create unique index if not exists procurement_quality_tests_lot_uniq on public.p
 create unique index if not exists procurement_moisture_records_lot_uniq on public.procurement_moisture_records ("lotId");
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Procurement Phase 2.2 — J-Form (a business DOCUMENT only; NOT an accounting event — no
+-- voucher / intent / posting). gross/deductions/net are document figures, not ledger postings.
+-- Business invariant (AUTHORITATIVE): one J-Form per lot — the unique index on "lotId" makes the
+-- INSERT-only commit fail + roll back atomically on a duplicate. RUN this block once in the
+-- Supabase SQL editor BEFORE the commit-transaction function (which now references this table).
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists procurement_jforms (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "lotId" text,
+  "documentNo" text,
+  gross jsonb,
+  deductions jsonb,
+  net jsonb,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+alter table public.procurement_jforms enable row level security;
+drop policy if exists "society_rw" on public.procurement_jforms;
+create policy "society_rw" on public.procurement_jforms for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create unique index if not exists procurement_jforms_lot_uniq on public.procurement_jforms ("lotId");
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
 -- transaction: every supplied collection commits together, or nothing does — a
 -- ProcurementLot can never exist in the cloud without its immutable creation event.
@@ -1263,6 +1288,12 @@ begin
     for rec in select value from jsonb_array_elements(p_payload->'moistureRecords') loop
       insert into procurement_moisture_records (id, society_id, "lotId", moisture, "createdAt", "updatedAt")
       values (rec->>'id', rec->>'society_id', rec->>'lotId', rec->'moisture', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
+    end loop;
+  end if;
+  if p_payload ? 'jforms' then
+    for rec in select value from jsonb_array_elements(p_payload->'jforms') loop
+      insert into procurement_jforms (id, society_id, "lotId", "documentNo", gross, deductions, net, "createdAt", "updatedAt")
+      values (rec->>'id', rec->>'society_id', rec->>'lotId', rec->>'documentNo', rec->'gross', rec->'deductions', rec->'net', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
     end loop;
   end if;
   if p_payload ? 'events' then

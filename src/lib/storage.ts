@@ -1,5 +1,5 @@
 import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer } from '@/types';
-import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord } from '@/lib/procurement';
+import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm } from '@/lib/procurement';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
 export interface VoucherTemplate {
@@ -67,6 +67,7 @@ const KEYS = {
   procurementEvents: 'sahayata_procurement_events',
   procurementQualityTests: 'sahayata_procurement_quality_tests',
   procurementMoistureRecords: 'sahayata_procurement_moisture_records',
+  procurementJForms: 'sahayata_procurement_jforms',
 };
 
 // ── Central account ID constants ─────────────────────────────────────────────
@@ -758,6 +759,8 @@ export const getProcurementQualityTests = (): QualityTest[] => get(KEYS.procurem
 export const setProcurementQualityTests = (q: QualityTest[]): void => set(KEYS.procurementQualityTests, q);
 export const getProcurementMoistureRecords = (): MoistureRecord[] => get(KEYS.procurementMoistureRecords, []);
 export const setProcurementMoistureRecords = (m: MoistureRecord[]): void => set(KEYS.procurementMoistureRecords, m);
+export const getProcurementJForms = (): JForm[] => get(KEYS.procurementJForms, []);
+export const setProcurementJForms = (j: JForm[]): void => set(KEYS.procurementJForms, j);
 
 export const getAccounts = (): LedgerAccount[] => {
   const stored = get<LedgerAccount[] | null>(KEYS.accounts, null);

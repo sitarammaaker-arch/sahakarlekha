@@ -21,7 +21,7 @@ import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
-import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, Quantity, Money } from '@/lib/procurement';
+import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, Quantity, Money } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
 
 interface DataContextType {
@@ -39,6 +39,8 @@ interface DataContextType {
   procurementQualityTests: QualityTest[];
   procurementMoistureRecords: MoistureRecord[];
   recordQualityInspection: (data: { lotId: string; result: string; moisture: number; inspectedBy?: string }) => QualityTest;
+  procurementJForms: JForm[];
+  generateJForm: (data: { lotId: string }) => JForm;
   loans: Loan[];
   assets: Asset[];
 
@@ -214,6 +216,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [procurementEvents, setProcurementEventsState] = useState<ProcurementEvent[]>(() => storage.getProcurementEvents());
   const [procurementQualityTests, setProcurementQualityTestsState] = useState<QualityTest[]>(() => storage.getProcurementQualityTests());
   const [procurementMoistureRecords, setProcurementMoistureRecordsState] = useState<MoistureRecord[]>(() => storage.getProcurementMoistureRecords());
+  const [procurementJForms, setProcurementJFormsState] = useState<JForm[]>(() => storage.getProcurementJForms());
   const procurementFarmersRef = useRef<Farmer[]>(procurementFarmers);
   useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
   const loansRef = useRef<Loan[]>(loans);
@@ -267,7 +270,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Reset all state to empty before loading new society's data
     setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
     setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
-    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]);
+    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
@@ -418,6 +421,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         supabase.from('procurement_moisture_records').select('*').eq('society_id', sid).then(
           ({ data, error }) => setProcurementMoistureRecordsState(error || !data ? storage.getProcurementMoistureRecords() : (data as unknown as MoistureRecord[])),
           () => setProcurementMoistureRecordsState(storage.getProcurementMoistureRecords()),
+        );
+        supabase.from('procurement_jforms').select('*').eq('society_id', sid).then(
+          ({ data, error }) => setProcurementJFormsState(error || !data ? storage.getProcurementJForms() : (data as unknown as JForm[])),
+          () => setProcurementJFormsState(storage.getProcurementJForms()),
         );
 
         // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
@@ -812,6 +819,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementEventsState(storage.getProcurementEvents());
         setProcurementQualityTestsState(storage.getProcurementQualityTests());
         setProcurementMoistureRecordsState(storage.getProcurementMoistureRecords());
+        setProcurementJFormsState(storage.getProcurementJForms());
         setAssetsState(storage.getAssets());
       } finally {
         setIsLoading(false);
@@ -1993,6 +2001,43 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return qt;
   }, [user, procurementQualityTests, procurementMoistureRecords]);
+
+  // Phase 2.2 — J-Form generation (business DOCUMENT only; NOT an accounting event). Generates
+  // ONE J-Form per lot + one immutable 'jform.generated' event, committed atomically via the frozen
+  // contract. gross = qty × MSP rate, deductions = 0 (no deduction workflow this phase), net = gross.
+  // No voucher / financial intent / posting request.
+  const generateJForm = useCallback((data: { lotId: string }): JForm => {
+    const sentinel: JForm = { id: '', lotId: data.lotId, documentNo: '', gross: { amount: 0, currency: 'INR' }, deductions: { amount: 0, currency: 'INR' }, net: { amount: 0, currency: 'INR' }, createdAt: '', updatedAt: '' };
+    if (guardFYLocked()) return sentinel;
+    // Early validation only (NOT the business guarantee; the DB unique index on lotId is). One per lot.
+    if (procurementJForms.some(j => j.lotId === data.lotId)) {
+      toastRef.current({ title: 'पहले से जारी', description: 'इस लॉट का J-Form पहले से बना है। (J-Form already generated for this lot)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    const lot = procurementLots.find(l => l.id === data.lotId);
+    const cur = lot?.mspRate?.currency || 'INR';
+    const grossAmount = (lot?.quantity?.value || 0) * (lot?.mspRate?.amount || 0);
+    const now = new Date().toISOString();
+    const jf: JForm = {
+      id: crypto.randomUUID(), lotId: data.lotId, documentNo: `J${String(procurementJForms.length + 1).padStart(4, '0')}`,
+      gross: { amount: grossAmount, currency: cur },
+      deductions: { amount: 0, currency: cur },
+      net: { amount: grossAmount, currency: cur },
+      createdAt: now, updatedAt: now,
+    };
+    const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: data.lotId, name: 'jform.generated', occurredAt: now, recordedAt: now, actor: user?.name || 'System', payload: { jformId: jf.id, documentNo: jf.documentNo, net: jf.net } };
+    setProcurementJFormsState(prev => { const u = [...prev, jf]; storage.setProcurementJForms(u); return u; });
+    setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
+    supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'jform.generate', transactionId: crypto.randomUUID(), transactionVersion: 1, jforms: [withSoc(jf)], events: [withSoc(event)] } }).then(({ error }) => {
+      if (error) {
+        console.error('J-Form commit error:', error.message);
+        setProcurementJFormsState(prev => { const r = prev.filter(x => x.id !== jf.id); storage.setProcurementJForms(r); return r; });
+        setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
+        toastRef.current({ title: 'J-Form सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara banayein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return jf;
+  }, [user, procurementJForms, procurementLots]);
 
   // Only active (non-deleted) vouchers for all financial calculations
   const activeVouchers = vouchers.filter(v => !v.isDeleted);
@@ -4122,6 +4167,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       suppliers, customers, kccLoans, societyCapabilities, setCapabilityHidden,
       procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
       procurementQualityTests, procurementMoistureRecords, recordQualityInspection,
+      procurementJForms, generateJForm,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, approveMember, rejectMember,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
