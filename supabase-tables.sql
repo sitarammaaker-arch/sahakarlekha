@@ -1075,13 +1075,44 @@ create index if not exists idx_society_capabilities_society on society_capabilit
 create index if not exists idx_society_capabilities_capability on society_capabilities(capability);
 -- Society-scoped RLS (mirrors the society_rw policy used by all data tables)
 alter table public.society_capabilities enable row level security;
-drop policy if exists "society_rw" on public.society_capabilities;
-create policy "society_rw" on public.society_capabilities for all to authenticated
-  using (society_id::text in (select public.current_user_society_ids()))
-  with check (society_id::text in (select public.current_user_society_ids()));
--- SOURCE TRUST MODEL (C6.2): the app only ever writes source='admin' rows (mode='revoke').
--- source IN ('plan','plugin','state','trial','system') = ENTITLEMENT and must be written by
--- SERVER/service-role code ONLY (billing, marketplace, jurisdiction). This policy is
--- currently source-blind; BEFORE any capability gates a paid/sensitive feature, tighten the
--- WITH CHECK to: (source = 'admin' and mode = 'revoke') for the 'authenticated' role, and move
--- entitlement writes behind the service role. Tracked as a pre-monetization hardening item.
+
+-- C6.3 — SERVER-SIDE TRUST ENFORCEMENT (the DB is the authority, not client code).
+-- Reads stay open to society members (entitlement resolution must see every source). WRITES by
+-- the 'authenticated' role are restricted to source='admin', mode='revoke' — the only rows the
+-- client may ever create. Entitlement sources (plan/plugin/state/trial/system) are REJECTED for
+-- clients and can be written ONLY by service-role/server code (which bypasses RLS). Replaces the
+-- earlier source-blind society_rw policy. Idempotent: re-runnable.
+drop policy if exists "society_rw"                on public.society_capabilities;
+drop policy if exists "cap_select"                on public.society_capabilities;
+drop policy if exists "cap_insert_admin_revoke"   on public.society_capabilities;
+drop policy if exists "cap_update_admin_revoke"   on public.society_capabilities;
+drop policy if exists "cap_delete_admin"          on public.society_capabilities;
+
+-- READ: any society member (resolver needs all sources visible).
+create policy "cap_select" on public.society_capabilities for select to authenticated
+  using (society_id::text in (select public.current_user_society_ids()));
+
+-- INSERT: society members may create ONLY an admin 'hide' row.
+create policy "cap_insert_admin_revoke" on public.society_capabilities for insert to authenticated
+  with check (
+    society_id::text in (select public.current_user_society_ids())
+    and source = 'admin' and mode = 'revoke'
+  );
+
+-- UPDATE: may only touch an existing admin row, and it must stay admin/revoke.
+create policy "cap_update_admin_revoke" on public.society_capabilities for update to authenticated
+  using (
+    society_id::text in (select public.current_user_society_ids())
+    and source = 'admin'
+  )
+  with check (
+    society_id::text in (select public.current_user_society_ids())
+    and source = 'admin' and mode = 'revoke'
+  );
+
+-- DELETE: may only remove an admin row (re-enable). Entitlement rows are untouchable by clients.
+create policy "cap_delete_admin" on public.society_capabilities for delete to authenticated
+  using (
+    society_id::text in (select public.current_user_society_ids())
+    and source = 'admin'
+  );

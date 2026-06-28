@@ -49,10 +49,10 @@ export const DOMAIN_HEADING_KEY: Record<NavDomain, string | null> = {
  *                NEVER create these rows.
  *   • 'trial'  → SERVER-CONTROLLED ONLY (time-bound entitlement; carries expiresAt).
  *
- * NOTE: today's `society_rw` RLS is source-blind (any society member can write any source),
- * so this rule is enforced only by convention + the client never emitting non-admin rows.
- * Before any capability gates a PAID/sensitive feature, RLS must restrict client writes to
- * source='admin' (mode='revoke'). Tracked as a pre-monetization hardening item.
+ * ENFORCEMENT (C6.3): the rule is now enforced in the DATABASE, not by convention. RLS lets
+ * the 'authenticated' role write ONLY source='admin', mode='revoke'; every entitlement source
+ * (plan/plugin/state/trial/system) is rejected for clients and writable only by service-role/
+ * server code (which bypasses RLS). See the policies in supabase-tables.sql.
  */
 export type CapabilitySource = 'admin' | 'plan' | 'plugin' | 'state' | 'trial' | 'system';
 export type CapabilityMode = 'grant' | 'revoke';
