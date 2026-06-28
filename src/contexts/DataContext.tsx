@@ -20,6 +20,7 @@ import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } f
 import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
+import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
 
 interface DataContextType {
@@ -1105,6 +1106,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
+    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
     // Capture edit audit snapshot — only track the fields that actually changed
     const changedFields = (Object.keys(data) as (keyof typeof data)[]).filter(
       k => data[k] !== current[k]
@@ -1183,6 +1185,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return false;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return false;
+    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
 
     // 🔒 Block deletion of vouchers ACTIVELY linked to a Purchase / Sale parent.
     // If the parent purchase/sale no longer points to THIS voucher (i.e., it's an
@@ -1267,6 +1270,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
+    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
     // H6: If parent record (purchase / sale) has already been hard-deleted, blocking restore prevents
     // creating a "ghost" voucher with no item rows and inconsistent stock.
     if (current.refType === 'purchase' && current.refId) {
@@ -1612,7 +1616,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // RULE 3: soft-cancel the member's auto-generated vouchers (share capital /
     // admission fee) so no ghost Share Capital lingers in the Trial Balance.
     const now = new Date().toISOString();
-    const linkedIds = new Set(vouchersRef.current.filter(v => v.memberId === id && !v.isDeleted).map(v => v.id));
+    const linkedIds = new Set(vouchersRef.current.filter(v => v.memberId === id && !v.isDeleted && !isEngineVoucher(v)).map(v => v.id));
     if (linkedIds.size > 0) {
       const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Member deleted' } : v;
       vouchersRef.current = vouchersRef.current.map(cancel);
@@ -2103,7 +2107,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // in its narration) so no ghost "Loans & Advances" asset lingers in Trial Balance / Balance Sheet.
     if (loan?.loanNo) {
       const now = new Date().toISOString();
-      const linkedIds = new Set(vouchersRef.current.filter(v => !v.isDeleted && v.memberId === loan.memberId && v.narration?.includes(loan.loanNo)).map(v => v.id));
+      const linkedIds = new Set(vouchersRef.current.filter(v => !v.isDeleted && v.memberId === loan.memberId && v.narration?.includes(loan.loanNo) && !isEngineVoucher(v)).map(v => v.id));
       if (linkedIds.size > 0) {
         const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Loan deleted' } : v;
         vouchersRef.current = vouchersRef.current.map(cancel);
@@ -2158,7 +2162,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // unique assetNo in the narration) so no orphan depreciation expense / accumulated-dep lingers.
     if (asset?.assetNo) {
       const now = new Date().toISOString();
-      const linkedIds = new Set(vouchersRef.current.filter(v => !v.isDeleted && v.narration?.includes(asset.assetNo)).map(v => v.id));
+      const linkedIds = new Set(vouchersRef.current.filter(v => !v.isDeleted && v.narration?.includes(asset.assetNo) && !isEngineVoucher(v)).map(v => v.id));
       if (linkedIds.size > 0) {
         const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Asset deleted' } : v;
         vouchersRef.current = vouchersRef.current.map(cancel);
@@ -2812,7 +2816,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (sale) {
         const now = new Date().toISOString();
         // Soft-delete all linked vouchers (main + GST)
-        const linkedIds = [sale.voucherId, ...(sale.gstVoucherIds ?? [])].filter(Boolean) as string[];
+        const linkedIds = ([sale.voucherId, ...(sale.gstVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
         if (linkedIds.length > 0) {
           setVouchersState(v => {
             const updated = v.map(x => linkedIds.includes(x.id)
@@ -2898,7 +2902,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .then(({ error }) => { if (error) console.error('Old movements delete sync:', error.message); });
 
     // 2️⃣ Soft-cancel the original sale voucher(s) + drop voucher_entries
-    const linkedIds = [original.voucherId, ...(original.gstVoucherIds ?? [])].filter(Boolean) as string[];
+    const linkedIds = ([original.voucherId, ...(original.gstVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
     if (linkedIds.length > 0) {
       setVouchersState(v => {
         const updated = v.map(x => linkedIds.includes(x.id)
@@ -3120,7 +3124,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (purchase) {
         const now = new Date().toISOString();
         // Cascade soft-delete: main voucher + all GST/TDS tax vouchers
-        const linkedIds = [purchase.voucherId, ...(purchase.taxVoucherIds ?? [])].filter(Boolean) as string[];
+        const linkedIds = ([purchase.voucherId, ...(purchase.taxVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
         if (linkedIds.length > 0) {
           setVouchersState(v => {
             const updated = v.map(x => linkedIds.includes(x.id)
@@ -3210,7 +3214,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .then(({ error }) => { if (error) console.error('Old movements delete sync:', error.message); });
 
     // 2️⃣ Soft-delete the original purchase voucher(s)
-    const linkedIds = [original.voucherId, ...(original.taxVoucherIds ?? [])].filter(Boolean) as string[];
+    const linkedIds = ([original.voucherId, ...(original.taxVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
     if (linkedIds.length > 0) {
       setVouchersState(v => {
         const updated = v.map(x => linkedIds.includes(x.id)
@@ -3394,7 +3398,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (oldRecord.isPaid && !data.isPaid && oldRecord.voucherId) {
       // (a) Cancel the linked voucher
       const v = vouchersRef.current.find(x => x.id === oldRecord.voucherId);
-      if (v && !v.isDeleted) {
+      if (v && !v.isDeleted && !isEngineVoucher(v)) {
         const cancelled = { ...v, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy: 'System', deletedReason: `Salary slip ${oldRecord.slipNo} marked unpaid` };
         setVouchersState(prev => prev.map(x => x.id === v.id ? cancelled : x));
         supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', v.id).then(({ error }) => {
@@ -3466,7 +3470,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const record = salaryRecordsRef.current.find(r => r.id === id);
     if (record?.voucherId) {
       const v = vouchersRef.current.find(x => x.id === record.voucherId);
-      if (v && !v.isDeleted) {
+      if (v && !v.isDeleted && !isEngineVoucher(v)) {
         const cancelled = { ...v, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy: 'System', deletedReason: `Salary slip ${record.slipNo} deleted` };
         setVouchersState(prev => prev.map(x => x.id === v.id ? cancelled : x));
         supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', v.id).then(({ error }) => {

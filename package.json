@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "validate:glossary": "node scripts/validate-glossary.mjs",
     "test:calc": "node scripts/test-calculators.mjs",
-    "test:nav": "node scripts/test-nav.mjs"
+    "test:nav": "node scripts/test-nav.mjs",
+    "test:accounting": "node scripts/test-accounting.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

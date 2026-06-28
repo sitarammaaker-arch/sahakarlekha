@@ -26,6 +26,9 @@ export interface VoucherEditSnapshot {
   };
 }
 
+/** Who created a voucher: a user (manual) or the Financial Event Engine (system-owned). */
+export type VoucherOrigin = 'manual' | 'engine';
+
 export interface Voucher {
   id: string;
   voucherNo: string;
@@ -61,6 +64,10 @@ export interface Voucher {
   refId?: string;     // reference to parent sale/purchase id
   // Bill-wise settlement: a receipt allocated against specific sale invoices
   billAllocations?: BillAllocation[];
+  // Phase-0 immutable engine-voucher boundary: system-owned vouchers are reversal-only.
+  origin?: VoucherOrigin;   // undefined / 'manual' = user voucher; 'engine' = system-owned (immutable)
+  reversalOf?: string;      // if this voucher is a reversal, the original engine voucher id
+  reversedBy?: string;      // if this engine voucher was reversed, the reversal voucher id
 }
 
 /** Tally "Method of Adjustment": settle a specific bill, or hold as advance / on-account. */
