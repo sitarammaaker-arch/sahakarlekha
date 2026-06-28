@@ -1176,3 +1176,36 @@ create policy "society_rw" on public.procurement_lots for all to authenticated
 create policy "society_rw" on public.procurement_events for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
+-- transaction: every supplied collection commits together, or nothing does — a
+-- ProcurementLot can never exist in the cloud without its immutable creation event.
+-- STABLE SIGNATURE: future phases add optional keys (jforms / documents / claims /
+-- dispatches / payments / financialIntents / postingRequests / …) with new internal
+-- handlers; the RPC name and the client contract never change. SECURITY INVOKER, so the
+-- existing society_rw RLS still applies. RUN THIS BLOCK once in the Supabase SQL editor.
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function public.procurement_commit_transaction(p_payload jsonb)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare rec jsonb;
+begin
+  if p_payload ? 'lots' then
+    for rec in select value from jsonb_array_elements(p_payload->'lots') loop
+      insert into procurement_lots (id, society_id, "centreId", "seasonId", "cropId", "varietyId", "farmerId", "arhtiyaId", quantity, "mspRate", "operationalStatus", "financialStatus", "reconciliationStatus", "createdAt", "updatedAt")
+      values (rec->>'id', rec->>'society_id', rec->>'centreId', rec->>'seasonId', rec->>'cropId', rec->>'varietyId', rec->>'farmerId', rec->>'arhtiyaId', rec->'quantity', rec->'mspRate', rec->>'operationalStatus', rec->>'financialStatus', rec->>'reconciliationStatus', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
+    end loop;
+  end if;
+  if p_payload ? 'events' then
+    for rec in select value from jsonb_array_elements(p_payload->'events') loop
+      insert into procurement_events (id, society_id, name, "correlationId", "occurredAt", "recordedAt", actor, payload)
+      values (rec->>'id', rec->>'society_id', rec->>'name', rec->>'correlationId', (rec->>'occurredAt')::timestamptz, (rec->>'recordedAt')::timestamptz, rec->>'actor', rec->'payload');
+    end loop;
+  end if;
+end;
+$$;
+grant execute on function public.procurement_commit_transaction(jsonb) to authenticated;

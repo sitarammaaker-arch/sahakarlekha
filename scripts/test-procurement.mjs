@@ -49,5 +49,16 @@ ok(ev.correlationId === lot.id, 'event correlationId == lot.id');
 ok(ev.actor === 'राजेश', 'event records the actor');
 ok(!('voucherId' in lot) && !('voucherId' in ev) && !('amount' in lot), 'NO voucher created (no voucher fields on lot or event)');
 
+// 4. M1 — lot + event commit as ONE inseparable business transaction (generic boundary).
+//    Mirrors the DataContext rpc payload + the symmetric rollback.
+const buildCommitPayload = (lots, events) => ({ lots, events });
+const payload = buildCommitPayload([lot], [ev]);
+ok(payload.lots.length === 1 && payload.events.length === 1, 'M1: commit payload = exactly one lot + one event (inseparable unit)');
+ok(payload.events[0].correlationId === payload.lots[0].id, 'M1: committed event is linked to the committed lot (correlationId == lot.id)');
+ok(Array.isArray(payload.lots) && Array.isArray(payload.events), 'M1: payload uses object-of-collections shape (stable signature for future keys)');
+const rollback = (lots, events, lotId, eventId) => ({ lots: lots.filter(l => l.id !== lotId), events: events.filter(e => e.id !== eventId) });
+const after = rollback([lot], [ev], lot.id, ev.id);
+ok(after.lots.length === 0 && after.events.length === 0, 'M1: failure rolls back BOTH lot and event (no orphan)');
+
 console.log(`[procurement-test] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

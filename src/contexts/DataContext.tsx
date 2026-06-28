@@ -1931,15 +1931,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     setProcurementLotsState(prev => { const u = [...prev, lot]; storage.setProcurementLots(u); return u; });
     setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
-    supabase.from('procurement_lots').upsert(withSoc(lot)).then(({ error }) => {
+    // M1: commit the lot AND its immutable event in ONE atomic DB transaction (generic
+    // business-transaction boundary). Both persist together or neither does → the cloud can
+    // never hold a lot without its lot.created event. On failure, roll back BOTH optimistically.
+    supabase.rpc('procurement_commit_transaction', { p_payload: { lots: [withSoc(lot)], events: [withSoc(event)] } }).then(({ error }) => {
       if (error) {
-        console.error('Lot sync error:', error.message);
+        console.error('Procurement commit error:', error.message);
         setProcurementLotsState(prev => { const r = prev.filter(l => l.id !== lot.id); storage.setProcurementLots(r); return r; });
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
         toastRef.current({ title: 'लॉट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara banayein.`, variant: 'destructive', duration: 12000 });
-        return;
       }
-      supabase.from('procurement_events').upsert(withSoc(event)).then(({ error: evErr }) => { if (evErr) console.error('Event sync error:', evErr.message); });
     });
     return lot;
   }, [user]);
