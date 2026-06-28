@@ -38,7 +38,7 @@ interface DataContextType {
   addProcurementLot: (data: { farmerId: string; cropId: string; varietyId?: string; quantity: Quantity; mspRate: Money }) => ProcurementLot;
   procurementQualityTests: QualityTest[];
   procurementMoistureRecords: MoistureRecord[];
-  recordQualityInspection: (data: { lotId: string; result: string; moisture: number; inspectedBy?: string }) => boolean;
+  recordQualityInspection: (data: { lotId: string; result: string; moisture: number; inspectedBy?: string }) => QualityTest;
   loans: Loan[];
   assets: Asset[];
 
@@ -1964,8 +1964,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Phase 2.1 — Quality Inspection (pure recording). Records a QualityTest + the measured
   // MoistureRecord + two immutable events (quality.tested, moisture.recorded) for a lot, all
   // committed atomically via the frozen transaction contract. No lot status change, no voucher.
-  const recordQualityInspection = useCallback((data: { lotId: string; result: string; moisture: number; inspectedBy?: string }): boolean => {
-    if (guardFYLocked()) return false;
+  const recordQualityInspection = useCallback((data: { lotId: string; result: string; moisture: number; inspectedBy?: string }): QualityTest => {
+    const sentinel: QualityTest = { id: '', lotId: data.lotId, result: data.result, inspectedBy: '', createdAt: '', updatedAt: '' };
+    if (guardFYLocked()) return sentinel;
+    // Phase 2.1.1 — early validation only (NOT the business guarantee; the DB unique index on
+    // lotId is). One QualityTest + one MoistureRecord per lot: reject a repeat before the RPC.
+    if (procurementQualityTests.some(q => q.lotId === data.lotId) || procurementMoistureRecords.some(m => m.lotId === data.lotId)) {
+      toastRef.current({ title: 'पहले से दर्ज', description: 'इस लॉट की क्वालिटी जाँच पहले से मौजूद है। (Quality already recorded for this lot)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
     const now = new Date().toISOString();
     const by = data.inspectedBy?.trim() || user?.name || 'System';
     const qt: QualityTest = { id: crypto.randomUUID(), lotId: data.lotId, result: data.result, inspectedBy: by, createdAt: now, updatedAt: now };
@@ -1984,8 +1991,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toastRef.current({ title: 'क्वालिटी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara record karein.`, variant: 'destructive', duration: 12000 });
       }
     });
-    return true;
-  }, [user]);
+    return qt;
+  }, [user, procurementQualityTests, procurementMoistureRecords]);
 
   // Only active (non-deleted) vouchers for all financial calculations
   const activeVouchers = vouchers.filter(v => !v.isDeleted);

@@ -62,8 +62,8 @@ export default function ProcurementLots() {
     const m = Number(moistureValue);
     if (!qualityResult) { toast({ title: hi ? 'परिणाम चुनें' : 'Select a result', variant: 'destructive' }); return; }
     if (moistureValue === '' || !(m >= 0)) { toast({ title: hi ? 'नमी मान दर्ज करें' : 'Enter a valid moisture value', variant: 'destructive' }); return; }
-    const okk = recordQualityInspection({ lotId: qualityLotId, result: qualityResult, moisture: m, inspectedBy: inspector.trim() || undefined });
-    if (okk) { toast({ title: hi ? 'क्वालिटी दर्ज हुई' : 'Quality recorded', description: `${resultLabel(qualityResult)} · ${m}%` }); setQualityOpen(false); }
+    const qt = recordQualityInspection({ lotId: qualityLotId, result: qualityResult, moisture: m, inspectedBy: inspector.trim() || undefined });
+    if (qt.id) { toast({ title: hi ? 'क्वालिटी दर्ज हुई' : 'Quality recorded', description: `${resultLabel(qualityResult)} · ${m}%` }); setQualityOpen(false); }
   };
 
   const saveFarmer = () => {

@@ -1211,6 +1211,14 @@ create policy "society_rw" on public.procurement_moisture_records for all to aut
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
 
+-- Phase 2.1.1 — business invariant (AUTHORITATIVE): one QualityTest + one MoistureRecord per lot.
+-- The commit RPC stays INSERT-only; a duplicate "lotId" violates these unique indexes, so the
+-- INSERT fails and the whole transaction rolls back atomically — duplicates are blocked even if
+-- the UI / DataContext is bypassed. NOTE: assumes no existing duplicate "lotId" rows; if any
+-- exist they must be removed before these indexes can be created.
+create unique index if not exists procurement_quality_tests_lot_uniq on public.procurement_quality_tests ("lotId");
+create unique index if not exists procurement_moisture_records_lot_uniq on public.procurement_moisture_records ("lotId");
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
 -- transaction: every supplied collection commits together, or nothing does — a

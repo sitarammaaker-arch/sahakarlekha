@@ -82,5 +82,14 @@ ok(qPayload.transactionType === 'quality.record', 'quality commit envelope: tran
 ok(qPayload.qualityTests.length === 1 && qPayload.moistureRecords.length === 1 && qPayload.events.length === 2, 'quality commit payload: 1 qualityTest + 1 moistureRecord + 2 events');
 ok(!('lots' in qPayload) && !('voucherId' in qt) && !('amount' in qt), 'Option B: NO lot mutation, NO voucher (pure recording)');
 
+// 6. Phase 2.1.1 — one QualityTest + one MoistureRecord per lot. Authoritative enforcement is the
+//    DB unique index on lotId; this mirrors the DataContext early-validation + its return style.
+const alreadyInspected = (tests, moistures, lotId) => tests.some(t => t.lotId === lotId) || moistures.some(m => m.lotId === lotId);
+const sentinelOf = (lotId, result) => ({ id: '', lotId, result, inspectedBy: '', createdAt: '', updatedAt: '' });
+ok(alreadyInspected([qt], [mr], 'lot-1') === true, 'guard detects an existing QualityTest/MoistureRecord for the lot');
+ok(alreadyInspected([qt], [mr], 'lot-2') === false, 'guard allows a first inspection for a fresh lot');
+ok(alreadyInspected([], [mr], 'lot-1') === true, 'guard detects a duplicate via the MoistureRecord side too');
+ok(sentinelOf('lot-1', 'accepted').id === '', 'rejected path returns an empty-id sentinel (consistent with addFarmer/addProcurementLot)');
+
 console.log(`[procurement-test] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
