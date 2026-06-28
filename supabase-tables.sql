@@ -1244,6 +1244,21 @@ create policy "society_rw" on public.procurement_jforms for all to authenticated
   with check (society_id::text in (select public.current_user_society_ids()));
 create unique index if not exists procurement_jforms_lot_uniq on public.procurement_jforms ("lotId");
 
+-- Phase 2.3 — J-Form document numbering is DB-owned (single source of truth). A per-society
+-- counter, incremented atomically inside the commit transaction (row-lock serializes concurrent
+-- generators; rolls back with the transaction). The (society_id, "documentNo") unique index is the
+-- AUTHORITATIVE final guard against duplicate official numbers. The client never generates J000n.
+create table if not exists procurement_jform_counters (
+  society_id text primary key,
+  last_no integer not null default 0
+);
+alter table public.procurement_jform_counters enable row level security;
+drop policy if exists "society_rw" on public.procurement_jform_counters;
+create policy "society_rw" on public.procurement_jform_counters for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create unique index if not exists procurement_jforms_docno_uniq on public.procurement_jforms (society_id, "documentNo");
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
 -- transaction: every supplied collection commits together, or nothing does — a
@@ -1264,13 +1279,23 @@ create unique index if not exists procurement_jforms_lot_uniq on public.procurem
 -- handlers; the RPC name and the client contract never change. SECURITY INVOKER, so the
 -- existing society_rw RLS still applies. RUN THIS BLOCK once in the Supabase SQL editor.
 -- ─────────────────────────────────────────────────────────────────────────────
-create or replace function public.procurement_commit_transaction(p_payload jsonb)
-returns void
+-- D1(A): returns jsonb now (return-type change requires drop+create). Name, the (jsonb) input
+-- signature, the payload envelope, the metadata, and the atomicity model are all unchanged.
+drop function if exists public.procurement_commit_transaction(jsonb);
+create function public.procurement_commit_transaction(p_payload jsonb)
+returns jsonb
 language plpgsql
 security invoker
 set search_path = public
 as $$
-declare rec jsonb;
+declare
+  rec jsonb;
+  v_sid text;
+  v_no integer;
+  v_doc text;
+  v_payload jsonb;
+  v_docmap jsonb := '{}'::jsonb;   -- jformId -> generated documentNo
+  v_result jsonb := '[]'::jsonb;   -- [{ id, lotId, documentNo }] returned to the client
 begin
   if p_payload ? 'lots' then
     for rec in select value from jsonb_array_elements(p_payload->'lots') loop
@@ -1292,16 +1317,30 @@ begin
   end if;
   if p_payload ? 'jforms' then
     for rec in select value from jsonb_array_elements(p_payload->'jforms') loop
+      v_sid := rec->>'society_id';
+      -- DB-owned numbering: atomic per-society counter (row-locked → concurrency-safe).
+      insert into procurement_jform_counters (society_id, last_no) values (v_sid, 1)
+        on conflict (society_id) do update set last_no = procurement_jform_counters.last_no + 1
+        returning last_no into v_no;
+      v_doc := 'J' || lpad(v_no::text, 4, '0');
       insert into procurement_jforms (id, society_id, "lotId", "documentNo", gross, deductions, net, "createdAt", "updatedAt")
-      values (rec->>'id', rec->>'society_id', rec->>'lotId', rec->>'documentNo', rec->'gross', rec->'deductions', rec->'net', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
+      values (rec->>'id', v_sid, rec->>'lotId', v_doc, rec->'gross', rec->'deductions', rec->'net', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
+      v_docmap := v_docmap || jsonb_build_object(rec->>'id', v_doc);
+      v_result := v_result || jsonb_build_object('id', rec->>'id', 'lotId', rec->>'lotId', 'documentNo', v_doc);
     end loop;
   end if;
   if p_payload ? 'events' then
     for rec in select value from jsonb_array_elements(p_payload->'events') loop
+      v_payload := rec->'payload';
+      -- D2(ii): stamp the DB-generated number into the immutable event so it can never diverge.
+      if v_payload ? 'jformId' and v_docmap ? (v_payload->>'jformId') then
+        v_payload := jsonb_set(v_payload, '{documentNo}', v_docmap->(v_payload->>'jformId'));
+      end if;
       insert into procurement_events (id, society_id, name, "correlationId", "occurredAt", "recordedAt", actor, payload)
-      values (rec->>'id', rec->>'society_id', rec->>'name', rec->>'correlationId', (rec->>'occurredAt')::timestamptz, (rec->>'recordedAt')::timestamptz, rec->>'actor', rec->'payload');
+      values (rec->>'id', rec->>'society_id', rec->>'name', rec->>'correlationId', (rec->>'occurredAt')::timestamptz, (rec->>'recordedAt')::timestamptz, rec->>'actor', v_payload);
     end loop;
   end if;
+  return jsonb_build_object('jforms', v_result);
 end;
 $$;
 grant execute on function public.procurement_commit_transaction(jsonb) to authenticated;

@@ -67,8 +67,9 @@ export default function ProcurementLots() {
   };
   const lotJForm = (lotId: string) => procurementJForms.find(j => j.lotId === lotId);
   const handleGenerateJForm = (lotId: string) => {
-    const jf = generateJForm({ lotId });
-    if (jf.id) toast({ title: hi ? 'J-Form बना' : 'J-Form generated', description: `${jf.documentNo} · ₹${jf.net.amount}` });
+    // documentNo is DB-generated; generateJForm shows the success toast with the authoritative
+    // number once the RPC responds (and toasts on FY-lock / duplicate guard). Nothing to do here.
+    generateJForm({ lotId });
   };
 
   const saveFarmer = () => {

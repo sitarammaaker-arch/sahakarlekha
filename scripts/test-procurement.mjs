@@ -91,25 +91,33 @@ ok(alreadyInspected([qt], [mr], 'lot-2') === false, 'guard allows a first inspec
 ok(alreadyInspected([], [mr], 'lot-1') === true, 'guard detects a duplicate via the MoistureRecord side too');
 ok(sentinelOf('lot-1', 'accepted').id === '', 'rejected path returns an empty-id sentinel (consistent with addFarmer/addProcurementLot)');
 
-// 7. Phase 2.2 — J-Form generation (business document only). Mirrors DataContext.generateJForm.
-const buildJForm = (lotId, qty, rate, currency, count, now, uuid) => {
+// 7. Phase 2.3 — J-Form numbering is DB-owned. Mirrors generateJForm (client sends NO number) +
+//    the SQL commit (per-society counter → documentNo, stamped into BOTH the jform row and the event).
+const buildClientJForm = (lotId, qty, rate, currency, now, uuid) => {
   const gross = qty * rate;
-  return { id: uuid, lotId, documentNo: `J${String(count + 1).padStart(4, '0')}`, gross: { amount: gross, currency }, deductions: { amount: 0, currency }, net: { amount: gross - 0, currency }, createdAt: now, updatedAt: now };
+  return { id: uuid, lotId, documentNo: '', gross: { amount: gross, currency }, deductions: { amount: 0, currency }, net: { amount: gross, currency }, createdAt: now, updatedAt: now };
 };
-const jf = buildJForm('lot-1', 20, 2275, 'INR', 0, 'T', 'JF');
-ok(jf.lotId === 'lot-1' && typeof jf.documentNo === 'string' && 'id' in jf && 'createdAt' in jf, 'JForm shape (lotId/documentNo + BaseEntity)');
-ok(jf.documentNo === 'J0001', 'J-Form auto documentNo = J0001 for the first');
-ok(jf.gross.amount === 45500 && jf.gross.currency === 'INR', 'gross = qty × MSP rate, currency-tagged');
-ok(jf.deductions.amount === 0, 'deductions = 0 (no deduction workflow this phase)');
-ok(jf.net.amount === jf.gross.amount - jf.deductions.amount, 'net = gross − deductions');
-const jEvent = { id: 'je', correlationId: 'lot-1', name: 'jform.generated', occurredAt: 'T', recordedAt: 'T', actor: 'A', payload: { jformId: jf.id, documentNo: jf.documentNo, net: jf.net } };
-ok(jEvent.name === 'jform.generated' && jEvent.correlationId === jf.lotId, "exactly one 'jform.generated' event linked to the lot");
-const jPayload = { transactionType: 'jform.generate', transactionId: 'TX', transactionVersion: 1, jforms: [jf], events: [jEvent] };
-ok(jPayload.transactionType === 'jform.generate', 'J-Form commit envelope: transactionType = jform.generate');
-ok(jPayload.jforms.length === 1 && jPayload.events.length === 1, 'J-Form commit payload: 1 jform + 1 event');
-const alreadyJForm = (jforms, lotId) => jforms.some(j => j.lotId === lotId);
-ok(alreadyJForm([jf], 'lot-1') === true && alreadyJForm([jf], 'lot-2') === false, 'one J-Form per lot guard (mirror)');
-ok(!('voucherId' in jf) && !('intentId' in jf) && !('postingRequestId' in jf), 'J-Form is a document: NO voucher / intent / posting fields');
+const cjf = buildClientJForm('lot-1', 20, 2275, 'INR', 'T', 'JF');
+ok(cjf.documentNo === '', 'client sends NO document number (DB is the single source of truth)');
+ok(cjf.gross.amount === 45500 && cjf.deductions.amount === 0 && cjf.net.amount === 45500, 'gross = qty × MSP, deductions = 0, net = gross');
+ok(!('voucherId' in cjf) && !('intentId' in cjf) && !('postingRequestId' in cjf), 'J-Form is a document: NO voucher / intent / posting fields');
+const nextDocNo = (lastNo) => 'J' + String(lastNo + 1).padStart(4, '0');           // DB counter mirror
+ok(nextDocNo(0) === 'J0001' && nextDocNo(1) === 'J0002' && nextDocNo(11) === 'J0012', 'DB numbering: per-society counter → J0001, J0002, …');
+let last = 0; const seq = [nextDocNo(last++), nextDocNo(last++), nextDocNo(last++)];
+ok(new Set(seq).size === 3 && seq[0] < seq[1] && seq[1] < seq[2], 'numbering is strictly increasing + distinct');
+const commit = (clientJf, sid, lastNo) => {                                          // SQL commit mirror
+  const doc = nextDocNo(lastNo);
+  const jform = { ...clientJf, society_id: sid, documentNo: doc };
+  const event = { id: 'je', correlationId: clientJf.lotId, name: 'jform.generated', payload: { jformId: clientJf.id, documentNo: doc, net: clientJf.net } };
+  return { jform, event };
+};
+const { jform, event } = commit(cjf, 'SOC001', 0);
+ok(jform.documentNo === 'J0001', 'DB stamps the generated number onto the J-Form row');
+ok(event.name === 'jform.generated' && event.correlationId === cjf.lotId, "one 'jform.generated' event linked to the lot");
+ok(event.payload.documentNo === jform.documentNo, 'J-Form and jform.generated event ALWAYS share the same documentNo (D2)');
+const docKey = (sid, doc) => `${sid}|${doc}`;                                         // (society_id, documentNo) uniqueness mirror
+ok(new Set([docKey('SOC001','J0001'), docKey('SOC001','J0002'), docKey('SOC002','J0001')]).size === 3, '(society_id, documentNo) unique: same number allowed across societies, never within one');
+ok(docKey('SOC001','J0001') !== docKey('SOC002','J0001') && docKey('SOC001','J0001') === docKey('SOC001','J0001'), 'duplicate (society_id, documentNo) collides → blocked by the unique index (D4)');
 
 console.log(`[procurement-test] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

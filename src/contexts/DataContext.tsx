@@ -2018,22 +2018,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const cur = lot?.mspRate?.currency || 'INR';
     const grossAmount = (lot?.quantity?.value || 0) * (lot?.mspRate?.amount || 0);
     const now = new Date().toISOString();
+    // documentNo is DB-owned (single source of truth). The client sends a placeholder and receives the
+    // authoritative number in the RPC response — it never computes J000n here.
     const jf: JForm = {
-      id: crypto.randomUUID(), lotId: data.lotId, documentNo: `J${String(procurementJForms.length + 1).padStart(4, '0')}`,
+      id: crypto.randomUUID(), lotId: data.lotId, documentNo: '',
       gross: { amount: grossAmount, currency: cur },
       deductions: { amount: 0, currency: cur },
       net: { amount: grossAmount, currency: cur },
       createdAt: now, updatedAt: now,
     };
-    const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: data.lotId, name: 'jform.generated', occurredAt: now, recordedAt: now, actor: user?.name || 'System', payload: { jformId: jf.id, documentNo: jf.documentNo, net: jf.net } };
+    const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: data.lotId, name: 'jform.generated', occurredAt: now, recordedAt: now, actor: user?.name || 'System', payload: { jformId: jf.id, documentNo: '', net: jf.net } };
     setProcurementJFormsState(prev => { const u = [...prev, jf]; storage.setProcurementJForms(u); return u; });
     setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
-    supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'jform.generate', transactionId: crypto.randomUUID(), transactionVersion: 1, jforms: [withSoc(jf)], events: [withSoc(event)] } }).then(({ error }) => {
+    supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'jform.generate', transactionId: crypto.randomUUID(), transactionVersion: 1, jforms: [withSoc(jf)], events: [withSoc(event)] } }).then(({ data: res, error }) => {
       if (error) {
         console.error('J-Form commit error:', error.message);
         setProcurementJFormsState(prev => { const r = prev.filter(x => x.id !== jf.id); storage.setProcurementJForms(r); return r; });
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
         toastRef.current({ title: 'J-Form सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara banayein.`, variant: 'destructive', duration: 12000 });
+        return;
+      }
+      // D1(A): patch the optimistic J-Form + its event with the DB-generated documentNo from the response.
+      const gen = (res as { jforms?: Array<{ id: string; documentNo: string }> } | null)?.jforms?.find(j => j.id === jf.id);
+      if (gen?.documentNo) {
+        setProcurementJFormsState(prev => { const u = prev.map(x => x.id === jf.id ? { ...x, documentNo: gen.documentNo } : x); storage.setProcurementJForms(u); return u; });
+        setProcurementEventsState(prev => { const u = prev.map(e => e.id === event.id ? { ...e, payload: { ...(e.payload as Record<string, unknown>), documentNo: gen.documentNo } } : e); storage.setProcurementEvents(u); return u; });
+        toastRef.current({ title: 'J-Form बना', description: `${gen.documentNo} · ₹${jf.net.amount}`, duration: 6000 });
       }
     });
     return jf;
