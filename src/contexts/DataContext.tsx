@@ -1346,6 +1346,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
+    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
     const updated = { ...current, approvalStatus: 'approved' as const, approvedBy, approvedAt: new Date().toISOString() };
     setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); return u; });
     supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => {
@@ -1362,6 +1363,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
+    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
     const updated = { ...current, approvalStatus: 'rejected' as const, approvalRemarks: reason, approvedBy: rejectedBy, approvedAt: new Date().toISOString() };
     setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); return u; });
     supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => {
@@ -1725,6 +1727,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Merge duplicate accounts: move all voucher references from removeId → keepId, then delete removeId
   const mergeAccounts = useCallback((keepId: string, removeId: string): number => {
     if (guardFYLocked()) return 0;
+    // P0.1b: engine vouchers are immutable — never silently re-point their accounts. If any
+    // engine voucher references the account being merged away (removeId), abort the WHOLE merge
+    // (no partial merge). Correction must go through a reversal, not an edit.
+    const engineRefKind = (v: Voucher): 'Debit' | 'Credit' | 'Line' | null =>
+      v.debitAccountId === removeId ? 'Debit'
+        : v.creditAccountId === removeId ? 'Credit'
+          : (v.lines?.some(l => l.accountId === removeId) ? 'Line' : null);
+    const blocker = vouchersRef.current.find(v => isEngineVoucher(v) && engineRefKind(v) !== null);
+    if (blocker) {
+      const detail = `${blocker.voucherNo || blocker.id} (${engineRefKind(blocker)})`;
+      toastRef.current({ title: 'मर्ज नहीं हो सकता', description: `इस खाते से जुड़ा सिस्टम वाउचर ${detail} है — सिस्टम वाउचर (engine-generated) के खाते बदले नहीं जा सकते। पहले reversal करें, फिर merge करें।`, variant: 'destructive', duration: 10000 });
+      return 0;
+    }
     // Track which voucher IDs we actually changed BEFORE we overwrite vouchersRef
     const changedIds = new Set<string>();
     const updated = vouchersRef.current.map(v => {

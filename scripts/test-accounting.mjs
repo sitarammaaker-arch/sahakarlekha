@@ -59,5 +59,26 @@ ok(rev.isDeleted === false && rev.editHistory === undefined && rev.approvalStatu
 ok(orig.debitAccountId === 'A' && orig.lines[0].type === 'Dr' && orig.editHistory.length === 1,
    'buildReversalVoucher is PURE — original voucher not mutated');
 
+// 5. P0.1b — mergeAccounts aborts if any engine voucher references the merged account
+//    (via debit / credit / line); manual merges proceed unchanged. Mirrors the DataContext guard.
+const refKind = (v, removeId) =>
+  v.debitAccountId === removeId ? 'Debit'
+    : v.creditAccountId === removeId ? 'Credit'
+      : (v.lines?.some((l) => l.accountId === removeId) ? 'Line' : null);
+const mergeBlockedBy = (vouchers, removeId) =>
+  vouchers.find((v) => isEngineVoucher(v) && refKind(v, removeId) !== null) || null;
+
+const eDebit = { origin: 'engine', voucherNo: 'PV-1', debitAccountId: 'X', creditAccountId: 'Y' };
+const eCredit = { origin: 'engine', voucherNo: 'PV-2', debitAccountId: 'A', creditAccountId: 'X' };
+const eLine = { origin: 'engine', voucherNo: 'PV-3', debitAccountId: 'A', creditAccountId: 'B', lines: [{ accountId: 'X', type: 'Dr' }, { accountId: 'B', type: 'Cr' }] };
+const manual = { origin: 'manual', voucherNo: 'JV-1', debitAccountId: 'X', creditAccountId: 'Z' };
+
+ok(mergeBlockedBy([manual, eDebit], 'X') === eDebit && refKind(eDebit, 'X') === 'Debit', 'P0.1b: merge BLOCKED by engine voucher via DEBIT ref (reports voucher + kind)');
+ok(mergeBlockedBy([manual, eCredit], 'X') === eCredit && refKind(eCredit, 'X') === 'Credit', 'P0.1b: merge BLOCKED by engine voucher via CREDIT ref');
+ok(mergeBlockedBy([manual, eLine], 'X') === eLine && refKind(eLine, 'X') === 'Line', 'P0.1b: merge BLOCKED by engine voucher via LINE ref');
+ok(mergeBlockedBy([manual], 'X') === null, 'P0.1b: manual merge succeeds unchanged (no engine ref)');
+ok(mutationBlocked({ origin: 'engine' }) === true, 'P0.1b: approve/reject BLOCKED for engine voucher');
+ok(mutationBlocked({ origin: 'manual' }) === false, 'P0.1b: approve/reject allowed for manual voucher');
+
 console.log(`[accounting-test] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
