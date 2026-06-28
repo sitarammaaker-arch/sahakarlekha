@@ -19,7 +19,7 @@ import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } from '@/lib/storage';
 import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
-import type { SocietyCapabilityRow } from '@/lib/navigation';
+import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
 
 interface DataContextType {
@@ -27,7 +27,8 @@ interface DataContextType {
   members: Member[];
   accounts: LedgerAccount[];
   society: SocietySettings;
-  societyCapabilities: SocietyCapabilityRow[];   // C3: capability grant/revoke rows (read-only plumbing)
+  societyCapabilities: SocietyCapabilityRow[];   // C3: capability grant/revoke rows
+  setCapabilityHidden: (capability: Capability, hidden: boolean, meta?: { reason?: string; by?: string }) => void;  // C6
   loans: Loan[];
   assets: Asset[];
 
@@ -370,6 +371,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               mode: r.mode as SocietyCapabilityRow['mode'],
               source: r.source as SocietyCapabilityRow['source'],
               expiresAt: (r.expires_at as string | null) ?? null,
+              grantedBy: (r.granted_by as string | null) ?? null,
+              createdAt: (r.created_at as string | null) ?? null,
             })));
           },
           () => setSocietyCapabilitiesState([]),
@@ -1790,6 +1793,36 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = { ...prev, ...data };
       supabase.from('society_settings').upsert({ id: societyIdRef.current, society_id: societyIdRef.current, ...updated }).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
       return updated;
+    });
+  }, []);
+
+  // C6: admin hides/shows an ENTITLED capability for this society. Writes/removes an
+  // admin 'revoke' row only (admin can never entitle). RULE-1: optimistic + rollback on
+  // failure with a destructive Hindi toast so local state never diverges from Supabase.
+  const setCapabilityHidden = useCallback((capability: Capability, hidden: boolean, meta?: { reason?: string; by?: string }) => {
+    const sid = societyIdRef.current;
+    const stableId = `${sid}__${capability}__admin`;
+    const failToast = (msg: string) => toastRef.current({ title: 'सेव नहीं हुआ', description: 'Cloud save fail — refresh karne par badlav nahi rahega. (' + msg + ')', variant: 'destructive', duration: 10000 });
+    setSocietyCapabilitiesState(prev => {
+      const rollback = prev;
+      if (hidden) {
+        const nowIso = new Date().toISOString();
+        const next = [
+          ...prev.filter(r => !(r.capability === capability && r.source === 'admin' && r.mode === 'revoke')),
+          { capability, mode: 'revoke' as const, source: 'admin' as const, expiresAt: null, grantedBy: meta?.by ?? null, createdAt: nowIso },
+        ];
+        supabase.from('society_capabilities').upsert({ id: stableId, society_id: sid, capability, mode: 'revoke', source: 'admin', granted_by: meta?.by ?? null, created_at: nowIso }).then(
+          ({ error }) => { if (error) { setSocietyCapabilitiesState(rollback); failToast(error.message); } else { toastRef.current({ title: 'फ़ीचर बंद किया गया', description: meta?.reason ? 'कारण: ' + meta.reason : 'सुविधा अब साइडबार में नहीं दिखेगी।' }); } },
+          () => { setSocietyCapabilitiesState(rollback); failToast('network'); },
+        );
+        return next;
+      }
+      const next = prev.filter(r => !(r.capability === capability && r.source === 'admin' && r.mode === 'revoke'));
+      supabase.from('society_capabilities').delete().eq('society_id', sid).eq('capability', capability).eq('source', 'admin').then(
+        ({ error }) => { if (error) { setSocietyCapabilitiesState(rollback); failToast(error.message); } else { toastRef.current({ title: 'फ़ीचर चालू किया गया', description: meta?.reason ? 'कारण: ' + meta.reason : 'सुविधा अब साइडबार में दिखेगी।' }); } },
+        () => { setSocietyCapabilitiesState(rollback); failToast('network'); },
+      );
+      return next;
     });
   }, []);
 
@@ -3918,7 +3951,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     <DataContext.Provider value={{
       vouchers, members, accounts, society, loans, assets, auditObjections,
       stockItems, stockMovements, sales, purchases, employees, salaryRecords,
-      suppliers, customers, kccLoans, societyCapabilities,
+      suppliers, customers, kccLoans, societyCapabilities, setCapabilityHidden,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, approveMember, rejectMember,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,

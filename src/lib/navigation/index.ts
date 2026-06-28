@@ -2,6 +2,7 @@
 export * from './capabilities';
 export { MODULE_CATALOG, type ModuleDefinition } from './moduleCatalog';
 export { SOCIETY_TYPE_CAPABILITIES } from './societyTypeCapabilities';
-export { resolveCapabilities } from './capabilityResolver';
+export { resolveCapabilities, resolveEntitlements } from './capabilityResolver';
+export { CAPABILITY_META, CAPABILITY_CATEGORIES, modulesForCapability, type CapabilityMeta, type CapabilityCategory } from './capabilityCatalog';
 export { isModuleVisible, getVisibleGroups, type NavContext, type NavGroup } from './navVisibility';
 export { navigationService, type NavigationService } from './navigationService';

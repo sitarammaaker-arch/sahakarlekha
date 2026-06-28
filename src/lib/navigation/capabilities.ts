@@ -44,6 +44,8 @@ export interface SocietyCapabilityRow {
   mode: CapabilityMode;       // 'grant' = entitle; 'revoke' = admin-hide within entitlement
   source: CapabilitySource;
   expiresAt?: string | null;  // ISO timestamp; null = permanent (trials use this)
+  grantedBy?: string | null;  // audit: who (display only; resolver ignores)
+  createdAt?: string | null;  // audit: when (display only; resolver ignores)
 }
 
 export type { SocietyType };

@@ -14,7 +14,7 @@ import {
   ListTree, Boxes, Truck, UserCheck, ShoppingCart, HandCoins, PackagePlus, Banknote, BadgeDollarSign, Milk,
   Scale, ArrowLeftRight, TrendingUp, FileSpreadsheet, BarChart3, Clock, Percent, TrendingDown, Receipt, Warehouse,
   Package, PiggyBank, FileJson, Hash, Landmark, ScrollText, BookMarked, ShieldCheck, Users2, FileCheck, Shield,
-  Coins, Trash2, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup,
+  Coins, Trash2, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks,
 } from 'lucide-react';
 import type { Capability, NavDomain, Role } from './capabilities';
 
@@ -107,4 +107,5 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'backupRestore',              titleKey: 'backupRestore',              icon: DatabaseBackup,  route: '/backup-restore',               domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 3 },
   { id: 'multiSocietyConsolidation',  titleKey: 'multiSocietyConsolidation',  icon: Building2,       route: '/multi-society-consolidation',  domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 4 },
   { id: 'universalImporter',          titleKey: 'universalImporter',          icon: FileSpreadsheet, route: '/universal-importer',           domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 5 },
+  { id: 'features',                   titleKey: 'features',                   icon: Blocks,          route: '/features',                     domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 6 },
 ];
