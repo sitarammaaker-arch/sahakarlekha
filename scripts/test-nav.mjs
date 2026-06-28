@@ -54,5 +54,15 @@ ok(resolveCapabilities([], [R('plan_cap', 'grant', 'plan'), R('plan_cap', 'revok
 // 5. Super-admin show-all bypasses every gate
 ok(isModuleVisible({ requiredCapabilities: ['x'], requiredRoles: ['admin'] }, ctx([], 'viewer', true)), 'super-admin shows all');
 
+// 6. C4 — Milk Collection is dairy-only. Mirrors SOCIETY_TYPE_CAPABILITIES.dairy
+//    (['dairy_collection']) and moduleCatalog.milkCollection (requiredCapabilities: ['dairy_collection']).
+const DAIRY_CAPS = [...resolveCapabilities(['dairy_collection'], [], NOW)];   // dairy type template
+const NONDAIRY_CAPS = [...resolveCapabilities([], [], NOW)];                  // every other type (empty template)
+const milkModule = { requiredCapabilities: ['dairy_collection'] };
+ok(isModuleVisible(milkModule, ctx(DAIRY_CAPS, 'admin')), 'C4: dairy admin sees Milk Collection');
+ok(isModuleVisible(milkModule, ctx(DAIRY_CAPS, 'viewer')), 'C4: dairy viewer sees Milk Collection (no role gate)');
+ok(!isModuleVisible(milkModule, ctx(NONDAIRY_CAPS, 'admin')), 'C4: non-dairy admin does NOT see Milk Collection');
+ok(!isModuleVisible(milkModule, ctx(NONDAIRY_CAPS, 'viewer')), 'C4: non-dairy viewer does NOT see Milk Collection');
+
 console.log(`[nav-test] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

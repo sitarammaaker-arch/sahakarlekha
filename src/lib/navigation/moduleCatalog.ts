@@ -55,7 +55,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'purchases',      titleKey: 'purchases',      icon: PackagePlus,     route: '/purchases',       domain: 'operations', requiredCapabilities: U, order: 6 },
   { id: 'makePayment',    titleKey: 'makePayment',    icon: Banknote,        route: '/make-payment',    domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 7 },
   { id: 'salary',         titleKey: 'salary',         icon: BadgeDollarSign, route: '/salary',          domain: 'operations', requiredCapabilities: U, order: 8 },
-  { id: 'milkCollection', titleKey: 'milkCollection', icon: Milk,            route: '/milk-collection', domain: 'operations', requiredCapabilities: U, order: 9 },
+  { id: 'milkCollection', titleKey: 'milkCollection', icon: Milk,            route: '/milk-collection', domain: 'operations', requiredCapabilities: ['dairy_collection'], order: 9 },  // C4: dairy-only
 
   // ── reports (was reportNavItems) ──
   { id: 'trialBalance',       titleKey: 'trialBalance',       icon: Scale,           route: '/trial-balance',        domain: 'reports', requiredCapabilities: U, order: 0 },

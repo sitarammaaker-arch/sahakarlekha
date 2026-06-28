@@ -11,7 +11,7 @@ export const SOCIETY_TYPE_CAPABILITIES: Record<SocietyType, Capability[]> = {
   marketing_processing: [],
   pacs: [],
   consumer: [],
-  dairy: [],
+  dairy: ['dairy_collection'],   // C4: dairy societies get the milk-collection capability
   housing: [],
   sugar: [],
   labour: [],
