@@ -21,7 +21,7 @@ import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
-import type { Farmer, ProcurementLot, ProcurementEvent, Quantity, Money } from '@/lib/procurement';
+import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, Quantity, Money } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
 
 interface DataContextType {
@@ -36,6 +36,9 @@ interface DataContextType {
   procurementEvents: ProcurementEvent[];
   addFarmer: (data: { farmerName: string; fatherName?: string; mobile?: string }) => Farmer;
   addProcurementLot: (data: { farmerId: string; cropId: string; varietyId?: string; quantity: Quantity; mspRate: Money }) => ProcurementLot;
+  procurementQualityTests: QualityTest[];
+  procurementMoistureRecords: MoistureRecord[];
+  recordQualityInspection: (data: { lotId: string; result: string; moisture: number; inspectedBy?: string }) => boolean;
   loans: Loan[];
   assets: Asset[];
 
@@ -209,6 +212,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [procurementFarmers, setProcurementFarmersState] = useState<Farmer[]>(() => storage.getProcurementFarmers());
   const [procurementLots, setProcurementLotsState] = useState<ProcurementLot[]>(() => storage.getProcurementLots());
   const [procurementEvents, setProcurementEventsState] = useState<ProcurementEvent[]>(() => storage.getProcurementEvents());
+  const [procurementQualityTests, setProcurementQualityTestsState] = useState<QualityTest[]>(() => storage.getProcurementQualityTests());
+  const [procurementMoistureRecords, setProcurementMoistureRecordsState] = useState<MoistureRecord[]>(() => storage.getProcurementMoistureRecords());
   const procurementFarmersRef = useRef<Farmer[]>(procurementFarmers);
   useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
   const loansRef = useRef<Loan[]>(loans);
@@ -262,6 +267,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Reset all state to empty before loading new society's data
     setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
     setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
+    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
@@ -404,6 +410,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         supabase.from('procurement_events').select('*').eq('society_id', sid).then(
           ({ data, error }) => setProcurementEventsState(error || !data ? storage.getProcurementEvents() : (data as unknown as ProcurementEvent[])),
           () => setProcurementEventsState(storage.getProcurementEvents()),
+        );
+        supabase.from('procurement_quality_tests').select('*').eq('society_id', sid).then(
+          ({ data, error }) => setProcurementQualityTestsState(error || !data ? storage.getProcurementQualityTests() : (data as unknown as QualityTest[])),
+          () => setProcurementQualityTestsState(storage.getProcurementQualityTests()),
+        );
+        supabase.from('procurement_moisture_records').select('*').eq('society_id', sid).then(
+          ({ data, error }) => setProcurementMoistureRecordsState(error || !data ? storage.getProcurementMoistureRecords() : (data as unknown as MoistureRecord[])),
+          () => setProcurementMoistureRecordsState(storage.getProcurementMoistureRecords()),
         );
 
         // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
@@ -796,6 +810,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementFarmersState(storage.getProcurementFarmers());
         setProcurementLotsState(storage.getProcurementLots());
         setProcurementEventsState(storage.getProcurementEvents());
+        setProcurementQualityTestsState(storage.getProcurementQualityTests());
+        setProcurementMoistureRecordsState(storage.getProcurementMoistureRecords());
         setAssetsState(storage.getAssets());
       } finally {
         setIsLoading(false);
@@ -1943,6 +1959,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
     return lot;
+  }, [user]);
+
+  // Phase 2.1 — Quality Inspection (pure recording). Records a QualityTest + the measured
+  // MoistureRecord + two immutable events (quality.tested, moisture.recorded) for a lot, all
+  // committed atomically via the frozen transaction contract. No lot status change, no voucher.
+  const recordQualityInspection = useCallback((data: { lotId: string; result: string; moisture: number; inspectedBy?: string }): boolean => {
+    if (guardFYLocked()) return false;
+    const now = new Date().toISOString();
+    const by = data.inspectedBy?.trim() || user?.name || 'System';
+    const qt: QualityTest = { id: crypto.randomUUID(), lotId: data.lotId, result: data.result, inspectedBy: by, createdAt: now, updatedAt: now };
+    const mr: MoistureRecord = { id: crypto.randomUUID(), lotId: data.lotId, moisture: { value: data.moisture }, createdAt: now, updatedAt: now };
+    const qEvent: ProcurementEvent = { id: crypto.randomUUID(), correlationId: data.lotId, name: 'quality.tested', occurredAt: now, recordedAt: now, actor: by, payload: { lotId: data.lotId, result: data.result } };
+    const mEvent: ProcurementEvent = { id: crypto.randomUUID(), correlationId: data.lotId, name: 'moisture.recorded', occurredAt: now, recordedAt: now, actor: by, payload: { lotId: data.lotId, moisture: data.moisture } };
+    setProcurementQualityTestsState(prev => { const u = [...prev, qt]; storage.setProcurementQualityTests(u); return u; });
+    setProcurementMoistureRecordsState(prev => { const u = [...prev, mr]; storage.setProcurementMoistureRecords(u); return u; });
+    setProcurementEventsState(prev => { const u = [...prev, qEvent, mEvent]; storage.setProcurementEvents(u); return u; });
+    supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'quality.record', transactionId: crypto.randomUUID(), transactionVersion: 1, qualityTests: [withSoc(qt)], moistureRecords: [withSoc(mr)], events: [withSoc(qEvent), withSoc(mEvent)] } }).then(({ error }) => {
+      if (error) {
+        console.error('Quality commit error:', error.message);
+        setProcurementQualityTestsState(prev => { const r = prev.filter(x => x.id !== qt.id); storage.setProcurementQualityTests(r); return r; });
+        setProcurementMoistureRecordsState(prev => { const r = prev.filter(x => x.id !== mr.id); storage.setProcurementMoistureRecords(r); return r; });
+        setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== qEvent.id && e.id !== mEvent.id); storage.setProcurementEvents(r); return r; });
+        toastRef.current({ title: 'क्वालिटी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara record karein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return true;
   }, [user]);
 
   // Only active (non-deleted) vouchers for all financial calculations
@@ -4072,6 +4114,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       stockItems, stockMovements, sales, purchases, employees, salaryRecords,
       suppliers, customers, kccLoans, societyCapabilities, setCapabilityHidden,
       procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
+      procurementQualityTests, procurementMoistureRecords, recordQualityInspection,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, approveMember, rejectMember,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,

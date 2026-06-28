@@ -1178,6 +1178,40 @@ create policy "society_rw" on public.procurement_events for all to authenticated
   with check (society_id::text in (select public.current_user_society_ids()));
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Procurement Phase 2.1 — Quality Inspection (pure recording): a quality test + the
+-- measured moisture value per lot. Loosely coupled by lotId; loads are error-tolerant.
+-- RUN THIS BLOCK once in the Supabase SQL editor BEFORE the commit-transaction function
+-- (which now references these tables).
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists procurement_quality_tests (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "lotId" text,
+  result text,
+  "inspectedBy" text,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+create table if not exists procurement_moisture_records (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "lotId" text,
+  moisture jsonb,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+alter table public.procurement_quality_tests enable row level security;
+alter table public.procurement_moisture_records enable row level security;
+drop policy if exists "society_rw" on public.procurement_quality_tests;
+drop policy if exists "society_rw" on public.procurement_moisture_records;
+create policy "society_rw" on public.procurement_quality_tests for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create policy "society_rw" on public.procurement_moisture_records for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
 -- transaction: every supplied collection commits together, or nothing does — a
 -- ProcurementLot can never exist in the cloud without its immutable creation event.
@@ -1209,6 +1243,18 @@ begin
     for rec in select value from jsonb_array_elements(p_payload->'lots') loop
       insert into procurement_lots (id, society_id, "centreId", "seasonId", "cropId", "varietyId", "farmerId", "arhtiyaId", quantity, "mspRate", "operationalStatus", "financialStatus", "reconciliationStatus", "createdAt", "updatedAt")
       values (rec->>'id', rec->>'society_id', rec->>'centreId', rec->>'seasonId', rec->>'cropId', rec->>'varietyId', rec->>'farmerId', rec->>'arhtiyaId', rec->'quantity', rec->'mspRate', rec->>'operationalStatus', rec->>'financialStatus', rec->>'reconciliationStatus', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
+    end loop;
+  end if;
+  if p_payload ? 'qualityTests' then
+    for rec in select value from jsonb_array_elements(p_payload->'qualityTests') loop
+      insert into procurement_quality_tests (id, society_id, "lotId", result, "inspectedBy", "createdAt", "updatedAt")
+      values (rec->>'id', rec->>'society_id', rec->>'lotId', rec->>'result', rec->>'inspectedBy', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
+    end loop;
+  end if;
+  if p_payload ? 'moistureRecords' then
+    for rec in select value from jsonb_array_elements(p_payload->'moistureRecords') loop
+      insert into procurement_moisture_records (id, society_id, "lotId", moisture, "createdAt", "updatedAt")
+      values (rec->>'id', rec->>'society_id', rec->>'lotId', rec->'moisture', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
     end loop;
   end if;
   if p_payload ? 'events' then

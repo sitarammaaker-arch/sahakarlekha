@@ -20,8 +20,14 @@ const CROPS = [
   { id: 'bajra', name: 'Bajra', nameHi: 'बाजरा' },
 ];
 
+const QUALITY_RESULTS = [
+  { id: 'accepted', en: 'Accepted', hi: 'स्वीकृत' },
+  { id: 'accepted_with_cut', en: 'Accepted (with cut)', hi: 'कटौती सहित स्वीकृत' },
+  { id: 'rejected', en: 'Rejected', hi: 'अस्वीकृत' },
+];
+
 export default function ProcurementLots() {
-  const { procurementFarmers, procurementLots, addFarmer, addProcurementLot } = useData();
+  const { procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, addFarmer, addProcurementLot, recordQualityInspection } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -39,8 +45,26 @@ export default function ProcurementLots() {
   const [fatherName, setFatherName] = useState('');
   const [mobile, setMobile] = useState('');
 
+  // Quality dialog
+  const [qualityOpen, setQualityOpen] = useState(false);
+  const [qualityLotId, setQualityLotId] = useState('');
+  const [qualityResult, setQualityResult] = useState('');
+  const [moistureValue, setMoistureValue] = useState('');
+  const [inspector, setInspector] = useState('');
+
   const cropName = (id: string) => { const c = CROPS.find(x => x.id === id); return c ? (hi ? c.nameHi : c.name) : id; };
   const farmerLabel = (id: string) => { const f = procurementFarmers.find(x => x.id === id); return f ? `${f.farmerName} (${f.farmerCode})` : id; };
+  const lotQuality = (lotId: string) => procurementQualityTests.find(q => q.lotId === lotId);
+  const lotMoisture = (lotId: string) => procurementMoistureRecords.find(m => m.lotId === lotId);
+  const resultLabel = (id: string) => { const r = QUALITY_RESULTS.find(x => x.id === id); return r ? (hi ? r.hi : r.en) : id; };
+  const openQuality = (lotId: string) => { setQualityLotId(lotId); setQualityResult(''); setMoistureValue(''); setInspector(''); setQualityOpen(true); };
+  const saveQuality = () => {
+    const m = Number(moistureValue);
+    if (!qualityResult) { toast({ title: hi ? 'परिणाम चुनें' : 'Select a result', variant: 'destructive' }); return; }
+    if (moistureValue === '' || !(m >= 0)) { toast({ title: hi ? 'नमी मान दर्ज करें' : 'Enter a valid moisture value', variant: 'destructive' }); return; }
+    const okk = recordQualityInspection({ lotId: qualityLotId, result: qualityResult, moisture: m, inspectedBy: inspector.trim() || undefined });
+    if (okk) { toast({ title: hi ? 'क्वालिटी दर्ज हुई' : 'Quality recorded', description: `${resultLabel(qualityResult)} · ${m}%` }); setQualityOpen(false); }
+  };
 
   const saveFarmer = () => {
     if (!farmerName.trim()) { toast({ title: hi ? 'किसान का नाम आवश्यक है' : 'Farmer name is required', variant: 'destructive' }); return; }
@@ -127,14 +151,23 @@ export default function ProcurementLots() {
         <CardContent className="space-y-2">
           {lots.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'अभी तक कोई लॉट नहीं।' : 'No lots yet.'}</p>}
           {lots.map(l => (
-            <div key={l.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
-              <div>
+            <div key={l.id} className="flex items-center justify-between rounded-lg border p-3 text-sm gap-3">
+              <div className="min-w-0">
                 <div className="font-medium">{farmerLabel(l.farmerId)} · {cropName(l.cropId)}{l.varietyId ? ` (${l.varietyId})` : ''}</div>
                 <div className="text-muted-foreground">
                   {l.quantity?.value ?? 0} {l.quantity?.unit ?? 'qtl'} · ₹{l.mspRate?.amount ?? 0}/{hi ? 'क्विंटल' : 'qtl'}
                 </div>
+                {lotQuality(l.id) && (
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {hi ? 'क्वालिटी' : 'Quality'}: {resultLabel(lotQuality(l.id)!.result)}
+                    {lotMoisture(l.id) ? ` · ${hi ? 'नमी' : 'Moisture'} ${lotMoisture(l.id)!.moisture.value}%` : ''}
+                  </div>
+                )}
               </div>
-              <Badge variant="secondary">{l.operationalStatus}</Badge>
+              <div className="flex items-center gap-2 shrink-0">
+                <Badge variant="secondary">{l.operationalStatus}</Badge>
+                {!lotQuality(l.id) && <Button size="sm" variant="outline" onClick={() => openQuality(l.id)}>{hi ? 'क्वालिटी' : 'Quality'}</Button>}
+              </div>
             </div>
           ))}
         </CardContent>
@@ -161,6 +194,34 @@ export default function ProcurementLots() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setFarmerOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
             <Button onClick={saveFarmer}>{hi ? 'जोड़ें' : 'Add'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quality inspection dialog */}
+      <Dialog open={qualityOpen} onOpenChange={setQualityOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{hi ? 'क्वालिटी जाँच' : 'Quality Inspection'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>{hi ? 'परिणाम' : 'Result'} *</Label>
+              <Select value={qualityResult} onValueChange={setQualityResult}>
+                <SelectTrigger><SelectValue placeholder={hi ? 'परिणाम चुनें' : 'Select result'} /></SelectTrigger>
+                <SelectContent>{QUALITY_RESULTS.map(r => <SelectItem key={r.id} value={r.id}>{hi ? r.hi : r.en}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'नमी (%)' : 'Moisture (%)'} *</Label>
+              <Input type="number" min={0} value={moistureValue} onChange={e => setMoistureValue(e.target.value)} placeholder="0" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'निरीक्षक' : 'Inspector'}</Label>
+              <Input value={inspector} onChange={e => setInspector(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setQualityOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
+            <Button onClick={saveQuality}>{hi ? 'दर्ज करें' : 'Record'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

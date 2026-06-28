@@ -1,5 +1,5 @@
 import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer } from '@/types';
-import type { Farmer, ProcurementLot, ProcurementEvent } from '@/lib/procurement';
+import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord } from '@/lib/procurement';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
 export interface VoucherTemplate {
@@ -65,6 +65,8 @@ const KEYS = {
   procurementFarmers: 'sahayata_procurement_farmers',
   procurementLots: 'sahayata_procurement_lots',
   procurementEvents: 'sahayata_procurement_events',
+  procurementQualityTests: 'sahayata_procurement_quality_tests',
+  procurementMoistureRecords: 'sahayata_procurement_moisture_records',
 };
 
 // ── Central account ID constants ─────────────────────────────────────────────
@@ -752,6 +754,10 @@ export const getProcurementLots = (): ProcurementLot[] => get(KEYS.procurementLo
 export const setProcurementLots = (l: ProcurementLot[]): void => set(KEYS.procurementLots, l);
 export const getProcurementEvents = (): ProcurementEvent[] => get(KEYS.procurementEvents, []);
 export const setProcurementEvents = (e: ProcurementEvent[]): void => set(KEYS.procurementEvents, e);
+export const getProcurementQualityTests = (): QualityTest[] => get(KEYS.procurementQualityTests, []);
+export const setProcurementQualityTests = (q: QualityTest[]): void => set(KEYS.procurementQualityTests, q);
+export const getProcurementMoistureRecords = (): MoistureRecord[] => get(KEYS.procurementMoistureRecords, []);
+export const setProcurementMoistureRecords = (m: MoistureRecord[]): void => set(KEYS.procurementMoistureRecords, m);
 
 export const getAccounts = (): LedgerAccount[] => {
   const stored = get<LedgerAccount[] | null>(KEYS.accounts, null);

@@ -63,5 +63,24 @@ const rollback = (lots, events, lotId, eventId) => ({ lots: lots.filter(l => l.i
 const after = rollback([lot], [ev], lot.id, ev.id);
 ok(after.lots.length === 0 && after.events.length === 0, 'M1: failure rolls back BOTH lot and event (no orphan)');
 
+// 5. Phase 2.1 — Quality Inspection (pure recording). Mirrors DataContext.recordQualityInspection.
+const buildQualityTest = (lotId, result, by, now, uuid) => ({ id: uuid, lotId, result, inspectedBy: by, createdAt: now, updatedAt: now });
+const buildMoistureRecord = (lotId, moisture, now, uuid) => ({ id: uuid, lotId, moisture: { value: moisture }, createdAt: now, updatedAt: now });
+const buildQualityEvents = (lotId, result, moisture, by, now) => ([
+  { id: 'qev', correlationId: lotId, name: 'quality.tested', occurredAt: now, recordedAt: now, actor: by, payload: { lotId, result } },
+  { id: 'mev', correlationId: lotId, name: 'moisture.recorded', occurredAt: now, recordedAt: now, actor: by, payload: { lotId, moisture } },
+]);
+const qt = buildQualityTest('lot-1', 'accepted', 'Insp', 'T', 'QT');
+const mr = buildMoistureRecord('lot-1', 12.5, 'T', 'MR');
+const qEvents = buildQualityEvents('lot-1', 'accepted', 12.5, 'Insp', 'T');
+ok(qt.lotId === 'lot-1' && qt.result === 'accepted' && qt.inspectedBy === 'Insp' && 'id' in qt && 'createdAt' in qt, 'QualityTest shape (lotId/result/inspectedBy + BaseEntity)');
+ok(mr.lotId === 'lot-1' && mr.moisture.value === 12.5, 'MoistureRecord captures the measured moisture value');
+ok(qEvents.length === 2 && qEvents[0].name === 'quality.tested' && qEvents[1].name === 'moisture.recorded', 'records exactly TWO events: quality.tested + moisture.recorded');
+ok(qEvents.every(e => e.correlationId === qt.lotId), 'both quality events linked to the lot (correlationId == lotId)');
+const qPayload = { transactionType: 'quality.record', transactionId: 'TX', transactionVersion: 1, qualityTests: [qt], moistureRecords: [mr], events: qEvents };
+ok(qPayload.transactionType === 'quality.record', 'quality commit envelope: transactionType = quality.record');
+ok(qPayload.qualityTests.length === 1 && qPayload.moistureRecords.length === 1 && qPayload.events.length === 2, 'quality commit payload: 1 qualityTest + 1 moistureRecord + 2 events');
+ok(!('lots' in qPayload) && !('voucherId' in qt) && !('amount' in qt), 'Option B: NO lot mutation, NO voucher (pure recording)');
+
 console.log(`[procurement-test] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
