@@ -1,30 +1,65 @@
 /**
- * Capability resolver (C3) — the ONE place a society's capability set is computed
- * from the relational `society_capabilities` rows:
- *   entitled  = typeTemplate ∪ {active grant rows}
- *   visible   = entitled − {active admin revoke rows}
- * "Active" excludes expired rows (trials). Future plan/plugin/state sources are just
- * rows with a different `source` — composed here without touching any consumer.
- * Defensive: bad/missing input falls back to the type template (never throws).
+ * Capability resolver (C5) — TWO distinct concepts, each a pure, order-independent
+ * set operation. Separating them prevents an admin from enabling unlicensed features.
+ *
+ *   Step 1  ENTITLEMENT — what a society MAY use. Granted ONLY by non-admin sources
+ *           (template, trial, plugin, plan, state, system). The admin CANNOT create
+ *           entitlement.   entitled = (template ∪ non-admin grants) − non-admin revokes
+ *
+ *   Step 2  VISIBILITY — what actually shows in the nav. The admin may only HIDE an
+ *           already-entitled capability, never reveal an unentitled one.
+ *           visible = entitled − admin-hidden
+ *
+ * Final navigation visibility = Entitlement AND NOT admin-hidden.
+ * Expired rows (expiresAt ≤ now) are filtered out first. Pure functions of
+ * (societyType, rows, now) → fully deterministic.
  */
 import type { SocietyType } from '@/types';
-import type { Capability, SocietyCapabilityRow } from './capabilities';
+import type { Capability, CapabilitySource, SocietyCapabilityRow } from './capabilities';
 import { SOCIETY_TYPE_CAPABILITIES } from './societyTypeCapabilities';
 
+const ADMIN_SOURCE: CapabilitySource = 'admin';
+
+function activeRows(rows: SocietyCapabilityRow[], now: number): SocietyCapabilityRow[] {
+  return (Array.isArray(rows) ? rows : []).filter((r) => !r.expiresAt || new Date(r.expiresAt).getTime() > now);
+}
+
+/**
+ * Step 1 — capabilities the society is ENTITLED to. Admin rows are ignored here, so an
+ * admin can never entitle an unlicensed capability. (Exported for the C6 admin UI, which
+ * must know which capabilities are togglable.)
+ */
+export function resolveEntitlements(
+  societyType: SocietyType,
+  rows: SocietyCapabilityRow[] = [],
+  nowMs?: number,
+): Set<Capability> {
+  const active = activeRows(rows, nowMs ?? Date.now());
+  const template: Capability[] = SOCIETY_TYPE_CAPABILITIES[societyType] ?? [];
+  const grants = active.filter((r) => r.source !== ADMIN_SOURCE && r.mode === 'grant').map((r) => r.capability);
+  const revokes = new Set<Capability>(
+    active.filter((r) => r.source !== ADMIN_SOURCE && r.mode === 'revoke').map((r) => r.capability),
+  );
+  return new Set<Capability>([...template, ...grants].filter((c) => !revokes.has(c)));
+}
+
+/**
+ * Step 2 — final navigation VISIBILITY = entitled − admin-hidden. This is the
+ * consumer-facing function (useNavigation / navigationService). An admin `revoke` hides
+ * an entitled capability; an admin `grant` cannot reveal an unentitled one (it is a no-op
+ * for an already-entitled capability).
+ */
 export function resolveCapabilities(
   societyType: SocietyType,
   rows: SocietyCapabilityRow[] = [],
   nowMs?: number,
 ): Set<Capability> {
   const now = nowMs ?? Date.now();
-  const template: Capability[] = SOCIETY_TYPE_CAPABILITIES[societyType] ?? [];
-  const active = (Array.isArray(rows) ? rows : []).filter(
-    (r) => !r.expiresAt || new Date(r.expiresAt).getTime() > now,
+  const entitled = resolveEntitlements(societyType, rows, now);
+  const adminHidden = new Set<Capability>(
+    activeRows(rows, now)
+      .filter((r) => r.source === ADMIN_SOURCE && r.mode === 'revoke')
+      .map((r) => r.capability),
   );
-  const grants = active.filter((r) => r.mode === 'grant').map((r) => r.capability);
-  // Admin can hide an entitled capability; non-admin sources cannot be admin-revoked here.
-  const revokes = new Set<Capability>(
-    active.filter((r) => r.mode === 'revoke' && r.source === 'admin').map((r) => r.capability),
-  );
-  return new Set<Capability>([...template, ...grants].filter((c) => !revokes.has(c)));
+  return new Set<Capability>([...entitled].filter((c) => !adminHidden.has(c)));
 }
