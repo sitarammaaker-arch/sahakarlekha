@@ -1934,7 +1934,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // M1: commit the lot AND its immutable event in ONE atomic DB transaction (generic
     // business-transaction boundary). Both persist together or neither does → the cloud can
     // never hold a lot without its lot.created event. On failure, roll back BOTH optimistically.
-    supabase.rpc('procurement_commit_transaction', { p_payload: { lots: [withSoc(lot)], events: [withSoc(event)] } }).then(({ error }) => {
+    supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'lot.create', transactionId: crypto.randomUUID(), lots: [withSoc(lot)], events: [withSoc(event)] } }).then(({ error }) => {
       if (error) {
         console.error('Procurement commit error:', error.message);
         setProcurementLotsState(prev => { const r = prev.filter(l => l.id !== lot.id); storage.setProcurementLots(r); return r; });

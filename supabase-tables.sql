@@ -1181,6 +1181,15 @@ create policy "society_rw" on public.procurement_events for all to authenticated
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
 -- transaction: every supplied collection commits together, or nothing does — a
 -- ProcurementLot can never exist in the cloud without its immutable creation event.
+--
+-- PAYLOAD ENVELOPE: { transactionType, transactionId, lots[], events[], …future collections }.
+--   transactionType — the business operation, e.g. 'lot.create', 'jform.generate',
+--                     'dispatch.create', 'payment.release', 'claim.raise', …
+--   transactionId    — one immutable id per business transaction (future audit-ledger /
+--                     financial-engine / document-store / posting / integration linkage).
+-- Phase-1 processes only lots[] + events[]; transactionType / transactionId are RESERVED
+-- envelope metadata (read by future handlers — no behaviour change here).
+--
 -- STABLE SIGNATURE: future phases add optional keys (jforms / documents / claims /
 -- dispatches / payments / financialIntents / postingRequests / …) with new internal
 -- handlers; the RPC name and the client contract never change. SECURITY INVOKER, so the
