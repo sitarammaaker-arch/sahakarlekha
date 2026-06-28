@@ -14,7 +14,7 @@ import { navigationService, getVisibleGroups, type NavContext, type NavGroup } f
 
 export function useNavigation(): NavGroup[] {
   const { society, societyCapabilities } = useData();
-  const { hasPermission } = useAuth();
+  const { hasPermission, isSuperAdmin } = useAuth();
   const societyType = society.societyType ?? 'other';
 
   return useMemo(() => {
@@ -23,8 +23,8 @@ export function useNavigation(): NavGroup[] {
       societyType,
       capabilities,
       hasRole: hasPermission,
-      superAdminShowAll: false,
+      superAdminShowAll: isSuperAdmin,   // C7: platform super-admin bypasses role + capability gates
     };
     return getVisibleGroups(ctx);
-  }, [societyType, societyCapabilities, hasPermission]);
+  }, [societyType, societyCapabilities, hasPermission, isSuperAdmin]);
 }

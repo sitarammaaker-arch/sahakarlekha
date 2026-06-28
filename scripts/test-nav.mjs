@@ -102,5 +102,29 @@ ok(isModuleVisible(salesModule, ctx(INVSALES_CAPS, 'viewer')), 'inv_sales: grant
 ok(!isModuleVisible(salesModule, ctx(SERVICE_CAPS, 'admin')), 'inv_sales: housing/labour do NOT see Sales/Inventory');
 ok(isModuleVisible(tradingAcctModule, ctx(SERVICE_CAPS, 'admin')), 'Trading Account stays UNIVERSAL (visible even to housing/labour)');
 
+// 8. C7 — super-admin show-all: getVisibleGroups returns EVERY module across all domains,
+//    bypassing role + capability gates. Mirrors navVisibility.getVisibleGroups + DOMAIN_ORDER.
+const DOMAIN_ORDER = ['core', 'operations', 'reports', 'registers', 'administration'];
+function getVisibleGroups(context, catalog) {
+  const visible = catalog.filter((m) => isModuleVisible(m, context));
+  return DOMAIN_ORDER
+    .map((domain) => ({ domain, items: visible.filter((m) => m.domain === domain).sort((a, b) => a.order - b.order) }))
+    .filter((g) => g.items.length > 0);
+}
+const sampleCatalog = [
+  { id: 'u',    domain: 'core',           order: 0, requiredCapabilities: [] },
+  { id: 'cap',  domain: 'operations',     order: 0, requiredCapabilities: ['inventory_sales'] },
+  { id: 'role', domain: 'registers',      order: 0, requiredCapabilities: [], requiredRoles: ['admin'] },
+  { id: 'both', domain: 'administration', order: 0, requiredCapabilities: ['dairy_collection'], requiredRoles: ['admin'] },
+];
+const flat = (groups) => groups.flatMap((g) => g.items.map((m) => m.id));
+ok(flat(getVisibleGroups(ctx([], 'viewer', true), sampleCatalog)).length === sampleCatalog.length,
+   'C7: super-admin sees ALL modules (every domain, even role+capability gated)');
+ok(flat(getVisibleGroups(ctx([], 'viewer', false), sampleCatalog)).join(',') === 'u',
+   'C7: non-super viewer still gated — only universal visible (no privilege escalation)');
+ok(getVisibleGroups(ctx(['inventory_sales', 'dairy_collection'], 'admin', false), sampleCatalog).map((g) => g.domain).join(',')
+   === 'core,operations,registers,administration',
+   'C7: domain/group order preserved (DOMAIN_ORDER) — show-all adds items, never reorders');
+
 console.log(`[nav-test] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
