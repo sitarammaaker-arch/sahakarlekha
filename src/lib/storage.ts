@@ -691,14 +691,18 @@ export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAc
     return { ...acc, ...patch } as LedgerAccount;
   });
 
-  // Step 2: Add missing accounts (skip if already present)
+  // Step 2: Add missing accounts. Skip if the CODE already exists OR a head with the
+  // SAME name+type already exists — otherwise a template account (e.g. "Cooperative
+  // Society Shares" at 3202) + an ACCOUNTS_TO_ADD copy at 3208 create a duplicate head.
   const existingIds = new Set(patched.map(a => a.id));
+  const existingNameType = new Set(patched.map(a => `${a.name.trim().toLowerCase()}|${a.type}`));
   for (const newAcc of ACCOUNTS_TO_ADD) {
-    if (!existingIds.has(newAcc.id)) {
-      patched.push(newAcc);
-      newlyAdded.push(newAcc);
-      changed = true;
-    }
+    if (existingIds.has(newAcc.id)) continue;
+    if (existingNameType.has(`${newAcc.name.trim().toLowerCase()}|${newAcc.type}`)) continue;
+    patched.push(newAcc);
+    newlyAdded.push(newAcc);
+    existingNameType.add(`${newAcc.name.trim().toLowerCase()}|${newAcc.type}`);
+    changed = true;
   }
 
   return { accounts: patched, changed, newlyAdded };

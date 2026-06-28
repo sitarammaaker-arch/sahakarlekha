@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,7 +51,7 @@ const TYPE_BADGE_CLASS: Record<AccountType, string> = {
 
 const LedgerHeads: React.FC = () => {
   const { language } = useLanguage();
-  const { accounts, addAccount, updateAccount, deleteAccount, mergeAccounts, getEntityLinks, getAccountBalance } = useData();
+  const { accounts, society, addAccount, updateAccount, deleteAccount, mergeAccounts, getEntityLinks, getAccountBalance } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -141,6 +141,20 @@ const LedgerHeads: React.FC = () => {
     });
     return Object.values(groups).filter(g => g.length > 1);
   }, [accounts]);
+
+  // Auto-clean genuine duplicates (same name + type) silently — no user should ever
+  // see a "Duplicate Account" warning and mistake it for an error. Keep the lowest
+  // code, merge the rest into it (reuses the proven mergeAccounts). Skips when the FY
+  // is audit-locked (no mutation allowed — the gated banner below signals it instead).
+  const autoMergedRef = useRef(false);
+  useEffect(() => {
+    if (autoMergedRef.current || duplicateGroups.length === 0 || society.fyLocked) return;
+    autoMergedRef.current = true;
+    duplicateGroups.forEach(group => {
+      const sorted = [...group].sort((a, b) => a.id.localeCompare(b.id));
+      sorted.slice(1).forEach(dup => mergeAccounts(sorted[0].id, dup.id));
+    });
+  }, [duplicateGroups, society.fyLocked, mergeAccounts]);
 
   const handleMerge = (keepId: string, removeId: string, name: string) => {
     const count = mergeAccounts(keepId, removeId);
@@ -289,7 +303,8 @@ const LedgerHeads: React.FC = () => {
       </div>
 
       {/* Duplicate accounts warning + merge */}
-      {duplicateGroups.length > 0 && (
+      {/* Banner only when the FY is locked (auto-merge can't run then); otherwise duplicates self-clean above. */}
+      {society.fyLocked && duplicateGroups.length > 0 && (
         <Card className="border-amber-300 bg-amber-50 dark:bg-amber-900/20">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2 text-amber-800 dark:text-amber-200">
