@@ -14,7 +14,7 @@ import {
   type Capability, type CapabilityMeta,
 } from '@/lib/navigation';
 import { SOCIETY_TYPES } from '@/lib/constants';
-import { Blocks, Lock, Search, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Blocks, Lock, Search, CheckCircle2, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react';
 import { fmtDateTime } from '@/lib/dateUtils';
 
 export default function Features() {
@@ -32,6 +32,18 @@ export default function Features() {
   const [search, setSearch] = useState('');
   const [pending, setPending] = useState<{ cap: Capability; toHidden: boolean } | null>(null);
   const [reason, setReason] = useState('');
+
+  // Defense in depth (C6.2): this screen governs module visibility, so it must enforce
+  // admin-only at the COMPONENT level — never rely on the sidebar hiding the link. A
+  // non-admin reaching /features directly (URL/bookmark) gets no access and no toggles.
+  if (user?.role !== 'admin') {
+    return (
+      <div className="p-8 text-center text-muted-foreground">
+        <ShieldCheck className="h-12 w-12 mx-auto mb-3 opacity-30" />
+        <p>{hi ? 'केवल व्यवस्थापक के लिए' : 'Admin access required'}</p>
+      </div>
+    );
+  }
 
   const adminRevokeRow = (cap: Capability) =>
     societyCapabilities.find(r => r.capability === cap && r.source === 'admin' && r.mode === 'revoke');

@@ -1079,3 +1079,9 @@ drop policy if exists "society_rw" on public.society_capabilities;
 create policy "society_rw" on public.society_capabilities for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+-- SOURCE TRUST MODEL (C6.2): the app only ever writes source='admin' rows (mode='revoke').
+-- source IN ('plan','plugin','state','trial','system') = ENTITLEMENT and must be written by
+-- SERVER/service-role code ONLY (billing, marketplace, jurisdiction). This policy is
+-- currently source-blind; BEFORE any capability gates a paid/sensitive feature, tighten the
+-- WITH CHECK to: (source = 'admin' and mode = 'revoke') for the 'authenticated' role, and move
+-- entitlement writes behind the service role. Tracked as a pre-monetization hardening item.

@@ -36,7 +36,24 @@ export const DOMAIN_HEADING_KEY: Record<NavDomain, string | null> = {
   administration: null,  // no heading (matches current settings group — verified vs Sidebar)
 };
 
-/** A grant/revoke row from the `society_capabilities` table (C3). */
+/**
+ * A grant/revoke row from the `society_capabilities` table (C3).
+ *
+ * SOURCE TRUST MODEL (C6.2 — documented, not yet enforced in RLS):
+ *   • 'admin'  → CLIENT-writable. The only source the app/UI may create, and only as a
+ *                `revoke` (admin hiding an already-entitled capability). Admin can never
+ *                entitle (see resolver: admin rows are ignored for entitlement).
+ *   • 'plan' | 'plugin' | 'state' | 'system' → SERVER-CONTROLLED ONLY. These create
+ *                ENTITLEMENT and must be written exclusively by trusted server/service-role
+ *                code (billing, marketplace install, jurisdiction rules). The client must
+ *                NEVER create these rows.
+ *   • 'trial'  → SERVER-CONTROLLED ONLY (time-bound entitlement; carries expiresAt).
+ *
+ * NOTE: today's `society_rw` RLS is source-blind (any society member can write any source),
+ * so this rule is enforced only by convention + the client never emitting non-admin rows.
+ * Before any capability gates a PAID/sensitive feature, RLS must restrict client writes to
+ * source='admin' (mode='revoke'). Tracked as a pre-monetization hardening item.
+ */
 export type CapabilitySource = 'admin' | 'plan' | 'plugin' | 'state' | 'trial' | 'system';
 export type CapabilityMode = 'grant' | 'revoke';
 export interface SocietyCapabilityRow {
