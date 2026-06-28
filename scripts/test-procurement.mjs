@@ -51,10 +51,11 @@ ok(!('voucherId' in lot) && !('voucherId' in ev) && !('amount' in lot), 'NO vouc
 
 // 4. M1 — lot + event commit as ONE inseparable business transaction (generic boundary).
 //    Mirrors the DataContext rpc payload + the symmetric rollback.
-const buildCommitPayload = (lots, events) => ({ transactionType: 'lot.create', transactionId: 'TX-UUID', lots, events });
+const buildCommitPayload = (lots, events) => ({ transactionType: 'lot.create', transactionId: 'TX-UUID', transactionVersion: 1, lots, events });
 const payload = buildCommitPayload([lot], [ev]);
 ok(payload.transactionType === 'lot.create', 'envelope: transactionType present (lot.create)');
 ok(typeof payload.transactionId === 'string' && payload.transactionId.length > 0, 'envelope: transactionId present (immutable business-transaction id)');
+ok(payload.transactionVersion === 1, 'envelope: transactionVersion present (= 1)');
 ok(payload.lots.length === 1 && payload.events.length === 1, 'M1: commit payload = exactly one lot + one event (inseparable unit)');
 ok(payload.events[0].correlationId === payload.lots[0].id, 'M1: committed event is linked to the committed lot (correlationId == lot.id)');
 ok(Array.isArray(payload.lots) && Array.isArray(payload.events), 'M1: payload uses object-of-collections shape (stable signature for future keys)');

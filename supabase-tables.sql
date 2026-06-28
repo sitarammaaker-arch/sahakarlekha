@@ -1182,13 +1182,15 @@ create policy "society_rw" on public.procurement_events for all to authenticated
 -- transaction: every supplied collection commits together, or nothing does — a
 -- ProcurementLot can never exist in the cloud without its immutable creation event.
 --
--- PAYLOAD ENVELOPE: { transactionType, transactionId, lots[], events[], …future collections }.
---   transactionType — the business operation, e.g. 'lot.create', 'jform.generate',
---                     'dispatch.create', 'payment.release', 'claim.raise', …
---   transactionId    — one immutable id per business transaction (future audit-ledger /
---                     financial-engine / document-store / posting / integration linkage).
--- Phase-1 processes only lots[] + events[]; transactionType / transactionId are RESERVED
--- envelope metadata (read by future handlers — no behaviour change here).
+-- PAYLOAD ENVELOPE: { transactionType, transactionId, transactionVersion, lots[], events[], …future collections }.
+--   transactionType    — the business operation, e.g. 'lot.create', 'jform.generate',
+--                       'dispatch.create', 'payment.release', 'claim.raise', …
+--   transactionId       — one immutable id per business transaction (future audit-ledger /
+--                       financial-engine / document-store / posting / integration linkage).
+--   transactionVersion  — payload-schema version (today: 1). Reserved so the server can keep
+--                       older clients working if the envelope ever evolves. No behaviour use yet.
+-- Phase-1 processes only lots[] + events[]; the envelope fields are RESERVED metadata
+-- (read by future handlers — no behaviour change here).
 --
 -- STABLE SIGNATURE: future phases add optional keys (jforms / documents / claims /
 -- dispatches / payments / financialIntents / postingRequests / …) with new internal
