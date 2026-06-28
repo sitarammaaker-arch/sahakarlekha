@@ -172,6 +172,22 @@ export interface Loan {
   createdAt: string;
 }
 
+// ── Dairy / Milk society — daily collection register + member payout ──────────
+export type MilkShift = 'morning' | 'evening';
+export interface MilkEntry {
+  id: string;
+  date: string;          // YYYY-MM-DD
+  shift: MilkShift;
+  memberId: string;      // → Member.id
+  memberName: string;    // denormalised for the payout sheet
+  qty: number;           // litres
+  fat: number;           // fat %
+  snf: number;           // SNF / CLR (informational)
+  rate: number;          // ₹ per litre (society enters; no union rate hardcoded)
+  amount: number;        // qty × rate
+  createdAt: string;
+}
+
 export type AssetCategory = 'Land' | 'Building' | 'Furniture' | 'Equipment' | 'Vehicle' | 'Computer' | 'Other';
 export type AssetStatus = 'active' | 'disposed';
 

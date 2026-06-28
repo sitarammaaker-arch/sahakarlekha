@@ -128,11 +128,14 @@ const LedgerHeads: React.FC = () => {
   const liabilityCount = accounts.filter(a => a.type === 'liability').length;
   const incExpCount    = accounts.filter(a => a.type === 'income' || a.type === 'expense').length;
 
-  // Duplicate detection: group non-group accounts by normalized name
+  // Duplicate detection: group non-group accounts by normalized name + TYPE.
+  // Same name but DIFFERENT type — e.g. "Rent" income (किराया आय) vs "Rent" expense
+  // (किराया व्यय) — are NOT duplicates; merging them across type would corrupt the
+  // P&L / Income & Expenditure, so they must never be flagged.
   const duplicateGroups = useMemo(() => {
     const groups: Record<string, LedgerAccount[]> = {};
     accounts.filter(a => !a.isGroup).forEach(a => {
-      const key = a.name.trim().toLowerCase();
+      const key = `${a.name.trim().toLowerCase()}|${a.type}`;
       if (!groups[key]) groups[key] = [];
       groups[key].push(a);
     });

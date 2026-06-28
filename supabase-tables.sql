@@ -1024,3 +1024,28 @@ $$;
 
 grant execute on function issue_certificate(text, text, text, text, int) to anon, authenticated;
 grant execute on function verify_certificate(text, text) to anon, authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Dairy / Milk society — daily collection register (member-wise qty/fat/SNF/payout)
+-- RUN THIS BLOCK once in the Supabase SQL editor to enable the Milk Collection module.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists milk_entries (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  date text,
+  shift text,
+  "memberId" text,
+  "memberName" text,
+  qty numeric,
+  fat numeric,
+  snf numeric,
+  rate numeric,
+  amount numeric,
+  "createdAt" timestamp default now()
+);
+-- Society-scoped RLS (mirrors the society_rw policy used by all data tables)
+alter table public.milk_entries enable row level security;
+drop policy if exists "society_rw" on public.milk_entries;
+create policy "society_rw" on public.milk_entries for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));

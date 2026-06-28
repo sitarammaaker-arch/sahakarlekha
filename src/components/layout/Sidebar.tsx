@@ -7,7 +7,7 @@ import {
   Scale, TrendingUp, FileSpreadsheet, BarChart3, Settings, LogOut,
   ChevronLeft, ChevronRight, ArrowLeftRight, BookMarked, Landmark, Package, ShieldCheck, CalendarDays,
   ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, HandCoins, Banknote, Clock, Truck, UserCheck, Trash2, CheckCircle2, Shield, Percent, Coins, Layers, Users2, ClipboardList, FileCheck, DatabaseBackup, TrendingDown,
-  Warehouse, PiggyBank, Receipt, UserCog, FileJson, Wheat, Vote, BookOpenCheck, ScrollText, Hash,
+  Warehouse, PiggyBank, Receipt, UserCog, FileJson, Wheat, Vote, BookOpenCheck, ScrollText, Hash, Milk,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -52,6 +52,7 @@ const operationsNavItems: NavItem[] = [
   { key: 'purchases', icon: PackagePlus, path: '/purchases' },
   { key: 'makePayment', icon: Banknote, path: '/make-payment', roles: ['admin', 'accountant'] },
   { key: 'salary', icon: BadgeDollarSign, path: '/salary' },
+  { key: 'milkCollection', icon: Milk, path: '/milk-collection' },
 ];
 
 const reportNavItems: NavItem[] = [
