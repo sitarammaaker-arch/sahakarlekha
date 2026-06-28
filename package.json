@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "validate:glossary": "node scripts/validate-glossary.mjs",
-    "test:calc": "node scripts/test-calculators.mjs"
+    "test:calc": "node scripts/test-calculators.mjs",
+    "test:nav": "node scripts/test-nav.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
