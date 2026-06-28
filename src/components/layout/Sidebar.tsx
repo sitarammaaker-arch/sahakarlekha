@@ -2,17 +2,13 @@ import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  LayoutDashboard, Wallet, Building2, FileText, BookOpen, Users,
-  Scale, TrendingUp, FileSpreadsheet, BarChart3, Settings, LogOut,
-  ChevronLeft, ChevronRight, ArrowLeftRight, BookMarked, Landmark, Package, ShieldCheck, CalendarDays,
-  ListTree, Boxes, ShoppingCart, PackagePlus, BadgeDollarSign, HandCoins, Banknote, Clock, Truck, UserCheck, Trash2, CheckCircle2, Shield, Percent, Coins, Layers, Users2, ClipboardList, FileCheck, DatabaseBackup, TrendingDown,
-  Warehouse, PiggyBank, Receipt, UserCog, FileJson, Wheat, Vote, BookOpenCheck, ScrollText, Hash, Milk,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useNavigation } from '@/hooks/useNavigation';
+import type { ModuleDefinition } from '@/lib/navigation';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -21,108 +17,21 @@ interface SidebarProps {
   onMobileClose: () => void;
 }
 
-interface NavItem {
-  key: string;
-  icon: React.ElementType;
-  path: string;
-  roles?: ('admin' | 'accountant' | 'viewer')[];
-}
-
-const mainNavItems: NavItem[] = [
-  { key: 'dashboard', icon: LayoutDashboard, path: '/dashboard' },
-  { key: 'cashBook', icon: Wallet, path: '/cash-book' },
-  { key: 'bankBook', icon: Building2, path: '/bank-book' },
-  { key: 'bankReconciliation', icon: CheckCircle2, path: '/bank-reconciliation' },
-  { key: 'vouchers', icon: FileText, path: '/vouchers' },
-  { key: 'compoundVoucher', icon: Layers, path: '/compound-voucher', roles: ['admin', 'accountant'] },
-  { key: 'voucherApproval', icon: CheckCircle2, path: '/voucher-approval', roles: ['admin'] },
-  { key: 'dayBook', icon: CalendarDays, path: '/day-book' },
-  { key: 'ledger', icon: BookOpen, path: '/ledger' },
-  { key: 'members', icon: Users, path: '/members' },
-  { key: 'memberApplication', icon: ClipboardList, path: '/member-application', roles: ['admin', 'accountant'] },
-];
-
-const operationsNavItems: NavItem[] = [
-  { key: 'ledgerHeads', icon: ListTree, path: '/ledger-heads' },
-  { key: 'inventory', icon: Boxes, path: '/inventory' },
-  { key: 'suppliers', icon: Truck, path: '/suppliers' },
-  { key: 'customers', icon: UserCheck, path: '/customers' },
-  { key: 'sales', icon: ShoppingCart, path: '/sales' },
-  { key: 'receivePayment', icon: HandCoins, path: '/receive-payment', roles: ['admin', 'accountant'] },
-  { key: 'purchases', icon: PackagePlus, path: '/purchases' },
-  { key: 'makePayment', icon: Banknote, path: '/make-payment', roles: ['admin', 'accountant'] },
-  { key: 'salary', icon: BadgeDollarSign, path: '/salary' },
-  { key: 'milkCollection', icon: Milk, path: '/milk-collection' },
-];
-
-const reportNavItems: NavItem[] = [
-  { key: 'trialBalance', icon: Scale, path: '/trial-balance' },
-  { key: 'receiptsPayments', icon: ArrowLeftRight, path: '/receipts-payments' },
-  { key: 'tradingAccount', icon: ShoppingCart, path: '/trading-account' },
-  { key: 'profitLoss', icon: TrendingUp, path: '/profit-loss' },
-  { key: 'balanceSheet', icon: FileSpreadsheet, path: '/balance-sheet' },
-  { key: 'reports', icon: BarChart3, path: '/reports' },
-  { key: 'saleRegister', icon: ShoppingCart, path: '/sale-register' },
-  { key: 'purchaseRegister', icon: PackagePlus, path: '/purchase-register' },
-  { key: 'billsOutstanding', icon: Clock, path: '/bills-outstanding' },
-  { key: 'gstSummary', icon: Percent, path: '/gst-summary' },
-  { key: 'agingAnalysis', icon: TrendingDown, path: '/aging-analysis' },
-  { key: 'tdsForm16A', icon: Receipt, path: '/tds-form16a' },
-  { key: 'tdsRegister', icon: Receipt, path: '/tds-register' },
-  { key: 'stockValuation', icon: Warehouse, path: '/stock-valuation' },
-  { key: 'closingStockReport', icon: Package, path: '/closing-stock-report' },
-  { key: 'budgetModule', icon: PiggyBank, path: '/budget-module' },
-  { key: 'eWayBill', icon: FileJson, path: '/eway-bill' },
-  { key: 'hsnMaster', icon: Hash, path: '/hsn-master' },
-  { key: 'nabardReport', icon: Landmark, path: '/nabard-report' },
-  { key: 'federationReport', icon: ScrollText, path: '/federation-report' },
-  { key: 'recoverables', icon: ScrollText, path: '/recoverables' },
-  { key: 'kachiAarat', icon: ScrollText, path: '/kachi-aarat' },
-];
-
-const registerNavItems: NavItem[] = [
-  { key: 'shareRegister', icon: BookMarked, path: '/share-register' },
-  { key: 'loanRegister', icon: Landmark, path: '/loan-register' },
-  { key: 'loanInterest', icon: Percent, path: '/loan-interest', roles: ['admin', 'accountant'] },
-  { key: 'assetRegister', icon: Package, path: '/asset-register' },
-  { key: 'depreciationSchedule', icon: TrendingDown, path: '/depreciation-schedule' },
-  { key: 'auditRegister', icon: ShieldCheck, path: '/audit-register' },
-  { key: 'meetingRegister', icon: Users2, path: '/meeting-register' },
-  { key: 'nominationRegister', icon: UserCheck, path: '/nomination-register' },
-  { key: 'form1MemberList', icon: ClipboardList, path: '/form1-member-list' },
-  { key: 'auditCertificate', icon: FileCheck, path: '/audit-certificate', roles: ['admin', 'accountant'] },
-  { key: 'auditSchedules', icon: ClipboardList, path: '/audit-schedules', roles: ['admin', 'accountant'] },
-  { key: 'reserveFund', icon: Shield, path: '/reserve-fund', roles: ['admin', 'accountant'] },
-  { key: 'profitDistribution', icon: Coins, path: '/profit-distribution', roles: ['admin', 'accountant'] },
-  { key: 'deletedVouchers', icon: Trash2, path: '/deleted-vouchers', roles: ['admin'] },
-  { key: 'kccLoan', icon: Wheat, path: '/kcc-loan' },
-  { key: 'electionModule', icon: Vote, path: '/election-module' },
-  { key: 'boardOfDirectors', icon: Users2, path: '/board-of-directors', roles: ['admin'] },
-];
-
-const settingsNavItems: NavItem[] = [
-  { key: 'societySetup', icon: Settings, path: '/society-setup', roles: ['admin'] },
-  { key: 'openingBalances', icon: BookOpenCheck, path: '/opening-balances', roles: ['admin'] },
-  { key: 'userManagement', icon: UserCog, path: '/user-management', roles: ['admin'] },
-  { key: 'backupRestore', icon: DatabaseBackup, path: '/backup-restore', roles: ['admin'] },
-  { key: 'multiSocietyConsolidation', icon: Building2, path: '/multi-society-consolidation', roles: ['admin'] },
-  { key: 'universalImporter', icon: FileSpreadsheet, path: '/universal-importer', roles: ['admin'] },
-];
-
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpen, onMobileClose }) => {
   const { t } = useLanguage();
-  const { user, logout, hasPermission } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
+  // Capability-Based Navigation: groups + items come from the registry/engine, NOT
+  // hardcoded arrays. Role filtering is applied inside the engine (isModuleVisible).
+  const groups = useNavigation();
 
-  const renderNavItem = (item: NavItem) => {
-    if (item.roles && !hasPermission(item.roles)) return null;
-
-    const isActive = location.pathname === item.path;
+  const renderNavItem = (item: ModuleDefinition) => {
+    const isActive = location.pathname === item.route;
     const Icon = item.icon;
 
     const linkContent = (
       <NavLink
-        to={item.path}
+        to={item.route}
         onClick={onMobileClose} // Close mobile sidebar on navigation
         className={cn(
           'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
@@ -132,20 +41,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
         )}
       >
         <Icon className={cn('h-5 w-5 flex-shrink-0', isActive && 'text-sidebar-primary')} />
-        {!collapsed && <span className="text-sm font-medium truncate">{t(item.key)}</span>}
+        {!collapsed && <span className="text-sm font-medium truncate">{t(item.titleKey)}</span>}
       </NavLink>
     );
 
     if (collapsed) {
       return (
-        <Tooltip key={item.key} delayDuration={0}>
+        <Tooltip key={item.id} delayDuration={0}>
           <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
-          <TooltipContent side="right" className="font-medium">{t(item.key)}</TooltipContent>
+          <TooltipContent side="right" className="font-medium">{t(item.titleKey)}</TooltipContent>
         </Tooltip>
       );
     }
 
-    return <div key={item.key}>{linkContent}</div>;
+    return <div key={item.id}>{linkContent}</div>;
   };
 
   return (
@@ -192,50 +101,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
         </Button>
       </div>
 
-      {/* Navigation */}
+      {/* Navigation — rendered from the capability engine (groups in domain order,
+          a separator before every group except the first, heading when present). */}
       <nav className="flex flex-col h-[calc(100vh-4rem)] p-3 overflow-y-auto">
-        <div className="space-y-1">
-          {mainNavItems.map(renderNavItem)}
-        </div>
-
-        <Separator className="my-4 bg-sidebar-border" />
-
-        {!collapsed && (
-          <p className="px-3 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-2">
-            {t('operations') || 'Operations'}
-          </p>
-        )}
-        <div className="space-y-1">
-          {operationsNavItems.map(renderNavItem)}
-        </div>
-
-        <Separator className="my-4 bg-sidebar-border" />
-
-        {!collapsed && (
-          <p className="px-3 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-2">
-            {t('reports')}
-          </p>
-        )}
-        <div className="space-y-1">
-          {reportNavItems.map(renderNavItem)}
-        </div>
-
-        <Separator className="my-4 bg-sidebar-border" />
-
-        {!collapsed && (
-          <p className="px-3 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-2">
-            {t('registers') || 'Registers'}
-          </p>
-        )}
-        <div className="space-y-1">
-          {registerNavItems.map(renderNavItem)}
-        </div>
-
-        <Separator className="my-4 bg-sidebar-border" />
-
-        <div className="space-y-1">
-          {settingsNavItems.map(renderNavItem)}
-        </div>
+        {groups.map((group, gi) => (
+          <React.Fragment key={group.domain}>
+            {gi > 0 && <Separator className="my-4 bg-sidebar-border" />}
+            {group.headingKey && !collapsed && (
+              <p className="px-3 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-2">
+                {t(group.headingKey)}
+              </p>
+            )}
+            <div className="space-y-1">
+              {group.items.map(renderNavItem)}
+            </div>
+          </React.Fragment>
+        ))}
 
         <div className="flex-1" />
 

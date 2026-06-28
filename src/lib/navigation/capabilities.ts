@@ -29,11 +29,11 @@ export const DOMAIN_ORDER: NavDomain[] = ['core', 'operations', 'reports', 'regi
 
 /** i18n heading key per group (null = no heading, as 'core' renders today). Verified against Sidebar in C2. */
 export const DOMAIN_HEADING_KEY: Record<NavDomain, string | null> = {
-  core: null,
+  core: null,            // no heading (matches current main group)
   operations: 'operations',
   reports: 'reports',
   registers: 'registers',
-  administration: 'settings',
+  administration: null,  // no heading (matches current settings group — verified vs Sidebar)
 };
 
 /** Per-society admin grants/revokes (persisted as society_settings.capability_overrides from C3). */
