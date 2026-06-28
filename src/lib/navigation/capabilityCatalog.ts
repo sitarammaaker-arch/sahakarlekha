@@ -37,8 +37,8 @@ export interface CapabilityMeta {
 export const CAPABILITY_META: CapabilityMeta[] = [
   { id: 'dairy_collection', category: 'dairy', nameHi: 'दुग्ध संकलन', nameEn: 'Dairy Collection',
     descHi: 'सदस्य-वार दूध संकलन — मात्रा, फैट, SNF, दर और भुगतान पत्रक।', descEn: 'Member-wise milk collection — quantity, fat, SNF, rate and payout sheet.', docsUrl: '#' },
-  { id: 'trading', category: 'trading', nameHi: 'व्यापार', nameEn: 'Trading',
-    descHi: 'माल की खरीद-बिक्री, ग्राहक, आपूर्तिकर्ता और स्टॉक से जुड़े मॉड्यूल।', descEn: 'Buying and selling of goods — customers, suppliers and stock modules.', docsUrl: '#' },
+  { id: 'inventory_sales', category: 'trading', nameHi: 'भंडार एवं बिक्री', nameEn: 'Inventory & Sales',
+    descHi: 'माल का स्टॉक, ग्राहक, बिक्री, बिक्री रजिस्टर और स्टॉक मूल्यांकन।', descEn: 'Goods stock, customers, sales, sale register and stock valuation.', docsUrl: '#' },
   { id: 'warehousing', category: 'inventory', nameHi: 'भंडारण', nameEn: 'Warehousing',
     descHi: 'गोदाम-आधारित स्टॉक मूल्यांकन और भंडार प्रबंधन।', descEn: 'Warehouse-based stock valuation and inventory management.', docsUrl: '#' },
   { id: 'lending', category: 'lending', nameHi: 'ऋण', nameEn: 'Lending',

@@ -10,7 +10,7 @@ export type Role = 'admin' | 'accountant' | 'viewer';
 
 /** Capabilities a module can require. Extensible — new ones never edit existing modules. */
 export type Capability =
-  | 'trading'
+  | 'inventory_sales'
   | 'lending'
   | 'dairy_collection'
   | 'procurement_msp'
