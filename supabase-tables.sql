@@ -1116,3 +1116,63 @@ create policy "cap_delete_admin" on public.society_capabilities for delete to au
     public.is_society_admin(society_id::text)
     and source = 'admin'
   );
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Procurement ERP — Phase 1.0 (Farmer → ProcurementLot → lot.created event).
+-- Minimal vertical slice: farmer master, lots, and an append-only event ledger.
+-- Loads are error-tolerant; the app works before this block is run.
+-- RUN THIS BLOCK once in the Supabase SQL editor.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists procurement_farmers (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "farmerCode" text,
+  "farmerName" text,
+  "fatherName" text,
+  mobile text,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+create table if not exists procurement_lots (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "centreId" text,
+  "seasonId" text,
+  "cropId" text,
+  "varietyId" text,
+  "farmerId" text,
+  "arhtiyaId" text,
+  quantity jsonb,
+  "mspRate" jsonb,
+  "operationalStatus" text,
+  "financialStatus" text,
+  "reconciliationStatus" text,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+create table if not exists procurement_events (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  name text not null,
+  "correlationId" text,
+  "occurredAt" timestamptz,
+  "recordedAt" timestamptz default now(),
+  actor text,
+  payload jsonb
+);
+-- Society-scoped RLS (mirrors the society_rw policy used by all data tables)
+alter table public.procurement_farmers enable row level security;
+alter table public.procurement_lots enable row level security;
+alter table public.procurement_events enable row level security;
+drop policy if exists "society_rw" on public.procurement_farmers;
+drop policy if exists "society_rw" on public.procurement_lots;
+drop policy if exists "society_rw" on public.procurement_events;
+create policy "society_rw" on public.procurement_farmers for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create policy "society_rw" on public.procurement_lots for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create policy "society_rw" on public.procurement_events for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));

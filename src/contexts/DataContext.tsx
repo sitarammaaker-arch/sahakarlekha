@@ -21,6 +21,7 @@ import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
+import type { Farmer, ProcurementLot, ProcurementEvent, Quantity, Money } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
 
 interface DataContextType {
@@ -30,6 +31,11 @@ interface DataContextType {
   society: SocietySettings;
   societyCapabilities: SocietyCapabilityRow[];   // C3: capability grant/revoke rows
   setCapabilityHidden: (capability: Capability, hidden: boolean, meta?: { reason?: string; by?: string }) => void;  // C6
+  procurementFarmers: Farmer[];
+  procurementLots: ProcurementLot[];
+  procurementEvents: ProcurementEvent[];
+  addFarmer: (data: { farmerName: string; fatherName?: string; mobile?: string }) => Farmer;
+  addProcurementLot: (data: { farmerId: string; cropId: string; varietyId?: string; quantity: Quantity; mspRate: Money }) => ProcurementLot;
   loans: Loan[];
   assets: Asset[];
 
@@ -200,6 +206,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
   const [loans, setLoansState] = useState<Loan[]>([]);
   const [societyCapabilities, setSocietyCapabilitiesState] = useState<SocietyCapabilityRow[]>([]);
+  const [procurementFarmers, setProcurementFarmersState] = useState<Farmer[]>(() => storage.getProcurementFarmers());
+  const [procurementLots, setProcurementLotsState] = useState<ProcurementLot[]>(() => storage.getProcurementLots());
+  const [procurementEvents, setProcurementEventsState] = useState<ProcurementEvent[]>(() => storage.getProcurementEvents());
+  const procurementFarmersRef = useRef<Farmer[]>(procurementFarmers);
+  useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
   const loansRef = useRef<Loan[]>(loans);
   useEffect(() => { loansRef.current = loans; }, [loans]);
   const [assets, setAssetsState] = useState<Asset[]>([]);
@@ -250,6 +261,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Reset all state to empty before loading new society's data
     setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
+    setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
@@ -377,6 +389,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             })));
           },
           () => setSocietyCapabilitiesState([]),
+        );
+
+        // Procurement Phase 1.0 — error-tolerant load (Supabase → localStorage fallback). Independent
+        // queries: a missing table NEVER breaks the main data load; the demo persists via localStorage.
+        supabase.from('procurement_farmers').select('*').eq('society_id', sid).then(
+          ({ data, error }) => setProcurementFarmersState(error || !data ? storage.getProcurementFarmers() : (data as unknown as Farmer[])),
+          () => setProcurementFarmersState(storage.getProcurementFarmers()),
+        );
+        supabase.from('procurement_lots').select('*').eq('society_id', sid).then(
+          ({ data, error }) => setProcurementLotsState(error || !data ? storage.getProcurementLots() : (data as unknown as ProcurementLot[])),
+          () => setProcurementLotsState(storage.getProcurementLots()),
+        );
+        supabase.from('procurement_events').select('*').eq('society_id', sid).then(
+          ({ data, error }) => setProcurementEventsState(error || !data ? storage.getProcurementEvents() : (data as unknown as ProcurementEvent[])),
+          () => setProcurementEventsState(storage.getProcurementEvents()),
         );
 
         // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
@@ -766,6 +793,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSocietyState(storage.getSociety());
         setLoansState(storage.getLoans());
         setSocietyCapabilitiesState([]);   // C3: offline fallback → empty (all modules visible, as today)
+        setProcurementFarmersState(storage.getProcurementFarmers());
+        setProcurementLotsState(storage.getProcurementLots());
+        setProcurementEventsState(storage.getProcurementEvents());
         setAssetsState(storage.getAssets());
       } finally {
         setIsLoading(false);
@@ -1844,6 +1874,75 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return next;
     });
   }, []);
+
+  // ── Procurement Phase 1.0 ──────────────────────────────────────────────────
+  // Farmer master (minimal). Optimistic + localStorage mirror + Supabase upsert + RULE-1 rollback.
+  const addFarmer = useCallback((data: { farmerName: string; fatherName?: string; mobile?: string }): Farmer => {
+    if (guardFYLocked()) return { id: '', farmerCode: '', farmerName: data.farmerName, createdAt: '', updatedAt: '' };
+    const now = new Date().toISOString();
+    const newFarmer: Farmer = {
+      id: crypto.randomUUID(),
+      farmerCode: `F${String(procurementFarmersRef.current.length + 1).padStart(4, '0')}`,
+      farmerName: data.farmerName,
+      fatherName: data.fatherName || undefined,
+      mobile: data.mobile || undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setProcurementFarmersState(prev => { const u = [...prev, newFarmer]; storage.setProcurementFarmers(u); return u; });
+    supabase.from('procurement_farmers').upsert(withSoc(newFarmer)).then(({ error }) => {
+      if (error) {
+        console.error('Farmer sync error:', error.message);
+        setProcurementFarmersState(prev => { const r = prev.filter(f => f.id !== newFarmer.id); storage.setProcurementFarmers(r); return r; });
+        toastRef.current({ title: 'किसान सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return newFarmer;
+  }, []);
+
+  // Create a ProcurementLot + exactly ONE immutable 'lot.created' event (append-only). No voucher.
+  const addProcurementLot = useCallback((data: { farmerId: string; cropId: string; varietyId?: string; quantity: Quantity; mspRate: Money }): ProcurementLot => {
+    const sentinel: ProcurementLot = { id: '', centreId: '', seasonId: '', cropId: '', farmerId: '', operationalStatus: 'created', financialStatus: 'unbilled', reconciliationStatus: 'pending', createdAt: '', updatedAt: '' };
+    if (guardFYLocked()) return sentinel;
+    const now = new Date().toISOString();
+    const lot: ProcurementLot = {
+      id: crypto.randomUUID(),
+      centreId: societyIdRef.current,
+      seasonId: societyRef.current?.financialYear || '',
+      cropId: data.cropId,
+      varietyId: data.varietyId || undefined,
+      farmerId: data.farmerId,
+      quantity: data.quantity,
+      mspRate: data.mspRate,
+      operationalStatus: 'created',
+      financialStatus: 'unbilled',
+      reconciliationStatus: 'pending',
+      createdAt: now,
+      updatedAt: now,
+    };
+    const event: ProcurementEvent = {
+      id: crypto.randomUUID(),
+      correlationId: lot.id,
+      name: 'lot.created',
+      occurredAt: now,
+      recordedAt: now,
+      actor: user?.name || 'System',
+      payload: { centreId: lot.centreId, farmerId: lot.farmerId, cropId: lot.cropId, seasonId: lot.seasonId },
+    };
+    setProcurementLotsState(prev => { const u = [...prev, lot]; storage.setProcurementLots(u); return u; });
+    setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
+    supabase.from('procurement_lots').upsert(withSoc(lot)).then(({ error }) => {
+      if (error) {
+        console.error('Lot sync error:', error.message);
+        setProcurementLotsState(prev => { const r = prev.filter(l => l.id !== lot.id); storage.setProcurementLots(r); return r; });
+        setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
+        toastRef.current({ title: 'लॉट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara banayein.`, variant: 'destructive', duration: 12000 });
+        return;
+      }
+      supabase.from('procurement_events').upsert(withSoc(event)).then(({ error: evErr }) => { if (evErr) console.error('Event sync error:', evErr.message); });
+    });
+    return lot;
+  }, [user]);
 
   // Only active (non-deleted) vouchers for all financial calculations
   const activeVouchers = vouchers.filter(v => !v.isDeleted);
@@ -3971,6 +4070,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       vouchers, members, accounts, society, loans, assets, auditObjections,
       stockItems, stockMovements, sales, purchases, employees, salaryRecords,
       suppliers, customers, kccLoans, societyCapabilities, setCapabilityHidden,
+      procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, approveMember, rejectMember,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,

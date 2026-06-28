@@ -1,4 +1,5 @@
 import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer } from '@/types';
+import type { Farmer, ProcurementLot, ProcurementEvent } from '@/lib/procurement';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
 export interface VoucherTemplate {
@@ -61,6 +62,9 @@ const KEYS = {
   supplierCounter: 'sahayata_supplier_counter',
   customers: 'sahayata_customers',
   customerCounter: 'sahayata_customer_counter',
+  procurementFarmers: 'sahayata_procurement_farmers',
+  procurementLots: 'sahayata_procurement_lots',
+  procurementEvents: 'sahayata_procurement_events',
 };
 
 // ── Central account ID constants ─────────────────────────────────────────────
@@ -741,6 +745,13 @@ export const setVouchers = (v: Voucher[]): void => set(KEYS.vouchers, v);
 
 export const getMembers = (): Member[] => get(KEYS.members, []);
 export const setMembers = (m: Member[]): void => set(KEYS.members, m);
+// Procurement Phase 1.0 — local repository for farmers / lots / append-only events
+export const getProcurementFarmers = (): Farmer[] => get(KEYS.procurementFarmers, []);
+export const setProcurementFarmers = (f: Farmer[]): void => set(KEYS.procurementFarmers, f);
+export const getProcurementLots = (): ProcurementLot[] => get(KEYS.procurementLots, []);
+export const setProcurementLots = (l: ProcurementLot[]): void => set(KEYS.procurementLots, l);
+export const getProcurementEvents = (): ProcurementEvent[] => get(KEYS.procurementEvents, []);
+export const setProcurementEvents = (e: ProcurementEvent[]): void => set(KEYS.procurementEvents, e);
 
 export const getAccounts = (): LedgerAccount[] => {
   const stored = get<LedgerAccount[] | null>(KEYS.accounts, null);

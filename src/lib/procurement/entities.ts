@@ -1,7 +1,7 @@
 /**
  * Procurement Phase-0.2 — domain entities + the ProcurementLot aggregate root. Interfaces ONLY.
  */
-import type { BaseEntity, Money, Percentage, Weight } from './shared';
+import type { BaseEntity, Money, Quantity, Percentage, Weight } from './shared';
 
 /** Three orthogonal status dimensions (frozen blueprint). */
 export type OperationalStatus =
@@ -17,7 +17,7 @@ export type ReconciliationStatus =
   | 'matched' | 'variance' | 'disputed' | 'resolved';
 
 // ── Stakeholders ──
-export interface Farmer extends BaseEntity { name: string; fatherName?: string; village?: string; bankAccount?: string; }
+export interface Farmer extends BaseEntity { farmerCode: string; farmerName: string; fatherName?: string; mobile?: string; }
 export interface Arhtiya extends BaseEntity { name: string; licenceNo: string; }
 export interface Labour extends BaseEntity { name: string; }
 export interface Transporter extends BaseEntity { name: string; vehicleNo?: string; }
@@ -44,6 +44,8 @@ export interface ProcurementLot extends BaseEntity {
   varietyId?: string;
   farmerId: string;
   arhtiyaId?: string;
+  quantity?: Quantity;
+  mspRate?: Money;
   operationalStatus: OperationalStatus;
   financialStatus: FinancialStatus;
   reconciliationStatus: ReconciliationStatus;

@@ -119,6 +119,7 @@ const TdsForm16A = lazyWithRetry(() => import("./pages/TdsForm16A"));
 const TdsRegister = lazyWithRetry(() => import("./pages/TdsRegister"));
 const UserManagement = lazyWithRetry(() => import("./pages/UserManagement"));
 const Features = lazyWithRetry(() => import("./pages/Features"));
+const ProcurementLots = lazyWithRetry(() => import("./pages/ProcurementLots"));
 const EWayBill = lazyWithRetry(() => import("./pages/EWayBill"));
 const HsnMaster = lazyWithRetry(() => import("./pages/HsnMaster"));
 const KccLoan = lazyWithRetry(() => import("./pages/KccLoan"));
@@ -287,6 +288,7 @@ const AppRoutes = () => {
       <Route path="/tds-register" element={<ProtectedRoute><TdsRegister /></ProtectedRoute>} />
       <Route path="/user-management" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
       <Route path="/features" element={<ProtectedRoute><Features /></ProtectedRoute>} />
+      <Route path="/procurement-lots" element={<ProtectedRoute><ProcurementLots /></ProtectedRoute>} />
       <Route path="/eway-bill" element={<ProtectedRoute><EWayBill /></ProtectedRoute>} />
       <Route path="/kcc-loan" element={<ProtectedRoute><KccLoan /></ProtectedRoute>} />
       <Route path="/election-module" element={<ProtectedRoute><ElectionModule /></ProtectedRoute>} />
