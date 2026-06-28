@@ -49,10 +49,10 @@ export const DOMAIN_HEADING_KEY: Record<NavDomain, string | null> = {
  *                NEVER create these rows.
  *   • 'trial'  → SERVER-CONTROLLED ONLY (time-bound entitlement; carries expiresAt).
  *
- * ENFORCEMENT (C6.3): the rule is now enforced in the DATABASE, not by convention. RLS lets
- * the 'authenticated' role write ONLY source='admin', mode='revoke'; every entitlement source
- * (plan/plugin/state/trial/system) is rejected for clients and writable only by service-role/
- * server code (which bypasses RLS). See the policies in supabase-tables.sql.
+ * ENFORCEMENT (C6.3/C6.4): the rules are enforced in the DATABASE, not by convention. RLS lets
+ * only a society ADMIN (is_society_admin) write, and only source='admin', mode='revoke';
+ * accountant/viewer and every entitlement source (plan/plugin/state/trial/system) are rejected
+ * for clients (entitlement = service-role/server only). See the policies in supabase-tables.sql.
  */
 export type CapabilitySource = 'admin' | 'plan' | 'plugin' | 'state' | 'trial' | 'system';
 export type CapabilityMode = 'grant' | 'revoke';

@@ -1076,12 +1076,12 @@ create index if not exists idx_society_capabilities_capability on society_capabi
 -- Society-scoped RLS (mirrors the society_rw policy used by all data tables)
 alter table public.society_capabilities enable row level security;
 
--- C6.3 — SERVER-SIDE TRUST ENFORCEMENT (the DB is the authority, not client code).
--- Reads stay open to society members (entitlement resolution must see every source). WRITES by
--- the 'authenticated' role are restricted to source='admin', mode='revoke' — the only rows the
--- client may ever create. Entitlement sources (plan/plugin/state/trial/system) are REJECTED for
--- clients and can be written ONLY by service-role/server code (which bypasses RLS). Replaces the
--- earlier source-blind society_rw policy. Idempotent: re-runnable.
+-- C6.3 + C6.4 — SERVER-SIDE TRUST + AUTHORIZATION (the DB is the authority, not client code).
+-- READS stay open to any society member (entitlement resolution must see every source). WRITES are:
+--   • restricted to source='admin', mode='revoke' (C6.3 — the only rows a client may create), AND
+--   • allowed ONLY for a Society ADMINISTRATOR of that society (C6.4 — is_society_admin()).
+-- So accountant/operator/viewer are rejected at the database even via direct API; entitlement
+-- sources (plan/plugin/state/trial/system) remain server/service-role only. Idempotent: re-runnable.
 drop policy if exists "society_rw"                on public.society_capabilities;
 drop policy if exists "cap_select"                on public.society_capabilities;
 drop policy if exists "cap_insert_admin_revoke"   on public.society_capabilities;
@@ -1092,27 +1092,27 @@ drop policy if exists "cap_delete_admin"          on public.society_capabilities
 create policy "cap_select" on public.society_capabilities for select to authenticated
   using (society_id::text in (select public.current_user_society_ids()));
 
--- INSERT: society members may create ONLY an admin 'hide' row.
+-- INSERT: only a society ADMIN may create an admin 'hide' row.
 create policy "cap_insert_admin_revoke" on public.society_capabilities for insert to authenticated
   with check (
-    society_id::text in (select public.current_user_society_ids())
+    public.is_society_admin(society_id::text)
     and source = 'admin' and mode = 'revoke'
   );
 
--- UPDATE: may only touch an existing admin row, and it must stay admin/revoke.
+-- UPDATE: only a society ADMIN, only an existing admin row, staying admin/revoke.
 create policy "cap_update_admin_revoke" on public.society_capabilities for update to authenticated
   using (
-    society_id::text in (select public.current_user_society_ids())
+    public.is_society_admin(society_id::text)
     and source = 'admin'
   )
   with check (
-    society_id::text in (select public.current_user_society_ids())
+    public.is_society_admin(society_id::text)
     and source = 'admin' and mode = 'revoke'
   );
 
--- DELETE: may only remove an admin row (re-enable). Entitlement rows are untouchable by clients.
+-- DELETE: only a society ADMIN may remove an admin row (re-enable). Entitlement rows are untouchable.
 create policy "cap_delete_admin" on public.society_capabilities for delete to authenticated
   using (
-    society_id::text in (select public.current_user_society_ids())
+    public.is_society_admin(society_id::text)
     and source = 'admin'
   );
