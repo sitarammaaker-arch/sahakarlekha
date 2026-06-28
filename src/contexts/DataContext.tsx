@@ -19,6 +19,7 @@ import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } from '@/lib/storage';
 import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
+import type { SocietyCapabilityRow } from '@/lib/navigation';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
 
 interface DataContextType {
@@ -26,6 +27,7 @@ interface DataContextType {
   members: Member[];
   accounts: LedgerAccount[];
   society: SocietySettings;
+  societyCapabilities: SocietyCapabilityRow[];   // C3: capability grant/revoke rows (read-only plumbing)
   loans: Loan[];
   assets: Asset[];
 
@@ -195,6 +197,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return false;
   }, []);
   const [loans, setLoansState] = useState<Loan[]>([]);
+  const [societyCapabilities, setSocietyCapabilitiesState] = useState<SocietyCapabilityRow[]>([]);
   const loansRef = useRef<Loan[]>(loans);
   useEffect(() => { loansRef.current = loans; }, [loans]);
   const [assets, setAssetsState] = useState<Asset[]>([]);
@@ -244,7 +247,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
 
     // Reset all state to empty before loading new society's data
-    setVouchersState([]); setMembersState([]); setLoansState([]);
+    setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
@@ -356,6 +359,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setAuditObjectionsState(aoData || []);
         setStockItemsState(siData || []);
         setStockMovementsState(smData || []);
+
+        // C3: load capability rows independently (NOT in the Promise.all) so a missing
+        // table (pre-migration) NEVER breaks the main data load. snake → camel mapped.
+        supabase.from('society_capabilities').select('*').eq('society_id', sid).then(
+          ({ data: capData, error: capErr }) => {
+            if (capErr || !capData) { setSocietyCapabilitiesState([]); return; }
+            setSocietyCapabilitiesState(capData.map((r: Record<string, unknown>) => ({
+              capability: r.capability as SocietyCapabilityRow['capability'],
+              mode: r.mode as SocietyCapabilityRow['mode'],
+              source: r.source as SocietyCapabilityRow['source'],
+              expiresAt: (r.expires_at as string | null) ?? null,
+            })));
+          },
+          () => setSocietyCapabilitiesState([]),
+        );
 
         // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
         // Two cases handled:
@@ -743,6 +761,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         setSocietyState(storage.getSociety());
         setLoansState(storage.getLoans());
+        setSocietyCapabilitiesState([]);   // C3: offline fallback → empty (all modules visible, as today)
         setAssetsState(storage.getAssets());
       } finally {
         setIsLoading(false);
@@ -3899,7 +3918,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     <DataContext.Provider value={{
       vouchers, members, accounts, society, loans, assets, auditObjections,
       stockItems, stockMovements, sales, purchases, employees, salaryRecords,
-      suppliers, customers, kccLoans,
+      suppliers, customers, kccLoans, societyCapabilities,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, approveMember, rejectMember,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,

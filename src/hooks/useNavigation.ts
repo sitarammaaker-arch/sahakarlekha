@@ -13,12 +13,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { navigationService, getVisibleGroups, type NavContext, type NavGroup } from '@/lib/navigation';
 
 export function useNavigation(): NavGroup[] {
-  const { society } = useData();
+  const { society, societyCapabilities } = useData();
   const { hasPermission } = useAuth();
   const societyType = society.societyType ?? 'other';
 
   return useMemo(() => {
-    const capabilities = navigationService.resolveCapabilities(societyType, null);
+    const capabilities = navigationService.resolveCapabilities(societyType, societyCapabilities);
     const ctx: NavContext = {
       societyType,
       capabilities,
@@ -26,5 +26,5 @@ export function useNavigation(): NavGroup[] {
       superAdminShowAll: false,
     };
     return getVisibleGroups(ctx);
-  }, [societyType, hasPermission]);
+  }, [societyType, societyCapabilities, hasPermission]);
 }

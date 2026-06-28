@@ -1049,3 +1049,33 @@ drop policy if exists "society_rw" on public.milk_entries;
 create policy "society_rw" on public.milk_entries for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Capability-Based Navigation (C3) — per-society capability grant/revoke rows.
+-- The single relational source for what a society MAY use beyond its type template.
+--   mode   : 'grant' (entitle) | 'revoke' (admin-hide within entitlement)
+--   source : 'admin' | 'plan' | 'plugin' | 'state' | 'trial' | 'system'  (precedence + audit)
+--   expires_at : null = permanent; set for trials / time-bound entitlements
+-- Type-template capabilities stay in CODE (not materialised here) → most societies have 0 rows.
+-- Read-only plumbing in C3 (no writers yet); the admin editor (C6) writes source='admin' rows.
+-- RUN THIS BLOCK once in the Supabase SQL editor.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists society_capabilities (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  capability text not null,
+  mode text not null default 'grant',
+  source text not null default 'admin',
+  expires_at timestamptz,
+  granted_by text,
+  created_at timestamptz default now(),
+  unique (society_id, capability, source)
+);
+create index if not exists idx_society_capabilities_society on society_capabilities(society_id);
+create index if not exists idx_society_capabilities_capability on society_capabilities(capability);
+-- Society-scoped RLS (mirrors the society_rw policy used by all data tables)
+alter table public.society_capabilities enable row level security;
+drop policy if exists "society_rw" on public.society_capabilities;
+create policy "society_rw" on public.society_capabilities for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));

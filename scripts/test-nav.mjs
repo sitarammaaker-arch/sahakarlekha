@@ -3,10 +3,13 @@
 // the identical trivially-small logic, and `tsc` guarantees the TS itself compiles).
 // Run: node scripts/test-nav.mjs   (exit 1 on any failure)
 
-function resolveCapabilities(base, overrides) {
-  const grant = Array.isArray(overrides?.grant) ? overrides.grant : [];
-  const revoke = new Set(Array.isArray(overrides?.revoke) ? overrides.revoke : []);
-  return new Set([...(base || []), ...grant].filter((c) => !revoke.has(c)));
+// Mirror of capabilityResolver.resolveCapabilities (relational rows; C3):
+// entitled = template ∪ active grants; visible = entitled − active admin revokes; expiry honored.
+function resolveCapabilities(template, rows, now) {
+  const active = (Array.isArray(rows) ? rows : []).filter((r) => !r.expiresAt || new Date(r.expiresAt).getTime() > now);
+  const grants = active.filter((r) => r.mode === 'grant').map((r) => r.capability);
+  const revokes = new Set(active.filter((r) => r.mode === 'revoke' && r.source === 'admin').map((r) => r.capability));
+  return new Set([...(template || []), ...grants].filter((c) => !revokes.has(c)));
 }
 function isModuleVisible(m, ctx) {
   if (ctx.superAdminShowAll) return true;
@@ -36,12 +39,17 @@ ok(isModuleVisible({ requiredCapabilities: ['trading', 'gst'] }, ctx(['trading',
 ok(!isModuleVisible({ requiredCapabilities: [], requiredRoles: ['admin'] }, ctx([], 'viewer')), 'role-gated hidden for viewer');
 ok(isModuleVisible({ requiredCapabilities: [], requiredRoles: ['admin'] }, ctx([], 'admin')), 'role-gated visible for admin');
 
-// 4. Resolver: template ∪ grant − revoke
-ok(resolveCapabilities([], { grant: ['lending'] }).has('lending'), 'grant adds capability');
-ok(resolveCapabilities(['trading'], {}).has('trading'), 'template capability present');
-ok(!resolveCapabilities(['trading'], { revoke: ['trading'] }).has('trading'), 'revoke removes template capability');
-ok(!resolveCapabilities([], { grant: ['x'], revoke: ['x'] }).has('x'), 'revoke beats grant');
-ok(resolveCapabilities('unknownType' && [], null).size === 0, 'null/empty overrides → no crash');
+// 4. Resolver (relational rows): entitled = template ∪ active grants; visible = − admin revokes; expiry honored
+const NOW = 1000;
+const R = (capability, mode, source = 'admin', expiresAt = null) => ({ capability, mode, source, expiresAt });
+ok(resolveCapabilities([], [R('lending', 'grant')], NOW).has('lending'), 'grant row adds capability');
+ok(resolveCapabilities(['trading'], [], NOW).has('trading'), 'template capability present (no rows)');
+ok(!resolveCapabilities(['trading'], [R('trading', 'revoke', 'admin')], NOW).has('trading'), 'admin revoke hides template capability');
+ok(!resolveCapabilities([], [R('x', 'grant'), R('x', 'revoke', 'admin')], NOW).has('x'), 'admin revoke beats grant');
+ok(resolveCapabilities('marketing_processing' && [], null, NOW).size === 0, 'null rows → no crash, empty set');
+ok(!resolveCapabilities([], [R('trial_cap', 'grant', 'trial', 500)], NOW).has('trial_cap'), 'expired grant ignored (expiresAt < now)');
+ok(resolveCapabilities([], [R('trial_cap', 'grant', 'trial', 5000)], NOW).has('trial_cap'), 'unexpired grant honored (expiresAt > now)');
+ok(resolveCapabilities([], [R('plan_cap', 'grant', 'plan'), R('plan_cap', 'revoke', 'plugin')], NOW).has('plan_cap'), 'non-admin revoke does NOT hide (admin-only)');
 
 // 5. Super-admin show-all bypasses every gate
 ok(isModuleVisible({ requiredCapabilities: ['x'], requiredRoles: ['admin'] }, ctx([], 'viewer', true)), 'super-admin shows all');

@@ -36,10 +36,14 @@ export const DOMAIN_HEADING_KEY: Record<NavDomain, string | null> = {
   administration: null,  // no heading (matches current settings group — verified vs Sidebar)
 };
 
-/** Per-society admin grants/revokes (persisted as society_settings.capability_overrides from C3). */
-export interface CapabilityOverrides {
-  grant?: Capability[];
-  revoke?: Capability[];
+/** A grant/revoke row from the `society_capabilities` table (C3). */
+export type CapabilitySource = 'admin' | 'plan' | 'plugin' | 'state' | 'trial' | 'system';
+export type CapabilityMode = 'grant' | 'revoke';
+export interface SocietyCapabilityRow {
+  capability: Capability;
+  mode: CapabilityMode;       // 'grant' = entitle; 'revoke' = admin-hide within entitlement
+  source: CapabilitySource;
+  expiresAt?: string | null;  // ISO timestamp; null = permanent (trials use this)
 }
 
 export type { SocietyType };
