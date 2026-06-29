@@ -63,6 +63,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'departmentMaster',titleKey: 'departmentMaster',icon: Landmark,        route: '/department-master', domain: 'labour',   requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 11 },
   { id: 'workOrders',      titleKey: 'workOrders',      icon: ClipboardList,   route: '/work-orders',     domain: 'labour',     requiredCapabilities: ['labour'], order: 12 },
   { id: 'musterRoll',      titleKey: 'musterRoll',      icon: UserCheck,       route: '/muster-roll',     domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 13 },
+  { id: 'departmentBills', titleKey: 'departmentBills', icon: Receipt,         route: '/department-bills', domain: 'labour',    requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 14 },
 
   // ── reports (was reportNavItems) ──
   { id: 'trialBalance',       titleKey: 'trialBalance',       icon: Scale,           route: '/trial-balance',        domain: 'reports', requiredCapabilities: U, order: 0 },

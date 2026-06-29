@@ -1,4 +1,4 @@
-import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, WorkOrder, MusterEntry, Worker, Department } from '@/types';
+import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, WorkOrder, MusterEntry, Worker, Department, DepartmentBill } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement } from '@/lib/procurement';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
@@ -78,6 +78,7 @@ const KEYS = {
   musterEntries: 'sahayata_muster_entries',
   workers: 'sahayata_workers',
   departments: 'sahayata_departments',
+  departmentBills: 'sahayata_department_bills',
 };
 
 // ── Central account ID constants ─────────────────────────────────────────────
@@ -792,6 +793,8 @@ export const getWorkers = (): Worker[] => get(KEYS.workers, []);
 export const setWorkers = (w: Worker[]): void => set(KEYS.workers, w);
 export const getDepartments = (): Department[] => get(KEYS.departments, []);
 export const setDepartments = (d: Department[]): void => set(KEYS.departments, d);
+export const getDepartmentBills = (): DepartmentBill[] => get(KEYS.departmentBills, []);
+export const setDepartmentBills = (b: DepartmentBill[]): void => set(KEYS.departmentBills, b);
 
 export const getAccounts = (): LedgerAccount[] => {
   const stored = get<LedgerAccount[] | null>(KEYS.accounts, null);

@@ -270,6 +270,26 @@ export interface Department {
   createdAt: string;
 }
 
+// Labour cooperative — a bill raised on a department/employer for work done (income side).
+// At creation: Dr department receivable / Cr 4203 Labour Charges (income), tagged workOrderId.
+// Collection reduces the receivable (partial allowed).
+export type DeptBillType = 'running' | 'final';
+export interface DepartmentBill {
+  id: string;
+  billNo: string;
+  departmentId: string;
+  workOrderId?: string;       // dimension — enables per-work-order income/profit
+  billType: DeptBillType;
+  date: string;
+  amount: number;             // gross billed = income recognised
+  paidAmount: number;         // collected so far
+  status: 'unpaid' | 'partial' | 'paid';
+  voucherId?: string;         // the bill (income-recognition) voucher
+  narration?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 export type LoanType = 'short-term' | 'medium-term' | 'long-term';
 export type LoanStatus = 'active' | 'cleared' | 'overdue';
 

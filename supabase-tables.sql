@@ -1547,6 +1547,32 @@ create policy "society_rw" on public.departments for all to authenticated
   with check (society_id::text in (select public.current_user_society_ids()));
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Labour cooperative — Department Bills (income side; raised on a department, posts
+-- Dr receivable / Cr 4203 Labour Charges; collection reduces receivable). RUN once.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists department_bills (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "billNo" text,
+  "departmentId" text,
+  "workOrderId" text,
+  "billType" text,
+  date text,
+  amount numeric,
+  "paidAmount" numeric default 0,
+  status text,
+  "voucherId" text,
+  narration text,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table public.department_bills enable row level security;
+drop policy if exists "society_rw" on public.department_bills;
+create policy "society_rw" on public.department_bills for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
 -- transaction: every supplied collection commits together, or nothing does — a
 -- ProcurementLot can never exist in the cloud without its immutable creation event.
