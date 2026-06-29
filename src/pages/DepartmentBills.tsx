@@ -62,8 +62,11 @@ export default function DepartmentBills() {
   const woBilled = selectedWO ? billedForWO(selectedWO.id) : 0;
   const woRemaining = selectedWO ? +(woContract - woBilled).toFixed(2) : 0;
 
-  // Work orders selectable for the chosen department (its own + any legacy ones without a dept link).
-  const woOptions = departmentId ? openOrders.filter(w => w.departmentId === departmentId || !w.departmentId) : [];
+  // Work orders selectable for the chosen department = ONLY those linked to that department.
+  // (Earlier this also included legacy orders with no departmentId, which then leaked into every
+  // department's list — breaking the department↔work-order sync. Such legacy orders must be
+  // linked to a department in Work Orders before they can be billed.)
+  const woOptions = departmentId ? openOrders.filter(w => w.departmentId === departmentId) : [];
 
   // Changing the department resets the work order + amount (a WO belongs to one department).
   const onSelectDept = (id: string) => { setDepartmentId(id); setWorkOrderId(''); setAmount(''); };
