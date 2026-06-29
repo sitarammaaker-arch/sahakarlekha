@@ -144,7 +144,9 @@ export default function DepartmentBills() {
             </div>
             <div className="space-y-2">
               <Label>{hi ? 'कार्य आदेश' : 'Work Order'} *</Label>
-              <Select value={workOrderId || undefined} onValueChange={onSelectWO}>
+              {/* fully controlled (value="" when none) — passing undefined makes Radix uncontrolled,
+                  so it keeps the old selection and re-selecting it fires no onValueChange (amount stays 0). */}
+              <Select value={workOrderId} onValueChange={onSelectWO}>
                 <SelectTrigger><SelectValue placeholder={hi ? 'कार्य आदेश चुनें' : 'Select work order'} /></SelectTrigger>
                 <SelectContent>
                   {woOptions.length === 0
