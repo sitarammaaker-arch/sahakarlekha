@@ -251,5 +251,35 @@ ok(validate(pv, [], 0) === 'reject:<=0' && validate(pv, [], -5) === 'reject:<=0'
 ok(validate(pv, [p1], 200000) === 'reject:>outstanding', 'reject amount > outstanding (₹200000 > ₹105000)');
 ok(validate(pv, [p1], 105000) === 'ok', 'accept amount == outstanding (final settlement)');
 
+// 13. Phase 3.4 — MSP Deduction. Mirrors DataContext.recordDeduction + Net Payable / Outstanding.
+const buildDeduction = (ev, accId, amt) => {
+  const payableAcc = (ev.lines.find(l => l.type === 'Cr') || {}).accountId;   // engine Cr leg (2105)
+  return { id: 'ded-' + accId + '-' + amt, voucherNo: 'JV', type: 'journal', amount: amt, refType: 'farmer.deduction', refId: ev.id, debitAccountId: payableAcc, creditAccountId: accId, lines: [{ accountId: payableAcc, type: 'Dr', amount: amt }, { accountId: accId, type: 'Cr', amount: amt }] };
+};
+const sumRef = (vs, rt, rid) => vs.filter(v => !v.isDeleted && v.refType === rt && v.refId === rid).reduce((s, v) => s + v.amount, 0);
+const netInfo = (ev, vs) => {
+  const gross = ev.amount;
+  const totalDeductions = sumRef(vs, 'farmer.deduction', ev.id);
+  const netPayable = +(gross - totalDeductions).toFixed(2);
+  const paid = sumRef(vs, 'farmer.payment', ev.id);
+  const outstanding = +(netPayable - paid).toFixed(2);
+  return { gross, totalDeductions, netPayable, paid, outstanding };
+};
+const dv = { id: 'EV-2', amount: 455000, lines: [{ accountId: '3403', type: 'Dr', amount: 455000 }, { accountId: '2105', type: 'Cr', amount: 455000 }] };
+const dTds = buildDeduction(dv, '2202', 5000);
+ok(dTds.type === 'journal' && dTds.refType === 'farmer.deduction' && dTds.refId === 'EV-2', 'deduction voucher: type=journal, refType=farmer.deduction, refId=engineVoucherId');
+ok(dTds.debitAccountId === '2105' && dTds.creditAccountId === '2202', 'deduction: Dr payable (2105 = engine Cr leg); Cr the selected account (TDS 2202)');
+ok(dTds.lines.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0) === dTds.lines.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0), 'deduction voucher balanced (Dr = Cr)');
+const i1 = netInfo(dv, [dTds]);
+ok(i1.gross === 455000 && i1.totalDeductions === 5000 && i1.netPayable === 450000 && i1.outstanding === 450000, 'Net Payable = Gross − Σdeductions; Outstanding = Net − Σpayments');
+const i2 = netInfo(dv, [dTds, buildDeduction(dv, '4202', 9100)]);
+ok(i2.totalDeductions === 14100 && i2.netPayable === 440900, 'multiple deductions accumulate (TDS + Market Fee)');
+const i3 = netInfo(dv, [dTds, buildDeduction(dv, '4202', 9100), { id: 'p', type: 'payment', amount: 440900, refType: 'farmer.payment', refId: 'EV-2' }]);
+ok(i3.outstanding === 0, 'paying the Net Outstanding → Outstanding 0 (fully settled after deductions)');
+const validateDed = (ev, vs, amt) => { const out = netInfo(ev, vs).outstanding; if (!(amt > 0)) return 'reject:<=0'; if (amt > out) return 'reject:>outstanding'; return 'ok'; };
+ok(validateDed(dv, [dTds], 0) === 'reject:<=0', 'reject deduction amount <= 0');
+ok(validateDed(dv, [dTds], 500000) === 'reject:>outstanding', 'reject deduction amount > outstanding');
+ok(validateDed(dv, [dTds], 450000) === 'ok', 'accept deduction up to outstanding');
+
 console.log(`[procurement-test] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

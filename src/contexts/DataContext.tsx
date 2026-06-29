@@ -50,6 +50,7 @@ interface DataContextType {
   generatePostingRuleResult: (data: { postingRequestId: string }) => PostingRuleResult;
   generateEngineVoucher: (data: { postingRuleResultId: string }) => Voucher;
   recordFarmerPayment: (data: { engineVoucherId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; paymentDate: string; reference?: string; remarks?: string }) => Voucher;
+  recordDeduction: (data: { engineVoucherId: string; deductionType: string; accountId: string; amount: number; reference?: string; remarks?: string }) => Voucher;
   loans: Loan[];
   assets: Asset[];
 
@@ -2277,9 +2278,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'Engine Voucher नहीं मिला', description: 'पहले Post करें। (Post the engine voucher first)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
-    // 3. Outstanding = engine voucher amount − Σ existing payment vouchers (derived; no cached balance)
+    // 3. Outstanding = Gross − Σ deductions − Σ payments (derived; no cached balance)
+    const deducted = vouchersRef.current.filter(v => !v.isDeleted && v.refType === 'farmer.deduction' && v.refId === ev.id).reduce((s, v) => s + (v.amount || 0), 0);
     const paid = vouchersRef.current.filter(v => !v.isDeleted && v.refType === 'farmer.payment' && v.refId === ev.id).reduce((s, v) => s + (v.amount || 0), 0);
-    const outstanding = +(ev.amount - paid).toFixed(2);
+    const outstanding = +(ev.amount - deducted - paid).toFixed(2);
     // 4. Reject amount <= 0
     if (!(data.amount > 0)) {
       toastRef.current({ title: 'राशि डालें', description: 'भुगतान राशि 0 से अधिक होनी चाहिए। (Amount must be greater than 0)', variant: 'destructive', duration: 8000 });
@@ -2305,6 +2307,50 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       lines: [
         { id: lid(), accountId: payableAcc, type: 'Dr', amount: data.amount },
         { id: lid(), accountId: creditAcc, type: 'Cr', amount: data.amount },
+      ],
+    });
+  }, [user, accounts, addVoucher]);
+
+  // Phase 3.4 — MSP Deduction. Records ONE deduction against an Engine Voucher's payable, reusing
+  // addVoucher: Dr = the Engine Voucher's payable account (its Cr leg); Cr = the operator-selected
+  // chart account (the deduction's destination — TDS Payable, Market Fee, etc.). type='journal'.
+  // refType='farmer.deduction', refId=engineVoucherId. Net Outstanding = Gross − Σdeductions − Σpayments.
+  const recordDeduction = useCallback((data: { engineVoucherId: string; deductionType: string; accountId: string; amount: number; reference?: string; remarks?: string }): Voucher => {
+    const sentinel = { id: '', voucherNo: '', type: 'journal', date: '', debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    if (guardFYLocked()) return sentinel;
+    const ev = vouchersRef.current.find(v => v.id === data.engineVoucherId && !v.isDeleted && isEngineVoucher(v));
+    if (!ev) {
+      toastRef.current({ title: 'Engine Voucher नहीं मिला', description: 'पहले Post करें। (Post the engine voucher first)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    if (!data.accountId || !accounts.some(a => a.id === data.accountId)) {
+      toastRef.current({ title: 'खाता चुनें', description: 'कटौती के लिए एक खाता चुनें। (Select a deduction account)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    const deducted = vouchersRef.current.filter(v => !v.isDeleted && v.refType === 'farmer.deduction' && v.refId === ev.id).reduce((s, v) => s + (v.amount || 0), 0);
+    const paid = vouchersRef.current.filter(v => !v.isDeleted && v.refType === 'farmer.payment' && v.refId === ev.id).reduce((s, v) => s + (v.amount || 0), 0);
+    const netOutstanding = +(ev.amount - deducted - paid).toFixed(2);
+    if (!(data.amount > 0)) {
+      toastRef.current({ title: 'राशि डालें', description: 'कटौती राशि 0 से अधिक होनी चाहिए। (Amount must be greater than 0)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    if (data.amount > netOutstanding) {
+      toastRef.current({ title: 'कटौती शेष से अधिक', description: `कटौती ₹${data.amount} शेष ₹${netOutstanding} से अधिक नहीं हो सकती। (Cannot exceed outstanding)`, variant: 'destructive', duration: 9000 });
+      return sentinel;
+    }
+    const payableAcc = ev.lines?.find(l => l.type === 'Cr')?.accountId || ev.creditAccountId;
+    const lid = () => crypto.randomUUID();
+    const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
+    const rem = data.remarks?.trim() ? ` · ${data.remarks.trim()}` : '';
+    return addVoucher({
+      type: 'journal', date: new Date().toISOString().split('T')[0],
+      debitAccountId: payableAcc, creditAccountId: data.accountId, amount: data.amount,
+      narration: `MSP कटौती (${data.deductionType}) — ${ev.voucherNo}${ref}${rem}`,
+      refType: 'farmer.deduction', refId: ev.id,
+      createdBy: user?.name || 'System',
+      lines: [
+        { id: lid(), accountId: payableAcc, type: 'Dr', amount: data.amount },
+        { id: lid(), accountId: data.accountId, type: 'Cr', amount: data.amount },
       ],
     });
   }, [user, accounts, addVoucher]);
@@ -4441,7 +4487,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       procurementFinancialIntents, generateFinancialIntent,
       procurementPostingRequests, generatePostingRequest,
       procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
-      recordFarmerPayment,
+      recordFarmerPayment, recordDeduction,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, approveMember, rejectMember,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,

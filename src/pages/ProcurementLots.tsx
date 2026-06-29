@@ -27,8 +27,22 @@ const QUALITY_RESULTS = [
   { id: 'rejected', en: 'Rejected', hi: 'अस्वीकृत' },
 ];
 
+// MSP deduction types. `acc` is a default credit account ONLY where the chart binding is unambiguous
+// (TDS → 2202 TDS Payable). For the rest the operator selects the account from the chart (no invented
+// IDs / no baked-in accounting treatment).
+const DEDUCTION_TYPES = [
+  { id: 'tds', en: 'TDS', hi: 'TDS', acc: '2202' },
+  { id: 'market_fee', en: 'Market Fee', hi: 'मंडी शुल्क', acc: '' },
+  { id: 'hrdf', en: 'HRDF', hi: 'HRDF', acc: '' },
+  { id: 'labour', en: 'Labour', hi: 'हमाली', acc: '' },
+  { id: 'weighment', en: 'Weighment', hi: 'तौल', acc: '' },
+  { id: 'bardana', en: 'Bardana', hi: 'बारदाना', acc: '' },
+  { id: 'transport', en: 'Transportation', hi: 'परिवहन', acc: '' },
+  { id: 'other', en: 'Other Recovery', hi: 'अन्य वसूली', acc: '' },
+];
+
 export default function ProcurementLots() {
-  const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, recordFarmerPayment } = useData();
+  const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, recordFarmerPayment, recordDeduction } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -63,6 +77,16 @@ export default function ProcurementLots() {
   const [payBankId, setPayBankId] = useState('');
   const [payRef, setPayRef] = useState('');
   const [payRemarks, setPayRemarks] = useState('');
+
+  // MSP Deduction dialog
+  const [dedOpen, setDedOpen] = useState(false);
+  const [dedEvId, setDedEvId] = useState('');
+  const [dedOutstanding, setDedOutstanding] = useState(0);
+  const [dedType, setDedType] = useState('');
+  const [dedAccId, setDedAccId] = useState('');
+  const [dedAmount, setDedAmount] = useState('');
+  const [dedRef, setDedRef] = useState('');
+  const [dedRemarks, setDedRemarks] = useState('');
 
   const cropName = (id: string) => { const c = CROPS.find(x => x.id === id); return c ? (hi ? c.nameHi : c.name) : id; };
   const farmerLabel = (id: string) => { const f = procurementFarmers.find(x => x.id === id); return f ? `${f.farmerName} (${f.farmerCode})` : id; };
@@ -116,14 +140,36 @@ export default function ProcurementLots() {
   const bankIds = getBankAccountIds(accounts);
   const bankAccounts = accounts.filter(a => bankIds.includes(a.id));
   const lotPayments = (evId: string) => vouchers.filter(v => !v.isDeleted && v.refType === 'farmer.payment' && v.refId === evId);
+  const lotDeductions = (evId: string) => vouchers.filter(v => !v.isDeleted && v.refType === 'farmer.deduction' && v.refId === evId);
   const payInfo = (lotId: string) => {
     const ev = lotEngineVoucher(lotId);
     if (!ev) return null;
-    const payable = ev.amount;
+    const gross = ev.amount;
+    const totalDeductions = lotDeductions(ev.id).reduce((s, v) => s + (v.amount || 0), 0);
+    const netPayable = +(gross - totalDeductions).toFixed(2);
     const paid = lotPayments(ev.id).reduce((s, v) => s + (v.amount || 0), 0);
-    const outstanding = +(payable - paid).toFixed(2);
-    const status: 'unpaid' | 'partial' | 'paid' = paid <= 0 ? 'unpaid' : outstanding <= 0 ? 'paid' : 'partial';
-    return { ev, payable, paid, outstanding, status };
+    const outstanding = +(netPayable - paid).toFixed(2);
+    const status: 'unpaid' | 'partial' | 'paid' = outstanding <= 0 ? 'paid' : paid <= 0 ? 'unpaid' : 'partial';
+    return { ev, gross, totalDeductions, netPayable, paid, outstanding, status };
+  };
+  const postableAccounts = accounts.filter(a => !a.isGroup);
+  const openDeduction = (lotId: string) => {
+    const info = payInfo(lotId);
+    if (!info) return;
+    setDedEvId(info.ev.id); setDedOutstanding(info.outstanding);
+    setDedType(''); setDedAccId(''); setDedAmount(''); setDedRef(''); setDedRemarks('');
+    setDedOpen(true);
+  };
+  const onDedType = (id: string) => { setDedType(id); const t = DEDUCTION_TYPES.find(x => x.id === id); setDedAccId(t?.acc || ''); };
+  const saveDeduction = () => {
+    const amt = Number(dedAmount);
+    if (!dedType) { toast({ title: hi ? 'प्रकार चुनें' : 'Select type', variant: 'destructive' }); return; }
+    if (!dedAccId) { toast({ title: hi ? 'खाता चुनें' : 'Select account', variant: 'destructive' }); return; }
+    if (!(amt > 0)) { toast({ title: hi ? 'राशि डालें' : 'Enter amount', variant: 'destructive' }); return; }
+    if (amt > dedOutstanding) { toast({ title: hi ? 'शेष से अधिक' : 'Exceeds outstanding', description: `${hi ? 'शेष' : 'Outstanding'} ${money(dedOutstanding)}`, variant: 'destructive' }); return; }
+    const t = DEDUCTION_TYPES.find(x => x.id === dedType);
+    const v = recordDeduction({ engineVoucherId: dedEvId, deductionType: t ? (hi ? t.hi : t.en) : dedType, accountId: dedAccId, amount: amt, reference: dedRef.trim() || undefined, remarks: dedRemarks.trim() || undefined });
+    if (v.id) { toast({ title: hi ? 'कटौती दर्ज हुई' : 'Deduction recorded', description: money(amt) }); setDedOpen(false); }
   };
   const openPay = (lotId: string) => {
     const info = payInfo(lotId);
@@ -268,7 +314,7 @@ export default function ProcurementLots() {
                     <span className={payInfo(l.id)!.status === 'paid' ? 'text-green-600' : payInfo(l.id)!.status === 'partial' ? 'text-amber-600' : 'text-muted-foreground'}>
                       {payInfo(l.id)!.status === 'paid' ? (hi ? '● पूर्ण भुगतान' : '● Fully Paid') : payInfo(l.id)!.status === 'partial' ? (hi ? '◐ आंशिक भुगतान' : '◐ Partially Paid') : (hi ? '○ अभुगतान' : '○ Unpaid')}
                     </span>
-                    {' · '}{hi ? 'देय' : 'Payable'} {money(payInfo(l.id)!.payable)} · {hi ? 'भुगतान' : 'Paid'} {money(payInfo(l.id)!.paid)} · {hi ? 'बकाया' : 'Outstanding'} {money(payInfo(l.id)!.outstanding)}
+                    {' · '}{hi ? 'सकल' : 'Gross'} {money(payInfo(l.id)!.gross)} · {hi ? 'कटौती' : 'Deductions'} {money(payInfo(l.id)!.totalDeductions)} · {hi ? 'निवल देय' : 'Net'} {money(payInfo(l.id)!.netPayable)} · {hi ? 'भुगतान' : 'Paid'} {money(payInfo(l.id)!.paid)} · {hi ? 'बकाया' : 'Outstanding'} {money(payInfo(l.id)!.outstanding)}
                   </div>
                 )}
               </div>
@@ -280,6 +326,7 @@ export default function ProcurementLots() {
                 {lotIntent(l.id) && !lotPostingRequest(l.id) && <Button size="sm" variant="outline" onClick={() => handleGeneratePostingRequest(lotIntent(l.id)!.id)}>{hi ? 'पोस्टिंग' : 'Posting Req'}</Button>}
                 {lotPostingRequest(l.id) && !lotRuleResult(l.id) && <Button size="sm" variant="outline" onClick={() => handleResolve(lotPostingRequest(l.id)!.id)}>{hi ? 'रिज़ॉल्व' : 'Resolve'}</Button>}
                 {lotRuleResult(l.id) && !lotEngineVoucher(l.id) && <Button size="sm" variant="outline" onClick={() => handlePost(lotRuleResult(l.id)!.id)}>{hi ? 'पोस्ट' : 'Post'}</Button>}
+                {lotEngineVoucher(l.id) && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openDeduction(l.id)}>{hi ? 'कटौती' : 'Add Deduction'}</Button>}
                 {lotEngineVoucher(l.id) && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openPay(l.id)}>{hi ? 'किसान को भुगतान' : 'Pay Farmer'}</Button>}
                 {lotEngineVoucher(l.id) && payInfo(l.id)!.outstanding <= 0 && <span className="text-xs text-green-600 font-medium">{hi ? '✓ पूर्ण भुगतान' : '✓ Fully Paid'}</span>}
               </div>
@@ -385,6 +432,45 @@ export default function ProcurementLots() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
             <Button onClick={savePay}>{hi ? 'भुगतान करें' : 'Pay'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dedOpen} onOpenChange={setDedOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{hi ? 'MSP कटौती' : 'MSP Deduction'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground">{hi ? 'बकाया' : 'Outstanding'}: {money(dedOutstanding)}</div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'कटौती प्रकार' : 'Deduction Type'} *</Label>
+              <Select value={dedType} onValueChange={onDedType}>
+                <SelectTrigger><SelectValue placeholder={hi ? 'प्रकार चुनें' : 'Select type'} /></SelectTrigger>
+                <SelectContent>{DEDUCTION_TYPES.map(t => <SelectItem key={t.id} value={t.id}>{hi ? t.hi : t.en}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'खाता' : 'Account'} *</Label>
+              <Select value={dedAccId} onValueChange={setDedAccId}>
+                <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
+                <SelectContent>{postableAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} · {hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'राशि' : 'Amount'} *</Label>
+              <Input type="number" min={0} max={dedOutstanding} value={dedAmount} onChange={e => setDedAmount(e.target.value)} placeholder="0" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'संदर्भ' : 'Reference'}</Label>
+              <Input value={dedRef} onChange={e => setDedRef(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'टिप्पणी' : 'Remarks'}</Label>
+              <Input value={dedRemarks} onChange={e => setDedRemarks(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDedOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
+            <Button onClick={saveDeduction}>{hi ? 'कटौती दर्ज करें' : 'Add Deduction'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
