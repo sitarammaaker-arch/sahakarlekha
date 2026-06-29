@@ -10,7 +10,8 @@ export type ProcurementEventName =
   | 'payment.initiated' | 'payment.confirmed' | 'payment.returned' | 'commission.computed'
   | 'stacked' | 'dispatched' | 'fci.accepted' | 'settled' | 'reconciled'
   | 'recoverable.raised' | 'recoverable.recovered' | 'override.applied' | 'document.issued'
-  | 'financial.intent.created' | 'posting.request.created' | 'posting.rule.resolved';
+  | 'financial.intent.created' | 'posting.request.created' | 'posting.rule.resolved'
+  | 'engine.voucher.created';
 
 /** Append-only event. Carries correlationId (refinement #2). */
 export interface ProcurementEvent<TPayload = unknown> extends Correlated {
@@ -31,3 +32,4 @@ export interface PaymentConfirmedPayload { paymentId: string; reference: string;
 export interface FinancialIntentCreatedPayload { intentId: string; jformId: string; amount: Money; }
 export interface PostingRequestCreatedPayload { postingRequestId: string; financialIntentId: string; amount: Money; }
 export interface PostingRuleResolvedPayload { postingRuleResultId: string; postingRequestId: string; legCount: number; }
+export interface EngineVoucherCreatedPayload { voucherId: string; voucherNo: string; postingRuleResultId: string; }

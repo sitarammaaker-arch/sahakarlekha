@@ -27,7 +27,7 @@ const QUALITY_RESULTS = [
 ];
 
 export default function ProcurementLots() {
-  const { procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult } = useData();
+  const { vouchers, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -88,6 +88,16 @@ export default function ProcurementLots() {
     // generatePostingRuleResult shows the success toast (and toasts on FY-lock / missing-request /
     // duplicate / no-rule guard). Nothing to do here.
     generatePostingRuleResult({ postingRequestId });
+  };
+  // The engine Voucher is the authoritative record (origin='engine' + refType/refId → the result).
+  const lotEngineVoucher = (lotId: string) => {
+    const rr = lotRuleResult(lotId);
+    return rr ? vouchers.find(v => !v.isDeleted && v.origin === 'engine' && v.refType === 'posting.rule.result' && v.refId === rr.id) : undefined;
+  };
+  const handlePost = (postingRuleResultId: string) => {
+    // generateEngineVoucher shows the success toast (and toasts on FY-lock / missing-result /
+    // duplicate / unresolved-legs guard). Nothing to do here.
+    generateEngineVoucher({ postingRuleResultId });
   };
 
   const saveFarmer = () => {
@@ -207,6 +217,11 @@ export default function ProcurementLots() {
                     {hi ? 'लेग्स' : 'Legs'}: {lotRuleResult(l.id)!.requestType} · {lotRuleResult(l.id)!.legs.length} legs
                   </div>
                 )}
+                {lotEngineVoucher(l.id) && (
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {hi ? 'वाउचर' : 'Voucher'}: {lotEngineVoucher(l.id)!.voucherNo}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Badge variant="secondary">{l.operationalStatus}</Badge>
@@ -215,6 +230,7 @@ export default function ProcurementLots() {
                 {lotJForm(l.id) && !lotIntent(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateIntent(lotJForm(l.id)!.id)}>{hi ? 'इंटेंट' : 'Intent'}</Button>}
                 {lotIntent(l.id) && !lotPostingRequest(l.id) && <Button size="sm" variant="outline" onClick={() => handleGeneratePostingRequest(lotIntent(l.id)!.id)}>{hi ? 'पोस्टिंग' : 'Posting Req'}</Button>}
                 {lotPostingRequest(l.id) && !lotRuleResult(l.id) && <Button size="sm" variant="outline" onClick={() => handleResolve(lotPostingRequest(l.id)!.id)}>{hi ? 'रिज़ॉल्व' : 'Resolve'}</Button>}
+                {lotRuleResult(l.id) && !lotEngineVoucher(l.id) && <Button size="sm" variant="outline" onClick={() => handlePost(lotRuleResult(l.id)!.id)}>{hi ? 'पोस्ट' : 'Post'}</Button>}
               </div>
             </div>
           ))}

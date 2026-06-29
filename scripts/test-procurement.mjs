@@ -160,23 +160,33 @@ ok(alreadyRequest([pr], 'FI-1') === true && alreadyRequest([pr], 'FI-2') === fal
 
 // 10. Phase 3.2 — Posting Rule resolution (business object only). Mirrors the pure resolver
 //     (src/lib/procurement/postingRules.ts) + DataContext.generatePostingRuleResult.
-const resolvePostingLegs = (requestType, amount, profile) => {
-  if (requestType === 'RecogniseProcurement' && profile === 'agency') {
-    return [
-      { side: 'Dr', accountSelector: 'stock.procurement', amount },
-      { side: 'Cr', accountSelector: 'farmer.payable', amount },
-    ];
+const BINDING = { 'stock.procurement': '3403', 'farmer.payable': '2105' };
+const CHART = [{ id: '3403', name: 'Trading Goods' }, { id: '2105', name: 'MSP Payable to Farmers' }];
+const resolvePostingLegs = (requestType, amount, profile, binding, accounts) => {
+  const raw = requestType === 'RecogniseProcurement' && profile === 'agency'
+    ? [{ side: 'Dr', accountSelector: 'stock.procurement' }, { side: 'Cr', accountSelector: 'farmer.payable' }]
+    : [];
+  if (raw.length === 0) return [];
+  const out = [];
+  for (const r of raw) {
+    const id = binding[r.accountSelector]; if (!id) return [];
+    const acc = accounts.find(a => a.id === id); if (!acc) return [];
+    out.push({ side: r.side, accountSelector: r.accountSelector, resolvedAccountId: acc.id, accountCode: acc.id, accountName: acc.name, amount });
   }
-  return [];
+  return out;
 };
 const srcRequest = { id: 'PR-1', lotId: 'lot-1', jformId: 'JF-1', financialIntentId: 'FI-1', requestType: 'RecogniseProcurement', amount: { amount: 45500, currency: 'INR' } };
-const legs = resolvePostingLegs(srcRequest.requestType, srcRequest.amount, 'agency');
+const legs = resolvePostingLegs(srcRequest.requestType, srcRequest.amount, 'agency', BINDING, CHART);
 ok(legs.length === 2 && legs[0].side === 'Dr' && legs[1].side === 'Cr', "resolver: RecogniseProcurement → 2 legs (Dr then Cr)");
-ok(legs[0].accountSelector === 'stock.procurement' && legs[1].accountSelector === 'farmer.payable', 'resolver: correct symbolic account selectors');
+ok(legs[0].accountSelector === 'stock.procurement' && legs[1].accountSelector === 'farmer.payable', 'resolver: symbolic selectors kept for audit');
+ok(legs[0].resolvedAccountId === '3403' && legs[1].resolvedAccountId === '2105', 'resolver: resolvedAccountId frozen from binding');
+ok(legs[0].accountCode === '3403' && legs[0].accountName === 'Trading Goods' && legs[1].accountName === 'MSP Payable to Farmers', 'resolver: accountCode + accountName snapshot frozen from the chart');
 const dr = legs.filter(l => l.side === 'Dr').reduce((s, l) => s + l.amount.amount, 0);
 const cr = legs.filter(l => l.side === 'Cr').reduce((s, l) => s + l.amount.amount, 0);
 ok(dr === cr && dr === srcRequest.amount.amount, 'resolver: legs balanced (∑Dr = ∑Cr = request amount)');
-ok(resolvePostingLegs('SettleFarmer', srcRequest.amount, 'agency').length === 0 && resolvePostingLegs('RecogniseProcurement', srcRequest.amount, 'principal').length === 0, 'resolver: unsupported requestType/profile → [] (caller rejects)');
+ok(resolvePostingLegs('SettleFarmer', srcRequest.amount, 'agency', BINDING, CHART).length === 0, 'resolver: unsupported requestType → []');
+ok(resolvePostingLegs('RecogniseProcurement', srcRequest.amount, 'principal', BINDING, CHART).length === 0, 'resolver: unsupported profile → []');
+ok(resolvePostingLegs('RecogniseProcurement', srcRequest.amount, 'agency', BINDING, []).length === 0, 'resolver: bound account missing from chart → [] (reject)');
 const rr = { id: 'RR-1', postingRequestId: srcRequest.id, lotId: srcRequest.lotId, jformId: srcRequest.jformId, financialIntentId: srcRequest.financialIntentId, requestType: srcRequest.requestType, profile: 'agency', legs, createdAt: 'T', updatedAt: 'T' };
 ok(rr.postingRequestId === 'PR-1' && rr.lotId === 'lot-1' && rr.profile === 'agency' && Array.isArray(rr.legs) && 'createdAt' in rr, 'PostingRuleResult shape (postingRequestId/lotId/profile/legs + BaseEntity)');
 ok(rr.requestType === srcRequest.requestType, 'requestType carried from the source request');
@@ -188,6 +198,32 @@ ok(rrPayload.transactionType === 'posting.rule.resolve', 'commit envelope: trans
 ok(rrPayload.postingRuleResults.length === 1 && rrPayload.events.length === 1, 'commit payload: 1 postingRuleResult + 1 event');
 const alreadyResult = (results, prId) => results.some(r => r.postingRequestId === prId);
 ok(alreadyResult([rr], 'PR-1') === true && alreadyResult([rr], 'PR-2') === false, 'one PostingRuleResult per Posting Request guard (mirror; DB unique on postingRequestId is the guarantee)');
+
+// 11. Phase 3.3 — Financial Engine (mapper). Mirrors engine.buildEngineVoucherLines +
+//     DataContext.generateEngineVoucher. Reuses the resolved `legs` from section 10.
+const buildEngineVoucherLines = (ls) => {
+  const out = [];
+  for (const leg of ls) { if (!leg.resolvedAccountId) return []; out.push({ accountId: leg.resolvedAccountId, type: leg.side, amount: leg.amount.amount }); }
+  return out;
+};
+const specs = buildEngineVoucherLines(legs);
+ok(specs.length === 2 && specs[0].accountId === '3403' && specs[1].accountId === '2105', 'engine: maps legs → lines using resolvedAccountId ONLY');
+ok(specs[0].type === 'Dr' && specs[1].type === 'Cr', 'engine: preserves Dr/Cr sides');
+const edr = specs.filter(s => s.type === 'Dr').reduce((s, x) => s + x.amount, 0);
+const ecr = specs.filter(s => s.type === 'Cr').reduce((s, x) => s + x.amount, 0);
+ok(edr === ecr && edr === 45500, 'engine: voucher lines balanced (∑Dr = ∑Cr)');
+ok(buildEngineVoucherLines([{ side: 'Dr', accountSelector: 'x', amount: { amount: 1, currency: 'INR' } }]).length === 0, 'engine: a leg without resolvedAccountId → [] (refuse to post)');
+const engineVoucher = { id: 'V-1', voucherNo: 'JV0001', type: 'journal', origin: 'engine', refType: 'posting.rule.result', refId: 'RR-1', lines: specs.map((s, i) => ({ id: 'L' + i, accountId: s.accountId, type: s.type, amount: s.amount })) };
+ok(engineVoucher.origin === 'engine', "engine voucher: origin = 'engine' (immutable, reversal-only)");
+ok(engineVoucher.type === 'journal' && engineVoucher.refType === 'posting.rule.result' && engineVoucher.refId === 'RR-1', 'engine voucher: type journal + refType/refId link the source result');
+const isEngineVoucher = (v) => !!v && v.origin === 'engine';
+ok(isEngineVoucher(engineVoucher) === true, 'engine voucher: isEngineVoucher === true (protected by the immutable boundary)');
+const existsEngineVoucher = (vs, resultId) => vs.some(v => !v.isDeleted && isEngineVoucher(v) && v.refType === 'posting.rule.result' && v.refId === resultId);
+ok(existsEngineVoucher([engineVoucher], 'RR-1') === true && existsEngineVoucher([engineVoucher], 'RR-2') === false, 'one engine voucher per PostingRuleResult guard (origin+refType+refId search; no link table)');
+const evEvent = { id: 'ev', correlationId: 'lot-1', name: 'engine.voucher.created', payload: { voucherId: engineVoucher.id, voucherNo: engineVoucher.voucherNo, postingRuleResultId: 'RR-1' } };
+ok(evEvent.name === 'engine.voucher.created' && evEvent.correlationId === 'lot-1', "exactly one 'engine.voucher.created' audit event linked to the lot");
+const evPayload = { transactionType: 'engine.voucher.create', transactionId: 'TX', transactionVersion: 1, events: [evEvent] };
+ok(evPayload.transactionType === 'engine.voucher.create' && evPayload.events.length === 1 && !('engineVouchers' in evPayload) && !('postingRuleResults' in evPayload), 'engine event envelope: transactionType=engine.voucher.create, events-only (no link collection)');
 
 console.log(`[procurement-test] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

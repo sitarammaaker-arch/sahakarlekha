@@ -22,7 +22,7 @@ import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money } from '@/lib/procurement';
-import { resolvePostingLegs } from '@/lib/procurement';
+import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLines } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
 
 interface DataContextType {
@@ -48,6 +48,7 @@ interface DataContextType {
   generatePostingRequest: (data: { financialIntentId: string }) => PostingRequest;
   procurementPostingRuleResults: PostingRuleResult[];
   generatePostingRuleResult: (data: { postingRequestId: string }) => PostingRuleResult;
+  generateEngineVoucher: (data: { postingRuleResultId: string }) => Voucher;
   loans: Loan[];
   assets: Asset[];
 
@@ -2179,9 +2180,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     // 4. Resolve legs via the pure rule, then build the result.
     const profile: AccountingProfile = 'agency';
-    const legs = resolvePostingLegs(request.requestType, request.amount, profile);
+    // Resolution + account snapshot are FROZEN here (binding + live chart). Engine never re-resolves.
+    const legs = resolvePostingLegs(request.requestType, request.amount, profile, PROCUREMENT_POSTING_BINDING, accounts);
     if (legs.length === 0) {
-      toastRef.current({ title: 'कोई Posting Rule नहीं', description: `इस requestType (${request.requestType}) के लिए अभी कोई rule नहीं है। (No posting rule for this request type yet)`, variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: 'Rule/खाता binding नहीं', description: `इस requestType (${request.requestType}) के लिए rule नहीं है या bound खाता chart में नहीं मिला। (No rule, or a bound account is missing from the chart)`, variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     const now = new Date().toISOString();
@@ -2206,7 +2208,59 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'Posting legs resolved', description: `${result.requestType} · ${legs.length} legs`, duration: 6000 });
     });
     return result;
-  }, [user, procurementPostingRequests, procurementPostingRuleResults]);
+  }, [user, procurementPostingRequests, procurementPostingRuleResults, accounts]);
+
+  // Phase 3.3 — Financial Engine (first slice). Consumes ONE PostingRuleResult → produces ONE
+  // immutable Engine Voucher (origin:'engine'), reusing addVoucher / persistVoucher / voucherImmutability.
+  // The Voucher (Accounting subsystem) is the SINGLE authoritative record; the procurement
+  // 'engine.voucher.created' event is a best-effort audit log. No link table, no compensation, no
+  // selector lookup — the engine maps ONLY the frozen resolvedAccountId on each leg.
+  const generateEngineVoucher = useCallback((data: { postingRuleResultId: string }): Voucher => {
+    const sentinel = { id: '', voucherNo: '', type: 'journal', date: '', debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    if (guardFYLocked()) return sentinel;
+    // 2. PostingRuleResult exists?
+    const result = procurementPostingRuleResults.find(r => r.id === data.postingRuleResultId);
+    if (!result) {
+      toastRef.current({ title: 'Posting Rule result नहीं मिला', description: 'पहले Resolve करें। (Resolve the Posting Request first)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    // 3. Engine voucher already exists? The Voucher itself is the authoritative one-to-one record
+    //    (origin='engine' + refType='posting.rule.result' + refId=result.id). No duplicate link table.
+    if (vouchersRef.current.some(v => !v.isDeleted && isEngineVoucher(v) && v.refType === 'posting.rule.result' && v.refId === result.id)) {
+      toastRef.current({ title: 'पहले से पोस्ट', description: 'इस result का Engine Voucher पहले से बना है। (Engine voucher already exists for this result)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    // 4. Map the frozen legs → voucher lines (uses ONLY resolvedAccountId; no binding lookup).
+    const specs = buildEngineVoucherLines(result.legs);
+    if (specs.length === 0) {
+      toastRef.current({ title: 'Legs resolved नहीं', description: 'इस result के legs में resolvedAccountId नहीं है — दोबारा Resolve करें। (Legs are not account-resolved)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    const lines: VoucherLine[] = specs.map(s => ({ id: crypto.randomUUID(), accountId: s.accountId, type: s.type, amount: s.amount }));
+    const drTotal = specs.filter(s => s.type === 'Dr').reduce((sum, s) => sum + s.amount, 0);
+    // 5. Create the immutable engine voucher via the EXISTING accounting path (authoritative record).
+    const voucher = addVoucher({
+      type: 'journal', date: new Date().toISOString().split('T')[0],
+      debitAccountId: '', creditAccountId: '', amount: drTotal, lines,
+      narration: `Engine: ${result.requestType} — ${result.jformId}`,
+      createdBy: user?.name || 'Engine',
+      origin: 'engine', refType: 'posting.rule.result', refId: result.id,
+    });
+    if (!voucher.id) return sentinel;   // addVoucher's own FY/balance guard already toasted
+    // 6. Best-effort immutable audit event (procurement-owned; NEVER affects the voucher).
+    const now = new Date().toISOString();
+    const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: result.lotId, name: 'engine.voucher.created', occurredAt: now, recordedAt: now, actor: user?.name || 'System', payload: { voucherId: voucher.id, voucherNo: voucher.voucherNo, postingRuleResultId: result.id } };
+    setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
+    supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'engine.voucher.create', transactionId: crypto.randomUUID(), transactionVersion: 1, events: [withSoc(event)] } }).then(({ error }) => {
+      if (error) {
+        console.warn('engine.voucher.created event commit failed:', error.message);
+        setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
+        toastRef.current({ title: '⚠️ Audit event save नहीं हुआ', description: `Engine voucher ${voucher.voucherNo} ban gaya (authoritative); par audit event cloud par save nahi hua: ${error.message}.`, variant: 'default', duration: 8000 });
+      }
+    });
+    toastRef.current({ title: 'Engine voucher बना', description: `${voucher.voucherNo} · ${result.requestType}`, duration: 6000 });
+    return voucher;
+  }, [user, procurementPostingRuleResults, addVoucher]);
 
   // Only active (non-deleted) vouchers for all financial calculations
   const activeVouchers = vouchers.filter(v => !v.isDeleted);
@@ -4339,7 +4393,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       procurementJForms, generateJForm,
       procurementFinancialIntents, generateFinancialIntent,
       procurementPostingRequests, generatePostingRequest,
-      procurementPostingRuleResults, generatePostingRuleResult,
+      procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, approveMember, rejectMember,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,

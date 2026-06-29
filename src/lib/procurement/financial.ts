@@ -26,7 +26,12 @@ export interface FinancialIntent {
 
 export interface PostingLeg {
   side: 'Dr' | 'Cr';
-  accountSelector: string;
+  accountSelector: string;          // symbolic — kept for audit/debugging only
+  // Frozen account snapshot (set at PostingRuleResult creation; immutable thereafter).
+  // resolvedAccountId is the ONLY field used for posting; code/name are audit/history/reproducibility.
+  resolvedAccountId?: string;
+  accountCode?: string;
+  accountName?: string;
   amount: Money;
 }
 
