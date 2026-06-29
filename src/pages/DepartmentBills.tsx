@@ -62,6 +62,12 @@ export default function DepartmentBills() {
   const woBilled = selectedWO ? billedForWO(selectedWO.id) : 0;
   const woRemaining = selectedWO ? +(woContract - woBilled).toFixed(2) : 0;
 
+  // Work orders selectable for the chosen department (its own + any legacy ones without a dept link).
+  const woOptions = departmentId ? openOrders.filter(w => w.departmentId === departmentId || !w.departmentId) : [];
+
+  // Changing the department resets the work order + amount (a WO belongs to one department).
+  const onSelectDept = (id: string) => { setDepartmentId(id); setWorkOrderId(''); setAmount(''); };
+
   // Selecting a work order pre-fills the bill amount with its remaining (un-billed) balance — editable.
   const onSelectWO = (woId: string) => {
     setWorkOrderId(woId);
@@ -73,9 +79,10 @@ export default function DepartmentBills() {
 
   const save = () => {
     if (!departmentId) { toast({ title: hi ? 'विभाग चुनें' : 'Select a department', variant: 'destructive' }); return; }
+    if (!workOrderId) { toast({ title: hi ? 'कार्य आदेश चुनें' : 'Select a work order', description: hi ? 'हर बिल किसी कार्य आदेश (ठेके) के विरुद्ध बनता है।' : 'Every bill is raised against a work order (contract).', variant: 'destructive' }); return; }
     const v = Number(amount);
     if (!(v > 0)) { toast({ title: hi ? 'बिल राशि दर्ज करें' : 'Enter a valid amount', variant: 'destructive' }); return; }
-    const bill = addDepartmentBill({ departmentId, workOrderId: workOrderId || undefined, billType, date, amount: v, narration: narration.trim() || undefined });
+    const bill = addDepartmentBill({ departmentId, workOrderId, billType, date, amount: v, narration: narration.trim() || undefined });
     if (bill.id) { setAmount(''); setNarration(''); setWorkOrderId(''); }
   };
 
@@ -123,16 +130,20 @@ export default function DepartmentBills() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>{hi ? 'विभाग / नियोक्ता' : 'Department / Employer'} *</Label>
-              <Select value={departmentId} onValueChange={setDepartmentId}>
+              <Select value={departmentId} onValueChange={onSelectDept}>
                 <SelectTrigger><SelectValue placeholder={hi ? 'विभाग चुनें' : 'Select department'} /></SelectTrigger>
                 <SelectContent>{activeDepts.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>{hi ? 'कार्य आदेश (वैकल्पिक)' : 'Work Order (optional)'}</Label>
+              <Label>{hi ? 'कार्य आदेश' : 'Work Order'} *</Label>
               <Select value={workOrderId || undefined} onValueChange={onSelectWO}>
-                <SelectTrigger><SelectValue placeholder={hi ? 'चुनें' : 'Select'} /></SelectTrigger>
-                <SelectContent>{openOrders.map(w => <SelectItem key={w.id} value={w.id}>{w.workOrderNo} · {w.clientName}</SelectItem>)}</SelectContent>
+                <SelectTrigger><SelectValue placeholder={hi ? 'कार्य आदेश चुनें' : 'Select work order'} /></SelectTrigger>
+                <SelectContent>
+                  {woOptions.length === 0
+                    ? <div className="px-2 py-1.5 text-sm text-muted-foreground">{hi ? 'इस विभाग का कोई कार्य आदेश नहीं — पहले Work Orders में बनाएँ' : 'No work order for this department — create one in Work Orders first'}</div>
+                    : woOptions.map(w => <SelectItem key={w.id} value={w.id}>{w.workOrderNo} · {w.clientName}</SelectItem>)}
+                </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
