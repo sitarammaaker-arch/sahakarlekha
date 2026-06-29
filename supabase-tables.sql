@@ -1333,6 +1333,52 @@ create policy "society_rw" on public.procurement_posting_rule_results for all to
 create unique index if not exists procurement_posting_rule_results_request_uniq on public.procurement_posting_rule_results ("postingRequestId");
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Farmer Settlement — the AUTHORITATIVE business document for procurement settlement.
+-- Business state (gross, deduction lines, netPayable, settlementNo, approval metadata) is stored
+-- here permanently and NEVER reconstructed from vouchers; only "amountPaid" advances as payments
+-- post. One settlement per Engine Voucher (the unique index on "engineVoucherId" is the AUTHORITATIVE
+-- guard). "settlementNo" is DB-owned & gap-free (per-society counter, assigned at approval inside the
+-- commit transaction — same model as J-Form documentNo). RUN this block once BEFORE the commit function.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists procurement_settlements (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "settlementNo" text,
+  "engineVoucherId" text,
+  status text,
+  gross jsonb,
+  "deductionLines" jsonb,
+  "netPayable" jsonb,
+  "amountPaid" jsonb,
+  "settlementVoucherId" text,
+  "approvedAt" timestamptz,
+  "approvedBy" text,
+  "createdBy" text,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+alter table public.procurement_settlements enable row level security;
+drop policy if exists "society_rw" on public.procurement_settlements;
+create policy "society_rw" on public.procurement_settlements for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create unique index if not exists procurement_settlements_ev_uniq on public.procurement_settlements ("engineVoucherId");
+create unique index if not exists procurement_settlements_no_uniq on public.procurement_settlements (society_id, "settlementNo");
+
+-- Per-society settlement-number counter (row-locked inside the commit transaction → concurrency-safe;
+-- rolls back with the transaction). The client never generates STLnnnnnn.
+create table if not exists procurement_settlement_counters (
+  society_id text primary key,
+  last_no integer not null default 0
+);
+alter table public.procurement_settlement_counters enable row level security;
+drop policy if exists "society_rw" on public.procurement_settlement_counters;
+create policy "society_rw" on public.procurement_settlement_counters for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
 -- transaction: every supplied collection commits together, or nothing does — a
 -- ProcurementLot can never exist in the cloud without its immutable creation event.
@@ -1369,6 +1415,9 @@ declare
   v_payload jsonb;
   v_docmap jsonb := '{}'::jsonb;   -- jformId -> generated documentNo
   v_result jsonb := '[]'::jsonb;   -- [{ id, lotId, documentNo }] returned to the client
+  v_stl text;                      -- generated settlementNo (this transaction)
+  v_stlmap jsonb := '{}'::jsonb;   -- settlementId -> generated settlementNo
+  v_settle_result jsonb := '[]'::jsonb;  -- [{ id, settlementNo }] returned to the client
 begin
   if p_payload ? 'lots' then
     for rec in select value from jsonb_array_elements(p_payload->'lots') loop
@@ -1420,6 +1469,31 @@ begin
       values (rec->>'id', rec->>'society_id', rec->>'postingRequestId', rec->>'lotId', rec->>'jformId', rec->>'financialIntentId', rec->>'requestType', rec->>'profile', rec->'legs', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
     end loop;
   end if;
+  if p_payload ? 'settlements' then
+    for rec in select value from jsonb_array_elements(p_payload->'settlements') loop
+      v_sid := rec->>'society_id';
+      -- DB-owned numbering: assign a gap-free per-society number only at approval (when the row
+      -- becomes 'approved' and has no number yet). Row-locked counter → concurrency-safe.
+      if (rec->>'status') = 'approved' and (rec->>'settlementNo') is null then
+        insert into procurement_settlement_counters (society_id, last_no) values (v_sid, 1)
+          on conflict (society_id) do update set last_no = procurement_settlement_counters.last_no + 1
+          returning last_no into v_no;
+        v_stl := 'STL' || lpad(v_no::text, 6, '0');
+      else
+        v_stl := rec->>'settlementNo';
+      end if;
+      insert into procurement_settlements (id, society_id, "settlementNo", "engineVoucherId", status, gross, "deductionLines", "netPayable", "amountPaid", "settlementVoucherId", "approvedAt", "approvedBy", "createdBy", "isDeleted", "createdAt", "updatedAt")
+      values (rec->>'id', v_sid, v_stl, rec->>'engineVoucherId', rec->>'status', rec->'gross', rec->'deductionLines', rec->'netPayable', rec->'amountPaid', rec->>'settlementVoucherId', (rec->>'approvedAt')::timestamptz, rec->>'approvedBy', rec->>'createdBy', coalesce((rec->>'isDeleted')::boolean, false), (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz)
+      on conflict (id) do update set
+        "settlementNo" = excluded."settlementNo", status = excluded.status, gross = excluded.gross,
+        "deductionLines" = excluded."deductionLines", "netPayable" = excluded."netPayable",
+        "amountPaid" = excluded."amountPaid", "settlementVoucherId" = excluded."settlementVoucherId",
+        "approvedAt" = excluded."approvedAt", "approvedBy" = excluded."approvedBy",
+        "isDeleted" = excluded."isDeleted", "updatedAt" = excluded."updatedAt";
+      v_stlmap := v_stlmap || jsonb_build_object(rec->>'id', v_stl);
+      v_settle_result := v_settle_result || jsonb_build_object('id', rec->>'id', 'settlementNo', v_stl);
+    end loop;
+  end if;
   if p_payload ? 'events' then
     for rec in select value from jsonb_array_elements(p_payload->'events') loop
       v_payload := rec->'payload';
@@ -1427,11 +1501,14 @@ begin
       if v_payload ? 'jformId' and v_docmap ? (v_payload->>'jformId') then
         v_payload := jsonb_set(v_payload, '{documentNo}', v_docmap->(v_payload->>'jformId'));
       end if;
+      if v_payload ? 'settlementId' and v_stlmap ? (v_payload->>'settlementId') then
+        v_payload := jsonb_set(v_payload, '{settlementNo}', v_stlmap->(v_payload->>'settlementId'));
+      end if;
       insert into procurement_events (id, society_id, name, "correlationId", "occurredAt", "recordedAt", actor, payload)
       values (rec->>'id', rec->>'society_id', rec->>'name', rec->>'correlationId', (rec->>'occurredAt')::timestamptz, (rec->>'recordedAt')::timestamptz, rec->>'actor', v_payload);
     end loop;
   end if;
-  return jsonb_build_object('jforms', v_result);
+  return jsonb_build_object('jforms', v_result, 'settlements', v_settle_result);
 end;
 $$;
 grant execute on function public.procurement_commit_transaction(jsonb) to authenticated;

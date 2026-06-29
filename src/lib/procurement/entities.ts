@@ -33,6 +33,38 @@ export interface Deduction extends BaseEntity { lotId: string; ruleId: string; a
 // ── Settlement ──
 export interface JForm extends BaseEntity { lotId: string; documentNo: string; gross: Money; deductions: Money; net: Money; }
 export interface FarmerPayment extends BaseEntity { jformId: string; amount: Money; status: string; reference?: string; }
+
+// ── Farmer Settlement (authoritative business document for procurement settlement) ──
+// One Engine Voucher ⇄ one FarmerSettlement. The Settlement is the SOURCE OF TRUTH: gross,
+// deduction lines, netPayable, settlementNo and approval metadata are stored permanently and are
+// NEVER reconstructed from accounting vouchers (vouchers are evidence only). Only amountPaid
+// advances as farmer.payment vouchers post. jformId / farmer are derived via ev→result→jform→lot
+// (NOT denormalized — preserves the Payment→EngineVoucher→PostingRuleResult→jformId SSOT trace).
+export interface SettlementDeductionLine {
+  id: string;
+  deductionType: string;   // label, e.g. TDS / Market Fee / Arhtiya Commission
+  accountId: string;       // Cr destination chart account
+  amount: Money;
+  reference?: string;
+  remarks?: string;
+}
+// Document lifecycle ONLY. Payment progress (unpaid/partial/paid) is DERIVED from netPayable &
+// amountPaid — never folded in here. Enum kept extensible (e.g. 'reversed') without schema change.
+export type SettlementStatus = 'draft' | 'approved';
+export interface FarmerSettlement extends BaseEntity {
+  settlementNo?: string;          // DB-owned, gap-free; assigned at approval (null while draft)
+  engineVoucherId: string;        // anchor (1:1)
+  status: SettlementStatus;
+  gross: Money;                   // snapshot of the engine voucher payable; immutable after approval
+  deductionLines: SettlementDeductionLine[];   // immutable after approval
+  netPayable: Money;              // LOCKED at approval = gross − Σ deductionLines
+  amountPaid: Money;              // advances as payments post (the only mutable business field post-approval)
+  settlementVoucherId?: string;   // the one compound deduction voucher posted at approval (a consequence)
+  approvedAt?: string;
+  approvedBy?: string;
+  createdBy?: string;
+  isDeleted?: boolean;
+}
 export interface CommissionBill extends BaseEntity { arhtiyaId: string; amount: Money; }
 export interface Claim extends BaseEntity { agencyId: string; amount: Money; }
 export interface Recoverable extends BaseEntity { partyId: string; amount: Money; }

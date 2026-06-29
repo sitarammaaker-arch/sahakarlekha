@@ -42,7 +42,7 @@ const DEDUCTION_TYPES = [
 ];
 
 export default function ProcurementLots() {
-  const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, recordFarmerPayment, recordDeduction } = useData();
+  const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, procurementSettlements, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement, recordFarmerPayment } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -78,10 +78,10 @@ export default function ProcurementLots() {
   const [payRef, setPayRef] = useState('');
   const [payRemarks, setPayRemarks] = useState('');
 
-  // MSP Deduction dialog
-  const [dedOpen, setDedOpen] = useState(false);
-  const [dedEvId, setDedEvId] = useState('');
-  const [dedOutstanding, setDedOutstanding] = useState(0);
+  // Farmer Settlement dialog (build draft deduction lines → approve). Deductions live ONLY here.
+  const [setlOpen, setSetlOpen] = useState(false);
+  const [setlId, setSetlId] = useState('');
+  // add-deduction-line sub-form (inside the settlement dialog)
   const [dedType, setDedType] = useState('');
   const [dedAccId, setDedAccId] = useState('');
   const [dedAmount, setDedAmount] = useState('');
@@ -139,38 +139,45 @@ export default function ProcurementLots() {
   const money = (n: number) => `₹${(n || 0).toLocaleString('en-IN')}`;
   const bankIds = getBankAccountIds(accounts);
   const bankAccounts = accounts.filter(a => bankIds.includes(a.id));
-  const lotPayments = (evId: string) => vouchers.filter(v => !v.isDeleted && v.refType === 'farmer.payment' && v.refId === evId);
-  const lotDeductions = (evId: string) => vouchers.filter(v => !v.isDeleted && v.refType === 'farmer.deduction' && v.refId === evId);
+  // Settlement is the SOURCE OF TRUTH — gross/deductions/net/paid read STORED fields, never vouchers.
+  const settlementForLot = (lotId: string) => { const ev = lotEngineVoucher(lotId); return ev ? procurementSettlements.find(s => !s.isDeleted && s.engineVoucherId === ev.id) : undefined; };
+  const currentSettlement = procurementSettlements.find(s => s.id === setlId && !s.isDeleted);
   const payInfo = (lotId: string) => {
     const ev = lotEngineVoucher(lotId);
     if (!ev) return null;
-    const gross = ev.amount;
-    const totalDeductions = lotDeductions(ev.id).reduce((s, v) => s + (v.amount || 0), 0);
-    const netPayable = +(gross - totalDeductions).toFixed(2);
-    const paid = lotPayments(ev.id).reduce((s, v) => s + (v.amount || 0), 0);
+    const s = procurementSettlements.find(x => !x.isDeleted && x.engineVoucherId === ev.id);
+    if (!s) return { ev, settlement: null, gross: ev.amount, totalDeductions: 0, netPayable: ev.amount, paid: 0, outstanding: ev.amount, payStatus: 'unpaid' as const };
+    const gross = s.gross.amount;
+    const totalDeductions = +s.deductionLines.reduce((a, l) => a + l.amount.amount, 0).toFixed(2);
+    const netPayable = s.netPayable.amount;
+    const paid = s.amountPaid.amount;
     const outstanding = +(netPayable - paid).toFixed(2);
-    const status: 'unpaid' | 'partial' | 'paid' = outstanding <= 0 ? 'paid' : paid <= 0 ? 'unpaid' : 'partial';
-    return { ev, gross, totalDeductions, netPayable, paid, outstanding, status };
+    const payStatus: 'unpaid' | 'partial' | 'paid' = (s.status === 'approved' && outstanding <= 0) ? 'paid' : paid > 0 ? 'partial' : 'unpaid';
+    return { ev, settlement: s, gross, totalDeductions, netPayable, paid, outstanding, payStatus };
   };
   const postableAccounts = accounts.filter(a => !a.isGroup);
-  const openDeduction = (lotId: string) => {
-    const info = payInfo(lotId);
-    if (!info) return;
-    setDedEvId(info.ev.id); setDedOutstanding(info.outstanding);
-    setDedType(''); setDedAccId(''); setDedAmount(''); setDedRef(''); setDedRemarks('');
-    setDedOpen(true);
+  const openSettlement = (lotId: string) => {
+    const s = settlementForLot(lotId);
+    if (!s) return;
+    setSetlId(s.id); setDedType(''); setDedAccId(''); setDedAmount(''); setDedRef(''); setDedRemarks(''); setSetlOpen(true);
+  };
+  const handleCreateSettlement = (lotId: string) => {
+    const ev = lotEngineVoucher(lotId);
+    if (!ev) return;
+    const s = createFarmerSettlement({ engineVoucherId: ev.id });
+    if (s.id) { setSetlId(s.id); setDedType(''); setDedAccId(''); setDedAmount(''); setDedRef(''); setDedRemarks(''); setSetlOpen(true); }
   };
   const onDedType = (id: string) => { setDedType(id); const t = DEDUCTION_TYPES.find(x => x.id === id); setDedAccId(t?.acc || ''); };
-  const saveDeduction = () => {
+  const addLine = () => {
     const amt = Number(dedAmount);
     if (!dedType) { toast({ title: hi ? 'प्रकार चुनें' : 'Select type', variant: 'destructive' }); return; }
     if (!dedAccId) { toast({ title: hi ? 'खाता चुनें' : 'Select account', variant: 'destructive' }); return; }
     if (!(amt > 0)) { toast({ title: hi ? 'राशि डालें' : 'Enter amount', variant: 'destructive' }); return; }
-    if (amt > dedOutstanding) { toast({ title: hi ? 'शेष से अधिक' : 'Exceeds outstanding', description: `${hi ? 'शेष' : 'Outstanding'} ${money(dedOutstanding)}`, variant: 'destructive' }); return; }
     const t = DEDUCTION_TYPES.find(x => x.id === dedType);
-    const v = recordDeduction({ engineVoucherId: dedEvId, deductionType: t ? (hi ? t.hi : t.en) : dedType, accountId: dedAccId, amount: amt, reference: dedRef.trim() || undefined, remarks: dedRemarks.trim() || undefined });
-    if (v.id) { toast({ title: hi ? 'कटौती दर्ज हुई' : 'Deduction recorded', description: money(amt) }); setDedOpen(false); }
+    addSettlementDeductionLine({ settlementId: setlId, deductionType: t ? (hi ? t.hi : t.en) : dedType, accountId: dedAccId, amount: amt, reference: dedRef.trim() || undefined, remarks: dedRemarks.trim() || undefined });
+    setDedType(''); setDedAccId(''); setDedAmount(''); setDedRef(''); setDedRemarks('');
   };
+  const approveSettlement = () => { if (setlId) approveFarmerSettlement({ settlementId: setlId }); };
   const openPay = (lotId: string) => {
     const info = payInfo(lotId);
     if (!info) return;
@@ -309,14 +316,22 @@ export default function ProcurementLots() {
                     {hi ? 'वाउचर' : 'Voucher'}: {lotEngineVoucher(l.id)!.voucherNo}
                   </div>
                 )}
-                {payInfo(l.id) && (
-                  <div className="text-xs mt-0.5">
-                    <span className={payInfo(l.id)!.status === 'paid' ? 'text-green-600' : payInfo(l.id)!.status === 'partial' ? 'text-amber-600' : 'text-muted-foreground'}>
-                      {payInfo(l.id)!.status === 'paid' ? (hi ? '● पूर्ण भुगतान' : '● Fully Paid') : payInfo(l.id)!.status === 'partial' ? (hi ? '◐ आंशिक भुगतान' : '◐ Partially Paid') : (hi ? '○ अभुगतान' : '○ Unpaid')}
-                    </span>
-                    {' · '}{hi ? 'सकल' : 'Gross'} {money(payInfo(l.id)!.gross)} · {hi ? 'कटौती' : 'Deductions'} {money(payInfo(l.id)!.totalDeductions)} · {hi ? 'निवल देय' : 'Net'} {money(payInfo(l.id)!.netPayable)} · {hi ? 'भुगतान' : 'Paid'} {money(payInfo(l.id)!.paid)} · {hi ? 'बकाया' : 'Outstanding'} {money(payInfo(l.id)!.outstanding)}
-                  </div>
-                )}
+                {(() => {
+                  const pi = payInfo(l.id);
+                  const s = pi?.settlement;
+                  if (!pi || !s) return null;
+                  return (
+                    <div className="text-xs mt-0.5">
+                      <span className={s.status === 'approved' ? (pi.payStatus === 'paid' ? 'text-green-600' : 'text-amber-600') : 'text-blue-600'}>
+                        {s.status === 'draft'
+                          ? (hi ? '✎ निपटान ड्राफ्ट' : '✎ Settlement Draft')
+                          : (hi ? `● निपटान ${s.settlementNo || '…'} (स्वीकृत)` : `● Settlement ${s.settlementNo || '…'} (Approved)`)}
+                      </span>
+                      {' · '}{hi ? 'सकल' : 'Gross'} {money(pi.gross)} · {hi ? 'कटौती' : 'Deductions'} {money(pi.totalDeductions)} · {hi ? 'निवल देय' : 'Net'} {money(pi.netPayable)}
+                      {s.status === 'approved' ? ` · ${hi ? 'भुगतान' : 'Paid'} ${money(pi.paid)} · ${hi ? 'बकाया' : 'Outstanding'} ${money(pi.outstanding)}` : ''}
+                    </div>
+                  );
+                })()}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Badge variant="secondary">{l.operationalStatus}</Badge>
@@ -326,9 +341,11 @@ export default function ProcurementLots() {
                 {lotIntent(l.id) && !lotPostingRequest(l.id) && <Button size="sm" variant="outline" onClick={() => handleGeneratePostingRequest(lotIntent(l.id)!.id)}>{hi ? 'पोस्टिंग' : 'Posting Req'}</Button>}
                 {lotPostingRequest(l.id) && !lotRuleResult(l.id) && <Button size="sm" variant="outline" onClick={() => handleResolve(lotPostingRequest(l.id)!.id)}>{hi ? 'रिज़ॉल्व' : 'Resolve'}</Button>}
                 {lotRuleResult(l.id) && !lotEngineVoucher(l.id) && <Button size="sm" variant="outline" onClick={() => handlePost(lotRuleResult(l.id)!.id)}>{hi ? 'पोस्ट' : 'Post'}</Button>}
-                {lotEngineVoucher(l.id) && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openDeduction(l.id)}>{hi ? 'कटौती' : 'Add Deduction'}</Button>}
-                {lotEngineVoucher(l.id) && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openPay(l.id)}>{hi ? 'किसान को भुगतान' : 'Pay Farmer'}</Button>}
-                {lotEngineVoucher(l.id) && payInfo(l.id)!.outstanding <= 0 && <span className="text-xs text-green-600 font-medium">{hi ? '✓ पूर्ण भुगतान' : '✓ Fully Paid'}</span>}
+                {lotEngineVoucher(l.id) && !settlementForLot(l.id) && <Button size="sm" variant="outline" onClick={() => handleCreateSettlement(l.id)}>{hi ? 'निपटान बनाएँ' : 'Create Settlement'}</Button>}
+                {settlementForLot(l.id)?.status === 'draft' && <Button size="sm" variant="outline" onClick={() => openSettlement(l.id)}>{hi ? 'निपटान प्रबंधन' : 'Manage Settlement'}</Button>}
+                {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="ghost" onClick={() => openSettlement(l.id)}>{hi ? 'देखें' : 'View'}</Button>}
+                {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openPay(l.id)}>{hi ? 'किसान को भुगतान' : 'Pay Farmer'}</Button>}
+                {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding <= 0 && <span className="text-xs text-green-600 font-medium">{hi ? '✓ पूर्ण भुगतान' : '✓ Fully Paid'}</span>}
               </div>
             </div>
           ))}
@@ -436,41 +453,70 @@ export default function ProcurementLots() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={dedOpen} onOpenChange={setDedOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{hi ? 'MSP कटौती' : 'MSP Deduction'}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="text-xs text-muted-foreground">{hi ? 'बकाया' : 'Outstanding'}: {money(dedOutstanding)}</div>
-            <div className="space-y-1.5">
-              <Label>{hi ? 'कटौती प्रकार' : 'Deduction Type'} *</Label>
-              <Select value={dedType} onValueChange={onDedType}>
-                <SelectTrigger><SelectValue placeholder={hi ? 'प्रकार चुनें' : 'Select type'} /></SelectTrigger>
-                <SelectContent>{DEDUCTION_TYPES.map(t => <SelectItem key={t.id} value={t.id}>{hi ? t.hi : t.en}</SelectItem>)}</SelectContent>
-              </Select>
+      {/* Farmer Settlement dialog — build draft deduction lines, then approve (the accounting trigger) */}
+      <Dialog open={setlOpen} onOpenChange={setSetlOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {hi ? 'किसान निपटान' : 'Farmer Settlement'}{currentSettlement?.settlementNo ? ` · ${currentSettlement.settlementNo}` : ''}
+            </DialogTitle>
+          </DialogHeader>
+          {currentSettlement && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm">
+                <Badge variant={currentSettlement.status === 'approved' ? 'default' : 'secondary'}>
+                  {currentSettlement.status === 'approved' ? (hi ? 'स्वीकृत' : 'Approved') : (hi ? 'ड्राफ्ट' : 'Draft')}
+                </Badge>
+                <span className="text-muted-foreground">{hi ? 'सकल' : 'Gross'}: {money(currentSettlement.gross.amount)}</span>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>{hi ? 'कटौतियाँ' : 'Deductions'}</Label>
+                {currentSettlement.deductionLines.length === 0 && <p className="text-xs text-muted-foreground">{hi ? 'अभी कोई कटौती नहीं' : 'No deductions yet'}</p>}
+                {currentSettlement.deductionLines.map(line => (
+                  <div key={line.id} className="flex items-center justify-between text-sm rounded border p-2 gap-2">
+                    <span className="min-w-0 truncate">{line.deductionType} · {line.accountId} · {money(line.amount.amount)}</span>
+                    {currentSettlement.status === 'draft' && (
+                      <Button size="sm" variant="ghost" className="shrink-0" onClick={() => removeSettlementDeductionLine({ settlementId: currentSettlement.id, lineId: line.id })}>{hi ? 'हटाएँ' : 'Remove'}</Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {currentSettlement.status === 'draft' && (
+                <div className="space-y-2 rounded-lg border p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Select value={dedType} onValueChange={onDedType}>
+                      <SelectTrigger><SelectValue placeholder={hi ? 'प्रकार' : 'Type'} /></SelectTrigger>
+                      <SelectContent>{DEDUCTION_TYPES.map(t => <SelectItem key={t.id} value={t.id}>{hi ? t.hi : t.en}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Select value={dedAccId} onValueChange={setDedAccId}>
+                      <SelectTrigger><SelectValue placeholder={hi ? 'खाता' : 'Account'} /></SelectTrigger>
+                      <SelectContent>{postableAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} · {hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <Input type="number" min={0} value={dedAmount} onChange={e => setDedAmount(e.target.value)} placeholder={hi ? 'राशि' : 'Amount'} />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Input value={dedRef} onChange={e => setDedRef(e.target.value)} placeholder={hi ? 'संदर्भ (वैकल्पिक)' : 'Reference (optional)'} />
+                    <Input value={dedRemarks} onChange={e => setDedRemarks(e.target.value)} placeholder={hi ? 'टिप्पणी (वैकल्पिक)' : 'Remarks (optional)'} />
+                  </div>
+                  <Button size="sm" variant="outline" className="w-full" onClick={addLine}>{hi ? '+ कटौती जोड़ें' : '+ Add Deduction'}</Button>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between rounded-lg bg-muted/50 p-3 text-sm font-medium">
+                <span>{hi ? 'निवल देय' : 'Net Payable'}</span>
+                <span>{money(currentSettlement.netPayable.amount)}</span>
+              </div>
+
+              {currentSettlement.status === 'approved' && (
+                <p className="text-xs text-muted-foreground">{hi ? 'स्वीकृत — अब "किसान को भुगतान" से निवल देय का निपटान करें। कटौतियाँ अब बदली नहीं जा सकतीं।' : 'Approved — use "Pay Farmer" to settle the net payable. Deductions are now locked.'}</p>
+              )}
             </div>
-            <div className="space-y-1.5">
-              <Label>{hi ? 'खाता' : 'Account'} *</Label>
-              <Select value={dedAccId} onValueChange={setDedAccId}>
-                <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
-                <SelectContent>{postableAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} · {hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>{hi ? 'राशि' : 'Amount'} *</Label>
-              <Input type="number" min={0} max={dedOutstanding} value={dedAmount} onChange={e => setDedAmount(e.target.value)} placeholder="0" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>{hi ? 'संदर्भ' : 'Reference'}</Label>
-              <Input value={dedRef} onChange={e => setDedRef(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>{hi ? 'टिप्पणी' : 'Remarks'}</Label>
-              <Input value={dedRemarks} onChange={e => setDedRemarks(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} />
-            </div>
-          </div>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDedOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
-            <Button onClick={saveDeduction}>{hi ? 'कटौती दर्ज करें' : 'Add Deduction'}</Button>
+            <Button variant="outline" onClick={() => setSetlOpen(false)}>{hi ? 'बंद करें' : 'Close'}</Button>
+            {currentSettlement?.status === 'draft' && <Button onClick={approveSettlement}>{hi ? 'निपटान स्वीकृत करें' : 'Approve Settlement'}</Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -21,7 +21,7 @@ import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
-import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money } from '@/lib/procurement';
+import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLines } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
 
@@ -49,8 +49,14 @@ interface DataContextType {
   procurementPostingRuleResults: PostingRuleResult[];
   generatePostingRuleResult: (data: { postingRequestId: string }) => PostingRuleResult;
   generateEngineVoucher: (data: { postingRuleResultId: string }) => Voucher;
+  // Farmer Settlement — the authoritative business document. Deductions live ONLY here (draft lines);
+  // approval is the single accounting trigger; payments settle the approved settlement's Net Payable.
+  procurementSettlements: FarmerSettlement[];
+  createFarmerSettlement: (data: { engineVoucherId: string }) => FarmerSettlement;
+  addSettlementDeductionLine: (data: { settlementId: string; deductionType: string; accountId: string; amount: number; reference?: string; remarks?: string }) => void;
+  removeSettlementDeductionLine: (data: { settlementId: string; lineId: string }) => void;
+  approveFarmerSettlement: (data: { settlementId: string }) => FarmerSettlement;
   recordFarmerPayment: (data: { engineVoucherId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; paymentDate: string; reference?: string; remarks?: string }) => Voucher;
-  recordDeduction: (data: { engineVoucherId: string; deductionType: string; accountId: string; amount: number; reference?: string; remarks?: string }) => Voucher;
   loans: Loan[];
   assets: Asset[];
 
@@ -230,6 +236,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [procurementFinancialIntents, setProcurementFinancialIntentsState] = useState<FinancialIntentRecord[]>(() => storage.getProcurementFinancialIntents());
   const [procurementPostingRequests, setProcurementPostingRequestsState] = useState<PostingRequest[]>(() => storage.getProcurementPostingRequests());
   const [procurementPostingRuleResults, setProcurementPostingRuleResultsState] = useState<PostingRuleResult[]>(() => storage.getProcurementPostingRuleResults());
+  const [procurementSettlements, setProcurementSettlementsState] = useState<FarmerSettlement[]>(() => storage.getProcurementSettlements());
   const procurementFarmersRef = useRef<Farmer[]>(procurementFarmers);
   useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
   const loansRef = useRef<Loan[]>(loans);
@@ -283,7 +290,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Reset all state to empty before loading new society's data
     setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
     setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
-    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]);
+    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]); setProcurementSettlementsState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
@@ -450,6 +457,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         supabase.from('procurement_posting_rule_results').select('*').eq('society_id', sid).then(
           ({ data, error }) => setProcurementPostingRuleResultsState(error || !data ? storage.getProcurementPostingRuleResults() : (data as unknown as PostingRuleResult[])),
           () => setProcurementPostingRuleResultsState(storage.getProcurementPostingRuleResults()),
+        );
+        supabase.from('procurement_settlements').select('*').eq('society_id', sid).then(
+          ({ data, error }) => setProcurementSettlementsState(error || !data ? storage.getProcurementSettlements() : (data as unknown as FarmerSettlement[])),
+          () => setProcurementSettlementsState(storage.getProcurementSettlements()),
         );
 
         // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
@@ -848,6 +859,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementFinancialIntentsState(storage.getProcurementFinancialIntents());
         setProcurementPostingRequestsState(storage.getProcurementPostingRequests());
         setProcurementPostingRuleResultsState(storage.getProcurementPostingRuleResults());
+        setProcurementSettlementsState(storage.getProcurementSettlements());
         setAssetsState(storage.getAssets());
       } finally {
         setIsLoading(false);
@@ -2264,41 +2276,175 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return voucher;
   }, [user, procurementPostingRuleResults, addVoucher]);
 
-  // Phase 3.4 — Farmer Payment. Records ONE payment (of many) settling an Engine Voucher's payable,
-  // reusing addVoucher exactly like addBillPayment. Dr = the Engine Voucher's payable account (its Cr
-  // leg — never hardcoded); Cr = Cash / selected Bank. Outstanding is DERIVED from vouchers (no stored
-  // balance): engine voucher amount − Σ existing farmer.payment vouchers for this engine voucher.
+  // ── Farmer Settlement — the authoritative business document ──────────────────
+  // Helper: the live (non-deleted) settlement for an Engine Voucher (1:1). SoT for the operator.
+  const settlementForEv = (engineVoucherId: string) =>
+    procurementSettlements.find(s => !s.isDeleted && s.engineVoucherId === engineVoucherId);
+
+  // Create the DRAFT settlement for a posted Engine Voucher. Snapshots gross from the ev payable.
+  // No accounting, no number yet. Plain upsert (provisional record) with RULE-1 rollback.
+  const createFarmerSettlement = useCallback((data: { engineVoucherId: string }): FarmerSettlement => {
+    const blank: FarmerSettlement = { id: '', engineVoucherId: data.engineVoucherId, status: 'draft', gross: { amount: 0, currency: 'INR' }, deductionLines: [], netPayable: { amount: 0, currency: 'INR' }, amountPaid: { amount: 0, currency: 'INR' }, createdAt: '', updatedAt: '' };
+    if (guardFYLocked()) return blank;
+    const ev = vouchersRef.current.find(v => v.id === data.engineVoucherId && !v.isDeleted && isEngineVoucher(v));
+    if (!ev) {
+      toastRef.current({ title: 'Engine Voucher नहीं मिला', description: 'पहले Post करें। (Post the engine voucher first)', variant: 'destructive', duration: 8000 });
+      return blank;
+    }
+    if (procurementSettlements.some(s => !s.isDeleted && s.engineVoucherId === ev.id)) {
+      toastRef.current({ title: 'पहले से बना', description: 'इस वाउचर का निपटान पहले से मौजूद है। (Settlement already exists)', variant: 'destructive', duration: 8000 });
+      return blank;
+    }
+    const now = new Date().toISOString();
+    const gross: Money = { amount: ev.amount, currency: 'INR' };
+    const stl: FarmerSettlement = { id: crypto.randomUUID(), engineVoucherId: ev.id, status: 'draft', gross, deductionLines: [], netPayable: { ...gross }, amountPaid: { amount: 0, currency: 'INR' }, createdBy: user?.name || 'System', isDeleted: false, createdAt: now, updatedAt: now };
+    setProcurementSettlementsState(prev => { const u = [...prev, stl]; storage.setProcurementSettlements(u); return u; });
+    supabase.from('procurement_settlements').upsert(withSoc(stl)).then(({ error }) => {
+      if (error) {
+        console.error('Settlement create error:', error.message);
+        setProcurementSettlementsState(prev => { const r = prev.filter(x => x.id !== stl.id); storage.setProcurementSettlements(r); return r; });
+        toastRef.current({ title: 'निपटान सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara banayein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    toastRef.current({ title: 'निपटान ड्राफ्ट बना', description: `${gross.currency} ${gross.amount}`, duration: 5000 });
+    return stl;
+  }, [user, procurementSettlements]);
+
+  // Internal: persist a DRAFT settlement mutation (line add/remove) with optimistic update + rollback.
+  const persistDraftSettlement = (prevStl: FarmerSettlement, nextStl: FarmerSettlement) => {
+    setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === nextStl.id ? nextStl : x); storage.setProcurementSettlements(u); return u; });
+    supabase.from('procurement_settlements').upsert(withSoc(nextStl)).then(({ error }) => {
+      if (error) {
+        console.error('Settlement update error:', error.message);
+        setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === prevStl.id ? prevStl : x); storage.setProcurementSettlements(u); return u; });
+        toastRef.current({ title: 'बदलाव सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  };
+
+  // Add a deduction LINE to a draft settlement (no accounting). Net Payable = gross − Σ lines (recomputed).
+  const addSettlementDeductionLine = useCallback((data: { settlementId: string; deductionType: string; accountId: string; amount: number; reference?: string; remarks?: string }): void => {
+    if (guardFYLocked()) return;
+    const stl = procurementSettlements.find(s => s.id === data.settlementId && !s.isDeleted);
+    if (!stl) { toastRef.current({ title: 'निपटान नहीं मिला', description: 'Settlement not found', variant: 'destructive', duration: 8000 }); return; }
+    if (stl.status !== 'draft') { toastRef.current({ title: 'स्वीकृत निपटान', description: 'स्वीकृत निपटान में कटौती नहीं जोड़ सकते। (Cannot edit an approved settlement)', variant: 'destructive', duration: 9000 }); return; }
+    if (!data.accountId || !accounts.some(a => a.id === data.accountId)) { toastRef.current({ title: 'खाता चुनें', description: 'कटौती के लिए एक खाता चुनें। (Select a deduction account)', variant: 'destructive', duration: 8000 }); return; }
+    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'कटौती राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return; }
+    const line: SettlementDeductionLine = { id: crypto.randomUUID(), deductionType: data.deductionType, accountId: data.accountId, amount: { amount: +data.amount.toFixed(2), currency: stl.gross.currency }, reference: data.reference?.trim() || undefined, remarks: data.remarks?.trim() || undefined };
+    const lines = [...stl.deductionLines, line];
+    const totalDed = +lines.reduce((s, l) => s + l.amount.amount, 0).toFixed(2);
+    if (totalDed > stl.gross.amount) { toastRef.current({ title: 'कटौती सकल से अधिक', description: `कुल कटौती ₹${totalDed} सकल ₹${stl.gross.amount} से अधिक नहीं हो सकती।`, variant: 'destructive', duration: 9000 }); return; }
+    const next: FarmerSettlement = { ...stl, deductionLines: lines, netPayable: { amount: +(stl.gross.amount - totalDed).toFixed(2), currency: stl.gross.currency }, updatedAt: new Date().toISOString() };
+    persistDraftSettlement(stl, next);
+    toastRef.current({ title: 'कटौती जोड़ी', description: `${data.deductionType} · ₹${line.amount.amount}`, duration: 5000 });
+  }, [accounts, procurementSettlements]);
+
+  // Remove a deduction line from a draft settlement.
+  const removeSettlementDeductionLine = useCallback((data: { settlementId: string; lineId: string }): void => {
+    if (guardFYLocked()) return;
+    const stl = procurementSettlements.find(s => s.id === data.settlementId && !s.isDeleted);
+    if (!stl || stl.status !== 'draft') { toastRef.current({ title: 'संभव नहीं', description: 'केवल ड्राफ्ट निपटान संपादित कर सकते हैं।', variant: 'destructive', duration: 8000 }); return; }
+    const lines = stl.deductionLines.filter(l => l.id !== data.lineId);
+    const totalDed = +lines.reduce((s, l) => s + l.amount.amount, 0).toFixed(2);
+    const next: FarmerSettlement = { ...stl, deductionLines: lines, netPayable: { amount: +(stl.gross.amount - totalDed).toFixed(2), currency: stl.gross.currency }, updatedAt: new Date().toISOString() };
+    persistDraftSettlement(stl, next);
+  }, [procurementSettlements]);
+
+  // APPROVE — the single business event (immutable Settlement Transaction). Posts ONE compound
+  // deduction voucher (Dr payable Σ / Cr each deduction account) as the accounting CONSEQUENCE, locks
+  // Net Payable, and commits the approved settlement + 'settlement.approved' event via the atomic RPC,
+  // which assigns the DB-owned gap-free Settlement Number. Voucher is created FIRST (authoritative
+  // accounting); on RPC failure it is cancelled and the settlement reverts to draft (RULE 1).
+  const approveFarmerSettlement = useCallback((data: { settlementId: string }): FarmerSettlement => {
+    const blank = { id: '', engineVoucherId: '', status: 'draft', gross: { amount: 0, currency: 'INR' }, deductionLines: [], netPayable: { amount: 0, currency: 'INR' }, amountPaid: { amount: 0, currency: 'INR' }, createdAt: '', updatedAt: '' } as FarmerSettlement;
+    if (guardFYLocked()) return blank;
+    const stl = procurementSettlements.find(s => s.id === data.settlementId && !s.isDeleted);
+    if (!stl) { toastRef.current({ title: 'निपटान नहीं मिला', description: 'Settlement not found', variant: 'destructive', duration: 8000 }); return blank; }
+    if (stl.status !== 'draft') { toastRef.current({ title: 'पहले से स्वीकृत', description: 'यह निपटान पहले ही स्वीकृत है। (Already approved)', variant: 'destructive', duration: 8000 }); return blank; }
+    const ev = vouchersRef.current.find(v => v.id === stl.engineVoucherId && !v.isDeleted && isEngineVoucher(v));
+    if (!ev) { toastRef.current({ title: 'Engine Voucher नहीं मिला', description: 'Post the engine voucher first', variant: 'destructive', duration: 8000 }); return blank; }
+    const totalDed = +stl.deductionLines.reduce((s, l) => s + l.amount.amount, 0).toFixed(2);
+    const netPayable: Money = { amount: +(stl.gross.amount - totalDed).toFixed(2), currency: stl.gross.currency };
+    const payableAcc = ev.lines?.find(l => l.type === 'Cr')?.accountId || ev.creditAccountId;
+    const now = new Date().toISOString();
+
+    // 1. Accounting consequence — ONE compound deduction voucher (only if there are deductions).
+    let settlementVoucherId: string | undefined;
+    if (totalDed > 0) {
+      const lid = () => crypto.randomUUID();
+      const v = addVoucher({
+        type: 'journal', date: now.split('T')[0],
+        debitAccountId: payableAcc, creditAccountId: stl.deductionLines[0].accountId, amount: totalDed,
+        narration: `निपटान कटौती — ${ev.voucherNo}`,
+        refType: 'farmer.settlement', refId: stl.id,
+        createdBy: user?.name || 'System',
+        lines: [
+          { id: lid(), accountId: payableAcc, type: 'Dr', amount: totalDed },
+          ...stl.deductionLines.map(l => ({ id: lid(), accountId: l.accountId, type: 'Cr' as const, amount: l.amount.amount })),
+        ],
+      });
+      if (!v.id) { toastRef.current({ title: 'कटौती वाउचर नहीं बना', description: 'Settlement not approved.', variant: 'destructive', duration: 9000 }); return blank; }
+      settlementVoucherId = v.id;
+    }
+
+    // 2. The approved Settlement Transaction (settlementNo assigned by the RPC). Optimistic local update.
+    const approved: FarmerSettlement = { ...stl, status: 'approved', netPayable, amountPaid: { amount: 0, currency: netPayable.currency }, settlementVoucherId, approvedAt: now, approvedBy: user?.name || 'System', updatedAt: now };
+    const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: ev.id, name: 'settlement.approved', occurredAt: now, recordedAt: now, actor: user?.name || 'System', payload: { settlementId: stl.id, settlementNo: '', engineVoucherId: ev.id, netPayable, settlementVoucherId } };
+    setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? approved : x); storage.setProcurementSettlements(u); return u; });
+    setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
+    supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'settlement.approve', transactionId: crypto.randomUUID(), transactionVersion: 1, settlements: [withSoc(approved)], events: [withSoc(event)] } }).then(({ data: res, error }) => {
+      if (error) {
+        console.error('Settlement approve commit error:', error.message);
+        // RULE 1 — revert to draft AND cancel the accounting consequence so re-approval can't double-post.
+        setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? stl : x); storage.setProcurementSettlements(u); return u; });
+        setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
+        if (settlementVoucherId) cancelVoucher(settlementVoucherId, 'Settlement approval failed (auto-rollback)', user?.name || 'System');
+        toastRef.current({ title: 'निपटान स्वीकृत नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara approve karein.`, variant: 'destructive', duration: 12000 });
+        return;
+      }
+      const gen = (res as { settlements?: Array<{ id: string; settlementNo: string }> } | null)?.settlements?.find(s => s.id === stl.id);
+      if (gen?.settlementNo) {
+        setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? { ...x, settlementNo: gen.settlementNo } : x); storage.setProcurementSettlements(u); return u; });
+        setProcurementEventsState(prev => { const u = prev.map(e => e.id === event.id ? { ...e, payload: { ...(e.payload as Record<string, unknown>), settlementNo: gen.settlementNo } } : e); storage.setProcurementEvents(u); return u; });
+        toastRef.current({ title: 'निपटान स्वीकृत', description: `${gen.settlementNo} · निवल देय ₹${netPayable.amount}`, duration: 6000 });
+      }
+    });
+    return approved;
+  }, [user, procurementSettlements, addVoucher, cancelVoucher]);
+
+  // Farmer Payment — settles the APPROVED settlement's Net Payable. Dr = the Engine Voucher's payable
+  // account (its Cr leg); Cr = Cash / selected Bank. Outstanding reads the STORED settlement (SoT):
+  // netPayable − amountPaid. The payment voucher is the authoritative base; advancing amountPaid is the
+  // extra (RULE-1 step-2 — mild warning on failure, since amountPaid is reconcilable from payments).
   const recordFarmerPayment = useCallback((data: { engineVoucherId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; paymentDate: string; reference?: string; remarks?: string }): Voucher => {
     const sentinel = { id: '', voucherNo: '', type: 'payment', date: data.paymentDate, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
-    // 1. FY lock
     if (guardFYLocked()) return sentinel;
-    // 2. Engine Voucher exists
     const ev = vouchersRef.current.find(v => v.id === data.engineVoucherId && !v.isDeleted && isEngineVoucher(v));
     if (!ev) {
       toastRef.current({ title: 'Engine Voucher नहीं मिला', description: 'पहले Post करें। (Post the engine voucher first)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
-    // 3. Outstanding = Gross − Σ deductions − Σ payments (derived; no cached balance)
-    const deducted = vouchersRef.current.filter(v => !v.isDeleted && v.refType === 'farmer.deduction' && v.refId === ev.id).reduce((s, v) => s + (v.amount || 0), 0);
-    const paid = vouchersRef.current.filter(v => !v.isDeleted && v.refType === 'farmer.payment' && v.refId === ev.id).reduce((s, v) => s + (v.amount || 0), 0);
-    const outstanding = +(ev.amount - deducted - paid).toFixed(2);
-    // 4. Reject amount <= 0
+    const stl = procurementSettlements.find(s => !s.isDeleted && s.engineVoucherId === ev.id);
+    if (!stl || stl.status !== 'approved') {
+      toastRef.current({ title: 'पहले निपटान स्वीकृत करें', description: 'भुगतान से पहले निपटान बनाकर स्वीकृत करें। (Approve the settlement before paying)', variant: 'destructive', duration: 9000 });
+      return sentinel;
+    }
+    const outstanding = +(stl.netPayable.amount - stl.amountPaid.amount).toFixed(2);
     if (!(data.amount > 0)) {
       toastRef.current({ title: 'राशि डालें', description: 'भुगतान राशि 0 से अधिक होनी चाहिए। (Amount must be greater than 0)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
-    // 5. Reject amount > outstanding
     if (data.amount > outstanding) {
       toastRef.current({ title: 'राशि बकाया से अधिक', description: `भुगतान ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकता। (Cannot exceed outstanding)`, variant: 'destructive', duration: 9000 });
       return sentinel;
     }
-    // 6. Create the payment voucher via the existing path (single source of truth).
     const payableAcc = ev.lines?.find(l => l.type === 'Cr')?.accountId || ev.creditAccountId;
     const creditAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
     const rem = data.remarks?.trim() ? ` · ${data.remarks.trim()}` : '';
-    return addVoucher({
+    // Authoritative base: the payment voucher (addVoucher self-manages RULE-1).
+    const voucher = addVoucher({
       type: 'payment', date: data.paymentDate,
       debitAccountId: payableAcc, creditAccountId: creditAcc, amount: data.amount,
       narration: `किसान को भुगतान — ${ev.voucherNo}${ref}${rem}`,
@@ -2309,51 +2455,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         { id: lid(), accountId: creditAcc, type: 'Cr', amount: data.amount },
       ],
     });
-  }, [user, accounts, addVoucher]);
-
-  // Phase 3.4 — MSP Deduction. Records ONE deduction against an Engine Voucher's payable, reusing
-  // addVoucher: Dr = the Engine Voucher's payable account (its Cr leg); Cr = the operator-selected
-  // chart account (the deduction's destination — TDS Payable, Market Fee, etc.). type='journal'.
-  // refType='farmer.deduction', refId=engineVoucherId. Net Outstanding = Gross − Σdeductions − Σpayments.
-  const recordDeduction = useCallback((data: { engineVoucherId: string; deductionType: string; accountId: string; amount: number; reference?: string; remarks?: string }): Voucher => {
-    const sentinel = { id: '', voucherNo: '', type: 'journal', date: '', debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
-    if (guardFYLocked()) return sentinel;
-    const ev = vouchersRef.current.find(v => v.id === data.engineVoucherId && !v.isDeleted && isEngineVoucher(v));
-    if (!ev) {
-      toastRef.current({ title: 'Engine Voucher नहीं मिला', description: 'पहले Post करें। (Post the engine voucher first)', variant: 'destructive', duration: 8000 });
-      return sentinel;
-    }
-    if (!data.accountId || !accounts.some(a => a.id === data.accountId)) {
-      toastRef.current({ title: 'खाता चुनें', description: 'कटौती के लिए एक खाता चुनें। (Select a deduction account)', variant: 'destructive', duration: 8000 });
-      return sentinel;
-    }
-    const deducted = vouchersRef.current.filter(v => !v.isDeleted && v.refType === 'farmer.deduction' && v.refId === ev.id).reduce((s, v) => s + (v.amount || 0), 0);
-    const paid = vouchersRef.current.filter(v => !v.isDeleted && v.refType === 'farmer.payment' && v.refId === ev.id).reduce((s, v) => s + (v.amount || 0), 0);
-    const netOutstanding = +(ev.amount - deducted - paid).toFixed(2);
-    if (!(data.amount > 0)) {
-      toastRef.current({ title: 'राशि डालें', description: 'कटौती राशि 0 से अधिक होनी चाहिए। (Amount must be greater than 0)', variant: 'destructive', duration: 8000 });
-      return sentinel;
-    }
-    if (data.amount > netOutstanding) {
-      toastRef.current({ title: 'कटौती शेष से अधिक', description: `कटौती ₹${data.amount} शेष ₹${netOutstanding} से अधिक नहीं हो सकती। (Cannot exceed outstanding)`, variant: 'destructive', duration: 9000 });
-      return sentinel;
-    }
-    const payableAcc = ev.lines?.find(l => l.type === 'Cr')?.accountId || ev.creditAccountId;
-    const lid = () => crypto.randomUUID();
-    const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
-    const rem = data.remarks?.trim() ? ` · ${data.remarks.trim()}` : '';
-    return addVoucher({
-      type: 'journal', date: new Date().toISOString().split('T')[0],
-      debitAccountId: payableAcc, creditAccountId: data.accountId, amount: data.amount,
-      narration: `MSP कटौती (${data.deductionType}) — ${ev.voucherNo}${ref}${rem}`,
-      refType: 'farmer.deduction', refId: ev.id,
-      createdBy: user?.name || 'System',
-      lines: [
-        { id: lid(), accountId: payableAcc, type: 'Dr', amount: data.amount },
-        { id: lid(), accountId: data.accountId, type: 'Cr', amount: data.amount },
-      ],
+    if (!voucher.id) return sentinel;
+    // Extra: advance the settlement's stored payment progress (amountPaid). Reconcilable from payment
+    // vouchers, so a cloud-save miss here is a MILD warning (no rollback of the saved payment).
+    const next: FarmerSettlement = { ...stl, amountPaid: { amount: +(stl.amountPaid.amount + data.amount).toFixed(2), currency: stl.netPayable.currency }, updatedAt: new Date().toISOString() };
+    setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? next : x); storage.setProcurementSettlements(u); return u; });
+    supabase.from('procurement_settlements').upsert(withSoc(next)).then(({ error }) => {
+      if (error) {
+        console.warn('Settlement amountPaid update failed:', error.message);
+        toastRef.current({ title: 'भुगतान दर्ज हुआ', description: 'निपटान प्रगति cloud पर अभी update नहीं हुई — refresh पर ठीक हो जाएगी। (Payment saved; settlement progress will sync.)', variant: 'default', duration: 9000 });
+      }
     });
-  }, [user, accounts, addVoucher]);
+    return voucher;
+  }, [user, accounts, addVoucher, procurementSettlements]);
 
   // Only active (non-deleted) vouchers for all financial calculations
   const activeVouchers = vouchers.filter(v => !v.isDeleted);
@@ -4487,7 +4601,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       procurementFinancialIntents, generateFinancialIntent,
       procurementPostingRequests, generatePostingRequest,
       procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
-      recordFarmerPayment, recordDeduction,
+      procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
+      recordFarmerPayment,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, approveMember, rejectMember,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,

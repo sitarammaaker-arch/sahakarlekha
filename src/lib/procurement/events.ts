@@ -11,7 +11,7 @@ export type ProcurementEventName =
   | 'stacked' | 'dispatched' | 'fci.accepted' | 'settled' | 'reconciled'
   | 'recoverable.raised' | 'recoverable.recovered' | 'override.applied' | 'document.issued'
   | 'financial.intent.created' | 'posting.request.created' | 'posting.rule.resolved'
-  | 'engine.voucher.created';
+  | 'engine.voucher.created' | 'settlement.approved';
 
 /** Append-only event. Carries correlationId (refinement #2). */
 export interface ProcurementEvent<TPayload = unknown> extends Correlated {
