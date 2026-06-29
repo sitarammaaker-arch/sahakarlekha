@@ -1456,6 +1456,8 @@ create table if not exists work_orders (
   "isDeleted" boolean default false,
   "createdAt" timestamptz default now()
 );
+-- Work Order → Department link (V2): which department/principal-employer awarded this order.
+alter table public.work_orders add column if not exists "departmentId" text;
 alter table public.work_orders enable row level security;
 drop policy if exists "society_rw" on public.work_orders;
 create policy "society_rw" on public.work_orders for all to authenticated

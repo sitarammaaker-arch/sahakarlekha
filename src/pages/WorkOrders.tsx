@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { useLabourData } from '@/contexts/LabourDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,8 @@ const STATUSES = [
 
 export default function WorkOrders() {
   const { workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder } = useData();
+  const { departments } = useLabourData();
+  const activeDepts = departments.filter(d => !d.isDeleted && d.status === 'active');
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -29,6 +32,7 @@ export default function WorkOrders() {
   // Create form
   const [workOrderNo, setWorkOrderNo] = useState('');
   const [clientName, setClientName] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
   const [description, setDescription] = useState('');
   const [contractValue, setContractValue] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -40,22 +44,27 @@ export default function WorkOrders() {
   const [editId, setEditId] = useState('');
   const [eWoNo, setEWoNo] = useState('');
   const [eClient, setEClient] = useState('');
+  const [eDeptId, setEDeptId] = useState('');
   const [eDesc, setEDesc] = useState('');
   const [eValue, setEValue] = useState('');
   const [eStart, setEStart] = useState('');
   const [eEnd, setEEnd] = useState('');
   const [eStatus, setEStatus] = useState<'open' | 'completed' | 'closed'>('open');
 
-  const resetForm = () => { setWorkOrderNo(''); setClientName(''); setDescription(''); setContractValue(''); setStartDate(''); setEndDate(''); setStatus('open'); };
+  const resetForm = () => { setWorkOrderNo(''); setClientName(''); setDepartmentId(''); setDescription(''); setContractValue(''); setStartDate(''); setEndDate(''); setStatus('open'); };
 
   const save = () => {
     const v = Number(contractValue);
-    if (!clientName.trim()) { toast({ title: hi ? 'क्लाइंट/विभाग का नाम आवश्यक' : 'Client/department name required', variant: 'destructive' }); return; }
+    // When departments exist, the client is the selected department; else fall back to free text.
+    const dept = activeDepts.find(d => d.id === departmentId);
+    const resolvedClient = dept ? dept.name : clientName.trim();
+    if (!resolvedClient) { toast({ title: hi ? 'क्लाइंट/विभाग चुनें' : 'Select a client/department', variant: 'destructive' }); return; }
     if (!(v >= 0)) { toast({ title: hi ? 'ठेका मूल्य दर्ज करें' : 'Enter a valid contract value', variant: 'destructive' }); return; }
     const woNo = workOrderNo.trim() || `WO-${String(workOrders.filter(w => !w.isDeleted).length + 1).padStart(4, '0')}`;
     const wo = addWorkOrder({
       workOrderNo: woNo,
-      clientName: clientName.trim(),
+      clientName: resolvedClient,
+      departmentId: dept ? dept.id : undefined,
       description: description.trim() || undefined,
       contractValue: v,
       startDate: startDate || undefined,
@@ -66,17 +75,20 @@ export default function WorkOrders() {
   };
 
   const openEdit = (w: WorkOrder) => {
-    setEditId(w.id); setEWoNo(w.workOrderNo); setEClient(w.clientName); setEDesc(w.description || '');
+    setEditId(w.id); setEWoNo(w.workOrderNo); setEClient(w.clientName); setEDeptId(w.departmentId || ''); setEDesc(w.description || '');
     setEValue(String(w.contractValue)); setEStart(w.startDate || ''); setEEnd(w.endDate || ''); setEStatus(w.status);
     setEditOpen(true);
   };
 
   const saveEdit = () => {
     const v = Number(eValue);
-    if (!eClient.trim()) { toast({ title: hi ? 'क्लाइंट का नाम आवश्यक' : 'Client name required', variant: 'destructive' }); return; }
+    const dept = activeDepts.find(d => d.id === eDeptId);
+    const resolvedClient = dept ? dept.name : eClient.trim();
+    if (!resolvedClient) { toast({ title: hi ? 'क्लाइंट/विभाग चुनें' : 'Select a client/department', variant: 'destructive' }); return; }
     if (!(v >= 0)) { toast({ title: hi ? 'मूल्य दर्ज करें' : 'Enter a valid value', variant: 'destructive' }); return; }
     updateWorkOrder(editId, {
-      workOrderNo: eWoNo.trim() || undefined, clientName: eClient.trim(), description: eDesc.trim() || undefined,
+      workOrderNo: eWoNo.trim() || undefined, clientName: resolvedClient, departmentId: dept ? dept.id : undefined,
+      description: eDesc.trim() || undefined,
       contractValue: v, startDate: eStart || undefined, endDate: eEnd || undefined, status: eStatus,
     });
     toast({ title: hi ? 'अपडेट हुआ' : 'Updated' });
@@ -115,7 +127,14 @@ export default function WorkOrders() {
             </div>
             <div className="space-y-2">
               <Label>{hi ? 'क्लाइंट / विभाग' : 'Client / Department'} *</Label>
-              <Input value={clientName} onChange={e => setClientName(e.target.value)} placeholder={hi ? 'जैसे PWD, नगर पालिका' : 'e.g. PWD, Municipality'} />
+              {activeDepts.length > 0 ? (
+                <Select value={departmentId} onValueChange={setDepartmentId}>
+                  <SelectTrigger><SelectValue placeholder={hi ? 'विभाग चुनें' : 'Select department'} /></SelectTrigger>
+                  <SelectContent>{activeDepts.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
+                </Select>
+              ) : (
+                <Input value={clientName} onChange={e => setClientName(e.target.value)} placeholder={hi ? 'विभाग/नियोक्ता मास्टर में जोड़ें' : 'add in Department/Employer master'} />
+              )}
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label>{hi ? 'कार्य विवरण' : 'Work Description'}</Label>
@@ -179,7 +198,20 @@ export default function WorkOrders() {
               <div className="space-y-1.5"><Label>{hi ? 'आदेश संख्या' : 'Order No'}</Label><Input value={eWoNo} onChange={e => setEWoNo(e.target.value)} /></div>
               <div className="space-y-1.5"><Label>{hi ? 'ठेका मूल्य (₹)' : 'Value (₹)'} *</Label><Input type="number" min={0} value={eValue} onChange={e => setEValue(e.target.value)} /></div>
             </div>
-            <div className="space-y-1.5"><Label>{hi ? 'क्लाइंट / विभाग' : 'Client / Department'} *</Label><Input value={eClient} onChange={e => setEClient(e.target.value)} /></div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'क्लाइंट / विभाग' : 'Client / Department'} *</Label>
+              {activeDepts.length > 0 ? (
+                <Select value={eDeptId || undefined} onValueChange={setEDeptId}>
+                  <SelectTrigger><SelectValue placeholder={eClient || (hi ? 'विभाग चुनें' : 'Select department')} /></SelectTrigger>
+                  <SelectContent>
+                    {eClient && !eDeptId && <SelectItem value="__legacy" disabled>{eClient}</SelectItem>}
+                    {activeDepts.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input value={eClient} onChange={e => setEClient(e.target.value)} />
+              )}
+            </div>
             <div className="space-y-1.5"><Label>{hi ? 'कार्य विवरण' : 'Description'}</Label><Input value={eDesc} onChange={e => setEDesc(e.target.value)} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>{hi ? 'आरंभ' : 'Start'}</Label><Input type="date" value={eStart} onChange={e => setEStart(e.target.value)} /></div>

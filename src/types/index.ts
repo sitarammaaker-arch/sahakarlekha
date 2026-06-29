@@ -200,7 +200,8 @@ export interface MaintenanceBill {
 export interface WorkOrder {
   id: string;
   workOrderNo: string;
-  clientName: string;
+  clientName: string;          // kept in sync with the linked department's name (display + legacy)
+  departmentId?: string;       // links to the Department / Principal-Employer master
   description?: string;
   contractValue: number;
   startDate?: string;
