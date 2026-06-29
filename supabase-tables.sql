@@ -1454,6 +1454,27 @@ create policy "society_rw" on public.work_orders for all to authenticated
   with check (society_id::text in (select public.current_user_society_ids()));
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Labour cooperative — Muster Roll / attendance-&-wage-basis register (master
+-- data; no accounting in V1, wage payment is a separate feature). RUN once.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists muster_entries (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "workOrderId" text,
+  period text,
+  "memberId" text,
+  "daysWorked" numeric,
+  "dailyWage" numeric,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table public.muster_entries enable row level security;
+drop policy if exists "society_rw" on public.muster_entries;
+create policy "society_rw" on public.muster_entries for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
 -- transaction: every supplied collection commits together, or nothing does — a
 -- ProcurementLot can never exist in the cloud without its immutable creation event.

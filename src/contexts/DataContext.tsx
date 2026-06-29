@@ -15,6 +15,7 @@ import type {
   HousingFlat,
   MaintenanceBill,
   WorkOrder,
+  MusterEntry,
 } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
@@ -112,6 +113,11 @@ interface DataContextType {
   addWorkOrder: (data: Omit<WorkOrder, 'id' | 'createdAt'>) => WorkOrder;
   updateWorkOrder: (id: string, data: Partial<WorkOrder>) => void;
   deleteWorkOrder: (id: string) => void;
+
+  musterEntries: MusterEntry[];
+  addMusterEntry: (data: Omit<MusterEntry, 'id' | 'createdAt'>) => MusterEntry;
+  updateMusterEntry: (id: string, data: Partial<MusterEntry>) => void;
+  deleteMusterEntry: (id: string) => void;
   approveMember: (id: string) => void;
   rejectMember: (id: string) => void;
 
@@ -259,6 +265,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [housingFlats, setHousingFlatsState] = useState<HousingFlat[]>(() => storage.getHousingFlats());
   const [maintenanceBills, setMaintenanceBillsState] = useState<MaintenanceBill[]>(() => storage.getMaintenanceBills());
   const [workOrders, setWorkOrdersState] = useState<WorkOrder[]>(() => storage.getWorkOrders());
+  const [musterEntries, setMusterEntriesState] = useState<MusterEntry[]>(() => storage.getMusterEntries());
   const procurementFarmersRef = useRef<Farmer[]>(procurementFarmers);
   useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
   const loansRef = useRef<Loan[]>(loans);
@@ -312,7 +319,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Reset all state to empty before loading new society's data
     setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
     setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
-    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]); setProcurementSettlementsState([]); setHousingFlatsState([]); setMaintenanceBillsState([]); setWorkOrdersState([]);
+    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]); setProcurementSettlementsState([]); setHousingFlatsState([]); setMaintenanceBillsState([]); setWorkOrdersState([]); setMusterEntriesState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
@@ -495,6 +502,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         supabase.from('work_orders').select('*').eq('society_id', sid).then(
           ({ data, error }) => setWorkOrdersState(error || !data ? storage.getWorkOrders() : (data as unknown as WorkOrder[])),
           () => setWorkOrdersState(storage.getWorkOrders()),
+        );
+        supabase.from('muster_entries').select('*').eq('society_id', sid).then(
+          ({ data, error }) => setMusterEntriesState(error || !data ? storage.getMusterEntries() : (data as unknown as MusterEntry[])),
+          () => setMusterEntriesState(storage.getMusterEntries()),
         );
 
         // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
@@ -897,6 +908,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setHousingFlatsState(storage.getHousingFlats());
         setMaintenanceBillsState(storage.getMaintenanceBills());
         setWorkOrdersState(storage.getWorkOrders());
+        setMusterEntriesState(storage.getMusterEntries());
         setAssetsState(storage.getAssets());
       } finally {
         setIsLoading(false);
@@ -1962,6 +1974,49 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
   }, [workOrders]);
+
+  // ── Labour Muster Roll (attendance/wage-basis register; master data + RULE-1 rollback) ──
+  const addMusterEntry = useCallback((data: Omit<MusterEntry, 'id' | 'createdAt'>): MusterEntry => {
+    if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as MusterEntry;
+    const m: MusterEntry = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    setMusterEntriesState(prev => { const u = [...prev, m]; storage.setMusterEntries(u); return u; });
+    supabase.from('muster_entries').upsert(withSoc(m)).then(({ error }) => {
+      if (error) {
+        console.error('Muster entry save error:', error.message);
+        setMusterEntriesState(prev => { const r = prev.filter(x => x.id !== m.id); storage.setMusterEntries(r); return r; });
+        toastRef.current({ title: 'हाज़िरी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return m;
+  }, []);
+
+  const updateMusterEntry = useCallback((id: string, data: Partial<MusterEntry>) => {
+    if (guardFYLocked()) return;
+    const old = musterEntries.find(x => x.id === id);
+    if (!old) return;
+    const updated = { ...old, ...data };
+    setMusterEntriesState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setMusterEntries(u); return u; });
+    supabase.from('muster_entries').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Muster entry update error:', error.message);
+        setMusterEntriesState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setMusterEntries(u); return u; });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [musterEntries]);
+
+  const deleteMusterEntry = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const old = musterEntries.find(x => x.id === id);
+    setMusterEntriesState(prev => { const u = prev.filter(x => x.id !== id); storage.setMusterEntries(u); return u; });
+    supabase.from('muster_entries').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('Muster entry delete error:', error.message);
+        if (old) setMusterEntriesState(prev => { const u = [...prev, old]; storage.setMusterEntries(u); return u; });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [musterEntries]);
 
   const approveMember = useCallback((id: string) => {
     const member = membersRef.current.find(m => m.id === id);
@@ -4858,6 +4913,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat,
       maintenanceBills, generateMaintenanceBills, deleteMaintenanceBill, recordMaintenanceCollection,
       workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
+      musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
       addLoan, updateLoan, deleteLoan,
       addAsset, updateAsset, deleteAsset, postDepreciation,

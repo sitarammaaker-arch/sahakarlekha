@@ -205,6 +205,19 @@ export interface WorkOrder {
   createdAt: string;
 }
 
+// Labour cooperative — a muster-roll entry (one per member-labourer per work order per period).
+// Captures attendance (days worked) + daily wage; wage amount is derived (days × rate).
+export interface MusterEntry {
+  id: string;
+  workOrderId: string;
+  period: string;            // "YYYY-MM"
+  memberId: string;          // labourer (member)
+  daysWorked: number;
+  dailyWage: number;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 export type LoanType = 'short-term' | 'medium-term' | 'long-term';
 export type LoanStatus = 'active' | 'cleared' | 'overdue';
 

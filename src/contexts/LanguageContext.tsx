@@ -76,6 +76,7 @@ export const translations: Translations = {
   flatsRegister: { hi: 'फ्लैट/यूनिट रजिस्टर', en: 'Flats / Units Register' },
   maintenanceBilling: { hi: 'रखरखाव बिलिंग', en: 'Maintenance Billing' },
   workOrders: { hi: 'कार्य आदेश / श्रम ठेका', en: 'Work Orders' },
+  musterRoll: { hi: 'मस्टर रोल / हाज़िरी', en: 'Muster Roll' },
   operations: { hi: 'संचालन', en: 'Operations' },
   ledgerHeads: { hi: 'लेजर हेड', en: 'Ledger Heads' },
   inventory: { hi: 'इन्वेंटरी', en: 'Inventory' },
