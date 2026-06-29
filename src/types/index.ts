@@ -248,6 +248,27 @@ export interface Worker {
   createdAt: string;
 }
 
+// Labour cooperative — the department / principal employer / client that awards work
+// orders. A debtor: the society raises running bills against it (receivable sub-ledger
+// auto-created under 3303 Sundry Debtors, reusing the Customer pattern).
+export type DepartmentType = 'govt_department' | 'principal_employer' | 'private_client';
+export interface Department {
+  id: string;
+  departmentCode: string;
+  name: string;
+  departmentType: DepartmentType;
+  accountId: string;          // auto-created receivable sub-ledger (parent 3303)
+  contactPerson?: string;
+  phone?: string;
+  address?: string;
+  gstin?: string;
+  tdsApplicable?: boolean;    // govt/principal employers deduct TDS on our bills (used in billing)
+  openingBalance?: number;
+  status: 'active' | 'inactive';
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 export type LoanType = 'short-term' | 'medium-term' | 'long-term';
 export type LoanStatus = 'active' | 'cleared' | 'overdue';
 
