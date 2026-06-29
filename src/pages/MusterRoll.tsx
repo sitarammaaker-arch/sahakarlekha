@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { useLabourData } from '@/contexts/LabourDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ const thisMonth = '2026-06'; // safe default; user can change. (No Date.now in m
 
 export default function MusterRoll() {
   const { workOrders, members, accounts, musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages } = useData();
+  const { workers } = useLabourData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -25,7 +27,11 @@ export default function MusterRoll() {
   const bankAccounts = accounts.filter(a => bankIds.includes(a.id));
 
   const openOrders = workOrders.filter(w => !w.isDeleted);
-  const memberName = (id: string) => members.find(m => m.id === id)?.name || (hi ? 'अज्ञात सदस्य' : 'Unknown member');
+  const activeWorkers = workers.filter(w => !w.isDeleted && w.status === 'active');
+  // Resolve a labourer's name: a Worker Master worker first, then a legacy member ref
+  // (older muster entries stored a member id before Worker Master existed).
+  const memberName = (id: string) =>
+    workers.find(w => w.id === id)?.name || members.find(m => m.id === id)?.name || (hi ? 'अज्ञात श्रमिक' : 'Unknown worker');
   const orderLabel = (id: string) => { const w = openOrders.find(o => o.id === id); return w ? `${w.workOrderNo} · ${w.clientName}` : (hi ? 'अज्ञात कार्य आदेश' : 'Unknown order'); };
 
   // Filters / context for the muster sheet
@@ -88,8 +94,8 @@ export default function MusterRoll() {
 
   const addRow = () => {
     if (!workOrderId) { toast({ title: hi ? 'पहले कार्य आदेश चुनें' : 'Select a work order first', variant: 'destructive' }); return; }
-    if (!memberId) { toast({ title: hi ? 'सदस्य चुनें' : 'Select a member', variant: 'destructive' }); return; }
-    if (rows.some(r => r.memberId === memberId)) { toast({ title: hi ? 'इस सदस्य की हाज़िरी पहले से दर्ज है' : 'This member is already recorded for this sheet', variant: 'destructive' }); return; }
+    if (!memberId) { toast({ title: hi ? 'श्रमिक चुनें' : 'Select a worker', variant: 'destructive' }); return; }
+    if (rows.some(r => r.memberId === memberId)) { toast({ title: hi ? 'इस श्रमिक की हाज़िरी पहले से दर्ज है' : 'This worker is already recorded for this sheet', variant: 'destructive' }); return; }
     const d = Number(daysWorked); const w = Number(dailyWage);
     if (!(d > 0)) { toast({ title: hi ? 'काम किए दिन दर्ज करें' : 'Enter days worked', variant: 'destructive' }); return; }
     if (!(w >= 0)) { toast({ title: hi ? 'दैनिक मज़दूरी दर्ज करें' : 'Enter daily wage', variant: 'destructive' }); return; }
@@ -153,10 +159,14 @@ export default function MusterRoll() {
           {/* Add-row */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end border-t pt-4">
             <div className="space-y-2 sm:col-span-2">
-              <Label>{hi ? 'सदस्य (श्रमिक)' : 'Member (labourer)'}</Label>
-              <Select value={memberId} onValueChange={setMemberId}>
-                <SelectTrigger><SelectValue placeholder={hi ? 'सदस्य चुनें' : 'Select member'} /></SelectTrigger>
-                <SelectContent>{members.filter(m => m.status === 'active').map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
+              <Label>{hi ? 'श्रमिक' : 'Worker (labourer)'}</Label>
+              <Select value={memberId} onValueChange={v => { setMemberId(v); const w = activeWorkers.find(x => x.id === v); if (w?.defaultDailyWage != null && !dailyWage) setDailyWage(String(w.defaultDailyWage)); }}>
+                <SelectTrigger><SelectValue placeholder={hi ? 'श्रमिक चुनें' : 'Select worker'} /></SelectTrigger>
+                <SelectContent>
+                  {activeWorkers.length === 0
+                    ? <div className="px-2 py-1.5 text-sm text-muted-foreground">{hi ? 'पहले श्रमिक मास्टर में श्रमिक जोड़ें' : 'Add workers in Worker Master first'}</div>
+                    : activeWorkers.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
@@ -222,10 +232,14 @@ export default function MusterRoll() {
           <DialogHeader><DialogTitle>{hi ? 'हाज़िरी संपादित करें' : 'Edit Attendance'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label>{hi ? 'सदस्य' : 'Member'}</Label>
+              <Label>{hi ? 'श्रमिक' : 'Worker'}</Label>
               <Select value={eMember} onValueChange={setEMember}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{members.filter(m => m.status === 'active').map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  {/* keep the existing ref selectable even if it is a legacy member not in the worker list */}
+                  {eMember && !activeWorkers.some(w => w.id === eMember) && <SelectItem value={eMember}>{memberName(eMember)}</SelectItem>}
+                  {activeWorkers.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                </SelectContent>
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
