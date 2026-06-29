@@ -929,6 +929,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       cr: l.type === 'Cr' ? l.amount : 0,
       narration: l.narration,
       societyId: sid,
+      // Denormalize the optional dimension only when present — keeps non-labour
+      // entries byte-identical and safe even before the columns are migrated.
+      ...(v.workOrderId !== undefined ? { workOrderId: v.workOrderId } : {}),
+      ...(v.costCentreId !== undefined ? { costCentreId: v.costCentreId } : {}),
     }));
 
   // Write (upsert) entries for a voucher — fire-and-forget, non-blocking.
@@ -963,7 +967,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Strip out everything that may live in late-added columns
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { lines, refType, refId, billAllocations, isCleared, clearedDate, editHistory, groupId,
-            approvalStatus, approvalRemarks, approvedBy, approvedAt, ...baseCols } = v;
+            approvalStatus, approvalRemarks, approvedBy, approvedAt, workOrderId, costCentreId, ...baseCols } = v;
 
     const handleBaseFailure = (msg: string) => {
       console.error(`Voucher ${opts.isUpdate ? 'update' : 'save'} failed (base):`, msg);
@@ -1002,6 +1006,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (approvedAt !== undefined) extras.approvedAt = approvedAt;
       if (editHistory !== undefined) extras.editHistory = editHistory;
       if (billAllocations !== undefined) extras.billAllocations = billAllocations;
+      if (workOrderId !== undefined) extras.workOrderId = workOrderId;
+      if (costCentreId !== undefined) extras.costCentreId = costCentreId;
       if (Object.keys(extras).length === 0) {
         if (!opts.isUpdate) syncEntries(v);
         return;

@@ -68,6 +68,11 @@ export interface Voucher {
   origin?: VoucherOrigin;   // undefined / 'manual' = user voucher; 'engine' = system-owned (immutable)
   reversalOf?: string;      // if this voucher is a reversal, the original engine voucher id
   reversedBy?: string;      // if this engine voucher was reversed, the reversal voucher id
+  // Optional accounting DIMENSION (additive, never affects Dr/Cr or existing reports).
+  // Labour tags vouchers by work order / cost centre for per-work-order cost & profit.
+  // Other society types leave these null and adopt later without migration.
+  workOrderId?: string;
+  costCentreId?: string;
 }
 
 /** Tally "Method of Adjustment": settle a specific bill, or hold as advance / on-account. */
@@ -443,6 +448,9 @@ export interface VoucherEntry {
   cr: number;   // credit amount (0 if debit side)
   narration?: string;
   societyId?: string;
+  // Optional accounting dimension, denormalized from the parent voucher (additive).
+  workOrderId?: string;
+  costCentreId?: string;
 }
 
 export type SocietyType = 'marketing_processing' | 'pacs' | 'consumer' | 'labour' | 'dairy' | 'housing' | 'sugar' | 'other';

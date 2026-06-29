@@ -487,6 +487,12 @@ alter table vouchers add column if not exists origin text;
 -- A bill-receipt voucher stores which sale invoices it settles, and by how much.
 alter table vouchers add column if not exists "billAllocations" jsonb;
 
+-- Optional accounting DIMENSION (additive). Patched in the extras step, never the base
+-- upsert, so existing societies keep working even before this migration runs. Labour tags
+-- vouchers by work order / cost centre; other society types leave them null.
+alter table vouchers add column if not exists "workOrderId" text;
+alter table vouchers add column if not exists "costCentreId" text;
+
 -- Vouchers: approval workflow + compound grouping columns
 alter table vouchers add column if not exists "groupId" text;
 alter table vouchers add column if not exists "approvalStatus" text default 'approved';
@@ -762,6 +768,9 @@ create table if not exists voucher_entries (
   narration text,
   society_id text not null default 'SOC001'
 );
+-- Optional accounting dimension, denormalized from the parent voucher (additive; nullable).
+alter table voucher_entries add column if not exists "workOrderId" text;
+alter table voucher_entries add column if not exists "costCentreId" text;
 alter table voucher_entries enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='voucher_entries' and policyname='allow_all') then
