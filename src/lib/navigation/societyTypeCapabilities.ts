@@ -14,6 +14,6 @@ export const SOCIETY_TYPE_CAPABILITIES: Record<SocietyType, Capability[]> = {
   dairy: ['dairy_collection', 'inventory_sales', 'gst', 'tds'],               // milk + goods commerce
   housing: ['tds', 'housing'],                                                // service — core accounting + TDS + housing (flats/maintenance)
   sugar: ['inventory_sales', 'procurement_msp', 'gst', 'tds'],                // cane procurement + sugar sales
-  labour: ['tds'],                                                            // service — only core accounting + contractor TDS
+  labour: ['tds', 'labour'],                                                  // service — core accounting + TDS + labour (work orders/wages)
   other: ['inventory_sales', 'lending', 'gst', 'tds'],                        // catch-all — broad
 };

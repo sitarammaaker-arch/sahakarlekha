@@ -191,6 +191,20 @@ export interface MaintenanceBill {
   createdAt: string;
 }
 
+// Labour cooperative — a work order / labour contract the society has taken up.
+export interface WorkOrder {
+  id: string;
+  workOrderNo: string;
+  clientName: string;
+  description?: string;
+  contractValue: number;
+  startDate?: string;
+  endDate?: string;
+  status: 'open' | 'completed' | 'closed';
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 export type LoanType = 'short-term' | 'medium-term' | 'long-term';
 export type LoanStatus = 'active' | 'cleared' | 'overdue';
 

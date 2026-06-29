@@ -14,6 +14,7 @@ import type {
   EntityLink,
   HousingFlat,
   MaintenanceBill,
+  WorkOrder,
 } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
@@ -106,6 +107,11 @@ interface DataContextType {
   generateMaintenanceBills: (data: { period: string; date?: string; flatIds?: string[] }) => MaintenanceBill[];
   deleteMaintenanceBill: (id: string) => void;
   recordMaintenanceCollection: (data: { billId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string; remarks?: string }) => Voucher;
+
+  workOrders: WorkOrder[];
+  addWorkOrder: (data: Omit<WorkOrder, 'id' | 'createdAt'>) => WorkOrder;
+  updateWorkOrder: (id: string, data: Partial<WorkOrder>) => void;
+  deleteWorkOrder: (id: string) => void;
   approveMember: (id: string) => void;
   rejectMember: (id: string) => void;
 
@@ -252,6 +258,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [procurementSettlements, setProcurementSettlementsState] = useState<FarmerSettlement[]>(() => storage.getProcurementSettlements());
   const [housingFlats, setHousingFlatsState] = useState<HousingFlat[]>(() => storage.getHousingFlats());
   const [maintenanceBills, setMaintenanceBillsState] = useState<MaintenanceBill[]>(() => storage.getMaintenanceBills());
+  const [workOrders, setWorkOrdersState] = useState<WorkOrder[]>(() => storage.getWorkOrders());
   const procurementFarmersRef = useRef<Farmer[]>(procurementFarmers);
   useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
   const loansRef = useRef<Loan[]>(loans);
@@ -305,7 +312,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Reset all state to empty before loading new society's data
     setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
     setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
-    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]); setProcurementSettlementsState([]); setHousingFlatsState([]); setMaintenanceBillsState([]);
+    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]); setProcurementSettlementsState([]); setHousingFlatsState([]); setMaintenanceBillsState([]); setWorkOrdersState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
@@ -484,6 +491,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         supabase.from('maintenance_bills').select('*').eq('society_id', sid).then(
           ({ data, error }) => setMaintenanceBillsState(error || !data ? storage.getMaintenanceBills() : (data as unknown as MaintenanceBill[])),
           () => setMaintenanceBillsState(storage.getMaintenanceBills()),
+        );
+        supabase.from('work_orders').select('*').eq('society_id', sid).then(
+          ({ data, error }) => setWorkOrdersState(error || !data ? storage.getWorkOrders() : (data as unknown as WorkOrder[])),
+          () => setWorkOrdersState(storage.getWorkOrders()),
         );
 
         // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
@@ -885,6 +896,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementSettlementsState(storage.getProcurementSettlements());
         setHousingFlatsState(storage.getHousingFlats());
         setMaintenanceBillsState(storage.getMaintenanceBills());
+        setWorkOrdersState(storage.getWorkOrders());
         setAssetsState(storage.getAssets());
       } finally {
         setIsLoading(false);
@@ -1907,6 +1919,49 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     toastRef.current({ title: 'वसूली दर्ज हुई', description: `${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'पूर्ण' : 'आंशिक'}`, duration: 6000 });
     return voucher;
   }, [maintenanceBills, accounts, addVoucher, cancelVoucher, user]);
+
+  // ── Labour Work Orders register (master data; Member-pattern persistence + RULE-1 rollback) ──
+  const addWorkOrder = useCallback((data: Omit<WorkOrder, 'id' | 'createdAt'>): WorkOrder => {
+    if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as WorkOrder;
+    const wo: WorkOrder = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    setWorkOrdersState(prev => { const u = [...prev, wo]; storage.setWorkOrders(u); return u; });
+    supabase.from('work_orders').upsert(withSoc(wo)).then(({ error }) => {
+      if (error) {
+        console.error('Work order save error:', error.message);
+        setWorkOrdersState(prev => { const r = prev.filter(w => w.id !== wo.id); storage.setWorkOrders(r); return r; });
+        toastRef.current({ title: 'कार्य आदेश सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return wo;
+  }, []);
+
+  const updateWorkOrder = useCallback((id: string, data: Partial<WorkOrder>) => {
+    if (guardFYLocked()) return;
+    const old = workOrders.find(w => w.id === id);
+    if (!old) return;
+    const updated = { ...old, ...data };
+    setWorkOrdersState(prev => { const u = prev.map(w => w.id === id ? updated : w); storage.setWorkOrders(u); return u; });
+    supabase.from('work_orders').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Work order update error:', error.message);
+        setWorkOrdersState(prev => { const u = prev.map(w => w.id === id ? old : w); storage.setWorkOrders(u); return u; });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [workOrders]);
+
+  const deleteWorkOrder = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const old = workOrders.find(w => w.id === id);
+    setWorkOrdersState(prev => { const u = prev.filter(w => w.id !== id); storage.setWorkOrders(u); return u; });
+    supabase.from('work_orders').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('Work order delete error:', error.message);
+        if (old) setWorkOrdersState(prev => { const u = [...prev, old]; storage.setWorkOrders(u); return u; });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [workOrders]);
 
   const approveMember = useCallback((id: string) => {
     const member = membersRef.current.find(m => m.id === id);
@@ -4802,6 +4857,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addMember, updateMember, deleteMember, approveMember, rejectMember,
       housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat,
       maintenanceBills, generateMaintenanceBills, deleteMaintenanceBill, recordMaintenanceCollection,
+      workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
       addLoan, updateLoan, deleteLoan,
       addAsset, updateAsset, deleteAsset, postDepreciation,

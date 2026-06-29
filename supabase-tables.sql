@@ -1431,6 +1431,29 @@ create policy "society_rw" on public.maintenance_bills for all to authenticated
 create unique index if not exists maintenance_bills_flat_period_uniq on public.maintenance_bills ("flatId", period) where ("isDeleted" = false);
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Labour cooperative — Work Orders / labour-contract register (master data; no
+-- accounting in V1). Plain society-scoped table (client upserts directly). RUN once.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists work_orders (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "workOrderNo" text,
+  "clientName" text,
+  description text,
+  "contractValue" numeric,
+  "startDate" text,
+  "endDate" text,
+  status text,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table public.work_orders enable row level security;
+drop policy if exists "society_rw" on public.work_orders;
+create policy "society_rw" on public.work_orders for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
 -- transaction: every supplied collection commits together, or nothing does — a
 -- ProcurementLot can never exist in the cloud without its immutable creation event.

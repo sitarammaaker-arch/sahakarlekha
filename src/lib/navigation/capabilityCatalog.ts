@@ -19,6 +19,7 @@ export const CAPABILITY_CATEGORIES: CapabilityCategory[] = [
   { key: 'lending',     nameHi: 'ऋण',              nameEn: 'Lending & Credit' },
   { key: 'procurement', nameHi: 'खरीद एवं MSP',     nameEn: 'Procurement & MSP' },
   { key: 'housing',     nameHi: 'गृह निर्माण',       nameEn: 'Housing' },
+  { key: 'labour',      nameHi: 'श्रमिक',           nameEn: 'Labour' },
   { key: 'compliance',  nameHi: 'कर एवं अनुपालन',    nameEn: 'Compliance & Tax' },
 ];
 
@@ -43,6 +44,8 @@ export const CAPABILITY_META: CapabilityMeta[] = [
     descHi: 'न्यूनतम समर्थन मूल्य पर खरीद, मंडी और फेडरेशन रिपोर्ट।', descEn: 'MSP procurement, mandi and federation reporting.', docsUrl: '#' },
   { id: 'housing', category: 'housing', nameHi: 'गृह निर्माण', nameEn: 'Housing',
     descHi: 'फ्लैट/यूनिट रजिस्टर — सदस्य-वार flats और मासिक रखरखाव।', descEn: 'Flats/units register — member-wise flats and monthly maintenance.', docsUrl: '#' },
+  { id: 'labour', category: 'labour', nameHi: 'श्रमिक', nameEn: 'Labour',
+    descHi: 'कार्य आदेश/श्रम ठेका रजिस्टर — मस्टर रोल व मज़दूरी की नींव।', descEn: 'Work orders / labour-contract register — basis for muster roll and wages.', docsUrl: '#' },
   { id: 'gst', category: 'compliance', nameHi: 'जीएसटी', nameEn: 'GST',
     descHi: 'GST सारांश, e-Way बिल और HSN मास्टर।', descEn: 'GST summary, e-Way bill and HSN master.', docsUrl: '#' },
   { id: 'tds', category: 'compliance', nameHi: 'टीडीएस', nameEn: 'TDS',

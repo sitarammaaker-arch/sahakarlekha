@@ -21,7 +21,8 @@ export type Capability =
   | 'transport'
   | 'gst'
   | 'tds'
-  | 'housing';
+  | 'housing'
+  | 'labour';
 
 /** Sidebar groups — 1:1 with today's visual groups, in render order. */
 export type NavDomain = 'core' | 'operations' | 'reports' | 'registers' | 'administration';
