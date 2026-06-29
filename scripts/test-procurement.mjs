@@ -158,5 +158,36 @@ ok(prPayload.postingRequests.length === 1 && prPayload.events.length === 1, 'com
 const alreadyRequest = (requests, fiId) => requests.some(p => p.financialIntentId === fiId);
 ok(alreadyRequest([pr], 'FI-1') === true && alreadyRequest([pr], 'FI-2') === false, 'one Posting Request per Financial Intent guard (mirror; DB unique index on financialIntentId is the guarantee)');
 
+// 10. Phase 3.2 — Posting Rule resolution (business object only). Mirrors the pure resolver
+//     (src/lib/procurement/postingRules.ts) + DataContext.generatePostingRuleResult.
+const resolvePostingLegs = (requestType, amount, profile) => {
+  if (requestType === 'RecogniseProcurement' && profile === 'agency') {
+    return [
+      { side: 'Dr', accountSelector: 'stock.procurement', amount },
+      { side: 'Cr', accountSelector: 'farmer.payable', amount },
+    ];
+  }
+  return [];
+};
+const srcRequest = { id: 'PR-1', lotId: 'lot-1', jformId: 'JF-1', financialIntentId: 'FI-1', requestType: 'RecogniseProcurement', amount: { amount: 45500, currency: 'INR' } };
+const legs = resolvePostingLegs(srcRequest.requestType, srcRequest.amount, 'agency');
+ok(legs.length === 2 && legs[0].side === 'Dr' && legs[1].side === 'Cr', "resolver: RecogniseProcurement → 2 legs (Dr then Cr)");
+ok(legs[0].accountSelector === 'stock.procurement' && legs[1].accountSelector === 'farmer.payable', 'resolver: correct symbolic account selectors');
+const dr = legs.filter(l => l.side === 'Dr').reduce((s, l) => s + l.amount.amount, 0);
+const cr = legs.filter(l => l.side === 'Cr').reduce((s, l) => s + l.amount.amount, 0);
+ok(dr === cr && dr === srcRequest.amount.amount, 'resolver: legs balanced (∑Dr = ∑Cr = request amount)');
+ok(resolvePostingLegs('SettleFarmer', srcRequest.amount, 'agency').length === 0 && resolvePostingLegs('RecogniseProcurement', srcRequest.amount, 'principal').length === 0, 'resolver: unsupported requestType/profile → [] (caller rejects)');
+const rr = { id: 'RR-1', postingRequestId: srcRequest.id, lotId: srcRequest.lotId, jformId: srcRequest.jformId, financialIntentId: srcRequest.financialIntentId, requestType: srcRequest.requestType, profile: 'agency', legs, createdAt: 'T', updatedAt: 'T' };
+ok(rr.postingRequestId === 'PR-1' && rr.lotId === 'lot-1' && rr.profile === 'agency' && Array.isArray(rr.legs) && 'createdAt' in rr, 'PostingRuleResult shape (postingRequestId/lotId/profile/legs + BaseEntity)');
+ok(rr.requestType === srcRequest.requestType, 'requestType carried from the source request');
+ok(!('voucherId' in rr) && !('journalId' in rr) && !('ledgerId' in rr) && !('engineVoucherId' in rr), 'business object only: NO voucher / journal / ledger / engine-voucher fields (legs are data)');
+const rrEvent = { id: 're', correlationId: rr.lotId, name: 'posting.rule.resolved', occurredAt: 'T', recordedAt: 'T', actor: 'राजेश', payload: { postingRuleResultId: rr.id, postingRequestId: rr.postingRequestId, legCount: rr.legs.length } };
+ok(rrEvent.name === 'posting.rule.resolved' && rrEvent.correlationId === rr.lotId && rrEvent.payload.legCount === 2, "exactly one 'posting.rule.resolved' event linked to the lot");
+const rrPayload = { transactionType: 'posting.rule.resolve', transactionId: 'TX', transactionVersion: 1, postingRuleResults: [rr], events: [rrEvent] };
+ok(rrPayload.transactionType === 'posting.rule.resolve', 'commit envelope: transactionType = posting.rule.resolve');
+ok(rrPayload.postingRuleResults.length === 1 && rrPayload.events.length === 1, 'commit payload: 1 postingRuleResult + 1 event');
+const alreadyResult = (results, prId) => results.some(r => r.postingRequestId === prId);
+ok(alreadyResult([rr], 'PR-1') === true && alreadyResult([rr], 'PR-2') === false, 'one PostingRuleResult per Posting Request guard (mirror; DB unique on postingRequestId is the guarantee)');
+
 console.log(`[procurement-test] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

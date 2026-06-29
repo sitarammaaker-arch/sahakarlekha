@@ -9,3 +9,4 @@ export * from './events';
 export * from './documents';
 export * from './financial';
 export * from './ports';
+export * from './postingRules';

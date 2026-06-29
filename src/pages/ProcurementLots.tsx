@@ -27,7 +27,7 @@ const QUALITY_RESULTS = [
 ];
 
 export default function ProcurementLots() {
-  const { procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest } = useData();
+  const { procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -82,6 +82,12 @@ export default function ProcurementLots() {
     // generatePostingRequest shows the success toast (and toasts on FY-lock / missing-intent /
     // duplicate guard). Nothing to do here.
     generatePostingRequest({ financialIntentId });
+  };
+  const lotRuleResult = (lotId: string) => procurementPostingRuleResults.find(r => r.lotId === lotId);
+  const handleResolve = (postingRequestId: string) => {
+    // generatePostingRuleResult shows the success toast (and toasts on FY-lock / missing-request /
+    // duplicate / no-rule guard). Nothing to do here.
+    generatePostingRuleResult({ postingRequestId });
   };
 
   const saveFarmer = () => {
@@ -196,6 +202,11 @@ export default function ProcurementLots() {
                     {hi ? 'पोस्टिंग' : 'Posting Req'}: {lotPostingRequest(l.id)!.requestType} · ₹{lotPostingRequest(l.id)!.amount.amount}
                   </div>
                 )}
+                {lotRuleResult(l.id) && (
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {hi ? 'लेग्स' : 'Legs'}: {lotRuleResult(l.id)!.requestType} · {lotRuleResult(l.id)!.legs.length} legs
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Badge variant="secondary">{l.operationalStatus}</Badge>
@@ -203,6 +214,7 @@ export default function ProcurementLots() {
                 {!lotJForm(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateJForm(l.id)}>J-Form</Button>}
                 {lotJForm(l.id) && !lotIntent(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateIntent(lotJForm(l.id)!.id)}>{hi ? 'इंटेंट' : 'Intent'}</Button>}
                 {lotIntent(l.id) && !lotPostingRequest(l.id) && <Button size="sm" variant="outline" onClick={() => handleGeneratePostingRequest(lotIntent(l.id)!.id)}>{hi ? 'पोस्टिंग' : 'Posting Req'}</Button>}
+                {lotPostingRequest(l.id) && !lotRuleResult(l.id) && <Button size="sm" variant="outline" onClick={() => handleResolve(lotPostingRequest(l.id)!.id)}>{hi ? 'रिज़ॉल्व' : 'Resolve'}</Button>}
               </div>
             </div>
           ))}

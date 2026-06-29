@@ -1307,6 +1307,32 @@ create policy "society_rw" on public.procurement_posting_requests for all to aut
 create unique index if not exists procurement_posting_requests_intent_uniq on public.procurement_posting_requests ("financialIntentId");
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Procurement Phase 3.2 — Posting Rule Result (a business OBJECT only; NOT posting / ledger /
+-- voucher). Stores the resolved legs (data) for a Posting Request. Business invariant
+-- (AUTHORITATIVE): one result per Posting Request — the unique index on "postingRequestId" makes the
+-- INSERT-only commit fail + roll back atomically on a duplicate. RUN once BEFORE the commit function.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists procurement_posting_rule_results (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "postingRequestId" text,
+  "lotId" text,
+  "jformId" text,
+  "financialIntentId" text,
+  "requestType" text,
+  profile text,
+  legs jsonb,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+alter table public.procurement_posting_rule_results enable row level security;
+drop policy if exists "society_rw" on public.procurement_posting_rule_results;
+create policy "society_rw" on public.procurement_posting_rule_results for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create unique index if not exists procurement_posting_rule_results_request_uniq on public.procurement_posting_rule_results ("postingRequestId");
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
 -- transaction: every supplied collection commits together, or nothing does — a
 -- ProcurementLot can never exist in the cloud without its immutable creation event.
@@ -1386,6 +1412,12 @@ begin
     for rec in select value from jsonb_array_elements(p_payload->'postingRequests') loop
       insert into procurement_posting_requests (id, society_id, "lotId", "jformId", "financialIntentId", "requestType", amount, "createdAt", "updatedAt")
       values (rec->>'id', rec->>'society_id', rec->>'lotId', rec->>'jformId', rec->>'financialIntentId', rec->>'requestType', rec->'amount', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
+    end loop;
+  end if;
+  if p_payload ? 'postingRuleResults' then
+    for rec in select value from jsonb_array_elements(p_payload->'postingRuleResults') loop
+      insert into procurement_posting_rule_results (id, society_id, "postingRequestId", "lotId", "jformId", "financialIntentId", "requestType", profile, legs, "createdAt", "updatedAt")
+      values (rec->>'id', rec->>'society_id', rec->>'postingRequestId', rec->>'lotId', rec->>'jformId', rec->>'financialIntentId', rec->>'requestType', rec->>'profile', rec->'legs', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
     end loop;
   end if;
   if p_payload ? 'events' then

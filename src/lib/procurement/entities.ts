@@ -2,7 +2,7 @@
  * Procurement Phase-0.2 — domain entities + the ProcurementLot aggregate root. Interfaces ONLY.
  */
 import type { BaseEntity, Money, Quantity, Percentage, Weight } from './shared';
-import type { FinancialIntentName } from './financial';
+import type { FinancialIntentName, PostingLeg, AccountingProfile } from './financial';
 
 /** Three orthogonal status dimensions (frozen blueprint). */
 export type OperationalStatus =
@@ -45,6 +45,9 @@ export interface FinancialIntentRecord extends BaseEntity { lotId: string; jform
 // Persisted business request derived from a FinancialIntent (Phase 3.1). Business object only —
 // NOT a posting / ledger / voucher. requestType reuses FinancialIntentName; amount reuses Money.
 export interface PostingRequest extends BaseEntity { lotId: string; jformId: string; financialIntentId: string; requestType: FinancialIntentName; amount: Money; }
+// Resolved legs for a PostingRequest per a Posting Rule (Phase 3.2). Business object only — legs are
+// the rule's OUTPUT as data (symbolic accountSelector), NOT a posted journal/ledger/voucher entry.
+export interface PostingRuleResult extends BaseEntity { postingRequestId: string; lotId: string; jformId: string; financialIntentId: string; requestType: FinancialIntentName; profile: AccountingProfile; legs: PostingLeg[]; }
 
 // ── Aggregate root ──
 export interface ProcurementLot extends BaseEntity {

@@ -21,7 +21,8 @@ import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
-import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, Quantity, Money } from '@/lib/procurement';
+import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money } from '@/lib/procurement';
+import { resolvePostingLegs } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
 
 interface DataContextType {
@@ -45,6 +46,8 @@ interface DataContextType {
   generateFinancialIntent: (data: { jformId: string }) => FinancialIntentRecord;
   procurementPostingRequests: PostingRequest[];
   generatePostingRequest: (data: { financialIntentId: string }) => PostingRequest;
+  procurementPostingRuleResults: PostingRuleResult[];
+  generatePostingRuleResult: (data: { postingRequestId: string }) => PostingRuleResult;
   loans: Loan[];
   assets: Asset[];
 
@@ -223,6 +226,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [procurementJForms, setProcurementJFormsState] = useState<JForm[]>(() => storage.getProcurementJForms());
   const [procurementFinancialIntents, setProcurementFinancialIntentsState] = useState<FinancialIntentRecord[]>(() => storage.getProcurementFinancialIntents());
   const [procurementPostingRequests, setProcurementPostingRequestsState] = useState<PostingRequest[]>(() => storage.getProcurementPostingRequests());
+  const [procurementPostingRuleResults, setProcurementPostingRuleResultsState] = useState<PostingRuleResult[]>(() => storage.getProcurementPostingRuleResults());
   const procurementFarmersRef = useRef<Farmer[]>(procurementFarmers);
   useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
   const loansRef = useRef<Loan[]>(loans);
@@ -276,7 +280,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Reset all state to empty before loading new society's data
     setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
     setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
-    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]);
+    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
@@ -439,6 +443,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         supabase.from('procurement_posting_requests').select('*').eq('society_id', sid).then(
           ({ data, error }) => setProcurementPostingRequestsState(error || !data ? storage.getProcurementPostingRequests() : (data as unknown as PostingRequest[])),
           () => setProcurementPostingRequestsState(storage.getProcurementPostingRequests()),
+        );
+        supabase.from('procurement_posting_rule_results').select('*').eq('society_id', sid).then(
+          ({ data, error }) => setProcurementPostingRuleResultsState(error || !data ? storage.getProcurementPostingRuleResults() : (data as unknown as PostingRuleResult[])),
+          () => setProcurementPostingRuleResultsState(storage.getProcurementPostingRuleResults()),
         );
 
         // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
@@ -836,6 +844,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementJFormsState(storage.getProcurementJForms());
         setProcurementFinancialIntentsState(storage.getProcurementFinancialIntents());
         setProcurementPostingRequestsState(storage.getProcurementPostingRequests());
+        setProcurementPostingRuleResultsState(storage.getProcurementPostingRuleResults());
         setAssetsState(storage.getAssets());
       } finally {
         setIsLoading(false);
@@ -2149,6 +2158,55 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return pr;
   }, [user, procurementFinancialIntents, procurementPostingRequests]);
+
+  // Phase 3.2 — Posting Rule resolution (business object only; NOT posting/ledger/voucher).
+  // Consumes ONE PostingRequest → resolves balanced legs via the pure resolver → persists ONE
+  // immutable PostingRuleResult + one immutable 'posting.rule.resolved' event, committed atomically
+  // via the frozen contract. The legs are data (symbolic selectors); no voucher / journal / ledger.
+  const generatePostingRuleResult = useCallback((data: { postingRequestId: string }): PostingRuleResult => {
+    const sentinel: PostingRuleResult = { id: '', postingRequestId: data.postingRequestId, lotId: '', jformId: '', financialIntentId: '', requestType: 'RecogniseProcurement', profile: 'agency', legs: [], createdAt: '', updatedAt: '' };
+    if (guardFYLocked()) return sentinel;
+    // 2. PostingRequest exists?
+    const request = procurementPostingRequests.find(p => p.id === data.postingRequestId);
+    if (!request) {
+      toastRef.current({ title: 'Posting Request नहीं मिला', description: 'पहले Posting Request बनाएं। (Generate the Posting Request first)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    // 3. PostingRuleResult already exists? (early validation; the DB unique index on postingRequestId is the guarantee). One per request.
+    if (procurementPostingRuleResults.some(r => r.postingRequestId === data.postingRequestId)) {
+      toastRef.current({ title: 'पहले से बना', description: 'इस Posting Request का result पहले से मौजूद है। (Already resolved for this Posting Request)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    // 4. Resolve legs via the pure rule, then build the result.
+    const profile: AccountingProfile = 'agency';
+    const legs = resolvePostingLegs(request.requestType, request.amount, profile);
+    if (legs.length === 0) {
+      toastRef.current({ title: 'कोई Posting Rule नहीं', description: `इस requestType (${request.requestType}) के लिए अभी कोई rule नहीं है। (No posting rule for this request type yet)`, variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    const now = new Date().toISOString();
+    const result: PostingRuleResult = {
+      id: crypto.randomUUID(), postingRequestId: request.id, lotId: request.lotId, jformId: request.jformId,
+      financialIntentId: request.financialIntentId, requestType: request.requestType, profile, legs,
+      createdAt: now, updatedAt: now,
+    };
+    // 5. Build the immutable 'posting.rule.resolved' event (correlationId = lot id).
+    const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: request.lotId, name: 'posting.rule.resolved', occurredAt: now, recordedAt: now, actor: user?.name || 'System', payload: { postingRuleResultId: result.id, postingRequestId: result.postingRequestId, legCount: legs.length } };
+    setProcurementPostingRuleResultsState(prev => { const u = [...prev, result]; storage.setProcurementPostingRuleResults(u); return u; });
+    setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
+    // 6. Commit through the frozen transaction contract.
+    supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'posting.rule.resolve', transactionId: crypto.randomUUID(), transactionVersion: 1, postingRuleResults: [withSoc(result)], events: [withSoc(event)] } }).then(({ error }) => {
+      if (error) {
+        console.error('Posting Rule resolve error:', error.message);
+        setProcurementPostingRuleResultsState(prev => { const r = prev.filter(x => x.id !== result.id); storage.setProcurementPostingRuleResults(r); return r; });
+        setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
+        toastRef.current({ title: 'Posting Rule result सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara karein.`, variant: 'destructive', duration: 12000 });
+        return;
+      }
+      toastRef.current({ title: 'Posting legs resolved', description: `${result.requestType} · ${legs.length} legs`, duration: 6000 });
+    });
+    return result;
+  }, [user, procurementPostingRequests, procurementPostingRuleResults]);
 
   // Only active (non-deleted) vouchers for all financial calculations
   const activeVouchers = vouchers.filter(v => !v.isDeleted);
@@ -4281,6 +4339,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       procurementJForms, generateJForm,
       procurementFinancialIntents, generateFinancialIntent,
       procurementPostingRequests, generatePostingRequest,
+      procurementPostingRuleResults, generatePostingRuleResult,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, approveMember, rejectMember,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
