@@ -203,7 +203,7 @@ export default function WorkOrders() {
             <div className="space-y-1.5">
               <Label>{hi ? 'क्लाइंट / विभाग' : 'Client / Department'} *</Label>
               {activeDepts.length > 0 ? (
-                <Select value={eDeptId || undefined} onValueChange={setEDeptId}>
+                <Select value={eDeptId} onValueChange={setEDeptId}>
                   <SelectTrigger><SelectValue placeholder={eClient || (hi ? 'विभाग चुनें' : 'Select department')} /></SelectTrigger>
                   <SelectContent>
                     {eClient && !eDeptId && <SelectItem value="__legacy" disabled>{eClient}</SelectItem>}
