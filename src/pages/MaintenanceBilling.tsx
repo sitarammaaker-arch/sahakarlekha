@@ -51,6 +51,12 @@ export default function MaintenanceBilling() {
   const pending = eligible.filter(f => !alreadyBilled.has(f.id));
   const periodTotal = periodBills.reduce((s, b) => s + (b.amount || 0), 0);
 
+  // All open (unpaid/partial) bills across every month — one place to see total dues.
+  const openBills = maintenanceBills
+    .filter(b => !b.isDeleted && +(b.amount - (b.paidAmount || 0)).toFixed(2) > 0.005)
+    .sort((a, b) => (a.flatNo || '').localeCompare(b.flatNo || '') || (a.period || '').localeCompare(b.period || ''));
+  const totalOutstanding = openBills.reduce((s, b) => s + (b.amount - (b.paidAmount || 0)), 0);
+
   const generate = () => {
     if (!period) { toast({ title: hi ? 'महीना चुनें' : 'Select a month', variant: 'destructive' }); return; }
     if (pending.length === 0) { toast({ title: hi ? 'कोई नया बिल नहीं' : 'No new bills', description: hi ? 'इस महीने के सभी पात्र फ्लैट बिल हो चुके हैं।' : 'All eligible flats already billed for this month.' }); return; }
@@ -134,6 +140,31 @@ export default function MaintenanceBilling() {
                   {outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openReceive(b.id, outstanding)} className="gap-1"><HandCoins className="h-4 w-4" />{hi ? 'भुगतान लें' : 'Receive'}</Button>}
                   <Button size="sm" variant="ghost" onClick={() => remove(b.id, b.billNo)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      {/* Outstanding across all months — total dues in one place */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center justify-between">
+            <span>{hi ? 'बकाया (सभी महीने)' : 'Outstanding (all months)'} ({openBills.length})</span>
+            {openBills.length > 0 && <span className="text-sm font-normal text-amber-600">{hi ? 'कुल बकाया' : 'Total due'}: {money(totalOutstanding)}</span>}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {openBills.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'कोई बकाया नहीं — सब वसूल हो गया।' : 'Nothing outstanding — all collected.'}</p>}
+          {openBills.map(b => {
+            const outstanding = +(b.amount - (b.paidAmount || 0)).toFixed(2);
+            return (
+              <div key={b.id} className="flex items-center justify-between rounded-lg border p-3 text-sm gap-3">
+                <div className="min-w-0">
+                  <div className="font-medium">{b.flatNo} · {memberLabel(b.memberId)} <Badge variant={b.status === 'partial' ? 'secondary' : 'outline'}>{b.status === 'partial' ? (hi ? 'आंशिक' : 'Partial') : (hi ? 'बकाया' : 'Unpaid')}</Badge></div>
+                  <div className="text-muted-foreground">{b.billNo} · {hi ? 'बिल' : 'Bill'} {money(b.amount)}{(b.paidAmount || 0) > 0 ? ` · ${hi ? 'भुगतान' : 'Paid'} ${money(b.paidAmount)}` : ''} · {hi ? 'बकाया' : 'Outstanding'} {money(outstanding)}</div>
+                </div>
+                <Button size="sm" variant="outline" className="shrink-0 gap-1" onClick={() => openReceive(b.id, outstanding)}><HandCoins className="h-4 w-4" />{hi ? 'भुगतान लें' : 'Receive'}</Button>
               </div>
             );
           })}
