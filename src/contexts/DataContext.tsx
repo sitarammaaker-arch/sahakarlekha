@@ -22,6 +22,7 @@ import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } f
 import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
+import { resolveCapabilities } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLines } from '@/lib/procurement';
@@ -3294,6 +3295,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // M15: Pass effDate to underlying TB so historical P&L is accurate.
     const tb = getTrialBalance(effDate);
 
+    // Indian Cooperative Act: a TRADING Account is only meaningful for goods-trading
+    // societies (those entitled to inventory_sales). Service societies (housing, labour,
+    // …) have no trading — their 4100/5100 heads are ordinary income/expense and must
+    // appear DIRECTLY in Income & Expenditure (no Trading A/c, no Gross-Profit bridge).
+    const hasTrading = resolveCapabilities(society.societyType ?? 'other', societyCapabilities).has('inventory_sales');
+
     // ── Audit C-9: NCDC two-statement structure (Trading A/c → P&L/I&E) ──────
     // Per NCDC Annexure II + III, trading heads (Sales, Purchases, direct expenses,
     // opening/closing stock) are absorbed into the TRADING ACCOUNT, and only the
@@ -3312,28 +3319,31 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // balance (refund/over-credit) must REDUCE income — and must net to the same
     // figure the ledger holds, otherwise the Balance Sheet won't tie. (BS-tie fix.)
     const incomeItems = tb
-      .filter(b => b.account.type === 'income' && !isTradingIncome(b.account.parentId) && b.netBalance !== 0)
+      .filter(b => b.account.type === 'income' && (!hasTrading || !isTradingIncome(b.account.parentId)) && b.netBalance !== 0)
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: -b.netBalance }));
 
     // Indirect (operating) EXPENSES — establishment, admin, depreciation, statutory.
     // P2-4: keep sign so a Cr balance (refund/over-credit) REDUCES total expenses.
     const expenseItems = tb
-      .filter(b => b.account.type === 'expense' && !isTradingExpense(b.account.parentId) && b.netBalance !== 0)
+      .filter(b => b.account.type === 'expense' && (!hasTrading || !isTradingExpense(b.account.parentId)) && b.netBalance !== 0)
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }));
 
     // Bridge line from the Trading Account (Annexure III opens P&L Cr side with it).
-    const trading = getTradingAccount(effDate);
-    const gp = trading.grossProfit;
-    if (gp > 0.005) {
-      incomeItems.unshift({ name: 'Gross Profit from Trading', nameHi: 'व्यापार से सकल लाभ', amount: gp });
-    } else if (gp < -0.005) {
-      expenseItems.unshift({ name: 'Gross Loss from Trading', nameHi: 'व्यापार से सकल हानि', amount: Math.abs(gp) });
+    // Service societies (no trading) skip this — their 4100/5100 are already included above.
+    if (hasTrading) {
+      const trading = getTradingAccount(effDate);
+      const gp = trading.grossProfit;
+      if (gp > 0.005) {
+        incomeItems.unshift({ name: 'Gross Profit from Trading', nameHi: 'व्यापार से सकल लाभ', amount: gp });
+      } else if (gp < -0.005) {
+        expenseItems.unshift({ name: 'Gross Loss from Trading', nameHi: 'व्यापार से सकल हानि', amount: Math.abs(gp) });
+      }
     }
 
     const totalIncome = incomeItems.reduce((s, i) => s + i.amount, 0);
     const totalExpenses = expenseItems.reduce((s, i) => s + i.amount, 0);
     return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit: totalIncome - totalExpenses };
-  }, [getTrialBalance, getTradingAccount, society.financialYear]);
+  }, [getTrialBalance, getTradingAccount, society.financialYear, society.societyType, societyCapabilities]);
 
   // ── Inventory ──────────────────────────────────────────────────────────────
   // Two-step stock_items save pattern (same as purchases for GST/TDS columns):
