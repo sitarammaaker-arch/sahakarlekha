@@ -22,7 +22,9 @@ const STATUSES = [
 export default function WorkOrders() {
   const { workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder } = useData();
   const { departments } = useLabourData();
-  const activeDepts = departments.filter(d => !d.isDeleted && d.status === 'active');
+  // Show any non-inactive department (matches Department Master, which lists all !isDeleted).
+  // A freshly created department whose status is unset/anything-but-'inactive' must still appear.
+  const activeDepts = departments.filter(d => !d.isDeleted && d.status !== 'inactive');
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
