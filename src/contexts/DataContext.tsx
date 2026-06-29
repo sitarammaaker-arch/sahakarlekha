@@ -21,7 +21,7 @@ import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
-import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, Quantity, Money } from '@/lib/procurement';
+import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, Quantity, Money } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
 
 interface DataContextType {
@@ -43,6 +43,8 @@ interface DataContextType {
   generateJForm: (data: { lotId: string }) => JForm;
   procurementFinancialIntents: FinancialIntentRecord[];
   generateFinancialIntent: (data: { jformId: string }) => FinancialIntentRecord;
+  procurementPostingRequests: PostingRequest[];
+  generatePostingRequest: (data: { financialIntentId: string }) => PostingRequest;
   loans: Loan[];
   assets: Asset[];
 
@@ -220,6 +222,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [procurementMoistureRecords, setProcurementMoistureRecordsState] = useState<MoistureRecord[]>(() => storage.getProcurementMoistureRecords());
   const [procurementJForms, setProcurementJFormsState] = useState<JForm[]>(() => storage.getProcurementJForms());
   const [procurementFinancialIntents, setProcurementFinancialIntentsState] = useState<FinancialIntentRecord[]>(() => storage.getProcurementFinancialIntents());
+  const [procurementPostingRequests, setProcurementPostingRequestsState] = useState<PostingRequest[]>(() => storage.getProcurementPostingRequests());
   const procurementFarmersRef = useRef<Farmer[]>(procurementFarmers);
   useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
   const loansRef = useRef<Loan[]>(loans);
@@ -273,7 +276,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Reset all state to empty before loading new society's data
     setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
     setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
-    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]);
+    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
@@ -432,6 +435,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         supabase.from('procurement_financial_intents').select('*').eq('society_id', sid).then(
           ({ data, error }) => setProcurementFinancialIntentsState(error || !data ? storage.getProcurementFinancialIntents() : (data as unknown as FinancialIntentRecord[])),
           () => setProcurementFinancialIntentsState(storage.getProcurementFinancialIntents()),
+        );
+        supabase.from('procurement_posting_requests').select('*').eq('society_id', sid).then(
+          ({ data, error }) => setProcurementPostingRequestsState(error || !data ? storage.getProcurementPostingRequests() : (data as unknown as PostingRequest[])),
+          () => setProcurementPostingRequestsState(storage.getProcurementPostingRequests()),
         );
 
         // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
@@ -828,6 +835,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementMoistureRecordsState(storage.getProcurementMoistureRecords());
         setProcurementJFormsState(storage.getProcurementJForms());
         setProcurementFinancialIntentsState(storage.getProcurementFinancialIntents());
+        setProcurementPostingRequestsState(storage.getProcurementPostingRequests());
         setAssetsState(storage.getAssets());
       } finally {
         setIsLoading(false);
@@ -2098,6 +2106,49 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return fi;
   }, [user, procurementJForms, procurementFinancialIntents]);
+
+  // Phase 3.1 — Posting Request (business object only; NOT posting/ledger/accounting/voucher).
+  // Generates ONE immutable PostingRequest from a Financial Intent + one immutable
+  // 'posting.request.created' event, committed atomically via the frozen contract. requestType and
+  // amount are copied from the source intent (no recalculation).
+  const generatePostingRequest = useCallback((data: { financialIntentId: string }): PostingRequest => {
+    const sentinel: PostingRequest = { id: '', lotId: '', jformId: '', financialIntentId: data.financialIntentId, requestType: 'RecogniseProcurement', amount: { amount: 0, currency: 'INR' }, createdAt: '', updatedAt: '' };
+    if (guardFYLocked()) return sentinel;
+    // 2. Financial Intent exists?
+    const intent = procurementFinancialIntents.find(i => i.id === data.financialIntentId);
+    if (!intent) {
+      toastRef.current({ title: 'Financial Intent नहीं मिला', description: 'पहले इस लॉट का Financial Intent बनाएं। (Generate the Financial Intent first)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    // 3. Posting Request already exists? (early validation; the DB unique index on financialIntentId is the guarantee). One per intent.
+    if (procurementPostingRequests.some(p => p.financialIntentId === data.financialIntentId)) {
+      toastRef.current({ title: 'पहले से बना', description: 'इस Financial Intent का Posting Request पहले से मौजूद है। (Posting Request already exists for this Financial Intent)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    const now = new Date().toISOString();
+    // 4. Build the PostingRequest (requestType + amount copied from the source intent).
+    const pr: PostingRequest = {
+      id: crypto.randomUUID(), lotId: intent.lotId, jformId: intent.jformId, financialIntentId: intent.id,
+      requestType: intent.intentType, amount: intent.amount,
+      createdAt: now, updatedAt: now,
+    };
+    // 5. Build the immutable 'posting.request.created' event (correlationId = lot id).
+    const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: intent.lotId, name: 'posting.request.created', occurredAt: now, recordedAt: now, actor: user?.name || 'System', payload: { postingRequestId: pr.id, financialIntentId: pr.financialIntentId, amount: pr.amount } };
+    setProcurementPostingRequestsState(prev => { const u = [...prev, pr]; storage.setProcurementPostingRequests(u); return u; });
+    setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
+    // 6. Commit through the frozen transaction contract.
+    supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'posting.request.create', transactionId: crypto.randomUUID(), transactionVersion: 1, postingRequests: [withSoc(pr)], events: [withSoc(event)] } }).then(({ error }) => {
+      if (error) {
+        console.error('Posting Request commit error:', error.message);
+        setProcurementPostingRequestsState(prev => { const r = prev.filter(x => x.id !== pr.id); storage.setProcurementPostingRequests(r); return r; });
+        setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
+        toastRef.current({ title: 'Posting Request सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara banayein.`, variant: 'destructive', duration: 12000 });
+        return;
+      }
+      toastRef.current({ title: 'Posting Request बना', description: `${pr.requestType} · ₹${pr.amount.amount}`, duration: 6000 });
+    });
+    return pr;
+  }, [user, procurementFinancialIntents, procurementPostingRequests]);
 
   // Only active (non-deleted) vouchers for all financial calculations
   const activeVouchers = vouchers.filter(v => !v.isDeleted);
@@ -4229,6 +4280,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       procurementQualityTests, procurementMoistureRecords, recordQualityInspection,
       procurementJForms, generateJForm,
       procurementFinancialIntents, generateFinancialIntent,
+      procurementPostingRequests, generatePostingRequest,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, approveMember, rejectMember,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,

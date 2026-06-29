@@ -1283,6 +1283,30 @@ create policy "society_rw" on public.procurement_financial_intents for all to au
 create unique index if not exists procurement_financial_intents_jform_uniq on public.procurement_financial_intents ("jformId");
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Procurement Phase 3.1 — Posting Request (a business OBJECT only; NOT posting / ledger /
+-- accounting / voucher). Business invariant (AUTHORITATIVE): one Posting Request per Financial
+-- Intent — the unique index on "financialIntentId" makes the INSERT-only commit fail + roll back
+-- atomically on a duplicate. RUN this block once BEFORE the commit-transaction function.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists procurement_posting_requests (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "lotId" text,
+  "jformId" text,
+  "financialIntentId" text,
+  "requestType" text,
+  amount jsonb,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+alter table public.procurement_posting_requests enable row level security;
+drop policy if exists "society_rw" on public.procurement_posting_requests;
+create policy "society_rw" on public.procurement_posting_requests for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create unique index if not exists procurement_posting_requests_intent_uniq on public.procurement_posting_requests ("financialIntentId");
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
 -- transaction: every supplied collection commits together, or nothing does — a
 -- ProcurementLot can never exist in the cloud without its immutable creation event.
@@ -1356,6 +1380,12 @@ begin
     for rec in select value from jsonb_array_elements(p_payload->'financialIntents') loop
       insert into procurement_financial_intents (id, society_id, "lotId", "jformId", "intentType", amount, "createdAt", "updatedAt")
       values (rec->>'id', rec->>'society_id', rec->>'lotId', rec->>'jformId', rec->>'intentType', rec->'amount', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
+    end loop;
+  end if;
+  if p_payload ? 'postingRequests' then
+    for rec in select value from jsonb_array_elements(p_payload->'postingRequests') loop
+      insert into procurement_posting_requests (id, society_id, "lotId", "jformId", "financialIntentId", "requestType", amount, "createdAt", "updatedAt")
+      values (rec->>'id', rec->>'society_id', rec->>'lotId', rec->>'jformId', rec->>'financialIntentId', rec->>'requestType', rec->'amount', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
     end loop;
   end if;
   if p_payload ? 'events' then

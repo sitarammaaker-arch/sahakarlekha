@@ -27,7 +27,7 @@ const QUALITY_RESULTS = [
 ];
 
 export default function ProcurementLots() {
-  const { procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent } = useData();
+  const { procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -76,6 +76,12 @@ export default function ProcurementLots() {
     // generateFinancialIntent shows the success toast (and toasts on FY-lock / missing-J-Form /
     // duplicate guard). Nothing to do here.
     generateFinancialIntent({ jformId });
+  };
+  const lotPostingRequest = (lotId: string) => procurementPostingRequests.find(p => p.lotId === lotId);
+  const handleGeneratePostingRequest = (financialIntentId: string) => {
+    // generatePostingRequest shows the success toast (and toasts on FY-lock / missing-intent /
+    // duplicate guard). Nothing to do here.
+    generatePostingRequest({ financialIntentId });
   };
 
   const saveFarmer = () => {
@@ -185,12 +191,18 @@ export default function ProcurementLots() {
                     {hi ? 'इंटेंट' : 'Intent'}: {lotIntent(l.id)!.intentType} · ₹{lotIntent(l.id)!.amount.amount}
                   </div>
                 )}
+                {lotPostingRequest(l.id) && (
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {hi ? 'पोस्टिंग' : 'Posting Req'}: {lotPostingRequest(l.id)!.requestType} · ₹{lotPostingRequest(l.id)!.amount.amount}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Badge variant="secondary">{l.operationalStatus}</Badge>
                 {!lotQuality(l.id) && <Button size="sm" variant="outline" onClick={() => openQuality(l.id)}>{hi ? 'क्वालिटी' : 'Quality'}</Button>}
                 {!lotJForm(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateJForm(l.id)}>J-Form</Button>}
                 {lotJForm(l.id) && !lotIntent(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateIntent(lotJForm(l.id)!.id)}>{hi ? 'इंटेंट' : 'Intent'}</Button>}
+                {lotIntent(l.id) && !lotPostingRequest(l.id) && <Button size="sm" variant="outline" onClick={() => handleGeneratePostingRequest(lotIntent(l.id)!.id)}>{hi ? 'पोस्टिंग' : 'Posting Req'}</Button>}
               </div>
             </div>
           ))}

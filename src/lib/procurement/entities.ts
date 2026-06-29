@@ -42,6 +42,9 @@ export interface Recoverable extends BaseEntity { partyId: string; amount: Money
 // FinancialIntent in ./financial). Composed only of existing contracts: id = intentId,
 // amount = Money (amount + currency), intentType = FinancialIntentName.
 export interface FinancialIntentRecord extends BaseEntity { lotId: string; jformId: string; intentType: FinancialIntentName; amount: Money; }
+// Persisted business request derived from a FinancialIntent (Phase 3.1). Business object only —
+// NOT a posting / ledger / voucher. requestType reuses FinancialIntentName; amount reuses Money.
+export interface PostingRequest extends BaseEntity { lotId: string; jformId: string; financialIntentId: string; requestType: FinancialIntentName; amount: Money; }
 
 // ── Aggregate root ──
 export interface ProcurementLot extends BaseEntity {

@@ -138,5 +138,25 @@ ok(iPayload.financialIntents.length === 1 && iPayload.events.length === 1, 'comm
 const alreadyIntent = (intents, jformId) => intents.some(i => i.jformId === jformId);
 ok(alreadyIntent([fi], 'JF-1') === true && alreadyIntent([fi], 'JF-2') === false, 'one Financial Intent per J-Form guard (mirror; DB unique index on jformId is the guarantee)');
 
+// 9. Phase 3.1 — Posting Request (business object only). Mirrors DataContext.generatePostingRequest.
+const buildPostingRequest = (intent, now, uuid) => ({
+  id: uuid, lotId: intent.lotId, jformId: intent.jformId, financialIntentId: intent.id,
+  requestType: intent.intentType, amount: intent.amount, createdAt: now, updatedAt: now,
+});
+const sourceIntent = { id: 'FI-1', lotId: 'lot-1', jformId: 'JF-1', intentType: 'RecogniseProcurement', amount: { amount: 45500, currency: 'INR' } };
+const pr = buildPostingRequest(sourceIntent, 'T', 'PR-1');
+ok(pr.id === 'PR-1' && pr.lotId === 'lot-1' && pr.jformId === 'JF-1' && pr.financialIntentId === 'FI-1' && 'createdAt' in pr && 'updatedAt' in pr, 'PostingRequest shape (id/lotId/jformId/financialIntentId + BaseEntity)');
+ok(pr.requestType === sourceIntent.intentType && pr.requestType === 'RecogniseProcurement', 'requestType copied from the source intent (RecogniseProcurement)');
+ok(pr.amount.amount === sourceIntent.amount.amount && pr.amount.currency === 'INR', 'amount copied from the source intent (no recalculation)');
+ok(!('voucherId' in pr) && !('postingRuleId' in pr) && !('ledgerId' in pr) && !('debitAccountId' in pr) && !('creditAccountId' in pr) && !('legs' in pr), 'business object only: NO voucher / posting / ledger / debit / credit fields');
+const prEvent = { id: 'pe', correlationId: pr.lotId, name: 'posting.request.created', occurredAt: 'T', recordedAt: 'T', actor: 'राजेश', payload: { postingRequestId: pr.id, financialIntentId: pr.financialIntentId, amount: pr.amount } };
+ok(prEvent.name === 'posting.request.created' && prEvent.correlationId === pr.lotId, "exactly one 'posting.request.created' event linked to the lot (correlationId = lotId)");
+ok(prEvent.payload.postingRequestId === pr.id && prEvent.payload.financialIntentId === pr.financialIntentId, 'event payload references the request + the source intent');
+const prPayload = { transactionType: 'posting.request.create', transactionId: 'TX', transactionVersion: 1, postingRequests: [pr], events: [prEvent] };
+ok(prPayload.transactionType === 'posting.request.create', 'commit envelope: transactionType = posting.request.create');
+ok(prPayload.postingRequests.length === 1 && prPayload.events.length === 1, 'commit payload: 1 postingRequest + 1 event');
+const alreadyRequest = (requests, fiId) => requests.some(p => p.financialIntentId === fiId);
+ok(alreadyRequest([pr], 'FI-1') === true && alreadyRequest([pr], 'FI-2') === false, 'one Posting Request per Financial Intent guard (mirror; DB unique index on financialIntentId is the guarantee)');
+
 console.log(`[procurement-test] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
