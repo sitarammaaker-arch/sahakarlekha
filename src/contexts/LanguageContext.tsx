@@ -73,6 +73,7 @@ export const translations: Translations = {
   recoverables: { hi: 'वसूली योग्य रजिस्टर', en: 'Recoverables Register' },
   kachiAarat: { hi: 'कच्ची आढ़त रजिस्टर', en: 'Kachi Aarat Register' },
   procurementLots: { hi: 'खरीद लॉट', en: 'Procurement Lots' },
+  flatsRegister: { hi: 'फ्लैट/यूनिट रजिस्टर', en: 'Flats / Units Register' },
   operations: { hi: 'संचालन', en: 'Operations' },
   ledgerHeads: { hi: 'लेजर हेड', en: 'Ledger Heads' },
   inventory: { hi: 'इन्वेंटरी', en: 'Inventory' },

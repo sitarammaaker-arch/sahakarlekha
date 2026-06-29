@@ -121,6 +121,7 @@ const TdsRegister = lazyWithRetry(() => import("./pages/TdsRegister"));
 const UserManagement = lazyWithRetry(() => import("./pages/UserManagement"));
 const Features = lazyWithRetry(() => import("./pages/Features"));
 const ProcurementLots = lazyWithRetry(() => import("./pages/ProcurementLots"));
+const FlatsRegister = lazyWithRetry(() => import("./pages/FlatsRegister"));
 const EWayBill = lazyWithRetry(() => import("./pages/EWayBill"));
 const HsnMaster = lazyWithRetry(() => import("./pages/HsnMaster"));
 const KccLoan = lazyWithRetry(() => import("./pages/KccLoan"));
@@ -294,6 +295,7 @@ const AppRoutes = () => {
       <Route path="/kcc-loan" element={<ProtectedRoute><KccLoan /></ProtectedRoute>} />
       <Route path="/election-module" element={<ProtectedRoute><ElectionModule /></ProtectedRoute>} />
       <Route path="/board-of-directors" element={<ProtectedRoute><BoardOfDirectors /></ProtectedRoute>} />
+      <Route path="/flats-register" element={<ProtectedRoute><FlatsRegister /></ProtectedRoute>} />
       <Route path="/opening-balances" element={<ProtectedRoute><OpeningBalances /></ProtectedRoute>} />
       <Route path="/multi-society-consolidation" element={<ProtectedRoute><MultiSocietyConsolidation /></ProtectedRoute>} />
       <Route path="/nabard-report" element={<ProtectedRoute><NabardReport /></ProtectedRoute>} />

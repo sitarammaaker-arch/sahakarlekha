@@ -12,6 +12,7 @@ import type {
   KccLoan,
   VoucherEntry,
   EntityLink,
+  HousingFlat,
 } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
@@ -93,6 +94,11 @@ interface DataContextType {
   addMember: (data: Omit<Member, 'id'>) => Member;
   updateMember: (id: string, data: Partial<Member>) => void;
   deleteMember: (id: string) => void;
+
+  housingFlats: HousingFlat[];
+  addHousingFlat: (data: Omit<HousingFlat, 'id' | 'createdAt'>) => HousingFlat;
+  updateHousingFlat: (id: string, data: Partial<HousingFlat>) => void;
+  deleteHousingFlat: (id: string) => void;
   approveMember: (id: string) => void;
   rejectMember: (id: string) => void;
 
@@ -237,6 +243,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [procurementPostingRequests, setProcurementPostingRequestsState] = useState<PostingRequest[]>(() => storage.getProcurementPostingRequests());
   const [procurementPostingRuleResults, setProcurementPostingRuleResultsState] = useState<PostingRuleResult[]>(() => storage.getProcurementPostingRuleResults());
   const [procurementSettlements, setProcurementSettlementsState] = useState<FarmerSettlement[]>(() => storage.getProcurementSettlements());
+  const [housingFlats, setHousingFlatsState] = useState<HousingFlat[]>(() => storage.getHousingFlats());
   const procurementFarmersRef = useRef<Farmer[]>(procurementFarmers);
   useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
   const loansRef = useRef<Loan[]>(loans);
@@ -290,7 +297,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Reset all state to empty before loading new society's data
     setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
     setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
-    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]); setProcurementSettlementsState([]);
+    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]); setProcurementSettlementsState([]); setHousingFlatsState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
@@ -461,6 +468,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         supabase.from('procurement_settlements').select('*').eq('society_id', sid).then(
           ({ data, error }) => setProcurementSettlementsState(error || !data ? storage.getProcurementSettlements() : (data as unknown as FarmerSettlement[])),
           () => setProcurementSettlementsState(storage.getProcurementSettlements()),
+        );
+        supabase.from('housing_flats').select('*').eq('society_id', sid).then(
+          ({ data, error }) => setHousingFlatsState(error || !data ? storage.getHousingFlats() : (data as unknown as HousingFlat[])),
+          () => setHousingFlatsState(storage.getHousingFlats()),
         );
 
         // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
@@ -860,6 +871,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementPostingRequestsState(storage.getProcurementPostingRequests());
         setProcurementPostingRuleResultsState(storage.getProcurementPostingRuleResults());
         setProcurementSettlementsState(storage.getProcurementSettlements());
+        setHousingFlatsState(storage.getHousingFlats());
         setAssetsState(storage.getAssets());
       } finally {
         setIsLoading(false);
@@ -1721,6 +1733,49 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     console.info(`[AUDIT-DELETE] Member id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
+
+  // ── Housing Flats/Units register (master data; Member-pattern persistence + RULE-1 rollback) ──
+  const addHousingFlat = useCallback((data: Omit<HousingFlat, 'id' | 'createdAt'>): HousingFlat => {
+    if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as HousingFlat;
+    const flat: HousingFlat = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    setHousingFlatsState(prev => { const u = [...prev, flat]; storage.setHousingFlats(u); return u; });
+    supabase.from('housing_flats').upsert(withSoc(flat)).then(({ error }) => {
+      if (error) {
+        console.error('Housing flat save error:', error.message);
+        setHousingFlatsState(prev => { const r = prev.filter(f => f.id !== flat.id); storage.setHousingFlats(r); return r; });
+        toastRef.current({ title: 'फ्लैट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return flat;
+  }, []);
+
+  const updateHousingFlat = useCallback((id: string, data: Partial<HousingFlat>) => {
+    if (guardFYLocked()) return;
+    const old = housingFlats.find(f => f.id === id);
+    if (!old) return;
+    const updated = { ...old, ...data };
+    setHousingFlatsState(prev => { const u = prev.map(f => f.id === id ? updated : f); storage.setHousingFlats(u); return u; });
+    supabase.from('housing_flats').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Housing flat update error:', error.message);
+        setHousingFlatsState(prev => { const u = prev.map(f => f.id === id ? old : f); storage.setHousingFlats(u); return u; });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [housingFlats]);
+
+  const deleteHousingFlat = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const old = housingFlats.find(f => f.id === id);
+    setHousingFlatsState(prev => { const u = prev.filter(f => f.id !== id); storage.setHousingFlats(u); return u; });
+    supabase.from('housing_flats').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('Housing flat delete error:', error.message);
+        if (old) setHousingFlatsState(prev => { const u = [...prev, old]; storage.setHousingFlats(u); return u; });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [housingFlats]);
 
   const approveMember = useCallback((id: string) => {
     const member = membersRef.current.find(m => m.id === id);
@@ -4605,6 +4660,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       recordFarmerPayment,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, approveMember, rejectMember,
+      housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
       addLoan, updateLoan, deleteLoan,
       addAsset, updateAsset, deleteAsset, postDepreciation,

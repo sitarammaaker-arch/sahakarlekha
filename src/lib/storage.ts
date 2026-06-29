@@ -1,4 +1,4 @@
-import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer } from '@/types';
+import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement } from '@/lib/procurement';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
@@ -72,6 +72,7 @@ const KEYS = {
   procurementPostingRequests: 'sahayata_procurement_posting_requests',
   procurementPostingRuleResults: 'sahayata_procurement_posting_rule_results',
   procurementSettlements: 'sahayata_procurement_settlements',
+  housingFlats: 'sahayata_housing_flats',
 };
 
 // ── Central account ID constants ─────────────────────────────────────────────
@@ -773,6 +774,8 @@ export const getProcurementPostingRuleResults = (): PostingRuleResult[] => get(K
 export const setProcurementPostingRuleResults = (r: PostingRuleResult[]): void => set(KEYS.procurementPostingRuleResults, r);
 export const getProcurementSettlements = (): FarmerSettlement[] => get(KEYS.procurementSettlements, []);
 export const setProcurementSettlements = (s: FarmerSettlement[]): void => set(KEYS.procurementSettlements, s);
+export const getHousingFlats = (): HousingFlat[] => get(KEYS.housingFlats, []);
+export const setHousingFlats = (f: HousingFlat[]): void => set(KEYS.housingFlats, f);
 
 export const getAccounts = (): LedgerAccount[] => {
   const stored = get<LedgerAccount[] | null>(KEYS.accounts, null);

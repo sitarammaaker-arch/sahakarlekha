@@ -100,6 +100,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'kccLoan',              titleKey: 'kccLoan',              icon: Wheat,        route: '/kcc-loan',              domain: 'registers', requiredCapabilities: ['lending'], order: 14 },
   { id: 'electionModule',       titleKey: 'electionModule',       icon: Vote,         route: '/election-module',       domain: 'registers', requiredCapabilities: U, order: 15 },
   { id: 'boardOfDirectors',     titleKey: 'boardOfDirectors',     icon: Users2,       route: '/board-of-directors',    domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin'], order: 16 },
+  { id: 'flatsRegister',        titleKey: 'flatsRegister',        icon: Building2,    route: '/flats-register',        domain: 'registers', requiredCapabilities: ['housing'], order: 17 },
 
   // ── administration (was settingsNavItems) ──
   { id: 'societySetup',               titleKey: 'societySetup',               icon: Settings,        route: '/society-setup',                domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 0 },

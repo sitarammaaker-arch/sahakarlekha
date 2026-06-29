@@ -20,7 +20,8 @@ export type Capability =
   | 'pos_billing'
   | 'transport'
   | 'gst'
-  | 'tds';
+  | 'tds'
+  | 'housing';
 
 /** Sidebar groups — 1:1 with today's visual groups, in render order. */
 export type NavDomain = 'core' | 'operations' | 'reports' | 'registers' | 'administration';

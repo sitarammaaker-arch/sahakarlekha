@@ -160,6 +160,20 @@ export interface Member {
   nomineeFatherName?: string;
 }
 
+// Housing cooperative — a flat/unit in the society, optionally linked to an owner member.
+export interface HousingFlat {
+  id: string;
+  flatNo: string;
+  blockNo?: string;
+  memberId?: string;          // owner (link to Member); optional for vacant/unsold
+  ownerType?: 'owner' | 'tenant';
+  area?: number;              // sq ft
+  monthlyMaintenance: number;
+  registrationDate?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 export type LoanType = 'short-term' | 'medium-term' | 'long-term';
 export type LoanStatus = 'active' | 'cleared' | 'overdue';
 
