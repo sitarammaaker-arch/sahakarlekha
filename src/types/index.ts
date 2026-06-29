@@ -174,6 +174,23 @@ export interface HousingFlat {
   createdAt: string;
 }
 
+// Housing cooperative — a maintenance bill (one per flat per period); posts a receivable voucher.
+export interface MaintenanceBill {
+  id: string;
+  billNo: string;             // descriptive, collision-free, e.g. "2026-07/A-101"
+  flatId: string;
+  flatNo: string;            // snapshot for display
+  memberId?: string;         // owner at billing time
+  period: string;            // "YYYY-MM"
+  date: string;              // voucher date
+  amount: number;
+  voucherId?: string;        // the receivable voucher (Dr 3303 / Cr 4101)
+  paidAmount: number;        // advanced by Collection (next delivery); 0 at billing
+  status: 'unpaid' | 'partial' | 'paid';
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 export type LoanType = 'short-term' | 'medium-term' | 'long-term';
 export type LoanStatus = 'active' | 'cleared' | 'overdue';
 

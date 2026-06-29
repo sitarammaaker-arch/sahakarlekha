@@ -13,6 +13,7 @@ import type {
   VoucherEntry,
   EntityLink,
   HousingFlat,
+  MaintenanceBill,
 } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
@@ -99,6 +100,10 @@ interface DataContextType {
   addHousingFlat: (data: Omit<HousingFlat, 'id' | 'createdAt'>) => HousingFlat;
   updateHousingFlat: (id: string, data: Partial<HousingFlat>) => void;
   deleteHousingFlat: (id: string) => void;
+
+  maintenanceBills: MaintenanceBill[];
+  generateMaintenanceBills: (data: { period: string; date?: string; flatIds?: string[] }) => MaintenanceBill[];
+  deleteMaintenanceBill: (id: string) => void;
   approveMember: (id: string) => void;
   rejectMember: (id: string) => void;
 
@@ -244,6 +249,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [procurementPostingRuleResults, setProcurementPostingRuleResultsState] = useState<PostingRuleResult[]>(() => storage.getProcurementPostingRuleResults());
   const [procurementSettlements, setProcurementSettlementsState] = useState<FarmerSettlement[]>(() => storage.getProcurementSettlements());
   const [housingFlats, setHousingFlatsState] = useState<HousingFlat[]>(() => storage.getHousingFlats());
+  const [maintenanceBills, setMaintenanceBillsState] = useState<MaintenanceBill[]>(() => storage.getMaintenanceBills());
   const procurementFarmersRef = useRef<Farmer[]>(procurementFarmers);
   useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
   const loansRef = useRef<Loan[]>(loans);
@@ -297,7 +303,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Reset all state to empty before loading new society's data
     setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
     setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
-    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]); setProcurementSettlementsState([]); setHousingFlatsState([]);
+    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]); setProcurementSettlementsState([]); setHousingFlatsState([]); setMaintenanceBillsState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
@@ -472,6 +478,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         supabase.from('housing_flats').select('*').eq('society_id', sid).then(
           ({ data, error }) => setHousingFlatsState(error || !data ? storage.getHousingFlats() : (data as unknown as HousingFlat[])),
           () => setHousingFlatsState(storage.getHousingFlats()),
+        );
+        supabase.from('maintenance_bills').select('*').eq('society_id', sid).then(
+          ({ data, error }) => setMaintenanceBillsState(error || !data ? storage.getMaintenanceBills() : (data as unknown as MaintenanceBill[])),
+          () => setMaintenanceBillsState(storage.getMaintenanceBills()),
         );
 
         // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
@@ -872,6 +882,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementPostingRuleResultsState(storage.getProcurementPostingRuleResults());
         setProcurementSettlementsState(storage.getProcurementSettlements());
         setHousingFlatsState(storage.getHousingFlats());
+        setMaintenanceBillsState(storage.getMaintenanceBills());
         setAssetsState(storage.getAssets());
       } finally {
         setIsLoading(false);
@@ -1776,6 +1787,79 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
   }, [housingFlats]);
+
+  // ── Housing Maintenance Billing — one bill per flat per period; posts a receivable ──
+  // voucher (Dr 3303 Maintenance Receivable / Cr 4101 Maintenance Charges) tagged to the
+  // owner member. Billing only (collection is a separate delivery). RULE-6 FY-lock,
+  // RULE-1 rollback (cancel the voucher if the bill row fails to persist).
+  const generateMaintenanceBills = useCallback((data: { period: string; date?: string; flatIds?: string[] }): MaintenanceBill[] => {
+    if (guardFYLocked()) return [];
+    if (!/^\d{4}-\d{2}$/.test(data.period || '')) {
+      toastRef.current({ title: 'अवधि चुनें', description: 'महीना (YYYY-MM) चुनें। (Select a billing month)', variant: 'destructive', duration: 8000 });
+      return [];
+    }
+    if (!accounts.some(a => a.id === '3303') || !accounts.some(a => a.id === '4101')) {
+      toastRef.current({ title: 'खाते नहीं मिले', description: 'रखरखाव खाते (3303 / 4101) इस समिति के चार्ट में नहीं हैं। Housing chart सेट करें।', variant: 'destructive', duration: 10000 });
+      return [];
+    }
+    const targets = housingFlats.filter(f => !f.isDeleted && (f.monthlyMaintenance || 0) > 0 && (!data.flatIds || data.flatIds.includes(f.id)));
+    const billed = new Set(maintenanceBills.filter(b => !b.isDeleted && b.period === data.period).map(b => b.flatId));
+    const date = data.date || new Date().toISOString().split('T')[0];
+    const created: MaintenanceBill[] = [];
+    const lid = () => crypto.randomUUID();
+    for (const flat of targets) {
+      if (billed.has(flat.id)) continue;
+      const amount = +flat.monthlyMaintenance.toFixed(2);
+      const billId = crypto.randomUUID();
+      const v = addVoucher({
+        type: 'journal', date,
+        debitAccountId: '3303', creditAccountId: '4101', amount,
+        narration: `रखरखाव बिल ${data.period} — ${flat.flatNo}`,
+        refType: 'maintenance.bill', refId: billId,
+        memberId: flat.memberId,
+        createdBy: user?.name || 'System',
+        lines: [
+          { id: lid(), accountId: '3303', type: 'Dr', amount },
+          { id: lid(), accountId: '4101', type: 'Cr', amount },
+        ],
+      });
+      if (!v.id) continue;
+      created.push({ id: billId, billNo: `${data.period}/${flat.flatNo}`, flatId: flat.id, flatNo: flat.flatNo, memberId: flat.memberId, period: data.period, date, amount, voucherId: v.id, paidAmount: 0, status: 'unpaid', isDeleted: false, createdAt: new Date().toISOString() });
+    }
+    if (created.length === 0) {
+      toastRef.current({ title: 'कोई नया बिल नहीं', description: 'इस अवधि के लिए सभी पात्र फ्लैट पहले से बिल हो चुके हैं या कोई पात्र फ्लैट नहीं।', variant: 'default', duration: 8000 });
+      return [];
+    }
+    setMaintenanceBillsState(prev => { const u = [...prev, ...created]; storage.setMaintenanceBills(u); return u; });
+    created.forEach(bill => {
+      supabase.from('maintenance_bills').upsert(withSoc(bill)).then(({ error }) => {
+        if (error) {
+          console.error('Maintenance bill save error:', error.message);
+          setMaintenanceBillsState(prev => { const r = prev.filter(b => b.id !== bill.id); storage.setMaintenanceBills(r); return r; });
+          if (bill.voucherId) cancelVoucher(bill.voucherId, 'Maintenance bill save failed (auto-rollback)', user?.name || 'System');
+          toastRef.current({ title: 'बिल सेव नहीं हुआ', description: `${bill.billNo} — cloud save fail (${error.message}). इसका receivable voucher वापस ले लिया गया।`, variant: 'destructive', duration: 12000 });
+        }
+      });
+    });
+    toastRef.current({ title: 'रखरखाव बिल बने', description: `${created.length} बिल · अवधि ${data.period}`, duration: 6000 });
+    return created;
+  }, [accounts, housingFlats, maintenanceBills, addVoucher, cancelVoucher, user]);
+
+  const deleteMaintenanceBill = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const bill = maintenanceBills.find(b => b.id === id && !b.isDeleted);
+    if (!bill) return;
+    // RULE 3: cancel the linked receivable voucher so no ghost receivable/income lingers.
+    if (bill.voucherId) cancelVoucher(bill.voucherId, `Maintenance bill ${bill.billNo} deleted`, user?.name || 'System');
+    setMaintenanceBillsState(prev => { const u = prev.filter(b => b.id !== id); storage.setMaintenanceBills(u); return u; });
+    supabase.from('maintenance_bills').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('Maintenance bill delete error:', error.message);
+        setMaintenanceBillsState(prev => { const u = [...prev, bill]; storage.setMaintenanceBills(u); return u; });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [maintenanceBills, cancelVoucher, user]);
 
   const approveMember = useCallback((id: string) => {
     const member = membersRef.current.find(m => m.id === id);
@@ -4661,6 +4745,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, approveMember, rejectMember,
       housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat,
+      maintenanceBills, generateMaintenanceBills, deleteMaintenanceBill,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
       addLoan, updateLoan, deleteLoan,
       addAsset, updateAsset, deleteAsset, postDepreciation,

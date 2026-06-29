@@ -1404,6 +1404,33 @@ create policy "society_rw" on public.housing_flats for all to authenticated
   with check (society_id::text in (select public.current_user_society_ids()));
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Housing — Maintenance bills (one ACTIVE bill per flat per period). Each bill posts a
+-- receivable voucher (Dr 3303 / Cr 4101), refType='maintenance.bill', refId=bill.id. RUN once.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists maintenance_bills (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "billNo" text,
+  "flatId" text,
+  "flatNo" text,
+  "memberId" text,
+  period text,
+  date text,
+  amount numeric,
+  "voucherId" text,
+  "paidAmount" numeric default 0,
+  status text,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table public.maintenance_bills enable row level security;
+drop policy if exists "society_rw" on public.maintenance_bills;
+create policy "society_rw" on public.maintenance_bills for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create unique index if not exists maintenance_bills_flat_period_uniq on public.maintenance_bills ("flatId", period) where ("isDeleted" = false);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
 -- transaction: every supplied collection commits together, or nothing does — a
 -- ProcurementLot can never exist in the cloud without its immutable creation event.
