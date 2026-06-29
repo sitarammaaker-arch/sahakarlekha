@@ -225,5 +225,31 @@ ok(evEvent.name === 'engine.voucher.created' && evEvent.correlationId === 'lot-1
 const evPayload = { transactionType: 'engine.voucher.create', transactionId: 'TX', transactionVersion: 1, events: [evEvent] };
 ok(evPayload.transactionType === 'engine.voucher.create' && evPayload.events.length === 1 && !('engineVouchers' in evPayload) && !('postingRuleResults' in evPayload), 'engine event envelope: transactionType=engine.voucher.create, events-only (no link collection)');
 
+// 12. Phase 3.4 — Farmer Payment. Mirrors DataContext.recordFarmerPayment + the DERIVED Outstanding
+//     (engine voucher amount − Σ farmer.payment vouchers). No stored balance; vouchers are the truth.
+const CASH = '3301';
+const buildPayment = (ev, amt, mode, bankId) => {
+  const payableAcc = (ev.lines.find(l => l.type === 'Cr') || {}).accountId;   // derived from the engine Cr leg
+  const creditAcc = mode === 'cash' ? CASH : (bankId || 'BANK1');
+  return { id: 'pay-' + amt + '-' + mode, voucherNo: 'PV', type: 'payment', amount: amt, refType: 'farmer.payment', refId: ev.id, debitAccountId: payableAcc, creditAccountId: creditAcc, lines: [{ accountId: payableAcc, type: 'Dr', amount: amt }, { accountId: creditAcc, type: 'Cr', amount: amt }] };
+};
+const outstandingOf = (ev, payments) => +(ev.amount - payments.filter(v => !v.isDeleted && v.refType === 'farmer.payment' && v.refId === ev.id).reduce((s, v) => s + v.amount, 0)).toFixed(2);
+const statusOf = (ev, payments) => { const out = outstandingOf(ev, payments); const paid = ev.amount - out; return paid <= 0 ? 'unpaid' : out <= 0 ? 'paid' : 'partial'; };
+const pv = { id: 'EV-1', amount: 455000, lines: [{ accountId: '3403', type: 'Dr', amount: 455000 }, { accountId: '2105', type: 'Cr', amount: 455000 }] };
+ok(outstandingOf(pv, []) === 455000 && statusOf(pv, []) === 'unpaid', 'Outstanding = engine voucher amount; status Unpaid when no payments');
+const p1 = buildPayment(pv, 350000, 'cash');
+ok(p1.type === 'payment' && p1.refType === 'farmer.payment' && p1.refId === 'EV-1', 'payment voucher: type=payment, refType=farmer.payment, refId=engineVoucherId');
+ok(p1.debitAccountId === '2105' && p1.creditAccountId === '3301', 'payment derives payable account (2105 = engine Cr leg) as Dr; Cash (3301) as Cr');
+ok(p1.lines.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0) === p1.lines.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0), 'payment voucher balanced (Dr = Cr)');
+ok(outstandingOf(pv, [p1]) === 105000 && statusOf(pv, [p1]) === 'partial', 'after partial ₹350000 → Outstanding ₹105000, status Partially Paid');
+ok(buildPayment(pv, 100, 'bank', '3302-001').creditAccountId === '3302-001', 'Bank mode credits the selected bank account');
+const p2 = buildPayment(pv, 105000, 'cash');
+ok(outstandingOf(pv, [p1, p2]) === 0 && statusOf(pv, [p1, p2]) === 'paid', 'after final ₹105000 → Outstanding ₹0, status Fully Paid');
+ok(statusOf(pv, []) === 'unpaid' && statusOf(pv, [p1]) === 'partial' && statusOf(pv, [p1, p2]) === 'paid', 'status transitions: Unpaid → Partially Paid → Fully Paid');
+const validate = (ev, payments, amt) => { const out = outstandingOf(ev, payments); if (!(amt > 0)) return 'reject:<=0'; if (amt > out) return 'reject:>outstanding'; return 'ok'; };
+ok(validate(pv, [], 0) === 'reject:<=0' && validate(pv, [], -5) === 'reject:<=0', 'reject amount <= 0');
+ok(validate(pv, [p1], 200000) === 'reject:>outstanding', 'reject amount > outstanding (₹200000 > ₹105000)');
+ok(validate(pv, [p1], 105000) === 'ok', 'accept amount == outstanding (final settlement)');
+
 console.log(`[procurement-test] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { getBankAccountIds } from '@/lib/storage';
 import { Wheat, Plus } from 'lucide-react';
 
 // Phase 1.0 — a small fixed crop list (no Crop master CRUD in scope).
@@ -27,7 +28,7 @@ const QUALITY_RESULTS = [
 ];
 
 export default function ProcurementLots() {
-  const { vouchers, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher } = useData();
+  const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, recordFarmerPayment } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -51,6 +52,17 @@ export default function ProcurementLots() {
   const [qualityResult, setQualityResult] = useState('');
   const [moistureValue, setMoistureValue] = useState('');
   const [inspector, setInspector] = useState('');
+
+  // Farmer Payment dialog
+  const [payOpen, setPayOpen] = useState(false);
+  const [payEvId, setPayEvId] = useState('');
+  const [payOutstanding, setPayOutstanding] = useState(0);
+  const [payAmount, setPayAmount] = useState('');
+  const [payDate, setPayDate] = useState('');
+  const [payMode, setPayMode] = useState<'cash' | 'bank'>('cash');
+  const [payBankId, setPayBankId] = useState('');
+  const [payRef, setPayRef] = useState('');
+  const [payRemarks, setPayRemarks] = useState('');
 
   const cropName = (id: string) => { const c = CROPS.find(x => x.id === id); return c ? (hi ? c.nameHi : c.name) : id; };
   const farmerLabel = (id: string) => { const f = procurementFarmers.find(x => x.id === id); return f ? `${f.farmerName} (${f.farmerCode})` : id; };
@@ -98,6 +110,35 @@ export default function ProcurementLots() {
     // generateEngineVoucher shows the success toast (and toasts on FY-lock / missing-result /
     // duplicate / unresolved-legs guard). Nothing to do here.
     generateEngineVoucher({ postingRuleResultId });
+  };
+  // Farmer Payment — Payable/Paid/Outstanding are DERIVED from vouchers (no stored balance).
+  const money = (n: number) => `₹${(n || 0).toLocaleString('en-IN')}`;
+  const bankIds = getBankAccountIds(accounts);
+  const bankAccounts = accounts.filter(a => bankIds.includes(a.id));
+  const lotPayments = (evId: string) => vouchers.filter(v => !v.isDeleted && v.refType === 'farmer.payment' && v.refId === evId);
+  const payInfo = (lotId: string) => {
+    const ev = lotEngineVoucher(lotId);
+    if (!ev) return null;
+    const payable = ev.amount;
+    const paid = lotPayments(ev.id).reduce((s, v) => s + (v.amount || 0), 0);
+    const outstanding = +(payable - paid).toFixed(2);
+    const status: 'unpaid' | 'partial' | 'paid' = paid <= 0 ? 'unpaid' : outstanding <= 0 ? 'paid' : 'partial';
+    return { ev, payable, paid, outstanding, status };
+  };
+  const openPay = (lotId: string) => {
+    const info = payInfo(lotId);
+    if (!info) return;
+    setPayEvId(info.ev.id); setPayOutstanding(info.outstanding);
+    setPayAmount(String(info.outstanding)); setPayDate(new Date().toISOString().split('T')[0]);
+    setPayMode('cash'); setPayBankId(bankAccounts[0]?.id || ''); setPayRef(''); setPayRemarks('');
+    setPayOpen(true);
+  };
+  const savePay = () => {
+    const amt = Number(payAmount);
+    if (!(amt > 0)) { toast({ title: hi ? 'राशि डालें' : 'Enter amount', variant: 'destructive' }); return; }
+    if (amt > payOutstanding) { toast({ title: hi ? 'राशि बकाया से अधिक' : 'Exceeds outstanding', description: `${hi ? 'बकाया' : 'Outstanding'} ${money(payOutstanding)}`, variant: 'destructive' }); return; }
+    const v = recordFarmerPayment({ engineVoucherId: payEvId, amount: amt, mode: payMode, bankAccountId: payMode === 'bank' ? (payBankId || undefined) : undefined, paymentDate: payDate, reference: payRef.trim() || undefined, remarks: payRemarks.trim() || undefined });
+    if (v.id) { toast({ title: hi ? 'भुगतान दर्ज हुआ' : 'Payment recorded', description: `${money(amt)} · ${payMode === 'cash' ? (hi ? 'नकद' : 'Cash') : (hi ? 'बैंक' : 'Bank')}` }); setPayOpen(false); }
   };
 
   const saveFarmer = () => {
@@ -222,6 +263,14 @@ export default function ProcurementLots() {
                     {hi ? 'वाउचर' : 'Voucher'}: {lotEngineVoucher(l.id)!.voucherNo}
                   </div>
                 )}
+                {payInfo(l.id) && (
+                  <div className="text-xs mt-0.5">
+                    <span className={payInfo(l.id)!.status === 'paid' ? 'text-green-600' : payInfo(l.id)!.status === 'partial' ? 'text-amber-600' : 'text-muted-foreground'}>
+                      {payInfo(l.id)!.status === 'paid' ? (hi ? '● पूर्ण भुगतान' : '● Fully Paid') : payInfo(l.id)!.status === 'partial' ? (hi ? '◐ आंशिक भुगतान' : '◐ Partially Paid') : (hi ? '○ अभुगतान' : '○ Unpaid')}
+                    </span>
+                    {' · '}{hi ? 'देय' : 'Payable'} {money(payInfo(l.id)!.payable)} · {hi ? 'भुगतान' : 'Paid'} {money(payInfo(l.id)!.paid)} · {hi ? 'बकाया' : 'Outstanding'} {money(payInfo(l.id)!.outstanding)}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Badge variant="secondary">{l.operationalStatus}</Badge>
@@ -231,6 +280,8 @@ export default function ProcurementLots() {
                 {lotIntent(l.id) && !lotPostingRequest(l.id) && <Button size="sm" variant="outline" onClick={() => handleGeneratePostingRequest(lotIntent(l.id)!.id)}>{hi ? 'पोस्टिंग' : 'Posting Req'}</Button>}
                 {lotPostingRequest(l.id) && !lotRuleResult(l.id) && <Button size="sm" variant="outline" onClick={() => handleResolve(lotPostingRequest(l.id)!.id)}>{hi ? 'रिज़ॉल्व' : 'Resolve'}</Button>}
                 {lotRuleResult(l.id) && !lotEngineVoucher(l.id) && <Button size="sm" variant="outline" onClick={() => handlePost(lotRuleResult(l.id)!.id)}>{hi ? 'पोस्ट' : 'Post'}</Button>}
+                {lotEngineVoucher(l.id) && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openPay(l.id)}>{hi ? 'किसान को भुगतान' : 'Pay Farmer'}</Button>}
+                {lotEngineVoucher(l.id) && payInfo(l.id)!.outstanding <= 0 && <span className="text-xs text-green-600 font-medium">{hi ? '✓ पूर्ण भुगतान' : '✓ Fully Paid'}</span>}
               </div>
             </div>
           ))}
@@ -286,6 +337,54 @@ export default function ProcurementLots() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setQualityOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
             <Button onClick={saveQuality}>{hi ? 'दर्ज करें' : 'Record'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={payOpen} onOpenChange={setPayOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{hi ? 'किसान को भुगतान' : 'Pay Farmer'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground">{hi ? 'बकाया' : 'Outstanding'}: {money(payOutstanding)}</div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'राशि' : 'Amount'} *</Label>
+              <Input type="number" min={0} max={payOutstanding} value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder="0" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'भुगतान तिथि' : 'Payment Date'} *</Label>
+              <Input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'माध्यम' : 'Mode'} *</Label>
+              <Select value={payMode} onValueChange={v => setPayMode(v as 'cash' | 'bank')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">{hi ? 'नकद' : 'Cash'}</SelectItem>
+                  <SelectItem value="bank">{hi ? 'बैंक' : 'Bank'}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {payMode === 'bank' && (
+              <div className="space-y-1.5">
+                <Label>{hi ? 'बैंक खाता' : 'Bank Account'}</Label>
+                <Select value={payBankId} onValueChange={setPayBankId}>
+                  <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
+                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label>{hi ? 'संदर्भ' : 'Reference'}</Label>
+              <Input value={payRef} onChange={e => setPayRef(e.target.value)} placeholder={hi ? 'वैकल्पिक (चेक/UTR)' : 'optional (cheque/UTR)'} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'टिप्पणी' : 'Remarks'}</Label>
+              <Input value={payRemarks} onChange={e => setPayRemarks(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
+            <Button onClick={savePay}>{hi ? 'भुगतान करें' : 'Pay'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -49,6 +49,7 @@ interface DataContextType {
   procurementPostingRuleResults: PostingRuleResult[];
   generatePostingRuleResult: (data: { postingRequestId: string }) => PostingRuleResult;
   generateEngineVoucher: (data: { postingRuleResultId: string }) => Voucher;
+  recordFarmerPayment: (data: { engineVoucherId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; paymentDate: string; reference?: string; remarks?: string }) => Voucher;
   loans: Loan[];
   assets: Asset[];
 
@@ -2262,6 +2263,52 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return voucher;
   }, [user, procurementPostingRuleResults, addVoucher]);
 
+  // Phase 3.4 — Farmer Payment. Records ONE payment (of many) settling an Engine Voucher's payable,
+  // reusing addVoucher exactly like addBillPayment. Dr = the Engine Voucher's payable account (its Cr
+  // leg — never hardcoded); Cr = Cash / selected Bank. Outstanding is DERIVED from vouchers (no stored
+  // balance): engine voucher amount − Σ existing farmer.payment vouchers for this engine voucher.
+  const recordFarmerPayment = useCallback((data: { engineVoucherId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; paymentDate: string; reference?: string; remarks?: string }): Voucher => {
+    const sentinel = { id: '', voucherNo: '', type: 'payment', date: data.paymentDate, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    // 1. FY lock
+    if (guardFYLocked()) return sentinel;
+    // 2. Engine Voucher exists
+    const ev = vouchersRef.current.find(v => v.id === data.engineVoucherId && !v.isDeleted && isEngineVoucher(v));
+    if (!ev) {
+      toastRef.current({ title: 'Engine Voucher नहीं मिला', description: 'पहले Post करें। (Post the engine voucher first)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    // 3. Outstanding = engine voucher amount − Σ existing payment vouchers (derived; no cached balance)
+    const paid = vouchersRef.current.filter(v => !v.isDeleted && v.refType === 'farmer.payment' && v.refId === ev.id).reduce((s, v) => s + (v.amount || 0), 0);
+    const outstanding = +(ev.amount - paid).toFixed(2);
+    // 4. Reject amount <= 0
+    if (!(data.amount > 0)) {
+      toastRef.current({ title: 'राशि डालें', description: 'भुगतान राशि 0 से अधिक होनी चाहिए। (Amount must be greater than 0)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    // 5. Reject amount > outstanding
+    if (data.amount > outstanding) {
+      toastRef.current({ title: 'राशि बकाया से अधिक', description: `भुगतान ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकता। (Cannot exceed outstanding)`, variant: 'destructive', duration: 9000 });
+      return sentinel;
+    }
+    // 6. Create the payment voucher via the existing path (single source of truth).
+    const payableAcc = ev.lines?.find(l => l.type === 'Cr')?.accountId || ev.creditAccountId;
+    const creditAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    const lid = () => crypto.randomUUID();
+    const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
+    const rem = data.remarks?.trim() ? ` · ${data.remarks.trim()}` : '';
+    return addVoucher({
+      type: 'payment', date: data.paymentDate,
+      debitAccountId: payableAcc, creditAccountId: creditAcc, amount: data.amount,
+      narration: `किसान को भुगतान — ${ev.voucherNo}${ref}${rem}`,
+      refType: 'farmer.payment', refId: ev.id,
+      createdBy: user?.name || 'System',
+      lines: [
+        { id: lid(), accountId: payableAcc, type: 'Dr', amount: data.amount },
+        { id: lid(), accountId: creditAcc, type: 'Cr', amount: data.amount },
+      ],
+    });
+  }, [user, accounts, addVoucher]);
+
   // Only active (non-deleted) vouchers for all financial calculations
   const activeVouchers = vouchers.filter(v => !v.isDeleted);
 
@@ -4394,6 +4441,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       procurementFinancialIntents, generateFinancialIntent,
       procurementPostingRequests, generatePostingRequest,
       procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
+      recordFarmerPayment,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, approveMember, rejectMember,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
