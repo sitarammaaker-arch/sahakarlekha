@@ -10,13 +10,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { getBankAccountIds } from '@/lib/storage';
-import { UserCheck, Pencil, Trash2, IndianRupee } from 'lucide-react';
+import { UserCheck, Pencil, Trash2, IndianRupee, FileText } from 'lucide-react';
 import type { MusterEntry } from '@/types';
 
 const thisMonth = '2026-06'; // safe default; user can change. (No Date.now in module scope.)
 
 export default function MusterRoll() {
-  const { workOrders, members, accounts, musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages } = useData();
+  const { workOrders, members, accounts, musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages, accrueWages } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -61,6 +61,13 @@ export default function MusterRoll() {
   const totalDays = rows.reduce((s, r) => s + (r.daysWorked || 0), 0);
   const unpaidRows = rows.filter(r => !r.paid);
   const unpaidTotal = unpaidRows.reduce((s, r) => s + wageOf(r), 0);
+  const accruableRows = rows.filter(r => !r.paid && !r.accrued);
+  const accruableTotal = accruableRows.reduce((s, r) => s + wageOf(r), 0);
+
+  const doAccrue = () => {
+    if (!window.confirm(hi ? `इस शीट की देय मज़दूरी ${money(accruableTotal)} दायित्व के रूप में दर्ज करें?\n(लेखा: नाम मज़दूरी 5202 / जमा देय मज़दूरी 2109)` : `Book ${money(accruableTotal)} as a wages-payable liability?\n(Dr Wages 5202 / Cr Wages Payable 2109)`)) return;
+    accrueWages({ workOrderId, period, date: new Date().toISOString().slice(0, 10) });
+  };
 
   const openPay = () => {
     setPayMode('cash'); setPayBankId(bankAccounts[0]?.id || '');
@@ -172,19 +179,22 @@ export default function MusterRoll() {
           {rows.map(m => (
             <div key={m.id} className="flex items-center justify-between rounded-lg border p-3 text-sm gap-3">
               <div className="min-w-0">
-                <div className="font-medium flex items-center gap-2">{memberName(m.memberId)}{m.paid && <Badge variant="secondary">{hi ? 'भुगतान हुआ' : 'Paid'}</Badge>}</div>
+                <div className="font-medium flex items-center gap-2">{memberName(m.memberId)}{m.paid && <Badge variant="secondary">{hi ? 'भुगतान हुआ' : 'Paid'}</Badge>}{m.accrued && !m.paid && <Badge variant="outline">{hi ? 'देयता दर्ज' : 'Accrued'}</Badge>}</div>
                 <div className="text-muted-foreground">{m.daysWorked} {hi ? 'दिन' : 'days'} × {money(m.dailyWage)} = <span className="font-medium text-foreground">{money(wageOf(m))}</span></div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {!m.paid && <Button size="sm" variant="ghost" onClick={() => openEdit(m)}><Pencil className="h-4 w-4" /></Button>}
-                {!m.paid && <Button size="sm" variant="ghost" onClick={() => remove(m)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
+                {!m.paid && !m.accrued && <Button size="sm" variant="ghost" onClick={() => openEdit(m)}><Pencil className="h-4 w-4" /></Button>}
+                {!m.paid && !m.accrued && <Button size="sm" variant="ghost" onClick={() => remove(m)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
               </div>
             </div>
           ))}
           {unpaidRows.length > 0 && (
-            <div className="flex items-center justify-between gap-3 border-t pt-3">
+            <div className="flex items-center justify-between gap-3 border-t pt-3 flex-wrap">
               <span className="text-sm text-muted-foreground">{hi ? 'देय (अभुगतान)' : 'Payable (unpaid)'}: <span className="font-semibold text-foreground">{money(unpaidTotal)}</span> · {unpaidRows.length} {hi ? 'श्रमिक' : 'labourers'}</span>
-              <Button size="sm" onClick={openPay}><IndianRupee className="h-4 w-4 mr-1" />{hi ? 'मज़दूरी भुगतान करें' : 'Pay Wages'}</Button>
+              <div className="flex items-center gap-2">
+                {accruableRows.length > 0 && <Button size="sm" variant="outline" onClick={doAccrue}><FileText className="h-4 w-4 mr-1" />{hi ? 'देय मज़दूरी दर्ज करें' : 'Accrue'}</Button>}
+                <Button size="sm" onClick={openPay}><IndianRupee className="h-4 w-4 mr-1" />{hi ? 'मज़दूरी भुगतान करें' : 'Pay Wages'}</Button>
+              </div>
             </div>
           )}
           {rows.length > 0 && unpaidRows.length === 0 && (
@@ -250,7 +260,13 @@ export default function MusterRoll() {
             )}
             <div className="space-y-1.5"><Label>{hi ? 'संदर्भ (वैकल्पिक)' : 'Reference (optional)'}</Label><Input value={payRef} onChange={e => setPayRef(e.target.value)} /></div>
             <div className="space-y-1.5"><Label>{hi ? 'टिप्पणी (वैकल्पिक)' : 'Remarks (optional)'}</Label><Input value={payRemarks} onChange={e => setPayRemarks(e.target.value)} /></div>
-            <p className="text-xs text-muted-foreground">{hi ? 'लेखा प्रविष्टि: नाम मज़दूरी (5202) / जमा ' : 'Entry: Dr Wages (5202) / Cr '}{payMode === 'cash' ? (hi ? 'नकद' : 'Cash') : (hi ? 'बैंक' : 'Bank')}</p>
+            <p className="text-xs text-muted-foreground">
+              {hi ? 'लेखा प्रविष्टि: नाम ' : 'Entry: Dr '}
+              {unpaidRows.some(r => r.accrued)
+                ? (hi ? 'देय मज़दूरी (2109) + मज़दूरी (5202)' : 'Wages Payable (2109) + Wages (5202)')
+                : (hi ? 'मज़दूरी (5202)' : 'Wages (5202)')}
+              {hi ? ' / जमा ' : ' / Cr '}{payMode === 'cash' ? (hi ? 'नकद' : 'Cash') : (hi ? 'बैंक' : 'Bank')}
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>

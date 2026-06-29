@@ -216,6 +216,8 @@ export interface MusterEntry {
   dailyWage: number;
   paid?: boolean;            // wage paid (locks the row; set by payWages)
   paymentVoucherId?: string; // links to the wage-payment voucher
+  accrued?: boolean;         // wage liability booked (Dr 5202 / Cr 2109); set by accrueWages
+  accrualVoucherId?: string; // links to the accrual journal voucher
   isDeleted?: boolean;
   createdAt: string;
 }

@@ -613,6 +613,7 @@ const ACCOUNT_PATCHES: Record<string, Partial<LedgerAccount>> = {
 
 const ACCOUNTS_TO_ADD: LedgerAccount[] = [
   { id: '2107', name: 'Member Deposits',            nameHi: 'सदस्य जमाराशि',            type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'deposit' },
+  { id: '2109', name: 'Wages Payable',              nameHi: 'देय मज़दूरी',              type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
   { id: '2205', name: 'HRDF Payable',               nameHi: 'देय HRDF',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
   { id: '3108', name: 'Accum. Dep. - Building',     nameHi: 'संचित ह्रास - भवन',         type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100', subtype: 'accumulated_dep' },
   { id: '3109', name: 'Accum. Dep. - Furniture',    nameHi: 'संचित ह्रास - फर्नीचर',     type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100', subtype: 'accumulated_dep' },
