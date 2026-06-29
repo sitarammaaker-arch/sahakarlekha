@@ -78,9 +78,9 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'budgetModule',       titleKey: 'budgetModule',       icon: PiggyBank,       route: '/budget-module',        domain: 'reports', requiredCapabilities: U, order: 15 },
   { id: 'eWayBill',           titleKey: 'eWayBill',           icon: FileJson,        route: '/eway-bill',            domain: 'reports', requiredCapabilities: ['gst'], order: 16 },
   { id: 'hsnMaster',          titleKey: 'hsnMaster',          icon: Hash,            route: '/hsn-master',           domain: 'reports', requiredCapabilities: ['gst'], order: 17 },
-  { id: 'nabardReport',       titleKey: 'nabardReport',       icon: Landmark,        route: '/nabard-report',        domain: 'reports', requiredCapabilities: U, order: 18 },
+  { id: 'nabardReport',       titleKey: 'nabardReport',       icon: Landmark,        route: '/nabard-report',        domain: 'reports', requiredCapabilities: ['lending'], order: 18 },
   { id: 'federationReport',   titleKey: 'federationReport',   icon: ScrollText,      route: '/federation-report',    domain: 'reports', requiredCapabilities: ['procurement_msp'], order: 19 },
-  { id: 'recoverables',       titleKey: 'recoverables',       icon: ScrollText,      route: '/recoverables',         domain: 'reports', requiredCapabilities: U, order: 20 },
+  { id: 'recoverables',       titleKey: 'recoverables',       icon: ScrollText,      route: '/recoverables',         domain: 'reports', requiredCapabilities: ['procurement_msp'], order: 20 },
   { id: 'kachiAarat',         titleKey: 'kachiAarat',         icon: ScrollText,      route: '/kachi-aarat',          domain: 'reports', requiredCapabilities: ['procurement_msp'], order: 21 },
 
   // ── registers (was registerNavItems) ──
