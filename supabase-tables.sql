@@ -480,6 +480,8 @@ alter table purchases add column if not exists "taxVoucherIds" jsonb default '[]
 alter table vouchers add column if not exists lines jsonb default '[]';
 alter table vouchers add column if not exists "refType" text;
 alter table vouchers add column if not exists "refId" text;
+-- Engine-voucher origin tag (Phase 3.3). Sent in the base upsert, so the column MUST exist.
+alter table vouchers add column if not exists origin text;
 
 -- Vouchers: bill-wise settlement (Tally "Against Reference").
 -- A bill-receipt voucher stores which sale invoices it settles, and by how much.
