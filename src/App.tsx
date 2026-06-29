@@ -8,6 +8,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DataProvider, useData } from "@/contexts/DataContext";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { CapabilityGuard } from "@/components/CapabilityGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePageTracking } from "@/lib/analytics";
 
@@ -169,7 +170,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     );
   }
 
-  return <MainLayout><ErrorBoundary>{children}</ErrorBoundary></MainLayout>;
+  return <MainLayout><CapabilityGuard><ErrorBoundary>{children}</ErrorBoundary></CapabilityGuard></MainLayout>;
 };
 
 // Public Route wrapper (redirects to dashboard if authenticated)
