@@ -119,7 +119,6 @@ interface DataContextType {
   updateMusterEntry: (id: string, data: Partial<MusterEntry>) => void;
   deleteMusterEntry: (id: string) => void;
   payWages: (data: { workOrderId: string; period: string; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string; remarks?: string }) => Voucher;
-  accrueWages: (data: { workOrderId: string; period: string; date: string }) => Voucher;
   approveMember: (id: string) => void;
   rejectMember: (id: string) => void;
 
@@ -1977,52 +1976,94 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, [workOrders]);
 
-  // ── Labour Muster Roll (attendance/wage-basis register; master data + RULE-1 rollback) ──
+  // ── Labour Muster Roll (attendance register) — AUTO-ACCRUAL ──────────────────
+  // Per Indian Cooperative (mercantile) accounting, wages are an expense + liability
+  // the moment they are earned. So every attendance line auto-posts a journal
+  // Dr 5202 Wages / Cr 2109 Wages Payable (origin:'auto'); the operator never sees an
+  // accrual step. Edit re-accrues (supersede old voucher on success); delete reverses
+  // it; Pay Wages later clears 2109. No double-count (payWages debits 2109 for accrued).
+  const postWageAccrual = useCallback((entry: MusterEntry): Voucher => {
+    const wage = (entry.daysWorked || 0) * (entry.dailyWage || 0);
+    if (!(wage > 0)) return { id: '' } as Voucher;
+    const wo = workOrders.find(w => w.id === entry.workOrderId);
+    const lid = () => crypto.randomUUID();
+    return addVoucher({
+      type: 'journal', date: `${entry.period}-15`,
+      debitAccountId: '5202', creditAccountId: '2109', amount: wage,
+      narration: `मज़दूरी देयता (स्वतः) — ${wo?.workOrderNo || entry.workOrderId} · ${entry.period}`,
+      refType: 'wage.accrual', refId: entry.id, origin: 'auto',
+      createdBy: user?.name || 'System',
+      lines: [
+        { id: lid(), accountId: '5202', type: 'Dr', amount: wage },
+        { id: lid(), accountId: '2109', type: 'Cr', amount: wage },
+      ],
+    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>);
+  }, [workOrders, addVoucher, user]);
+
   const addMusterEntry = useCallback((data: Omit<MusterEntry, 'id' | 'createdAt'>): MusterEntry => {
     if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as MusterEntry;
-    const m: MusterEntry = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    const id = crypto.randomUUID();
+    const wage = (data.daysWorked || 0) * (data.dailyWage || 0);
+    // Auto-accrual first — if it fails (unbalanced/FY), don't create the entry.
+    const av = wage > 0 ? postWageAccrual({ ...data, id, createdAt: '' } as MusterEntry) : ({ id: '' } as Voucher);
+    if (wage > 0 && !av.id) return { ...data, id: '', createdAt: '' } as MusterEntry;
+    const m: MusterEntry = { ...data, id, accrued: wage > 0, accrualVoucherId: av.id || undefined, createdAt: new Date().toISOString() };
     setMusterEntriesState(prev => { const u = [...prev, m]; storage.setMusterEntries(u); return u; });
     supabase.from('muster_entries').upsert(withSoc(m)).then(({ error }) => {
       if (error) {
         console.error('Muster entry save error:', error.message);
         setMusterEntriesState(prev => { const r = prev.filter(x => x.id !== m.id); storage.setMusterEntries(r); return r; });
+        if (av.id) cancelVoucher(av.id, 'Muster entry rolled back (save failed)', user?.name || 'System');
         toastRef.current({ title: 'हाज़िरी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
       }
     });
     return m;
-  }, []);
+  }, [postWageAccrual, cancelVoucher, user]);
 
   const updateMusterEntry = useCallback((id: string, data: Partial<MusterEntry>) => {
     if (guardFYLocked()) return;
     const old = musterEntries.find(x => x.id === id);
     if (!old) return;
     if (old.paid) { toastRef.current({ title: 'भुगतान हो चुका', description: 'मज़दूरी-भुगतान हो चुकी entry संपादित नहीं हो सकती। पहले भुगतान voucher रद्द करें।', variant: 'destructive', duration: 9000 }); return; }
-    if (old.accrued) { toastRef.current({ title: 'देयता दर्ज हो चुकी', description: 'देय मज़दूरी दर्ज हो चुकी entry संपादित नहीं हो सकती। पहले accrual voucher रद्द करें।', variant: 'destructive', duration: 9000 }); return; }
-    const updated = { ...old, ...data };
-    setMusterEntriesState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setMusterEntries(u); return u; });
-    supabase.from('muster_entries').upsert(withSoc(updated)).then(({ error }) => {
+    const updated: MusterEntry = { ...old, ...data };
+    const oldWage = (old.daysWorked || 0) * (old.dailyWage || 0);
+    const newWage = (updated.daysWorked || 0) * (updated.dailyWage || 0);
+    const wageChanged = newWage !== oldWage;
+    // If the wage amount changed, post a fresh accrual now; the old one is superseded
+    // (cancelled) only after the entry update persists, so a failure leaves old intact.
+    const newAv = wageChanged && newWage > 0 ? postWageAccrual(updated) : ({ id: '' } as Voucher);
+    if (wageChanged && newWage > 0 && !newAv.id) return; // accrual failed → abort edit
+    const next: MusterEntry = wageChanged
+      ? { ...updated, accrued: newWage > 0, accrualVoucherId: newAv.id || undefined }
+      : updated;
+    setMusterEntriesState(prev => { const u = prev.map(x => x.id === id ? next : x); storage.setMusterEntries(u); return u; });
+    supabase.from('muster_entries').upsert(withSoc(next)).then(({ error }) => {
       if (error) {
         console.error('Muster entry update error:', error.message);
         setMusterEntriesState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setMusterEntries(u); return u; });
+        if (newAv.id) cancelVoucher(newAv.id, 'Muster edit rolled back (save failed)', user?.name || 'System');
         toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      } else if (wageChanged && old.accrualVoucherId) {
+        cancelVoucher(old.accrualVoucherId, 'Wage accrual superseded (muster edited)', user?.name || 'System');
       }
     });
-  }, [musterEntries]);
+  }, [musterEntries, postWageAccrual, cancelVoucher, user]);
 
   const deleteMusterEntry = useCallback((id: string) => {
     if (guardFYLocked()) return;
     const old = musterEntries.find(x => x.id === id);
     if (old?.paid) { toastRef.current({ title: 'भुगतान हो चुका', description: 'मज़दूरी-भुगतान हो चुकी entry हटाई नहीं जा सकती। पहले भुगतान voucher रद्द करें।', variant: 'destructive', duration: 9000 }); return; }
-    if (old?.accrued) { toastRef.current({ title: 'देयता दर्ज हो चुकी', description: 'देय मज़दूरी दर्ज हो चुकी entry हटाई नहीं जा सकती। पहले accrual voucher रद्द करें।', variant: 'destructive', duration: 9000 }); return; }
     setMusterEntriesState(prev => { const u = prev.filter(x => x.id !== id); storage.setMusterEntries(u); return u; });
     supabase.from('muster_entries').delete().eq('id', id).then(({ error }) => {
       if (error) {
         console.error('Muster entry delete error:', error.message);
         if (old) setMusterEntriesState(prev => { const u = [...prev, old]; storage.setMusterEntries(u); return u; });
         toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      } else if (old?.accrualVoucherId) {
+        cancelVoucher(old.accrualVoucherId, 'Wage accrual reversed (muster deleted)', user?.name || 'System');
       }
     });
-  }, [musterEntries]);
+  }, [musterEntries, cancelVoucher, user]);
 
   // ── Labour Wage Payment — pay all unpaid muster entries of a sheet (workOrder+period) ──
   // Split Dr (no double-count): accrued portion → Dr 2109 Wages Payable (clears the
@@ -2072,47 +2113,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     toastRef.current({ title: 'मज़दूरी भुगतान दर्ज हुआ', description: `${wo?.workOrderNo || ''} · ${data.period} · ${sheet.length} श्रमिक · ₹${total}`, duration: 6000 });
     return voucher;
   }, [musterEntries, workOrders, accounts, addVoucher, cancelVoucher, user]);
-
-  // ── Labour Wage Accrual — book the liability for earned-but-unpaid wages of a sheet ──
-  // Journal voucher: Dr 5202 Wages / Cr 2109 Wages Payable (देय मज़दूरी) for the total of
-  // entries that are unpaid AND not yet accrued. Makes I&E show the full-period wage expense
-  // and Balance Sheet show the obligation. Payment later debits 2109 (no double-count).
-  // RULE-1: on entry-mark failure, cancel the voucher + roll back. RULE-6: FY guard.
-  const accrueWages = useCallback((data: { workOrderId: string; period: string; date: string }): Voucher => {
-    const sentinel = { id: '', voucherNo: '', type: 'journal', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
-    if (guardFYLocked()) return sentinel;
-    const sheet = musterEntries.filter(m => !m.isDeleted && !m.paid && !m.accrued && m.workOrderId === data.workOrderId && m.period === data.period);
-    if (sheet.length === 0) { toastRef.current({ title: 'कुछ दर्ज करने को नहीं', description: 'इस शीट की सारी मज़दूरी या तो चुकाई जा चुकी है या उसकी देयता पहले ही दर्ज है।', variant: 'destructive', duration: 8000 }); return sentinel; }
-    const total = +sheet.reduce((s, m) => s + (m.daysWorked || 0) * (m.dailyWage || 0), 0).toFixed(2);
-    if (!(total > 0)) { toastRef.current({ title: 'राशि शून्य', description: 'देय मज़दूरी 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
-    const wo = workOrders.find(w => w.id === data.workOrderId);
-    const lid = () => crypto.randomUUID();
-    const voucher = addVoucher({
-      type: 'journal', date: data.date,
-      debitAccountId: '5202', creditAccountId: '2109', amount: total,
-      narration: `मज़दूरी देयता दर्ज — ${wo?.workOrderNo || data.workOrderId} · ${data.period} · ${sheet.length} श्रमिक`,
-      refType: 'wage.accrual', refId: data.workOrderId,
-      createdBy: user?.name || 'System',
-      lines: [
-        { id: lid(), accountId: '5202', type: 'Dr', amount: total },
-        { id: lid(), accountId: '2109', type: 'Cr', amount: total },
-      ],
-    });
-    if (!voucher.id) return sentinel;
-    const ids = new Set(sheet.map(m => m.id));
-    const updatedSheet = sheet.map(m => ({ ...m, accrued: true, accrualVoucherId: voucher.id }));
-    setMusterEntriesState(prev => { const u = prev.map(m => ids.has(m.id) ? { ...m, accrued: true, accrualVoucherId: voucher.id } : m); storage.setMusterEntries(u); return u; });
-    supabase.from('muster_entries').upsert(updatedSheet.map(m => withSoc(m))).then(({ error }) => {
-      if (error) {
-        console.error('Wage accrual muster-mark error:', error.message);
-        setMusterEntriesState(prev => { const u = prev.map(m => ids.has(m.id) ? { ...m, accrued: false, accrualVoucherId: undefined } : m); storage.setMusterEntries(u); return u; });
-        cancelVoucher(voucher.id, 'Wage accrual rolled back (muster mark failed)', user?.name || 'System');
-        toastRef.current({ title: 'देयता सेव नहीं हुई', description: `Cloud save fail — ${error.message}. प्रविष्टि वापस ले ली गई; दोबारा करें।`, variant: 'destructive', duration: 12000 });
-      }
-    });
-    toastRef.current({ title: 'देय मज़दूरी दर्ज हुई', description: `${wo?.workOrderNo || ''} · ${data.period} · ₹${total} (Dr मज़दूरी / Cr देय मज़दूरी)`, duration: 6000 });
-    return voucher;
-  }, [musterEntries, workOrders, addVoucher, cancelVoucher, user]);
 
   const approveMember = useCallback((id: string) => {
     const member = membersRef.current.find(m => m.id === id);
@@ -5009,7 +5009,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat,
       maintenanceBills, generateMaintenanceBills, deleteMaintenanceBill, recordMaintenanceCollection,
       workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
-      musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages, accrueWages,
+      musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
       addLoan, updateLoan, deleteLoan,
       addAsset, updateAsset, deleteAsset, postDepreciation,

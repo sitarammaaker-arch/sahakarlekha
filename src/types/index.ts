@@ -27,7 +27,7 @@ export interface VoucherEditSnapshot {
 }
 
 /** Who created a voucher: a user (manual) or the Financial Event Engine (system-owned). */
-export type VoucherOrigin = 'manual' | 'engine';
+export type VoucherOrigin = 'manual' | 'engine' | 'auto';
 
 export interface Voucher {
   id: string;
