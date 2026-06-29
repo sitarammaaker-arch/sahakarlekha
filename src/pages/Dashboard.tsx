@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { useCapabilities } from '@/hooks/useCapabilities';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { QuickActions } from '@/components/dashboard/QuickActions';
@@ -22,6 +23,7 @@ const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b
 const Dashboard: React.FC = () => {
   const { t, language } = useLanguage();
   const { accounts, getAccountBalance, members, vouchers, getProfitLoss, loans, society, getTrialBalance, getTradingAccount, auditObjections } = useData();
+  const { has } = useCapabilities();
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -358,7 +360,8 @@ const Dashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Loan Portfolio Summary */}
+        {/* Loan Portfolio Summary — only for societies entitled to lending */}
+        {has('lending') && (
         <Card className="shadow-card">
           <CardHeader>
             <CardTitle className="text-base">
@@ -391,6 +394,7 @@ const Dashboard: React.FC = () => {
             )}
           </CardContent>
         </Card>
+        )}
       </div>
 
       {/* Recent Vouchers + Quick Actions */}

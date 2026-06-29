@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { useCapabilities } from '@/hooks/useCapabilities';
 import {
   CommandDialog,
   CommandEmpty,
@@ -21,6 +22,7 @@ interface GlobalSearchProps {
 export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }) => {
   const { language } = useLanguage();
   const { members, vouchers, accounts, loans, assets } = useData();
+  const { has } = useCapabilities();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
 
@@ -38,7 +40,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
     a.name.toLowerCase().includes(q) || a.nameHi.includes(q) || a.id.toLowerCase().includes(q)
   ).slice(0, 5);
 
-  const filteredLoans = q.length < 2 ? [] : loans.filter(l =>
+  const filteredLoans = (q.length < 2 || !has('lending')) ? [] : loans.filter(l =>
     l.loanNo.toLowerCase().includes(q) || l.purpose.toLowerCase().includes(q)
   ).slice(0, 3);
 

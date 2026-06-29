@@ -8,12 +8,12 @@ import type { SocietyType } from '@/types';
 import type { Capability } from './capabilities';
 
 export const SOCIETY_TYPE_CAPABILITIES: Record<SocietyType, Capability[]> = {
-  marketing_processing: ['inventory_sales'],
-  pacs: ['inventory_sales'],                          // input/goods distribution
-  consumer: ['inventory_sales'],
-  dairy: ['dairy_collection', 'inventory_sales'],     // C4 milk + goods commerce
-  housing: [],                                        // service — no goods
-  sugar: ['inventory_sales'],
-  labour: [],                                         // service — no goods
-  other: ['inventory_sales'],                         // catch-all/store — conservative
+  marketing_processing: ['inventory_sales', 'procurement_msp', 'gst', 'tds'], // trades goods + MSP procurement
+  pacs: ['inventory_sales', 'lending', 'procurement_msp', 'gst', 'tds'],      // credit + input distribution + procurement
+  consumer: ['inventory_sales', 'gst', 'tds'],                                // retail store
+  dairy: ['dairy_collection', 'inventory_sales', 'gst', 'tds'],               // milk + goods commerce
+  housing: ['tds'],                                                           // service — only core accounting + contractor TDS
+  sugar: ['inventory_sales', 'procurement_msp', 'gst', 'tds'],                // cane procurement + sugar sales
+  labour: ['tds'],                                                            // service — only core accounting + contractor TDS
+  other: ['inventory_sales', 'lending', 'gst', 'tds'],                        // catch-all — broad
 };

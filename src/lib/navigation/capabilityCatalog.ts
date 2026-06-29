@@ -12,15 +12,12 @@ export interface CapabilityCategory {
   nameEn: string;
 }
 
-/** Categories in display order (only those that back at least one capability). */
+/** Categories in display order (only those that back at least one MAPPED capability). */
 export const CAPABILITY_CATEGORIES: CapabilityCategory[] = [
   { key: 'dairy',       nameHi: 'दुग्ध',            nameEn: 'Dairy' },
   { key: 'trading',     nameHi: 'व्यापार एवं बिक्री', nameEn: 'Trading & Sales' },
-  { key: 'inventory',   nameHi: 'भंडार',            nameEn: 'Inventory & Warehouse' },
   { key: 'lending',     nameHi: 'ऋण',              nameEn: 'Lending & Credit' },
   { key: 'procurement', nameHi: 'खरीद एवं MSP',     nameEn: 'Procurement & MSP' },
-  { key: 'billing',     nameHi: 'बिलिंग',           nameEn: 'Billing & POS' },
-  { key: 'transport',   nameHi: 'परिवहन',           nameEn: 'Transport' },
   { key: 'compliance',  nameHi: 'कर एवं अनुपालन',    nameEn: 'Compliance & Tax' },
 ];
 
@@ -39,20 +36,10 @@ export const CAPABILITY_META: CapabilityMeta[] = [
     descHi: 'सदस्य-वार दूध संकलन — मात्रा, फैट, SNF, दर और भुगतान पत्रक।', descEn: 'Member-wise milk collection — quantity, fat, SNF, rate and payout sheet.', docsUrl: '#' },
   { id: 'inventory_sales', category: 'trading', nameHi: 'भंडार एवं बिक्री', nameEn: 'Inventory & Sales',
     descHi: 'माल का स्टॉक, ग्राहक, बिक्री, बिक्री रजिस्टर और स्टॉक मूल्यांकन।', descEn: 'Goods stock, customers, sales, sale register and stock valuation.', docsUrl: '#' },
-  { id: 'warehousing', category: 'inventory', nameHi: 'भंडारण', nameEn: 'Warehousing',
-    descHi: 'गोदाम-आधारित स्टॉक मूल्यांकन और भंडार प्रबंधन।', descEn: 'Warehouse-based stock valuation and inventory management.', docsUrl: '#' },
   { id: 'lending', category: 'lending', nameHi: 'ऋण', nameEn: 'Lending',
     descHi: 'सदस्यों को ऋण, ब्याज और KCC से जुड़े रजिस्टर।', descEn: 'Member loans, interest and KCC-related registers.', docsUrl: '#' },
   { id: 'procurement_msp', category: 'procurement', nameHi: 'खरीद / MSP', nameEn: 'Procurement / MSP',
     descHi: 'न्यूनतम समर्थन मूल्य पर खरीद, मंडी और फेडरेशन रिपोर्ट।', descEn: 'MSP procurement, mandi and federation reporting.', docsUrl: '#' },
-  { id: 'fertilizer_distribution', category: 'procurement', nameHi: 'उर्वरक वितरण', nameEn: 'Fertilizer Distribution',
-    descHi: 'उर्वरक स्टॉक और वितरण।', descEn: 'Fertilizer stock and distribution.', docsUrl: '#' },
-  { id: 'seed_distribution', category: 'procurement', nameHi: 'बीज वितरण', nameEn: 'Seed Distribution',
-    descHi: 'बीज स्टॉक और वितरण।', descEn: 'Seed stock and distribution.', docsUrl: '#' },
-  { id: 'pos_billing', category: 'billing', nameHi: 'POS बिलिंग', nameEn: 'POS Billing',
-    descHi: 'काउंटर बिलिंग और पॉइंट-ऑफ-सेल।', descEn: 'Counter billing and point-of-sale.', docsUrl: '#' },
-  { id: 'transport', category: 'transport', nameHi: 'परिवहन', nameEn: 'Transport',
-    descHi: 'वाहन और ढुलाई प्रबंधन।', descEn: 'Vehicle and freight management.', docsUrl: '#' },
   { id: 'gst', category: 'compliance', nameHi: 'जीएसटी', nameEn: 'GST',
     descHi: 'GST सारांश, e-Way बिल और HSN मास्टर।', descEn: 'GST summary, e-Way bill and HSN master.', docsUrl: '#' },
   { id: 'tds', category: 'compliance', nameHi: 'टीडीएस', nameEn: 'TDS',
