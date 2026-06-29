@@ -54,6 +54,20 @@ export default function DepartmentBills() {
 
   const bills = departmentBills.filter(b => !b.isDeleted);
   const outstandingOf = (b: DepartmentBill) => +(b.amount - b.paidAmount).toFixed(2);
+
+  // Un-billed balance of a work order = contract value − bills already raised against it.
+  const billedForWO = (woId: string) => departmentBills.filter(b => !b.isDeleted && b.workOrderId === woId).reduce((s, b) => s + (b.amount || 0), 0);
+  const selectedWO = openOrders.find(o => o.id === workOrderId);
+  const woContract = selectedWO?.contractValue || 0;
+  const woBilled = selectedWO ? billedForWO(selectedWO.id) : 0;
+  const woRemaining = selectedWO ? +(woContract - woBilled).toFixed(2) : 0;
+
+  // Selecting a work order pre-fills the bill amount with its remaining (un-billed) balance — editable.
+  const onSelectWO = (woId: string) => {
+    setWorkOrderId(woId);
+    const wo = openOrders.find(o => o.id === woId);
+    if (wo) { const rem = +((wo.contractValue || 0) - billedForWO(wo.id)).toFixed(2); setAmount(rem > 0 ? String(rem) : '0'); }
+  };
   const totalBilled = bills.reduce((s, b) => s + b.amount, 0);
   const totalOutstanding = bills.reduce((s, b) => s + outstandingOf(b), 0);
 
@@ -116,7 +130,7 @@ export default function DepartmentBills() {
             </div>
             <div className="space-y-2">
               <Label>{hi ? 'कार्य आदेश (वैकल्पिक)' : 'Work Order (optional)'}</Label>
-              <Select value={workOrderId || undefined} onValueChange={setWorkOrderId}>
+              <Select value={workOrderId || undefined} onValueChange={onSelectWO}>
                 <SelectTrigger><SelectValue placeholder={hi ? 'चुनें' : 'Select'} /></SelectTrigger>
                 <SelectContent>{openOrders.map(w => <SelectItem key={w.id} value={w.id}>{w.workOrderNo} · {w.clientName}</SelectItem>)}</SelectContent>
               </Select>
@@ -135,6 +149,11 @@ export default function DepartmentBills() {
             <div className="space-y-2">
               <Label>{hi ? 'बिल राशि (₹)' : 'Bill Amount (₹)'} *</Label>
               <Input type="number" min={0} value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" />
+              {selectedWO && (
+                <p className="text-xs text-muted-foreground">
+                  {hi ? 'ठेका मूल्य' : 'Contract'} {money(woContract)} · {hi ? 'पहले बिल' : 'billed'} {money(woBilled)} · <span className="font-medium text-foreground">{hi ? 'शेष' : 'remaining'} {money(woRemaining)}</span> — {hi ? 'राशि घटा/बढ़ा सकते हैं' : 'amount editable'}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>{hi ? 'विवरण (वैकल्पिक)' : 'Narration (optional)'}</Label>
