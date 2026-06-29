@@ -83,7 +83,14 @@ export default function DepartmentBills() {
     const v = Number(amount);
     if (!(v > 0)) { toast({ title: hi ? 'बिल राशि दर्ज करें' : 'Enter a valid amount', variant: 'destructive' }); return; }
     const bill = addDepartmentBill({ departmentId, workOrderId, billType, date, amount: v, narration: narration.trim() || undefined });
-    if (bill.id) { setAmount(''); setNarration(''); setWorkOrderId(''); }
+    if (bill.id) {
+      // Keep the work order selected and immediately re-prefill the amount with the NEW
+      // remaining (woRemaining is this render's value, i.e. before the bill just added), so
+      // the next running bill is ready without re-selecting or refreshing the page.
+      const newRemaining = +(woRemaining - v).toFixed(2);
+      setAmount(newRemaining > 0 ? String(newRemaining) : '0');
+      setNarration('');
+    }
   };
 
   const openPay = (b: DepartmentBill) => {
