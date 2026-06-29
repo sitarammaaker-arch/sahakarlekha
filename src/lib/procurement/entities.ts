@@ -2,6 +2,7 @@
  * Procurement Phase-0.2 — domain entities + the ProcurementLot aggregate root. Interfaces ONLY.
  */
 import type { BaseEntity, Money, Quantity, Percentage, Weight } from './shared';
+import type { FinancialIntentName } from './financial';
 
 /** Three orthogonal status dimensions (frozen blueprint). */
 export type OperationalStatus =
@@ -35,6 +36,12 @@ export interface FarmerPayment extends BaseEntity { jformId: string; amount: Mon
 export interface CommissionBill extends BaseEntity { arhtiyaId: string; amount: Money; }
 export interface Claim extends BaseEntity { agencyId: string; amount: Money; }
 export interface Recoverable extends BaseEntity { partyId: string; amount: Money; }
+
+// ── Financial (Phase 3.0) ──
+// Persisted business record of a financial intent (distinct from the engine's transient
+// FinancialIntent in ./financial). Composed only of existing contracts: id = intentId,
+// amount = Money (amount + currency), intentType = FinancialIntentName.
+export interface FinancialIntentRecord extends BaseEntity { lotId: string; jformId: string; intentType: FinancialIntentName; amount: Money; }
 
 // ── Aggregate root ──
 export interface ProcurementLot extends BaseEntity {

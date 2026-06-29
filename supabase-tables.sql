@@ -1260,6 +1260,29 @@ create policy "society_rw" on public.procurement_jform_counters for all to authe
 create unique index if not exists procurement_jforms_docno_uniq on public.procurement_jforms (society_id, "documentNo");
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Procurement Phase 3.0 — Financial Intent (a business OBJECT only; NOT accounting — no posting /
+-- engine / voucher / ledger). Business invariant (AUTHORITATIVE): one Financial Intent per J-Form —
+-- the unique index on "jformId" makes the INSERT-only commit fail + roll back atomically on a
+-- duplicate. RUN this block once BEFORE the commit-transaction function (which now references it).
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists procurement_financial_intents (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "lotId" text,
+  "jformId" text,
+  "intentType" text,
+  amount jsonb,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+alter table public.procurement_financial_intents enable row level security;
+drop policy if exists "society_rw" on public.procurement_financial_intents;
+create policy "society_rw" on public.procurement_financial_intents for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create unique index if not exists procurement_financial_intents_jform_uniq on public.procurement_financial_intents ("jformId");
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
 -- transaction: every supplied collection commits together, or nothing does — a
 -- ProcurementLot can never exist in the cloud without its immutable creation event.
@@ -1327,6 +1350,12 @@ begin
       values (rec->>'id', v_sid, rec->>'lotId', v_doc, rec->'gross', rec->'deductions', rec->'net', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
       v_docmap := v_docmap || jsonb_build_object(rec->>'id', v_doc);
       v_result := v_result || jsonb_build_object('id', rec->>'id', 'lotId', rec->>'lotId', 'documentNo', v_doc);
+    end loop;
+  end if;
+  if p_payload ? 'financialIntents' then
+    for rec in select value from jsonb_array_elements(p_payload->'financialIntents') loop
+      insert into procurement_financial_intents (id, society_id, "lotId", "jformId", "intentType", amount, "createdAt", "updatedAt")
+      values (rec->>'id', rec->>'society_id', rec->>'lotId', rec->>'jformId', rec->>'intentType', rec->'amount', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
     end loop;
   end if;
   if p_payload ? 'events' then

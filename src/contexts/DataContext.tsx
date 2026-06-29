@@ -21,7 +21,7 @@ import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
-import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, Quantity, Money } from '@/lib/procurement';
+import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, Quantity, Money } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
 
 interface DataContextType {
@@ -41,6 +41,8 @@ interface DataContextType {
   recordQualityInspection: (data: { lotId: string; result: string; moisture: number; inspectedBy?: string }) => QualityTest;
   procurementJForms: JForm[];
   generateJForm: (data: { lotId: string }) => JForm;
+  procurementFinancialIntents: FinancialIntentRecord[];
+  generateFinancialIntent: (data: { jformId: string }) => FinancialIntentRecord;
   loans: Loan[];
   assets: Asset[];
 
@@ -217,6 +219,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [procurementQualityTests, setProcurementQualityTestsState] = useState<QualityTest[]>(() => storage.getProcurementQualityTests());
   const [procurementMoistureRecords, setProcurementMoistureRecordsState] = useState<MoistureRecord[]>(() => storage.getProcurementMoistureRecords());
   const [procurementJForms, setProcurementJFormsState] = useState<JForm[]>(() => storage.getProcurementJForms());
+  const [procurementFinancialIntents, setProcurementFinancialIntentsState] = useState<FinancialIntentRecord[]>(() => storage.getProcurementFinancialIntents());
   const procurementFarmersRef = useRef<Farmer[]>(procurementFarmers);
   useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
   const loansRef = useRef<Loan[]>(loans);
@@ -270,7 +273,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Reset all state to empty before loading new society's data
     setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
     setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
-    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]);
+    setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
     setStockMovementsState([]); setSalesState([]); setPurchasesState([]);
     setEmployeesState([]); setSalaryRecordsState([]);
@@ -425,6 +428,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         supabase.from('procurement_jforms').select('*').eq('society_id', sid).then(
           ({ data, error }) => setProcurementJFormsState(error || !data ? storage.getProcurementJForms() : (data as unknown as JForm[])),
           () => setProcurementJFormsState(storage.getProcurementJForms()),
+        );
+        supabase.from('procurement_financial_intents').select('*').eq('society_id', sid).then(
+          ({ data, error }) => setProcurementFinancialIntentsState(error || !data ? storage.getProcurementFinancialIntents() : (data as unknown as FinancialIntentRecord[])),
+          () => setProcurementFinancialIntentsState(storage.getProcurementFinancialIntents()),
         );
 
         // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
@@ -820,6 +827,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementQualityTestsState(storage.getProcurementQualityTests());
         setProcurementMoistureRecordsState(storage.getProcurementMoistureRecords());
         setProcurementJFormsState(storage.getProcurementJForms());
+        setProcurementFinancialIntentsState(storage.getProcurementFinancialIntents());
         setAssetsState(storage.getAssets());
       } finally {
         setIsLoading(false);
@@ -2048,6 +2056,48 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return jf;
   }, [user, procurementJForms, procurementLots]);
+
+  // Phase 3.0 — Financial Intent (business object only; NOT accounting). Generates ONE immutable
+  // FinancialIntentRecord from a generated J-Form + one immutable 'financial.intent.created' event,
+  // committed atomically via the frozen contract. No posting / engine / voucher / ledger.
+  const generateFinancialIntent = useCallback((data: { jformId: string }): FinancialIntentRecord => {
+    const sentinel: FinancialIntentRecord = { id: '', lotId: '', jformId: data.jformId, intentType: 'RecogniseProcurement', amount: { amount: 0, currency: 'INR' }, createdAt: '', updatedAt: '' };
+    if (guardFYLocked()) return sentinel;
+    // 2. J-Form exists?
+    const jform = procurementJForms.find(j => j.id === data.jformId);
+    if (!jform) {
+      toastRef.current({ title: 'J-Form नहीं मिला', description: 'पहले इस लॉट का J-Form बनाएं। (Generate the J-Form first)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    // 3. Existing Financial Intent? (early validation; the DB unique index on jformId is the guarantee). One per J-Form.
+    if (procurementFinancialIntents.some(i => i.jformId === data.jformId)) {
+      toastRef.current({ title: 'पहले से बना', description: 'इस J-Form का Financial Intent पहले से मौजूद है। (Financial Intent already exists for this J-Form)', variant: 'destructive', duration: 8000 });
+      return sentinel;
+    }
+    const now = new Date().toISOString();
+    // 4. Build the FinancialIntentRecord.
+    const fi: FinancialIntentRecord = {
+      id: crypto.randomUUID(), lotId: jform.lotId, jformId: jform.id,
+      intentType: 'RecogniseProcurement', amount: jform.net,
+      createdAt: now, updatedAt: now,
+    };
+    // 5. Build the immutable 'financial.intent.created' event (correlationId = lot id).
+    const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: jform.lotId, name: 'financial.intent.created', occurredAt: now, recordedAt: now, actor: user?.name || 'System', payload: { intentId: fi.id, jformId: fi.jformId, amount: fi.amount } };
+    setProcurementFinancialIntentsState(prev => { const u = [...prev, fi]; storage.setProcurementFinancialIntents(u); return u; });
+    setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
+    // 6. Commit through the frozen transaction contract.
+    supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'financial.intent.create', transactionId: crypto.randomUUID(), transactionVersion: 1, financialIntents: [withSoc(fi)], events: [withSoc(event)] } }).then(({ error }) => {
+      if (error) {
+        console.error('Financial Intent commit error:', error.message);
+        setProcurementFinancialIntentsState(prev => { const r = prev.filter(x => x.id !== fi.id); storage.setProcurementFinancialIntents(r); return r; });
+        setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
+        toastRef.current({ title: 'Financial Intent सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara banayein.`, variant: 'destructive', duration: 12000 });
+        return;
+      }
+      toastRef.current({ title: 'Financial Intent बना', description: `${fi.intentType} · ₹${fi.amount.amount}`, duration: 6000 });
+    });
+    return fi;
+  }, [user, procurementJForms, procurementFinancialIntents]);
 
   // Only active (non-deleted) vouchers for all financial calculations
   const activeVouchers = vouchers.filter(v => !v.isDeleted);
@@ -4178,6 +4228,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
       procurementQualityTests, procurementMoistureRecords, recordQualityInspection,
       procurementJForms, generateJForm,
+      procurementFinancialIntents, generateFinancialIntent,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, approveMember, rejectMember,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,

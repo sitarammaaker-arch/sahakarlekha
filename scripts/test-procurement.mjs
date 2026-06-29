@@ -119,5 +119,24 @@ const docKey = (sid, doc) => `${sid}|${doc}`;                                   
 ok(new Set([docKey('SOC001','J0001'), docKey('SOC001','J0002'), docKey('SOC002','J0001')]).size === 3, '(society_id, documentNo) unique: same number allowed across societies, never within one');
 ok(docKey('SOC001','J0001') !== docKey('SOC002','J0001') && docKey('SOC001','J0001') === docKey('SOC001','J0001'), 'duplicate (society_id, documentNo) collides → blocked by the unique index (D4)');
 
+// 8. Phase 3.0 — Financial Intent (business object only). Mirrors DataContext.generateFinancialIntent.
+const buildIntent = (jform, now, uuid) => ({
+  id: uuid, lotId: jform.lotId, jformId: jform.id, intentType: 'RecogniseProcurement', amount: jform.net, createdAt: now, updatedAt: now,
+});
+const sampleJform = { id: 'JF-1', lotId: 'lot-1', net: { amount: 45500, currency: 'INR' } };
+const fi = buildIntent(sampleJform, 'T', 'FI-1');
+ok(fi.id === 'FI-1' && fi.lotId === 'lot-1' && fi.jformId === 'JF-1' && 'createdAt' in fi, 'FinancialIntentRecord shape (intentId/lotId/jformId + createdAt)');
+ok(fi.intentType === 'RecogniseProcurement', "intentType = 'RecogniseProcurement'");
+ok(fi.amount.amount === 45500 && fi.amount.currency === 'INR', 'amount = J-Form net (currency-tagged: amount + currency)');
+ok(!('voucherId' in fi) && !('postingRuleId' in fi) && !('ledgerId' in fi) && !('legs' in fi), 'business object only: NO voucher / posting / ledger fields');
+const iEvent = { id: 'ie', correlationId: fi.lotId, name: 'financial.intent.created', occurredAt: 'T', recordedAt: 'T', actor: 'राजेश', payload: { intentId: fi.id, jformId: fi.jformId, amount: fi.amount } };
+ok(iEvent.name === 'financial.intent.created' && iEvent.correlationId === fi.lotId, "exactly one 'financial.intent.created' event linked to the lot");
+ok(iEvent.payload.intentId === fi.id && iEvent.payload.jformId === fi.jformId, 'event payload references the intent + J-Form');
+const iPayload = { transactionType: 'financial.intent.create', transactionId: 'TX', transactionVersion: 1, financialIntents: [fi], events: [iEvent] };
+ok(iPayload.transactionType === 'financial.intent.create', 'commit envelope: transactionType = financial.intent.create');
+ok(iPayload.financialIntents.length === 1 && iPayload.events.length === 1, 'commit payload: 1 financialIntent + 1 event');
+const alreadyIntent = (intents, jformId) => intents.some(i => i.jformId === jformId);
+ok(alreadyIntent([fi], 'JF-1') === true && alreadyIntent([fi], 'JF-2') === false, 'one Financial Intent per J-Form guard (mirror; DB unique index on jformId is the guarantee)');
+
 console.log(`[procurement-test] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

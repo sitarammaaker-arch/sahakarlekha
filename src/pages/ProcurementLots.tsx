@@ -27,7 +27,7 @@ const QUALITY_RESULTS = [
 ];
 
 export default function ProcurementLots() {
-  const { procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, addFarmer, addProcurementLot, recordQualityInspection, generateJForm } = useData();
+  const { procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -70,6 +70,12 @@ export default function ProcurementLots() {
     // documentNo is DB-generated; generateJForm shows the success toast with the authoritative
     // number once the RPC responds (and toasts on FY-lock / duplicate guard). Nothing to do here.
     generateJForm({ lotId });
+  };
+  const lotIntent = (lotId: string) => procurementFinancialIntents.find(i => i.lotId === lotId);
+  const handleGenerateIntent = (jformId: string) => {
+    // generateFinancialIntent shows the success toast (and toasts on FY-lock / missing-J-Form /
+    // duplicate guard). Nothing to do here.
+    generateFinancialIntent({ jformId });
   };
 
   const saveFarmer = () => {
@@ -174,11 +180,17 @@ export default function ProcurementLots() {
                     J-Form: {lotJForm(l.id)!.documentNo} · ₹{lotJForm(l.id)!.net.amount}
                   </div>
                 )}
+                {lotIntent(l.id) && (
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {hi ? 'इंटेंट' : 'Intent'}: {lotIntent(l.id)!.intentType} · ₹{lotIntent(l.id)!.amount.amount}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Badge variant="secondary">{l.operationalStatus}</Badge>
                 {!lotQuality(l.id) && <Button size="sm" variant="outline" onClick={() => openQuality(l.id)}>{hi ? 'क्वालिटी' : 'Quality'}</Button>}
                 {!lotJForm(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateJForm(l.id)}>J-Form</Button>}
+                {lotJForm(l.id) && !lotIntent(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateIntent(lotJForm(l.id)!.id)}>{hi ? 'इंटेंट' : 'Intent'}</Button>}
               </div>
             </div>
           ))}

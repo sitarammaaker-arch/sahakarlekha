@@ -9,7 +9,8 @@ export type ProcurementEventName =
   | 'weighed' | 'bagged' | 'deductions.applied' | 'jform.generated' | 'jform.signed'
   | 'payment.initiated' | 'payment.confirmed' | 'payment.returned' | 'commission.computed'
   | 'stacked' | 'dispatched' | 'fci.accepted' | 'settled' | 'reconciled'
-  | 'recoverable.raised' | 'recoverable.recovered' | 'override.applied' | 'document.issued';
+  | 'recoverable.raised' | 'recoverable.recovered' | 'override.applied' | 'document.issued'
+  | 'financial.intent.created';
 
 /** Append-only event. Carries correlationId (refinement #2). */
 export interface ProcurementEvent<TPayload = unknown> extends Correlated {
@@ -27,3 +28,4 @@ export interface QualityTestedPayload { result: string; }
 export interface WeighedPayload { netKg: number; bags: number; }
 export interface JFormGeneratedPayload { jformId: string; documentNo: string; net: Money; }
 export interface PaymentConfirmedPayload { paymentId: string; reference: string; }
+export interface FinancialIntentCreatedPayload { intentId: string; jformId: string; amount: Money; }
