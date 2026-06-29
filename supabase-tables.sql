@@ -1474,6 +1474,8 @@ alter table public.muster_entries add column if not exists "paymentVoucherId" te
 -- Wage Accrual (V4): mark the wages-payable liability booked + link the accrual voucher.
 alter table public.muster_entries add column if not exists accrued boolean default false;
 alter table public.muster_entries add column if not exists "accrualVoucherId" text;
+-- Partial Wage Payment (V5): cumulative amount paid (supports per-labourer + instalment).
+alter table public.muster_entries add column if not exists "paidAmount" numeric default 0;
 alter table public.muster_entries enable row level security;
 drop policy if exists "society_rw" on public.muster_entries;
 create policy "society_rw" on public.muster_entries for all to authenticated

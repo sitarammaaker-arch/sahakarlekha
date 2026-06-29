@@ -214,8 +214,9 @@ export interface MusterEntry {
   memberId: string;          // labourer (member)
   daysWorked: number;
   dailyWage: number;
-  paid?: boolean;            // wage paid (locks the row; set by payWages)
-  paymentVoucherId?: string; // links to the wage-payment voucher
+  paid?: boolean;            // fully paid (paidAmount >= wage); locks the row
+  paidAmount?: number;       // cumulative amount paid (supports partial / instalment payment)
+  paymentVoucherId?: string; // links to the most recent wage-payment voucher
   accrued?: boolean;         // wage liability booked (Dr 5202 / Cr 2109); set by accrueWages
   accrualVoucherId?: string; // links to the accrual journal voucher
   isDeleted?: boolean;

@@ -51,25 +51,38 @@ export default function MusterRoll() {
   const [payDate, setPayDate] = useState('');
   const [payRef, setPayRef] = useState('');
   const [payRemarks, setPayRemarks] = useState('');
+  // Per-labourer allocation: { [entryId]: { selected, amount } } — supports partial / instalment.
+  const [alloc, setAlloc] = useState<Record<string, { selected: boolean; amount: string }>>({});
 
   const rows = useMemo(
     () => musterEntries.filter(m => !m.isDeleted && m.workOrderId === workOrderId && m.period === period),
     [musterEntries, workOrderId, period],
   );
   const wageOf = (r: MusterEntry) => (r.daysWorked || 0) * (r.dailyWage || 0);
+  const outstandingOf = (r: MusterEntry) => +(wageOf(r) - (r.paidAmount || 0)).toFixed(2);
   const totalWage = rows.reduce((s, r) => s + wageOf(r), 0);
   const totalDays = rows.reduce((s, r) => s + (r.daysWorked || 0), 0);
   const unpaidRows = rows.filter(r => !r.paid);
-  const unpaidTotal = unpaidRows.reduce((s, r) => s + wageOf(r), 0);
+  const unpaidTotal = unpaidRows.reduce((s, r) => s + outstandingOf(r), 0);
+
+  const selectedAllocations = unpaidRows
+    .filter(r => alloc[r.id]?.selected)
+    .map(r => ({ entryId: r.id, amount: Math.min(Number(alloc[r.id]?.amount) || 0, outstandingOf(r)) }))
+    .filter(a => a.amount > 0);
+  const selectedTotal = +selectedAllocations.reduce((s, a) => s + a.amount, 0).toFixed(2);
 
   const openPay = () => {
     setPayMode('cash'); setPayBankId(bankAccounts[0]?.id || '');
     setPayDate(new Date().toISOString().slice(0, 10)); setPayRef(''); setPayRemarks('');
+    const init: Record<string, { selected: boolean; amount: string }> = {};
+    unpaidRows.forEach(r => { init[r.id] = { selected: true, amount: String(outstandingOf(r)) }; });
+    setAlloc(init);
     setPayOpen(true);
   };
 
   const confirmPay = () => {
-    const v = payWages({ workOrderId, period, mode: payMode, bankAccountId: payMode === 'bank' ? (payBankId || undefined) : undefined, date: payDate, reference: payRef.trim() || undefined, remarks: payRemarks.trim() || undefined });
+    if (selectedAllocations.length === 0) { toast({ title: hi ? 'कोई श्रमिक/राशि चुनी नहीं' : 'Select at least one labourer & amount', variant: 'destructive' }); return; }
+    const v = payWages({ workOrderId, period, mode: payMode, bankAccountId: payMode === 'bank' ? (payBankId || undefined) : undefined, date: payDate, reference: payRef.trim() || undefined, remarks: payRemarks.trim() || undefined, allocations: selectedAllocations });
     if (v.id) setPayOpen(false);
   };
 
@@ -172,12 +185,19 @@ export default function MusterRoll() {
           {rows.map(m => (
             <div key={m.id} className="flex items-center justify-between rounded-lg border p-3 text-sm gap-3">
               <div className="min-w-0">
-                <div className="font-medium flex items-center gap-2">{memberName(m.memberId)}{m.paid && <Badge variant="secondary">{hi ? 'भुगतान हुआ' : 'Paid'}</Badge>}</div>
-                <div className="text-muted-foreground">{m.daysWorked} {hi ? 'दिन' : 'days'} × {money(m.dailyWage)} = <span className="font-medium text-foreground">{money(wageOf(m))}</span></div>
+                <div className="font-medium flex items-center gap-2">
+                  {memberName(m.memberId)}
+                  {m.paid && <Badge variant="secondary">{hi ? 'भुगतान हुआ' : 'Paid'}</Badge>}
+                  {!m.paid && (m.paidAmount || 0) > 0 && <Badge variant="outline">{hi ? 'आंशिक' : 'Partial'}</Badge>}
+                </div>
+                <div className="text-muted-foreground">
+                  {m.daysWorked} {hi ? 'दिन' : 'days'} × {money(m.dailyWage)} = <span className="font-medium text-foreground">{money(wageOf(m))}</span>
+                  {(m.paidAmount || 0) > 0 && !m.paid && <span> · {hi ? 'चुकाया' : 'paid'} {money(m.paidAmount || 0)} · {hi ? 'बकाया' : 'due'} {money(outstandingOf(m))}</span>}
+                </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {!m.paid && <Button size="sm" variant="ghost" onClick={() => openEdit(m)}><Pencil className="h-4 w-4" /></Button>}
-                {!m.paid && <Button size="sm" variant="ghost" onClick={() => remove(m)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
+                {!m.paid && !(m.paidAmount && m.paidAmount > 0) && <Button size="sm" variant="ghost" onClick={() => openEdit(m)}><Pencil className="h-4 w-4" /></Button>}
+                {!m.paid && !(m.paidAmount && m.paidAmount > 0) && <Button size="sm" variant="ghost" onClick={() => remove(m)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
               </div>
             </div>
           ))}
@@ -225,9 +245,25 @@ export default function MusterRoll() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{hi ? 'मज़दूरी भुगतान' : 'Pay Wages'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="rounded-lg bg-muted p-3 text-sm">
+            <div className="rounded-lg bg-muted p-3 text-sm space-y-2">
               <div>{hi ? 'कार्य आदेश' : 'Work order'}: <span className="font-medium">{workOrderId ? orderLabel(workOrderId) : '—'}</span> · {period}</div>
-              <div>{hi ? 'देय मज़दूरी' : 'Payable'}: <span className="font-semibold">{money(unpaidTotal)}</span> · {unpaidRows.length} {hi ? 'श्रमिक' : 'labourers'}</div>
+              <div className="font-medium">{hi ? 'श्रमिक व भुगतान-राशि चुनें (आंशिक भी संभव)' : 'Select labourers & amounts (partial allowed)'}</div>
+              <div className="space-y-2 max-h-52 overflow-auto pr-1">
+                {unpaidRows.map(r => {
+                  const a = alloc[r.id] || { selected: false, amount: '0' };
+                  const out = outstandingOf(r);
+                  return (
+                    <div key={r.id} className="flex items-center gap-2">
+                      <input type="checkbox" className="h-4 w-4 shrink-0" checked={a.selected}
+                        onChange={e => setAlloc(p => ({ ...p, [r.id]: { ...a, selected: e.target.checked } }))} />
+                      <span className="flex-1 min-w-0 truncate">{memberName(r.memberId)} <span className="text-muted-foreground">· {hi ? 'बकाया' : 'due'} {money(out)}</span></span>
+                      <Input type="number" min={0} max={out} className="w-24 h-8 shrink-0" value={a.amount} disabled={!a.selected}
+                        onChange={e => setAlloc(p => ({ ...p, [r.id]: { ...a, amount: e.target.value } }))} />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="text-right">{hi ? 'कुल चयनित' : 'Selected total'}: <span className="font-semibold">{money(selectedTotal)}</span></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -256,18 +292,19 @@ export default function MusterRoll() {
             <p className="text-xs text-muted-foreground">
               {hi ? 'लेखा प्रविष्टि: नाम ' : 'Entry: Dr '}
               {(() => {
-                const anyAccrued = unpaidRows.some(r => r.accrued);
-                const anyDirect = unpaidRows.some(r => !r.accrued);
+                const selRows = unpaidRows.filter(r => alloc[r.id]?.selected);
+                const anyAccrued = selRows.some(r => r.accrued);
+                const anyDirect = selRows.some(r => !r.accrued);
                 if (anyAccrued && anyDirect) return hi ? 'देय मज़दूरी (2109) + मज़दूरी (5202)' : 'Wages Payable (2109) + Wages (5202)';
-                if (anyAccrued) return hi ? 'देय मज़दूरी (2109)' : 'Wages Payable (2109)';
-                return hi ? 'मज़दूरी (5202)' : 'Wages (5202)';
+                if (anyDirect) return hi ? 'मज़दूरी (5202)' : 'Wages (5202)';
+                return hi ? 'देय मज़दूरी (2109)' : 'Wages Payable (2109)';
               })()}
               {hi ? ' / जमा ' : ' / Cr '}{payMode === 'cash' ? (hi ? 'नकद' : 'Cash') : (hi ? 'बैंक' : 'Bank')}
             </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
-            <Button onClick={confirmPay} disabled={unpaidRows.length === 0}>{hi ? `भुगतान करें (${money(unpaidTotal)})` : `Pay (${money(unpaidTotal)})`}</Button>
+            <Button onClick={confirmPay} disabled={selectedTotal <= 0}>{hi ? `भुगतान करें (${money(selectedTotal)})` : `Pay (${money(selectedTotal)})`}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
