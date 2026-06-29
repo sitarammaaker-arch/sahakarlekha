@@ -6,19 +6,37 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Receipt, Trash2 } from 'lucide-react';
+import { getBankAccountIds } from '@/lib/storage';
+import { Receipt, Trash2, HandCoins } from 'lucide-react';
 
 const thisMonth = () => new Date().toISOString().slice(0, 7); // YYYY-MM
+const today = () => new Date().toISOString().split('T')[0];
 
 export default function MaintenanceBilling() {
-  const { housingFlats, maintenanceBills, members, generateMaintenanceBills, deleteMaintenanceBill } = useData();
+  const { housingFlats, maintenanceBills, members, accounts, generateMaintenanceBills, deleteMaintenanceBill, recordMaintenanceCollection } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
   const money = (n: number) => `₹${(n || 0).toLocaleString('en-IN')}`;
 
   const [period, setPeriod] = useState(thisMonth());
+
+  const bankIds = getBankAccountIds(accounts);
+  const bankAccounts = accounts.filter(a => bankIds.includes(a.id));
+
+  // Receive-payment dialog
+  const [payOpen, setPayOpen] = useState(false);
+  const [payBillId, setPayBillId] = useState('');
+  const [payOutstanding, setPayOutstanding] = useState(0);
+  const [payAmount, setPayAmount] = useState('');
+  const [payDate, setPayDate] = useState(today());
+  const [payMode, setPayMode] = useState<'cash' | 'bank'>('cash');
+  const [payBankId, setPayBankId] = useState('');
+  const [payRef, setPayRef] = useState('');
+  const [payRemarks, setPayRemarks] = useState('');
 
   const memberLabel = (id?: string) => {
     if (!id) return hi ? '— खाली —' : '— Vacant —';
@@ -43,6 +61,19 @@ export default function MaintenanceBilling() {
     if (!window.confirm(hi ? `बिल ${billNo} हटाएँ? इसका receivable voucher भी रद्द होगा।` : `Delete bill ${billNo}? Its receivable voucher will be cancelled too.`)) return;
     deleteMaintenanceBill(id);
     toast({ title: hi ? 'बिल हटाया गया' : 'Bill deleted' });
+  };
+
+  const openReceive = (billId: string, outstanding: number) => {
+    setPayBillId(billId); setPayOutstanding(outstanding);
+    setPayAmount(String(outstanding)); setPayDate(today()); setPayMode('cash'); setPayBankId(bankAccounts[0]?.id || ''); setPayRef(''); setPayRemarks('');
+    setPayOpen(true);
+  };
+  const saveReceive = () => {
+    const amt = Number(payAmount);
+    if (!(amt > 0)) { toast({ title: hi ? 'राशि डालें' : 'Enter amount', variant: 'destructive' }); return; }
+    if (amt > payOutstanding) { toast({ title: hi ? 'राशि बकाया से अधिक' : 'Exceeds outstanding', description: `${hi ? 'बकाया' : 'Outstanding'} ${money(payOutstanding)}`, variant: 'destructive' }); return; }
+    const v = recordMaintenanceCollection({ billId: payBillId, amount: amt, mode: payMode, bankAccountId: payMode === 'bank' ? (payBankId || undefined) : undefined, date: payDate, reference: payRef.trim() || undefined, remarks: payRemarks.trim() || undefined });
+    if (v.id) setPayOpen(false);
   };
 
   return (
@@ -91,17 +122,72 @@ export default function MaintenanceBilling() {
         </CardHeader>
         <CardContent className="space-y-2">
           {periodBills.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'इस महीने अभी कोई बिल नहीं।' : 'No bills for this month yet.'}</p>}
-          {periodBills.map(b => (
-            <div key={b.id} className="flex items-center justify-between rounded-lg border p-3 text-sm gap-3">
-              <div className="min-w-0">
-                <div className="font-medium">{b.billNo} <Badge variant={b.status === 'paid' ? 'default' : b.status === 'partial' ? 'secondary' : 'outline'}>{b.status === 'paid' ? (hi ? 'भुगतान' : 'Paid') : b.status === 'partial' ? (hi ? 'आंशिक' : 'Partial') : (hi ? 'बकाया' : 'Unpaid')}</Badge></div>
-                <div className="text-muted-foreground">{b.flatNo} · {memberLabel(b.memberId)} · {money(b.amount)}</div>
+          {periodBills.map(b => {
+            const outstanding = +(b.amount - (b.paidAmount || 0)).toFixed(2);
+            return (
+              <div key={b.id} className="flex items-center justify-between rounded-lg border p-3 text-sm gap-3">
+                <div className="min-w-0">
+                  <div className="font-medium">{b.billNo} <Badge variant={b.status === 'paid' ? 'default' : b.status === 'partial' ? 'secondary' : 'outline'}>{b.status === 'paid' ? (hi ? 'भुगतान' : 'Paid') : b.status === 'partial' ? (hi ? 'आंशिक' : 'Partial') : (hi ? 'बकाया' : 'Unpaid')}</Badge></div>
+                  <div className="text-muted-foreground">{b.flatNo} · {memberLabel(b.memberId)} · {money(b.amount)}{(b.paidAmount || 0) > 0 ? ` · ${hi ? 'भुगतान' : 'Paid'} ${money(b.paidAmount)} · ${hi ? 'बकाया' : 'Outstanding'} ${money(outstanding)}` : ''}</div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openReceive(b.id, outstanding)} className="gap-1"><HandCoins className="h-4 w-4" />{hi ? 'भुगतान लें' : 'Receive'}</Button>}
+                  <Button size="sm" variant="ghost" onClick={() => remove(b.id, b.billNo)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                </div>
               </div>
-              <Button size="sm" variant="ghost" className="shrink-0" onClick={() => remove(b.id, b.billNo)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
+
+      {/* Receive payment dialog */}
+      <Dialog open={payOpen} onOpenChange={setPayOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{hi ? 'रखरखाव भुगतान लें' : 'Receive Maintenance Payment'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground">{hi ? 'बकाया' : 'Outstanding'}: {money(payOutstanding)}</div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'राशि' : 'Amount'} *</Label>
+              <Input type="number" min={0} max={payOutstanding} value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder="0" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'तिथि' : 'Date'} *</Label>
+              <Input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'माध्यम' : 'Mode'} *</Label>
+              <Select value={payMode} onValueChange={v => setPayMode(v as 'cash' | 'bank')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">{hi ? 'नकद' : 'Cash'}</SelectItem>
+                  <SelectItem value="bank">{hi ? 'बैंक' : 'Bank'}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {payMode === 'bank' && (
+              <div className="space-y-1.5">
+                <Label>{hi ? 'बैंक खाता' : 'Bank Account'}</Label>
+                <Select value={payBankId} onValueChange={setPayBankId}>
+                  <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
+                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label>{hi ? 'संदर्भ' : 'Reference'}</Label>
+              <Input value={payRef} onChange={e => setPayRef(e.target.value)} placeholder={hi ? 'वैकल्पिक (रसीद/UTR)' : 'optional (receipt/UTR)'} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'टिप्पणी' : 'Remarks'}</Label>
+              <Input value={payRemarks} onChange={e => setPayRemarks(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
+            <Button onClick={saveReceive}>{hi ? 'भुगतान लें' : 'Receive'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
