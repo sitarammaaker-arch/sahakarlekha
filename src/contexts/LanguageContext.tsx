@@ -75,6 +75,8 @@ export const translations: Translations = {
   procurementLots: { hi: 'खरीद लॉट', en: 'Procurement Lots' },
   flatsRegister: { hi: 'फ्लैट/यूनिट रजिस्टर', en: 'Flats / Units Register' },
   maintenanceBilling: { hi: 'रखरखाव बिलिंग', en: 'Maintenance Billing' },
+  navLabour: { hi: 'श्रमिक प्रबंधन', en: 'Labour' },
+  workerMaster: { hi: 'श्रमिक मास्टर', en: 'Worker Master' },
   workOrders: { hi: 'कार्य आदेश / श्रम ठेका', en: 'Work Orders' },
   musterRoll: { hi: 'मस्टर रोल / हाज़िरी', en: 'Muster Roll' },
   operations: { hi: 'संचालन', en: 'Operations' },

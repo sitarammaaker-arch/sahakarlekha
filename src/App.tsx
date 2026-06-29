@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DataProvider, useData } from "@/contexts/DataContext";
+import { LabourProvider } from "@/contexts/LabourDataContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { CapabilityGuard } from "@/components/CapabilityGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -125,6 +126,7 @@ const FlatsRegister = lazyWithRetry(() => import("./pages/FlatsRegister"));
 const MaintenanceBilling = lazyWithRetry(() => import("./pages/MaintenanceBilling"));
 const WorkOrders = lazyWithRetry(() => import("./pages/WorkOrders"));
 const MusterRoll = lazyWithRetry(() => import("./pages/MusterRoll"));
+const WorkerMaster = lazyWithRetry(() => import("./pages/WorkerMaster"));
 const EWayBill = lazyWithRetry(() => import("./pages/EWayBill"));
 const HsnMaster = lazyWithRetry(() => import("./pages/HsnMaster"));
 const KccLoan = lazyWithRetry(() => import("./pages/KccLoan"));
@@ -302,6 +304,7 @@ const AppRoutes = () => {
       <Route path="/maintenance-billing" element={<ProtectedRoute><MaintenanceBilling /></ProtectedRoute>} />
       <Route path="/work-orders" element={<ProtectedRoute><WorkOrders /></ProtectedRoute>} />
       <Route path="/muster-roll" element={<ProtectedRoute><MusterRoll /></ProtectedRoute>} />
+      <Route path="/worker-master" element={<ProtectedRoute><WorkerMaster /></ProtectedRoute>} />
       <Route path="/opening-balances" element={<ProtectedRoute><OpeningBalances /></ProtectedRoute>} />
       <Route path="/multi-society-consolidation" element={<ProtectedRoute><MultiSocietyConsolidation /></ProtectedRoute>} />
       <Route path="/nabard-report" element={<ProtectedRoute><NabardReport /></ProtectedRoute>} />
@@ -327,6 +330,7 @@ const App = () => (
     <LanguageProvider>
       <AuthProvider>
         <DataProvider>
+        <LabourProvider>
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -334,6 +338,7 @@ const App = () => (
             <AppRoutes />
           </BrowserRouter>
         </TooltipProvider>
+        </LabourProvider>
         </DataProvider>
       </AuthProvider>
     </LanguageProvider>

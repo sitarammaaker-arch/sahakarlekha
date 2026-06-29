@@ -1,4 +1,4 @@
-import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, WorkOrder, MusterEntry } from '@/types';
+import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, WorkOrder, MusterEntry, Worker } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement } from '@/lib/procurement';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
@@ -76,6 +76,7 @@ const KEYS = {
   maintenanceBills: 'sahayata_maintenance_bills',
   workOrders: 'sahayata_work_orders',
   musterEntries: 'sahayata_muster_entries',
+  workers: 'sahayata_workers',
 };
 
 // ── Central account ID constants ─────────────────────────────────────────────
@@ -786,6 +787,8 @@ export const getWorkOrders = (): WorkOrder[] => get(KEYS.workOrders, []);
 export const setWorkOrders = (w: WorkOrder[]): void => set(KEYS.workOrders, w);
 export const getMusterEntries = (): MusterEntry[] => get(KEYS.musterEntries, []);
 export const setMusterEntries = (m: MusterEntry[]): void => set(KEYS.musterEntries, m);
+export const getWorkers = (): Worker[] => get(KEYS.workers, []);
+export const setWorkers = (w: Worker[]): void => set(KEYS.workers, w);
 
 export const getAccounts = (): LedgerAccount[] => {
   const stored = get<LedgerAccount[] | null>(KEYS.accounts, null);

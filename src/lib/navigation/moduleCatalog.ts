@@ -14,7 +14,7 @@ import {
   ListTree, Boxes, Truck, UserCheck, ShoppingCart, HandCoins, PackagePlus, Banknote, BadgeDollarSign, Milk,
   Scale, ArrowLeftRight, TrendingUp, FileSpreadsheet, BarChart3, Clock, Percent, TrendingDown, Receipt, Warehouse,
   Package, PiggyBank, FileJson, Hash, Landmark, ScrollText, BookMarked, ShieldCheck, Users2, FileCheck, Shield,
-  Coins, Trash2, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks,
+  Coins, Trash2, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks, HardHat,
 } from 'lucide-react';
 import type { Capability, NavDomain, Role } from './capabilities';
 
@@ -58,8 +58,10 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'milkCollection', titleKey: 'milkCollection', icon: Milk,            route: '/milk-collection', domain: 'operations', requiredCapabilities: ['dairy_collection'], order: 9 },  // C4: dairy-only
   { id: 'procurementLots', titleKey: 'procurementLots', icon: Wheat,         route: '/procurement-lots', domain: 'operations', requiredCapabilities: ['procurement_msp'], order: 10 },
   { id: 'maintenanceBilling', titleKey: 'maintenanceBilling', icon: Receipt, route: '/maintenance-billing', domain: 'operations', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 11 },
-  { id: 'workOrders',      titleKey: 'workOrders',      icon: ClipboardList,   route: '/work-orders',     domain: 'operations', requiredCapabilities: ['labour'], order: 12 },
-  { id: 'musterRoll',      titleKey: 'musterRoll',      icon: UserCheck,       route: '/muster-roll',     domain: 'operations', requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 13 },
+  // ── Labour cooperative module group (domain: 'labour') ──
+  { id: 'workerMaster',    titleKey: 'workerMaster',    icon: HardHat,         route: '/worker-master',   domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 10 },
+  { id: 'workOrders',      titleKey: 'workOrders',      icon: ClipboardList,   route: '/work-orders',     domain: 'labour',     requiredCapabilities: ['labour'], order: 12 },
+  { id: 'musterRoll',      titleKey: 'musterRoll',      icon: UserCheck,       route: '/muster-roll',     domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 13 },
 
   // ── reports (was reportNavItems) ──
   { id: 'trialBalance',       titleKey: 'trialBalance',       icon: Scale,           route: '/trial-balance',        domain: 'reports', requiredCapabilities: U, order: 0 },

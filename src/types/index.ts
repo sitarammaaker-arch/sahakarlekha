@@ -228,6 +228,26 @@ export interface MusterEntry {
   createdAt: string;
 }
 
+// Labour cooperative — a worker (the society's labour pool). A worker may be a society
+// member, a non-member, or an external contract worker. Master data only (no accounting).
+export type WorkerType = 'member' | 'non_member' | 'contract';
+export type WorkerCategory = 'skilled' | 'semi_skilled' | 'unskilled' | 'operator' | 'helper' | 'supervisor';
+export interface Worker {
+  id: string;
+  workerCode: string;
+  name: string;
+  workerType: WorkerType;
+  memberId?: string;          // linked Member id when workerType === 'member'
+  category: WorkerCategory;
+  phone?: string;
+  defaultDailyWage?: number;  // default rate; can be overridden per muster entry
+  idProofType?: 'aadhaar' | 'pan' | 'voter' | 'other';
+  idProofNo?: string;
+  status: 'active' | 'inactive';
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 export type LoanType = 'short-term' | 'medium-term' | 'long-term';
 export type LoanStatus = 'active' | 'cleared' | 'overdue';
 
