@@ -118,6 +118,7 @@ interface DataContextType {
   addMusterEntry: (data: Omit<MusterEntry, 'id' | 'createdAt'>) => MusterEntry;
   updateMusterEntry: (id: string, data: Partial<MusterEntry>) => void;
   deleteMusterEntry: (id: string) => void;
+  payWages: (data: { workOrderId: string; period: string; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string; remarks?: string }) => Voucher;
   approveMember: (id: string) => void;
   rejectMember: (id: string) => void;
 
@@ -1994,6 +1995,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     const old = musterEntries.find(x => x.id === id);
     if (!old) return;
+    if (old.paid) { toastRef.current({ title: 'भुगतान हो चुका', description: 'मज़दूरी-भुगतान हो चुकी entry संपादित नहीं हो सकती। पहले भुगतान voucher रद्द करें।', variant: 'destructive', duration: 9000 }); return; }
     const updated = { ...old, ...data };
     setMusterEntriesState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setMusterEntries(u); return u; });
     supabase.from('muster_entries').upsert(withSoc(updated)).then(({ error }) => {
@@ -2008,6 +2010,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deleteMusterEntry = useCallback((id: string) => {
     if (guardFYLocked()) return;
     const old = musterEntries.find(x => x.id === id);
+    if (old?.paid) { toastRef.current({ title: 'भुगतान हो चुका', description: 'मज़दूरी-भुगतान हो चुकी entry हटाई नहीं जा सकती। पहले भुगतान voucher रद्द करें।', variant: 'destructive', duration: 9000 }); return; }
     setMusterEntriesState(prev => { const u = prev.filter(x => x.id !== id); storage.setMusterEntries(u); return u; });
     supabase.from('muster_entries').delete().eq('id', id).then(({ error }) => {
       if (error) {
@@ -2017,6 +2020,49 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
   }, [musterEntries]);
+
+  // ── Labour Wage Payment — pay all unpaid muster entries of a sheet (workOrder+period) ──
+  // One voucher: Dr 5202 Wages (total) / Cr Cash-Bank (total). Marks those entries paid.
+  // RULE-1: on entry-mark persist failure, cancel the voucher + roll back. RULE-6: FY guard.
+  const payWages = useCallback((data: { workOrderId: string; period: string; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string; remarks?: string }): Voucher => {
+    const sentinel = { id: '', voucherNo: '', type: 'payment', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    if (guardFYLocked()) return sentinel;
+    const sheet = musterEntries.filter(m => !m.isDeleted && !m.paid && m.workOrderId === data.workOrderId && m.period === data.period);
+    if (sheet.length === 0) { toastRef.current({ title: 'कोई अभुगतान मज़दूरी नहीं', description: 'इस कार्य आदेश/महीने की सभी मज़दूरी पहले ही चुकाई जा चुकी है।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    const total = +sheet.reduce((s, m) => s + (m.daysWorked || 0) * (m.dailyWage || 0), 0).toFixed(2);
+    if (!(total > 0)) { toastRef.current({ title: 'राशि शून्य', description: 'देय मज़दूरी 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    const wo = workOrders.find(w => w.id === data.workOrderId);
+    const debitAcc = '5202'; // Wages (expense)
+    const creditAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    const lid = () => crypto.randomUUID();
+    const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
+    const rem = data.remarks?.trim() ? ` · ${data.remarks.trim()}` : '';
+    const voucher = addVoucher({
+      type: 'payment', date: data.date,
+      debitAccountId: debitAcc, creditAccountId: creditAcc, amount: total,
+      narration: `मज़दूरी भुगतान — ${wo?.workOrderNo || data.workOrderId} · ${data.period} · ${sheet.length} श्रमिक${ref}${rem}`,
+      refType: 'wage.payment', refId: data.workOrderId,
+      createdBy: user?.name || 'System',
+      lines: [
+        { id: lid(), accountId: debitAcc, type: 'Dr', amount: total },
+        { id: lid(), accountId: creditAcc, type: 'Cr', amount: total },
+      ],
+    });
+    if (!voucher.id) return sentinel;
+    const paidIds = new Set(sheet.map(m => m.id));
+    const updatedSheet = sheet.map(m => ({ ...m, paid: true, paymentVoucherId: voucher.id }));
+    setMusterEntriesState(prev => { const u = prev.map(m => paidIds.has(m.id) ? { ...m, paid: true, paymentVoucherId: voucher.id } : m); storage.setMusterEntries(u); return u; });
+    supabase.from('muster_entries').upsert(updatedSheet.map(m => withSoc(m))).then(({ error }) => {
+      if (error) {
+        console.error('Wage payment muster-mark error:', error.message);
+        setMusterEntriesState(prev => { const u = prev.map(m => paidIds.has(m.id) ? { ...m, paid: false, paymentVoucherId: undefined } : m); storage.setMusterEntries(u); return u; });
+        cancelVoucher(voucher.id, 'Wage payment rolled back (muster mark failed)', user?.name || 'System');
+        toastRef.current({ title: 'मज़दूरी भुगतान सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. भुगतान वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    toastRef.current({ title: 'मज़दूरी भुगतान दर्ज हुआ', description: `${wo?.workOrderNo || ''} · ${data.period} · ${sheet.length} श्रमिक · ₹${total}`, duration: 6000 });
+    return voucher;
+  }, [musterEntries, workOrders, accounts, addVoucher, cancelVoucher, user]);
 
   const approveMember = useCallback((id: string) => {
     const member = membersRef.current.find(m => m.id === id);
@@ -4913,7 +4959,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat,
       maintenanceBills, generateMaintenanceBills, deleteMaintenanceBill, recordMaintenanceCollection,
       workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
-      musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry,
+      musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
       addLoan, updateLoan, deleteLoan,
       addAsset, updateAsset, deleteAsset, postDepreciation,

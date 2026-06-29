@@ -1468,6 +1468,9 @@ create table if not exists muster_entries (
   "isDeleted" boolean default false,
   "createdAt" timestamptz default now()
 );
+-- Wage Payment (V3): mark a muster entry paid + link its wage-payment voucher.
+alter table public.muster_entries add column if not exists paid boolean default false;
+alter table public.muster_entries add column if not exists "paymentVoucherId" text;
 alter table public.muster_entries enable row level security;
 drop policy if exists "society_rw" on public.muster_entries;
 create policy "society_rw" on public.muster_entries for all to authenticated

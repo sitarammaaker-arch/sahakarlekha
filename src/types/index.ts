@@ -214,6 +214,8 @@ export interface MusterEntry {
   memberId: string;          // labourer (member)
   daysWorked: number;
   dailyWage: number;
+  paid?: boolean;            // wage paid (locks the row; set by payWages)
+  paymentVoucherId?: string; // links to the wage-payment voucher
   isDeleted?: boolean;
   createdAt: string;
 }
