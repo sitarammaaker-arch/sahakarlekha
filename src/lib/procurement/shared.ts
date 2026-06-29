@@ -4,11 +4,12 @@
  * Procurement ERP Blueprint v1.2.
  */
 
-/** Currency-tagged monetary amount — v1.2 multi-currency guardrail (never a bare number). */
-export interface Money {
-  amount: number;
-  currency: string;   // ISO 4217; default 'INR'
-}
+/**
+ * Currency-tagged monetary amount — v1.2 multi-currency guardrail (never a bare number).
+ * Now defined in the shared posting core and re-exported here so existing procurement
+ * imports (`import { Money } from './shared'`) keep working unchanged.
+ */
+export type { Money } from '@/lib/posting/types';
 
 /** A measured quantity with an explicit unit. */
 export interface Quantity {

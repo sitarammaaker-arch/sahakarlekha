@@ -11,6 +11,8 @@
  */
 import type { Money } from './shared';
 import type { PostingLeg, AccountingProfile, FinancialIntentName } from './financial';
+import type { RawPostingLeg } from '@/lib/posting/types';
+import { freezePostingLegs } from '@/lib/posting/freezePostingLegs';
 
 /** Symbolic selector → LedgerAccount id. Business-confirmed (D1). */
 export const PROCUREMENT_POSTING_BINDING: Record<string, string> = {
@@ -32,29 +34,14 @@ export function resolvePostingLegs(
   binding: Record<string, string>,
   accounts: ReadonlyArray<{ id: string; name: string }>,
 ): PostingLeg[] {
-  const raw: Array<{ side: 'Dr' | 'Cr'; accountSelector: string }> =
+  // PROCUREMENT BUSINESS RULE (stays in this domain): which raw legs this request posts.
+  const raw: RawPostingLeg[] =
     requestType === 'RecogniseProcurement' && profile === 'agency'
       ? [
           { side: 'Dr', accountSelector: 'stock.procurement' },
           { side: 'Cr', accountSelector: 'farmer.payable' },
         ]
       : [];
-  if (raw.length === 0) return [];
-
-  const legs: PostingLeg[] = [];
-  for (const r of raw) {
-    const accountId = binding[r.accountSelector];
-    if (!accountId) return [];                              // unbound selector
-    const account = accounts.find(a => a.id === accountId);
-    if (!account) return [];                                // bound account not in the chart
-    legs.push({
-      side: r.side,
-      accountSelector: r.accountSelector,
-      resolvedAccountId: account.id,
-      accountCode: account.id,       // in this chart the id IS the chart code
-      accountName: account.name,
-      amount,
-    });
-  }
-  return legs;
+  // GENERIC INFRASTRUCTURE (shared posting core): freeze the raw legs against the chart.
+  return freezePostingLegs(raw, amount, binding, accounts);
 }

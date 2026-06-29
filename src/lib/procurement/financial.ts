@@ -3,8 +3,12 @@
  * Interfaces ONLY — no posting logic, no implementation, no engine. Reuses the existing Voucher type.
  */
 import type { Money } from './shared';
+import type { PostingLeg } from '@/lib/posting/types';
 import type { ProcurementEvent } from './events';
 import type { Voucher } from '@/types';
+
+// Re-export the generic PostingLeg so existing procurement imports keep working unchanged.
+export type { PostingLeg };
 
 export type FinancialIntentName =
   | 'RecogniseProcurement' | 'CreateFarmerPayable' | 'AccrueLevyLiability' | 'AccrueCommission'
@@ -24,16 +28,6 @@ export interface FinancialIntent {
   dimensions?: Record<string, string>;   // lot / party / levy — for posting-rule resolution
 }
 
-export interface PostingLeg {
-  side: 'Dr' | 'Cr';
-  accountSelector: string;          // symbolic — kept for audit/debugging only
-  // Frozen account snapshot (set at PostingRuleResult creation; immutable thereafter).
-  // resolvedAccountId is the ONLY field used for posting; code/name are audit/history/reproducibility.
-  resolvedAccountId?: string;
-  accountCode?: string;
-  accountName?: string;
-  amount: Money;
-}
 
 export interface PostingRule {
   intent: FinancialIntentName;
