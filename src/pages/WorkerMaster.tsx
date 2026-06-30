@@ -37,9 +37,28 @@ export default function WorkerMaster() {
   const typeLabel = (id: WorkerType) => { const t = TYPES.find(x => x.id === id); return t ? (hi ? t.hi : t.en) : id; };
   const catLabel = (id: WorkerCategory) => { const c = CATEGORIES.find(x => x.id === id); return c ? (hi ? c.hi : c.en) : id; };
 
-  const blank = { name: '', workerType: 'member' as WorkerType, memberId: '', category: 'unskilled' as WorkerCategory, phone: '', defaultDailyWage: '', workerCode: '' };
+  const blank = {
+    name: '', workerType: 'member' as WorkerType, memberId: '', category: 'unskilled' as WorkerCategory, phone: '', defaultDailyWage: '', workerCode: '',
+    // Statutory / payout (all optional)
+    uan: '', esiIp: '', pan: '', aadhaar: '', bankAccountNo: '', ifsc: '', dateOfBirth: '', gender: '', fatherHusbandName: '', joiningDate: '', permanentAddress: '',
+  };
   const [form, setForm] = useState(blank);
   const set = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  // The optional statutory/payout fields, normalised (empty → undefined) for save.
+  const statutoryPayload = (f: typeof blank) => ({
+    uan: f.uan.trim() || undefined,
+    esiIp: f.esiIp.trim() || undefined,
+    pan: f.pan.trim().toUpperCase() || undefined,
+    aadhaar: f.aadhaar.trim() || undefined,
+    bankAccountNo: f.bankAccountNo.trim() || undefined,
+    ifsc: f.ifsc.trim().toUpperCase() || undefined,
+    dateOfBirth: f.dateOfBirth || undefined,
+    gender: (f.gender || undefined) as Worker['gender'],
+    fatherHusbandName: f.fatherHusbandName.trim() || undefined,
+    joiningDate: f.joiningDate || undefined,
+    permanentAddress: f.permanentAddress.trim() || undefined,
+  });
 
   const [editOpen, setEditOpen] = useState(false);
   const [editId, setEditId] = useState('');
@@ -59,6 +78,7 @@ export default function WorkerMaster() {
       category: form.category,
       phone: form.phone.trim() || undefined,
       defaultDailyWage: form.defaultDailyWage ? Number(form.defaultDailyWage) : undefined,
+      ...statutoryPayload(form),
       status: 'active',
     });
     if (w.id) { toast({ title: hi ? 'श्रमिक जोड़ा गया' : 'Worker added', description: `${w.workerCode} · ${w.name}` }); setForm(blank); }
@@ -66,7 +86,12 @@ export default function WorkerMaster() {
 
   const openEdit = (w: Worker) => {
     setEditId(w.id);
-    setEForm({ name: w.name, workerType: w.workerType, memberId: w.memberId || '', category: w.category, phone: w.phone || '', defaultDailyWage: w.defaultDailyWage != null ? String(w.defaultDailyWage) : '', workerCode: w.workerCode });
+    setEForm({
+      name: w.name, workerType: w.workerType, memberId: w.memberId || '', category: w.category, phone: w.phone || '',
+      defaultDailyWage: w.defaultDailyWage != null ? String(w.defaultDailyWage) : '', workerCode: w.workerCode,
+      uan: w.uan || '', esiIp: w.esiIp || '', pan: w.pan || '', aadhaar: w.aadhaar || '', bankAccountNo: w.bankAccountNo || '', ifsc: w.ifsc || '',
+      dateOfBirth: w.dateOfBirth || '', gender: w.gender || '', fatherHusbandName: w.fatherHusbandName || '', joiningDate: w.joiningDate || '', permanentAddress: w.permanentAddress || '',
+    });
     setEditOpen(true);
   };
 
@@ -80,6 +105,7 @@ export default function WorkerMaster() {
       category: eForm.category,
       phone: eForm.phone.trim() || undefined,
       defaultDailyWage: eForm.defaultDailyWage ? Number(eForm.defaultDailyWage) : undefined,
+      ...statutoryPayload(eForm),
     });
     toast({ title: hi ? 'अपडेट हुआ' : 'Updated' });
     setEditOpen(false);
@@ -150,6 +176,66 @@ export default function WorkerMaster() {
           <Input type="number" min={0} value={f.defaultDailyWage} onChange={e => s('defaultDailyWage', e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} />
         </div>
       </div>
+
+      {/* Statutory & payout details — CLRA Form XIII / EPF / ESI / NEFT. All optional. */}
+      <details className="mt-4 rounded-lg border bg-muted/20">
+        <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">
+          {hi ? 'सांविधिक एवं भुगतान विवरण (EPF/ESI/बैंक) — वैकल्पिक' : 'Statutory & payout details (EPF/ESI/bank) — optional'}
+        </summary>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 pt-1">
+          <div className="space-y-2">
+            <Label>UAN <span className="text-muted-foreground">({hi ? 'EPF' : 'EPF'})</span></Label>
+            <Input value={f.uan} onChange={e => s('uan', e.target.value)} placeholder={hi ? '12 अंक' : '12 digits'} inputMode="numeric" maxLength={12} />
+          </div>
+          <div className="space-y-2">
+            <Label>ESI IP {hi ? 'नंबर' : 'No.'}</Label>
+            <Input value={f.esiIp} onChange={e => s('esiIp', e.target.value)} placeholder={hi ? 'बीमा संख्या' : 'insurance no.'} inputMode="numeric" />
+          </div>
+          <div className="space-y-2">
+            <Label>{hi ? 'पिता / पति का नाम' : 'Father / Husband name'}</Label>
+            <Input value={f.fatherHusbandName} onChange={e => s('fatherHusbandName', e.target.value)} placeholder={hi ? 'CLRA Form XIII' : 'CLRA Form XIII'} />
+          </div>
+          <div className="space-y-2">
+            <Label>{hi ? 'लिंग' : 'Gender'}</Label>
+            <Select value={f.gender || undefined} onValueChange={v => s('gender', v)}>
+              <SelectTrigger><SelectValue placeholder={hi ? 'चुनें' : 'Select'} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="male">{hi ? 'पुरुष' : 'Male'}</SelectItem>
+                <SelectItem value="female">{hi ? 'महिला' : 'Female'}</SelectItem>
+                <SelectItem value="other">{hi ? 'अन्य' : 'Other'}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>{hi ? 'जन्म तिथि' : 'Date of birth'}</Label>
+            <Input type="date" value={f.dateOfBirth} onChange={e => s('dateOfBirth', e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>{hi ? 'कार्य-ग्रहण तिथि' : 'Date of joining'}</Label>
+            <Input type="date" value={f.joiningDate} onChange={e => s('joiningDate', e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>{hi ? 'आधार' : 'Aadhaar'}</Label>
+            <Input value={f.aadhaar} onChange={e => s('aadhaar', e.target.value)} placeholder={hi ? '12 अंक' : '12 digits'} inputMode="numeric" maxLength={12} />
+          </div>
+          <div className="space-y-2">
+            <Label>PAN</Label>
+            <Input value={f.pan} onChange={e => s('pan', e.target.value)} placeholder="ABCDE1234F" maxLength={10} className="uppercase" />
+          </div>
+          <div className="space-y-2">
+            <Label>{hi ? 'बैंक खाता संख्या' : 'Bank account no.'}</Label>
+            <Input value={f.bankAccountNo} onChange={e => s('bankAccountNo', e.target.value)} placeholder={hi ? 'NEFT भुगतान हेतु' : 'for NEFT payout'} inputMode="numeric" />
+          </div>
+          <div className="space-y-2">
+            <Label>IFSC</Label>
+            <Input value={f.ifsc} onChange={e => s('ifsc', e.target.value)} placeholder="SBIN0001234" maxLength={11} className="uppercase" />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label>{hi ? 'स्थायी पता' : 'Permanent address'}</Label>
+            <Input value={f.permanentAddress} onChange={e => s('permanentAddress', e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} />
+          </div>
+        </div>
+      </details>
     </>
   );
 
@@ -192,6 +278,14 @@ export default function WorkerMaster() {
                   {w.phone ? `${w.phone} · ` : ''}
                   {w.defaultDailyWage != null ? `${hi ? 'दर' : 'rate'} ${money(w.defaultDailyWage)}` : ''}
                 </div>
+                {(w.uan || w.esiIp || w.bankAccountNo || w.aadhaar) && (
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {w.uan ? `UAN ${w.uan} · ` : ''}
+                    {w.esiIp ? `ESI ${w.esiIp} · ` : ''}
+                    {w.aadhaar ? `${hi ? 'आधार' : 'Aadhaar'} ••••${w.aadhaar.slice(-4)} · ` : ''}
+                    {w.bankAccountNo ? `${hi ? 'बैंक' : 'Bank'} ${w.ifsc ? `${w.ifsc}/` : ''}${w.bankAccountNo}` : ''}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <Button size="sm" variant="ghost" onClick={() => openEdit(w)}><Pencil className="h-4 w-4" /></Button>

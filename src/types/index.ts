@@ -247,6 +247,18 @@ export interface Worker {
   defaultDailyWage?: number;  // default rate; can be overridden per muster entry
   idProofType?: 'aadhaar' | 'pan' | 'voter' | 'other';
   idProofNo?: string;
+  // Statutory identifiers & payout details (CLRA Form XIII / EPF / ESI / NEFT). All optional.
+  uan?: string;               // EPF Universal Account Number (12-digit)
+  esiIp?: string;             // ESI Insurance / IP number
+  pan?: string;               // PAN (TDS on wages, if applicable)
+  aadhaar?: string;           // Aadhaar (stored as entered; displayed masked)
+  bankAccountNo?: string;     // for NEFT/bank wage payout
+  ifsc?: string;
+  dateOfBirth?: string;       // "YYYY-MM-DD"
+  gender?: 'male' | 'female' | 'other';
+  fatherHusbandName?: string; // CLRA Form XIII column
+  joiningDate?: string;       // date of employment ("YYYY-MM-DD")
+  permanentAddress?: string;
   status: 'active' | 'inactive';
   isDeleted?: boolean;
   createdAt: string;

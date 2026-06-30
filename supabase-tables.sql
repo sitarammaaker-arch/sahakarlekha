@@ -1520,6 +1520,18 @@ drop policy if exists "society_rw" on public.workers;
 create policy "society_rw" on public.workers for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+-- B1: statutory & payout identifiers (CLRA Form XIII / EPF / ESI / NEFT). RUN once.
+alter table public.workers add column if not exists "uan" text;
+alter table public.workers add column if not exists "esiIp" text;
+alter table public.workers add column if not exists "pan" text;
+alter table public.workers add column if not exists "aadhaar" text;
+alter table public.workers add column if not exists "bankAccountNo" text;
+alter table public.workers add column if not exists "ifsc" text;
+alter table public.workers add column if not exists "dateOfBirth" text;
+alter table public.workers add column if not exists "gender" text;
+alter table public.workers add column if not exists "fatherHusbandName" text;
+alter table public.workers add column if not exists "joiningDate" text;
+alter table public.workers add column if not exists "permanentAddress" text;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Labour cooperative — Department / Principal-Employer master (the client that awards
