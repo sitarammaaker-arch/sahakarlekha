@@ -80,6 +80,7 @@ export const translations: Translations = {
   departmentMaster: { hi: 'विभाग / नियोक्ता', en: 'Department / Employer' },
   departmentBills: { hi: 'विभाग बिल', en: 'Department Bills' },
   workOrderProfit: { hi: 'कार्य आदेश लाभ', en: 'Work Order Profit' },
+  wageRegister: { hi: 'मज़दूरी रजिस्टर', en: 'Wage Register' },
   workOrders: { hi: 'कार्य आदेश / श्रम ठेका', en: 'Work Orders' },
   musterRoll: { hi: 'मस्टर रोल / हाज़िरी', en: 'Muster Roll' },
   operations: { hi: 'संचालन', en: 'Operations' },

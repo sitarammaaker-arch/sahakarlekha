@@ -130,6 +130,7 @@ const WorkerMaster = lazyWithRetry(() => import("./pages/WorkerMaster"));
 const DepartmentMaster = lazyWithRetry(() => import("./pages/DepartmentMaster"));
 const DepartmentBills = lazyWithRetry(() => import("./pages/DepartmentBills"));
 const WorkOrderProfit = lazyWithRetry(() => import("./pages/WorkOrderProfit"));
+const WageRegister = lazyWithRetry(() => import("./pages/WageRegister"));
 const EWayBill = lazyWithRetry(() => import("./pages/EWayBill"));
 const HsnMaster = lazyWithRetry(() => import("./pages/HsnMaster"));
 const KccLoan = lazyWithRetry(() => import("./pages/KccLoan"));
@@ -311,6 +312,7 @@ const AppRoutes = () => {
       <Route path="/department-master" element={<ProtectedRoute><DepartmentMaster /></ProtectedRoute>} />
       <Route path="/department-bills" element={<ProtectedRoute><DepartmentBills /></ProtectedRoute>} />
       <Route path="/work-order-profit" element={<ProtectedRoute><WorkOrderProfit /></ProtectedRoute>} />
+      <Route path="/wage-register" element={<ProtectedRoute><WageRegister /></ProtectedRoute>} />
       <Route path="/opening-balances" element={<ProtectedRoute><OpeningBalances /></ProtectedRoute>} />
       <Route path="/multi-society-consolidation" element={<ProtectedRoute><MultiSocietyConsolidation /></ProtectedRoute>} />
       <Route path="/nabard-report" element={<ProtectedRoute><NabardReport /></ProtectedRoute>} />

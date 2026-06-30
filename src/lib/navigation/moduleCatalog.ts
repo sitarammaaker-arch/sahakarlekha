@@ -65,6 +65,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'musterRoll',      titleKey: 'musterRoll',      icon: UserCheck,       route: '/muster-roll',     domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 13 },
   { id: 'departmentBills', titleKey: 'departmentBills', icon: Receipt,         route: '/department-bills', domain: 'labour',    requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 14 },
   { id: 'workOrderProfit', titleKey: 'workOrderProfit', icon: BarChart3,       route: '/work-order-profit', domain: 'labour',   requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 15 },
+  { id: 'wageRegister',    titleKey: 'wageRegister',    icon: ScrollText,      route: '/wage-register',   domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 16 },
 
   // ── reports (was reportNavItems) ──
   { id: 'trialBalance',       titleKey: 'trialBalance',       icon: Scale,           route: '/trial-balance',        domain: 'reports', requiredCapabilities: U, order: 0 },
