@@ -19,11 +19,22 @@ import * as storage from '@/lib/storage';
 import type { Worker, Department, DepartmentBill, DeptBillType, WorkerAdvance, PfEsiRun, LedgerAccount, Voucher } from '@/types';
 
 // EPF/ESI rates & ceilings (statutory defaults; editable per run on the PF/ESI page).
-export interface PfEsiConfig { epfRate: number; epfCeiling: number; esiEmpRate: number; esiErRate: number; esiCeiling: number; }
-export const PF_ESI_DEFAULTS: PfEsiConfig = { epfRate: 12, epfCeiling: 15000, esiEmpRate: 0.75, esiErRate: 3.25, esiCeiling: 21000 };
+// Employer EPF 12% = EPF 3.67% (A/c 1) + EPS 8.33% (A/c 10); plus EDLI 0.5% (A/c 21) +
+// admin 0.5% (A/c 2) = 1% extra → employer total 13% of the EPF wage base.
+export interface PfEsiConfig {
+  epfRate: number; epfCeiling: number; epsRate: number; edliRate: number; adminRate: number;
+  esiEmpRate: number; esiErRate: number; esiCeiling: number;
+}
+export const PF_ESI_DEFAULTS: PfEsiConfig = {
+  epfRate: 12, epfCeiling: 15000, epsRate: 8.33, edliRate: 0.5, adminRate: 0.5,
+  esiEmpRate: 0.75, esiErRate: 3.25, esiCeiling: 21000,
+};
 export interface PfEsiComputation {
-  grossWages: number; epfEmployee: number; epfEmployer: number; esiEmployee: number; esiEmployer: number;
-  perWorker: { workerId: string; wage: number; epfEmp: number; epfEr: number; esiEmp: number; esiEr: number }[];
+  grossWages: number;
+  epfEmployee: number; epfEmployer: number;       // employer EPF = 12% (incl. EPS)
+  epfEps: number; epfAdminEdli: number;           // EPS portion (of the 12%) + EDLI+admin (the extra 1%)
+  esiEmployee: number; esiEmployer: number;
+  perWorker: { workerId: string; wage: number; epfEmp: number; epfEr: number; eps: number; edli: number; admin: number; esiEmp: number; esiEr: number }[];
 }
 
 interface LabourDataContextValue {
@@ -424,17 +435,21 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     rows.forEach(m => { byWorker.set(m.memberId, (byWorker.get(m.memberId) || 0) + (m.daysWorked || 0) * (m.dailyWage || 0)); });
     const perWorker = Array.from(byWorker.entries()).map(([workerId, wage]) => {
       const epfBase = Math.min(wage, cfg.epfCeiling);
-      const epfEmp = +(epfBase * cfg.epfRate / 100).toFixed(2);
-      const epfEr = epfEmp;                                   // employer EPF = same 12% (3.67 EPF + 8.33 EPS)
-      const esiOn = wage <= cfg.esiCeiling ? wage : 0;        // ESI not applicable above the ceiling
-      const esiEmp = +(esiOn * cfg.esiEmpRate / 100).toFixed(2);
-      const esiEr = +(esiOn * cfg.esiErRate / 100).toFixed(2);
-      return { workerId, wage, epfEmp, epfEr, esiEmp, esiEr };
+      const epfEmp = +(epfBase * cfg.epfRate / 100).toFixed(2);    // employee 12%
+      const epfEr = epfEmp;                                        // employer EPF 12% = EPF 3.67% (A/c1) + EPS 8.33% (A/c10)
+      const eps = +(epfBase * cfg.epsRate / 100).toFixed(2);       // EPS portion of the 12% (A/c10)
+      const edli = +(epfBase * cfg.edliRate / 100).toFixed(2);     // EDLI 0.5% (A/c21)
+      const admin = +(epfBase * cfg.adminRate / 100).toFixed(2);   // admin 0.5% (A/c2)
+      const esiOn = wage <= cfg.esiCeiling ? wage : 0;             // ESI not applicable above the ceiling
+      const esiEmp = Math.ceil(esiOn * cfg.esiEmpRate / 100);      // ESIC rule: round up to next rupee per employee
+      const esiEr = Math.ceil(esiOn * cfg.esiErRate / 100);
+      return { workerId, wage, epfEmp, epfEr, eps, edli, admin, esiEmp, esiEr };
     });
     const sum = (f: (w: PfEsiComputation['perWorker'][number]) => number) => +perWorker.reduce((s, w) => s + f(w), 0).toFixed(2);
     return {
       grossWages: sum(w => w.wage),
       epfEmployee: sum(w => w.epfEmp), epfEmployer: sum(w => w.epfEr),
+      epfEps: sum(w => w.eps), epfAdminEdli: sum(w => w.edli + w.admin),
       esiEmployee: sum(w => w.esiEmp), esiEmployer: sum(w => w.esiEr),
       perWorker,
     };
@@ -446,14 +461,15 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     if (pfEsiRuns.some(r => !r.isDeleted && r.period === period)) { toastRef.current({ title: 'पहले से दर्ज', description: `${period} की EPF/ESI देयता पहले ही पोस्ट हो चुकी है।`, variant: 'destructive', duration: 9000 }); return sentinel; }
     const c = computePfEsi(period, cfg);
     const empShare = +(c.epfEmployee + c.esiEmployee).toFixed(2);
-    const epfTotal = +(c.epfEmployee + c.epfEmployer).toFixed(2);
+    const epfTotal = +(c.epfEmployee + c.epfEmployer + c.epfAdminEdli).toFixed(2);   // A/c 1+10 + A/c 21+2
     const esiTotal = +(c.esiEmployee + c.esiEmployer).toFixed(2);
     if (epfTotal + esiTotal <= 0) { toastRef.current({ title: 'कुछ दर्ज करने को नहीं', description: 'इस महीने की मज़दूरी/अंशदान शून्य है।', variant: 'destructive', duration: 8000 }); return sentinel; }
     const id = crypto.randomUUID();
     const lid = () => crypto.randomUUID();
     const lines = [
       ...(empShare > 0 ? [{ id: lid(), accountId: '2109', type: 'Dr' as const, amount: empShare }] : []),       // employee share deducted from wages payable
-      ...(c.epfEmployer > 0 ? [{ id: lid(), accountId: '5203', type: 'Dr' as const, amount: c.epfEmployer }] : []),
+      ...(c.epfEmployer > 0 ? [{ id: lid(), accountId: '5203', type: 'Dr' as const, amount: c.epfEmployer }] : []),      // employer EPF 12% (EPF+EPS)
+      ...(c.epfAdminEdli > 0 ? [{ id: lid(), accountId: '5209', type: 'Dr' as const, amount: c.epfAdminEdli }] : []),    // EDLI 0.5% + admin 0.5%
       ...(c.esiEmployer > 0 ? [{ id: lid(), accountId: '5204', type: 'Dr' as const, amount: c.esiEmployer }] : []),
       ...(epfTotal > 0 ? [{ id: lid(), accountId: '2203', type: 'Cr' as const, amount: epfTotal }] : []),
       ...(esiTotal > 0 ? [{ id: lid(), accountId: '2204', type: 'Cr' as const, amount: esiTotal }] : []),
@@ -461,13 +477,13 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const voucher = addVoucher({
       type: 'journal', date,
       debitAccountId: '5203', creditAccountId: '2203', amount: +(epfTotal + esiTotal).toFixed(2),
-      narration: `EPF/ESI देयता — ${period} (कर्मचारी ₹${empShare} + नियोक्ता ₹${(c.epfEmployer + c.esiEmployer).toFixed(2)})`,
+      narration: `EPF/ESI देयता — ${period} (कर्मचारी ₹${empShare} + नियोक्ता ₹${(c.epfEmployer + c.epfAdminEdli + c.esiEmployer).toFixed(2)})`,
       refType: 'pf_esi.liability', refId: id,
       createdBy: user?.name || 'System',
       lines,
     } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>);
     if (!voucher.id) return sentinel;
-    const run: PfEsiRun = { id, period, grossWages: c.grossWages, epfEmployee: c.epfEmployee, epfEmployer: c.epfEmployer, esiEmployee: c.esiEmployee, esiEmployer: c.esiEmployer, status: 'posted', voucherId: voucher.id, createdAt: new Date().toISOString() };
+    const run: PfEsiRun = { id, period, grossWages: c.grossWages, epfEmployee: c.epfEmployee, epfEmployer: c.epfEmployer, epfAdminEdli: c.epfAdminEdli, esiEmployee: c.esiEmployee, esiEmployer: c.esiEmployer, status: 'posted', voucherId: voucher.id, createdAt: new Date().toISOString() };
     setPfEsiRunsState(prev => { const u = [...prev, run]; storage.setPfEsiRuns(u); return u; });
     supabase.from('pf_esi_runs').upsert(withSoc(run)).then(({ error }) => {
       if (error) {
@@ -487,7 +503,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const run = pfEsiRuns.find(r => r.id === data.runId && !r.isDeleted);
     if (!run) { toastRef.current({ title: 'रन नहीं मिला', variant: 'destructive', duration: 8000 }); return sentinel; }
     if (run.status === 'deposited') { toastRef.current({ title: 'पहले ही जमा', description: 'इस माह की EPF/ESI पहले ही जमा हो चुकी है।', variant: 'destructive', duration: 8000 }); return sentinel; }
-    const epfTotal = +(run.epfEmployee + run.epfEmployer).toFixed(2);
+    const epfTotal = +(run.epfEmployee + run.epfEmployer + (run.epfAdminEdli || 0)).toFixed(2);
     const esiTotal = +(run.esiEmployee + run.esiEmployer).toFixed(2);
     const total = +(epfTotal + esiTotal).toFixed(2);
     const creditAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.getBankAccountIds(accounts)[0] || storage.ACCOUNT_IDS.BANK);

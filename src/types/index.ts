@@ -310,7 +310,8 @@ export interface PfEsiRun {
   period: string;            // "YYYY-MM"
   grossWages: number;        // total muster wages for the month (basis)
   epfEmployee: number;
-  epfEmployer: number;
+  epfEmployer: number;        // employer EPF 12% (EPF 3.67% + EPS 8.33%)
+  epfAdminEdli?: number;      // employer EDLI 0.5% + admin 0.5% (the extra 1%)
   esiEmployee: number;
   esiEmployer: number;
   status: 'posted' | 'deposited';

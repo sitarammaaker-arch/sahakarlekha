@@ -30,8 +30,13 @@ export default function PfEsi() {
 
   const comp = useMemo(() => computePfEsi(period, cfg), [computePfEsi, period, cfg]);
   const alreadyPosted = pfEsiRuns.some(r => !r.isDeleted && r.period === period);
-  const epfTotal = +(comp.epfEmployee + comp.epfEmployer).toFixed(2);
+  const epfTotal = +(comp.epfEmployee + comp.epfEmployer + comp.epfAdminEdli).toFixed(2);
   const esiTotal = +(comp.esiEmployee + comp.esiEmployer).toFixed(2);
+  // ECR account-head breakup (for challan reconciliation):
+  const acEpf = +(comp.epfEmployee + (comp.epfEmployer - comp.epfEps)).toFixed(2);  // A/c 1: employee 12% + employer 3.67%
+  const acEps = comp.epfEps;                                                         // A/c 10: EPS 8.33%
+  const acEdli = +(comp.epfAdminEdli / 2).toFixed(2);                                // A/c 21: EDLI 0.5%
+  const acAdmin = +(comp.epfAdminEdli - acEdli).toFixed(2);                          // A/c 2: admin 0.5%
 
   const runs = pfEsiRuns.filter(r => !r.isDeleted).sort((a, b) => (b.period || '').localeCompare(a.period || ''));
 
@@ -80,6 +85,9 @@ export default function PfEsi() {
             <div className="space-y-1.5"><Label>{hi ? 'महीना' : 'Month'}</Label><Input type="month" value={period} onChange={e => setPeriod(e.target.value)} /></div>
             <div className="space-y-1.5"><Label>{hi ? 'EPF दर %' : 'EPF rate %'}</Label><Input type="number" value={cfg.epfRate} onChange={e => setRate('epfRate', e.target.value)} /></div>
             <div className="space-y-1.5"><Label>{hi ? 'EPF सीमा (₹)' : 'EPF ceiling (₹)'}</Label><Input type="number" value={cfg.epfCeiling} onChange={e => setRate('epfCeiling', e.target.value)} /></div>
+            <div className="space-y-1.5"><Label>{hi ? 'EPS दर % (A/c10)' : 'EPS rate % (A/c10)'}</Label><Input type="number" value={cfg.epsRate} onChange={e => setRate('epsRate', e.target.value)} /></div>
+            <div className="space-y-1.5"><Label>{hi ? 'EDLI दर % (A/c21)' : 'EDLI rate % (A/c21)'}</Label><Input type="number" value={cfg.edliRate} onChange={e => setRate('edliRate', e.target.value)} /></div>
+            <div className="space-y-1.5"><Label>{hi ? 'Admin दर % (A/c2)' : 'Admin rate % (A/c2)'}</Label><Input type="number" value={cfg.adminRate} onChange={e => setRate('adminRate', e.target.value)} /></div>
             <div className="space-y-1.5"><Label>{hi ? 'ESI कर्म. %' : 'ESI emp %'}</Label><Input type="number" value={cfg.esiEmpRate} onChange={e => setRate('esiEmpRate', e.target.value)} /></div>
             <div className="space-y-1.5"><Label>{hi ? 'ESI नियोक्ता %' : 'ESI er %'}</Label><Input type="number" value={cfg.esiErRate} onChange={e => setRate('esiErRate', e.target.value)} /></div>
             <div className="space-y-1.5"><Label>{hi ? 'ESI सीमा (₹)' : 'ESI ceiling (₹)'}</Label><Input type="number" value={cfg.esiCeiling} onChange={e => setRate('esiCeiling', e.target.value)} /></div>
@@ -127,10 +135,24 @@ export default function PfEsi() {
           )}
 
           {comp.perWorker.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {hi ? 'देय EPF' : 'EPF payable'}: <span className="font-medium text-foreground">{money(epfTotal)}</span> · {hi ? 'देय ESI' : 'ESI payable'}: <span className="font-medium text-foreground">{money(esiTotal)}</span>
-              {' · '}{hi ? 'लेखा: नाम देय मज़दूरी(2109, कर्म.) + PF/ESI व्यय(5203/5204, नियो.) / जमा देय EPF(2203)+देय ESI(2204)' : 'Dr Wages Payable(2109, EE) + PF/ESI exp(5203/5204, ER) / Cr EPF(2203)+ESI(2204) Payable'}
-            </p>
+            <div className="space-y-2 rounded-lg border bg-muted/20 p-3 text-xs">
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                <span>{hi ? 'देय EPF' : 'EPF payable'}: <span className="font-semibold text-foreground">{money(epfTotal)}</span></span>
+                <span>{hi ? 'देय ESI' : 'ESI payable'}: <span className="font-semibold text-foreground">{money(esiTotal)}</span></span>
+              </div>
+              {/* EPFO challan (ECR) account-head breakup */}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground border-t pt-1.5">
+                <span>A/c 1 (EPF): <span className="text-foreground">{money(acEpf)}</span></span>
+                <span>A/c 10 (EPS): <span className="text-foreground">{money(acEps)}</span></span>
+                <span>A/c 21 (EDLI): <span className="text-foreground">{money(acEdli)}</span></span>
+                <span>A/c 2 (Admin): <span className="text-foreground">{money(acAdmin)}</span></span>
+              </div>
+              <p className="text-muted-foreground border-t pt-1.5">
+                {hi
+                  ? 'लेखा: नाम देय मज़दूरी(2109, कर्म.) + PF नियो.(5203) + EDLI/Admin(5209) + ESI नियो.(5204) / जमा देय EPF(2203) + देय ESI(2204)'
+                  : 'Dr Wages Payable(2109, EE) + PF employer(5203) + EDLI/Admin(5209) + ESI employer(5204) / Cr EPF(2203) + ESI(2204) Payable'}
+              </p>
+            </div>
           )}
 
           <Button onClick={post} className="w-full" disabled={alreadyPosted || comp.perWorker.length === 0 || (epfTotal + esiTotal) <= 0}>

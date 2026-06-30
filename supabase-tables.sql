@@ -1635,6 +1635,8 @@ drop policy if exists "society_rw" on public.pf_esi_runs;
 create policy "society_rw" on public.pf_esi_runs for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+-- B2: employer EDLI 0.5% + admin 0.5% (the extra 1% of EPF wages). RUN once.
+alter table public.pf_esi_runs add column if not exists "epfAdminEdli" numeric;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
