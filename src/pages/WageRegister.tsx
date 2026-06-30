@@ -29,6 +29,7 @@ export default function WageRegister() {
     operator: { en: 'Operator', hi: 'ऑपरेटर' }, helper: { en: 'Helper', hi: 'सहायक' }, supervisor: { en: 'Supervisor', hi: 'पर्यवेक्षक' },
   };
   const labourerCat = (id: string) => { const c = workers.find(w => w.id === id)?.category; return c ? (hi ? CAT[c]?.hi : CAT[c]?.en) || c : ''; };
+  const unitWord = (b?: string) => b === 'piece' ? (hi ? 'नग' : 'units') : b === 'hourly' ? (hi ? 'घंटे' : 'hrs') : (hi ? 'दिन' : 'days');
   const wo = openOrders.find(o => o.id === workOrderId);
 
   const rows = useMemo(
@@ -96,7 +97,7 @@ export default function WageRegister() {
                     <th className="text-left font-medium px-2 py-2 w-8">#</th>
                     <th className="text-left font-medium px-2 py-2">{hi ? 'श्रमिक' : 'Worker'}</th>
                     <th className="text-left font-medium px-2 py-2">{hi ? 'श्रेणी' : 'Category'}</th>
-                    <th className="text-right font-medium px-2 py-2">{hi ? 'दिन' : 'Days'}</th>
+                    <th className="text-right font-medium px-2 py-2">{hi ? 'दिन/मात्रा' : 'Days/Qty'}</th>
                     <th className="text-right font-medium px-2 py-2">{hi ? 'दर' : 'Rate'}</th>
                     <th className="text-right font-medium px-2 py-2">{hi ? 'मज़दूरी' : 'Wage'}</th>
                     <th className="text-right font-medium px-2 py-2">{hi ? 'चुकाया' : 'Paid'}</th>
@@ -112,7 +113,7 @@ export default function WageRegister() {
                         <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
                         <td className="px-2 py-2">{labourerCode(r.memberId) ? `${labourerCode(r.memberId)} · ` : ''}{labourerName(r.memberId)}</td>
                         <td className="px-2 py-2">{labourerCat(r.memberId)}</td>
-                        <td className="px-2 py-2 text-right">{r.daysWorked}</td>
+                        <td className="px-2 py-2 text-right">{r.daysWorked}{r.workBasis && r.workBasis !== 'daily' ? ` ${unitWord(r.workBasis)}` : ''}</td>
                         <td className="px-2 py-2 text-right">{money(r.dailyWage)}</td>
                         <td className="px-2 py-2 text-right font-medium">{money(wage)}</td>
                         <td className="px-2 py-2 text-right text-muted-foreground">{money(r.paidAmount || 0)}</td>
