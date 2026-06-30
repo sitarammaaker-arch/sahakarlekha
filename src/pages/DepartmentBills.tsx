@@ -51,6 +51,7 @@ export default function DepartmentBills() {
   const [payBankId, setPayBankId] = useState('');
   const [payDate, setPayDate] = useState('');
   const [payRef, setPayRef] = useState('');
+  const [payTds, setPayTds] = useState('');
 
   const bills = departmentBills.filter(b => !b.isDeleted);
   const outstandingOf = (b: DepartmentBill) => +(b.amount - b.paidAmount).toFixed(2);
@@ -96,16 +97,23 @@ export default function DepartmentBills() {
     }
   };
 
+  const payBill = bills.find(b => b.id === payBillId);
+  const payDept = payBill ? departments.find(d => d.id === payBill.departmentId) : undefined;
+  const payTdsApplicable = !!payDept?.tdsApplicable;
+  const payNetCash = +(Math.max(0, (Number(payAmount) || 0) - (Number(payTds) || 0))).toFixed(2);
+
   const openPay = (b: DepartmentBill) => {
     setPayBillId(b.id); setPayAmount(String(outstandingOf(b))); setPayMode('cash'); setPayBankId(bankAccounts[0]?.id || '');
-    setPayDate(new Date().toISOString().slice(0, 10)); setPayRef('');
+    setPayDate(new Date().toISOString().slice(0, 10)); setPayRef(''); setPayTds('');
     setPayOpen(true);
   };
 
   const confirmPay = () => {
     const amt = Number(payAmount);
     if (!(amt > 0)) { toast({ title: hi ? 'राशि डालें' : 'Enter amount', variant: 'destructive' }); return; }
-    const v = recordDepartmentCollection({ billId: payBillId, amount: amt, mode: payMode, bankAccountId: payMode === 'bank' ? (payBankId || undefined) : undefined, date: payDate, reference: payRef.trim() || undefined });
+    const tds = Number(payTds) || 0;
+    if (tds < 0 || tds >= amt) { toast({ title: hi ? 'TDS राशि गलत' : 'Invalid TDS', description: hi ? 'TDS वसूली-राशि से कम होना चाहिए।' : 'TDS must be less than the amount.', variant: 'destructive' }); return; }
+    const v = recordDepartmentCollection({ billId: payBillId, amount: amt, tdsAmount: tds > 0 ? tds : undefined, mode: payMode, bankAccountId: payMode === 'bank' ? (payBankId || undefined) : undefined, date: payDate, reference: payRef.trim() || undefined });
     if (v.id) setPayOpen(false);
   };
 
@@ -248,8 +256,22 @@ export default function DepartmentBills() {
                 </Select>
               </div>
             )}
+            {payTdsApplicable && (
+              <div className="space-y-1.5">
+                <Label className="flex items-center justify-between">
+                  <span>{hi ? 'TDS कटौती (₹)' : 'TDS deducted (₹)'}</span>
+                  <button type="button" className="text-xs text-primary underline" onClick={() => setPayTds(String(+(((Number(payAmount) || 0) * 0.02)).toFixed(2)))}>{hi ? '2% भरें' : 'Fill 2%'}</button>
+                </Label>
+                <Input type="number" min={0} value={payTds} onChange={e => setPayTds(e.target.value)} placeholder="0" />
+                <p className="text-xs text-muted-foreground">{hi ? 'विभाग द्वारा बिल पर काटा TDS — हमारा प्राप्य (3307)। शुद्ध नकद' : 'TDS withheld by the department — our receivable (3307). Net cash'}: <span className="font-medium text-foreground">{money(payNetCash)}</span></p>
+              </div>
+            )}
             <div className="space-y-1.5"><Label>{hi ? 'संदर्भ (वैकल्पिक)' : 'Reference (optional)'}</Label><Input value={payRef} onChange={e => setPayRef(e.target.value)} /></div>
-            <p className="text-xs text-muted-foreground">{hi ? 'लेखा प्रविष्टि: नाम ' : 'Entry: Dr '}{payMode === 'cash' ? (hi ? 'नकद' : 'Cash') : (hi ? 'बैंक' : 'Bank')}{hi ? ' / जमा विभाग-प्राप्य' : ' / Cr Department receivable'}</p>
+            <p className="text-xs text-muted-foreground">
+              {hi ? 'लेखा प्रविष्टि: नाम ' : 'Entry: Dr '}{payMode === 'cash' ? (hi ? 'नकद' : 'Cash') : (hi ? 'बैंक' : 'Bank')}
+              {(Number(payTds) || 0) > 0 ? (hi ? ' + प्राप्य TDS (3307)' : ' + TDS Receivable (3307)') : ''}
+              {hi ? ' / जमा विभाग-प्राप्य' : ' / Cr Department receivable'}
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>

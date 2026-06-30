@@ -31,7 +31,7 @@ interface LabourDataContextValue {
 
   departmentBills: DepartmentBill[];
   addDepartmentBill: (data: { departmentId: string; workOrderId?: string; billType: DeptBillType; date: string; amount: number; narration?: string }) => DepartmentBill;
-  recordDepartmentCollection: (data: { billId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string; remarks?: string }) => Voucher;
+  recordDepartmentCollection: (data: { billId: string; amount: number; tdsAmount?: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string; remarks?: string }) => Voucher;
   deleteDepartmentBill: (id: string) => void;
 }
 
@@ -224,7 +224,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     return bill;
   }, [departments, departmentBills, society, user, addVoucher, cancelVoucher]);
 
-  const recordDepartmentCollection = useCallback((data: { billId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string; remarks?: string }): Voucher => {
+  const recordDepartmentCollection = useCallback((data: { billId: string; amount: number; tdsAmount?: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string; remarks?: string }): Voucher => {
     const sentinel = { id: '', voucherNo: '', type: 'receipt', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
     const bill = departmentBills.find(b => b.id === data.billId && !b.isDeleted);
@@ -234,19 +234,26 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const outstanding = +(bill.amount - bill.paidAmount).toFixed(2);
     if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'वसूली राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
     if (data.amount > outstanding + 0.005) { toastRef.current({ title: 'राशि बकाया से अधिक', description: `वसूली ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकती।`, variant: 'destructive', duration: 9000 }); return sentinel; }
+    // TDS deducted by the department on the gross settled amount → our receivable (3307).
+    const tds = +(data.tdsAmount || 0).toFixed(2);
+    if (tds < 0 || tds >= data.amount) { toastRef.current({ title: 'TDS राशि गलत', description: 'TDS 0 से कम या वसूली-राशि के बराबर/अधिक नहीं हो सकता।', variant: 'destructive', duration: 9000 }); return sentinel; }
+    const netCash = +(data.amount - tds).toFixed(2);
     const debitAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.getBankAccountIds(accounts)[0] || storage.ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
     const rem = data.remarks?.trim() ? ` · ${data.remarks.trim()}` : '';
+    const tdsNarr = tds > 0 ? ` · TDS ₹${tds}` : '';
     const voucher = addVoucher({
       type: 'receipt', date: data.date,
+      // Header keeps the cash/bank receipt; lines carry the full split (incl. TDS receivable).
       debitAccountId: debitAcc, creditAccountId: dept.accountId, amount: data.amount,
-      narration: `विभाग वसूली — ${bill.billNo} · ${dept.name}${ref}${rem}`,
+      narration: `विभाग वसूली — ${bill.billNo} · ${dept.name}${tdsNarr}${ref}${rem}`,
       refType: 'dept.collection', refId: bill.id, workOrderId: bill.workOrderId,
       createdBy: user?.name || 'System',
       lines: [
-        { id: lid(), accountId: debitAcc, type: 'Dr', amount: data.amount },
-        { id: lid(), accountId: dept.accountId, type: 'Cr', amount: data.amount },
+        ...(netCash > 0 ? [{ id: lid(), accountId: debitAcc, type: 'Dr' as const, amount: netCash }] : []),
+        ...(tds > 0 ? [{ id: lid(), accountId: '3307', type: 'Dr' as const, amount: tds }] : []),   // TDS Receivable
+        { id: lid(), accountId: dept.accountId, type: 'Cr' as const, amount: data.amount },
       ],
     } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>);
     if (!voucher.id) return sentinel;
