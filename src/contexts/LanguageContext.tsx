@@ -83,6 +83,7 @@ export const translations: Translations = {
   workOrderProfit: { hi: 'कार्य आदेश लाभ', en: 'Work Order Profit' },
   wageRegister: { hi: 'मज़दूरी रजिस्टर', en: 'Wage Register' },
   workerLedger: { hi: 'श्रमिक लेजर', en: 'Worker Ledger' },
+  advanceRegister: { hi: 'अग्रिम रजिस्टर', en: 'Advance Register' },
   workOrders: { hi: 'कार्य आदेश / श्रम ठेका', en: 'Work Orders' },
   musterRoll: { hi: 'मस्टर रोल / हाज़िरी', en: 'Muster Roll' },
   operations: { hi: 'संचालन', en: 'Operations' },

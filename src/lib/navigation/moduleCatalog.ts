@@ -68,6 +68,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'workOrderProfit', titleKey: 'workOrderProfit', icon: BarChart3,       route: '/work-order-profit', domain: 'labour',   requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 15 },
   { id: 'wageRegister',    titleKey: 'wageRegister',    icon: ScrollText,      route: '/wage-register',   domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 16 },
   { id: 'workerLedger',    titleKey: 'workerLedger',    icon: BookOpen,        route: '/worker-ledger',   domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 17 },
+  { id: 'advanceRegister', titleKey: 'advanceRegister', icon: ScrollText,      route: '/advance-register', domain: 'labour',    requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 18 },
 
   // ── reports (was reportNavItems) ──
   { id: 'trialBalance',       titleKey: 'trialBalance',       icon: Scale,           route: '/trial-balance',        domain: 'reports', requiredCapabilities: U, order: 0 },
