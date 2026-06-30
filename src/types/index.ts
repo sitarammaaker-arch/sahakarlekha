@@ -170,8 +170,12 @@ export interface HousingFlat {
   id: string;
   flatNo: string;
   blockNo?: string;
+  floor?: string;             // floor / level (e.g. "Ground", "3")
+  unitType?: string;          // 1BHK / 2BHK / 3BHK / Shop / Office / Other
   memberId?: string;          // owner (link to Member); optional for vacant/unsold
-  ownerType?: 'owner' | 'tenant';
+  associateMemberId?: string; // associate / joint member (housing-specific)
+  ownerType?: 'owner' | 'tenant';   // legacy; kept in sync from `occupancy` (L9 back-compat)
+  occupancy?: 'self' | 'rented' | 'vacant';  // physical status; drives non-occupancy charges (H2)
   area?: number;              // sq ft
   monthlyMaintenance: number;
   registrationDate?: string;
