@@ -273,6 +273,22 @@ export interface Department {
 // Labour cooperative — a bill raised on a department/employer for work done (income side).
 // At creation: Dr department receivable / Cr 4203 Labour Charges (income), tagged workOrderId.
 // Collection reduces the receivable (partial allowed).
+// Labour cooperative — an advance paid to a worker (asset 3304), recovered over time.
+export interface WorkerAdvance {
+  id: string;
+  advanceNo: string;
+  workerId: string;
+  date: string;
+  amount: number;            // advance given
+  recovered: number;         // cumulative recovered
+  status: 'open' | 'cleared';
+  mode: 'cash' | 'bank';
+  voucherId?: string;        // the advance-payment voucher
+  narration?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 export type DeptBillType = 'running' | 'final';
 export interface DepartmentBill {
   id: string;

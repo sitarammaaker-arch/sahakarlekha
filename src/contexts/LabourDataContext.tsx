@@ -16,7 +16,7 @@ import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
-import type { Worker, Department, DepartmentBill, DeptBillType, LedgerAccount, Voucher } from '@/types';
+import type { Worker, Department, DepartmentBill, DeptBillType, WorkerAdvance, LedgerAccount, Voucher } from '@/types';
 
 interface LabourDataContextValue {
   workers: Worker[];
@@ -33,6 +33,11 @@ interface LabourDataContextValue {
   addDepartmentBill: (data: { departmentId: string; workOrderId?: string; billType: DeptBillType; date: string; amount: number; narration?: string }) => DepartmentBill;
   recordDepartmentCollection: (data: { billId: string; amount: number; tdsAmount?: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string; remarks?: string }) => Voucher;
   deleteDepartmentBill: (id: string) => void;
+
+  workerAdvances: WorkerAdvance[];
+  addWorkerAdvance: (data: { workerId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; narration?: string }) => WorkerAdvance;
+  recordAdvanceRecovery: (data: { advanceId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }) => Voucher;
+  deleteWorkerAdvance: (id: string) => void;
 }
 
 const LabourDataContext = createContext<LabourDataContextValue | undefined>(undefined);
@@ -59,11 +64,12 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   const [workers, setWorkersState] = useState<Worker[]>(() => storage.getWorkers());
   const [departments, setDepartmentsState] = useState<Department[]>(() => storage.getDepartments());
   const [departmentBills, setDepartmentBillsState] = useState<DepartmentBill[]>(() => storage.getDepartmentBills());
+  const [workerAdvances, setWorkerAdvancesState] = useState<WorkerAdvance[]>(() => storage.getWorkerAdvances());
 
   // Load when the society changes; Supabase is SSOT, localStorage is offline fallback.
   useEffect(() => {
     const sid = user?.societyId;
-    if (!sid) { setWorkersState([]); setDepartmentsState([]); setDepartmentBillsState([]); return; }
+    if (!sid) { setWorkersState([]); setDepartmentsState([]); setDepartmentBillsState([]); setWorkerAdvancesState([]); return; }
     supabase.from('workers').select('*').eq('society_id', sid).then(
       ({ data, error }) => setWorkersState(error || !data ? storage.getWorkers() : (data as unknown as Worker[])),
       () => setWorkersState(storage.getWorkers()),
@@ -75,6 +81,10 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     supabase.from('department_bills').select('*').eq('society_id', sid).then(
       ({ data, error }) => setDepartmentBillsState(error || !data ? storage.getDepartmentBills() : (data as unknown as DepartmentBill[])),
       () => setDepartmentBillsState(storage.getDepartmentBills()),
+    );
+    supabase.from('worker_advances').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setWorkerAdvancesState(error || !data ? storage.getWorkerAdvances() : (data as unknown as WorkerAdvance[])),
+      () => setWorkerAdvancesState(storage.getWorkerAdvances()),
     );
   }, [user?.societyId]);
 
@@ -291,8 +301,102 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     });
   }, [departmentBills, vouchers, society, user, cancelVoucher]);
 
+  // ── Worker Advances — asset 3304 Loans & Advances; recovered over time ──────────
+  // Give: Dr 3304 / Cr Cash-Bank. Recovery: Dr Cash-Bank / Cr 3304 (partial). RULE-1/RULE-6.
+  const addWorkerAdvance = useCallback((data: { workerId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; narration?: string }): WorkerAdvance => {
+    const sentinel = { id: '', advanceNo: '', workerId: data.workerId, date: data.date, amount: 0, recovered: 0, status: 'open', mode: data.mode, createdAt: '' } as WorkerAdvance;
+    if (guardFYLocked()) return sentinel;
+    const worker = workers.find(w => w.id === data.workerId);
+    if (!worker) { toastRef.current({ title: 'श्रमिक नहीं मिला', description: 'Worker not found', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि दर्ज करें', description: 'अग्रिम राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    const id = crypto.randomUUID();
+    const maxNum = workerAdvances.reduce((m, a) => { const x = a.advanceNo?.match(/ADV\/(\d+)/); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0);
+    const advanceNo = `ADV/${String(maxNum + 1).padStart(3, '0')}`;
+    const creditAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.getBankAccountIds(accounts)[0] || storage.ACCOUNT_IDS.BANK);
+    const lid = () => crypto.randomUUID();
+    const voucher = addVoucher({
+      type: 'payment', date: data.date,
+      debitAccountId: '3304', creditAccountId: creditAcc, amount: data.amount,
+      narration: `श्रमिक अग्रिम — ${advanceNo} · ${worker.name}${data.narration ? ` · ${data.narration}` : ''}`,
+      refType: 'worker.advance', refId: id,
+      createdBy: user?.name || 'System',
+      lines: [
+        { id: lid(), accountId: '3304', type: 'Dr', amount: data.amount },
+        { id: lid(), accountId: creditAcc, type: 'Cr', amount: data.amount },
+      ],
+    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>);
+    if (!voucher.id) return sentinel;
+    const adv: WorkerAdvance = { id, advanceNo, workerId: data.workerId, date: data.date, amount: data.amount, recovered: 0, status: 'open', mode: data.mode, voucherId: voucher.id, narration: data.narration, createdAt: new Date().toISOString() };
+    setWorkerAdvancesState(prev => { const u = [...prev, adv]; storage.setWorkerAdvances(u); return u; });
+    supabase.from('worker_advances').upsert(withSoc(adv)).then(({ error }) => {
+      if (error) {
+        console.error('Worker advance save error:', error.message);
+        setWorkerAdvancesState(prev => { const r = prev.filter(a => a.id !== adv.id); storage.setWorkerAdvances(r); return r; });
+        cancelVoucher(voucher.id, 'Worker advance rolled back (save failed)', user?.name || 'System');
+        toastRef.current({ title: 'अग्रिम सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    toastRef.current({ title: 'श्रमिक अग्रिम दर्ज हुआ', description: `${advanceNo} · ${worker.name} · ₹${data.amount}`, duration: 6000 });
+    return adv;
+  }, [workers, workerAdvances, accounts, society, user, addVoucher, cancelVoucher]);
+
+  const recordAdvanceRecovery = useCallback((data: { advanceId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }): Voucher => {
+    const sentinel = { id: '', voucherNo: '', type: 'receipt', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    if (guardFYLocked()) return sentinel;
+    const adv = workerAdvances.find(a => a.id === data.advanceId && !a.isDeleted);
+    if (!adv) { toastRef.current({ title: 'अग्रिम नहीं मिला', description: 'Advance not found', variant: 'destructive', duration: 8000 }); return sentinel; }
+    const worker = workers.find(w => w.id === adv.workerId);
+    const outstanding = +(adv.amount - adv.recovered).toFixed(2);
+    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'वसूली 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (data.amount > outstanding + 0.005) { toastRef.current({ title: 'राशि बकाया से अधिक', description: `वसूली ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकती।`, variant: 'destructive', duration: 9000 }); return sentinel; }
+    const debitAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.getBankAccountIds(accounts)[0] || storage.ACCOUNT_IDS.BANK);
+    const lid = () => crypto.randomUUID();
+    const voucher = addVoucher({
+      type: 'receipt', date: data.date,
+      debitAccountId: debitAcc, creditAccountId: '3304', amount: data.amount,
+      narration: `अग्रिम वसूली — ${adv.advanceNo} · ${worker?.name || ''}`,
+      refType: 'worker.advance.recovery', refId: adv.id,
+      createdBy: user?.name || 'System',
+      lines: [
+        { id: lid(), accountId: debitAcc, type: 'Dr', amount: data.amount },
+        { id: lid(), accountId: '3304', type: 'Cr', amount: data.amount },
+      ],
+    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>);
+    if (!voucher.id) return sentinel;
+    const newRec = +(adv.recovered + data.amount).toFixed(2);
+    const next: WorkerAdvance = { ...adv, recovered: newRec, status: newRec >= adv.amount - 0.005 ? 'cleared' : 'open' };
+    setWorkerAdvancesState(prev => { const u = prev.map(a => a.id === adv.id ? next : a); storage.setWorkerAdvances(u); return u; });
+    supabase.from('worker_advances').upsert(withSoc(next)).then(({ error }) => {
+      if (error) {
+        console.error('Advance recovery update error:', error.message);
+        setWorkerAdvancesState(prev => { const u = prev.map(a => a.id === adv.id ? adv : a); storage.setWorkerAdvances(u); return u; });
+        cancelVoucher(voucher.id, 'Advance recovery rolled back (update failed)', user?.name || 'System');
+        toastRef.current({ title: 'वसूली सेव नहीं हुई', description: `Cloud save fail — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    toastRef.current({ title: 'अग्रिम वसूली दर्ज हुई', description: `${adv.advanceNo} · ₹${data.amount} · ${next.status === 'cleared' ? 'पूर्ण' : 'आंशिक'}`, duration: 6000 });
+    return voucher;
+  }, [workerAdvances, workers, accounts, society, user, addVoucher, cancelVoucher]);
+
+  const deleteWorkerAdvance = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const old = workerAdvances.find(a => a.id === id);
+    if (!old) return;
+    setWorkerAdvancesState(prev => { const u = prev.filter(a => a.id !== id); storage.setWorkerAdvances(u); return u; });
+    supabase.from('worker_advances').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('Worker advance delete error:', error.message);
+        setWorkerAdvancesState(prev => { const u = [...prev, old]; storage.setWorkerAdvances(u); return u; });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        return;
+      }
+      if (old.voucherId) cancelVoucher(old.voucherId, 'Worker advance deleted', user?.name || 'System');
+      vouchers.filter(v => !v.isDeleted && v.refType === 'worker.advance.recovery' && v.refId === old.id).forEach(v => cancelVoucher(v.id, 'Worker advance deleted (recovery reversed)', user?.name || 'System'));
+    });
+  }, [workerAdvances, vouchers, society, user, cancelVoucher]);
+
   return (
-    <LabourDataContext.Provider value={{ workers, addWorker, updateWorker, deleteWorker, departments, addDepartment, updateDepartment, deleteDepartment, departmentBills, addDepartmentBill, recordDepartmentCollection, deleteDepartmentBill }}>
+    <LabourDataContext.Provider value={{ workers, addWorker, updateWorker, deleteWorker, departments, addDepartment, updateDepartment, deleteDepartment, departmentBills, addDepartmentBill, recordDepartmentCollection, deleteDepartmentBill, workerAdvances, addWorkerAdvance, recordAdvanceRecovery, deleteWorkerAdvance }}>
       {children}
     </LabourDataContext.Provider>
   );

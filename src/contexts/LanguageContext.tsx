@@ -78,6 +78,7 @@ export const translations: Translations = {
   navLabour: { hi: 'श्रमिक प्रबंधन', en: 'Labour' },
   workerMaster: { hi: 'श्रमिक मास्टर', en: 'Worker Master' },
   departmentMaster: { hi: 'विभाग / नियोक्ता', en: 'Department / Employer' },
+  workerAdvances: { hi: 'श्रमिक अग्रिम', en: 'Worker Advances' },
   departmentBills: { hi: 'विभाग बिल', en: 'Department Bills' },
   workOrderProfit: { hi: 'कार्य आदेश लाभ', en: 'Work Order Profit' },
   wageRegister: { hi: 'मज़दूरी रजिस्टर', en: 'Wage Register' },
