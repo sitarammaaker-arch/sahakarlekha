@@ -16,7 +16,15 @@ import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
-import type { Worker, Department, DepartmentBill, DeptBillType, WorkerAdvance, LedgerAccount, Voucher } from '@/types';
+import type { Worker, Department, DepartmentBill, DeptBillType, WorkerAdvance, PfEsiRun, LedgerAccount, Voucher } from '@/types';
+
+// EPF/ESI rates & ceilings (statutory defaults; editable per run on the PF/ESI page).
+export interface PfEsiConfig { epfRate: number; epfCeiling: number; esiEmpRate: number; esiErRate: number; esiCeiling: number; }
+export const PF_ESI_DEFAULTS: PfEsiConfig = { epfRate: 12, epfCeiling: 15000, esiEmpRate: 0.75, esiErRate: 3.25, esiCeiling: 21000 };
+export interface PfEsiComputation {
+  grossWages: number; epfEmployee: number; epfEmployer: number; esiEmployee: number; esiEmployer: number;
+  perWorker: { workerId: string; wage: number; epfEmp: number; epfEr: number; esiEmp: number; esiEr: number }[];
+}
 
 interface LabourDataContextValue {
   workers: Worker[];
@@ -38,6 +46,12 @@ interface LabourDataContextValue {
   addWorkerAdvance: (data: { workerId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; narration?: string }) => WorkerAdvance;
   recordAdvanceRecovery: (data: { advanceId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }) => Voucher;
   deleteWorkerAdvance: (id: string) => void;
+
+  pfEsiRuns: PfEsiRun[];
+  computePfEsi: (period: string, cfg: PfEsiConfig) => PfEsiComputation;
+  postPfEsi: (period: string, cfg: PfEsiConfig, date: string) => PfEsiRun;
+  depositPfEsi: (data: { runId: string; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }) => Voucher;
+  deletePfEsiRun: (id: string) => void;
 }
 
 const LabourDataContext = createContext<LabourDataContextValue | undefined>(undefined);
@@ -45,7 +59,7 @@ const LabourDataContext = createContext<LabourDataContextValue | undefined>(unde
 export function LabourProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   // Compose core (never fork): FY-lock from society; sub-ledger via the core account engine.
-  const { society, accounts, vouchers, addAccount, updateAccount, deleteAccount, addVoucher, cancelVoucher } = useData();
+  const { society, accounts, vouchers, musterEntries, addAccount, updateAccount, deleteAccount, addVoucher, cancelVoucher } = useData();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   useEffect(() => { toastRef.current = toast; }, [toast]);
@@ -65,11 +79,12 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   const [departments, setDepartmentsState] = useState<Department[]>(() => storage.getDepartments());
   const [departmentBills, setDepartmentBillsState] = useState<DepartmentBill[]>(() => storage.getDepartmentBills());
   const [workerAdvances, setWorkerAdvancesState] = useState<WorkerAdvance[]>(() => storage.getWorkerAdvances());
+  const [pfEsiRuns, setPfEsiRunsState] = useState<PfEsiRun[]>(() => storage.getPfEsiRuns());
 
   // Load when the society changes; Supabase is SSOT, localStorage is offline fallback.
   useEffect(() => {
     const sid = user?.societyId;
-    if (!sid) { setWorkersState([]); setDepartmentsState([]); setDepartmentBillsState([]); setWorkerAdvancesState([]); return; }
+    if (!sid) { setWorkersState([]); setDepartmentsState([]); setDepartmentBillsState([]); setWorkerAdvancesState([]); setPfEsiRunsState([]); return; }
     supabase.from('workers').select('*').eq('society_id', sid).then(
       ({ data, error }) => setWorkersState(error || !data ? storage.getWorkers() : (data as unknown as Worker[])),
       () => setWorkersState(storage.getWorkers()),
@@ -85,6 +100,10 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     supabase.from('worker_advances').select('*').eq('society_id', sid).then(
       ({ data, error }) => setWorkerAdvancesState(error || !data ? storage.getWorkerAdvances() : (data as unknown as WorkerAdvance[])),
       () => setWorkerAdvancesState(storage.getWorkerAdvances()),
+    );
+    supabase.from('pf_esi_runs').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setPfEsiRunsState(error || !data ? storage.getPfEsiRuns() : (data as unknown as PfEsiRun[])),
+      () => setPfEsiRunsState(storage.getPfEsiRuns()),
     );
   }, [user?.societyId]);
 
@@ -395,8 +414,129 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     });
   }, [workerAdvances, vouchers, society, user, cancelVoucher]);
 
+  // ── EPF / ESI (monthly, statutory) — computed from the month's muster wages ──────
+  // Employee share is deducted from wages payable (2109); employer share is an expense
+  // (5203 PF / 5204 ESI). Both credit the statutory payables (2203 EPF / 2204 ESI).
+  const computePfEsi = useCallback((period: string, cfg: PfEsiConfig): PfEsiComputation => {
+    const rows = musterEntries.filter(m => !m.isDeleted && m.period === period);
+    const byWorker = new Map<string, number>();
+    rows.forEach(m => { byWorker.set(m.memberId, (byWorker.get(m.memberId) || 0) + (m.daysWorked || 0) * (m.dailyWage || 0)); });
+    const perWorker = Array.from(byWorker.entries()).map(([workerId, wage]) => {
+      const epfBase = Math.min(wage, cfg.epfCeiling);
+      const epfEmp = +(epfBase * cfg.epfRate / 100).toFixed(2);
+      const epfEr = epfEmp;                                   // employer EPF = same 12% (3.67 EPF + 8.33 EPS)
+      const esiOn = wage <= cfg.esiCeiling ? wage : 0;        // ESI not applicable above the ceiling
+      const esiEmp = +(esiOn * cfg.esiEmpRate / 100).toFixed(2);
+      const esiEr = +(esiOn * cfg.esiErRate / 100).toFixed(2);
+      return { workerId, wage, epfEmp, epfEr, esiEmp, esiEr };
+    });
+    const sum = (f: (w: PfEsiComputation['perWorker'][number]) => number) => +perWorker.reduce((s, w) => s + f(w), 0).toFixed(2);
+    return {
+      grossWages: sum(w => w.wage),
+      epfEmployee: sum(w => w.epfEmp), epfEmployer: sum(w => w.epfEr),
+      esiEmployee: sum(w => w.esiEmp), esiEmployer: sum(w => w.esiEr),
+      perWorker,
+    };
+  }, [musterEntries]);
+
+  const postPfEsi = useCallback((period: string, cfg: PfEsiConfig, date: string): PfEsiRun => {
+    const sentinel = { id: '', period, grossWages: 0, epfEmployee: 0, epfEmployer: 0, esiEmployee: 0, esiEmployer: 0, status: 'posted', createdAt: '' } as PfEsiRun;
+    if (guardFYLocked()) return sentinel;
+    if (pfEsiRuns.some(r => !r.isDeleted && r.period === period)) { toastRef.current({ title: 'पहले से दर्ज', description: `${period} की EPF/ESI देयता पहले ही पोस्ट हो चुकी है।`, variant: 'destructive', duration: 9000 }); return sentinel; }
+    const c = computePfEsi(period, cfg);
+    const empShare = +(c.epfEmployee + c.esiEmployee).toFixed(2);
+    const epfTotal = +(c.epfEmployee + c.epfEmployer).toFixed(2);
+    const esiTotal = +(c.esiEmployee + c.esiEmployer).toFixed(2);
+    if (epfTotal + esiTotal <= 0) { toastRef.current({ title: 'कुछ दर्ज करने को नहीं', description: 'इस महीने की मज़दूरी/अंशदान शून्य है।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    const id = crypto.randomUUID();
+    const lid = () => crypto.randomUUID();
+    const lines = [
+      ...(empShare > 0 ? [{ id: lid(), accountId: '2109', type: 'Dr' as const, amount: empShare }] : []),       // employee share deducted from wages payable
+      ...(c.epfEmployer > 0 ? [{ id: lid(), accountId: '5203', type: 'Dr' as const, amount: c.epfEmployer }] : []),
+      ...(c.esiEmployer > 0 ? [{ id: lid(), accountId: '5204', type: 'Dr' as const, amount: c.esiEmployer }] : []),
+      ...(epfTotal > 0 ? [{ id: lid(), accountId: '2203', type: 'Cr' as const, amount: epfTotal }] : []),
+      ...(esiTotal > 0 ? [{ id: lid(), accountId: '2204', type: 'Cr' as const, amount: esiTotal }] : []),
+    ];
+    const voucher = addVoucher({
+      type: 'journal', date,
+      debitAccountId: '5203', creditAccountId: '2203', amount: +(epfTotal + esiTotal).toFixed(2),
+      narration: `EPF/ESI देयता — ${period} (कर्मचारी ₹${empShare} + नियोक्ता ₹${(c.epfEmployer + c.esiEmployer).toFixed(2)})`,
+      refType: 'pf_esi.liability', refId: id,
+      createdBy: user?.name || 'System',
+      lines,
+    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>);
+    if (!voucher.id) return sentinel;
+    const run: PfEsiRun = { id, period, grossWages: c.grossWages, epfEmployee: c.epfEmployee, epfEmployer: c.epfEmployer, esiEmployee: c.esiEmployee, esiEmployer: c.esiEmployer, status: 'posted', voucherId: voucher.id, createdAt: new Date().toISOString() };
+    setPfEsiRunsState(prev => { const u = [...prev, run]; storage.setPfEsiRuns(u); return u; });
+    supabase.from('pf_esi_runs').upsert(withSoc(run)).then(({ error }) => {
+      if (error) {
+        console.error('PF/ESI run save error:', error.message);
+        setPfEsiRunsState(prev => { const r = prev.filter(x => x.id !== run.id); storage.setPfEsiRuns(r); return r; });
+        cancelVoucher(voucher.id, 'PF/ESI run rolled back (save failed)', user?.name || 'System');
+        toastRef.current({ title: 'EPF/ESI सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    toastRef.current({ title: 'EPF/ESI देयता दर्ज हुई', description: `${period} · EPF ₹${epfTotal} · ESI ₹${esiTotal}`, duration: 6000 });
+    return run;
+  }, [pfEsiRuns, computePfEsi, society, user, addVoucher, cancelVoucher]);
+
+  const depositPfEsi = useCallback((data: { runId: string; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }): Voucher => {
+    const sentinel = { id: '', voucherNo: '', type: 'payment', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    if (guardFYLocked()) return sentinel;
+    const run = pfEsiRuns.find(r => r.id === data.runId && !r.isDeleted);
+    if (!run) { toastRef.current({ title: 'रन नहीं मिला', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (run.status === 'deposited') { toastRef.current({ title: 'पहले ही जमा', description: 'इस माह की EPF/ESI पहले ही जमा हो चुकी है।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    const epfTotal = +(run.epfEmployee + run.epfEmployer).toFixed(2);
+    const esiTotal = +(run.esiEmployee + run.esiEmployer).toFixed(2);
+    const total = +(epfTotal + esiTotal).toFixed(2);
+    const creditAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.getBankAccountIds(accounts)[0] || storage.ACCOUNT_IDS.BANK);
+    const lid = () => crypto.randomUUID();
+    const voucher = addVoucher({
+      type: 'payment', date: data.date,
+      debitAccountId: '2203', creditAccountId: creditAcc, amount: total,
+      narration: `EPF/ESI जमा — ${run.period}`,
+      refType: 'pf_esi.deposit', refId: run.id,
+      createdBy: user?.name || 'System',
+      lines: [
+        ...(epfTotal > 0 ? [{ id: lid(), accountId: '2203', type: 'Dr' as const, amount: epfTotal }] : []),
+        ...(esiTotal > 0 ? [{ id: lid(), accountId: '2204', type: 'Dr' as const, amount: esiTotal }] : []),
+        { id: lid(), accountId: creditAcc, type: 'Cr' as const, amount: total },
+      ],
+    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>);
+    if (!voucher.id) return sentinel;
+    const next: PfEsiRun = { ...run, status: 'deposited', depositVoucherId: voucher.id };
+    setPfEsiRunsState(prev => { const u = prev.map(r => r.id === run.id ? next : r); storage.setPfEsiRuns(u); return u; });
+    supabase.from('pf_esi_runs').upsert(withSoc(next)).then(({ error }) => {
+      if (error) {
+        console.error('PF/ESI deposit update error:', error.message);
+        setPfEsiRunsState(prev => { const u = prev.map(r => r.id === run.id ? run : r); storage.setPfEsiRuns(u); return u; });
+        cancelVoucher(voucher.id, 'PF/ESI deposit rolled back (update failed)', user?.name || 'System');
+        toastRef.current({ title: 'जमा सेव नहीं हुई', description: `Cloud save fail — ${error.message}. वापस ले लिया गया।`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    toastRef.current({ title: 'EPF/ESI जमा दर्ज हुई', description: `${run.period} · ₹${total}`, duration: 6000 });
+    return voucher;
+  }, [pfEsiRuns, accounts, society, user, addVoucher, cancelVoucher]);
+
+  const deletePfEsiRun = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const old = pfEsiRuns.find(r => r.id === id);
+    if (!old) return;
+    setPfEsiRunsState(prev => { const u = prev.filter(r => r.id !== id); storage.setPfEsiRuns(u); return u; });
+    supabase.from('pf_esi_runs').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('PF/ESI run delete error:', error.message);
+        setPfEsiRunsState(prev => { const u = [...prev, old]; storage.setPfEsiRuns(u); return u; });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        return;
+      }
+      if (old.voucherId) cancelVoucher(old.voucherId, 'PF/ESI run deleted', user?.name || 'System');
+      if (old.depositVoucherId) cancelVoucher(old.depositVoucherId, 'PF/ESI run deleted (deposit reversed)', user?.name || 'System');
+    });
+  }, [pfEsiRuns, society, user, cancelVoucher]);
+
   return (
-    <LabourDataContext.Provider value={{ workers, addWorker, updateWorker, deleteWorker, departments, addDepartment, updateDepartment, deleteDepartment, departmentBills, addDepartmentBill, recordDepartmentCollection, deleteDepartmentBill, workerAdvances, addWorkerAdvance, recordAdvanceRecovery, deleteWorkerAdvance }}>
+    <LabourDataContext.Provider value={{ workers, addWorker, updateWorker, deleteWorker, departments, addDepartment, updateDepartment, deleteDepartment, departmentBills, addDepartmentBill, recordDepartmentCollection, deleteDepartmentBill, workerAdvances, addWorkerAdvance, recordAdvanceRecovery, deleteWorkerAdvance, pfEsiRuns, computePfEsi, postPfEsi, depositPfEsi, deletePfEsiRun }}>
       {children}
     </LabourDataContext.Provider>
   );

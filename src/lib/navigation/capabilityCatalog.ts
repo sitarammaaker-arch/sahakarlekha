@@ -50,6 +50,8 @@ export const CAPABILITY_META: CapabilityMeta[] = [
     descHi: 'GST सारांश, e-Way बिल और HSN मास्टर।', descEn: 'GST summary, e-Way bill and HSN master.', docsUrl: '#' },
   { id: 'tds', category: 'compliance', nameHi: 'टीडीएस', nameEn: 'TDS',
     descHi: 'TDS रजिस्टर और फॉर्म 16A।', descEn: 'TDS register and Form 16A.', docsUrl: '#' },
+  { id: 'pf_esi', category: 'compliance', nameHi: 'EPF / ESI', nameEn: 'EPF / ESI',
+    descHi: 'मज़दूरी पर EPF व ESI अंशदान की मासिक गणना, लेखांकन व रजिस्टर। (सीमा से नीचे की समिति इसे बंद कर सकती है।)', descEn: 'Monthly EPF & ESI contribution on wages — computation, posting and register. (Societies below the threshold can turn this off.)', docsUrl: '#' },
 ];
 
 /** Modules that require a given capability — i.e. what a feature toggle shows/hides. */

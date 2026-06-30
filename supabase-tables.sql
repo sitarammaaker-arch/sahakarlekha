@@ -1600,6 +1600,31 @@ create policy "society_rw" on public.worker_advances for all to authenticated
   with check (society_id::text in (select public.current_user_society_ids()));
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Labour cooperative — monthly EPF/ESI processing runs (computed from muster wages).
+-- RUN once.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists pf_esi_runs (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  period text,
+  "grossWages" numeric,
+  "epfEmployee" numeric,
+  "epfEmployer" numeric,
+  "esiEmployee" numeric,
+  "esiEmployer" numeric,
+  status text,
+  "voucherId" text,
+  "depositVoucherId" text,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table public.pf_esi_runs enable row level security;
+drop policy if exists "society_rw" on public.pf_esi_runs;
+create policy "society_rw" on public.pf_esi_runs for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement — generic BUSINESS TRANSACTION boundary (M1 fix). ONE plpgsql
 -- transaction: every supplied collection commits together, or nothing does — a
 -- ProcurementLot can never exist in the cloud without its immutable creation event.

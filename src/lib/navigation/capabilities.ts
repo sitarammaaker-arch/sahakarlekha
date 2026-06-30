@@ -22,7 +22,8 @@ export type Capability =
   | 'gst'
   | 'tds'
   | 'housing'
-  | 'labour';
+  | 'labour'
+  | 'pf_esi';
 
 /** Sidebar groups — 1:1 with today's visual groups, in render order. */
 export type NavDomain = 'core' | 'operations' | 'labour' | 'reports' | 'registers' | 'administration';

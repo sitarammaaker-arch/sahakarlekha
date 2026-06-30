@@ -292,6 +292,22 @@ export interface WorkerAdvance {
   createdAt: string;
 }
 
+// Labour cooperative — a monthly EPF/ESI processing run (computed from that month's muster wages).
+export interface PfEsiRun {
+  id: string;
+  period: string;            // "YYYY-MM"
+  grossWages: number;        // total muster wages for the month (basis)
+  epfEmployee: number;
+  epfEmployer: number;
+  esiEmployee: number;
+  esiEmployer: number;
+  status: 'posted' | 'deposited';
+  voucherId?: string;        // the liability-posting voucher
+  depositVoucherId?: string; // the deposit (challan) voucher
+  createdAt: string;
+  isDeleted?: boolean;
+}
+
 export type DeptBillType = 'running' | 'final';
 export interface DepartmentBill {
   id: string;

@@ -1,4 +1,4 @@
-import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance } from '@/types';
+import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement } from '@/lib/procurement';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
@@ -80,6 +80,7 @@ const KEYS = {
   departments: 'sahayata_departments',
   departmentBills: 'sahayata_department_bills',
   workerAdvances: 'sahayata_worker_advances',
+  pfEsiRuns: 'sahayata_pf_esi_runs',
 };
 
 // ── Central account ID constants ─────────────────────────────────────────────
@@ -619,6 +620,10 @@ const ACCOUNTS_TO_ADD: LedgerAccount[] = [
   { id: '2107', name: 'Member Deposits',            nameHi: 'सदस्य जमाराशि',            type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'deposit' },
   { id: '2109', name: 'Wages Payable',              nameHi: 'देय मज़दूरी',              type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
   { id: '3307', name: 'TDS Receivable',             nameHi: 'प्राप्य TDS',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
+  { id: '2203', name: 'EPF Payable',                nameHi: 'देय EPF',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
+  { id: '2204', name: 'ESI Payable',                nameHi: 'देय ESI',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
+  { id: '5203', name: 'PF',                         nameHi: 'भविष्य निधि (PF)',          type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5200', subtype: 'employee_expense' },
+  { id: '5204', name: 'ESI',                        nameHi: 'कर्मचारी बीमा (ESI)',       type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5200', subtype: 'employee_expense' },
   { id: '2205', name: 'HRDF Payable',               nameHi: 'देय HRDF',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
   { id: '3108', name: 'Accum. Dep. - Building',     nameHi: 'संचित ह्रास - भवन',         type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100', subtype: 'accumulated_dep' },
   { id: '3109', name: 'Accum. Dep. - Furniture',    nameHi: 'संचित ह्रास - फर्नीचर',     type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100', subtype: 'accumulated_dep' },
@@ -799,6 +804,8 @@ export const getDepartmentBills = (): DepartmentBill[] => get(KEYS.departmentBil
 export const setDepartmentBills = (b: DepartmentBill[]): void => set(KEYS.departmentBills, b);
 export const getWorkerAdvances = (): WorkerAdvance[] => get(KEYS.workerAdvances, []);
 export const setWorkerAdvances = (a: WorkerAdvance[]): void => set(KEYS.workerAdvances, a);
+export const getPfEsiRuns = (): PfEsiRun[] => get(KEYS.pfEsiRuns, []);
+export const setPfEsiRuns = (r: PfEsiRun[]): void => set(KEYS.pfEsiRuns, r);
 
 export const getAccounts = (): LedgerAccount[] => {
   const stored = get<LedgerAccount[] | null>(KEYS.accounts, null);
