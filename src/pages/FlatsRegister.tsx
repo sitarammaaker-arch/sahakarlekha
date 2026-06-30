@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { useHousingData } from '@/contexts/HousingDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,8 @@ const OWNER_TYPES = [
 ];
 
 export default function FlatsRegister() {
-  const { housingFlats, members, addHousingFlat, updateHousingFlat, deleteHousingFlat } = useData();
+  const { members } = useData();
+  const { housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat } = useHousingData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';

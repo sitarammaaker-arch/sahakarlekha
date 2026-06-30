@@ -8,6 +8,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DataProvider, useData } from "@/contexts/DataContext";
 import { LabourProvider } from "@/contexts/LabourDataContext";
+import { HousingProvider } from "@/contexts/HousingDataContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { CapabilityGuard } from "@/components/CapabilityGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -349,6 +350,7 @@ const App = () => (
       <AuthProvider>
         <DataProvider>
         <LabourProvider>
+        <HousingProvider>
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -356,6 +358,7 @@ const App = () => (
             <AppRoutes />
           </BrowserRouter>
         </TooltipProvider>
+        </HousingProvider>
         </LabourProvider>
         </DataProvider>
       </AuthProvider>

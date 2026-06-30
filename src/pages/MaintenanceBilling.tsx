@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { useHousingData } from '@/contexts/HousingDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,8 @@ const thisMonth = () => new Date().toISOString().slice(0, 7); // YYYY-MM
 const today = () => new Date().toISOString().split('T')[0];
 
 export default function MaintenanceBilling() {
-  const { housingFlats, maintenanceBills, members, accounts, generateMaintenanceBills, deleteMaintenanceBill, recordMaintenanceCollection } = useData();
+  const { members, accounts } = useData();
+  const { housingFlats, maintenanceBills, generateMaintenanceBills, deleteMaintenanceBill, recordMaintenanceCollection } = useHousingData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
