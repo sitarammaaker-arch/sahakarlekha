@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FileText, Printer } from 'lucide-react';
 
-const thisMonth = '2026-06';
+const thisMonth = new Date().toISOString().slice(0, 7);
 
 export default function WageRegister() {
   const { workOrders, musterEntries, members, society } = useData();
