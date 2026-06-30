@@ -11,11 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
-import { ShieldCheck, IndianRupee, Trash2 } from 'lucide-react';
+import { ShieldCheck, IndianRupee, Trash2, Download } from 'lucide-react';
 
 export default function PfEsi() {
   const { workers, pfEsiRuns, computePfEsi, postPfEsi, depositPfEsi, deletePfEsiRun } = useLabourData();
-  const { accounts } = useData();
+  const { accounts, musterEntries } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -64,6 +64,44 @@ export default function PfEsi() {
     if (!window.confirm(msg)) return;
     deletePfEsiRun(id);
     toast({ title: hi ? 'रन हटाया गया' : 'Run deleted' });
+  };
+
+  // ── Statutory return files (EPFO ECR + ESIC contribution) ────────────────────
+  const triggerDownload = (filename: string, content: string, mime: string) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+    a.remove(); URL.revokeObjectURL(url);
+  };
+  const daysOf = (workerId: string) => musterEntries
+    .filter(m => !m.isDeleted && m.period === period && m.memberId === workerId)
+    .reduce((s, m) => s + (m.daysWorked || 0), 0);
+
+  // EPFO ECR: hash-tilde-hash delimited, one line per member (UAN required), amounts in whole rupees.
+  // UAN#~#Name#~#Gross#~#EPFWages#~#EPSWages#~#EDLIWages#~#EPFContri(EE 12%)#~#EPSContri(8.33%)#~#EPF-EPSdiff(3.67%)#~#NCPdays#~#RefundAdv
+  const downloadEcr = () => {
+    const rows = comp.perWorker.map(w => ({ w, wk: workers.find(x => x.id === w.workerId) })).filter(r => r.wk?.uan);
+    if (rows.length === 0) { toast({ title: hi ? 'कोई UAN नहीं' : 'No UAN found', description: hi ? 'श्रमिक मास्टर में UAN भरें, तभी ECR बनेगी।' : 'Add UAN in Worker Master to generate the ECR.', variant: 'destructive', duration: 9000 }); return; }
+    const lines = rows.map(({ w, wk }) => {
+      const epfBase = Math.round(Math.min(w.wage, cfg.epfCeiling));
+      return [wk!.uan, wk!.name, Math.round(w.wage), epfBase, epfBase, epfBase, Math.round(w.epfEmp), Math.round(w.eps), Math.round(w.epfEr - w.eps), 0, 0].join('#~#');
+    });
+    triggerDownload(`ECR_${period}.txt`, lines.join('\n'), 'text/plain;charset=utf-8');
+    const excluded = comp.perWorker.length - rows.length;
+    toast({ title: hi ? 'ECR फ़ाइल बनी' : 'ECR file generated', description: `${rows.length} ${hi ? 'श्रमिक' : 'members'}${excluded > 0 ? ` · ${excluded} ${hi ? 'बिना UAN छोड़े' : 'skipped (no UAN)'}` : ''}`, duration: 7000 });
+  };
+
+  // ESIC monthly contribution: CSV (IP-number required, only ESI-applicable wages ≤ ceiling).
+  const downloadEsi = () => {
+    const rows = comp.perWorker.map(w => ({ w, wk: workers.find(x => x.id === w.workerId) })).filter(r => r.wk?.esiIp && r.w.esiEmp > 0);
+    if (rows.length === 0) { toast({ title: hi ? 'कोई ESI IP नहीं' : 'No ESI IP found', description: hi ? 'श्रमिक मास्टर में ESI IP नंबर भरें (और मज़दूरी सीमा के भीतर हो)।' : 'Add ESI IP numbers in Worker Master (and wage within the ceiling).', variant: 'destructive', duration: 9000 }); return; }
+    const csv = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
+    const header = 'IP Number,IP Name,No. of Days,Total Monthly Wages';
+    const lines = rows.map(({ w, wk }) => [csv(wk!.esiIp!), csv(wk!.name), daysOf(w.workerId), Math.round(w.wage)].join(','));
+    triggerDownload(`ESI_${period}.csv`, [header, ...lines].join('\n'), 'text/csv;charset=utf-8');
+    const eligible = comp.perWorker.filter(w => w.esiEmp > 0).length;
+    const excluded = eligible - rows.length;
+    toast({ title: hi ? 'ESI रिटर्न बनी' : 'ESI return generated', description: `${rows.length} ${hi ? 'श्रमिक' : 'IPs'}${excluded > 0 ? ` · ${excluded} ${hi ? 'बिना IP छोड़े' : 'skipped (no IP)'}` : ''}`, duration: 7000 });
   };
 
   return (
@@ -158,6 +196,13 @@ export default function PfEsi() {
           <Button onClick={post} className="w-full" disabled={alreadyPosted || comp.perWorker.length === 0 || (epfTotal + esiTotal) <= 0}>
             {alreadyPosted ? (hi ? 'इस माह की देयता पहले से दर्ज' : 'Liability already posted for this month') : (hi ? 'EPF/ESI देयता पोस्ट करें' : 'Post EPF/ESI Liability')}
           </Button>
+
+          {comp.perWorker.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <Button variant="outline" onClick={downloadEcr}><Download className="h-4 w-4 mr-2" />{hi ? 'ECR फ़ाइल (EPF)' : 'ECR file (EPF)'}</Button>
+              <Button variant="outline" onClick={downloadEsi}><Download className="h-4 w-4 mr-2" />{hi ? 'ESI रिटर्न (CSV)' : 'ESI return (CSV)'}</Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
