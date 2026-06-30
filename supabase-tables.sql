@@ -1487,6 +1487,8 @@ alter table public.muster_entries add column if not exists accrued boolean defau
 alter table public.muster_entries add column if not exists "accrualVoucherId" text;
 -- Partial Wage Payment (V5): cumulative amount paid (supports per-labourer + instalment).
 alter table public.muster_entries add column if not exists "paidAmount" numeric default 0;
+-- Wage Basis (V6): daily / piece / hourly — wage stays qty×rate, only the meaning changes.
+alter table public.muster_entries add column if not exists "workBasis" text;
 alter table public.muster_entries enable row level security;
 drop policy if exists "society_rw" on public.muster_entries;
 create policy "society_rw" on public.muster_entries for all to authenticated

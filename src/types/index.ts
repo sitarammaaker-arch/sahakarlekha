@@ -211,15 +211,18 @@ export interface WorkOrder {
   createdAt: string;
 }
 
-// Labour cooperative — a muster-roll entry (one per member-labourer per work order per period).
-// Captures attendance (days worked) + daily wage; wage amount is derived (days × rate).
+// Labour cooperative — a muster-roll entry (one per labourer per work order per period).
+// Wage is always derived as quantity × rate (daysWorked × dailyWage); the basis only changes
+// what the quantity/rate mean (days, piece/units, or hours).
+export type WorkBasis = 'daily' | 'piece' | 'hourly';
 export interface MusterEntry {
   id: string;
   workOrderId: string;
   period: string;            // "YYYY-MM"
-  memberId: string;          // labourer (member)
-  daysWorked: number;
-  dailyWage: number;
+  memberId: string;          // labourer (worker / member)
+  daysWorked: number;        // quantity: days (daily) / units (piece) / hours (hourly)
+  dailyWage: number;         // rate per the chosen basis
+  workBasis?: WorkBasis;     // default 'daily'
   paid?: boolean;            // fully paid (paidAmount >= wage); locks the row
   paidAmount?: number;       // cumulative amount paid (supports partial / instalment payment)
   paymentVoucherId?: string; // links to the most recent wage-payment voucher

@@ -38,10 +38,19 @@ export default function MusterRoll() {
   const [workOrderId, setWorkOrderId] = useState(openOrders[0]?.id || '');
   const [period, setPeriod] = useState(thisMonth);
 
+  // Work basis: wage = qty × rate; only the labels/units change.
+  const BASIS: { id: 'daily' | 'piece' | 'hourly'; en: string; hi: string }[] = [
+    { id: 'daily', en: 'Daily', hi: 'दैनिक' }, { id: 'piece', en: 'Piece / Units', hi: 'नग / मात्रा' }, { id: 'hourly', en: 'Hourly', hi: 'घंटा' },
+  ];
+  const qtyLabel = (b?: string) => b === 'piece' ? (hi ? 'मात्रा (नग)' : 'Units') : b === 'hourly' ? (hi ? 'घंटे' : 'Hours') : (hi ? 'दिन' : 'Days');
+  const rateLabel = (b?: string) => b === 'piece' ? (hi ? 'प्रति-नग दर (₹)' : 'Rate/unit (₹)') : b === 'hourly' ? (hi ? 'प्रति-घंटा दर (₹)' : 'Rate/hour (₹)') : (hi ? 'दैनिक मज़दूरी (₹)' : 'Daily wage (₹)');
+  const unitWord = (b?: string) => b === 'piece' ? (hi ? 'नग' : 'units') : b === 'hourly' ? (hi ? 'घंटे' : 'hrs') : (hi ? 'दिन' : 'days');
+
   // Add-row form
   const [memberId, setMemberId] = useState('');
   const [daysWorked, setDaysWorked] = useState('');
   const [dailyWage, setDailyWage] = useState('');
+  const [basis, setBasis] = useState<'daily' | 'piece' | 'hourly'>('daily');
 
   // Edit dialog
   const [editOpen, setEditOpen] = useState(false);
@@ -49,6 +58,7 @@ export default function MusterRoll() {
   const [eMember, setEMember] = useState('');
   const [eDays, setEDays] = useState('');
   const [eWage, setEWage] = useState('');
+  const [eBasis, setEBasis] = useState<'daily' | 'piece' | 'hourly'>('daily');
 
   // Pay-wages dialog
   const [payOpen, setPayOpen] = useState(false);
@@ -97,19 +107,19 @@ export default function MusterRoll() {
     if (!memberId) { toast({ title: hi ? 'श्रमिक चुनें' : 'Select a worker', variant: 'destructive' }); return; }
     if (rows.some(r => r.memberId === memberId)) { toast({ title: hi ? 'इस श्रमिक की हाज़िरी पहले से दर्ज है' : 'This worker is already recorded for this sheet', variant: 'destructive' }); return; }
     const d = Number(daysWorked); const w = Number(dailyWage);
-    if (!(d > 0)) { toast({ title: hi ? 'काम किए दिन दर्ज करें' : 'Enter days worked', variant: 'destructive' }); return; }
-    if (!(w >= 0)) { toast({ title: hi ? 'दैनिक मज़दूरी दर्ज करें' : 'Enter daily wage', variant: 'destructive' }); return; }
-    const entry = addMusterEntry({ workOrderId, period, memberId, daysWorked: d, dailyWage: w });
-    if (entry.id) { toast({ title: hi ? 'हाज़िरी जोड़ी गई' : 'Attendance added', description: `${memberName(memberId)} · ${d} ${hi ? 'दिन' : 'days'}` }); setMemberId(''); setDaysWorked(''); setDailyWage(''); }
+    if (!(d > 0)) { toast({ title: hi ? `${qtyLabel(basis)} दर्ज करें` : `Enter ${qtyLabel(basis).toLowerCase()}`, variant: 'destructive' }); return; }
+    if (!(w >= 0)) { toast({ title: hi ? 'दर दर्ज करें' : 'Enter rate', variant: 'destructive' }); return; }
+    const entry = addMusterEntry({ workOrderId, period, memberId, daysWorked: d, dailyWage: w, workBasis: basis });
+    if (entry.id) { toast({ title: hi ? 'हाज़िरी जोड़ी गई' : 'Attendance added', description: `${memberName(memberId)} · ${d} ${unitWord(basis)}` }); setMemberId(''); setDaysWorked(''); setDailyWage(''); setBasis('daily'); }
   };
 
-  const openEdit = (m: MusterEntry) => { setEditId(m.id); setEMember(m.memberId); setEDays(String(m.daysWorked)); setEWage(String(m.dailyWage)); setEditOpen(true); };
+  const openEdit = (m: MusterEntry) => { setEditId(m.id); setEMember(m.memberId); setEDays(String(m.daysWorked)); setEWage(String(m.dailyWage)); setEBasis(m.workBasis || 'daily'); setEditOpen(true); };
 
   const saveEdit = () => {
     const d = Number(eDays); const w = Number(eWage);
-    if (!(d > 0)) { toast({ title: hi ? 'दिन दर्ज करें' : 'Enter days', variant: 'destructive' }); return; }
-    if (!(w >= 0)) { toast({ title: hi ? 'मज़दूरी दर्ज करें' : 'Enter wage', variant: 'destructive' }); return; }
-    updateMusterEntry(editId, { memberId: eMember, daysWorked: d, dailyWage: w });
+    if (!(d > 0)) { toast({ title: hi ? `${qtyLabel(eBasis)} दर्ज करें` : `Enter ${qtyLabel(eBasis).toLowerCase()}`, variant: 'destructive' }); return; }
+    if (!(w >= 0)) { toast({ title: hi ? 'दर दर्ज करें' : 'Enter rate', variant: 'destructive' }); return; }
+    updateMusterEntry(editId, { memberId: eMember, daysWorked: d, dailyWage: w, workBasis: eBasis });
     toast({ title: hi ? 'अपडेट हुआ' : 'Updated' });
     setEditOpen(false);
   };
@@ -170,11 +180,18 @@ export default function MusterRoll() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>{hi ? 'दिन' : 'Days'}</Label>
+              <Label>{hi ? 'कार्य-आधार' : 'Work basis'}</Label>
+              <Select value={basis} onValueChange={v => setBasis(v as 'daily' | 'piece' | 'hourly')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{BASIS.map(b => <SelectItem key={b.id} value={b.id}>{hi ? b.hi : b.en}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>{qtyLabel(basis)}</Label>
               <Input type="number" min={0} value={daysWorked} onChange={e => setDaysWorked(e.target.value)} placeholder="0" />
             </div>
             <div className="space-y-2">
-              <Label>{hi ? 'दैनिक मज़दूरी (₹)' : 'Daily wage (₹)'}</Label>
+              <Label>{rateLabel(basis)}</Label>
               <Input type="number" min={0} value={dailyWage} onChange={e => setDailyWage(e.target.value)} placeholder="0" />
             </div>
           </div>
@@ -201,7 +218,7 @@ export default function MusterRoll() {
                   {!m.paid && (m.paidAmount || 0) > 0 && <Badge variant="outline">{hi ? 'आंशिक' : 'Partial'}</Badge>}
                 </div>
                 <div className="text-muted-foreground">
-                  {m.daysWorked} {hi ? 'दिन' : 'days'} × {money(m.dailyWage)} = <span className="font-medium text-foreground">{money(wageOf(m))}</span>
+                  {m.daysWorked} {unitWord(m.workBasis)} × {money(m.dailyWage)} = <span className="font-medium text-foreground">{money(wageOf(m))}</span>
                   {(m.paidAmount || 0) > 0 && !m.paid && <span> · {hi ? 'चुकाया' : 'paid'} {money(m.paidAmount || 0)} · {hi ? 'बकाया' : 'due'} {money(outstandingOf(m))}</span>}
                 </div>
               </div>
@@ -242,9 +259,16 @@ export default function MusterRoll() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'कार्य-आधार' : 'Work basis'}</Label>
+              <Select value={eBasis} onValueChange={v => setEBasis(v as 'daily' | 'piece' | 'hourly')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{BASIS.map(b => <SelectItem key={b.id} value={b.id}>{hi ? b.hi : b.en}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label>{hi ? 'दिन' : 'Days'}</Label><Input type="number" min={0} value={eDays} onChange={e => setEDays(e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>{hi ? 'दैनिक मज़दूरी (₹)' : 'Daily wage (₹)'}</Label><Input type="number" min={0} value={eWage} onChange={e => setEWage(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>{qtyLabel(eBasis)}</Label><Input type="number" min={0} value={eDays} onChange={e => setEDays(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>{rateLabel(eBasis)}</Label><Input type="number" min={0} value={eWage} onChange={e => setEWage(e.target.value)} /></div>
             </div>
           </div>
           <DialogFooter>
