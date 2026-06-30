@@ -20,8 +20,8 @@ const STATUSES = [
 ];
 
 export default function WorkOrders() {
-  const { workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder } = useData();
-  const { departments } = useLabourData();
+  const { workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder, musterEntries } = useData();
+  const { departments, departmentBills } = useLabourData();
   // Show any non-inactive department (matches Department Master, which lists all !isDeleted).
   // A freshly created department whose status is unset/anything-but-'inactive' must still appear.
   const activeDepts = departments.filter(d => !d.isDeleted && d.status !== 'inactive');
@@ -98,6 +98,20 @@ export default function WorkOrders() {
   };
 
   const remove = (w: WorkOrder) => {
+    // RULE-3: block deletion while muster entries / department bills reference this WO
+    // (their wage-accrual + income vouchers would otherwise stay live but unattributed).
+    const hasMuster = musterEntries.some(m => !m.isDeleted && m.workOrderId === w.id);
+    const hasBills = departmentBills.some(b => !b.isDeleted && b.workOrderId === w.id);
+    if (hasMuster || hasBills) {
+      toast({
+        title: hi ? 'कार्य आदेश हटाया नहीं जा सकता' : 'Cannot delete work order',
+        description: hasMuster
+          ? (hi ? 'इस आदेश की मस्टर/मज़दूरी प्रविष्टियाँ हैं। पहले वे हटाएँ।' : 'This order has muster/wage entries. Remove them first.')
+          : (hi ? 'इस आदेश के विभाग-बिल दर्ज हैं। पहले वे हटाएँ।' : 'This order has department bills. Remove them first.'),
+        variant: 'destructive', duration: 9000,
+      });
+      return;
+    }
     if (!window.confirm(hi ? `कार्य आदेश ${w.workOrderNo} हटाएँ?` : `Delete work order ${w.workOrderNo}?`)) return;
     deleteWorkOrder(w.id);
     toast({ title: hi ? 'कार्य आदेश हटाया गया' : 'Work order deleted' });

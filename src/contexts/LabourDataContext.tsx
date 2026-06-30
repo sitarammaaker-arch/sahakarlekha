@@ -265,7 +265,8 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     if (data.amount > outstanding + 0.005) { toastRef.current({ title: 'राशि बकाया से अधिक', description: `वसूली ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकती।`, variant: 'destructive', duration: 9000 }); return sentinel; }
     // TDS deducted by the department on the gross settled amount → our receivable (3307).
     const tds = +(data.tdsAmount || 0).toFixed(2);
-    if (tds < 0 || tds >= data.amount) { toastRef.current({ title: 'TDS राशि गलत', description: 'TDS 0 से कम या वसूली-राशि के बराबर/अधिक नहीं हो सकता।', variant: 'destructive', duration: 9000 }); return sentinel; }
+    // TDS may equal the gross (100%-withheld settlement → netCash 0); only > gross is invalid.
+    if (tds < 0 || tds > data.amount + 0.005) { toastRef.current({ title: 'TDS राशि गलत', description: 'TDS 0 से कम या वसूली-राशि से अधिक नहीं हो सकता।', variant: 'destructive', duration: 9000 }); return sentinel; }
     const netCash = +(data.amount - tds).toFixed(2);
     const debitAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.getBankAccountIds(accounts)[0] || storage.ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();

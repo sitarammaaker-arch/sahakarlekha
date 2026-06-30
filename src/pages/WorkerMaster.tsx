@@ -28,8 +28,8 @@ const CATEGORIES: { id: WorkerCategory; en: string; hi: string }[] = [
 ];
 
 export default function WorkerMaster() {
-  const { workers, addWorker, updateWorker, deleteWorker } = useLabourData();
-  const { members } = useData();
+  const { workers, addWorker, updateWorker, deleteWorker, workerAdvances } = useLabourData();
+  const { members, musterEntries } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -86,6 +86,20 @@ export default function WorkerMaster() {
   };
 
   const remove = (w: Worker) => {
+    // RULE-3: block deletion while live dependents exist (their wage-accrual / advance
+    // vouchers would otherwise dangle on the books with no owning worker).
+    const hasMuster = musterEntries.some(m => !m.isDeleted && m.memberId === w.id);
+    const openAdv = workerAdvances.some(a => !a.isDeleted && a.workerId === w.id && a.status !== 'cleared');
+    if (hasMuster || openAdv) {
+      toast({
+        title: hi ? 'श्रमिक हटाया नहीं जा सकता' : 'Cannot delete worker',
+        description: hasMuster
+          ? (hi ? 'इस श्रमिक की मस्टर/मज़दूरी प्रविष्टियाँ हैं। पहले वे हटाएँ।' : 'This worker has muster/wage entries. Remove them first.')
+          : (hi ? 'इस श्रमिक का बकाया अग्रिम है। पहले वसूली पूरी करें।' : 'This worker has an outstanding advance. Recover it first.'),
+        variant: 'destructive', duration: 9000,
+      });
+      return;
+    }
     if (!window.confirm(hi ? `श्रमिक ${w.name} हटाएँ?` : `Delete worker ${w.name}?`)) return;
     deleteWorker(w.id);
     toast({ title: hi ? 'श्रमिक हटाया गया' : 'Worker deleted' });

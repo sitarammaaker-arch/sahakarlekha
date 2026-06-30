@@ -24,7 +24,7 @@ export default function PfEsi() {
   const bankIds = getBankAccountIds(accounts);
   const bankAccounts = accounts.filter(a => bankIds.includes(a.id));
 
-  const [period, setPeriod] = useState('2026-06');
+  const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
   const [cfg, setCfg] = useState<PfEsiConfig>(PF_ESI_DEFAULTS);
   const setRate = (k: keyof PfEsiConfig, v: string) => setCfg(c => ({ ...c, [k]: Number(v) || 0 }));
 
@@ -51,8 +51,12 @@ export default function PfEsi() {
     const v = depositPfEsi({ runId: depRunId, mode: depMode, bankAccountId: depMode === 'bank' ? (depBankId || undefined) : undefined, date: depDate });
     if (v.id) setDepOpen(false);
   };
-  const remove = (id: string, period: string) => {
-    if (!window.confirm(hi ? `${period} की EPF/ESI रन हटाएँ? (इसके voucher रद्द होंगे)` : `Delete EPF/ESI run for ${period}? (its vouchers cancel)`)) return;
+  const remove = (id: string, p: string, deposited: boolean) => {
+    // A deposited run was likely already filed with EPFO/ESIC — warn explicitly before reversing.
+    const msg = deposited
+      ? (hi ? `${p} की EPF/ESI जमा हो चुकी है — संभवतः EPFO/ESIC में दाख़िल। हटाने पर देयता व जमा दोनों voucher उलट जाएँगे। फिर भी हटाएँ?` : `${p} EPF/ESI is already deposited — likely filed with EPFO/ESIC. Deleting reverses BOTH the liability and deposit vouchers. Delete anyway?`)
+      : (hi ? `${p} की EPF/ESI रन हटाएँ? (इसके voucher रद्द होंगे)` : `Delete EPF/ESI run for ${p}? (its vouchers cancel)`);
+    if (!window.confirm(msg)) return;
     deletePfEsiRun(id);
     toast({ title: hi ? 'रन हटाया गया' : 'Run deleted' });
   };
@@ -152,7 +156,7 @@ export default function PfEsi() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {r.status !== 'deposited' && <Button size="sm" onClick={() => openDep(r.id)}><IndianRupee className="h-4 w-4 mr-1" />{hi ? 'जमा करें' : 'Deposit'}</Button>}
-                  <Button size="sm" variant="ghost" onClick={() => remove(r.id, r.period)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => remove(r.id, r.period, r.status === 'deposited')}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>
               </div>
             );

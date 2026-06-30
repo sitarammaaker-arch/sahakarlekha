@@ -14,7 +14,7 @@ import { getBankAccountIds } from '@/lib/storage';
 import { UserCheck, Pencil, Trash2, IndianRupee } from 'lucide-react';
 import type { MusterEntry } from '@/types';
 
-const thisMonth = '2026-06'; // safe default; user can change. (No Date.now in module scope.)
+const thisMonth = new Date().toISOString().slice(0, 7); // current YYYY-MM
 
 export default function MusterRoll() {
   const { workOrders, members, accounts, musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages } = useData();

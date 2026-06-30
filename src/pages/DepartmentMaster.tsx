@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useLabourData } from '@/contexts/LabourDataContext';
+import { useData } from '@/contexts/DataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,7 +20,8 @@ const TYPES: { id: DepartmentType; en: string; hi: string }[] = [
 ];
 
 export default function DepartmentMaster() {
-  const { departments, addDepartment, updateDepartment, deleteDepartment } = useLabourData();
+  const { departments, addDepartment, updateDepartment, deleteDepartment, departmentBills } = useLabourData();
+  const { workOrders } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -70,6 +72,20 @@ export default function DepartmentMaster() {
   };
 
   const remove = (d: Department) => {
+    // RULE-3: block deletion while live bills / work orders reference this department
+    // (their receivable + income vouchers would otherwise point at a vanished party).
+    const hasBills = departmentBills.some(b => !b.isDeleted && b.departmentId === d.id);
+    const hasWO = workOrders.some(w => !w.isDeleted && w.departmentId === d.id);
+    if (hasBills || hasWO) {
+      toast({
+        title: hi ? 'विभाग हटाया नहीं जा सकता' : 'Cannot delete department',
+        description: hasBills
+          ? (hi ? 'इस विभाग के बिल दर्ज हैं। पहले वे हटाएँ।' : 'This department has bills. Remove them first.')
+          : (hi ? 'इस विभाग से जुड़े कार्य आदेश हैं। पहले वे हटाएँ/पुनः-असाइन करें।' : 'Work orders are linked to this department. Remove/re-assign them first.'),
+        variant: 'destructive', duration: 9000,
+      });
+      return;
+    }
     if (!window.confirm(hi ? `विभाग ${d.name} हटाएँ?` : `Delete department ${d.name}?`)) return;
     deleteDepartment(d.id);
     toast({ title: hi ? 'विभाग हटाया गया' : 'Department deleted' });

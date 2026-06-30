@@ -267,6 +267,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [maintenanceBills, setMaintenanceBillsState] = useState<MaintenanceBill[]>(() => storage.getMaintenanceBills());
   const [workOrders, setWorkOrdersState] = useState<WorkOrder[]>(() => storage.getWorkOrders());
   const [musterEntries, setMusterEntriesState] = useState<MusterEntry[]>(() => storage.getMusterEntries());
+  const musterEntriesRef = useRef<MusterEntry[]>(musterEntries);
+  useEffect(() => { musterEntriesRef.current = musterEntries; }, [musterEntries]);
   const procurementFarmersRef = useRef<Farmer[]>(procurementFarmers);
   useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
   const loansRef = useRef<Loan[]>(loans);
@@ -1377,6 +1379,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         variant: 'destructive',
       });
       return false;
+    }
+    // Block cancelling an auto wage-accrual voucher while its muster entry is live —
+    // otherwise the entry's `accrued` flag goes stale and payWages would Dr 2109 against
+    // a liability that no longer exists (double-counting the expense).
+    if (current.refType === 'wage.accrual') {
+      const linkedMuster = musterEntriesRef.current.find(m => m.accrualVoucherId === id && !m.isDeleted);
+      if (linkedMuster) {
+        toastRef.current({
+          title: 'यहाँ रद्द नहीं होगा',
+          description: 'यह मज़दूरी-देयता (स्वतः) वाउचर मस्टर रोल से बना है। इसे Muster Roll → सम्बंधित प्रविष्टि को edit/delete करें — accrual अपने-आप उलट जाएगा।',
+          variant: 'destructive', duration: 10000,
+        });
+        return false;
+      }
     }
     if (current.memberId && (current.creditAccountId === ACCOUNT_IDS.SHARE_CAP || current.creditAccountId === ACCOUNT_IDS.ADM_FEE)) {
       const kind = current.creditAccountId === ACCOUNT_IDS.SHARE_CAP ? 'Share Capital' : 'Admission Fee';

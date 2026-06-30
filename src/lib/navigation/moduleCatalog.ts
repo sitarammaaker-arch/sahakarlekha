@@ -61,7 +61,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   // ── Labour cooperative module group (domain: 'labour') ──
   { id: 'workerMaster',    titleKey: 'workerMaster',    icon: HardHat,         route: '/worker-master',   domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 10 },
   { id: 'departmentMaster',titleKey: 'departmentMaster',icon: Landmark,        route: '/department-master', domain: 'labour',   requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 11 },
-  { id: 'workOrders',      titleKey: 'workOrders',      icon: ClipboardList,   route: '/work-orders',     domain: 'labour',     requiredCapabilities: ['labour'], order: 12 },
+  { id: 'workOrders',      titleKey: 'workOrders',      icon: ClipboardList,   route: '/work-orders',     domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 12 },
   { id: 'musterRoll',      titleKey: 'musterRoll',      icon: UserCheck,       route: '/muster-roll',     domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 13 },
   { id: 'workerAdvances',  titleKey: 'workerAdvances',  icon: HandCoins,       route: '/worker-advances', domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 13.5 },
   { id: 'departmentBills', titleKey: 'departmentBills', icon: Receipt,         route: '/department-bills', domain: 'labour',    requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 14 },
