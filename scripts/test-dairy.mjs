@@ -259,5 +259,47 @@ const ENTRIES = [
   ok(settlementLegs(100, [], '5108', '').length === 0, 'missing payable account → no legs');
 }
 
+// ── Mirror: src/lib/dairy/registers.ts ──
+function buildCollectionRegister(entries, from, to) {
+  const rows = entries.filter(e => e.date >= from && e.date <= to).slice()
+    .sort((a, b) => a.date.localeCompare(b.date) || a.shift.localeCompare(b.shift) || a.memberName.localeCompare(b.memberName));
+  let totalQty = 0, totalAmount = 0, fatWt = 0, snfWt = 0;
+  for (const e of rows) { totalQty += e.qty || 0; totalAmount += e.amount || 0; fatWt += (e.fat || 0) * (e.qty || 0); snfWt += (e.snf || 0) * (e.qty || 0); }
+  return { rows, totalQty: round2(totalQty), totalAmount: round2(totalAmount), count: rows.length, avgFat: totalQty > 0 ? round2(fatWt / totalQty) : 0, avgSnf: totalQty > 0 ? round2(snfWt / totalQty) : 0 };
+}
+function buildRecoverySummary(settlements) {
+  const m = new Map();
+  for (const s of settlements) { if (s.isDeleted) continue; for (const l of s.deductionLines) { const cur = m.get(l.type) || { count: 0, amount: 0 }; cur.count += 1; cur.amount = round2(cur.amount + (l.amount || 0)); m.set(l.type, cur); } }
+  const rows = [...m.entries()].map(([type, v]) => ({ type, count: v.count, amount: v.amount })).sort((a, b) => b.amount - a.amount);
+  return { rows, total: round2(rows.reduce((a, r) => a + r.amount, 0)) };
+}
+
+// 17. Collection register: window filter, totals, qty-weighted avg fat
+{
+  const es = [
+    { id: '1', date: '2026-07-02', shift: 'morning', memberName: 'A', qty: 10, fat: 4.0, snf: 8.5, rate: 30, amount: 300 },
+    { id: '2', date: '2026-07-02', shift: 'evening', memberName: 'B', qty: 30, fat: 5.0, snf: 8.7, rate: 34, amount: 1020 },
+    { id: '3', date: '2026-06-30', shift: 'morning', memberName: 'C', qty: 5, fat: 3, snf: 8, rate: 20, amount: 100 }, // out of window
+  ];
+  const r = buildCollectionRegister(es, '2026-07-01', '2026-07-31');
+  ok(r.count === 2 && r.totalQty === 40, 'window excludes out-of-range; qty sums (10+30)');
+  ok(r.totalAmount === 1320, 'amount total (300 + 1020)');
+  ok(r.avgFat === 4.75, 'qty-weighted avg fat = (4×10 + 5×30)/40 = 4.75');
+}
+
+// 18. Recovery summary: group deduction lines by type across non-deleted settlements
+{
+  const setts = [
+    { isDeleted: false, deductionLines: [{ type: 'Feed', amount: 200 }, { type: 'Advance', amount: 100 }] },
+    { isDeleted: false, deductionLines: [{ type: 'Feed', amount: 150 }] },
+    { isDeleted: true, deductionLines: [{ type: 'Feed', amount: 999 }] }, // excluded
+  ];
+  const r = buildRecoverySummary(setts);
+  ok(r.total === 450, 'recovery total across live settlements (200 + 100 + 150)');
+  const feed = r.rows.find(x => x.type === 'Feed');
+  ok(feed.count === 2 && feed.amount === 350, 'Feed grouped: 2 lines, 350 (deleted settlement excluded)');
+  ok(r.rows[0].type === 'Feed', 'rows sorted by amount desc (Feed 350 first)');
+}
+
 console.log(`[dairy-test] ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
