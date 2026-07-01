@@ -17,7 +17,8 @@ const out = (s: DairySettlement) => Math.max(0, +(s.netPayable - s.amountPaid).t
 
 function SettlementCard({ s }: { s: DairySettlement }) {
   const { accounts } = useData();
-  const { addDairyDeduction, removeDairyDeduction, approveDairySettlement, recordDairySettlementPayment, deleteDairySettlement } = useDairyData();
+  const { addDairyDeduction, removeDairyDeduction, approveDairySettlement, recordDairySettlementPayment, deleteDairySettlement, getMemberInputBalance, memberInputReceivableAccountId } = useDairyData();
+  const inputBal = getMemberInputBalance(s.memberId);
   const { language } = useLanguage();
   const hi = language === 'hi';
   const postable = useMemo(() => accounts.filter(a => !a.isGroup), [accounts]);
@@ -73,6 +74,12 @@ function SettlementCard({ s }: { s: DairySettlement }) {
 
       {isDraft && (
         <div className="space-y-2 rounded-md border-dashed border p-2">
+          {inputBal.outstanding > 0 && memberInputReceivableAccountId && (
+            <div className="flex items-center justify-between rounded bg-amber-50 border border-amber-200 px-2 py-1 text-xs">
+              <span>{hi ? 'बकाया आदान (आहार/दवा)' : 'Outstanding inputs (feed/medicine)'}: <b>₹{inputBal.outstanding.toLocaleString('en-IN')}</b></span>
+              <Button size="sm" variant="secondary" className="h-7" onClick={() => addDairyDeduction({ settlementId: s.id, type: hi ? 'आदान वसूली' : 'Input Recovery', accountId: memberInputReceivableAccountId, amount: inputBal.outstanding })}>{hi ? 'वसूल करें' : 'Recover'}</Button>
+            </div>
+          )}
           <p className="text-xs font-medium">{hi ? 'कटौती जोड़ें (वसूली)' : 'Add deduction (recovery)'}</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
             <div className="space-y-1"><Label className="text-xs">{hi ? 'प्रकार' : 'Type'}</Label>
