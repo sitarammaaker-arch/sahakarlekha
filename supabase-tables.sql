@@ -1411,6 +1411,8 @@ alter table public.housing_flats add column if not exists floor text;
 alter table public.housing_flats add column if not exists "unitType" text;
 alter table public.housing_flats add column if not exists "associateMemberId" text;
 alter table public.housing_flats add column if not exists occupancy text;
+-- Housing H2a — owner-member receivable sub-ledger (leaf under 3303).
+alter table public.housing_flats add column if not exists "receivableAccountId" text;
 alter table public.housing_flats enable row level security;
 drop policy if exists "society_rw" on public.housing_flats;
 create policy "society_rw" on public.housing_flats for all to authenticated
@@ -1437,6 +1439,8 @@ create table if not exists maintenance_bills (
   "isDeleted" boolean default false,
   "createdAt" timestamptz default now()
 );
+-- Housing H2a — account the demand debited (owner-member sub-ledger); collection credits the same.
+alter table public.maintenance_bills add column if not exists "receivableAccountId" text;
 alter table public.maintenance_bills enable row level security;
 drop policy if exists "society_rw" on public.maintenance_bills;
 create policy "society_rw" on public.maintenance_bills for all to authenticated

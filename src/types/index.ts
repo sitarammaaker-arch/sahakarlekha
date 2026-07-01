@@ -176,6 +176,7 @@ export interface HousingFlat {
   associateMemberId?: string; // associate / joint member (housing-specific)
   ownerType?: 'owner' | 'tenant';   // legacy; kept in sync from `occupancy` (L9 back-compat)
   occupancy?: 'self' | 'rented' | 'vacant';  // physical status; drives non-occupancy charges (H2)
+  receivableAccountId?: string;  // owner-member's receivable sub-ledger (leaf under 3303); '' → uses 3303 control
   area?: number;              // sq ft
   monthlyMaintenance: number;
   registrationDate?: string;
@@ -193,7 +194,8 @@ export interface MaintenanceBill {
   period: string;            // "YYYY-MM"
   date: string;              // voucher date
   amount: number;
-  voucherId?: string;        // the receivable voucher (Dr 3303 / Cr 4101)
+  voucherId?: string;        // the receivable voucher (Dr receivable / Cr 4101)
+  receivableAccountId?: string;  // account the demand debited; collection credits the same (defaults to 3303)
   paidAmount: number;        // advanced by Collection (next delivery); 0 at billing
   status: 'unpaid' | 'partial' | 'paid';
   isDeleted?: boolean;

@@ -20,7 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
-import type { HousingFlat, MaintenanceBill, Voucher } from '@/types';
+import type { HousingFlat, MaintenanceBill, Voucher, LedgerAccount } from '@/types';
 
 interface HousingDataContextValue {
   housingFlats: HousingFlat[];
@@ -38,8 +38,8 @@ const HousingDataContext = createContext<HousingDataContextValue | undefined>(un
 
 export function HousingProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  // Compose core (never fork): FY-lock + chart from society; vouchers via the core engine.
-  const { society, accounts, addVoucher, cancelVoucher } = useData();
+  // Compose core (never fork): FY-lock + chart from society; sub-ledgers + vouchers via the core engine.
+  const { society, accounts, members, addAccount, addVoucher, cancelVoucher } = useData();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   useEffect(() => { toastRef.current = toast; }, [toast]);
@@ -133,28 +133,69 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const date = data.date || new Date().toISOString().split('T')[0];
     const created: MaintenanceBill[] = [];
     const lid = () => crypto.randomUUID();
+
+    // Resolve (find-or-create, deduped per owner member within AND across runs) the member's
+    // receivable sub-ledger — a leaf under 3303 (mirrors the Departments sub-ledger pattern; 3303
+    // stays a leaf so historical postings never orphan). Vacant flats fall back to the 3303 control.
+    const recCache = new Map<string, string>();
+    const flatRecUpdates = new Map<string, string>();  // flatId → receivableAccountId to backfill
+    const resolveReceivable = (memberId?: string): string => {
+      if (!memberId) return '3303';
+      const cached = recCache.get(memberId);
+      if (cached) return cached;
+      const existing = housingFlats.find(f => !f.isDeleted && f.memberId === memberId && f.receivableAccountId && accounts.some(a => a.id === f.receivableAccountId))?.receivableAccountId;
+      let accId = existing;
+      if (!accId) {
+        const mem = members.find(m => m.id === memberId);
+        const label = mem ? `${mem.name} (${mem.memberId})` : memberId.slice(0, 8);
+        const acc = addAccount({
+          name: `Maintenance Receivable — ${label}`,
+          nameHi: `प्राप्य रखरखाव — ${mem?.name || label}`,
+          type: 'asset', openingBalance: 0, openingBalanceType: 'debit',
+          isSystem: false, isGroup: false, parentId: '3303',
+        } as Omit<LedgerAccount, 'id'>);
+        accId = acc.id;
+      }
+      recCache.set(memberId, accId);
+      return accId;
+    };
+
     for (const flat of targets) {
       if (billed.has(flat.id)) continue;
       const amount = +flat.monthlyMaintenance.toFixed(2);
+      const rec = resolveReceivable(flat.memberId);
+      if (flat.memberId && flat.receivableAccountId !== rec) flatRecUpdates.set(flat.id, rec);
       const billId = crypto.randomUUID();
       const v = addVoucher({
         type: 'journal', date,
-        debitAccountId: '3303', creditAccountId: '4101', amount,
+        debitAccountId: rec, creditAccountId: '4101', amount,
         narration: `रखरखाव बिल ${data.period} — ${flat.flatNo}`,
         refType: 'maintenance.bill', refId: billId,
         memberId: flat.memberId,
         createdBy: user?.name || 'System',
         lines: [
-          { id: lid(), accountId: '3303', type: 'Dr', amount },
+          { id: lid(), accountId: rec, type: 'Dr', amount },
           { id: lid(), accountId: '4101', type: 'Cr', amount },
         ],
       });
       if (!v.id) continue;
-      created.push({ id: billId, billNo: `${data.period}/${flat.flatNo}`, flatId: flat.id, flatNo: flat.flatNo, memberId: flat.memberId, period: data.period, date, amount, voucherId: v.id, paidAmount: 0, status: 'unpaid', isDeleted: false, createdAt: new Date().toISOString() });
+      created.push({ id: billId, billNo: `${data.period}/${flat.flatNo}`, flatId: flat.id, flatNo: flat.flatNo, memberId: flat.memberId, period: data.period, date, amount, voucherId: v.id, receivableAccountId: rec, paidAmount: 0, status: 'unpaid', isDeleted: false, createdAt: new Date().toISOString() });
     }
     if (created.length === 0) {
       toastRef.current({ title: 'कोई नया बिल नहीं', description: 'इस अवधि के लिए सभी पात्र फ्लैट पहले से बिल हो चुके हैं या कोई पात्र फ्लैट नहीं।', variant: 'default', duration: 8000 });
       return [];
+    }
+    // Backfill receivableAccountId onto billed flats so future runs reuse the same sub-ledger
+    // (best-effort; the bill's own receivableAccountId is the authoritative link for collection).
+    if (flatRecUpdates.size > 0) {
+      setHousingFlatsState(prev => {
+        const u = prev.map(f => flatRecUpdates.has(f.id) ? { ...f, receivableAccountId: flatRecUpdates.get(f.id) } : f);
+        storage.setHousingFlats(u); return u;
+      });
+      flatRecUpdates.forEach((rec, flatId) => {
+        const flat = housingFlats.find(f => f.id === flatId);
+        if (flat) supabase.from('housing_flats').upsert(withSoc({ ...flat, receivableAccountId: rec })).then(({ error }) => { if (error) console.warn('Flat receivable backfill (non-fatal):', error.message); });
+      });
     }
     setMaintenanceBillsState(prev => { const u = [...prev, ...created]; storage.setMaintenanceBills(u); return u; });
     created.forEach(bill => {
@@ -169,7 +210,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     });
     toastRef.current({ title: 'रखरखाव बिल बने', description: `${created.length} बिल · अवधि ${data.period}`, duration: 6000 });
     return created;
-  }, [accounts, housingFlats, maintenanceBills, addVoucher, cancelVoucher, user]);
+  }, [accounts, housingFlats, maintenanceBills, members, addAccount, addVoucher, cancelVoucher, user]);
 
   const deleteMaintenanceBill = useCallback((id: string) => {
     if (guardFYLocked()) return;
@@ -198,7 +239,8 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const outstanding = +(bill.amount - bill.paidAmount).toFixed(2);
     if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'भुगतान राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
     if (data.amount > outstanding) { toastRef.current({ title: 'राशि बकाया से अधिक', description: `भुगतान ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकता।`, variant: 'destructive', duration: 9000 }); return sentinel; }
-    const creditAcc = '3303';
+    // Credit the exact account the demand debited (owner-member sub-ledger, or the 3303 control).
+    const creditAcc = bill.receivableAccountId || '3303';
     const debitAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
