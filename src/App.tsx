@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DataProvider, useData } from "@/contexts/DataContext";
 import { LabourProvider } from "@/contexts/LabourDataContext";
 import { HousingProvider } from "@/contexts/HousingDataContext";
+import { DairyProvider } from "@/contexts/DairyDataContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { CapabilityGuard } from "@/components/CapabilityGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -375,6 +376,7 @@ const App = () => (
         <DataProvider>
         <LabourProvider>
         <HousingProvider>
+        <DairyProvider>
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -382,6 +384,7 @@ const App = () => (
             <AppRoutes />
           </BrowserRouter>
         </TooltipProvider>
+        </DairyProvider>
         </HousingProvider>
         </LabourProvider>
         </DataProvider>
