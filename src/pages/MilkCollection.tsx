@@ -21,15 +21,20 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Milk, Plus, Trash2 } from 'lucide-react';
+import { Milk, Plus, Trash2, Printer } from 'lucide-react';
+import { printMilkSlip } from '@/lib/dairy/slip';
 import type { MilkEntry, MilkShift, MilkQualityDecision } from '@/types';
 
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const today = () => new Date().toISOString().slice(0, 10);
 
 const MilkCollection: React.FC = () => {
-  const { members } = useData();
+  const { members, society } = useData();
   const { milkEntries, addMilkEntry, deleteMilkEntry, resolveMilkRate } = useDairyData();
+  const printSlip = (e: MilkEntry) => {
+    const ok = printMilkSlip(e, { societyName: society?.name || '', hi, memberCode: members.find((m) => m.id === e.memberId)?.memberId });
+    if (!ok) toast({ title: hi ? 'पॉपअप ब्लॉक' : 'Popup blocked', description: hi ? 'पर्ची प्रिंट के लिए इस साइट के पॉपअप allow करें।' : 'Allow popups for this site to print the slip.', variant: 'destructive' });
+  };
   const { language } = useLanguage();
   const hi = language === 'hi';
   const { toast } = useToast();
@@ -204,7 +209,10 @@ const MilkCollection: React.FC = () => {
                   <TableCell className="text-right">{e.snf || '—'}</TableCell>
                   <TableCell className="text-right">{e.rate.toFixed(2)}</TableCell>
                   <TableCell className="text-right font-medium">{e.qualityDecision === 'rejected' ? '—' : inr(e.amount)}</TableCell>
-                  <TableCell><Button variant="ghost" size="icon" onClick={() => deleteMilkEntry(e.id)} aria-label={hi ? 'हटाएँ' : 'Delete'}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <Button variant="ghost" size="icon" onClick={() => printSlip(e)} aria-label={hi ? 'पर्ची' : 'Slip'}><Printer className="h-4 w-4 text-muted-foreground" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => deleteMilkEntry(e.id)} aria-label={hi ? 'हटाएँ' : 'Delete'}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  </TableCell>
                 </TableRow>
               ))}</TableBody>
             </Table></div>
