@@ -12,14 +12,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
 import { computeBillLines, billTotal } from '@/lib/housing/billing';
-import type { HousingFlat } from '@/types';
-import { Receipt, Trash2, HandCoins } from 'lucide-react';
+import { generateMaintenanceBillPDF, generateMaintenanceReceiptPDF } from '@/lib/pdf';
+import type { HousingFlat, MaintenanceBill } from '@/types';
+import { Receipt, Trash2, HandCoins, FileText } from 'lucide-react';
 
 const thisMonth = () => new Date().toISOString().slice(0, 7); // YYYY-MM
 const today = () => new Date().toISOString().split('T')[0];
 
 export default function MaintenanceBilling() {
-  const { members, accounts } = useData();
+  const { members, accounts, society } = useData();
   const { housingFlats, maintenanceBills, chargeHeads, generateMaintenanceBills, deleteMaintenanceBill, recordMaintenanceCollection } = useHousingData();
   const { language } = useLanguage();
   const { toast } = useToast();
@@ -91,7 +92,16 @@ export default function MaintenanceBilling() {
     if (!(amt > 0)) { toast({ title: hi ? 'राशि डालें' : 'Enter amount', variant: 'destructive' }); return; }
     if (amt > payOutstanding) { toast({ title: hi ? 'राशि बकाया से अधिक' : 'Exceeds outstanding', description: `${hi ? 'बकाया' : 'Outstanding'} ${money(payOutstanding)}`, variant: 'destructive' }); return; }
     const v = recordMaintenanceCollection({ billId: payBillId, amount: amt, mode: payMode, bankAccountId: payMode === 'bank' ? (payBankId || undefined) : undefined, date: payDate, reference: payRef.trim() || undefined, remarks: payRemarks.trim() || undefined });
-    if (v.id) setPayOpen(false);
+    if (v.id) {
+      setPayOpen(false);
+      const bill = maintenanceBills.find(b => b.id === payBillId);
+      const mem = bill ? members.find(m => m.id === bill.memberId) : undefined;
+      if (bill) generateMaintenanceReceiptPDF({ receiptNo: v.voucherNo || v.id, billNo: bill.billNo, flatNo: bill.flatNo || '', memberName: mem?.name || '', amount: amt, date: payDate, mode: payMode, reference: payRef.trim() || undefined }, society);
+    }
+  };
+
+  const printBill = (bill: MaintenanceBill) => {
+    generateMaintenanceBillPDF(bill, housingFlats.find(f => f.id === bill.flatId), members.find(m => m.id === bill.memberId), society);
   };
 
   return (
@@ -152,6 +162,7 @@ export default function MaintenanceBilling() {
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  <Button size="sm" variant="ghost" onClick={() => printBill(b)} title={hi ? 'बिल PDF' : 'Bill PDF'}><FileText className="h-4 w-4" /></Button>
                   {outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openReceive(b.id, outstanding)} className="gap-1"><HandCoins className="h-4 w-4" />{hi ? 'भुगतान लें' : 'Receive'}</Button>}
                   <Button size="sm" variant="ghost" onClick={() => remove(b.id, b.billNo)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>
