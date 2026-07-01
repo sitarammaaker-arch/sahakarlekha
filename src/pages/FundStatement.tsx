@@ -28,7 +28,9 @@ export default function FundStatement() {
   const money = (n: number) => `₹${(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const today = () => new Date().toISOString().split('T')[0];
 
-  const funds = accounts.filter(isFundAccount);
+  const funds = useMemo(() => accounts.filter(isFundAccount), [accounts]);
+  // Precompute each fund's corpus once per data change (not once per fund per render).
+  const fundBalances = useMemo(() => new Map(funds.map(f => [f.id, buildFundStatement(f, vouchers).closing])), [funds, vouchers]);
   const bankIds = getBankAccountIds(accounts);
   const bankAccounts = accounts.filter(a => bankIds.includes(a.id));
 
@@ -70,6 +72,26 @@ export default function FundStatement() {
     });
     if (inv.id) setInvOpen(false);
   };
+
+  // Redeem dialog — capture maturity value so any interest earned is posted (not silently dropped).
+  const [redeemInv, setRedeemInv] = useState<(typeof fundInvestments)[number] | null>(null);
+  const [redeemMaturity, setRedeemMaturity] = useState('');
+  const [redeemDate, setRedeemDate] = useState(today());
+  const [redeemMode, setRedeemMode] = useState<'cash' | 'bank'>('bank');
+  const [redeemBankId, setRedeemBankId] = useState('');
+
+  const openRedeem = (inv: (typeof fundInvestments)[number]) => {
+    setRedeemInv(inv); setRedeemMaturity(String(inv.amount)); setRedeemDate(today());
+    setRedeemMode('bank'); setRedeemBankId(bankAccounts[0]?.id || '');
+  };
+  const saveRedeem = () => {
+    if (!redeemInv) return;
+    const mat = Number(redeemMaturity);
+    if (!(mat >= redeemInv.amount)) { toast({ title: hi ? 'परिपक्वता राशि मूल से कम नहीं हो सकती' : 'Maturity cannot be less than principal', variant: 'destructive' }); return; }
+    redeemFundInvestment({ id: redeemInv.id, date: redeemDate, mode: redeemMode, bankAccountId: redeemMode === 'bank' ? (redeemBankId || undefined) : undefined, maturityAmount: mat });
+    setRedeemInv(null);
+  };
+  const redeemInterest = redeemInv ? round2(Math.max(0, (Number(redeemMaturity) || 0) - redeemInv.amount)) : 0;
 
   // Operation dialog
   const [opOpen, setOpOpen] = useState(false);
@@ -129,7 +151,7 @@ export default function FundStatement() {
         <CardContent className="space-y-2">
           {funds.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'चार्ट में कोई संचय निधि खाता नहीं।' : 'No reserve-fund accounts in the chart.'}</p>}
           {funds.map(f => {
-            const bal = buildFundStatement(f, vouchers).closing;
+            const bal = fundBalances.get(f.id) || 0;
             return (
               <button key={f.id} onClick={() => setFundId(f.id)}
                 className={`w-full flex items-center justify-between rounded-lg border p-3 text-left text-sm ${fundId === f.id ? 'border-primary bg-primary/5' : ''}`}>
@@ -219,7 +241,7 @@ export default function FundStatement() {
                     <div className="text-muted-foreground">{money(i.amount)} · {i.date}{i.maturityDate ? ` → ${i.maturityDate}` : ''}{i.interestRate ? ` · ${i.interestRate}%` : ''}</div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    {i.status === 'active' && <Button size="sm" variant="outline" onClick={() => redeemFundInvestment({ id: i.id, date: today(), mode: 'bank', bankAccountId: bankAccounts[0]?.id })}>{hi ? 'भुनाएँ' : 'Redeem'}</Button>}
+                    {i.status === 'active' && <Button size="sm" variant="outline" onClick={() => openRedeem(i)}>{hi ? 'भुनाएँ' : 'Redeem'}</Button>}
                     <Button size="sm" variant="ghost" onClick={() => { if (window.confirm(hi ? 'निवेश हटाएँ?' : 'Delete investment?')) deleteFundInvestment(i.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   </div>
                 </div>
@@ -276,6 +298,48 @@ export default function FundStatement() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setInvOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
             <Button onClick={saveInvest}>{hi ? 'निवेश दर्ज करें' : 'Record Investment'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Redeem dialog */}
+      <Dialog open={!!redeemInv} onOpenChange={o => { if (!o) setRedeemInv(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{hi ? 'निवेश भुनाएँ' : 'Redeem Investment'}{redeemInv ? ` — ${redeemInv.instrument || 'FDR'}` : ''}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground">{hi ? 'मूल राशि' : 'Principal'}: {money(redeemInv?.amount || 0)}</div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'परिपक्वता / प्राप्त राशि' : 'Maturity / amount received'} *</Label>
+              <Input type="number" min={redeemInv?.amount || 0} value={redeemMaturity} onChange={e => setRedeemMaturity(e.target.value)} />
+              <p className="text-xs text-muted-foreground">{hi ? 'ब्याज' : 'Interest'}: {money(redeemInterest)} {redeemInterest > 0 ? (hi ? '→ सीधे निधि कोष में' : '→ direct to fund corpus') : ''}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'तिथि' : 'Date'} *</Label>
+              <Input type="date" value={redeemDate} onChange={e => setRedeemDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'किसमें प्राप्त' : 'Received in'} *</Label>
+              <Select value={redeemMode} onValueChange={v => setRedeemMode(v as 'cash' | 'bank')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">{hi ? 'नकद' : 'Cash'}</SelectItem>
+                  <SelectItem value="bank">{hi ? 'बैंक' : 'Bank'}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {redeemMode === 'bank' && (
+              <div className="space-y-1.5">
+                <Label>{hi ? 'बैंक खाता' : 'Bank Account'}</Label>
+                <Select value={redeemBankId} onValueChange={setRedeemBankId}>
+                  <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
+                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRedeemInv(null)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
+            <Button onClick={saveRedeem}>{hi ? 'भुनाएँ' : 'Redeem'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

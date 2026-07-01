@@ -388,5 +388,25 @@ function buildAgingRegister(bills, asOn) { const buckets = { '0-30': 0, '31-60':
   ok(a.total === 1300, 'aging total = sum of open outstanding');
 }
 
+// 26. R1: FDR redemption legs are balanced and interest accrues to the fund corpus (not dropped)
+{
+  const redeemLegs = (principal, maturity, bankAcc, investAcc, fundAcc, fundExists = true) => {
+    let gross = maturity && maturity > principal ? round2(maturity) : principal;
+    let interest = round2(gross - principal);
+    if (interest > 0 && !fundExists) { gross = principal; interest = 0; }
+    const lines = [{ accountId: bankAcc, type: 'Dr', amount: gross }, { accountId: investAcc, type: 'Cr', amount: principal }];
+    if (interest > 0) lines.push({ accountId: fundAcc, type: 'Cr', amount: interest });
+    return lines;
+  };
+  const bal = (legs) => round2(legs.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0) - legs.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0));
+  const legs = redeemLegs(100000, 107000, 'BANK', '3201', '1202');
+  ok(bal(legs) === 0, 'redemption with interest is balanced (Dr 107000 = Cr 100000 + 7000)');
+  ok(legs.some(l => l.accountId === '1202' && l.amount === 7000), 'interest credited to fund corpus, not silently lost');
+  ok(redeemLegs(100000, 100000, 'B', '3201', '1202').length === 2, 'principal-only maturity → 2 balanced legs');
+  ok(redeemLegs(100000, undefined, 'B', '3201', '1202').length === 2, 'no maturity given → principal-only (back-compat)');
+  const noFund = redeemLegs(100000, 107000, 'B', '3201', '1202', false);
+  ok(bal(noFund) === 0 && noFund.length === 2, 'missing fund account → falls back to principal-only, still balanced (never posts unbalanced)');
+}
+
 console.log(`[housing-test] ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
