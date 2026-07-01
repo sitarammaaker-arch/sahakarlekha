@@ -23,7 +23,7 @@ import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { computeBillLines, demandLegs, billTotal, round2, gstLineForBill } from '@/lib/housing/billing';
 import { plannedBillInterest } from '@/lib/housing/arrears';
 import { buildMemberStatement } from '@/lib/housing/statement';
-import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, Voucher, LedgerAccount } from '@/types';
+import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, Voucher, LedgerAccount } from '@/types';
 
 interface HousingDataContextValue {
   housingFlats: HousingFlat[];
@@ -69,6 +69,16 @@ interface HousingDataContextValue {
   transfers: HousingTransfer[];
   recordFlatTransfer: (data: { flatId: string; toMemberId: string; date: string; transferType?: 'sale' | 'nominee' | 'legal_heir'; transferFee?: number; premium?: number; mode?: 'cash' | 'bank'; bankAccountId?: string; resolutionNo?: string; resolutionDate?: string; remarks?: string }) => HousingTransfer;
   deleteFlatTransfer: (id: string) => void;
+
+  insurances: HousingInsurance[];
+  addInsurance: (data: Omit<HousingInsurance, 'id' | 'createdAt'>) => HousingInsurance;
+  updateInsurance: (id: string, data: Partial<HousingInsurance>) => void;
+  deleteInsurance: (id: string) => void;
+
+  amcs: HousingAmc[];
+  addAmc: (data: Omit<HousingAmc, 'id' | 'createdAt'>) => HousingAmc;
+  updateAmc: (id: string, data: Partial<HousingAmc>) => void;
+  deleteAmc: (id: string) => void;
 }
 
 const HousingDataContext = createContext<HousingDataContextValue | undefined>(undefined);
@@ -99,11 +109,13 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   const [complaints, setComplaintsState] = useState<HousingComplaint[]>(() => storage.getHousingComplaints());
   const [parkingSlots, setParkingState] = useState<HousingParking[]>(() => storage.getHousingParking());
   const [transfers, setTransfersState] = useState<HousingTransfer[]>(() => storage.getHousingTransfers());
+  const [insurances, setInsurancesState] = useState<HousingInsurance[]>(() => storage.getHousingInsurance());
+  const [amcs, setAmcsState] = useState<HousingAmc[]>(() => storage.getHousingAmc());
 
   // Load when the society changes; Supabase is SSOT, localStorage is offline fallback.
   useEffect(() => {
     const sid = user?.societyId;
-    if (!sid) { setHousingFlatsState([]); setMaintenanceBillsState([]); setChargeHeadsState([]); setFundInvestmentsState([]); setComplaintsState([]); setParkingState([]); setTransfersState([]); return; }
+    if (!sid) { setHousingFlatsState([]); setMaintenanceBillsState([]); setChargeHeadsState([]); setFundInvestmentsState([]); setComplaintsState([]); setParkingState([]); setTransfersState([]); setInsurancesState([]); setAmcsState([]); return; }
     supabase.from('housing_flats').select('*').eq('society_id', sid).then(
       ({ data, error }) => setHousingFlatsState(error || !data ? storage.getHousingFlats() : (data as unknown as HousingFlat[])),
       () => setHousingFlatsState(storage.getHousingFlats()),
@@ -131,6 +143,14 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     supabase.from('housing_transfers').select('*').eq('society_id', sid).then(
       ({ data, error }) => setTransfersState(error || !data ? storage.getHousingTransfers() : (data as unknown as HousingTransfer[])),
       () => setTransfersState(storage.getHousingTransfers()),
+    );
+    supabase.from('housing_insurance').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setInsurancesState(error || !data ? storage.getHousingInsurance() : (data as unknown as HousingInsurance[])),
+      () => setInsurancesState(storage.getHousingInsurance()),
+    );
+    supabase.from('housing_amc').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setAmcsState(error || !data ? storage.getHousingAmc() : (data as unknown as HousingAmc[])),
+      () => setAmcsState(storage.getHousingAmc()),
     );
   }, [user?.societyId]);
 
@@ -727,6 +747,72 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     });
   }, [transfers, cancelVoucher, user]);
 
+  // ── Insurance register (operational; plain-table persistence + RULE-1 rollback) ──
+  const addInsurance = useCallback((data: Omit<HousingInsurance, 'id' | 'createdAt'>): HousingInsurance => {
+    if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as HousingInsurance;
+    const p: HousingInsurance = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    setInsurancesState(prev => { const u = [...prev, p]; storage.setHousingInsurance(u); return u; });
+    supabase.from('housing_insurance').upsert(withSoc(p)).then(({ error }) => {
+      if (error) {
+        console.error('Insurance save error:', error.message);
+        setInsurancesState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingInsurance(r); return r; });
+        toastRef.current({ title: 'बीमा सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return p;
+  }, []);
+  const updateInsurance = useCallback((id: string, data: Partial<HousingInsurance>) => {
+    if (guardFYLocked()) return;
+    const old = insurances.find(x => x.id === id);
+    if (!old) return;
+    const updated = { ...old, ...data };
+    setInsurancesState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingInsurance(u); return u; });
+    supabase.from('housing_insurance').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) { console.error('Insurance update error:', error.message); setInsurancesState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingInsurance(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+    });
+  }, [insurances]);
+  const deleteInsurance = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const old = insurances.find(x => x.id === id);
+    setInsurancesState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingInsurance(u); return u; });
+    supabase.from('housing_insurance').delete().eq('id', id).then(({ error }) => {
+      if (error) { console.error('Insurance delete error:', error.message); if (old) setInsurancesState(prev => { const u = [...prev, old]; storage.setHousingInsurance(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+    });
+  }, [insurances]);
+
+  // ── AMC / vendor contract register (operational) ──
+  const addAmc = useCallback((data: Omit<HousingAmc, 'id' | 'createdAt'>): HousingAmc => {
+    if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as HousingAmc;
+    const p: HousingAmc = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    setAmcsState(prev => { const u = [...prev, p]; storage.setHousingAmc(u); return u; });
+    supabase.from('housing_amc').upsert(withSoc(p)).then(({ error }) => {
+      if (error) {
+        console.error('AMC save error:', error.message);
+        setAmcsState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingAmc(r); return r; });
+        toastRef.current({ title: 'AMC सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return p;
+  }, []);
+  const updateAmc = useCallback((id: string, data: Partial<HousingAmc>) => {
+    if (guardFYLocked()) return;
+    const old = amcs.find(x => x.id === id);
+    if (!old) return;
+    const updated = { ...old, ...data };
+    setAmcsState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingAmc(u); return u; });
+    supabase.from('housing_amc').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) { console.error('AMC update error:', error.message); setAmcsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingAmc(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+    });
+  }, [amcs]);
+  const deleteAmc = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const old = amcs.find(x => x.id === id);
+    setAmcsState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingAmc(u); return u; });
+    supabase.from('housing_amc').delete().eq('id', id).then(({ error }) => {
+      if (error) { console.error('AMC delete error:', error.message); if (old) setAmcsState(prev => { const u = [...prev, old]; storage.setHousingAmc(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+    });
+  }, [amcs]);
+
   return (
     <HousingDataContext.Provider value={{
       housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat,
@@ -738,6 +824,8 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       complaints, addComplaint, updateComplaint, deleteComplaint,
       parkingSlots, addParking, updateParking, deleteParking,
       transfers, recordFlatTransfer, deleteFlatTransfer,
+      insurances, addInsurance, updateInsurance, deleteInsurance,
+      amcs, addAmc, updateAmc, deleteAmc,
     }}>
       {children}
     </HousingDataContext.Provider>

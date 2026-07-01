@@ -15,7 +15,7 @@ import {
   Scale, ArrowLeftRight, TrendingUp, FileSpreadsheet, BarChart3, Clock, Percent, TrendingDown, Receipt, Warehouse,
   Package, PiggyBank, FileJson, Hash, Landmark, ScrollText, BookMarked, ShieldCheck, Users2, FileCheck, Shield,
   Coins, Trash2, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks, HardHat,
-  MessageSquareWarning, Car,
+  MessageSquareWarning, Car, Wrench,
 } from 'lucide-react';
 import type { Capability, NavDomain, Role } from './capabilities';
 
@@ -70,6 +70,8 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'parking', titleKey: 'parking', icon: Car, route: '/parking', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 8 },
   { id: 'transferRegister', titleKey: 'transferRegister', icon: ArrowLeftRight, route: '/transfer-register', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 9 },
   { id: 'shareNominationRegister', titleKey: 'shareNominationRegister', icon: ScrollText, route: '/share-nomination-register', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 10 },
+  { id: 'insurance', titleKey: 'insurance', icon: ShieldCheck, route: '/insurance', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 11 },
+  { id: 'amc', titleKey: 'amc', icon: Wrench, route: '/amc', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 12 },
   // ── Labour cooperative module group (domain: 'labour') ──
   { id: 'workerMaster',    titleKey: 'workerMaster',    icon: HardHat,         route: '/worker-master',   domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 10 },
   { id: 'departmentMaster',titleKey: 'departmentMaster',icon: Landmark,        route: '/department-master', domain: 'labour',   requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 11 },

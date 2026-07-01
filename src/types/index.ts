@@ -292,6 +292,35 @@ export interface HousingParking {
   createdAt: string;
 }
 
+// Housing — an insurance policy register entry (operational; expiry tracking).
+export interface HousingInsurance {
+  id: string;
+  policyNo: string;
+  insurer?: string;
+  coverageType?: string;      // building / fire / asset / liability / other
+  sumInsured?: number;
+  premium?: number;
+  startDate?: string;
+  expiryDate?: string;
+  remarks?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
+// Housing — an AMC / vendor maintenance contract (lift, pump, security…) with renewal tracking.
+export interface HousingAmc {
+  id: string;
+  contractNo: string;
+  vendor?: string;
+  equipment?: string;         // lift / pump / generator / cctv / fire / housekeeping / other
+  amount?: number;
+  startDate?: string;
+  expiryDate?: string;
+  remarks?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 // Housing — a flat ownership transfer (reassigns the owner; may post transfer fee + premium).
 export interface HousingTransfer {
   id: string;
