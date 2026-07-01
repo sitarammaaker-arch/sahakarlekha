@@ -7,12 +7,14 @@ import type { MilkEntry, DairySettlement } from '@/types';
 export const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
 
 export interface CollectionRegister {
-  rows: MilkEntry[];
-  totalQty: number;
+  rows: MilkEntry[];      // all rows in the window (incl. rejected, for the record)
+  totalQty: number;       // ACCEPTED litres (payable basis) — excludes rejected
   totalAmount: number;
-  count: number;
-  avgFat: number;   // qty-weighted
-  avgSnf: number;   // qty-weighted
+  count: number;          // all rows
+  avgFat: number;         // qty-weighted over accepted only
+  avgSnf: number;         // qty-weighted over accepted only
+  rejectedQty: number;    // litres rejected in the window (not paid)
+  rejectedCount: number;
 }
 
 /** Milk collection register for [from,to], sorted date → shift → member. Qty-weighted avg fat/snf. */
@@ -21,8 +23,11 @@ export function buildCollectionRegister(entries: ReadonlyArray<MilkEntry>, from:
     .filter(e => e.date >= from && e.date <= to)
     .slice()
     .sort((a, b) => a.date.localeCompare(b.date) || a.shift.localeCompare(b.shift) || a.memberName.localeCompare(b.memberName));
-  let totalQty = 0, totalAmount = 0, fatWt = 0, snfWt = 0;
+  // A4 fix: aggregate ACCEPTED milk only (payable basis) so totalQty/avg tie to totalAmount;
+  // rejected litres are reported separately, not folded into the quality averages.
+  let totalQty = 0, totalAmount = 0, fatWt = 0, snfWt = 0, rejectedQty = 0, rejectedCount = 0;
   for (const e of rows) {
+    if (e.qualityDecision === 'rejected') { rejectedQty += e.qty || 0; rejectedCount += 1; continue; }
     totalQty += e.qty || 0;
     totalAmount += e.amount || 0;
     fatWt += (e.fat || 0) * (e.qty || 0);
@@ -35,6 +40,8 @@ export function buildCollectionRegister(entries: ReadonlyArray<MilkEntry>, from:
     count: rows.length,
     avgFat: totalQty > 0 ? round2(fatWt / totalQty) : 0,
     avgSnf: totalQty > 0 ? round2(snfWt / totalQty) : 0,
+    rejectedQty: round2(rejectedQty),
+    rejectedCount,
   };
 }
 

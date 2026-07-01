@@ -145,6 +145,9 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       const ids = new Set(cloud.map(r => r.id));
       const merged = [...cloud, ...legacy.filter(r => r && r.id && !ids.has(r.id))];
       storage.setMilkEntries(merged);
+      // A1 fix: retire the bespoke legacy key once adopted, so a subsequently-deleted
+      // entry can never be resurrected by a re-merge on the next load.
+      try { localStorage.removeItem(`sl_milk_entries_${sid}`); } catch { /* ignore */ }
       return merged;
     };
     supabase.from('milk_entries').select('*').eq('society_id', sid).then(
@@ -283,6 +286,13 @@ export function DairyProvider({ children }: { children: ReactNode }) {
 
   const deleteMilkEntry = useCallback((id: string) => {
     if (guardFYLocked()) return;
+    // A6 fix: an entry inside an APPROVED settlement's window was already paid on a frozen gross —
+    // deleting it would break the collection-register / passbook tie-out. Block it.
+    const entry = milkEntries.find(e => e.id === id);
+    if (entry) {
+      const locked = settlements.find(s => !s.isDeleted && s.status === 'approved' && s.memberId === entry.memberId && (s.from || '') <= entry.date && (s.to || '') >= entry.date);
+      if (locked) { toastRef.current({ title: 'सेटलमेंट में शामिल', description: `यह एंट्री ${locked.settlementNo || 'approved सेटलमेंट'} में गिनी जा चुकी है — पहले सेटलमेंट reverse करें।`, variant: 'destructive', duration: 10000 }); return; }
+    }
     setMilkEntriesState(prev => {
       const before = prev.find(e => e.id === id);
       const u = prev.filter(e => e.id !== id);
@@ -295,7 +305,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       });
       return u;
     });
-  }, [societyId]);
+  }, [societyId, milkEntries, settlements]);
 
   // ── Farmer settlement cycle (D3) — the authoritative per-member posting path ──
   const persistSettlement = useCallback((next: DairySettlement, revertTo: DairySettlement | null, onFail?: () => void) => {
@@ -322,6 +332,10 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return sentinel;
     const member = members.find(m => m.id === args.memberId);
     if (!member) { toastRef.current({ title: 'सदस्य नहीं मिला', variant: 'destructive' }); return sentinel; }
+    // A2 fix: block overlapping settlement windows for the same member — otherwise the
+    // milk cost for the overlapping days would be accrued (Dr 5108 / Cr 2102) twice.
+    const overlap = settlements.find(s => !s.isDeleted && s.memberId === args.memberId && (s.from || '') <= args.to && (s.to || '') >= args.from);
+    if (overlap) { toastRef.current({ title: 'अवधि ओवरलैप', description: `इस सदस्य का ${overlap.from}→${overlap.to} सेटलमेंट पहले से है — अवधि दोहराई नहीं जा सकती।`, variant: 'destructive', duration: 10000 }); return sentinel; }
     const gross = computeGross(milkEntries, args.memberId, args.from, args.to);
     if (gross <= 0) { toastRef.current({ title: 'कोई दूध नहीं', description: 'इस सदस्य का इस अवधि में कोई स्वीकृत संकलन नहीं।', variant: 'destructive' }); return sentinel; }
     const s: DairySettlement = {
@@ -332,19 +346,29 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     commitSettlement(s, null);
     toastRef.current({ title: 'सेटलमेंट बनाया (draft)', description: `${member.name} — सकल ₹${gross.toLocaleString('en-IN')}` });
     return s;
-  }, [members, milkEntries, commitSettlement]);
+  }, [members, milkEntries, settlements, commitSettlement]);
 
   const addDairyDeduction = useCallback((args: { settlementId: string; type: string; accountId: string; amount: number; remarks?: string }) => {
     if (guardFYLocked()) return;
     const cur = settlements.find(s => s.id === args.settlementId);
     if (!cur || cur.status !== 'draft') { toastRef.current({ title: 'बदल नहीं सकते', description: 'Approved सेटलमेंट में कटौती नहीं जुड़ सकती।', variant: 'destructive' }); return; }
     if (!(args.amount > 0) || !args.accountId) { toastRef.current({ title: 'अधूरी कटौती', variant: 'destructive' }); return; }
-    const line: DairyDeductionLine = { id: crypto.randomUUID(), type: args.type, accountId: args.accountId, amount: +args.amount.toFixed(2), remarks: args.remarks };
+    // A5 fix: any deduction crediting the Member Input Receivable account is an input recovery —
+    // cap it at the member's CURRENT derived outstanding so a manual line or a double-click can
+    // never recover more feed/medicine than was issued (which would silently over-charge milk).
+    const inputAcct = resolveMemberInputReceivableAccountId(accounts);
+    let amount = +args.amount.toFixed(2);
+    if (inputAcct && args.accountId === inputAcct) {
+      const remaining = memberInputOutstanding(inputIssues, settlements, cur.memberId, inputAcct).outstanding;
+      if (remaining <= 0.005) { toastRef.current({ title: 'कोई बकाया आदान नहीं', description: 'इस सदस्य का पूरा आदान पहले ही वसूल हो चुका है।', variant: 'destructive' }); return; }
+      if (amount > remaining) amount = remaining;
+    }
+    const line: DairyDeductionLine = { id: crypto.randomUUID(), type: args.type, accountId: args.accountId, amount, remarks: args.remarks };
     const lines = [...cur.deductionLines, line];
     if (sumDeductions(lines) > cur.gross + 0.005) { toastRef.current({ title: 'कटौती सकल से ज़्यादा', description: 'कुल कटौती दूध-मूल्य से अधिक नहीं हो सकती।', variant: 'destructive' }); return; }
     const next: DairySettlement = { ...cur, deductionLines: lines, netPayable: netPayable(cur.gross, lines) };
     commitSettlement(next, cur);
-  }, [settlements, commitSettlement]);
+  }, [settlements, inputIssues, accounts, commitSettlement]);
 
   const removeDairyDeduction = useCallback((args: { settlementId: string; lineId: string }) => {
     if (guardFYLocked()) return;
@@ -531,9 +555,16 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return;
     const cur = inputIssues.find(i => i.id === id);
     if (!cur) return;
+    // A7 fix: don't orphan a recovery — if removing this issue would leave the member's
+    // recovered amount exceeding what remains issued, the 3305 receivable would go negative.
+    const inputAcct = resolveMemberInputReceivableAccountId(accounts);
+    if (inputAcct) {
+      const bal = memberInputOutstanding(inputIssues, settlements, cur.memberId, inputAcct);
+      if (bal.recovered > bal.issued - cur.amount + 0.005) { toastRef.current({ title: 'वसूली मौजूद', description: 'इस आदान की वसूली सेटलमेंट में हो चुकी है — पहले वह सेटलमेंट/कटौती reverse करें।', variant: 'destructive', duration: 10000 }); return; }
+    }
     if (cur.voucherId) cancelVoucher(cur.voucherId, 'Input issue deleted', user?.name || 'System');
     commitInputIssue({ ...cur, isDeleted: true }, cur);
-  }, [inputIssues, cancelVoucher, commitInputIssue, user]);
+  }, [inputIssues, settlements, accounts, cancelVoucher, commitInputIssue, user]);
 
   const getMemberInputBalance = useCallback(
     (memberId: string) => memberInputOutstanding(inputIssues, settlements, memberId, resolveMemberInputReceivableAccountId(accounts) || ''),
@@ -559,7 +590,8 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!(args.rate > 0)) { toastRef.current({ title: 'दर ज़रूरी', description: 'एक धनात्मक दर डालें।', variant: 'destructive' }); return sentinel; }
     const lines = args.kind === 'bonus'
       ? computeBonusLines(milkEntries, args.from, args.to, args.basis, args.rate)
-      : computeDividendLines(members.map(m => ({ id: m.id, name: m.name, shareCapital: m.shareCapital })), args.rate);
+      // A3 fix: dividend only to ACTIVE members (computeDividendLines excludes inactive/exited).
+      : computeDividendLines(members.map(m => ({ id: m.id, name: m.name, shareCapital: m.shareCapital, status: m.status })), args.rate);
     if (lines.length === 0) { toastRef.current({ title: 'कोई राशि नहीं', description: args.kind === 'bonus' ? 'इस अवधि में कोई स्वीकृत दूध नहीं।' : 'किसी सदस्य की शेयर पूंजी नहीं।', variant: 'destructive' }); return sentinel; }
     const total = distributionTotal(lines);
     const d: DairyDistribution = {

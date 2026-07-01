@@ -33,12 +33,13 @@ export function computeBonusLines(
     .sort((a, b) => a.memberName.localeCompare(b.memberName));
 }
 
-/** Dividend lines from paid-up share capital. ratePct = % of share capital. */
+/** Dividend lines from paid-up share capital of ACTIVE members. ratePct = % of share capital. */
 export function computeDividendLines(
   members: ReadonlyArray<{ id: string; name: string; shareCapital?: number; status?: string }>,
   ratePct: number,
 ): DairyDistributionLine[] {
   return members
+    .filter(m => !(m.status && m.status !== 'active'))   // exclude inactive/exited members
     .map(m => ({ memberId: m.id, memberName: m.name, base: round2(m.shareCapital || 0), amount: round2((m.shareCapital || 0) * (ratePct || 0) / 100) }))
     .filter(l => l.amount > 0)
     .sort((a, b) => a.memberName.localeCompare(b.memberName));

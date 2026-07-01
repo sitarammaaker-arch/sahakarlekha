@@ -265,9 +265,12 @@ const ENTRIES = [
 function buildCollectionRegister(entries, from, to) {
   const rows = entries.filter(e => e.date >= from && e.date <= to).slice()
     .sort((a, b) => a.date.localeCompare(b.date) || a.shift.localeCompare(b.shift) || a.memberName.localeCompare(b.memberName));
-  let totalQty = 0, totalAmount = 0, fatWt = 0, snfWt = 0;
-  for (const e of rows) { totalQty += e.qty || 0; totalAmount += e.amount || 0; fatWt += (e.fat || 0) * (e.qty || 0); snfWt += (e.snf || 0) * (e.qty || 0); }
-  return { rows, totalQty: round2(totalQty), totalAmount: round2(totalAmount), count: rows.length, avgFat: totalQty > 0 ? round2(fatWt / totalQty) : 0, avgSnf: totalQty > 0 ? round2(snfWt / totalQty) : 0 };
+  let totalQty = 0, totalAmount = 0, fatWt = 0, snfWt = 0, rejectedQty = 0, rejectedCount = 0;
+  for (const e of rows) {
+    if (e.qualityDecision === 'rejected') { rejectedQty += e.qty || 0; rejectedCount += 1; continue; }
+    totalQty += e.qty || 0; totalAmount += e.amount || 0; fatWt += (e.fat || 0) * (e.qty || 0); snfWt += (e.snf || 0) * (e.qty || 0);
+  }
+  return { rows, totalQty: round2(totalQty), totalAmount: round2(totalAmount), count: rows.length, avgFat: totalQty > 0 ? round2(fatWt / totalQty) : 0, avgSnf: totalQty > 0 ? round2(snfWt / totalQty) : 0, rejectedQty: round2(rejectedQty), rejectedCount };
 }
 function buildRecoverySummary(settlements) {
   const m = new Map();
@@ -287,6 +290,19 @@ function buildRecoverySummary(settlements) {
   ok(r.count === 2 && r.totalQty === 40, 'window excludes out-of-range; qty sums (10+30)');
   ok(r.totalAmount === 1320, 'amount total (300 + 1020)');
   ok(r.avgFat === 4.75, 'qty-weighted avg fat = (4×10 + 5×30)/40 = 4.75');
+}
+
+// 17b. A4 fix: rejected milk excluded from qty/avg (reported separately), so totals tie to amount
+{
+  const es = [
+    { id: '1', date: '2026-07-02', shift: 'morning', memberName: 'A', qty: 100, fat: 4.0, snf: 8.5, rate: 34, amount: 3400, qualityDecision: 'accepted' },
+    { id: '2', date: '2026-07-02', shift: 'morning', memberName: 'B', qty: 50, fat: 2.5, snf: 7.0, rate: 0, amount: 0, qualityDecision: 'rejected' },
+  ];
+  const r = buildCollectionRegister(es, '2026-07-01', '2026-07-31');
+  ok(r.totalQty === 100 && r.totalAmount === 3400, 'rejected 50 L excluded from payable qty/amount (100 L, 3400)');
+  ok(r.avgFat === 4.0, 'avg fat is accepted-only (not dragged down by the rejected 2.5-fat milk)');
+  ok(r.rejectedQty === 50 && r.rejectedCount === 1, 'rejected reported separately (50 L, 1 row)');
+  ok(r.count === 2, 'both rows still listed in the register');
 }
 
 // 18. Recovery summary: group deduction lines by type across non-deleted settlements
@@ -361,7 +377,8 @@ function computeBonusLines(entries, from, to, basis, rate) {
     .filter(l => l.amount > 0).sort((a, b) => a.memberName.localeCompare(b.memberName));
 }
 function computeDividendLines(members, ratePct) {
-  return members.map(m => ({ memberId: m.id, memberName: m.name, base: round2(m.shareCapital || 0), amount: round2((m.shareCapital || 0) * (ratePct || 0) / 100) }))
+  return members.filter(m => !(m.status && m.status !== 'active'))
+    .map(m => ({ memberId: m.id, memberName: m.name, base: round2(m.shareCapital || 0), amount: round2((m.shareCapital || 0) * (ratePct || 0) / 100) }))
     .filter(l => l.amount > 0).sort((a, b) => a.memberName.localeCompare(b.memberName));
 }
 const distributionTotal = (lines) => round2(lines.reduce((s, l) => s + (l.amount || 0), 0));
@@ -390,11 +407,15 @@ function distributionLegs(total, distAcc, payAcc) {
 
 // 22. Dividend lines: % of share capital; zero-share members excluded
 {
-  const members = [{ id: 'm1', name: 'A', shareCapital: 1000 }, { id: 'm2', name: 'B', shareCapital: 500 }, { id: 'm3', name: 'C', shareCapital: 0 }];
+  const members = [{ id: 'm1', name: 'A', shareCapital: 1000, status: 'active' }, { id: 'm2', name: 'B', shareCapital: 500, status: 'active' }, { id: 'm3', name: 'C', shareCapital: 0, status: 'active' }];
   const lines = computeDividendLines(members, 10);
   ok(lines.length === 2, 'zero-share member excluded');
   ok(lines.find(l => l.memberId === 'm1').amount === 100, 'dividend 10% of 1000 = 100');
   ok(distributionTotal(lines) === 150, 'dividend total = 100 + 50');
+  // A3 fix: inactive member with shares is excluded
+  const withInactive = [{ id: 'm1', name: 'A', shareCapital: 1000, status: 'active' }, { id: 'm4', name: 'D', shareCapital: 2000, status: 'inactive' }];
+  const l2 = computeDividendLines(withInactive, 10);
+  ok(l2.length === 1 && l2[0].memberId === 'm1', 'inactive member excluded from dividend even with shares');
 }
 
 // 23. Distribution legs: balanced Dr distribution / Cr payable
