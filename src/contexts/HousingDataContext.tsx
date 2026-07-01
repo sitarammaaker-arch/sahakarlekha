@@ -67,7 +67,7 @@ interface HousingDataContextValue {
   deleteParking: (id: string) => void;
 
   transfers: HousingTransfer[];
-  recordFlatTransfer: (data: { flatId: string; toMemberId: string; date: string; transferFee?: number; premium?: number; mode?: 'cash' | 'bank'; bankAccountId?: string; resolutionNo?: string; resolutionDate?: string; remarks?: string }) => HousingTransfer;
+  recordFlatTransfer: (data: { flatId: string; toMemberId: string; date: string; transferType?: 'sale' | 'nominee' | 'legal_heir'; transferFee?: number; premium?: number; mode?: 'cash' | 'bank'; bankAccountId?: string; resolutionNo?: string; resolutionDate?: string; remarks?: string }) => HousingTransfer;
   deleteFlatTransfer: (id: string) => void;
 }
 
@@ -656,7 +656,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
 
   // ── Flat transfer — reassign owner + optionally post fee (→ 4201) & premium (→ 1202 corpus).
   // Clears the flat's receivableAccountId so the next bill resolves the NEW owner's sub-ledger.
-  const recordFlatTransfer = useCallback((data: { flatId: string; toMemberId: string; date: string; transferFee?: number; premium?: number; mode?: 'cash' | 'bank'; bankAccountId?: string; resolutionNo?: string; resolutionDate?: string; remarks?: string }): HousingTransfer => {
+  const recordFlatTransfer = useCallback((data: { flatId: string; toMemberId: string; date: string; transferType?: 'sale' | 'nominee' | 'legal_heir'; transferFee?: number; premium?: number; mode?: 'cash' | 'bank'; bankAccountId?: string; resolutionNo?: string; resolutionDate?: string; remarks?: string }): HousingTransfer => {
     const blank = { id: '', flatId: data.flatId, toMemberId: data.toMemberId, date: data.date, createdAt: '' } as HousingTransfer;
     if (guardFYLocked()) return blank;
     const flat = housingFlats.find(f => f.id === data.flatId && !f.isDeleted);
@@ -693,14 +693,16 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       voucherId = v.id;
     }
     const oldOwner = flat.memberId;
-    updateHousingFlat(flat.id, { memberId: data.toMemberId, receivableAccountId: undefined, associateMemberId: undefined });
-    const t: HousingTransfer = { id, flatId: flat.id, flatNo: flat.flatNo, fromMemberId: oldOwner, toMemberId: data.toMemberId, date: data.date, transferFee: fee || undefined, premium: prem || undefined, voucherId, resolutionNo: data.resolutionNo?.trim() || undefined, resolutionDate: data.resolutionDate || undefined, remarks: data.remarks, isDeleted: false, createdAt: new Date().toISOString() };
+    // Owner changes; the share cert follows the flat (a flat property). The nominee was the OLD
+    // owner's — reset it so the new owner records their own (R3).
+    updateHousingFlat(flat.id, { memberId: data.toMemberId, receivableAccountId: undefined, associateMemberId: undefined, nomineeName: undefined, nomineeRelation: undefined, nomineePhone: undefined });
+    const t: HousingTransfer = { id, flatId: flat.id, flatNo: flat.flatNo, fromMemberId: oldOwner, toMemberId: data.toMemberId, date: data.date, transferType: data.transferType || 'sale', transferFee: fee || undefined, premium: prem || undefined, voucherId, resolutionNo: data.resolutionNo?.trim() || undefined, resolutionDate: data.resolutionDate || undefined, remarks: data.remarks, isDeleted: false, createdAt: new Date().toISOString() };
     setTransfersState(prev => { const u = [...prev, t]; storage.setHousingTransfers(u); return u; });
     supabase.from('housing_transfers').upsert(withSoc(t)).then(({ error }) => {
       if (error) {
         console.error('Transfer save error:', error.message);
         setTransfersState(prev => { const r = prev.filter(x => x.id !== t.id); storage.setHousingTransfers(r); return r; });
-        updateHousingFlat(flat.id, { memberId: oldOwner, receivableAccountId: flat.receivableAccountId, associateMemberId: flat.associateMemberId });
+        updateHousingFlat(flat.id, { memberId: oldOwner, receivableAccountId: flat.receivableAccountId, associateMemberId: flat.associateMemberId, nomineeName: flat.nomineeName, nomineeRelation: flat.nomineeRelation, nomineePhone: flat.nomineePhone });
         if (voucherId) cancelVoucher(voucherId, 'Transfer save failed (auto-rollback)', user?.name || 'System');
         toastRef.current({ title: 'हस्तांतरण सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. मालिक व शुल्क वापस ले लिए गए।`, variant: 'destructive', duration: 12000 });
       }

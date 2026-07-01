@@ -1569,6 +1569,15 @@ alter table public.housing_charge_heads add column if not exists kind text;
 alter table public.housing_transfers add column if not exists "resolutionNo" text;
 alter table public.housing_transfers add column if not exists "resolutionDate" text;
 
+-- Housing R3 — share certificate & nomination as per-flat properties, + transfer basis. RUN once.
+alter table public.housing_flats add column if not exists "shareCertNo" text;
+alter table public.housing_flats add column if not exists "shareCount" numeric;
+alter table public.housing_flats add column if not exists "shareFaceValue" numeric;
+alter table public.housing_flats add column if not exists "nomineeName" text;
+alter table public.housing_flats add column if not exists "nomineeRelation" text;
+alter table public.housing_flats add column if not exists "nomineePhone" text;
+alter table public.housing_transfers add column if not exists "transferType" text;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Labour cooperative — Work Orders / labour-contract register (master data; no
 -- accounting in V1). Plain society-scoped table (client upserts directly). RUN once.

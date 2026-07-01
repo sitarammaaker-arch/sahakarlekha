@@ -32,6 +32,7 @@ export default function TransferRegister() {
   const [bankId, setBankId] = useState('');
   const [resNo, setResNo] = useState('');
   const [resDate, setResDate] = useState('');
+  const [transferType, setTransferType] = useState<'sale' | 'nominee' | 'legal_heir'>('sale');
 
   const flats = housingFlats.filter(f => !f.isDeleted);
   const flat = flats.find(f => f.id === flatId);
@@ -44,11 +45,12 @@ export default function TransferRegister() {
     if (toMemberId === flat.memberId) { toast({ title: hi ? 'नया मालिक अलग होना चाहिए' : 'New owner must differ', variant: 'destructive' }); return; }
     const t = recordFlatTransfer({
       flatId: flat.id, toMemberId, date,
+      transferType,
       transferFee: fee ? Number(fee) : undefined, premium: premium ? Number(premium) : undefined,
       mode, bankAccountId: mode === 'bank' ? (bankId || undefined) : undefined,
       resolutionNo: resNo.trim() || undefined, resolutionDate: resDate || undefined,
     });
-    if (t.id) { setFlatId(''); setToMemberId(''); setFee(''); setPremium(''); setResNo(''); setResDate(''); }
+    if (t.id) { setFlatId(''); setToMemberId(''); setFee(''); setPremium(''); setResNo(''); setResDate(''); setTransferType('sale'); }
   };
 
   const list = transfers.filter(t => !t.isDeleted).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
@@ -86,6 +88,20 @@ export default function TransferRegister() {
                 <SelectTrigger><SelectValue placeholder={hi ? 'सदस्य चुनें' : 'Select member'} /></SelectTrigger>
                 <SelectContent>{members.map(m => <SelectItem key={m.id} value={m.id}>{m.name} ({m.memberId})</SelectItem>)}</SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>{hi ? 'हस्तांतरण का आधार' : 'Transfer basis'}</Label>
+              <Select value={transferType} onValueChange={v => setTransferType(v as 'sale' | 'nominee' | 'legal_heir')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sale">{hi ? 'बिक्री' : 'Sale'}</SelectItem>
+                  <SelectItem value="nominee">{hi ? 'नामिती (मृत्यु पर)' : 'Nominee (on death)'}</SelectItem>
+                  <SelectItem value="legal_heir">{hi ? 'कानूनी वारिस' : 'Legal heir'}</SelectItem>
+                </SelectContent>
+              </Select>
+              {transferType === 'nominee' && flat && (
+                <p className="text-xs text-muted-foreground">{flat.nomineeName ? (hi ? `दर्ज नामिती: ${flat.nomineeName}${flat.nomineeRelation ? ` (${flat.nomineeRelation})` : ''} — इसी सदस्य को नया मालिक चुनें।` : `Recorded nominee: ${flat.nomineeName}${flat.nomineeRelation ? ` (${flat.nomineeRelation})` : ''} — select that member as new owner.`) : (hi ? 'इस फ्लैट का कोई नामिती दर्ज नहीं (Share & Nomination रजिस्टर में जोड़ें)।' : 'No nominee recorded for this flat (add in Share & Nomination register).')}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>{hi ? 'तिथि' : 'Date'} *</Label>

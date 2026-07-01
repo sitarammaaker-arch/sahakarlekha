@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { RowInput } from 'jspdf-autotable';
-import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord, Voucher } from '@/types';
+import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord, Voucher, HousingFlat } from '@/types';
 import { ACCOUNT_IDS } from '@/lib/storage';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { fmtDate } from '@/lib/dateUtils';
@@ -1051,6 +1051,50 @@ export function generateDemandNoticePDF(input: DemandNoticeInput, society: Socie
   addSignatureBlock(doc, font, ['Secretary / Manager', 'Chairman / President'], sy + 8);
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName(`DemandNotice-${input.memberId}`, society));
+}
+
+// ─── Housing Share & Nomination Register ─────────────────────────────────────
+export function generateHousingShareNominationPDF(flats: HousingFlat[], members: Member[], society: SocietySettings): void {
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const { startY, font } = addHeader(doc, 'SHARE & NOMINATION REGISTER', society, `As on ${fmtDate(new Date().toISOString().split('T')[0])}`, { reportCode: 'SN' });
+  const owner = (id?: string) => { const m = members.find(x => x.id === id); return m ? `${m.name} (${m.memberId})` : ''; };
+  const active = flats.filter(f => !f.isDeleted);
+  const rows = active.map((f, i) => [
+    String(i + 1),
+    `${f.flatNo}${f.blockNo ? ` / ${f.blockNo}` : ''}`,
+    owner(f.memberId),
+    f.shareCertNo || '',
+    f.shareCount != null ? String(f.shareCount) : '',
+    f.shareFaceValue != null ? fmt(f.shareFaceValue) : '',
+    fmt((f.shareCount || 0) * (f.shareFaceValue || 0)),
+    f.nomineeName || '',
+    f.nomineeRelation || '',
+    f.nomineePhone || '',
+  ]);
+  autoTable(doc, {
+    startY: startY + 2,
+    head: [['S.No', 'Flat / Unit', 'Owner', 'Cert No.', 'Shares', 'Face Val.', 'Total', 'Nominee', 'Relation', 'Phone']],
+    body: rows,
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: { 5: { halign: 'right' }, 6: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(5, 6),
+  });
+  const sy = (doc as any).lastAutoTable.finalY + 8;
+  const totalShares = active.reduce((s, f) => s + (f.shareCount || 0), 0);
+  const totalCap = active.reduce((s, f) => s + (f.shareCount || 0) * (f.shareFaceValue || 0), 0);
+  doc.setFontSize(9);
+  doc.setFont(font, 'bold');
+  doc.text(`Total Flats: ${active.length}   |   Total Shares: ${totalShares}   |   Total Share Capital: ${fmt(totalCap)}`, 15, sy);
+  doc.setFont(font, 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(60);
+  doc.text('Certified that the above is a true record of share certificates and nominations per flat as maintained by the Society.', 15, sy + 7);
+  doc.setTextColor(0);
+  addSignatureBlock(doc, font, ['Secretary / Manager', 'Chairman / President'], sy + 14);
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName('ShareNominationRegister', society));
 }
 
 // ─── Loan Register PDF ────────────────────────────────────────────────────────
