@@ -61,7 +61,8 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'farmerSettlement', titleKey: 'farmerSettlement', icon: HandCoins,   route: '/farmer-settlement', domain: 'dairy', requiredCapabilities: ['dairy_collection'], requiredRoles: ['admin', 'accountant'], order: 2 },
   { id: 'milkDispatch', titleKey: 'milkDispatch', icon: Truck,               route: '/milk-dispatch', domain: 'dairy', requiredCapabilities: ['dairy_collection'], requiredRoles: ['admin', 'accountant'], order: 3 },
   { id: 'dairyInputs', titleKey: 'dairyInputs', icon: PackagePlus,           route: '/dairy-inputs', domain: 'dairy', requiredCapabilities: ['dairy_collection'], requiredRoles: ['admin', 'accountant'], order: 4 },
-  { id: 'dairyRegisters', titleKey: 'dairyRegisters', icon: FileSpreadsheet, route: '/dairy-registers', domain: 'dairy', requiredCapabilities: ['dairy_collection'], requiredRoles: ['admin', 'accountant', 'viewer'], order: 5 },
+  { id: 'dairyDistribution', titleKey: 'dairyDistribution', icon: Coins,     route: '/dairy-distribution', domain: 'dairy', requiredCapabilities: ['dairy_collection'], requiredRoles: ['admin', 'accountant'], order: 5 },
+  { id: 'dairyRegisters', titleKey: 'dairyRegisters', icon: FileSpreadsheet, route: '/dairy-registers', domain: 'dairy', requiredCapabilities: ['dairy_collection'], requiredRoles: ['admin', 'accountant', 'viewer'], order: 6 },
   { id: 'procurementLots', titleKey: 'procurementLots', icon: Wheat,         route: '/procurement-lots', domain: 'operations', requiredCapabilities: ['procurement_msp'], order: 10 },
   // ── Housing-cooperative module group (domain: 'housing') — all housing modules live here so
   // a housing society sees ONE organised "Housing" sidebar group (mirrors the Labour group). ──

@@ -658,6 +658,41 @@ export interface DairyInputIssue {
   createdAt: string;
 }
 
+/**
+ * Dairy year-end distribution (D6) — patronage BONUS (milk-supply-proportional) or DIVIDEND
+ * (share-capital-proportional). Governance-gated: a resolution reference is MANDATORY at approval.
+ * Approval posts one appropriation voucher (Dr distribution equity / Cr payable, total); payments
+ * (Dr payable / Cr bank|cash) advance amountPaid. Per-member `lines` are the SSOT breakdown.
+ */
+export type DairyDistributionKind = 'bonus' | 'dividend';
+export type DairyBonusBasis = 'per_litre' | 'per_value';
+export interface DairyDistributionLine {
+  memberId: string;
+  memberName: string;
+  base: number;    // litres / milk-value / share-capital the amount was computed on
+  amount: number;
+}
+export interface DairyDistribution {
+  id: string;
+  kind: DairyDistributionKind;
+  from?: string;         // bonus milk period start
+  to?: string;           // bonus milk period end
+  fyLabel?: string;      // dividend financial-year label (display)
+  basis?: DairyBonusBasis; // bonus only: per_litre | per_value
+  rate: number;          // ₹/litre, or fraction of value, or dividend % of share capital
+  resolutionNo: string;  // GOVERNANCE — mandatory at approval
+  resolutionDate?: string;
+  lines: DairyDistributionLine[];
+  total: number;
+  status: 'draft' | 'approved';
+  amountPaid: number;
+  voucherId?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 export type AssetCategory = 'Land' | 'Building' | 'Furniture' | 'Equipment' | 'Vehicle' | 'Computer' | 'Other';
 export type AssetStatus = 'active' | 'disposed';
 

@@ -1,4 +1,4 @@
-import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun } from '@/types';
+import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement } from '@/lib/procurement';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
@@ -88,6 +88,7 @@ const KEYS = {
   dairySettlements: 'sahayata_dairy_settlements',
   dairyDispatches: 'sahayata_dairy_dispatches',
   dairyInputIssues: 'sahayata_dairy_input_issues',
+  dairyDistributions: 'sahayata_dairy_distributions',
   workOrders: 'sahayata_work_orders',
   musterEntries: 'sahayata_muster_entries',
   workers: 'sahayata_workers',
@@ -840,6 +841,9 @@ export const setDairyDispatches = (d: DairyDispatch[]): void => set(KEYS.dairyDi
 
 export const getDairyInputIssues = (): DairyInputIssue[] => get(KEYS.dairyInputIssues, []);
 export const setDairyInputIssues = (i: DairyInputIssue[]): void => set(KEYS.dairyInputIssues, i);
+
+export const getDairyDistributions = (): DairyDistribution[] => get(KEYS.dairyDistributions, []);
+export const setDairyDistributions = (d: DairyDistribution[]): void => set(KEYS.dairyDistributions, d);
 export const getWorkOrders = (): WorkOrder[] => get(KEYS.workOrders, []);
 export const setWorkOrders = (w: WorkOrder[]): void => set(KEYS.workOrders, w);
 export const getMusterEntries = (): MusterEntry[] => get(KEYS.musterEntries, []);
