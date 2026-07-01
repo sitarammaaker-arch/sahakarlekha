@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { useHousingData } from '@/contexts/HousingDataContext';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import {
   CommandDialog,
@@ -12,7 +13,7 @@ import {
   CommandList,
   CommandSeparator,
 } from '@/components/ui/command';
-import { Users, FileText, BookOpen, Landmark, Package } from 'lucide-react';
+import { Users, FileText, BookOpen, Landmark, Package, Building2, Receipt, MessageSquareWarning } from 'lucide-react';
 
 interface GlobalSearchProps {
   open: boolean;
@@ -22,6 +23,7 @@ interface GlobalSearchProps {
 export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }) => {
   const { language } = useLanguage();
   const { members, vouchers, accounts, loans, assets } = useData();
+  const { housingFlats, maintenanceBills, complaints } = useHousingData();
   const { has } = useCapabilities();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
@@ -48,6 +50,17 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
     a.name.toLowerCase().includes(q) || a.assetNo.toLowerCase().includes(q)
   ).slice(0, 3);
 
+  const isHousing = has('housing');
+  const filteredFlats = (q.length < 2 || !isHousing) ? [] : housingFlats.filter(f =>
+    !f.isDeleted && (f.flatNo.toLowerCase().includes(q) || (f.blockNo || '').toLowerCase().includes(q))
+  ).slice(0, 5);
+  const filteredBills = (q.length < 2 || !isHousing) ? [] : maintenanceBills.filter(b =>
+    !b.isDeleted && (b.billNo.toLowerCase().includes(q) || (b.flatNo || '').toLowerCase().includes(q))
+  ).slice(0, 5);
+  const filteredComplaints = (q.length < 2 || !isHousing) ? [] : complaints.filter(c =>
+    !c.isDeleted && ((c.complaintNo || '').toLowerCase().includes(q) || (c.title || '').toLowerCase().includes(q))
+  ).slice(0, 5);
+
   const go = useCallback((path: string) => {
     onOpenChange(false);
     setQuery('');
@@ -63,7 +76,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
     return language === 'hi' ? map[type]?.[0] : map[type]?.[1];
   };
 
-  const hasResults = filteredMembers.length + filteredVouchers.length + filteredAccounts.length + filteredLoans.length + filteredAssets.length > 0;
+  const hasResults = filteredMembers.length + filteredVouchers.length + filteredAccounts.length + filteredLoans.length + filteredAssets.length + filteredFlats.length + filteredBills.length + filteredComplaints.length > 0;
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
@@ -149,6 +162,50 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
                   <Package className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span className="font-mono text-sm">{a.assetNo}</span>
                   <span className="text-muted-foreground text-xs truncate">{a.name}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
+
+        {filteredFlats.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading={language === 'hi' ? 'फ्लैट' : 'Flats'}>
+              {filteredFlats.map(f => (
+                <CommandItem key={f.id} onSelect={() => go('/flats-register')} className="gap-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="font-medium">{f.flatNo}{f.blockNo ? ` / ${f.blockNo}` : ''}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
+
+        {filteredBills.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading={language === 'hi' ? 'रखरखाव बिल' : 'Maintenance Bills'}>
+              {filteredBills.map(b => (
+                <CommandItem key={b.id} onSelect={() => go('/maintenance-billing')} className="gap-2">
+                  <Receipt className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="font-mono text-sm">{b.billNo}</span>
+                  <span className="text-muted-foreground text-xs ml-auto">{b.flatNo}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
+
+        {filteredComplaints.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading={language === 'hi' ? 'शिकायतें' : 'Complaints'}>
+              {filteredComplaints.map(c => (
+                <CommandItem key={c.id} onSelect={() => go('/complaints')} className="gap-2">
+                  <MessageSquareWarning className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="font-mono text-sm">{c.complaintNo}</span>
+                  <span className="text-muted-foreground text-xs truncate">{c.title}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

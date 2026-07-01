@@ -83,6 +83,8 @@ export const translations: Translations = {
   parking: { hi: 'पार्किंग रजिस्टर', en: 'Parking' },
   transferRegister: { hi: 'हस्तांतरण रजिस्टर', en: 'Transfer Register' },
   shareNominationRegister: { hi: 'शेयर एवं नामांकन', en: 'Share & Nomination' },
+  insurance: { hi: 'बीमा रजिस्टर', en: 'Insurance' },
+  amc: { hi: 'AMC / अनुबंध', en: 'AMC / Contracts' },
   navLabour: { hi: 'श्रमिक प्रबंधन', en: 'Labour' },
   navHousing: { hi: 'आवास प्रबंधन', en: 'Housing' },
   workerMaster: { hi: 'श्रमिक मास्टर', en: 'Worker Master' },

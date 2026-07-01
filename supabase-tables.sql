@@ -1578,6 +1578,33 @@ alter table public.housing_flats add column if not exists "nomineeRelation" text
 alter table public.housing_flats add column if not exists "nomineePhone" text;
 alter table public.housing_transfers add column if not exists "transferType" text;
 
+-- Housing R4 — insurance policy register + AMC/vendor-contract register. RUN once.
+create table if not exists housing_insurance (
+  id text primary key, society_id text not null default 'SOC001',
+  "policyNo" text, insurer text, "coverageType" text, "sumInsured" numeric, premium numeric,
+  "startDate" text, "expiryDate" text, remarks text,
+  "isDeleted" boolean default false, "createdAt" timestamptz default now()
+);
+alter table public.housing_insurance enable row level security;
+drop policy if exists "society_rw" on public.housing_insurance;
+create policy "society_rw" on public.housing_insurance for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create index if not exists idx_housing_insurance_society on public.housing_insurance (society_id);
+
+create table if not exists housing_amc (
+  id text primary key, society_id text not null default 'SOC001',
+  "contractNo" text, vendor text, equipment text, amount numeric,
+  "startDate" text, "expiryDate" text, remarks text,
+  "isDeleted" boolean default false, "createdAt" timestamptz default now()
+);
+alter table public.housing_amc enable row level security;
+drop policy if exists "society_rw" on public.housing_amc;
+create policy "society_rw" on public.housing_amc for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create index if not exists idx_housing_amc_society on public.housing_amc (society_id);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Labour cooperative — Work Orders / labour-contract register (master data; no
 -- accounting in V1). Plain society-scoped table (client upserts directly). RUN once.

@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { RowInput } from 'jspdf-autotable';
-import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord, Voucher, HousingFlat } from '@/types';
+import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord, Voucher, HousingFlat, MaintenanceBill } from '@/types';
 import { ACCOUNT_IDS } from '@/lib/storage';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { fmtDate } from '@/lib/dateUtils';
@@ -1095,6 +1095,75 @@ export function generateHousingShareNominationPDF(flats: HousingFlat[], members:
   addSignatureBlock(doc, font, ['Secretary / Manager', 'Chairman / President'], sy + 14);
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('ShareNominationRegister', society));
+}
+
+// ─── Housing maintenance bill (invoice) ──────────────────────────────────────
+export function generateMaintenanceBillPDF(bill: MaintenanceBill, flat: HousingFlat | undefined, member: Member | undefined, society: SocietySettings): void {
+  const doc = new jsPDF();
+  const { startY, font } = addHeader(doc, 'MAINTENANCE BILL', society, `Period: ${bill.period}`, { reportCode: 'MB' });
+  let y = startY + 4;
+  doc.setFontSize(9);
+  doc.setFont(font, 'normal');
+  doc.text(`Bill No: ${bill.billNo}    Date: ${fmtDate(bill.date)}`, 15, y); y += 5;
+  doc.text(`Flat: ${bill.flatNo || flat?.flatNo || ''}${flat?.blockNo ? ` / ${flat.blockNo}` : ''}`, 15, y); y += 5;
+  if (member) { doc.text(`Owner: ${member.name} (${member.memberId})`, 15, y); y += 5; }
+  y += 2;
+
+  const lines = (bill.lines && bill.lines.length > 0) ? bill.lines : [{ name: 'Maintenance', amount: bill.amount }];
+  autoTable(doc, {
+    startY: y,
+    head: [['#', 'Charge Head', 'Amount (Rs.)']],
+    body: lines.map((l, i) => [String(i + 1), l.name, fmt(l.amount)]),
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
+    columnStyles: { 2: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(2),
+  });
+  let sy = (doc as any).lastAutoTable.finalY + 8;
+  const line = (label: string, val: number, bold: boolean) => {
+    doc.setFont(font, bold ? 'bold' : 'normal');
+    doc.text(label, 120, sy); doc.text(fmt(val), 195, sy, { align: 'right' }); sy += 6;
+  };
+  line('Total', bill.amount, true);
+  if ((bill.paidAmount || 0) > 0) {
+    line('Paid', bill.paidAmount, false);
+    line('Outstanding', +(bill.amount - (bill.paidAmount || 0)).toFixed(2), true);
+  }
+  sy += 6;
+  doc.setFontSize(7.5); doc.setTextColor(90); doc.setFont(font, 'normal');
+  doc.text('Please pay by the due date to avoid interest. This is a computer-generated bill.', 15, sy, { maxWidth: 180 });
+  doc.setTextColor(0);
+  addSignatureBlock(doc, font, ['Secretary / Manager', 'Treasurer'], sy + 8);
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName(`MaintenanceBill-${bill.billNo}`.replace(/[\\/]/g, '-'), society));
+}
+
+// ─── Housing maintenance payment receipt ─────────────────────────────────────
+export interface MaintenanceReceiptInput {
+  receiptNo: string; billNo: string; flatNo: string; memberName: string;
+  amount: number; date: string; mode: string; reference?: string;
+}
+export function generateMaintenanceReceiptPDF(input: MaintenanceReceiptInput, society: SocietySettings): void {
+  const doc = new jsPDF();
+  const { startY, font } = addHeader(doc, 'MAINTENANCE RECEIPT', society, undefined, { reportCode: 'MR' });
+  let y = startY + 6;
+  doc.setFontSize(10);
+  doc.setFont(font, 'normal');
+  doc.text(`Receipt No: ${input.receiptNo}`, 15, y);
+  doc.text(`Date: ${fmtDate(input.date)}`, 195, y, { align: 'right' }); y += 10;
+  const bodyText = `Received with thanks from ${input.memberName || 'the member'} (Flat ${input.flatNo}) a sum of Rs. ${fmt(input.amount)} towards maintenance bill ${input.billNo}, paid by ${input.mode}${input.reference ? ` (Ref: ${input.reference})` : ''}.`;
+  doc.text(bodyText, 15, y, { maxWidth: 180 }); y += 18;
+  doc.setFont(font, 'bold');
+  doc.setFontSize(13);
+  doc.text(`Rs. ${fmt(input.amount)}`, 15, y); y += 6;
+  doc.setFont(font, 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(90);
+  doc.text('Subject to realisation of cheque/instrument. Computer-generated receipt.', 15, y + 6, { maxWidth: 180 });
+  doc.setTextColor(0);
+  addSignatureBlock(doc, font, ['Authorised Signatory'], y + 16);
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName(`Receipt-${input.receiptNo}`.replace(/[\\/]/g, '-'), society));
 }
 
 // ─── Loan Register PDF ────────────────────────────────────────────────────────
