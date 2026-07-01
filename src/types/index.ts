@@ -178,6 +178,14 @@ export interface HousingFlat {
   occupancy?: 'self' | 'rented' | 'vacant';  // physical status; drives non-occupancy charges (H2)
   receivableAccountId?: string;  // owner-member's receivable sub-ledger (leaf under 3303); '' → uses 3303 control
   chargeOverrides?: Record<string, number>;  // per-head amount override (by chargeHeadId); 0 = head not applicable
+  // Share certificate & nomination are properties of the FLAT (holder = current owner); the cert
+  // follows the flat on transfer, and the nominee is per-unit (R3).
+  shareCertNo?: string;
+  shareCount?: number;
+  shareFaceValue?: number;
+  nomineeName?: string;
+  nomineeRelation?: string;
+  nomineePhone?: string;
   area?: number;              // sq ft
   monthlyMaintenance: number;
   registrationDate?: string;
@@ -295,6 +303,7 @@ export interface HousingTransfer {
   transferFee?: number;       // → 4201 Transfer Fee (income)
   premium?: number;           // → 1202 Sinking Fund (corpus), per common bye-law practice
   voucherId?: string;
+  transferType?: 'sale' | 'nominee' | 'legal_heir';  // governance record of the transfer basis (R3)
   resolutionNo?: string;      // committee/AGM resolution authorising the transfer (governance trail)
   resolutionDate?: string;
   remarks?: string;

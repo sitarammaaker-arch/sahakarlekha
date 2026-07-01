@@ -69,6 +69,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'complaints', titleKey: 'complaints', icon: MessageSquareWarning, route: '/complaints', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 7 },
   { id: 'parking', titleKey: 'parking', icon: Car, route: '/parking', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 8 },
   { id: 'transferRegister', titleKey: 'transferRegister', icon: ArrowLeftRight, route: '/transfer-register', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 9 },
+  { id: 'shareNominationRegister', titleKey: 'shareNominationRegister', icon: ScrollText, route: '/share-nomination-register', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 10 },
   // ── Labour cooperative module group (domain: 'labour') ──
   { id: 'workerMaster',    titleKey: 'workerMaster',    icon: HardHat,         route: '/worker-master',   domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 10 },
   { id: 'departmentMaster',titleKey: 'departmentMaster',icon: Landmark,        route: '/department-master', domain: 'labour',   requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 11 },
