@@ -2061,3 +2061,31 @@ create policy "society_rw" on public.dairy_dispatches for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
 create index if not exists idx_dairy_dispatches_society on public.dairy_dispatches (society_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Dairy cooperative (Delivery D4b) — feed / medicine / AI issued to a member on
+-- credit. Posts Dr Member Input Receivable (3305) / Cr income (e.g. 4103). The
+-- member's outstanding is DERIVED (issues − settlement input-recoveries).
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists dairy_input_issues (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  date text,
+  "memberId" text,
+  "memberName" text,
+  "inputType" text,
+  "itemName" text,
+  qty numeric,
+  amount numeric,
+  "incomeAccountId" text,
+  "voucherId" text,
+  remarks text,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table public.dairy_input_issues enable row level security;
+drop policy if exists "society_rw" on public.dairy_input_issues;
+create policy "society_rw" on public.dairy_input_issues for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create index if not exists idx_dairy_input_issues_society on public.dairy_input_issues (society_id);

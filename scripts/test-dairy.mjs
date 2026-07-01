@@ -315,5 +315,37 @@ function buildRecoverySummary(settlements) {
   ok(specs.filter(s => s.type === 'Dr')[0].amount === specs.filter(s => s.type === 'Cr')[0].amount && specs[0].amount === 12000, 'dispatch voucher balanced (Dr 12000 = Cr 12000)');
 }
 
+// ── Mirror: src/lib/dairy/inputs.ts (D4b — derived member input outstanding) ──
+const memberInputIssued = (issues, memberId) => round2(issues.filter(i => !i.isDeleted && i.memberId === memberId).reduce((s, i) => s + (i.amount || 0), 0));
+function memberInputRecovered(settlements, memberId, acct) {
+  if (!acct) return 0; let r = 0;
+  for (const s of settlements) { if (s.isDeleted || s.memberId !== memberId) continue; for (const l of s.deductionLines) if (l.accountId === acct) r += l.amount || 0; }
+  return round2(r);
+}
+function memberInputOutstanding(issues, settlements, memberId, acct) {
+  const issued = memberInputIssued(issues, memberId);
+  const recovered = memberInputRecovered(settlements, memberId, acct);
+  return { issued, recovered, outstanding: round2(Math.max(0, issued - recovered)) };
+}
+
+// 20. Input outstanding = Σ issues − Σ input-recovery deductions (derived, per member)
+{
+  const issues = [
+    { memberId: 'm1', amount: 500 }, { memberId: 'm1', amount: 300 },
+    { memberId: 'm1', amount: 100, isDeleted: true }, // excluded
+    { memberId: 'm2', amount: 999 },                  // other member
+  ];
+  const settlements = [
+    { memberId: 'm1', isDeleted: false, deductionLines: [{ accountId: '3305', amount: 200 }, { accountId: '3304', amount: 50 }] }, // 200 is input recovery, 50 is a different account
+    { memberId: 'm1', isDeleted: true, deductionLines: [{ accountId: '3305', amount: 500 }] },  // deleted settlement excluded
+  ];
+  const b = memberInputOutstanding(issues, settlements, 'm1', '3305');
+  ok(b.issued === 800, 'issued sums live issues for the member (500 + 300)');
+  ok(b.recovered === 200, 'recovered counts only 3305 deductions in live settlements (the 3304 line & deleted settlement excluded)');
+  ok(b.outstanding === 600, 'outstanding = issued − recovered (800 − 200)');
+  ok(memberInputOutstanding(issues, settlements, 'm2', '3305').outstanding === 999, 'other member outstanding isolated');
+  ok(memberInputOutstanding(issues, [{ memberId: 'm1', deductionLines: [{ accountId: '3305', amount: 5000 }] }], 'm1', '3305').outstanding === 0, 'over-recovery clamps outstanding to 0');
+}
+
 console.log(`[dairy-test] ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -634,6 +634,30 @@ export interface DairyDispatch {
   createdAt: string;
 }
 
+/**
+ * Dairy input issue (D4b) — feed / medicine / AI issued to a member on credit. Recorded via the
+ * ledger (Dr Member Input Receivable 3305 / Cr the income account, e.g. 4103 Cattle Feed Sales),
+ * so it is a real sale, not a side channel (C-E). The member's outstanding input balance is
+ * offered as a recovery deduction at farmer settlement (Dr milk payable / Cr 3305). Outstanding is
+ * DERIVED (Σ issues − Σ input-recovery deductions), never mutated on the issue row.
+ */
+export type DairyInputType = 'feed' | 'medicine' | 'ai' | 'other';
+export interface DairyInputIssue {
+  id: string;
+  date: string;
+  memberId: string;
+  memberName: string;
+  inputType: DairyInputType;
+  itemName?: string;
+  qty?: number;
+  amount: number;            // sale value on credit
+  incomeAccountId: string;   // Cr — e.g. 4103 Cattle Feed Sales
+  voucherId?: string;        // the Dr 3305 / Cr income voucher
+  remarks?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 export type AssetCategory = 'Land' | 'Building' | 'Furniture' | 'Equipment' | 'Vehicle' | 'Computer' | 'Other';
 export type AssetStatus = 'active' | 'disposed';
 

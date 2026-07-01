@@ -16,6 +16,7 @@ export const DAIRY_ACCOUNT_IDS = {
   milkBulkSales: '4106',   // Milk Sales — Bulk / Union
   milkPayable: '2102',     // Milk Payment Payable
   unionReceivable: '3303', // Union Receivable (Sundry Debtors)
+  memberInputReceivable: '3305', // Member Input Receivable (feed/medicine/AI on credit)
 } as const;
 
 type Acc = Pick<LedgerAccount, 'id' | 'name' | 'nameHi' | 'subtype'> & { isDeleted?: boolean };
@@ -50,3 +51,6 @@ export const resolveMilkPayableAccountId = (accounts: ReadonlyArray<Acc>): strin
 
 export const resolveUnionReceivableAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
   findBy(accounts, null, DAIRY_ACCOUNT_IDS.unionReceivable, ['विविध देनदार', 'Sundry Debtors', 'Union Receivable']);
+
+export const resolveMemberInputReceivableAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
+  findBy(accounts, null, DAIRY_ACCOUNT_IDS.memberInputReceivable, ['सदस्य आदान प्राप्य', 'Member Input Receivable']);

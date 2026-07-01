@@ -20,11 +20,12 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
 import { priceMilk } from '@/lib/dairy/pricing';
-import { resolveMilkProcurementAccountId, resolveMilkBulkSalesAccountId, resolveMilkPayableAccountId, resolveUnionReceivableAccountId } from '@/lib/dairy/accounts';
+import { resolveMilkProcurementAccountId, resolveMilkBulkSalesAccountId, resolveMilkPayableAccountId, resolveUnionReceivableAccountId, resolveMemberInputReceivableAccountId } from '@/lib/dairy/accounts';
 import { computeGross, netPayable, sumDeductions, outstanding, settlementLegs } from '@/lib/dairy/settlement';
+import { memberInputOutstanding, type InputBalance } from '@/lib/dairy/inputs';
 import { resolveDairyPostingLegs } from '@/lib/dairy/postingRules';
 import { buildEngineVoucherLines } from '@/lib/posting/engineVoucher';
-import type { DairyRateChart, MilkEntry, DairySettlement, DairyDeductionLine, DairyDispatch, Voucher } from '@/types';
+import type { DairyRateChart, MilkEntry, DairySettlement, DairyDeductionLine, DairyDispatch, DairyInputIssue, Voucher } from '@/types';
 
 interface DairyDataContextValue {
   dairyReady: boolean;
@@ -67,6 +68,15 @@ interface DairyDataContextValue {
   /** Receive a union payment against a dispatch: Dr bank|cash / Cr 3303; advances amountReceived. */
   receiveUnionPayment: (args: { dispatchId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }) => Voucher;
   deleteDairyDispatch: (dispatchId: string) => void;
+
+  // Member input issue: feed / medicine / AI on credit (D4b)
+  inputIssues: DairyInputIssue[];
+  /** Record an input issue; posts Dr Member Input Receivable (3305) / Cr the income account. */
+  recordDairyInputIssue: (data: Omit<DairyInputIssue, 'id' | 'createdAt' | 'voucherId'>) => DairyInputIssue;
+  deleteDairyInputIssue: (id: string) => void;
+  /** Dedicated 3305 ledger (null until seeded) + a member's derived input balance for recovery. */
+  memberInputReceivableAccountId: string | null;
+  getMemberInputBalance: (memberId: string) => InputBalance;
 }
 
 const DairyDataContext = createContext<DairyDataContextValue | null>(null);
@@ -100,6 +110,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   const [milkEntries, setMilkEntriesState] = useState<MilkEntry[]>(() => storage.getMilkEntries());
   const [settlements, setSettlementsState] = useState<DairySettlement[]>(() => storage.getDairySettlements());
   const [dispatches, setDispatchesState] = useState<DairyDispatch[]>(() => storage.getDairyDispatches());
+  const [inputIssues, setInputIssuesState] = useState<DairyInputIssue[]>(() => storage.getDairyInputIssues());
 
   useEffect(() => {
     const sid = user?.societyId;
@@ -148,6 +159,15 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     );
   }, [user?.societyId]);
 
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setInputIssuesState([]); return; }
+    supabase.from('dairy_input_issues').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setInputIssuesState(error || !data ? storage.getDairyInputIssues() : (data as DairyInputIssue[])),
+      () => setInputIssuesState(storage.getDairyInputIssues()),
+    );
+  }, [user?.societyId]);
+
   // ── C-A ensure-accounts: seed dedicated milk ledgers for a pre-D1 dairy society (additive) ──
   const seededRef = useRef(false);
   useEffect(() => {
@@ -157,13 +177,17 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (society.fyLocked) return; // seeding mutates the chart; retry on a later load when unlocked
     const needsProc = resolveMilkProcurementAccountId(accounts) === null;
     const needsSales = resolveMilkBulkSalesAccountId(accounts) === null;
-    if (!needsProc && !needsSales) { seededRef.current = true; return; }
+    const needsInput = resolveMemberInputReceivableAccountId(accounts) === null;
+    if (!needsProc && !needsSales && !needsInput) { seededRef.current = true; return; }
     seededRef.current = true; // attempt once per mount
     if (needsProc) {
       addAccount({ name: 'Milk Procurement (Direct)', nameHi: 'दुग्ध खरीदी लागत (प्रत्यक्ष)', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '5100', subtype: 'milk_procurement' });
     }
     if (needsSales) {
       addAccount({ name: 'Milk Sales — Bulk / Union', nameHi: 'दुग्ध बिक्री — यूनियन', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100', subtype: 'milk_sales' });
+    }
+    if (needsInput) {
+      addAccount({ name: 'Member Input Receivable', nameHi: 'सदस्य आदान प्राप्य', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300' });
     }
   }, [society?.societyType, society?.fyLocked, accounts, addAccount]);
 
@@ -439,6 +463,54 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     commitDispatch({ ...cur, isDeleted: true }, cur);
   }, [dispatches, cancelVoucher, commitDispatch, user]);
 
+  // ── Member input issue: feed / medicine / AI on credit (D4b) ──
+  const commitInputIssue = useCallback((next: DairyInputIssue, revertTo: DairyInputIssue | null, onFail?: () => void) => {
+    setInputIssuesState(prev => { const u = prev.some(i => i.id === next.id) ? prev.map(i => i.id === next.id ? next : i) : [...prev, next]; storage.setDairyInputIssues(u); return u; });
+    supabase.from('dairy_input_issues').upsert(withSoc(next)).then(({ error }) => {
+      if (error) {
+        console.error('Input issue save error:', error.message);
+        setInputIssuesState(prev => { const u = revertTo ? prev.map(i => i.id === next.id ? revertTo : i) : prev.filter(i => i.id !== next.id); storage.setDairyInputIssues(u); return u; });
+        onFail?.();
+        toastRef.current({ title: 'आदान सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas. (Pehli baar: dairy_input_issues block chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [societyId]);
+
+  const recordDairyInputIssue = useCallback((data: Omit<DairyInputIssue, 'id' | 'createdAt' | 'voucherId'>): DairyInputIssue => {
+    const sentinel = { id: '' } as DairyInputIssue;
+    if (guardFYLocked()) return sentinel;
+    const amount = +(data.amount || 0).toFixed(2);
+    if (amount <= 0 || !data.memberId || !data.incomeAccountId) { toastRef.current({ title: 'अधूरी जानकारी', description: 'सदस्य, राशि और आय-खाता ज़रूरी हैं।', variant: 'destructive' }); return sentinel; }
+    const rcv = resolveMemberInputReceivableAccountId(accounts);
+    if (!rcv || !accounts.some(a => a.id === data.incomeAccountId)) { toastRef.current({ title: 'खाता नहीं मिला', description: 'Member input receivable / income ledger missing.', variant: 'destructive', duration: 12000 }); return sentinel; }
+    const voucher = addVoucher({
+      type: 'journal', date: data.date,
+      debitAccountId: rcv, creditAccountId: data.incomeAccountId, amount,
+      lines: [{ id: crypto.randomUUID(), accountId: rcv, type: 'Dr', amount }, { id: crypto.randomUUID(), accountId: data.incomeAccountId, type: 'Cr', amount }],
+      narration: `आदान (उधार) — ${data.memberName} — ${data.inputType}${data.itemName ? ` ${data.itemName}` : ''}`,
+      refType: 'dairy.input.issue',
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+    if (!voucher?.id) return sentinel;
+    const issue: DairyInputIssue = { ...data, id: crypto.randomUUID(), amount, voucherId: voucher.id, createdAt: new Date().toISOString() };
+    commitInputIssue(issue, null, () => cancelVoucher(voucher.id, 'Input issue rolled back (cloud save failed)', user?.name || 'System'));
+    toastRef.current({ title: '✅ आदान दर्ज', description: `${data.memberName} — ₹${amount.toLocaleString('en-IN')} (उधार)` });
+    return issue;
+  }, [accounts, addVoucher, cancelVoucher, commitInputIssue, user]);
+
+  const deleteDairyInputIssue = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const cur = inputIssues.find(i => i.id === id);
+    if (!cur) return;
+    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Input issue deleted', user?.name || 'System');
+    commitInputIssue({ ...cur, isDeleted: true }, cur);
+  }, [inputIssues, cancelVoucher, commitInputIssue, user]);
+
+  const getMemberInputBalance = useCallback(
+    (memberId: string) => memberInputOutstanding(inputIssues, settlements, memberId, resolveMemberInputReceivableAccountId(accounts) || ''),
+    [inputIssues, settlements, accounts],
+  );
+
   const resolveMilkRate = useCallback(
     (args: { fat: number; snf: number; qty: number; date?: string; season?: string }) =>
       priceMilk(rateCharts, { fat: args.fat, snf: args.snf, qty: args.qty, date: args.date || new Date().toISOString().slice(0, 10), season: args.season }),
@@ -471,6 +543,11 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       recordDairyDispatch,
       receiveUnionPayment,
       deleteDairyDispatch,
+      inputIssues,
+      recordDairyInputIssue,
+      deleteDairyInputIssue,
+      memberInputReceivableAccountId: resolveMemberInputReceivableAccountId(accounts),
+      getMemberInputBalance,
     }}>
       {children}
     </DairyDataContext.Provider>
