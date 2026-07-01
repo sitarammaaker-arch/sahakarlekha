@@ -576,6 +576,40 @@ export interface DairyRateChart {
   createdAt: string;
 }
 
+/**
+ * Dairy farmer settlement (D3) — the per-member, per-cycle payout document and SSOT for the
+ * amounts (procurement-settlement PATTERN, but a periodic aggregation of milk entries, not a
+ * 1:1 lot anchor). gross = the member's accepted milk value in [from,to]; deductions are
+ * recoveries (feed / medicine / advance / loan); netPayable = gross − Σ deductions. On approval
+ * ONE compound voucher posts the accrual + recoveries (Dr milk cost 5108 / Cr payable 2102 net /
+ * Cr each recovery account); payments (Dr 2102 / Cr bank|cash) advance amountPaid.
+ */
+export interface DairyDeductionLine {
+  id: string;
+  type: string;          // label — 'Feed' | 'Medicine' | 'Advance' | 'Loan' | …
+  accountId: string;     // Cr destination (e.g. 3304 Advance, a recovery-income account)
+  amount: number;
+  remarks?: string;
+}
+export interface DairySettlement {
+  id: string;
+  settlementNo?: string; // assigned at approval
+  memberId: string;
+  memberName: string;    // snapshot for display
+  from: string;          // cycle start (YYYY-MM-DD)
+  to: string;            // cycle end
+  gross: number;         // Σ member accepted milk amount in the cycle (snapshot, locked at approval)
+  deductionLines: DairyDeductionLine[];
+  netPayable: number;    // gross − Σ deductions (locked at approval)
+  amountPaid: number;    // advances as payments post (only mutable field post-approval)
+  status: 'draft' | 'approved';
+  voucherId?: string;    // the compound accrual+recovery voucher posted at approval
+  approvedAt?: string;
+  approvedBy?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 export type AssetCategory = 'Land' | 'Building' | 'Furniture' | 'Equipment' | 'Vehicle' | 'Computer' | 'Other';
 export type AssetStatus = 'active' | 'disposed';
 

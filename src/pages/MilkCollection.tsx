@@ -21,15 +21,15 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Milk, Plus, Trash2, FileDown } from 'lucide-react';
+import { Milk, Plus, Trash2 } from 'lucide-react';
 import type { MilkEntry, MilkShift } from '@/types';
 
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const today = () => new Date().toISOString().slice(0, 10);
 
 const MilkCollection: React.FC = () => {
-  const { members, accounts } = useData();
-  const { milkEntries, addMilkEntry, deleteMilkEntry, postMilkCycle, resolveMilkRate, milkProcurementAccountId, milkPayableAccountId } = useDairyData();
+  const { members } = useData();
+  const { milkEntries, addMilkEntry, deleteMilkEntry, resolveMilkRate } = useDairyData();
   const { language } = useLanguage();
   const hi = language === 'hi';
   const { toast } = useToast();
@@ -39,7 +39,6 @@ const MilkCollection: React.FC = () => {
     { v: 'evening', hi: 'शाम', en: 'Evening' },
   ];
   const shiftLabel = (v: MilkShift) => { const s = SHIFTS.find((x) => x.v === v); return s ? (hi ? s.hi : s.en) : v; };
-  const acctName = (id: string | null) => { const a = accounts.find((x) => x.id === id); return a ? (hi ? (a.nameHi || a.name) : (a.name || a.nameHi)) : '—'; };
 
   // ── collection entry form ────────────────────────────────────────────────
   const [date, setDate] = useState(today());
@@ -103,8 +102,6 @@ const MilkCollection: React.FC = () => {
   }, [milkEntries, from, to]);
   const payoutTotal = payout.reduce((s, p) => s + p.amount, 0);
   const payoutQty = payout.reduce((s, p) => s + p.qty, 0);
-
-  const postToBooks = () => postMilkCycle({ from, to, amount: payoutTotal, qty: payoutQty, members: payout.length });
 
   return (
     <div className="space-y-6 p-1">
@@ -202,17 +199,7 @@ const MilkCollection: React.FC = () => {
               ))}</TableBody>
             </Table></div>
           )}
-
-          {/* Post to books — dedicated milk ledgers (C-A) */}
-          <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-            <p className="text-sm font-medium">{hi ? 'इस चक्र की कुल राशि खातों में पोस्ट करें' : "Post this cycle's total to the books"}</p>
-            <div className="text-xs text-muted-foreground grid grid-cols-1 sm:grid-cols-2 gap-1">
-              <span><b>Dr</b> {acctName(milkProcurementAccountId)}</span>
-              <span><b>Cr</b> {acctName(milkPayableAccountId)}</span>
-            </div>
-            <Button variant="outline" size="sm" onClick={postToBooks} disabled={payoutTotal <= 0}><FileDown className="h-4 w-4 mr-1" /> {hi ? `${inr(payoutTotal)} पोस्ट करें (Journal)` : `Post ${inr(payoutTotal)} (Journal)`}</Button>
-            <p className="text-xs text-muted-foreground">{hi ? 'यह एक journal voucher बनाता है — Dr दुग्ध खरीदी लागत, Cr देय दुग्ध भुगतान — जो ट्रायल बैलेंस/बैलेंस शीट में दिखेगा।' : 'Creates a journal voucher — Dr milk procurement, Cr milk payable — visible in Trial Balance / Balance Sheet.'}</p>
-          </div>
+          <p className="text-xs text-muted-foreground">{hi ? 'खातों में पोस्टिंग अब “दुग्ध सेटलमेंट” से होती है — सदस्य-वार सकल, कटौती व नेट भुगतान।' : 'Ledger posting now happens in “Farmer Settlement” — per-member gross, recoveries & net payout.'}</p>
         </CardContent>
       </Card>
     </div>

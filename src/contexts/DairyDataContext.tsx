@@ -21,9 +21,8 @@ import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
 import { priceMilk } from '@/lib/dairy/pricing';
 import { resolveMilkProcurementAccountId, resolveMilkBulkSalesAccountId, resolveMilkPayableAccountId } from '@/lib/dairy/accounts';
-import { resolveDairyPostingLegs } from '@/lib/dairy/postingRules';
-import { buildEngineVoucherLines } from '@/lib/posting/engineVoucher';
-import type { DairyRateChart, MilkEntry, Voucher } from '@/types';
+import { computeGross, netPayable, sumDeductions, outstanding, settlementLegs } from '@/lib/dairy/settlement';
+import type { DairyRateChart, MilkEntry, DairySettlement, DairyDeductionLine, Voucher } from '@/types';
 
 interface DairyDataContextValue {
   dairyReady: boolean;
@@ -46,14 +45,24 @@ interface DairyDataContextValue {
   milkEntries: MilkEntry[];
   addMilkEntry: (data: Omit<MilkEntry, 'id' | 'createdAt'>) => MilkEntry;
   deleteMilkEntry: (id: string) => void;
-  /** Post a cycle's milk cost via the posting binding — Dr 5108 / Cr 2102 (dedicated, never 5101). */
-  postMilkCycle: (args: { from: string; to: string; amount: number; qty: number; members: number }) => Voucher;
+
+  // Farmer settlement cycle (D3) — per-member, per-cycle payout (the authoritative posting path)
+  settlements: DairySettlement[];
+  /** Draft a settlement for a member's cycle; gross = accepted milk value in [from,to]. */
+  createDairySettlement: (args: { memberId: string; from: string; to: string }) => DairySettlement;
+  addDairyDeduction: (args: { settlementId: string; type: string; accountId: string; amount: number; remarks?: string }) => void;
+  removeDairyDeduction: (args: { settlementId: string; lineId: string }) => void;
+  /** Approve: lock net + post the compound voucher (Dr milk-cost gross / Cr payable net / Cr recoveries). */
+  approveDairySettlement: (settlementId: string) => DairySettlement;
+  /** Pay the (partial) net: Dr payable / Cr bank|cash; advances amountPaid. */
+  recordDairySettlementPayment: (args: { settlementId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string }) => Voucher;
+  deleteDairySettlement: (settlementId: string) => void;
 }
 
 const DairyDataContext = createContext<DairyDataContextValue | null>(null);
 
 export function DairyProvider({ children }: { children: ReactNode }) {
-  const { society, accounts, addAccount, addVoucher } = useData();
+  const { society, accounts, members, addAccount, addVoucher, cancelVoucher } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
@@ -79,6 +88,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   // ── Rate-chart state (localStorage seed → Supabase load on session) ─────────
   const [rateCharts, setRateChartsState] = useState<DairyRateChart[]>(() => storage.getDairyRateCharts());
   const [milkEntries, setMilkEntriesState] = useState<MilkEntry[]>(() => storage.getMilkEntries());
+  const [settlements, setSettlementsState] = useState<DairySettlement[]>(() => storage.getDairySettlements());
 
   useEffect(() => {
     const sid = user?.societyId;
@@ -106,6 +116,15 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     supabase.from('milk_entries').select('*').eq('society_id', sid).then(
       ({ data, error }) => setMilkEntriesState(merge(error || !data ? storage.getMilkEntries() : (data as MilkEntry[]))),
       () => setMilkEntriesState(merge(storage.getMilkEntries())),
+    );
+  }, [user?.societyId]);
+
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setSettlementsState([]); return; }
+    supabase.from('dairy_settlements').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setSettlementsState(error || !data ? storage.getDairySettlements() : (data as DairySettlement[])),
+      () => setSettlementsState(storage.getDairySettlements()),
     );
   }, [user?.societyId]);
 
@@ -205,31 +224,124 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     });
   }, [societyId]);
 
-  // Post the cycle milk cost through the dairy posting rule → dedicated ledgers (Dr 5108 / Cr 2102).
-  const postMilkCycle = useCallback((args: { from: string; to: string; amount: number; qty: number; members: number }): Voucher => {
-    const sentinel = { id: '' } as Voucher;
+  // ── Farmer settlement cycle (D3) — the authoritative per-member posting path ──
+  const persistSettlement = useCallback((next: DairySettlement, revertTo: DairySettlement | null, onFail?: () => void) => {
+    supabase.from('dairy_settlements').upsert(withSoc(next)).then(({ error }) => {
+      if (error) {
+        console.error('Settlement save error:', error.message);
+        setSettlementsState(prev => { const u = revertTo ? prev.map(s => s.id === next.id ? revertTo : s) : prev.filter(s => s.id !== next.id); storage.setDairySettlements(u); return u; });
+        onFail?.();
+        toastRef.current({ title: 'सेटलमेंट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas. (Pehli baar: dairy_settlements block chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [societyId]);
+
+  const commitSettlement = useCallback((next: DairySettlement, revertTo: DairySettlement | null, onFail?: () => void) => {
+    setSettlementsState(prev => {
+      const u = prev.some(s => s.id === next.id) ? prev.map(s => s.id === next.id ? next : s) : [...prev, next];
+      storage.setDairySettlements(u); return u;
+    });
+    persistSettlement(next, revertTo, onFail);
+  }, [persistSettlement]);
+
+  const createDairySettlement = useCallback((args: { memberId: string; from: string; to: string }): DairySettlement => {
+    const sentinel = { id: '' } as DairySettlement;
     if (guardFYLocked()) return sentinel;
-    const amount = +(args.amount || 0).toFixed(2);
-    if (amount <= 0) { toastRef.current({ title: 'कुछ नहीं', description: 'इस अवधि में कोई राशि नहीं।', variant: 'destructive' }); return sentinel; }
-    const procAcc = resolveMilkProcurementAccountId(accounts);
-    const payAcc = resolveMilkPayableAccountId(accounts);
-    if (!procAcc || !payAcc) { toastRef.current({ title: 'दुग्ध खाते नहीं मिले', description: 'Milk procurement / payable ledger missing — society type dairy hona chahiye.', variant: 'destructive', duration: 12000 }); return sentinel; }
-    const binding = { 'milk.procurement.cost': procAcc, 'farmer.milk.payable': payAcc };
-    const legs = resolveDairyPostingLegs('RecogniseMilkProcurement', { amount, currency: 'INR' }, binding, accounts);
-    const specs = buildEngineVoucherLines(legs);
-    if (specs.length !== 2) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'Posting legs resolve nahi hui (accounts missing).', variant: 'destructive' }); return sentinel; }
-    const dr = specs.find(s => s.type === 'Dr'); const cr = specs.find(s => s.type === 'Cr');
+    const member = members.find(m => m.id === args.memberId);
+    if (!member) { toastRef.current({ title: 'सदस्य नहीं मिला', variant: 'destructive' }); return sentinel; }
+    const gross = computeGross(milkEntries, args.memberId, args.from, args.to);
+    if (gross <= 0) { toastRef.current({ title: 'कोई दूध नहीं', description: 'इस सदस्य का इस अवधि में कोई स्वीकृत संकलन नहीं।', variant: 'destructive' }); return sentinel; }
+    const s: DairySettlement = {
+      id: crypto.randomUUID(), memberId: member.id, memberName: member.name,
+      from: args.from, to: args.to, gross, deductionLines: [], netPayable: gross, amountPaid: 0,
+      status: 'draft', createdAt: new Date().toISOString(),
+    };
+    commitSettlement(s, null);
+    toastRef.current({ title: 'सेटलमेंट बनाया (draft)', description: `${member.name} — सकल ₹${gross.toLocaleString('en-IN')}` });
+    return s;
+  }, [members, milkEntries, commitSettlement]);
+
+  const addDairyDeduction = useCallback((args: { settlementId: string; type: string; accountId: string; amount: number; remarks?: string }) => {
+    if (guardFYLocked()) return;
+    const cur = settlements.find(s => s.id === args.settlementId);
+    if (!cur || cur.status !== 'draft') { toastRef.current({ title: 'बदल नहीं सकते', description: 'Approved सेटलमेंट में कटौती नहीं जुड़ सकती।', variant: 'destructive' }); return; }
+    if (!(args.amount > 0) || !args.accountId) { toastRef.current({ title: 'अधूरी कटौती', variant: 'destructive' }); return; }
+    const line: DairyDeductionLine = { id: crypto.randomUUID(), type: args.type, accountId: args.accountId, amount: +args.amount.toFixed(2), remarks: args.remarks };
+    const lines = [...cur.deductionLines, line];
+    if (sumDeductions(lines) > cur.gross + 0.005) { toastRef.current({ title: 'कटौती सकल से ज़्यादा', description: 'कुल कटौती दूध-मूल्य से अधिक नहीं हो सकती।', variant: 'destructive' }); return; }
+    const next: DairySettlement = { ...cur, deductionLines: lines, netPayable: netPayable(cur.gross, lines) };
+    commitSettlement(next, cur);
+  }, [settlements, commitSettlement]);
+
+  const removeDairyDeduction = useCallback((args: { settlementId: string; lineId: string }) => {
+    if (guardFYLocked()) return;
+    const cur = settlements.find(s => s.id === args.settlementId);
+    if (!cur || cur.status !== 'draft') return;
+    const lines = cur.deductionLines.filter(l => l.id !== args.lineId);
+    commitSettlement({ ...cur, deductionLines: lines, netPayable: netPayable(cur.gross, lines) }, cur);
+  }, [settlements, commitSettlement]);
+
+  const approveDairySettlement = useCallback((settlementId: string): DairySettlement => {
+    const sentinel = { id: '' } as DairySettlement;
+    if (guardFYLocked()) return sentinel;
+    const cur = settlements.find(s => s.id === settlementId);
+    if (!cur || cur.status !== 'draft') { toastRef.current({ title: 'पहले से approved', variant: 'destructive' }); return sentinel; }
+    const milkCost = resolveMilkProcurementAccountId(accounts);
+    const payable = resolveMilkPayableAccountId(accounts);
+    if (!milkCost || !payable) { toastRef.current({ title: 'दुग्ध खाते नहीं मिले', description: 'Milk procurement / payable ledger missing.', variant: 'destructive', duration: 12000 }); return sentinel; }
+    const legs = settlementLegs(cur.gross, cur.deductionLines, milkCost, payable);
+    if (legs.length === 0) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'Legs balanced nahi (कटौती > सकल या खाता गुम).', variant: 'destructive' }); return sentinel; }
+    const net = netPayable(cur.gross, cur.deductionLines);
     const voucher = addVoucher({
-      type: 'journal', date: args.to,
-      debitAccountId: dr!.accountId, creditAccountId: cr!.accountId, amount,
-      lines: specs.map(s => ({ id: crypto.randomUUID(), accountId: s.accountId, type: s.type, amount: s.amount })),
-      narration: `दूध खरीद ${args.from} से ${args.to} — ${args.qty.toFixed(1)} लीटर, ${args.members} सदस्य`,
-      refType: 'dairy.procurement',
+      type: 'journal', date: cur.to,
+      debitAccountId: milkCost, creditAccountId: payable, amount: cur.gross,
+      lines: legs.map(l => ({ id: crypto.randomUUID(), accountId: l.accountId, type: l.type, amount: l.amount })),
+      narration: `दूध सेटलमेंट ${cur.memberName} — ${cur.from} से ${cur.to} (सकल ₹${cur.gross}, नेट ₹${net})`,
+      refType: 'dairy.settlement', refId: cur.id,
       createdBy: user?.name || 'admin',
     } as Parameters<typeof addVoucher>[0]);
-    if (voucher?.id) toastRef.current({ title: '✅ खातों में पोस्ट हुआ', description: `₹${amount.toLocaleString('en-IN')} — Dr दुग्ध खरीदी लागत, Cr देय दुग्ध भुगतान।` });
-    return voucher || sentinel;
-  }, [accounts, addVoucher, user]);
+    if (!voucher?.id) return sentinel;
+    const no = 'DS/' + String(settlements.filter(s => s.status === 'approved' && !s.isDeleted).length + 1).padStart(4, '0');
+    const next: DairySettlement = { ...cur, status: 'approved', settlementNo: no, netPayable: net, voucherId: voucher.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
+    commitSettlement(next, cur, () => cancelVoucher(voucher.id, 'Settlement approval rolled back (cloud save failed)', user?.name || 'System'));
+    toastRef.current({ title: '✅ सेटलमेंट approved', description: `${no} — नेट देय ₹${net.toLocaleString('en-IN')}` });
+    return next;
+  }, [settlements, accounts, addVoucher, cancelVoucher, commitSettlement, user]);
+
+  const recordDairySettlementPayment = useCallback((args: { settlementId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string }): Voucher => {
+    const sentinel = { id: '' } as Voucher;
+    if (guardFYLocked()) return sentinel;
+    const cur = settlements.find(s => s.id === args.settlementId);
+    if (!cur || cur.status !== 'approved') { toastRef.current({ title: 'पहले approve करें', variant: 'destructive' }); return sentinel; }
+    const out = outstanding(cur.netPayable, cur.amountPaid);
+    const amount = +Math.min(args.amount, out).toFixed(2);
+    if (!(amount > 0)) { toastRef.current({ title: 'कुछ बकाया नहीं', description: 'पूरा भुगतान हो चुका है।', variant: 'destructive' }); return sentinel; }
+    const payable = resolveMilkPayableAccountId(accounts);
+    if (!payable) { toastRef.current({ title: 'देय खाता नहीं मिला', variant: 'destructive' }); return sentinel; }
+    const creditAcc = args.mode === 'bank' ? (args.bankAccountId || '3302') : '3301';
+    const voucher = addVoucher({
+      type: 'payment', date: args.date,
+      debitAccountId: payable, creditAccountId: creditAcc, amount,
+      lines: [{ id: crypto.randomUUID(), accountId: payable, type: 'Dr', amount }, { id: crypto.randomUUID(), accountId: creditAcc, type: 'Cr', amount }],
+      narration: `दूध भुगतान ${cur.memberName} — ${cur.settlementNo || ''}${args.reference ? ` (${args.reference})` : ''}`,
+      refType: 'dairy.settlement.payment', refId: cur.id,
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+    if (!voucher?.id) return sentinel;
+    const next: DairySettlement = { ...cur, amountPaid: +(cur.amountPaid + amount).toFixed(2) };
+    commitSettlement(next, cur, () => cancelVoucher(voucher.id, 'Payment rolled back (cloud save failed)', user?.name || 'System'));
+    toastRef.current({ title: '✅ भुगतान दर्ज', description: `₹${amount.toLocaleString('en-IN')} — बकाया ₹${outstanding(cur.netPayable, next.amountPaid).toLocaleString('en-IN')}` });
+    return voucher;
+  }, [settlements, accounts, addVoucher, cancelVoucher, commitSettlement, user]);
+
+  const deleteDairySettlement = useCallback((settlementId: string) => {
+    if (guardFYLocked()) return;
+    const cur = settlements.find(s => s.id === settlementId);
+    if (!cur) return;
+    if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले भुगतान reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
+    if (cur.status === 'approved' && cur.voucherId) cancelVoucher(cur.voucherId, 'Settlement deleted', user?.name || 'System');
+    commitSettlement({ ...cur, isDeleted: true }, cur);
+  }, [settlements, cancelVoucher, commitSettlement, user]);
 
   const resolveMilkRate = useCallback(
     (args: { fat: number; snf: number; qty: number; date?: string; season?: string }) =>
@@ -252,7 +364,13 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       milkEntries,
       addMilkEntry,
       deleteMilkEntry,
-      postMilkCycle,
+      settlements,
+      createDairySettlement,
+      addDairyDeduction,
+      removeDairyDeduction,
+      approveDairySettlement,
+      recordDairySettlementPayment,
+      deleteDairySettlement,
     }}>
       {children}
     </DairyDataContext.Provider>
