@@ -21,7 +21,9 @@ import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
 import { priceMilk } from '@/lib/dairy/pricing';
 import { resolveMilkProcurementAccountId, resolveMilkBulkSalesAccountId, resolveMilkPayableAccountId } from '@/lib/dairy/accounts';
-import type { DairyRateChart } from '@/types';
+import { resolveDairyPostingLegs } from '@/lib/dairy/postingRules';
+import { buildEngineVoucherLines } from '@/lib/posting/engineVoucher';
+import type { DairyRateChart, MilkEntry, Voucher } from '@/types';
 
 interface DairyDataContextValue {
   dairyReady: boolean;
@@ -39,12 +41,19 @@ interface DairyDataContextValue {
   milkProcurementAccountId: string | null;
   milkBulkSalesAccountId: string | null;
   milkPayableAccountId: string | null;
+
+  // Milk collection entries (D2 — absorbed from the former self-contained MilkCollection page)
+  milkEntries: MilkEntry[];
+  addMilkEntry: (data: Omit<MilkEntry, 'id' | 'createdAt'>) => MilkEntry;
+  deleteMilkEntry: (id: string) => void;
+  /** Post a cycle's milk cost via the posting binding — Dr 5108 / Cr 2102 (dedicated, never 5101). */
+  postMilkCycle: (args: { from: string; to: string; amount: number; qty: number; members: number }) => Voucher;
 }
 
 const DairyDataContext = createContext<DairyDataContextValue | null>(null);
 
 export function DairyProvider({ children }: { children: ReactNode }) {
-  const { society, accounts, addAccount } = useData();
+  const { society, accounts, addAccount, addVoucher } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
@@ -69,6 +78,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
 
   // ── Rate-chart state (localStorage seed → Supabase load on session) ─────────
   const [rateCharts, setRateChartsState] = useState<DairyRateChart[]>(() => storage.getDairyRateCharts());
+  const [milkEntries, setMilkEntriesState] = useState<MilkEntry[]>(() => storage.getMilkEntries());
 
   useEffect(() => {
     const sid = user?.societyId;
@@ -76,6 +86,26 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     supabase.from('dairy_rate_charts').select('*').eq('society_id', sid).then(
       ({ data, error }) => setRateChartsState(error || !data ? storage.getDairyRateCharts() : (data as DairyRateChart[])),
       () => setRateChartsState(storage.getDairyRateCharts()),
+    );
+  }, [user?.societyId]);
+
+  // Milk entries — SSOT load; C-B: adopt any rows left in the former page's bespoke
+  // `sl_milk_entries_${sid}` key (offline-only entries that never synced) so nothing is lost.
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setMilkEntriesState([]); return; }
+    let legacy: MilkEntry[] = [];
+    try { const raw = localStorage.getItem(`sl_milk_entries_${sid}`); if (raw) legacy = JSON.parse(raw) as MilkEntry[]; } catch { /* ignore */ }
+    const merge = (cloud: MilkEntry[]): MilkEntry[] => {
+      if (!Array.isArray(legacy) || legacy.length === 0) return cloud;
+      const ids = new Set(cloud.map(r => r.id));
+      const merged = [...cloud, ...legacy.filter(r => r && r.id && !ids.has(r.id))];
+      storage.setMilkEntries(merged);
+      return merged;
+    };
+    supabase.from('milk_entries').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setMilkEntriesState(merge(error || !data ? storage.getMilkEntries() : (data as MilkEntry[]))),
+      () => setMilkEntriesState(merge(storage.getMilkEntries())),
     );
   }, [user?.societyId]);
 
@@ -145,6 +175,62 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     });
   }, [societyId]);
 
+  const addMilkEntry = useCallback((data: Omit<MilkEntry, 'id' | 'createdAt'>): MilkEntry => {
+    if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as MilkEntry;
+    const entry: MilkEntry = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    setMilkEntriesState(prev => { const u = [...prev, entry]; storage.setMilkEntries(u); return u; });
+    supabase.from('milk_entries').upsert(withSoc(entry)).then(({ error }) => {
+      if (error) {
+        console.error('Milk entry save error:', error.message);
+        setMilkEntriesState(prev => { const r = prev.filter(e => e.id !== entry.id); storage.setMilkEntries(r); return r; });
+        toastRef.current({ title: 'एंट्री सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka milk_entries block chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return entry;
+  }, [societyId]);
+
+  const deleteMilkEntry = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    setMilkEntriesState(prev => {
+      const before = prev.find(e => e.id === id);
+      const u = prev.filter(e => e.id !== id);
+      storage.setMilkEntries(u);
+      if (before) supabase.from('milk_entries').delete().eq('id', id).then(({ error }) => {
+        if (error) {
+          setMilkEntriesState(p => { const r = [...p, before]; storage.setMilkEntries(r); return r; });
+          toastRef.current({ title: 'डिलीट नहीं हुआ', description: `Cloud delete fail — ${error.message}. एंट्री वापस ले आई गई।`, variant: 'destructive', duration: 12000 });
+        }
+      });
+      return u;
+    });
+  }, [societyId]);
+
+  // Post the cycle milk cost through the dairy posting rule → dedicated ledgers (Dr 5108 / Cr 2102).
+  const postMilkCycle = useCallback((args: { from: string; to: string; amount: number; qty: number; members: number }): Voucher => {
+    const sentinel = { id: '' } as Voucher;
+    if (guardFYLocked()) return sentinel;
+    const amount = +(args.amount || 0).toFixed(2);
+    if (amount <= 0) { toastRef.current({ title: 'कुछ नहीं', description: 'इस अवधि में कोई राशि नहीं।', variant: 'destructive' }); return sentinel; }
+    const procAcc = resolveMilkProcurementAccountId(accounts);
+    const payAcc = resolveMilkPayableAccountId(accounts);
+    if (!procAcc || !payAcc) { toastRef.current({ title: 'दुग्ध खाते नहीं मिले', description: 'Milk procurement / payable ledger missing — society type dairy hona chahiye.', variant: 'destructive', duration: 12000 }); return sentinel; }
+    const binding = { 'milk.procurement.cost': procAcc, 'farmer.milk.payable': payAcc };
+    const legs = resolveDairyPostingLegs('RecogniseMilkProcurement', { amount, currency: 'INR' }, binding, accounts);
+    const specs = buildEngineVoucherLines(legs);
+    if (specs.length !== 2) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'Posting legs resolve nahi hui (accounts missing).', variant: 'destructive' }); return sentinel; }
+    const dr = specs.find(s => s.type === 'Dr'); const cr = specs.find(s => s.type === 'Cr');
+    const voucher = addVoucher({
+      type: 'journal', date: args.to,
+      debitAccountId: dr!.accountId, creditAccountId: cr!.accountId, amount,
+      lines: specs.map(s => ({ id: crypto.randomUUID(), accountId: s.accountId, type: s.type, amount: s.amount })),
+      narration: `दूध खरीद ${args.from} से ${args.to} — ${args.qty.toFixed(1)} लीटर, ${args.members} सदस्य`,
+      refType: 'dairy.procurement',
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+    if (voucher?.id) toastRef.current({ title: '✅ खातों में पोस्ट हुआ', description: `₹${amount.toLocaleString('en-IN')} — Dr दुग्ध खरीदी लागत, Cr देय दुग्ध भुगतान।` });
+    return voucher || sentinel;
+  }, [accounts, addVoucher, user]);
+
   const resolveMilkRate = useCallback(
     (args: { fat: number; snf: number; qty: number; date?: string; season?: string }) =>
       priceMilk(rateCharts, { fat: args.fat, snf: args.snf, qty: args.qty, date: args.date || new Date().toISOString().slice(0, 10), season: args.season }),
@@ -163,6 +249,10 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       milkProcurementAccountId: resolveMilkProcurementAccountId(accounts),
       milkBulkSalesAccountId: resolveMilkBulkSalesAccountId(accounts),
       milkPayableAccountId: resolveMilkPayableAccountId(accounts),
+      milkEntries,
+      addMilkEntry,
+      deleteMilkEntry,
+      postMilkCycle,
     }}>
       {children}
     </DairyDataContext.Provider>

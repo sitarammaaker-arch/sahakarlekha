@@ -131,5 +131,61 @@ const CHART = { id: 'c1', name: 'Jul', basis: 'fat_snf', effectiveFrom: '2026-07
   ok(resolveMilkProcurementAccountId([{ id: '5108', subtype: 'milk_procurement', isDeleted: true }]) === null, 'soft-deleted milk account is not resolved');
 }
 
+// ── Mirror: src/lib/posting/freezePostingLegs.ts + engineVoucher.ts + dairy/postingRules.ts ──
+function freezePostingLegs(rawLegs, amount, binding, accounts) {
+  if (rawLegs.length === 0) return [];
+  const legs = [];
+  for (const r of rawLegs) {
+    const accountId = binding[r.accountSelector];
+    if (!accountId) return [];
+    const account = accounts.find(a => a.id === accountId);
+    if (!account) return [];
+    legs.push({ side: r.side, accountSelector: r.accountSelector, resolvedAccountId: account.id, accountCode: account.id, accountName: account.name, amount });
+  }
+  return legs;
+}
+function buildEngineVoucherLines(legs) {
+  const lines = [];
+  for (const leg of legs) { if (!leg.resolvedAccountId) return []; lines.push({ accountId: leg.resolvedAccountId, type: leg.side, amount: leg.amount.amount }); }
+  return lines;
+}
+function resolveDairyPostingLegs(intent, amount, binding, accounts) {
+  const raw = intent === 'RecogniseMilkProcurement'
+    ? [{ side: 'Dr', accountSelector: 'milk.procurement.cost' }, { side: 'Cr', accountSelector: 'farmer.milk.payable' }]
+    : [];
+  return freezePostingLegs(raw, amount, binding, accounts);
+}
+
+// 10. Milk-procurement legs: Dr dedicated procurement / Cr milk payable, balanced & frozen
+{
+  const accounts = [{ id: '5108', name: 'Milk Procurement (Direct)' }, { id: '2102', name: 'Milk Payment Payable' }, { id: '5101', name: 'Purchases — General' }];
+  const binding = { 'milk.procurement.cost': '5108', 'farmer.milk.payable': '2102' };
+  const legs = resolveDairyPostingLegs('RecogniseMilkProcurement', { amount: 5000, currency: 'INR' }, binding, accounts);
+  ok(legs.length === 2, 'two legs produced');
+  const dr = legs.find(l => l.side === 'Dr'); const cr = legs.find(l => l.side === 'Cr');
+  ok(dr.resolvedAccountId === '5108', 'Dr freezes to the DEDICATED milk procurement 5108, not generic 5101');
+  ok(cr.resolvedAccountId === '2102', 'Cr freezes to milk payable 2102');
+  const specs = buildEngineVoucherLines(legs);
+  const drSum = specs.filter(s => s.type === 'Dr').reduce((s, l) => s + l.amount, 0);
+  const crSum = specs.filter(s => s.type === 'Cr').reduce((s, l) => s + l.amount, 0);
+  ok(drSum === crSum && drSum === 5000, 'engine voucher lines are balanced (Dr 5000 = Cr 5000)');
+}
+
+// 11. Runtime UUID binding (pre-D1 society): legs still resolve against the seeded account
+{
+  const accounts = [{ id: 'uuid-proc', name: 'Milk Procurement (Direct)' }, { id: 'uuid-pay', name: 'Milk Payment Payable' }];
+  const binding = { 'milk.procurement.cost': 'uuid-proc', 'farmer.milk.payable': 'uuid-pay' };
+  const legs = resolveDairyPostingLegs('RecogniseMilkProcurement', { amount: 100, currency: 'INR' }, binding, accounts);
+  ok(legs.length === 2 && legs[0].resolvedAccountId === 'uuid-proc', 'binding built from resolvers works for UUID-id ledgers');
+}
+
+// 12. Unresolvable → [] (never post an unbalanced/unresolved voucher)
+{
+  const accounts = [{ id: '5108', name: 'x' }]; // payable missing from chart
+  ok(resolveDairyPostingLegs('RecogniseMilkProcurement', { amount: 1, currency: 'INR' }, { 'milk.procurement.cost': '5108', 'farmer.milk.payable': '2102' }, accounts).length === 0, 'bound account missing from chart → no legs');
+  ok(resolveDairyPostingLegs('RecogniseMilkProcurement', { amount: 1, currency: 'INR' }, { 'milk.procurement.cost': '5108' }, accounts).length === 0, 'unbound selector → no legs');
+  ok(buildEngineVoucherLines([]).length === 0, 'no legs → no voucher lines');
+}
+
 console.log(`[dairy-test] ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -531,6 +531,7 @@ export interface Loan {
 
 // ── Dairy / Milk society — daily collection register + member payout ──────────
 export type MilkShift = 'morning' | 'evening';
+export type MilkQualityDecision = 'accepted' | 'accepted_cut' | 'rejected';
 export interface MilkEntry {
   id: string;
   date: string;          // YYYY-MM-DD
@@ -539,10 +540,17 @@ export interface MilkEntry {
   memberName: string;    // denormalised for the payout sheet
   qty: number;           // litres
   fat: number;           // fat %
-  snf: number;           // SNF / CLR (informational)
-  rate: number;          // ₹ per litre (society enters; no union rate hardcoded)
+  snf: number;           // SNF %
+  rate: number;          // ₹ per litre (from the rate chart or entered; no union rate hardcoded)
   amount: number;        // qty × rate
   createdAt: string;
+  // ── D2 (additive; existing rows leave these null) ──
+  centreId?: string;         // → collection centre (D2b master)
+  clr?: number;              // Corrected Lactometer Reading (informational)
+  water?: number;            // added-water % (informational)
+  qualityDecision?: MilkQualityDecision;
+  rateChartId?: string;      // the DairyRateChart used to price this entry (audit)
+  source?: 'manual' | 'amcs' | 'analyzer';  // how the reading was captured (future AMCS/analyzer)
 }
 
 /**

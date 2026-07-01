@@ -1,4 +1,4 @@
-import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun } from '@/types';
+import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement } from '@/lib/procurement';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
@@ -84,6 +84,7 @@ const KEYS = {
   housingDocuments: 'sahayata_housing_documents',
   housingBuildings: 'sahayata_housing_buildings',
   dairyRateCharts: 'sahayata_dairy_rate_charts',
+  milkEntries: 'sahayata_milk_entries',
   workOrders: 'sahayata_work_orders',
   musterEntries: 'sahayata_muster_entries',
   workers: 'sahayata_workers',
@@ -824,6 +825,9 @@ export const setHousingBuildings = (b: HousingBuilding[]): void => set(KEYS.hous
 
 export const getDairyRateCharts = (): DairyRateChart[] => get(KEYS.dairyRateCharts, []);
 export const setDairyRateCharts = (c: DairyRateChart[]): void => set(KEYS.dairyRateCharts, c);
+
+export const getMilkEntries = (): MilkEntry[] => get(KEYS.milkEntries, []);
+export const setMilkEntries = (e: MilkEntry[]): void => set(KEYS.milkEntries, e);
 export const getWorkOrders = (): WorkOrder[] => get(KEYS.workOrders, []);
 export const setWorkOrders = (w: WorkOrder[]): void => set(KEYS.workOrders, w);
 export const getMusterEntries = (): MusterEntry[] => get(KEYS.musterEntries, []);
