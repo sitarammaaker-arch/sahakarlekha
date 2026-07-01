@@ -1966,3 +1966,28 @@ begin
 end;
 $$;
 grant execute on function public.procurement_commit_transaction(jsonb) to authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Dairy cooperative (Delivery D1) — Fat + SNF two-axis milk rate charts.
+-- Effective-dated & immutable-by-convention: a rate revision is a NEW row with a
+-- later "effectiveFrom". fatBands/snfBands/matrix are stored as JSON.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists dairy_rate_charts (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  name text,
+  basis text,
+  "effectiveFrom" text,
+  season text,
+  "fatBands" jsonb,
+  "snfBands" jsonb,
+  matrix jsonb,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table public.dairy_rate_charts enable row level security;
+drop policy if exists "society_rw" on public.dairy_rate_charts;
+create policy "society_rw" on public.dairy_rate_charts for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create index if not exists idx_dairy_rate_charts_society on public.dairy_rate_charts (society_id);
