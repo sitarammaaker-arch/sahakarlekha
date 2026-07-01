@@ -22,7 +22,7 @@ import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { computeBillLines, demandLegs, billTotal, round2 } from '@/lib/housing/billing';
 import { plannedBillInterest } from '@/lib/housing/arrears';
-import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, HousingFundInvestment, Voucher, LedgerAccount } from '@/types';
+import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, Voucher, LedgerAccount } from '@/types';
 
 interface HousingDataContextValue {
   housingFlats: HousingFlat[];
@@ -53,6 +53,21 @@ interface HousingDataContextValue {
   addFundInvestment: (data: { fundAccountId: string; investmentAccountId: string; amount: number; date: string; mode: 'cash' | 'bank'; bankAccountId?: string; instrument?: string; institution?: string; maturityDate?: string; interestRate?: number }) => HousingFundInvestment;
   redeemFundInvestment: (data: { id: string; date: string; mode: 'cash' | 'bank'; bankAccountId?: string }) => void;
   deleteFundInvestment: (id: string) => void;
+
+  // Operational & governance registers (non-financial CRUD; transfer posts the fee/premium).
+  complaints: HousingComplaint[];
+  addComplaint: (data: Omit<HousingComplaint, 'id' | 'complaintNo' | 'createdAt'>) => HousingComplaint;
+  updateComplaint: (id: string, data: Partial<HousingComplaint>) => void;
+  deleteComplaint: (id: string) => void;
+
+  parkingSlots: HousingParking[];
+  addParking: (data: Omit<HousingParking, 'id' | 'createdAt'>) => HousingParking;
+  updateParking: (id: string, data: Partial<HousingParking>) => void;
+  deleteParking: (id: string) => void;
+
+  transfers: HousingTransfer[];
+  recordFlatTransfer: (data: { flatId: string; toMemberId: string; date: string; transferFee?: number; premium?: number; mode?: 'cash' | 'bank'; bankAccountId?: string; remarks?: string }) => HousingTransfer;
+  deleteFlatTransfer: (id: string) => void;
 }
 
 const HousingDataContext = createContext<HousingDataContextValue | undefined>(undefined);
@@ -80,11 +95,14 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   const [maintenanceBills, setMaintenanceBillsState] = useState<MaintenanceBill[]>(() => storage.getMaintenanceBills());
   const [chargeHeads, setChargeHeadsState] = useState<HousingChargeHead[]>(() => storage.getHousingChargeHeads());
   const [fundInvestments, setFundInvestmentsState] = useState<HousingFundInvestment[]>(() => storage.getHousingFundInvestments());
+  const [complaints, setComplaintsState] = useState<HousingComplaint[]>(() => storage.getHousingComplaints());
+  const [parkingSlots, setParkingState] = useState<HousingParking[]>(() => storage.getHousingParking());
+  const [transfers, setTransfersState] = useState<HousingTransfer[]>(() => storage.getHousingTransfers());
 
   // Load when the society changes; Supabase is SSOT, localStorage is offline fallback.
   useEffect(() => {
     const sid = user?.societyId;
-    if (!sid) { setHousingFlatsState([]); setMaintenanceBillsState([]); setChargeHeadsState([]); setFundInvestmentsState([]); return; }
+    if (!sid) { setHousingFlatsState([]); setMaintenanceBillsState([]); setChargeHeadsState([]); setFundInvestmentsState([]); setComplaintsState([]); setParkingState([]); setTransfersState([]); return; }
     supabase.from('housing_flats').select('*').eq('society_id', sid).then(
       ({ data, error }) => setHousingFlatsState(error || !data ? storage.getHousingFlats() : (data as unknown as HousingFlat[])),
       () => setHousingFlatsState(storage.getHousingFlats()),
@@ -100,6 +118,18 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     supabase.from('housing_fund_investments').select('*').eq('society_id', sid).then(
       ({ data, error }) => setFundInvestmentsState(error || !data ? storage.getHousingFundInvestments() : (data as unknown as HousingFundInvestment[])),
       () => setFundInvestmentsState(storage.getHousingFundInvestments()),
+    );
+    supabase.from('housing_complaints').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setComplaintsState(error || !data ? storage.getHousingComplaints() : (data as unknown as HousingComplaint[])),
+      () => setComplaintsState(storage.getHousingComplaints()),
+    );
+    supabase.from('housing_parking').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setParkingState(error || !data ? storage.getHousingParking() : (data as unknown as HousingParking[])),
+      () => setParkingState(storage.getHousingParking()),
+    );
+    supabase.from('housing_transfers').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setTransfersState(error || !data ? storage.getHousingTransfers() : (data as unknown as HousingTransfer[])),
+      () => setTransfersState(storage.getHousingTransfers()),
     );
   }, [user?.societyId]);
 
@@ -515,6 +545,156 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     });
   }, [fundInvestments, cancelVoucher, user]);
 
+  // ── Complaints register (operational; Member-pattern persistence + RULE-1 rollback) ──
+  const addComplaint = useCallback((data: Omit<HousingComplaint, 'id' | 'complaintNo' | 'createdAt'>): HousingComplaint => {
+    if (guardFYLocked()) return { ...data, id: '', complaintNo: '', createdAt: '' } as HousingComplaint;
+    const maxNum = complaints.reduce((m, c) => { const x = c.complaintNo?.match(/C\/(\d+)/); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0);
+    const c: HousingComplaint = { ...data, id: crypto.randomUUID(), complaintNo: `C/${String(maxNum + 1).padStart(4, '0')}`, createdAt: new Date().toISOString() };
+    setComplaintsState(prev => { const u = [...prev, c]; storage.setHousingComplaints(u); return u; });
+    supabase.from('housing_complaints').upsert(withSoc(c)).then(({ error }) => {
+      if (error) {
+        console.error('Complaint save error:', error.message);
+        setComplaintsState(prev => { const r = prev.filter(x => x.id !== c.id); storage.setHousingComplaints(r); return r; });
+        toastRef.current({ title: 'शिकायत सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return c;
+  }, [complaints]);
+
+  const updateComplaint = useCallback((id: string, data: Partial<HousingComplaint>) => {
+    if (guardFYLocked()) return;
+    const old = complaints.find(c => c.id === id);
+    if (!old) return;
+    const updated = { ...old, ...data };
+    setComplaintsState(prev => { const u = prev.map(c => c.id === id ? updated : c); storage.setHousingComplaints(u); return u; });
+    supabase.from('housing_complaints').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Complaint update error:', error.message);
+        setComplaintsState(prev => { const u = prev.map(c => c.id === id ? old : c); storage.setHousingComplaints(u); return u; });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [complaints]);
+
+  const deleteComplaint = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const old = complaints.find(c => c.id === id);
+    setComplaintsState(prev => { const u = prev.filter(c => c.id !== id); storage.setHousingComplaints(u); return u; });
+    supabase.from('housing_complaints').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('Complaint delete error:', error.message);
+        if (old) setComplaintsState(prev => { const u = [...prev, old]; storage.setHousingComplaints(u); return u; });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [complaints]);
+
+  // ── Parking register (operational; allotment record) ──
+  const addParking = useCallback((data: Omit<HousingParking, 'id' | 'createdAt'>): HousingParking => {
+    if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as HousingParking;
+    const p: HousingParking = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    setParkingState(prev => { const u = [...prev, p]; storage.setHousingParking(u); return u; });
+    supabase.from('housing_parking').upsert(withSoc(p)).then(({ error }) => {
+      if (error) {
+        console.error('Parking save error:', error.message);
+        setParkingState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingParking(r); return r; });
+        toastRef.current({ title: 'पार्किंग सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return p;
+  }, []);
+
+  const updateParking = useCallback((id: string, data: Partial<HousingParking>) => {
+    if (guardFYLocked()) return;
+    const old = parkingSlots.find(p => p.id === id);
+    if (!old) return;
+    const updated = { ...old, ...data };
+    setParkingState(prev => { const u = prev.map(p => p.id === id ? updated : p); storage.setHousingParking(u); return u; });
+    supabase.from('housing_parking').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Parking update error:', error.message);
+        setParkingState(prev => { const u = prev.map(p => p.id === id ? old : p); storage.setHousingParking(u); return u; });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [parkingSlots]);
+
+  const deleteParking = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const old = parkingSlots.find(p => p.id === id);
+    setParkingState(prev => { const u = prev.filter(p => p.id !== id); storage.setHousingParking(u); return u; });
+    supabase.from('housing_parking').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('Parking delete error:', error.message);
+        if (old) setParkingState(prev => { const u = [...prev, old]; storage.setHousingParking(u); return u; });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [parkingSlots]);
+
+  // ── Flat transfer — reassign owner + optionally post fee (→ 4201) & premium (→ 1202 corpus).
+  // Clears the flat's receivableAccountId so the next bill resolves the NEW owner's sub-ledger.
+  const recordFlatTransfer = useCallback((data: { flatId: string; toMemberId: string; date: string; transferFee?: number; premium?: number; mode?: 'cash' | 'bank'; bankAccountId?: string; remarks?: string }): HousingTransfer => {
+    const blank = { id: '', flatId: data.flatId, toMemberId: data.toMemberId, date: data.date, createdAt: '' } as HousingTransfer;
+    if (guardFYLocked()) return blank;
+    const flat = housingFlats.find(f => f.id === data.flatId && !f.isDeleted);
+    if (!flat) { toastRef.current({ title: 'फ्लैट नहीं मिला', description: 'Flat not found', variant: 'destructive', duration: 8000 }); return blank; }
+    if (!data.toMemberId) { toastRef.current({ title: 'नया सदस्य चुनें', description: 'Select the new owner', variant: 'destructive', duration: 8000 }); return blank; }
+    const fee = round2(data.transferFee || 0);
+    const prem = round2(data.premium || 0);
+    const id = crypto.randomUUID();
+    const lid = () => crypto.randomUUID();
+    let voucherId: string | undefined;
+    if (fee + prem > 0) {
+      const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+      const feeAcc = accounts.some(a => a.id === '4201') ? '4201' : '4400';
+      const premAcc = accounts.some(a => a.id === '1202') ? '1202' : feeAcc;
+      const lines = [{ id: lid(), accountId: bankAcc, type: 'Dr' as const, amount: round2(fee + prem) }];
+      if (fee > 0) lines.push({ id: lid(), accountId: feeAcc, type: 'Cr' as const, amount: fee });
+      if (prem > 0) lines.push({ id: lid(), accountId: premAcc, type: 'Cr' as const, amount: prem });
+      const v = addVoucher({
+        type: 'receipt', date: data.date,
+        debitAccountId: bankAcc, creditAccountId: feeAcc, amount: round2(fee + prem),
+        narration: `हस्तांतरण शुल्क — ${flat.flatNo}${prem > 0 ? ` (शुल्क ₹${fee} + प्रीमियम ₹${prem})` : ''}`,
+        refType: 'housing.transfer', refId: id, memberId: data.toMemberId, createdBy: user?.name || 'System',
+        lines,
+      });
+      if (!v.id) return blank;
+      voucherId = v.id;
+    }
+    const oldOwner = flat.memberId;
+    updateHousingFlat(flat.id, { memberId: data.toMemberId, receivableAccountId: undefined, associateMemberId: undefined });
+    const t: HousingTransfer = { id, flatId: flat.id, flatNo: flat.flatNo, fromMemberId: oldOwner, toMemberId: data.toMemberId, date: data.date, transferFee: fee || undefined, premium: prem || undefined, voucherId, remarks: data.remarks, isDeleted: false, createdAt: new Date().toISOString() };
+    setTransfersState(prev => { const u = [...prev, t]; storage.setHousingTransfers(u); return u; });
+    supabase.from('housing_transfers').upsert(withSoc(t)).then(({ error }) => {
+      if (error) {
+        console.error('Transfer save error:', error.message);
+        setTransfersState(prev => { const r = prev.filter(x => x.id !== t.id); storage.setHousingTransfers(r); return r; });
+        updateHousingFlat(flat.id, { memberId: oldOwner, receivableAccountId: flat.receivableAccountId, associateMemberId: flat.associateMemberId });
+        if (voucherId) cancelVoucher(voucherId, 'Transfer save failed (auto-rollback)', user?.name || 'System');
+        toastRef.current({ title: 'हस्तांतरण सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. मालिक व शुल्क वापस ले लिए गए।`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    toastRef.current({ title: 'फ्लैट हस्तांतरित', description: `${flat.flatNo}${fee + prem > 0 ? ` · ₹${round2(fee + prem)}` : ''}`, duration: 6000 });
+    return t;
+  }, [housingFlats, accounts, addVoucher, cancelVoucher, updateHousingFlat, user]);
+
+  const deleteFlatTransfer = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const t = transfers.find(x => x.id === id);
+    if (!t) return;
+    // Cancels the fee voucher; does NOT auto-revert ownership (the flat may have had later activity).
+    if (t.voucherId) cancelVoucher(t.voucherId, `Transfer ${t.flatNo} deleted`, user?.name || 'System');
+    setTransfersState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingTransfers(u); return u; });
+    supabase.from('housing_transfers').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('Transfer delete error:', error.message);
+        setTransfersState(prev => { const u = [...prev, t]; storage.setHousingTransfers(u); return u; });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [transfers, cancelVoucher, user]);
+
   return (
     <HousingDataContext.Provider value={{
       housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat,
@@ -523,6 +703,9 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       recordFundContribution, recordFundInterest, recordFundUtilisation,
       runArrearsInterest,
       fundInvestments, addFundInvestment, redeemFundInvestment, deleteFundInvestment,
+      complaints, addComplaint, updateComplaint, deleteComplaint,
+      parkingSlots, addParking, updateParking, deleteParking,
+      transfers, recordFlatTransfer, deleteFlatTransfer,
     }}>
       {children}
     </HousingDataContext.Provider>

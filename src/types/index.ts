@@ -248,6 +248,55 @@ export interface HousingFundInvestment {
   createdAt: string;
 }
 
+// Housing — a resident complaint / grievance (operational, non-financial).
+export interface HousingComplaint {
+  id: string;
+  complaintNo: string;
+  flatId?: string;
+  flatNo?: string;
+  memberId?: string;
+  category?: string;          // plumbing / electrical / lift / security / common-area / other
+  title: string;
+  description?: string;
+  raisedDate: string;
+  status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  resolution?: string;
+  resolvedDate?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
+// Housing — a parking slot allotment (billing is via a charge head; this is the register).
+export interface HousingParking {
+  id: string;
+  slotNo: string;
+  flatId?: string;
+  flatNo?: string;
+  memberId?: string;
+  vehicleType?: 'car' | 'two_wheeler' | 'other';
+  vehicleNo?: string;
+  monthlyCharge?: number;     // informational
+  status: 'allotted' | 'vacant';
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
+// Housing — a flat ownership transfer (reassigns the owner; may post transfer fee + premium).
+export interface HousingTransfer {
+  id: string;
+  flatId: string;
+  flatNo?: string;
+  fromMemberId?: string;
+  toMemberId: string;
+  date: string;
+  transferFee?: number;       // → 4201 Transfer Fee (income)
+  premium?: number;           // → 1202 Sinking Fund (corpus), per common bye-law practice
+  voucherId?: string;
+  remarks?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 // Labour cooperative — a work order / labour contract the society has taken up.
 export interface WorkOrder {
   id: string;

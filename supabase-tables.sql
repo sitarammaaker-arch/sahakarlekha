@@ -1498,6 +1498,50 @@ drop policy if exists "society_rw" on public.housing_fund_investments;
 create policy "society_rw" on public.housing_fund_investments for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Housing H5 — operational & governance registers (complaints, parking, transfers). RUN once.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists housing_complaints (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "complaintNo" text, "flatId" text, "flatNo" text, "memberId" text,
+  category text, title text, description text, "raisedDate" text,
+  status text default 'open', resolution text, "resolvedDate" text,
+  "isDeleted" boolean default false, "createdAt" timestamptz default now()
+);
+alter table public.housing_complaints enable row level security;
+drop policy if exists "society_rw" on public.housing_complaints;
+create policy "society_rw" on public.housing_complaints for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+
+create table if not exists housing_parking (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "slotNo" text, "flatId" text, "flatNo" text, "memberId" text,
+  "vehicleType" text, "vehicleNo" text, "monthlyCharge" numeric,
+  status text default 'allotted',
+  "isDeleted" boolean default false, "createdAt" timestamptz default now()
+);
+alter table public.housing_parking enable row level security;
+drop policy if exists "society_rw" on public.housing_parking;
+create policy "society_rw" on public.housing_parking for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+
+create table if not exists housing_transfers (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "flatId" text, "flatNo" text, "fromMemberId" text, "toMemberId" text,
+  date text, "transferFee" numeric, premium numeric, "voucherId" text, remarks text,
+  "isDeleted" boolean default false, "createdAt" timestamptz default now()
+);
+alter table public.housing_transfers enable row level security;
+drop policy if exists "society_rw" on public.housing_transfers;
+create policy "society_rw" on public.housing_transfers for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
 drop policy if exists "society_rw" on public.maintenance_bills;
 create policy "society_rw" on public.maintenance_bills for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))

@@ -1,4 +1,4 @@
-import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun } from '@/types';
+import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement } from '@/lib/procurement';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
@@ -76,6 +76,9 @@ const KEYS = {
   maintenanceBills: 'sahayata_maintenance_bills',
   housingChargeHeads: 'sahayata_housing_charge_heads',
   housingFundInvestments: 'sahayata_housing_fund_investments',
+  housingComplaints: 'sahayata_housing_complaints',
+  housingParking: 'sahayata_housing_parking',
+  housingTransfers: 'sahayata_housing_transfers',
   workOrders: 'sahayata_work_orders',
   musterEntries: 'sahayata_muster_entries',
   workers: 'sahayata_workers',
@@ -799,6 +802,12 @@ export const getHousingChargeHeads = (): HousingChargeHead[] => get(KEYS.housing
 export const setHousingChargeHeads = (h: HousingChargeHead[]): void => set(KEYS.housingChargeHeads, h);
 export const getHousingFundInvestments = (): HousingFundInvestment[] => get(KEYS.housingFundInvestments, []);
 export const setHousingFundInvestments = (i: HousingFundInvestment[]): void => set(KEYS.housingFundInvestments, i);
+export const getHousingComplaints = (): HousingComplaint[] => get(KEYS.housingComplaints, []);
+export const setHousingComplaints = (c: HousingComplaint[]): void => set(KEYS.housingComplaints, c);
+export const getHousingParking = (): HousingParking[] => get(KEYS.housingParking, []);
+export const setHousingParking = (p: HousingParking[]): void => set(KEYS.housingParking, p);
+export const getHousingTransfers = (): HousingTransfer[] => get(KEYS.housingTransfers, []);
+export const setHousingTransfers = (t: HousingTransfer[]): void => set(KEYS.housingTransfers, t);
 export const getWorkOrders = (): WorkOrder[] => get(KEYS.workOrders, []);
 export const setWorkOrders = (w: WorkOrder[]): void => set(KEYS.workOrders, w);
 export const getMusterEntries = (): MusterEntry[] => get(KEYS.musterEntries, []);

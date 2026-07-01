@@ -15,6 +15,7 @@ import {
   Scale, ArrowLeftRight, TrendingUp, FileSpreadsheet, BarChart3, Clock, Percent, TrendingDown, Receipt, Warehouse,
   Package, PiggyBank, FileJson, Hash, Landmark, ScrollText, BookMarked, ShieldCheck, Users2, FileCheck, Shield,
   Coins, Trash2, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks, HardHat,
+  MessageSquareWarning, Car,
 } from 'lucide-react';
 import type { Capability, NavDomain, Role } from './capabilities';
 
@@ -119,6 +120,9 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'electionModule',       titleKey: 'electionModule',       icon: Vote,         route: '/election-module',       domain: 'registers', requiredCapabilities: U, order: 15 },
   { id: 'boardOfDirectors',     titleKey: 'boardOfDirectors',     icon: Users2,       route: '/board-of-directors',    domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin'], order: 16 },
   { id: 'flatsRegister',        titleKey: 'flatsRegister',        icon: Building2,    route: '/flats-register',        domain: 'registers', requiredCapabilities: ['housing'], order: 17 },
+  { id: 'complaints',          titleKey: 'complaints',          icon: MessageSquareWarning, route: '/complaints',        domain: 'registers', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 18 },
+  { id: 'parking',             titleKey: 'parking',             icon: Car,          route: '/parking',               domain: 'registers', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 19 },
+  { id: 'transferRegister',    titleKey: 'transferRegister',    icon: ArrowLeftRight, route: '/transfer-register',    domain: 'registers', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 20 },
 
   // ── administration (was settingsNavItems) ──
   { id: 'societySetup',               titleKey: 'societySetup',               icon: Settings,        route: '/society-setup',                domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 0 },
