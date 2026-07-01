@@ -55,6 +55,7 @@ const MilkCollection: React.FC = () => {
   const [snf, setSnf] = useState('');
   const [rate, setRate] = useState('');
   const [quality, setQuality] = useState<MilkQualityDecision>('accepted');
+  const [cutPct, setCutPct] = useState('');   // quality cut % (only for accepted_cut)
 
   // keyboard-first: Enter advances member → qty → fat → SNF → submit → back to member
   const memberRef = useRef<HTMLButtonElement>(null);
@@ -84,7 +85,10 @@ const MilkCollection: React.FC = () => {
     rateSource === 'manual' ? manualRate
       : rateSource === 'fat' ? +(fatN * fatRateN).toFixed(2)
         : rateSource === 'chart' ? (chartPriced.rate || 0) : 0;
-  const amountPreview = +(qtyN * effectiveRate).toFixed(2);
+  // B1: 'accepted_cut' applies a quality cut % that reduces the paid rate/amount.
+  const cutN = quality === 'accepted_cut' ? Math.min(100, Math.max(0, parseFloat(cutPct) || 0)) : 0;
+  const netRate = +(effectiveRate * (1 - cutN / 100)).toFixed(2);
+  const amountPreview = +(qtyN * netRate).toFixed(2);
 
   const addEntry = () => {
     const member = members.find((m) => m.id === memberId);
@@ -96,11 +100,11 @@ const MilkCollection: React.FC = () => {
     const data: Omit<MilkEntry, 'id' | 'createdAt'> = {
       date, shift, memberId: member.id, memberName: member.name,
       qty: qtyN, fat: fatN, snf: snfN,
-      rate: rejected ? 0 : effectiveRate, amount: rejected ? 0 : amountPreview,
+      rate: rejected ? 0 : netRate, amount: rejected ? 0 : amountPreview,
       qualityDecision: quality, source: 'manual',
     };
     const saved = addMilkEntry(data);
-    if (saved.id) { setMemberId(''); setQty(''); setFat(''); setSnf(''); setRate(''); setQuality('accepted'); memberRef.current?.focus(); }
+    if (saved.id) { setMemberId(''); setQty(''); setFat(''); setSnf(''); setRate(''); setQuality('accepted'); setCutPct(''); memberRef.current?.focus(); }
   };
 
   // ── today's register (filtered by date + shift) ──────────────────────────
@@ -172,11 +176,18 @@ const MilkCollection: React.FC = () => {
               </Select>
             </div>
           </div>
+          {quality === 'accepted_cut' && (
+            <div className="flex items-end gap-3">
+              <div className="space-y-1 w-32"><Label>{hi ? 'कटौती %' : 'Cut %'}</Label><Input type="number" inputMode="decimal" value={cutPct} onChange={(e) => setCutPct(e.target.value)} placeholder={hi ? 'जैसे 20' : 'e.g. 20'} /></div>
+              <span className="text-xs text-muted-foreground pb-2">{hi ? `शुद्ध दर ₹${netRate.toFixed(2)}/ली (${cutN}% कटौती के बाद)` : `net rate ₹${netRate.toFixed(2)}/L (after ${cutN}% cut)`}</span>
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-sm text-muted-foreground flex items-center gap-2">
               {hi ? 'राशि' : 'Amount'}: <b className="text-foreground">{inr(amountPreview)}</b>
               {rateSource === 'chart' && <Badge variant="secondary">{hi ? 'चार्ट दर' : 'chart rate'} ₹{effectiveRate.toFixed(2)}</Badge>}
               {rateSource === 'fat' && <Badge variant="outline">{hi ? 'दर' : 'rate'} {effectiveRate.toFixed(2)} = fat {fatN} × {fatRateN}</Badge>}
+              {cutN > 0 && <Badge variant="secondary" className="text-amber-700">{hi ? 'कटौती' : 'cut'} {cutN}%</Badge>}
               {rateSource === 'none' && quality !== 'rejected' && (fatN > 0 || qtyN > 0) && <Badge variant="destructive">{hi ? 'दर नहीं मिली — रेट चार्ट भरें या दर डालें' : 'no rate — add a chart or enter rate'}</Badge>}
               <span className="hidden sm:inline text-xs">· {hi ? 'Enter से अगला खाना' : 'Enter = next field'}</span>
             </span>

@@ -17,7 +17,7 @@ const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en
 const today = () => new Date().toISOString().slice(0, 10);
 const out = (d: DairyDistribution) => Math.max(0, +(d.total - d.amountPaid).toFixed(2));
 
-function DistributionCard({ d }: { d: DairyDistribution }) {
+function DistributionCard({ d, surplus }: { d: DairyDistribution; surplus: number }) {
   const { accounts } = useData();
   const { approveDairyDistribution, recordDistributionPayment, deleteDairyDistribution } = useDairyData();
   const { language } = useLanguage();
@@ -74,6 +74,11 @@ function DistributionCard({ d }: { d: DairyDistribution }) {
         </Table></div>
       )}
 
+      {isDraft && d.total > surplus + 0.005 && (
+        <div className="rounded bg-amber-50 border border-amber-200 px-2 py-1 text-xs text-amber-800">
+          ⚠️ {hi ? `वितरण (₹${d.total.toLocaleString('en-IN')}) उपलब्ध अधिशेष (₹${surplus.toLocaleString('en-IN')}) से अधिक है — प्रस्ताव व सहकारी नियमों (संचय निधि के बाद) के अनुसार सुनिश्चित करें।` : `Distribution (₹${d.total.toLocaleString('en-IN')}) exceeds available surplus (₹${surplus.toLocaleString('en-IN')}) — ensure it complies with the resolution and bye-laws (after statutory reserve).`}
+        </div>
+      )}
       {isDraft && (
         <div className="space-y-2 rounded-md border-dashed border p-2">
           <p className="text-xs font-medium">{hi ? 'प्रस्ताव के साथ स्वीकृत करें (अनिवार्य)' : 'Approve with resolution (mandatory)'}</p>
@@ -106,10 +111,12 @@ function DistributionCard({ d }: { d: DairyDistribution }) {
 }
 
 export default function DairyDistribution() {
-  const { society } = useData();
+  const { society, getProfitLoss } = useData();
   const { distributions, createDairyDistribution } = useDairyData();
   const { language } = useLanguage();
   const hi = language === 'hi';
+  // B2: available surplus for a soft (non-blocking) over-distribution warning.
+  const surplus = useMemo(() => { try { return getProfitLoss().netProfit || 0; } catch { return 0; } }, [getProfitLoss]);
 
   const [kind, setKind] = useState<'bonus' | 'dividend'>('bonus');
   const [from, setFrom] = useState(society?.financialYearStart || today());
@@ -170,7 +177,7 @@ export default function DairyDistribution() {
         <CardHeader><CardTitle className="text-base">{hi ? 'वितरण' : 'Distributions'} ({list.length})</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           {list.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'कोई वितरण नहीं।' : 'No distributions yet.'}</p>}
-          {list.map(d => <DistributionCard key={d.id} d={d} />)}
+          {list.map(d => <DistributionCard key={d.id} d={d} surplus={surplus} />)}
         </CardContent>
       </Card>
     </div>
