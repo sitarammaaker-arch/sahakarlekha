@@ -152,7 +152,9 @@ function buildEngineVoucherLines(legs) {
 function resolveDairyPostingLegs(intent, amount, binding, accounts) {
   const raw = intent === 'RecogniseMilkProcurement'
     ? [{ side: 'Dr', accountSelector: 'milk.procurement.cost' }, { side: 'Cr', accountSelector: 'farmer.milk.payable' }]
-    : [];
+    : intent === 'RecogniseMilkDispatch'
+      ? [{ side: 'Dr', accountSelector: 'milk.dispatch.receivable' }, { side: 'Cr', accountSelector: 'milk.bulk.sales' }]
+      : [];
   return freezePostingLegs(raw, amount, binding, accounts);
 }
 
@@ -299,6 +301,18 @@ function buildRecoverySummary(settlements) {
   const feed = r.rows.find(x => x.type === 'Feed');
   ok(feed.count === 2 && feed.amount === 350, 'Feed grouped: 2 lines, 350 (deleted settlement excluded)');
   ok(r.rows[0].type === 'Feed', 'rows sorted by amount desc (Feed 350 first)');
+}
+
+// 19. Dispatch (revenue): Dr union receivable / Cr milk bulk-sales, balanced & frozen
+{
+  const accounts = [{ id: '3303', name: 'Sundry Debtors' }, { id: '4106', name: 'Milk Sales — Bulk / Union' }, { id: '4101', name: 'Sales — General' }];
+  const binding = { 'milk.dispatch.receivable': '3303', 'milk.bulk.sales': '4106' };
+  const legs = resolveDairyPostingLegs('RecogniseMilkDispatch', { amount: 12000, currency: 'INR' }, binding, accounts);
+  ok(legs.length === 2, 'two dispatch legs');
+  ok(legs.find(l => l.side === 'Dr').resolvedAccountId === '3303', 'Dr union receivable 3303');
+  ok(legs.find(l => l.side === 'Cr').resolvedAccountId === '4106', 'Cr milk bulk-sales 4106 (dedicated, not generic 4101)');
+  const specs = buildEngineVoucherLines(legs);
+  ok(specs.filter(s => s.type === 'Dr')[0].amount === specs.filter(s => s.type === 'Cr')[0].amount && specs[0].amount === 12000, 'dispatch voucher balanced (Dr 12000 = Cr 12000)');
 }
 
 console.log(`[dairy-test] ${pass} passed, ${fail} failed`);

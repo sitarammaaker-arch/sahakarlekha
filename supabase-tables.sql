@@ -2030,3 +2030,34 @@ create policy "society_rw" on public.dairy_settlements for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
 create index if not exists idx_dairy_settlements_society on public.dairy_settlements (society_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Dairy cooperative (Delivery D4) — milk dispatch to the Union (revenue side).
+-- Recording a dispatch posts Dr Union Receivable (3303) / Cr Milk Sales — Bulk
+-- (4106); union payments received advance "amountReceived".
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists dairy_dispatches (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  date text,
+  shift text,
+  "unionName" text,
+  qty numeric,
+  fat numeric,
+  snf numeric,
+  rate numeric,
+  amount numeric,
+  shortage numeric,
+  "vehicleNo" text,
+  remarks text,
+  "voucherId" text,
+  "amountReceived" numeric default 0,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table public.dairy_dispatches enable row level security;
+drop policy if exists "society_rw" on public.dairy_dispatches;
+create policy "society_rw" on public.dairy_dispatches for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create index if not exists idx_dairy_dispatches_society on public.dairy_dispatches (society_id);

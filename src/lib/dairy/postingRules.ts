@@ -13,12 +13,14 @@
 import type { Money, PostingLeg, RawPostingLeg } from '@/lib/posting/types';
 import { freezePostingLegs } from '@/lib/posting/freezePostingLegs';
 
-export type DairyIntentName = 'RecogniseMilkProcurement';
+export type DairyIntentName = 'RecogniseMilkProcurement' | 'RecogniseMilkDispatch';
 
 /** Symbolic selector → LedgerAccount id (default template ids; runtime binding may override with resolved ids). */
 export const DAIRY_POSTING_BINDING: Record<string, string> = {
-  'milk.procurement.cost': '5108', // Milk Procurement (Direct) — dedicated, not the generic 5101
-  'farmer.milk.payable':   '2102', // Milk Payment Payable (liability)
+  'milk.procurement.cost':    '5108', // Milk Procurement (Direct) — dedicated, not the generic 5101
+  'farmer.milk.payable':      '2102', // Milk Payment Payable (liability)
+  'milk.dispatch.receivable': '3303', // Union Receivable (Sundry Debtors)
+  'milk.bulk.sales':          '4106', // Milk Sales — Bulk / Union (income)
 };
 
 export function resolveDairyPostingLegs(
@@ -34,7 +36,12 @@ export function resolveDairyPostingLegs(
           { side: 'Dr', accountSelector: 'milk.procurement.cost' },
           { side: 'Cr', accountSelector: 'farmer.milk.payable' },
         ]
-      : [];
+      : intent === 'RecogniseMilkDispatch'
+        ? [
+            { side: 'Dr', accountSelector: 'milk.dispatch.receivable' },
+            { side: 'Cr', accountSelector: 'milk.bulk.sales' },
+          ]
+        : [];
   // GENERIC INFRASTRUCTURE (shared posting core): freeze the raw legs against the chart.
   return freezePostingLegs(raw, amount, binding, accounts);
 }
