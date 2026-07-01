@@ -9,7 +9,7 @@
  * posting goes through the dairy posting rule to the DEDICATED milk ledgers (Dr 5108 / Cr 2102),
  * never the generic 5101/4101 fallbacks (C-A). No union rate is hardcoded.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useDairyData } from '@/contexts/DairyDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Milk, Plus, Trash2 } from 'lucide-react';
-import type { MilkEntry, MilkShift } from '@/types';
+import type { MilkEntry, MilkShift, MilkQualityDecision } from '@/types';
 
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -49,6 +49,23 @@ const MilkCollection: React.FC = () => {
   const [fat, setFat] = useState('');
   const [snf, setSnf] = useState('');
   const [rate, setRate] = useState('');
+  const [quality, setQuality] = useState<MilkQualityDecision>('accepted');
+
+  // keyboard-first: Enter advances member → qty → fat → SNF → submit → back to member
+  const memberRef = useRef<HTMLButtonElement>(null);
+  const qtyRef = useRef<HTMLInputElement>(null);
+  const fatRef = useRef<HTMLInputElement>(null);
+  const snfRef = useRef<HTMLInputElement>(null);
+  const advance = (e: React.KeyboardEvent, next?: React.RefObject<HTMLElement>) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (next) next.current?.focus(); else addEntry();
+  };
+  const QUALITY: { v: MilkQualityDecision; hi: string; en: string }[] = [
+    { v: 'accepted', hi: 'स्वीकृत', en: 'Accept' },
+    { v: 'accepted_cut', hi: 'कटौती सहित', en: 'Cut' },
+    { v: 'rejected', hi: 'अस्वीकृत', en: 'Reject' },
+  ];
 
   const fatN = parseFloat(fat) || 0;
   const snfN = parseFloat(snf) || 0;
@@ -66,17 +83,19 @@ const MilkCollection: React.FC = () => {
 
   const addEntry = () => {
     const member = members.find((m) => m.id === memberId);
-    if (!member || qtyN <= 0 || effectiveRate <= 0) {
-      toast({ title: hi ? 'अधूरी जानकारी' : 'Incomplete', description: hi ? 'सदस्य, लीटर और दर (चार्ट / fat-दर / मैन्युअल) ज़रूरी हैं।' : 'Member, litres and a rate (chart / fat-rate / manual) are required.', variant: 'destructive' });
+    const rejected = quality === 'rejected';
+    if (!member || qtyN <= 0 || (!rejected && effectiveRate <= 0)) {
+      toast({ title: hi ? 'अधूरी जानकारी' : 'Incomplete', description: rejected ? (hi ? 'सदस्य और लीटर ज़रूरी हैं।' : 'Member and litres are required.') : (hi ? 'सदस्य, लीटर और दर (चार्ट / fat-दर / मैन्युअल) ज़रूरी हैं।' : 'Member, litres and a rate (chart / fat-rate / manual) are required.'), variant: 'destructive' });
       return;
     }
     const data: Omit<MilkEntry, 'id' | 'createdAt'> = {
       date, shift, memberId: member.id, memberName: member.name,
-      qty: qtyN, fat: fatN, snf: snfN, rate: effectiveRate, amount: amountPreview,
-      source: 'manual',
+      qty: qtyN, fat: fatN, snf: snfN,
+      rate: rejected ? 0 : effectiveRate, amount: rejected ? 0 : amountPreview,
+      qualityDecision: quality, source: 'manual',
     };
     const saved = addMilkEntry(data);
-    if (saved.id) { setMemberId(''); setQty(''); setFat(''); setSnf(''); setRate(''); }
+    if (saved.id) { setMemberId(''); setQty(''); setFat(''); setSnf(''); setRate(''); setQuality('accepted'); memberRef.current?.focus(); }
   };
 
   // ── today's register (filtered by date + shift) ──────────────────────────
@@ -84,8 +103,8 @@ const MilkCollection: React.FC = () => {
     () => milkEntries.filter((e) => e.date === date && e.shift === shift).sort((a, b) => a.memberName.localeCompare(b.memberName)),
     [milkEntries, date, shift],
   );
-  const dayQty = dayRows.reduce((s, e) => s + e.qty, 0);
-  const dayAmt = dayRows.reduce((s, e) => s + e.amount, 0);
+  const dayQty = dayRows.reduce((s, e) => s + e.qty, 0);                                   // collected (incl. rejected)
+  const dayAmt = dayRows.reduce((s, e) => s + (e.qualityDecision === 'rejected' ? 0 : e.amount), 0);  // payable
 
   // ── payout sheet ─────────────────────────────────────────────────────────
   const [from, setFrom] = useState(today());
@@ -94,6 +113,7 @@ const MilkCollection: React.FC = () => {
     const m = new Map<string, { name: string; qty: number; amount: number }>();
     for (const e of milkEntries) {
       if (e.date < from || e.date > to) continue;
+      if (e.qualityDecision === 'rejected') continue;   // rejected milk is not paid (matches settlement gross)
       const cur = m.get(e.memberId) || { name: e.memberName, qty: 0, amount: 0 };
       cur.qty += e.qty; cur.amount += e.amount;
       m.set(e.memberId, cur);
@@ -128,25 +148,32 @@ const MilkCollection: React.FC = () => {
             <div className="space-y-1"><Label>{hi ? 'fat दर ₹/point' : 'fat rate ₹/point'} <span className="text-xs text-muted-foreground">({hi ? 'चार्ट न हो तो' : 'if no chart'})</span></Label>
               <Input type="number" inputMode="decimal" value={fatRate} onChange={(e) => setFatRate(e.target.value)} placeholder={hi ? 'जैसे 7' : 'e.g. 7'} /></div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 items-end">
+          <div className="grid grid-cols-2 sm:grid-cols-7 gap-3 items-end">
             <div className="space-y-1 col-span-2"><Label>{hi ? 'सदस्य' : 'Member'}</Label>
-              <Select value={memberId} onValueChange={setMemberId}>
-                <SelectTrigger><SelectValue placeholder={hi ? 'सदस्य चुनें' : 'Select member'} /></SelectTrigger>
+              <Select value={memberId} onValueChange={(v) => { setMemberId(v); qtyRef.current?.focus(); }}>
+                <SelectTrigger ref={memberRef}><SelectValue placeholder={hi ? 'सदस्य चुनें' : 'Select member'} /></SelectTrigger>
                 <SelectContent>{members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}{m.memberId ? ` (${m.memberId})` : ''}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="space-y-1"><Label>{hi ? 'लीटर' : 'Litres'}</Label><Input type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} /></div>
-            <div className="space-y-1"><Label>fat %</Label><Input type="number" inputMode="decimal" value={fat} onChange={(e) => setFat(e.target.value)} /></div>
-            <div className="space-y-1"><Label>SNF %</Label><Input type="number" inputMode="decimal" value={snf} onChange={(e) => setSnf(e.target.value)} /></div>
+            <div className="space-y-1"><Label>{hi ? 'लीटर' : 'Litres'}</Label><Input ref={qtyRef} type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} onKeyDown={(e) => advance(e, fatRef)} /></div>
+            <div className="space-y-1"><Label>fat %</Label><Input ref={fatRef} type="number" inputMode="decimal" value={fat} onChange={(e) => setFat(e.target.value)} onKeyDown={(e) => advance(e, snfRef)} /></div>
+            <div className="space-y-1"><Label>SNF %</Label><Input ref={snfRef} type="number" inputMode="decimal" value={snf} onChange={(e) => setSnf(e.target.value)} onKeyDown={(e) => advance(e)} /></div>
             <div className="space-y-1"><Label>{hi ? 'दर ₹/लीटर' : 'Rate ₹/L'}</Label>
-              <Input type="number" inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder={rateSource === 'chart' || rateSource === 'fat' ? effectiveRate.toFixed(2) : ''} /></div>
+              <Input type="number" inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder={rateSource === 'chart' || rateSource === 'fat' ? effectiveRate.toFixed(2) : ''} disabled={quality === 'rejected'} /></div>
+            <div className="space-y-1"><Label>{hi ? 'गुणवत्ता' : 'Quality'}</Label>
+              <Select value={quality} onValueChange={(v) => setQuality(v as MilkQualityDecision)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{QUALITY.map((q) => <SelectItem key={q.v} value={q.v}>{hi ? q.hi : q.en}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-sm text-muted-foreground flex items-center gap-2">
               {hi ? 'राशि' : 'Amount'}: <b className="text-foreground">{inr(amountPreview)}</b>
               {rateSource === 'chart' && <Badge variant="secondary">{hi ? 'चार्ट दर' : 'chart rate'} ₹{effectiveRate.toFixed(2)}</Badge>}
               {rateSource === 'fat' && <Badge variant="outline">{hi ? 'दर' : 'rate'} {effectiveRate.toFixed(2)} = fat {fatN} × {fatRateN}</Badge>}
-              {rateSource === 'none' && (fatN > 0 || qtyN > 0) && <Badge variant="destructive">{hi ? 'दर नहीं मिली — रेट चार्ट भरें या दर डालें' : 'no rate — add a chart or enter rate'}</Badge>}
+              {rateSource === 'none' && quality !== 'rejected' && (fatN > 0 || qtyN > 0) && <Badge variant="destructive">{hi ? 'दर नहीं मिली — रेट चार्ट भरें या दर डालें' : 'no rate — add a chart or enter rate'}</Badge>}
+              <span className="hidden sm:inline text-xs">· {hi ? 'Enter से अगला खाना' : 'Enter = next field'}</span>
             </span>
             <Button onClick={addEntry}><Plus className="h-4 w-4 mr-1" /> {hi ? 'जोड़ें' : 'Add'}</Button>
           </div>
@@ -167,13 +194,16 @@ const MilkCollection: React.FC = () => {
                 <TableHead className="text-right">SNF</TableHead><TableHead className="text-right">{hi ? 'दर' : 'Rate'}</TableHead><TableHead className="text-right">{hi ? 'राशि' : 'Amount'}</TableHead><TableHead></TableHead>
               </TableRow></TableHeader>
               <TableBody>{dayRows.map((e) => (
-                <TableRow key={e.id}>
-                  <TableCell>{e.memberName}</TableCell>
+                <TableRow key={e.id} className={e.qualityDecision === 'rejected' ? 'opacity-60' : ''}>
+                  <TableCell>{e.memberName}
+                    {e.qualityDecision === 'rejected' && <Badge variant="destructive" className="ml-1 text-[10px]">{hi ? 'अस्वीकृत' : 'reject'}</Badge>}
+                    {e.qualityDecision === 'accepted_cut' && <Badge variant="secondary" className="ml-1 text-[10px]">{hi ? 'कटौती' : 'cut'}</Badge>}
+                  </TableCell>
                   <TableCell className="text-right">{e.qty.toFixed(1)}</TableCell>
                   <TableCell className="text-right">{e.fat || '—'}</TableCell>
                   <TableCell className="text-right">{e.snf || '—'}</TableCell>
                   <TableCell className="text-right">{e.rate.toFixed(2)}</TableCell>
-                  <TableCell className="text-right font-medium">{inr(e.amount)}</TableCell>
+                  <TableCell className="text-right font-medium">{e.qualityDecision === 'rejected' ? '—' : inr(e.amount)}</TableCell>
                   <TableCell><Button variant="ghost" size="icon" onClick={() => deleteMilkEntry(e.id)} aria-label={hi ? 'हटाएँ' : 'Delete'}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
                 </TableRow>
               ))}</TableBody>
