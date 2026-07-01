@@ -75,8 +75,9 @@ export const DAIRY_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   // ── Income ───────────────────────────────────────────────────────────────
   { id: '4000', name: 'Income',                     nameHi: 'आय',                       type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true  },
   { id: '4100', name: 'Trading Income',             nameHi: 'व्यापारिक आय',             type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
-  { id: '4101', name: 'Milk Sales',                 nameHi: 'दुग्ध बिक्री',             type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100' },
+  { id: '4101', name: 'Sales — General',            nameHi: 'बिक्री — सामान्य',         type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100' },
   { id: '4102', name: 'Ghee / Paneer Sales',        nameHi: 'घी / पनीर बिक्री',         type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100' },
+  { id: '4106', name: 'Milk Sales — Bulk / Union',  nameHi: 'दुग्ध बिक्री — यूनियन',    type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100', subtype: 'milk_sales' },
   { id: '4103', name: 'Cattle Feed Sales',          nameHi: 'पशु आहार बिक्री',          type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100' },
   { id: '4104', name: 'Curd / Buttermilk Sales',    nameHi: 'दही / छाछ बिक्री',         type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100' },
   { id: '4200', name: 'Commission Income',          nameHi: 'कमीशन आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
@@ -93,7 +94,8 @@ export const DAIRY_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   // ── Expenses ─────────────────────────────────────────────────────────────
   { id: '5000', name: 'Expenses',                   nameHi: 'व्यय',                     type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: true  },
   { id: '5100', name: 'Direct Expenses',            nameHi: 'प्रत्यक्ष व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
-  { id: '5101', name: 'Milk Procurement Cost',      nameHi: 'दुग्ध खरीदी लागत',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100' },
+  { id: '5101', name: 'Purchases — General',        nameHi: 'खरीद — सामान्य',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100' },
+  { id: '5108', name: 'Milk Procurement (Direct)',  nameHi: 'दुग्ध खरीदी लागत (प्रत्यक्ष)', type: 'expense', openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'milk_procurement' },
   { id: '5102', name: 'Cattle Feed Purchase',       nameHi: 'पशु आहार खरीदी',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100' },
   { id: '5103', name: 'Chilling / Processing Cost', nameHi: 'शीतलन / प्रसंस्करण लागत',  type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100' },
   { id: '5104', name: 'Milk Testing Expense',       nameHi: 'दुग्ध परीक्षण व्यय',       type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100' },

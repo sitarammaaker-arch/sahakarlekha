@@ -545,6 +545,29 @@ export interface MilkEntry {
   createdAt: string;
 }
 
+/**
+ * Dairy milk pricing — a Fat + SNF two-axis rate chart (Anand / union pattern).
+ * Effective-dated & immutable-by-convention: a rate revision is a NEW chart with a later
+ * effectiveFrom, so historical cycles re-price against the chart that was in force. The
+ * pricing engine (src/lib/dairy/pricing.ts) resolves rate = matrix[fatBand][snfBand].
+ */
+export interface DairyRateBand {
+  min: number;           // inclusive lower bound
+  max: number;           // exclusive upper bound
+}
+export interface DairyRateChart {
+  id: string;
+  name: string;
+  basis: 'fat_snf';      // D1 supports the two-axis Fat+SNF table; other bases are additive later
+  effectiveFrom: string; // YYYY-MM-DD — the chart applies to collections on/after this date
+  season?: string;       // optional label (e.g. 'flush' / 'lean')
+  fatBands: DairyRateBand[];   // rows — fat % bands
+  snfBands: DairyRateBand[];   // cols — SNF % bands
+  matrix: number[][];    // matrix[fatIndex][snfIndex] = ₹ per litre
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 export type AssetCategory = 'Land' | 'Building' | 'Furniture' | 'Equipment' | 'Vehicle' | 'Computer' | 'Other';
 export type AssetStatus = 'active' | 'disposed';
 
@@ -583,7 +606,9 @@ export type AccountSubtype =
   | 'long_term_loan' | 'current_liability' | 'statutory_liability' | 'deposit'
   | 'closing_stock'
   | 'trading_income' | 'commission_income' | 'scheme_income' | 'other_income'
+  | 'milk_sales'          // dairy — bulk/union milk sales (kept distinct from the generic 4101 sales fallback)
   | 'direct_expense' | 'employee_expense' | 'admin_expense' | 'operational_expense' | 'depreciation_expense' | 'statutory_expense'
+  | 'milk_procurement'    // dairy — farmer milk cost (kept distinct from the generic 5101 purchases fallback)
   | 'suspense';
 
 // ── Annual Review Report (Haryana Marketing Societies) classification tags ──

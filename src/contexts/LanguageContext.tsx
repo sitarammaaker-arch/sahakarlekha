@@ -88,6 +88,7 @@ export const translations: Translations = {
   legalDocuments: { hi: 'कानूनी / दस्तावेज़', en: 'Legal / Documents' },
   buildings: { hi: 'भवन / विंग', en: 'Buildings / Wings' },
   navDairy: { hi: 'दुग्ध प्रबंधन', en: 'Dairy' },
+  dairyRateCharts: { hi: 'दुग्ध रेट चार्ट', en: 'Milk Rate Charts' },
   navLabour: { hi: 'श्रमिक प्रबंधन', en: 'Labour' },
   navHousing: { hi: 'आवास प्रबंधन', en: 'Housing' },
   workerMaster: { hi: 'श्रमिक मास्टर', en: 'Worker Master' },
