@@ -126,6 +126,7 @@ const ProcurementLots = lazyWithRetry(() => import("./pages/ProcurementLots"));
 const FlatsRegister = lazyWithRetry(() => import("./pages/FlatsRegister"));
 const MaintenanceBilling = lazyWithRetry(() => import("./pages/MaintenanceBilling"));
 const ChargeHeads = lazyWithRetry(() => import("./pages/ChargeHeads"));
+const MemberStatement = lazyWithRetry(() => import("./pages/MemberStatement"));
 const WorkOrders = lazyWithRetry(() => import("./pages/WorkOrders"));
 const MusterRoll = lazyWithRetry(() => import("./pages/MusterRoll"));
 const WorkerMaster = lazyWithRetry(() => import("./pages/WorkerMaster"));
@@ -314,6 +315,7 @@ const AppRoutes = () => {
       <Route path="/flats-register" element={<ProtectedRoute><FlatsRegister /></ProtectedRoute>} />
       <Route path="/maintenance-billing" element={<ProtectedRoute><MaintenanceBilling /></ProtectedRoute>} />
       <Route path="/charge-heads" element={<ProtectedRoute><ChargeHeads /></ProtectedRoute>} />
+      <Route path="/member-statement" element={<ProtectedRoute><MemberStatement /></ProtectedRoute>} />
       <Route path="/work-orders" element={<ProtectedRoute><WorkOrders /></ProtectedRoute>} />
       <Route path="/muster-roll" element={<ProtectedRoute><MusterRoll /></ProtectedRoute>} />
       <Route path="/worker-master" element={<ProtectedRoute><WorkerMaster /></ProtectedRoute>} />

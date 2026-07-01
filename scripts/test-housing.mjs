@@ -193,5 +193,66 @@ const HEADS = [
   ok(demandLegs('MR-1', computeBillLines({ area: 0 }, [{ id: 'w', nameEn: 'W', accountId: '4102', basis: 'per_sqft', rate: 2 }])).length === 0, 'per_sqft head on a zero-area flat produces no posting');
 }
 
+// ── Mirror: src/lib/housing/statement.ts (H2c member maintenance statement) ──
+function buildMemberStatement(bills, vouchers) {
+  const activeBills = bills.filter(b => !b.isDeleted);
+  const billIds = new Set(activeBills.map(b => b.id));
+  const raw = [];
+  for (const b of activeBills) raw.push({ date: b.date, kind: 'demand', ref: b.billNo, particulars: `Maintenance ${b.period}`, debit: round2(b.amount), credit: 0, billId: b.id });
+  for (const v of vouchers) {
+    if (v.isDeleted) continue;
+    if (v.refType !== 'maintenance.receipt' || !v.refId || !billIds.has(v.refId)) continue;
+    raw.push({ date: v.date, kind: 'receipt', ref: v.voucherNo, particulars: v.narration || 'Receipt', debit: 0, credit: round2(v.amount), billId: v.refId });
+  }
+  raw.sort((a, b) => a.date.localeCompare(b.date) || (a.kind === b.kind ? 0 : a.kind === 'demand' ? -1 : 1));
+  let bal = 0;
+  const rows = raw.map(r => { bal = round2(bal + r.debit - r.credit); return { ...r, balance: bal }; });
+  const totalDemanded = round2(rows.reduce((s, r) => s + r.debit, 0));
+  const totalReceived = round2(rows.reduce((s, r) => s + r.credit, 0));
+  return { rows, totalDemanded, totalReceived, outstanding: round2(totalDemanded - totalReceived) };
+}
+
+// 15. Statement: demands + linked receipts, chronological running outstanding
+{
+  const bills = [
+    { id: 'b1', billNo: '2026-07/A-101', period: '2026-07', date: '2026-07-01', amount: 1500 },
+    { id: 'b2', billNo: '2026-08/A-101', period: '2026-08', date: '2026-08-01', amount: 1000 },
+  ];
+  const vouchers = [
+    { voucherNo: 'RCP-1', refType: 'maintenance.receipt', refId: 'b1', date: '2026-07-10', amount: 500 },
+    { voucherNo: 'X', refType: 'sale', refId: 'b1', date: '2026-07-11', amount: 999 }, // unrelated
+  ];
+  const s = buildMemberStatement(bills, vouchers);
+  ok(s.rows.length === 3, 'statement has two demands + one linked receipt');
+  ok(s.totalDemanded === 2500 && s.totalReceived === 500, 'totals sum demands and receipts');
+  ok(s.outstanding === 2000, 'outstanding = demanded − received');
+  ok(s.rows[s.rows.length - 1].balance === 2000, 'running balance ends at the outstanding');
+  ok(!s.rows.some(r => r.ref === 'X'), 'non-maintenance-receipt vouchers are excluded');
+}
+
+// 16. Soft-deleted bills/receipts excluded; receipt for an unknown bill ignored
+{
+  const bills = [
+    { id: 'b1', billNo: 'B1', period: '2026-07', date: '2026-07-01', amount: 1500 },
+    { id: 'b2', billNo: 'B2', period: '2026-07', date: '2026-07-01', amount: 800, isDeleted: true },
+  ];
+  const vouchers = [
+    { voucherNo: 'R1', refType: 'maintenance.receipt', refId: 'b1', date: '2026-07-05', amount: 300, isDeleted: true },
+    { voucherNo: 'R2', refType: 'maintenance.receipt', refId: 'bX', date: '2026-07-06', amount: 100 },
+  ];
+  const s = buildMemberStatement(bills, vouchers);
+  ok(s.rows.length === 1 && s.rows[0].ref === 'B1', 'deleted bill, deleted receipt, and orphan receipt all excluded');
+  ok(s.outstanding === 1500, 'outstanding reflects only the live demand');
+}
+
+// 17. Same-day demand is ordered before its receipt
+{
+  const bills = [{ id: 'b1', billNo: 'B1', period: '2026-07', date: '2026-07-01', amount: 1000 }];
+  const vouchers = [{ voucherNo: 'R1', refType: 'maintenance.receipt', refId: 'b1', date: '2026-07-01', amount: 400 }];
+  const s = buildMemberStatement(bills, vouchers);
+  ok(s.rows[0].kind === 'demand' && s.rows[1].kind === 'receipt', 'same-day: demand before receipt');
+  ok(s.rows[0].balance === 1000 && s.rows[1].balance === 600, 'running balance steps 1000 → 600');
+}
+
 console.log(`[housing-test] ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
