@@ -72,6 +72,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'shareNominationRegister', titleKey: 'shareNominationRegister', icon: ScrollText, route: '/share-nomination-register', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 10 },
   { id: 'insurance', titleKey: 'insurance', icon: ShieldCheck, route: '/insurance', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 11 },
   { id: 'amc', titleKey: 'amc', icon: Wrench, route: '/amc', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 12 },
+  { id: 'legalDocuments', titleKey: 'legalDocuments', icon: FileCheck, route: '/legal-documents', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 13 },
   // ── Labour cooperative module group (domain: 'labour') ──
   { id: 'workerMaster',    titleKey: 'workerMaster',    icon: HardHat,         route: '/worker-master',   domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 10 },
   { id: 'departmentMaster',titleKey: 'departmentMaster',icon: Landmark,        route: '/department-master', domain: 'labour',   requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 11 },

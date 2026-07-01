@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +16,7 @@ import { fmtDate } from '@/lib/dateUtils';
 const TrialBalance: React.FC = () => {
   const { t, language } = useLanguage();
   const { getTrialBalance, society } = useData();
+  const navigate = useNavigate();
   // P1-5: Default to the last day of the selected FY (31 March), not today's date.
   const fyEndDate = (() => {
     const endYY = society.financialYear.split('-')[1];
@@ -108,7 +110,11 @@ const TrialBalance: React.FC = () => {
         ) : rows.map((b, i) => (
           <TableRow key={b.account.id} className="hover:bg-muted/30">
             <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-            <TableCell className="font-medium">{language === 'hi' ? b.account.nameHi : b.account.name}</TableCell>
+            <TableCell className="font-medium">
+              <button className="text-left hover:text-primary hover:underline" onClick={() => navigate(`/ledger?account=${b.account.id}`)} title={language === 'hi' ? 'खाता-बही खोलें' : 'Open ledger'}>
+                {language === 'hi' ? b.account.nameHi : b.account.name}
+              </button>
+            </TableCell>
             <TableCell className="text-right text-sm text-muted-foreground">
               {b.openingDebit > 0 ? <>{fmt(b.openingDebit)} <span className="text-[10px]">Dr</span></>
                 : b.openingCredit > 0 ? <>{fmt(b.openingCredit)} <span className="text-[10px]">Cr</span></> : '—'}

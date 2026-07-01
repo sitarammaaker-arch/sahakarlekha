@@ -1605,6 +1605,20 @@ create policy "society_rw" on public.housing_amc for all to authenticated
   with check (society_id::text in (select public.current_user_society_ids()));
 create index if not exists idx_housing_amc_society on public.housing_amc (society_id);
 
+-- Housing R5 — legal / statutory document register (NOC, occupancy cert, notices). RUN once.
+create table if not exists housing_documents (
+  id text primary key, society_id text not null default 'SOC001',
+  "docType" text, title text, reference text, authority text,
+  date text, "expiryDate" text, status text, remarks text,
+  "isDeleted" boolean default false, "createdAt" timestamptz default now()
+);
+alter table public.housing_documents enable row level security;
+drop policy if exists "society_rw" on public.housing_documents;
+create policy "society_rw" on public.housing_documents for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create index if not exists idx_housing_documents_society on public.housing_documents (society_id);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Labour cooperative — Work Orders / labour-contract register (master data; no
 -- accounting in V1). Plain society-scoped table (client upserts directly). RUN once.

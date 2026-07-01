@@ -23,7 +23,7 @@ import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { computeBillLines, demandLegs, billTotal, round2, gstLineForBill } from '@/lib/housing/billing';
 import { plannedBillInterest } from '@/lib/housing/arrears';
 import { buildMemberStatement } from '@/lib/housing/statement';
-import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, Voucher, LedgerAccount } from '@/types';
+import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, Voucher, LedgerAccount } from '@/types';
 
 interface HousingDataContextValue {
   housingFlats: HousingFlat[];
@@ -79,6 +79,11 @@ interface HousingDataContextValue {
   addAmc: (data: Omit<HousingAmc, 'id' | 'createdAt'>) => HousingAmc;
   updateAmc: (id: string, data: Partial<HousingAmc>) => void;
   deleteAmc: (id: string) => void;
+
+  documents: HousingDocument[];
+  addDocument: (data: Omit<HousingDocument, 'id' | 'createdAt'>) => HousingDocument;
+  updateDocument: (id: string, data: Partial<HousingDocument>) => void;
+  deleteDocument: (id: string) => void;
 }
 
 const HousingDataContext = createContext<HousingDataContextValue | undefined>(undefined);
@@ -111,11 +116,12 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   const [transfers, setTransfersState] = useState<HousingTransfer[]>(() => storage.getHousingTransfers());
   const [insurances, setInsurancesState] = useState<HousingInsurance[]>(() => storage.getHousingInsurance());
   const [amcs, setAmcsState] = useState<HousingAmc[]>(() => storage.getHousingAmc());
+  const [documents, setDocumentsState] = useState<HousingDocument[]>(() => storage.getHousingDocuments());
 
   // Load when the society changes; Supabase is SSOT, localStorage is offline fallback.
   useEffect(() => {
     const sid = user?.societyId;
-    if (!sid) { setHousingFlatsState([]); setMaintenanceBillsState([]); setChargeHeadsState([]); setFundInvestmentsState([]); setComplaintsState([]); setParkingState([]); setTransfersState([]); setInsurancesState([]); setAmcsState([]); return; }
+    if (!sid) { setHousingFlatsState([]); setMaintenanceBillsState([]); setChargeHeadsState([]); setFundInvestmentsState([]); setComplaintsState([]); setParkingState([]); setTransfersState([]); setInsurancesState([]); setAmcsState([]); setDocumentsState([]); return; }
     supabase.from('housing_flats').select('*').eq('society_id', sid).then(
       ({ data, error }) => setHousingFlatsState(error || !data ? storage.getHousingFlats() : (data as unknown as HousingFlat[])),
       () => setHousingFlatsState(storage.getHousingFlats()),
@@ -151,6 +157,10 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     supabase.from('housing_amc').select('*').eq('society_id', sid).then(
       ({ data, error }) => setAmcsState(error || !data ? storage.getHousingAmc() : (data as unknown as HousingAmc[])),
       () => setAmcsState(storage.getHousingAmc()),
+    );
+    supabase.from('housing_documents').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setDocumentsState(error || !data ? storage.getHousingDocuments() : (data as unknown as HousingDocument[])),
+      () => setDocumentsState(storage.getHousingDocuments()),
     );
   }, [user?.societyId]);
 
@@ -813,6 +823,39 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     });
   }, [amcs]);
 
+  // ── Legal / statutory document register (operational) ──
+  const addDocument = useCallback((data: Omit<HousingDocument, 'id' | 'createdAt'>): HousingDocument => {
+    if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as HousingDocument;
+    const p: HousingDocument = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    setDocumentsState(prev => { const u = [...prev, p]; storage.setHousingDocuments(u); return u; });
+    supabase.from('housing_documents').upsert(withSoc(p)).then(({ error }) => {
+      if (error) {
+        console.error('Document save error:', error.message);
+        setDocumentsState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingDocuments(r); return r; });
+        toastRef.current({ title: 'दस्तावेज़ सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return p;
+  }, []);
+  const updateDocument = useCallback((id: string, data: Partial<HousingDocument>) => {
+    if (guardFYLocked()) return;
+    const old = documents.find(x => x.id === id);
+    if (!old) return;
+    const updated = { ...old, ...data };
+    setDocumentsState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingDocuments(u); return u; });
+    supabase.from('housing_documents').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) { console.error('Document update error:', error.message); setDocumentsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingDocuments(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+    });
+  }, [documents]);
+  const deleteDocument = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const old = documents.find(x => x.id === id);
+    setDocumentsState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingDocuments(u); return u; });
+    supabase.from('housing_documents').delete().eq('id', id).then(({ error }) => {
+      if (error) { console.error('Document delete error:', error.message); if (old) setDocumentsState(prev => { const u = [...prev, old]; storage.setHousingDocuments(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+    });
+  }, [documents]);
+
   return (
     <HousingDataContext.Provider value={{
       housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat,
@@ -826,6 +869,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       transfers, recordFlatTransfer, deleteFlatTransfer,
       insurances, addInsurance, updateInsurance, deleteInsurance,
       amcs, addAmc, updateAmc, deleteAmc,
+      documents, addDocument, updateDocument, deleteDocument,
     }}>
       {children}
     </HousingDataContext.Provider>

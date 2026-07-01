@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useCapabilities } from '@/hooks/useCapabilities';
+import { useHousingData } from '@/contexts/HousingDataContext';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { QuickActions } from '@/components/dashboard/QuickActions';
@@ -23,7 +24,15 @@ const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b
 const Dashboard: React.FC = () => {
   const { t, language } = useLanguage();
   const { accounts, getAccountBalance, members, vouchers, getProfitLoss, loans, society, getTrialBalance, getTradingAccount, auditObjections } = useData();
+  const { housingFlats, maintenanceBills, complaints } = useHousingData();
   const { has } = useCapabilities();
+
+  // Housing KPIs (shown only for housing societies).
+  const hFlats = housingFlats.filter(f => !f.isDeleted);
+  const hOutstanding = maintenanceBills.filter(b => !b.isDeleted).reduce((s, b) => s + Math.max(0, (b.amount || 0) - (b.paidAmount || 0)), 0);
+  const hVacant = hFlats.filter(f => (f.occupancy || (f.memberId ? 'self' : 'vacant')) === 'vacant').length;
+  const hOccupancyPct = hFlats.length ? Math.round(((hFlats.length - hVacant) / hFlats.length) * 100) : 0;
+  const hOpenComplaints = complaints.filter(c => !c.isDeleted && (c.status === 'open' || c.status === 'in_progress')).length;
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -391,6 +400,38 @@ const Dashboard: React.FC = () => {
               <p className="text-center text-muted-foreground text-sm py-4">
                 {language === 'hi' ? 'कोई ऋण दर्ज नहीं' : 'No loans recorded'}
               </p>
+            )}
+          </CardContent>
+        </Card>
+        )}
+
+        {/* Housing Summary — only for housing societies */}
+        {has('housing') && (
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="text-base">{language === 'hi' ? 'आवास सारांश' : 'Housing Summary'}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="text-center py-2">
+              <p className="text-2xl font-bold text-amber-600">{fmt(hOutstanding)}</p>
+              <p className="text-xs text-muted-foreground">{language === 'hi' ? 'बकाया रखरखाव' : 'Outstanding Maintenance'}</p>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center p-2 rounded-lg bg-muted/50">
+                <span className="text-sm font-medium">{language === 'hi' ? 'फ्लैट' : 'Flats'}</span>
+                <Badge variant="outline">{hFlats.length}</Badge>
+              </div>
+              <div className="flex justify-between items-center p-2 rounded-lg bg-success/10">
+                <span className="text-sm text-success font-medium">{language === 'hi' ? 'अधिभोग' : 'Occupancy'}</span>
+                <Badge className="bg-success/20 text-success border-success/30">{hOccupancyPct}%</Badge>
+              </div>
+              <div className="flex justify-between items-center p-2 rounded-lg bg-destructive/10">
+                <span className="text-sm text-destructive font-medium">{language === 'hi' ? 'खुली शिकायतें' : 'Open complaints'}</span>
+                <Badge className="bg-destructive/20 text-destructive border-destructive/30">{hOpenComplaints}</Badge>
+              </div>
+            </div>
+            {hFlats.length === 0 && (
+              <p className="text-center text-muted-foreground text-sm py-4">{language === 'hi' ? 'कोई फ्लैट दर्ज नहीं' : 'No flats recorded'}</p>
             )}
           </CardContent>
         </Card>
