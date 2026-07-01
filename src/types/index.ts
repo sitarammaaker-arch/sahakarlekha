@@ -610,6 +610,30 @@ export interface DairySettlement {
   createdAt: string;
 }
 
+/**
+ * Dairy milk dispatch to the Union (D4) — the revenue counterpart of collection. Recording a
+ * dispatch posts the sale: Dr Union Receivable (3303) / Cr Milk Sales — Bulk/Union (4106).
+ * Union payments received reduce the receivable (Dr bank / Cr 3303); amountReceived advances.
+ */
+export interface DairyDispatch {
+  id: string;
+  date: string;
+  shift?: MilkShift;
+  unionName: string;
+  qty: number;           // litres dispatched
+  fat?: number;
+  snf?: number;
+  rate: number;          // ₹ per litre (union rate)
+  amount: number;        // qty × rate — sale value
+  shortage?: number;     // litres short at union acknowledgement (informational)
+  vehicleNo?: string;
+  remarks?: string;
+  voucherId?: string;    // the Dr 3303 / Cr 4106 sale voucher
+  amountReceived: number; // union payments received against this dispatch
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 export type AssetCategory = 'Land' | 'Building' | 'Furniture' | 'Equipment' | 'Vehicle' | 'Computer' | 'Other';
 export type AssetStatus = 'active' | 'disposed';
 

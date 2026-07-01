@@ -90,6 +90,7 @@ export const translations: Translations = {
   navDairy: { hi: 'दुग्ध प्रबंधन', en: 'Dairy' },
   dairyRateCharts: { hi: 'दुग्ध रेट चार्ट', en: 'Milk Rate Charts' },
   farmerSettlement: { hi: 'दुग्ध सेटलमेंट', en: 'Farmer Settlement' },
+  milkDispatch: { hi: 'दुग्ध डिस्पैच', en: 'Milk Dispatch' },
   dairyRegisters: { hi: 'दुग्ध रजिस्टर', en: 'Dairy Registers' },
   navLabour: { hi: 'श्रमिक प्रबंधन', en: 'Labour' },
   navHousing: { hi: 'आवास प्रबंधन', en: 'Housing' },

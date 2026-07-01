@@ -20,9 +20,11 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
 import { priceMilk } from '@/lib/dairy/pricing';
-import { resolveMilkProcurementAccountId, resolveMilkBulkSalesAccountId, resolveMilkPayableAccountId } from '@/lib/dairy/accounts';
+import { resolveMilkProcurementAccountId, resolveMilkBulkSalesAccountId, resolveMilkPayableAccountId, resolveUnionReceivableAccountId } from '@/lib/dairy/accounts';
 import { computeGross, netPayable, sumDeductions, outstanding, settlementLegs } from '@/lib/dairy/settlement';
-import type { DairyRateChart, MilkEntry, DairySettlement, DairyDeductionLine, Voucher } from '@/types';
+import { resolveDairyPostingLegs } from '@/lib/dairy/postingRules';
+import { buildEngineVoucherLines } from '@/lib/posting/engineVoucher';
+import type { DairyRateChart, MilkEntry, DairySettlement, DairyDeductionLine, DairyDispatch, Voucher } from '@/types';
 
 interface DairyDataContextValue {
   dairyReady: boolean;
@@ -57,6 +59,14 @@ interface DairyDataContextValue {
   /** Pay the (partial) net: Dr payable / Cr bank|cash; advances amountPaid. */
   recordDairySettlementPayment: (args: { settlementId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string }) => Voucher;
   deleteDairySettlement: (settlementId: string) => void;
+
+  // Milk dispatch to the Union (D4 — revenue side)
+  dispatches: DairyDispatch[];
+  /** Record a dispatch; posts the sale Dr Union Receivable (3303) / Cr Milk Sales — Bulk (4106). */
+  recordDairyDispatch: (data: Omit<DairyDispatch, 'id' | 'createdAt' | 'amount' | 'voucherId' | 'amountReceived'>) => DairyDispatch;
+  /** Receive a union payment against a dispatch: Dr bank|cash / Cr 3303; advances amountReceived. */
+  receiveUnionPayment: (args: { dispatchId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }) => Voucher;
+  deleteDairyDispatch: (dispatchId: string) => void;
 }
 
 const DairyDataContext = createContext<DairyDataContextValue | null>(null);
@@ -89,6 +99,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   const [rateCharts, setRateChartsState] = useState<DairyRateChart[]>(() => storage.getDairyRateCharts());
   const [milkEntries, setMilkEntriesState] = useState<MilkEntry[]>(() => storage.getMilkEntries());
   const [settlements, setSettlementsState] = useState<DairySettlement[]>(() => storage.getDairySettlements());
+  const [dispatches, setDispatchesState] = useState<DairyDispatch[]>(() => storage.getDairyDispatches());
 
   useEffect(() => {
     const sid = user?.societyId;
@@ -125,6 +136,15 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     supabase.from('dairy_settlements').select('*').eq('society_id', sid).then(
       ({ data, error }) => setSettlementsState(error || !data ? storage.getDairySettlements() : (data as DairySettlement[])),
       () => setSettlementsState(storage.getDairySettlements()),
+    );
+  }, [user?.societyId]);
+
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setDispatchesState([]); return; }
+    supabase.from('dairy_dispatches').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setDispatchesState(error || !data ? storage.getDairyDispatches() : (data as DairyDispatch[])),
+      () => setDispatchesState(storage.getDairyDispatches()),
     );
   }, [user?.societyId]);
 
@@ -343,6 +363,82 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     commitSettlement({ ...cur, isDeleted: true }, cur);
   }, [settlements, cancelVoucher, commitSettlement, user]);
 
+  // ── Milk dispatch to the Union (D4 — revenue side) ──
+  const commitDispatch = useCallback((next: DairyDispatch, revertTo: DairyDispatch | null, onFail?: () => void) => {
+    setDispatchesState(prev => { const u = prev.some(d => d.id === next.id) ? prev.map(d => d.id === next.id ? next : d) : [...prev, next]; storage.setDairyDispatches(u); return u; });
+    supabase.from('dairy_dispatches').upsert(withSoc(next)).then(({ error }) => {
+      if (error) {
+        console.error('Dispatch save error:', error.message);
+        setDispatchesState(prev => { const u = revertTo ? prev.map(d => d.id === next.id ? revertTo : d) : prev.filter(d => d.id !== next.id); storage.setDairyDispatches(u); return u; });
+        onFail?.();
+        toastRef.current({ title: 'डिस्पैच सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas. (Pehli baar: dairy_dispatches block chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [societyId]);
+
+  const recordDairyDispatch = useCallback((data: Omit<DairyDispatch, 'id' | 'createdAt' | 'amount' | 'voucherId' | 'amountReceived'>): DairyDispatch => {
+    const sentinel = { id: '' } as DairyDispatch;
+    if (guardFYLocked()) return sentinel;
+    const qty = data.qty || 0, rate = data.rate || 0;
+    const amount = +(qty * rate).toFixed(2);
+    if (qty <= 0 || amount <= 0) { toastRef.current({ title: 'अधूरी जानकारी', description: 'लीटर और दर ज़रूरी हैं।', variant: 'destructive' }); return sentinel; }
+    const rcv = resolveUnionReceivableAccountId(accounts);
+    const sales = resolveMilkBulkSalesAccountId(accounts);
+    if (!rcv || !sales) { toastRef.current({ title: 'खाते नहीं मिले', description: 'Union receivable / bulk-sales ledger missing.', variant: 'destructive', duration: 12000 }); return sentinel; }
+    const binding = { 'milk.dispatch.receivable': rcv, 'milk.bulk.sales': sales };
+    const specs = buildEngineVoucherLines(resolveDairyPostingLegs('RecogniseMilkDispatch', { amount, currency: 'INR' }, binding, accounts));
+    if (specs.length !== 2) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'Legs resolve nahi hui.', variant: 'destructive' }); return sentinel; }
+    const dr = specs.find(s => s.type === 'Dr'); const cr = specs.find(s => s.type === 'Cr');
+    const voucher = addVoucher({
+      type: 'journal', date: data.date,
+      debitAccountId: dr!.accountId, creditAccountId: cr!.accountId, amount,
+      lines: specs.map(s => ({ id: crypto.randomUUID(), accountId: s.accountId, type: s.type, amount: s.amount })),
+      narration: `दूध डिस्पैच ${data.unionName} — ${qty} लीटर @ ₹${rate}`,
+      refType: 'dairy.dispatch',
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+    if (!voucher?.id) return sentinel;
+    const d: DairyDispatch = { ...data, id: crypto.randomUUID(), amount, voucherId: voucher.id, amountReceived: 0, createdAt: new Date().toISOString() };
+    commitDispatch(d, null, () => cancelVoucher(voucher.id, 'Dispatch rolled back (cloud save failed)', user?.name || 'System'));
+    toastRef.current({ title: '✅ डिस्पैच दर्ज', description: `${data.unionName} — बिक्री ₹${amount.toLocaleString('en-IN')}` });
+    return d;
+  }, [accounts, addVoucher, cancelVoucher, commitDispatch, user]);
+
+  const receiveUnionPayment = useCallback((args: { dispatchId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }): Voucher => {
+    const sentinel = { id: '' } as Voucher;
+    if (guardFYLocked()) return sentinel;
+    const cur = dispatches.find(d => d.id === args.dispatchId && !d.isDeleted);
+    if (!cur) return sentinel;
+    const due = +(cur.amount - cur.amountReceived).toFixed(2);
+    const amount = +Math.min(args.amount, due).toFixed(2);
+    if (!(amount > 0)) { toastRef.current({ title: 'कुछ बकाया नहीं', variant: 'destructive' }); return sentinel; }
+    const rcv = resolveUnionReceivableAccountId(accounts);
+    if (!rcv) { toastRef.current({ title: 'देनदार खाता नहीं मिला', variant: 'destructive' }); return sentinel; }
+    const debitAcc = args.mode === 'bank' ? (args.bankAccountId || '3302') : '3301';
+    const voucher = addVoucher({
+      type: 'receipt', date: args.date,
+      debitAccountId: debitAcc, creditAccountId: rcv, amount,
+      lines: [{ id: crypto.randomUUID(), accountId: debitAcc, type: 'Dr', amount }, { id: crypto.randomUUID(), accountId: rcv, type: 'Cr', amount }],
+      narration: `यूनियन भुगतान प्राप्त — ${cur.unionName} (${cur.date})`,
+      refType: 'dairy.dispatch.receipt', refId: cur.id,
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+    if (!voucher?.id) return sentinel;
+    const next: DairyDispatch = { ...cur, amountReceived: +(cur.amountReceived + amount).toFixed(2) };
+    commitDispatch(next, cur, () => cancelVoucher(voucher.id, 'Union payment rolled back (cloud save failed)', user?.name || 'System'));
+    toastRef.current({ title: '✅ भुगतान प्राप्त', description: `₹${amount.toLocaleString('en-IN')} — बकाया ₹${(due - amount).toLocaleString('en-IN')}` });
+    return voucher;
+  }, [dispatches, accounts, addVoucher, cancelVoucher, commitDispatch, user]);
+
+  const deleteDairyDispatch = useCallback((dispatchId: string) => {
+    if (guardFYLocked()) return;
+    const cur = dispatches.find(d => d.id === dispatchId);
+    if (!cur) return;
+    if (cur.amountReceived > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले प्राप्ति reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
+    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Dispatch deleted', user?.name || 'System');
+    commitDispatch({ ...cur, isDeleted: true }, cur);
+  }, [dispatches, cancelVoucher, commitDispatch, user]);
+
   const resolveMilkRate = useCallback(
     (args: { fat: number; snf: number; qty: number; date?: string; season?: string }) =>
       priceMilk(rateCharts, { fat: args.fat, snf: args.snf, qty: args.qty, date: args.date || new Date().toISOString().slice(0, 10), season: args.season }),
@@ -371,6 +467,10 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       approveDairySettlement,
       recordDairySettlementPayment,
       deleteDairySettlement,
+      dispatches,
+      recordDairyDispatch,
+      receiveUnionPayment,
+      deleteDairyDispatch,
     }}>
       {children}
     </DairyDataContext.Provider>
