@@ -321,6 +321,21 @@ export interface HousingAmc {
   createdAt: string;
 }
 
+// Housing — a legal / statutory document (NOC, occupancy certificate, legal notice…) register entry.
+export interface HousingDocument {
+  id: string;
+  docType?: string;        // noc / occupancy_cert / completion_cert / legal_notice / agreement / other
+  title: string;
+  reference?: string;      // document / reference number
+  authority?: string;      // issuing authority / counterparty
+  date?: string;
+  expiryDate?: string;
+  status?: 'valid' | 'pending' | 'expired';
+  remarks?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 // Housing — a flat ownership transfer (reassigns the owner; may post transfer fee + premium).
 export interface HousingTransfer {
   id: string;

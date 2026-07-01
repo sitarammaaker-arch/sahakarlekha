@@ -135,6 +135,7 @@ const TransferRegister = lazyWithRetry(() => import("./pages/TransferRegister"))
 const ShareNominationRegister = lazyWithRetry(() => import("./pages/ShareNominationRegister"));
 const Insurance = lazyWithRetry(() => import("./pages/Insurance"));
 const Amc = lazyWithRetry(() => import("./pages/Amc"));
+const LegalDocuments = lazyWithRetry(() => import("./pages/LegalDocuments"));
 const WorkOrders = lazyWithRetry(() => import("./pages/WorkOrders"));
 const MusterRoll = lazyWithRetry(() => import("./pages/MusterRoll"));
 const WorkerMaster = lazyWithRetry(() => import("./pages/WorkerMaster"));
@@ -332,6 +333,7 @@ const AppRoutes = () => {
       <Route path="/share-nomination-register" element={<ProtectedRoute><ShareNominationRegister /></ProtectedRoute>} />
       <Route path="/insurance" element={<ProtectedRoute><Insurance /></ProtectedRoute>} />
       <Route path="/amc" element={<ProtectedRoute><Amc /></ProtectedRoute>} />
+      <Route path="/legal-documents" element={<ProtectedRoute><LegalDocuments /></ProtectedRoute>} />
       <Route path="/work-orders" element={<ProtectedRoute><WorkOrders /></ProtectedRoute>} />
       <Route path="/muster-roll" element={<ProtectedRoute><MusterRoll /></ProtectedRoute>} />
       <Route path="/worker-master" element={<ProtectedRoute><WorkerMaster /></ProtectedRoute>} />

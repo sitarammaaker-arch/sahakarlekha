@@ -85,6 +85,7 @@ export const translations: Translations = {
   shareNominationRegister: { hi: 'शेयर एवं नामांकन', en: 'Share & Nomination' },
   insurance: { hi: 'बीमा रजिस्टर', en: 'Insurance' },
   amc: { hi: 'AMC / अनुबंध', en: 'AMC / Contracts' },
+  legalDocuments: { hi: 'कानूनी / दस्तावेज़', en: 'Legal / Documents' },
   navLabour: { hi: 'श्रमिक प्रबंधन', en: 'Labour' },
   navHousing: { hi: 'आवास प्रबंधन', en: 'Housing' },
   workerMaster: { hi: 'श्रमिक मास्टर', en: 'Worker Master' },
