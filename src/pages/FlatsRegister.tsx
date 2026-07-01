@@ -37,7 +37,7 @@ const effectiveOccupancy = (f: HousingFlat): Occupancy =>
 
 export default function FlatsRegister() {
   const { members } = useData();
-  const { housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat } = useHousingData();
+  const { housingFlats, chargeHeads, addHousingFlat, updateHousingFlat, deleteHousingFlat } = useHousingData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -66,8 +66,11 @@ export default function FlatsRegister() {
   const [eOccupancy, setEOccupancy] = useState<Occupancy>('self');
   const [eArea, setEArea] = useState('');
   const [eMaintenance, setEMaintenance] = useState('');
+  const [eOverrides, setEOverrides] = useState<Record<string, string>>({});
 
   const [query, setQuery] = useState('');
+
+  const activeHeads = chargeHeads.filter(h => !h.isDeleted && h.isActive !== false).sort((a, b) => (a.order || 0) - (b.order || 0));
 
   const memberLabel = (id?: string) => {
     if (!id) return hi ? '— खाली —' : '— Vacant —';
@@ -112,6 +115,7 @@ export default function FlatsRegister() {
     setEditId(f.id); setEFlatNo(f.flatNo); setEBlockNo(f.blockNo || ''); setEFloor(f.floor || '');
     setEUnitType(f.unitType || ''); setEMemberId(f.memberId || ''); setEAssociateMemberId(f.associateMemberId || '');
     setEOccupancy(effectiveOccupancy(f)); setEArea(f.area ? String(f.area) : ''); setEMaintenance(String(f.monthlyMaintenance));
+    setEOverrides(Object.fromEntries(Object.entries(f.chargeOverrides || {}).map(([k, v]) => [k, String(v)])));
     setEditOpen(true);
   };
 
@@ -119,11 +123,17 @@ export default function FlatsRegister() {
     const m = Number(eMaintenance);
     if (!eFlatNo.trim()) { toast({ title: hi ? 'फ्लैट नंबर आवश्यक' : 'Flat number required', variant: 'destructive' }); return; }
     if (!(m >= 0)) { toast({ title: hi ? 'राशि दर्ज करें' : 'Enter a valid amount', variant: 'destructive' }); return; }
+    // Overrides: a filled cell overrides the schedule amount (0 = head excluded); blank = use schedule.
+    const overrides: Record<string, number> = {};
+    for (const [headId, val] of Object.entries(eOverrides)) {
+      if (val !== undefined && val.trim() !== '' && Number(val) >= 0) overrides[headId] = Number(val);
+    }
     updateHousingFlat(editId, {
       flatNo: eFlatNo.trim(), blockNo: eBlockNo.trim() || undefined, floor: eFloor.trim() || undefined,
       unitType: eUnitType || undefined, memberId: eMemberId || undefined, associateMemberId: eAssociateMemberId || undefined,
       occupancy: eOccupancy, ownerType: ownerTypeFrom(eOccupancy),
       area: eArea ? Number(eArea) : undefined, monthlyMaintenance: m,
+      chargeOverrides: Object.keys(overrides).length ? overrides : undefined,
     });
     toast({ title: hi ? 'अपडेट हुआ' : 'Updated' });
     setEditOpen(false);
@@ -307,6 +317,19 @@ export default function FlatsRegister() {
               <div className="space-y-1.5"><Label>{hi ? 'क्षेत्रफल' : 'Area'}</Label><Input type="number" min={0} value={eArea} onChange={e => setEArea(e.target.value)} /></div>
             </div>
             <div className="space-y-1.5"><Label>{hi ? 'मासिक रखरखाव (₹)' : 'Monthly Maintenance (₹)'} *</Label><Input type="number" min={0} value={eMaintenance} onChange={e => setEMaintenance(e.target.value)} /></div>
+            {activeHeads.length > 0 && (
+              <div className="space-y-1.5 rounded-lg border p-2.5">
+                <Label className="text-xs text-muted-foreground">{hi ? 'प्रति-फ्लैट शुल्क override (वैकल्पिक — खाली = अनुसूची, 0 = लागू नहीं)' : 'Per-flat charge overrides (blank = schedule, 0 = not applicable)'}</Label>
+                {activeHeads.map(h => (
+                  <div key={h.id} className="flex items-center gap-2">
+                    <span className="text-sm flex-1 min-w-0 truncate">{hi ? h.nameHi : h.nameEn}</span>
+                    <Input type="number" min={0} className="w-24 h-8" value={eOverrides[h.id] ?? ''}
+                      placeholder={h.basis === 'per_sqft' ? `${h.rate}/sqft` : String(h.rate)}
+                      onChange={e => setEOverrides(prev => ({ ...prev, [h.id]: e.target.value }))} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>

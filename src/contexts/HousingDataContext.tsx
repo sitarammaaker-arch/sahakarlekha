@@ -20,7 +20,8 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
-import type { HousingFlat, MaintenanceBill, Voucher, LedgerAccount } from '@/types';
+import { computeBillLines, demandLegs, billTotal } from '@/lib/housing/billing';
+import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, Voucher, LedgerAccount } from '@/types';
 
 interface HousingDataContextValue {
   housingFlats: HousingFlat[];
@@ -32,6 +33,11 @@ interface HousingDataContextValue {
   generateMaintenanceBills: (data: { period: string; date?: string; flatIds?: string[] }) => MaintenanceBill[];
   deleteMaintenanceBill: (id: string) => void;
   recordMaintenanceCollection: (data: { billId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string; remarks?: string }) => Voucher;
+
+  chargeHeads: HousingChargeHead[];
+  addChargeHead: (data: Omit<HousingChargeHead, 'id' | 'createdAt'>) => HousingChargeHead;
+  updateChargeHead: (id: string, data: Partial<HousingChargeHead>) => void;
+  deleteChargeHead: (id: string) => void;
 }
 
 const HousingDataContext = createContext<HousingDataContextValue | undefined>(undefined);
@@ -57,11 +63,12 @@ export function HousingProvider({ children }: { children: ReactNode }) {
 
   const [housingFlats, setHousingFlatsState] = useState<HousingFlat[]>(() => storage.getHousingFlats());
   const [maintenanceBills, setMaintenanceBillsState] = useState<MaintenanceBill[]>(() => storage.getMaintenanceBills());
+  const [chargeHeads, setChargeHeadsState] = useState<HousingChargeHead[]>(() => storage.getHousingChargeHeads());
 
   // Load when the society changes; Supabase is SSOT, localStorage is offline fallback.
   useEffect(() => {
     const sid = user?.societyId;
-    if (!sid) { setHousingFlatsState([]); setMaintenanceBillsState([]); return; }
+    if (!sid) { setHousingFlatsState([]); setMaintenanceBillsState([]); setChargeHeadsState([]); return; }
     supabase.from('housing_flats').select('*').eq('society_id', sid).then(
       ({ data, error }) => setHousingFlatsState(error || !data ? storage.getHousingFlats() : (data as unknown as HousingFlat[])),
       () => setHousingFlatsState(storage.getHousingFlats()),
@@ -70,7 +77,54 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       ({ data, error }) => setMaintenanceBillsState(error || !data ? storage.getMaintenanceBills() : (data as unknown as MaintenanceBill[])),
       () => setMaintenanceBillsState(storage.getMaintenanceBills()),
     );
+    supabase.from('housing_charge_heads').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setChargeHeadsState(error || !data ? storage.getHousingChargeHeads() : (data as unknown as HousingChargeHead[])),
+      () => setChargeHeadsState(storage.getHousingChargeHeads()),
+    );
   }, [user?.societyId]);
+
+  // ── Charge-head schedule (society-wide master; plain-table persistence + RULE-1 rollback) ──
+  const addChargeHead = useCallback((data: Omit<HousingChargeHead, 'id' | 'createdAt'>): HousingChargeHead => {
+    if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as HousingChargeHead;
+    const head: HousingChargeHead = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    setChargeHeadsState(prev => { const u = [...prev, head]; storage.setHousingChargeHeads(u); return u; });
+    supabase.from('housing_charge_heads').upsert(withSoc(head)).then(({ error }) => {
+      if (error) {
+        console.error('Charge head save error:', error.message);
+        setChargeHeadsState(prev => { const r = prev.filter(h => h.id !== head.id); storage.setHousingChargeHeads(r); return r; });
+        toastRef.current({ title: 'शुल्क मद सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return head;
+  }, []);
+
+  const updateChargeHead = useCallback((id: string, data: Partial<HousingChargeHead>) => {
+    if (guardFYLocked()) return;
+    const old = chargeHeads.find(h => h.id === id);
+    if (!old) return;
+    const updated = { ...old, ...data };
+    setChargeHeadsState(prev => { const u = prev.map(h => h.id === id ? updated : h); storage.setHousingChargeHeads(u); return u; });
+    supabase.from('housing_charge_heads').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Charge head update error:', error.message);
+        setChargeHeadsState(prev => { const u = prev.map(h => h.id === id ? old : h); storage.setHousingChargeHeads(u); return u; });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [chargeHeads]);
+
+  const deleteChargeHead = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const old = chargeHeads.find(h => h.id === id);
+    setChargeHeadsState(prev => { const u = prev.filter(h => h.id !== id); storage.setHousingChargeHeads(u); return u; });
+    supabase.from('housing_charge_heads').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('Charge head delete error:', error.message);
+        if (old) setChargeHeadsState(prev => { const u = [...prev, old]; storage.setHousingChargeHeads(u); return u; });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [chargeHeads]);
 
   // ── Flat / Unit master (Member-pattern persistence + RULE-1 rollback, RULE-6 FY-lock) ──
   const addHousingFlat = useCallback((data: Omit<HousingFlat, 'id' | 'createdAt'>): HousingFlat => {
@@ -160,26 +214,34 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       return accId;
     };
 
+    // Active society charge-head schedule (empty → single monthlyMaintenance line for back-compat).
+    const activeHeads = chargeHeads.filter(h => !h.isDeleted && h.isActive !== false);
     for (const flat of targets) {
       if (billed.has(flat.id)) continue;
-      const amount = +flat.monthlyMaintenance.toFixed(2);
+      const billLines: MaintenanceBillLine[] = activeHeads.length > 0
+        ? computeBillLines(flat, chargeHeads)
+        : (flat.monthlyMaintenance || 0) > 0
+          ? [{ chargeHeadId: '', name: 'Maintenance', accountId: '4101', isFund: false, amount: +flat.monthlyMaintenance.toFixed(2) }]
+          : [];
+      const amount = billTotal(billLines);
+      if (amount <= 0) continue;   // nothing billable for this flat this period
       const rec = resolveReceivable(flat.memberId);
       if (flat.memberId && flat.receivableAccountId !== rec) flatRecUpdates.set(flat.id, rec);
       const billId = crypto.randomUUID();
+      // Balanced multi-leg demand: Dr <member receivable> total / Cr each head's own account
+      // (income → I&E, fund → 1202/1204 corpus directly, pass-through → liability).
+      const legs = demandLegs(rec, billLines);
       const v = addVoucher({
         type: 'journal', date,
-        debitAccountId: rec, creditAccountId: '4101', amount,
+        debitAccountId: rec, creditAccountId: billLines[0].accountId, amount,
         narration: `रखरखाव बिल ${data.period} — ${flat.flatNo}`,
         refType: 'maintenance.bill', refId: billId,
         memberId: flat.memberId,
         createdBy: user?.name || 'System',
-        lines: [
-          { id: lid(), accountId: rec, type: 'Dr', amount },
-          { id: lid(), accountId: '4101', type: 'Cr', amount },
-        ],
+        lines: legs.map(l => ({ id: lid(), accountId: l.accountId, type: l.type, amount: l.amount })),
       });
       if (!v.id) continue;
-      created.push({ id: billId, billNo: `${data.period}/${flat.flatNo}`, flatId: flat.id, flatNo: flat.flatNo, memberId: flat.memberId, period: data.period, date, amount, voucherId: v.id, receivableAccountId: rec, paidAmount: 0, status: 'unpaid', isDeleted: false, createdAt: new Date().toISOString() });
+      created.push({ id: billId, billNo: `${data.period}/${flat.flatNo}`, flatId: flat.id, flatNo: flat.flatNo, memberId: flat.memberId, period: data.period, date, amount, voucherId: v.id, receivableAccountId: rec, lines: billLines, paidAmount: 0, status: 'unpaid', isDeleted: false, createdAt: new Date().toISOString() });
     }
     if (created.length === 0) {
       toastRef.current({ title: 'कोई नया बिल नहीं', description: 'इस अवधि के लिए सभी पात्र फ्लैट पहले से बिल हो चुके हैं या कोई पात्र फ्लैट नहीं।', variant: 'default', duration: 8000 });
@@ -210,7 +272,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     });
     toastRef.current({ title: 'रखरखाव बिल बने', description: `${created.length} बिल · अवधि ${data.period}`, duration: 6000 });
     return created;
-  }, [accounts, housingFlats, maintenanceBills, members, addAccount, addVoucher, cancelVoucher, user]);
+  }, [accounts, housingFlats, maintenanceBills, chargeHeads, members, addAccount, addVoucher, cancelVoucher, user]);
 
   const deleteMaintenanceBill = useCallback((id: string) => {
     if (guardFYLocked()) return;
@@ -278,6 +340,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     <HousingDataContext.Provider value={{
       housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat,
       maintenanceBills, generateMaintenanceBills, deleteMaintenanceBill, recordMaintenanceCollection,
+      chargeHeads, addChargeHead, updateChargeHead, deleteChargeHead,
     }}>
       {children}
     </HousingDataContext.Provider>

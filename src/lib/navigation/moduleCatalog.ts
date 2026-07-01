@@ -58,6 +58,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'milkCollection', titleKey: 'milkCollection', icon: Milk,            route: '/milk-collection', domain: 'operations', requiredCapabilities: ['dairy_collection'], order: 9 },  // C4: dairy-only
   { id: 'procurementLots', titleKey: 'procurementLots', icon: Wheat,         route: '/procurement-lots', domain: 'operations', requiredCapabilities: ['procurement_msp'], order: 10 },
   { id: 'maintenanceBilling', titleKey: 'maintenanceBilling', icon: Receipt, route: '/maintenance-billing', domain: 'operations', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 11 },
+  { id: 'chargeHeads', titleKey: 'chargeHeads', icon: ListTree, route: '/charge-heads', domain: 'operations', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 12 },
   // ── Labour cooperative module group (domain: 'labour') ──
   { id: 'workerMaster',    titleKey: 'workerMaster',    icon: HardHat,         route: '/worker-master',   domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 10 },
   { id: 'departmentMaster',titleKey: 'departmentMaster',icon: Landmark,        route: '/department-master', domain: 'labour',   requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 11 },

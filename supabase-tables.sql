@@ -1441,7 +1441,36 @@ create table if not exists maintenance_bills (
 );
 -- Housing H2a — account the demand debited (owner-member sub-ledger); collection credits the same.
 alter table public.maintenance_bills add column if not exists "receivableAccountId" text;
+-- Housing H2b — per-charge-head breakdown of the bill.
+alter table public.maintenance_bills add column if not exists lines jsonb;
 alter table public.maintenance_bills enable row level security;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Housing H2b — society-wide maintenance charge-head schedule. Each head posts to its own
+-- target account (income 41xx / fund 1202,1204 / pass-through 2207) on the demand voucher. RUN once.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists housing_charge_heads (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  code text,
+  "nameHi" text,
+  "nameEn" text,
+  "accountId" text,
+  "isFund" boolean default false,
+  basis text,
+  rate numeric default 0,
+  "order" numeric default 0,
+  "isActive" boolean default true,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table public.housing_charge_heads enable row level security;
+drop policy if exists "society_rw" on public.housing_charge_heads;
+create policy "society_rw" on public.housing_charge_heads for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+-- per-flat charge override map (by chargeHeadId; 0 = head not applicable)
+alter table public.housing_flats add column if not exists "chargeOverrides" jsonb;
 drop policy if exists "society_rw" on public.maintenance_bills;
 create policy "society_rw" on public.maintenance_bills for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))

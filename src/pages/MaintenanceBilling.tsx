@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
+import { computeBillLines, billTotal } from '@/lib/housing/billing';
+import type { HousingFlat } from '@/types';
 import { Receipt, Trash2, HandCoins } from 'lucide-react';
 
 const thisMonth = () => new Date().toISOString().slice(0, 7); // YYYY-MM
@@ -18,7 +20,7 @@ const today = () => new Date().toISOString().split('T')[0];
 
 export default function MaintenanceBilling() {
   const { members, accounts } = useData();
-  const { housingFlats, maintenanceBills, generateMaintenanceBills, deleteMaintenanceBill, recordMaintenanceCollection } = useHousingData();
+  const { housingFlats, maintenanceBills, chargeHeads, generateMaintenanceBills, deleteMaintenanceBill, recordMaintenanceCollection } = useHousingData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -46,8 +48,11 @@ export default function MaintenanceBilling() {
     return m ? `${m.name} (${m.memberId})` : id;
   };
 
+  // A flat is billable via the charge-head schedule (if any), else its single monthlyMaintenance.
+  const activeHeads = chargeHeads.filter(h => !h.isDeleted && h.isActive !== false);
+  const billableTotal = (f: HousingFlat) => activeHeads.length > 0 ? billTotal(computeBillLines(f, chargeHeads)) : +(f.monthlyMaintenance || 0);
   const flats = housingFlats.filter(f => !f.isDeleted);
-  const eligible = flats.filter(f => (f.monthlyMaintenance || 0) > 0);
+  const eligible = flats.filter(f => billableTotal(f) > 0);
   const periodBills = maintenanceBills.filter(b => !b.isDeleted && b.period === period);
   const alreadyBilled = new Set(periodBills.map(b => b.flatId));
   const pending = eligible.filter(f => !alreadyBilled.has(f.id));
@@ -114,7 +119,7 @@ export default function MaintenanceBilling() {
           </Button>
           {eligible.length === 0 && (
             <p className="text-xs text-muted-foreground">
-              {hi ? 'कोई पात्र फ्लैट नहीं — पहले Flats Register में मासिक रखरखाव राशि सेट करें।' : 'No eligible flats — set monthly maintenance in the Flats Register first.'}
+              {hi ? 'कोई पात्र फ्लैट नहीं — Charge Heads में शुल्क अनुसूची बनाएँ, या Flats Register में मासिक रखरखाव राशि सेट करें।' : 'No eligible flats — define a schedule in Charge Heads, or set monthly maintenance in the Flats Register.'}
             </p>
           )}
         </CardContent>
@@ -137,6 +142,9 @@ export default function MaintenanceBilling() {
                 <div className="min-w-0">
                   <div className="font-medium">{b.billNo} <Badge variant={b.status === 'paid' ? 'default' : b.status === 'partial' ? 'secondary' : 'outline'}>{b.status === 'paid' ? (hi ? 'भुगतान' : 'Paid') : b.status === 'partial' ? (hi ? 'आंशिक' : 'Partial') : (hi ? 'बकाया' : 'Unpaid')}</Badge></div>
                   <div className="text-muted-foreground">{b.flatNo} · {memberLabel(b.memberId)} · {money(b.amount)}{(b.paidAmount || 0) > 0 ? ` · ${hi ? 'भुगतान' : 'Paid'} ${money(b.paidAmount)} · ${hi ? 'बकाया' : 'Outstanding'} ${money(outstanding)}` : ''}</div>
+                  {b.lines && b.lines.length > 1 && (
+                    <div className="text-xs text-muted-foreground/80 mt-0.5">{b.lines.map(l => `${l.name} ${money(l.amount)}`).join(' · ')}</div>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openReceive(b.id, outstanding)} className="gap-1"><HandCoins className="h-4 w-4" />{hi ? 'भुगतान लें' : 'Receive'}</Button>}

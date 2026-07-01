@@ -177,6 +177,7 @@ export interface HousingFlat {
   ownerType?: 'owner' | 'tenant';   // legacy; kept in sync from `occupancy` (L9 back-compat)
   occupancy?: 'self' | 'rented' | 'vacant';  // physical status; drives non-occupancy charges (H2)
   receivableAccountId?: string;  // owner-member's receivable sub-ledger (leaf under 3303); '' → uses 3303 control
+  chargeOverrides?: Record<string, number>;  // per-head amount override (by chargeHeadId); 0 = head not applicable
   area?: number;              // sq ft
   monthlyMaintenance: number;
   registrationDate?: string;
@@ -194,12 +195,38 @@ export interface MaintenanceBill {
   period: string;            // "YYYY-MM"
   date: string;              // voucher date
   amount: number;
-  voucherId?: string;        // the receivable voucher (Dr receivable / Cr 4101)
+  voucherId?: string;        // the receivable voucher (Dr receivable / Cr charge-head accounts)
   receivableAccountId?: string;  // account the demand debited; collection credits the same (defaults to 3303)
+  lines?: MaintenanceBillLine[];  // per-charge-head breakdown (H2b); absent → single-head legacy bill
   paidAmount: number;        // advanced by Collection (next delivery); 0 at billing
   status: 'unpaid' | 'partial' | 'paid';
   isDeleted?: boolean;
   createdAt: string;
+}
+
+// Housing — a society-wide maintenance charge head; produces one line on every bill (by basis).
+export interface HousingChargeHead {
+  id: string;
+  code?: string;
+  nameHi: string;
+  nameEn: string;
+  accountId: string;          // target ledger: income (41xx) / fund (1202,1204) / pass-through (2207)
+  isFund?: boolean;           // true → credited to a fund/reserve (corpus), NOT I&E income
+  basis: 'fixed' | 'per_sqft';
+  rate: number;               // ₹ per flat (fixed) or ₹ per sq ft (per_sqft)
+  order?: number;
+  isActive?: boolean;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
+// Housing — one computed charge line on a maintenance bill (snapshotted for display/PDF).
+export interface MaintenanceBillLine {
+  chargeHeadId: string;
+  name: string;
+  accountId: string;
+  isFund?: boolean;
+  amount: number;
 }
 
 // Labour cooperative — a work order / labour contract the society has taken up.

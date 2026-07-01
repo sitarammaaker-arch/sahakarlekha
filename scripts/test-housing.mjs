@@ -104,5 +104,94 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); 
   ok(collectionCredit({}) === '3303', 'bill with no receivable link → 3303 control');
 }
 
+// ── Mirror: src/lib/housing/billing.ts (H2b multi-charge-head bill computation) ──
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+function chargeHeadAmount(head, flat) {
+  const override = flat.chargeOverrides ? flat.chargeOverrides[head.id] : undefined;
+  if (override !== undefined && override !== null) return round2(Math.max(0, override));
+  const base = head.basis === 'per_sqft' ? head.rate * (flat.area || 0) : head.rate;
+  return round2(Math.max(0, base || 0));
+}
+function computeBillLines(flat, heads) {
+  return heads.filter(h => !h.isDeleted && h.isActive !== false).slice().sort((a, b) => (a.order || 0) - (b.order || 0))
+    .map(h => ({ chargeHeadId: h.id, name: h.nameEn || h.nameHi, accountId: h.accountId, isFund: !!h.isFund, amount: chargeHeadAmount(h, flat) }))
+    .filter(l => l.amount > 0);
+}
+const billTotal = (lines) => round2(lines.reduce((s, l) => s + l.amount, 0));
+function demandLegs(receivableAccountId, lines) {
+  const total = billTotal(lines);
+  if (total <= 0) return [];
+  const byAcc = new Map();
+  for (const l of lines) byAcc.set(l.accountId, round2((byAcc.get(l.accountId) || 0) + l.amount));
+  const legs = [{ accountId: receivableAccountId, type: 'Dr', amount: total }];
+  for (const [accountId, amount] of byAcc) legs.push({ accountId, type: 'Cr', amount });
+  return legs;
+}
+
+const HEADS = [
+  { id: 'svc',  nameEn: 'Service',  accountId: '4101', basis: 'fixed',    rate: 1000, order: 1 },
+  { id: 'watr', nameEn: 'Water',    accountId: '4102', basis: 'per_sqft', rate: 2,    order: 2 },
+  { id: 'sink', nameEn: 'Sinking',  accountId: '1202', basis: 'fixed',    rate: 500,  order: 3, isFund: true },
+  { id: 'park', nameEn: 'Parking',  accountId: '4103', basis: 'fixed',    rate: 300,  order: 4 },
+];
+
+// 9. Per-flat lines from the schedule (fixed + per_sqft), positive only, in order
+{
+  const flat = { area: 850 };
+  const lines = computeBillLines(flat, HEADS);
+  ok(lines.length === 4, 'all four active heads produce a line');
+  ok(lines[1].amount === 1700, 'per_sqft head bills rate × area (2 × 850 = 1700)');
+  ok(billTotal(lines) === 3500, 'bill total sums heads (1000+1700+500+300)');
+  ok(lines[2].isFund === true, 'fund head keeps its isFund flag for direct-to-fund routing');
+}
+
+// 10. Demand legs are balanced: Dr receivable(total) / Cr each head account (fund direct)
+{
+  const lines = computeBillLines({ area: 850 }, HEADS);
+  const legs = demandLegs('MR-1', lines);
+  const dr = legs.filter(l => l.type === 'Dr');
+  const cr = legs.filter(l => l.type === 'Cr');
+  ok(dr.length === 1 && dr[0].accountId === 'MR-1' && dr[0].amount === 3500, 'single Dr to the member receivable for the total');
+  ok(cr.reduce((s, l) => s + l.amount, 0) === 3500, 'Σ Cr equals the total (balanced)');
+  ok(cr.some(l => l.accountId === '1202' && l.amount === 500), 'sinking-fund contribution credited directly to fund 1202, not income');
+  ok(cr.some(l => l.accountId === '4101'), 'service charge credited to income 4101');
+}
+
+// 11. Per-flat override: 0 excludes a head; a value replaces the schedule amount
+{
+  const flat = { area: 850, chargeOverrides: { park: 0, svc: 1200 } };
+  const lines = computeBillLines(flat, HEADS);
+  ok(!lines.some(l => l.chargeHeadId === 'park'), 'override 0 excludes the parking head for this flat');
+  ok(lines.find(l => l.chargeHeadId === 'svc').amount === 1200, 'override replaces the schedule amount (service 1200)');
+}
+
+// 12. Inactive / deleted heads are excluded
+{
+  const heads = [
+    { id: 'a', nameEn: 'A', accountId: '4101', basis: 'fixed', rate: 100, isActive: false },
+    { id: 'b', nameEn: 'B', accountId: '4101', basis: 'fixed', rate: 200, isDeleted: true },
+    { id: 'c', nameEn: 'C', accountId: '4101', basis: 'fixed', rate: 300 },
+  ];
+  const lines = computeBillLines({}, heads);
+  ok(lines.length === 1 && lines[0].chargeHeadId === 'c', 'inactive and deleted heads are excluded');
+}
+
+// 13. Two heads on the same account collapse into one Cr leg
+{
+  const heads = [
+    { id: 'a', nameEn: 'A', accountId: '4101', basis: 'fixed', rate: 100, order: 1 },
+    { id: 'b', nameEn: 'B', accountId: '4101', basis: 'fixed', rate: 250, order: 2 },
+  ];
+  const legs = demandLegs('MR-1', computeBillLines({}, heads));
+  const cr = legs.filter(l => l.type === 'Cr');
+  ok(cr.length === 1 && cr[0].accountId === '4101' && cr[0].amount === 350, 'same-account heads grouped into one Cr leg (350)');
+}
+
+// 14. Zero/empty bill → no legs (caller skips posting)
+{
+  ok(demandLegs('MR-1', []).length === 0, 'empty bill produces no demand legs');
+  ok(demandLegs('MR-1', computeBillLines({ area: 0 }, [{ id: 'w', nameEn: 'W', accountId: '4102', basis: 'per_sqft', rate: 2 }])).length === 0, 'per_sqft head on a zero-area flat produces no posting');
+}
+
 console.log(`[housing-test] ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
