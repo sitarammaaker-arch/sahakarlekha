@@ -89,6 +89,7 @@ export const translations: Translations = {
   buildings: { hi: 'भवन / विंग', en: 'Buildings / Wings' },
   navDairy: { hi: 'दुग्ध प्रबंधन', en: 'Dairy' },
   dairyRateCharts: { hi: 'दुग्ध रेट चार्ट', en: 'Milk Rate Charts' },
+  farmerSettlement: { hi: 'दुग्ध सेटलमेंट', en: 'Farmer Settlement' },
   navLabour: { hi: 'श्रमिक प्रबंधन', en: 'Labour' },
   navHousing: { hi: 'आवास प्रबंधन', en: 'Housing' },
   workerMaster: { hi: 'श्रमिक मास्टर', en: 'Worker Master' },

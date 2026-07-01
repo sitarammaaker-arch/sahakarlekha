@@ -1998,3 +1998,35 @@ create policy "society_rw" on public.dairy_rate_charts for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
 create index if not exists idx_dairy_rate_charts_society on public.dairy_rate_charts (society_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Dairy cooperative (Delivery D3) — per-member, per-cycle farmer settlements.
+-- SSOT for the payout amounts: gross (accepted milk value) − deductionLines
+-- (recoveries) = netPayable; amountPaid advances as payments post. On approval a
+-- compound voucher posts Dr milk-cost / Cr payable(net) / Cr recoveries.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists dairy_settlements (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "settlementNo" text,
+  "memberId" text,
+  "memberName" text,
+  "from" text,
+  "to" text,
+  gross numeric,
+  "deductionLines" jsonb,
+  "netPayable" numeric,
+  "amountPaid" numeric default 0,
+  status text,
+  "voucherId" text,
+  "approvedAt" timestamptz,
+  "approvedBy" text,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table public.dairy_settlements enable row level security;
+drop policy if exists "society_rw" on public.dairy_settlements;
+create policy "society_rw" on public.dairy_settlements for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create index if not exists idx_dairy_settlements_society on public.dairy_settlements (society_id);

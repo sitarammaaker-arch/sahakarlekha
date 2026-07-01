@@ -187,5 +187,77 @@ function resolveDairyPostingLegs(intent, amount, binding, accounts) {
   ok(buildEngineVoucherLines([]).length === 0, 'no legs → no voucher lines');
 }
 
+// ── Mirror: src/lib/dairy/settlement.ts ──
+function computeGross(entries, memberId, from, to) {
+  let g = 0;
+  for (const e of entries) {
+    if (e.memberId !== memberId) continue;
+    if (e.date < from || e.date > to) continue;
+    if (e.qualityDecision === 'rejected') continue;
+    g += e.amount || 0;
+  }
+  return round2(g);
+}
+const sumDeductions = (lines) => round2(lines.reduce((s, l) => s + (l.amount || 0), 0));
+const netPayableFn = (gross, lines) => round2(gross - sumDeductions(lines));
+const outstandingFn = (net, paid) => round2(Math.max(0, net - (paid || 0)));
+function settlementLegs(gross, lines, milkCostAccountId, payableAccountId) {
+  const g = round2(gross);
+  if (!(g > 0) || !milkCostAccountId || !payableAccountId) return [];
+  if (lines.some(l => !l.accountId || !(l.amount > 0))) return [];
+  const net = netPayableFn(g, lines);
+  if (net < -0.005) return [];
+  const legs = [{ accountId: milkCostAccountId, type: 'Dr', amount: g }];
+  if (net > 0.005) legs.push({ accountId: payableAccountId, type: 'Cr', amount: net });
+  for (const l of lines) legs.push({ accountId: l.accountId, type: 'Cr', amount: round2(l.amount) });
+  return legs;
+}
+
+const ENTRIES = [
+  { memberId: 'm1', date: '2026-07-02', amount: 400, qualityDecision: 'accepted' },
+  { memberId: 'm1', date: '2026-07-05', amount: 350 },
+  { memberId: 'm1', date: '2026-07-08', amount: 300, qualityDecision: 'rejected' },  // excluded
+  { memberId: 'm1', date: '2026-06-30', amount: 999 },                                // out of range
+  { memberId: 'm2', date: '2026-07-03', amount: 500 },                                // other member
+];
+
+// 13. computeGross: member's accepted milk value in the window (rejected & out-of-range excluded)
+{
+  ok(computeGross(ENTRIES, 'm1', '2026-07-01', '2026-07-10') === 750, 'gross sums accepted in-window entries (400 + 350), excludes rejected & out-of-range');
+  ok(computeGross(ENTRIES, 'm2', '2026-07-01', '2026-07-10') === 500, 'other member gross is isolated');
+  ok(computeGross(ENTRIES, 'm3', '2026-07-01', '2026-07-10') === 0, 'member with no entries → 0');
+}
+
+// 14. net payable & outstanding
+{
+  const lines = [{ id: 'a', accountId: '3304', amount: 200 }, { id: 'b', accountId: '4103', amount: 50 }];
+  ok(sumDeductions(lines) === 250, 'deductions sum');
+  ok(netPayableFn(750, lines) === 500, 'net = gross − deductions (750 − 250)');
+  ok(outstandingFn(500, 300) === 200, 'outstanding = net − paid');
+  ok(outstandingFn(500, 500) === 0, 'fully paid → 0 outstanding');
+}
+
+// 15. settlementLegs: balanced Dr milk-cost / Cr payable(net) / Cr each recovery
+{
+  const lines = [{ id: 'a', accountId: '3304', amount: 200 }, { id: 'b', accountId: '4103', amount: 50 }];
+  const legs = settlementLegs(750, lines, '5108', '2102');
+  const dr = legs.filter(l => l.type === 'Dr'); const cr = legs.filter(l => l.type === 'Cr');
+  ok(dr.length === 1 && dr[0].accountId === '5108' && dr[0].amount === 750, 'single Dr to milk-cost 5108 = gross');
+  ok(cr.reduce((s, l) => s + l.amount, 0) === 750, '∑Cr = gross (balanced): payable net + recoveries');
+  ok(cr.some(l => l.accountId === '2102' && l.amount === 500), 'Cr payable = net 500');
+  ok(cr.some(l => l.accountId === '3304' && l.amount === 200) && cr.some(l => l.accountId === '4103' && l.amount === 50), 'each recovery credited to its own account');
+}
+
+// 16. settlementLegs edge cases: fully-recovered (net 0) drops payable leg; invalid → []
+{
+  const full = settlementLegs(300, [{ id: 'a', accountId: '3304', amount: 300 }], '5108', '2102');
+  ok(!full.some(l => l.accountId === '2102'), 'net 0 → no payable Cr leg');
+  ok(full.filter(l => l.type === 'Dr')[0].amount === 300 && full.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0) === 300, 'still balanced when fully recovered');
+  ok(settlementLegs(0, [], '5108', '2102').length === 0, 'zero gross → no legs');
+  ok(settlementLegs(100, [{ id: 'a', accountId: '3304', amount: 150 }], '5108', '2102').length === 0, 'deductions > gross → no legs (never post negative payable)');
+  ok(settlementLegs(100, [{ id: 'a', accountId: '', amount: 50 }], '5108', '2102').length === 0, 'deduction with no account → no legs');
+  ok(settlementLegs(100, [], '5108', '').length === 0, 'missing payable account → no legs');
+}
+
 console.log(`[dairy-test] ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

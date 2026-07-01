@@ -139,6 +139,7 @@ const Amc = lazyWithRetry(() => import("./pages/Amc"));
 const LegalDocuments = lazyWithRetry(() => import("./pages/LegalDocuments"));
 const Buildings = lazyWithRetry(() => import("./pages/Buildings"));
 const RateCharts = lazyWithRetry(() => import("./pages/dairy/RateCharts"));
+const FarmerSettlement = lazyWithRetry(() => import("./pages/dairy/FarmerSettlement"));
 const WorkOrders = lazyWithRetry(() => import("./pages/WorkOrders"));
 const MusterRoll = lazyWithRetry(() => import("./pages/MusterRoll"));
 const WorkerMaster = lazyWithRetry(() => import("./pages/WorkerMaster"));
@@ -339,6 +340,7 @@ const AppRoutes = () => {
       <Route path="/legal-documents" element={<ProtectedRoute><LegalDocuments /></ProtectedRoute>} />
       <Route path="/buildings" element={<ProtectedRoute><Buildings /></ProtectedRoute>} />
       <Route path="/dairy-rate-charts" element={<ProtectedRoute><RateCharts /></ProtectedRoute>} />
+      <Route path="/farmer-settlement" element={<ProtectedRoute><FarmerSettlement /></ProtectedRoute>} />
       <Route path="/work-orders" element={<ProtectedRoute><WorkOrders /></ProtectedRoute>} />
       <Route path="/muster-roll" element={<ProtectedRoute><MusterRoll /></ProtectedRoute>} />
       <Route path="/worker-master" element={<ProtectedRoute><WorkerMaster /></ProtectedRoute>} />
