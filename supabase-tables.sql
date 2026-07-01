@@ -1060,6 +1060,13 @@ drop policy if exists "society_rw" on public.milk_entries;
 create policy "society_rw" on public.milk_entries for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+-- Dairy D2 (additive): quality / centre / rate-chart / capture-source columns.
+alter table public.milk_entries add column if not exists "centreId" text;
+alter table public.milk_entries add column if not exists clr numeric;
+alter table public.milk_entries add column if not exists water numeric;
+alter table public.milk_entries add column if not exists "qualityDecision" text;
+alter table public.milk_entries add column if not exists "rateChartId" text;
+alter table public.milk_entries add column if not exists source text;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Capability-Based Navigation (C3) — per-society capability grant/revoke rows.
