@@ -994,6 +994,65 @@ export function generateShareRegisterPDF(members: Member[], society: SocietySett
   doc.save(pdfFileName('ShareRegister', society));
 }
 
+// ─── Housing Maintenance Demand Notice ───────────────────────────────────────
+export interface DemandNoticeInput {
+  memberName: string;
+  memberId: string;
+  flats: string;
+  asOnDate: string;
+  ratePct: number;
+  bills: { billNo: string; period: string; billDate: string; outstanding: number }[];
+  currentDue: number;       // principal + already-charged interest − receipts
+  pendingInterest: number;  // interest up to asOnDate not yet charged
+  totalDue: number;
+}
+export function generateDemandNoticePDF(input: DemandNoticeInput, society: SocietySettings): void {
+  const doc = new jsPDF();
+  const { startY, font } = addHeader(doc, 'MAINTENANCE DEMAND NOTICE', society, `As on ${fmtDate(input.asOnDate)}`, { reportCode: 'DN' });
+  let y = startY + 4;
+  doc.setFontSize(9);
+  doc.setFont(font, 'normal');
+  doc.text(`To: ${input.memberName} (${input.memberId})`, 15, y); y += 5;
+  if (input.flats) { doc.text(`Flat(s): ${input.flats}`, 15, y); y += 5; }
+  doc.setFontSize(8.5);
+  doc.setTextColor(60);
+  doc.text('Please find below the outstanding maintenance dues against your account. You are requested to clear the amount at the earliest to avoid further interest.', 15, y, { maxWidth: 180 });
+  y += 11;
+  doc.setTextColor(0);
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Bill No', 'Period', 'Bill Date', 'Outstanding (Rs.)']],
+    body: input.bills.map(b => [b.billNo, b.period, fmtDate(b.billDate), fmt(b.outstanding)]),
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
+    columnStyles: { 3: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(3),
+  });
+
+  let sy = (doc as any).lastAutoTable.finalY + 8;
+  doc.setFontSize(9);
+  const line = (label: string, val: number, bold: boolean) => {
+    doc.setFont(font, bold ? 'bold' : 'normal');
+    doc.text(label, 110, sy);
+    doc.text(fmt(val), 195, sy, { align: 'right' });
+    sy += 6;
+  };
+  line('Principal + charged interest due', input.currentDue, false);
+  line(`Interest up to ${fmtDate(input.asOnDate)} @ ${input.ratePct}% p.a.`, input.pendingInterest, false);
+  line('TOTAL AMOUNT DUE', input.totalDue, true);
+
+  sy += 6;
+  doc.setFontSize(7.5);
+  doc.setTextColor(90);
+  doc.setFont(font, 'normal');
+  doc.text('This is a computer-generated demand notice. Interest is indicative and computed on outstanding principal.', 15, sy, { maxWidth: 180 });
+  doc.setTextColor(0);
+  addSignatureBlock(doc, font, ['Secretary / Manager', 'Chairman / President'], sy + 8);
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName(`DemandNotice-${input.memberId}`, society));
+}
+
 // ─── Loan Register PDF ────────────────────────────────────────────────────────
 export function generateLoanRegisterPDF(loans: Loan[], members: Member[], society: SocietySettings): void {
   const doc = new jsPDF({ orientation: 'landscape' });

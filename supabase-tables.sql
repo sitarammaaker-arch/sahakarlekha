@@ -1406,6 +1406,13 @@ create table if not exists housing_flats (
   "isDeleted" boolean default false,
   "createdAt" timestamptz default now()
 );
+-- Housing H1 — flat-master expansion (additive; run on existing deployments).
+alter table public.housing_flats add column if not exists floor text;
+alter table public.housing_flats add column if not exists "unitType" text;
+alter table public.housing_flats add column if not exists "associateMemberId" text;
+alter table public.housing_flats add column if not exists occupancy text;
+-- Housing H2a — owner-member receivable sub-ledger (leaf under 3303).
+alter table public.housing_flats add column if not exists "receivableAccountId" text;
 alter table public.housing_flats enable row level security;
 drop policy if exists "society_rw" on public.housing_flats;
 create policy "society_rw" on public.housing_flats for all to authenticated
@@ -1432,7 +1439,109 @@ create table if not exists maintenance_bills (
   "isDeleted" boolean default false,
   "createdAt" timestamptz default now()
 );
+-- Housing H2a — account the demand debited (owner-member sub-ledger); collection credits the same.
+alter table public.maintenance_bills add column if not exists "receivableAccountId" text;
+-- Housing H2b — per-charge-head breakdown of the bill.
+alter table public.maintenance_bills add column if not exists lines jsonb;
 alter table public.maintenance_bills enable row level security;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Housing H2b — society-wide maintenance charge-head schedule. Each head posts to its own
+-- target account (income 41xx / fund 1202,1204 / pass-through 2207) on the demand voucher. RUN once.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists housing_charge_heads (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  code text,
+  "nameHi" text,
+  "nameEn" text,
+  "accountId" text,
+  "isFund" boolean default false,
+  basis text,
+  rate numeric default 0,
+  "order" numeric default 0,
+  "isActive" boolean default true,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table public.housing_charge_heads enable row level security;
+drop policy if exists "society_rw" on public.housing_charge_heads;
+create policy "society_rw" on public.housing_charge_heads for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+-- per-flat charge override map (by chargeHeadId; 0 = head not applicable)
+alter table public.housing_flats add column if not exists "chargeOverrides" jsonb;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Housing H3b — fund investments (FDR/bond that earmarks a reserve fund's corpus). Posting is
+-- Dr investment asset / Cr bank; the fund account itself is unchanged. RUN once.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists housing_fund_investments (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "fundAccountId" text,
+  "investmentAccountId" text,
+  instrument text,
+  institution text,
+  amount numeric,
+  date text,
+  "maturityDate" text,
+  "interestRate" numeric,
+  "voucherId" text,
+  "redemptionVoucherId" text,
+  status text default 'active',
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table public.housing_fund_investments enable row level security;
+drop policy if exists "society_rw" on public.housing_fund_investments;
+create policy "society_rw" on public.housing_fund_investments for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Housing H5 — operational & governance registers (complaints, parking, transfers). RUN once.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists housing_complaints (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "complaintNo" text, "flatId" text, "flatNo" text, "memberId" text,
+  category text, title text, description text, "raisedDate" text,
+  status text default 'open', resolution text, "resolvedDate" text,
+  "isDeleted" boolean default false, "createdAt" timestamptz default now()
+);
+alter table public.housing_complaints enable row level security;
+drop policy if exists "society_rw" on public.housing_complaints;
+create policy "society_rw" on public.housing_complaints for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+
+create table if not exists housing_parking (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "slotNo" text, "flatId" text, "flatNo" text, "memberId" text,
+  "vehicleType" text, "vehicleNo" text, "monthlyCharge" numeric,
+  status text default 'allotted',
+  "isDeleted" boolean default false, "createdAt" timestamptz default now()
+);
+alter table public.housing_parking enable row level security;
+drop policy if exists "society_rw" on public.housing_parking;
+create policy "society_rw" on public.housing_parking for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+
+create table if not exists housing_transfers (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "flatId" text, "flatNo" text, "fromMemberId" text, "toMemberId" text,
+  date text, "transferFee" numeric, premium numeric, "voucherId" text, remarks text,
+  "isDeleted" boolean default false, "createdAt" timestamptz default now()
+);
+alter table public.housing_transfers enable row level security;
+drop policy if exists "society_rw" on public.housing_transfers;
+create policy "society_rw" on public.housing_transfers for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
 drop policy if exists "society_rw" on public.maintenance_bills;
 create policy "society_rw" on public.maintenance_bills for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))

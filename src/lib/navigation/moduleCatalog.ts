@@ -15,6 +15,7 @@ import {
   Scale, ArrowLeftRight, TrendingUp, FileSpreadsheet, BarChart3, Clock, Percent, TrendingDown, Receipt, Warehouse,
   Package, PiggyBank, FileJson, Hash, Landmark, ScrollText, BookMarked, ShieldCheck, Users2, FileCheck, Shield,
   Coins, Trash2, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks, HardHat,
+  MessageSquareWarning, Car,
 } from 'lucide-react';
 import type { Capability, NavDomain, Role } from './capabilities';
 
@@ -58,6 +59,10 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'milkCollection', titleKey: 'milkCollection', icon: Milk,            route: '/milk-collection', domain: 'operations', requiredCapabilities: ['dairy_collection'], order: 9 },  // C4: dairy-only
   { id: 'procurementLots', titleKey: 'procurementLots', icon: Wheat,         route: '/procurement-lots', domain: 'operations', requiredCapabilities: ['procurement_msp'], order: 10 },
   { id: 'maintenanceBilling', titleKey: 'maintenanceBilling', icon: Receipt, route: '/maintenance-billing', domain: 'operations', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 11 },
+  { id: 'chargeHeads', titleKey: 'chargeHeads', icon: ListTree, route: '/charge-heads', domain: 'operations', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 12 },
+  { id: 'memberStatement', titleKey: 'memberStatement', icon: BookMarked, route: '/member-statement', domain: 'reports', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 40 },
+  { id: 'fundStatement', titleKey: 'fundStatement', icon: PiggyBank, route: '/fund-statement', domain: 'reports', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 41 },
+  { id: 'outstandingRegister', titleKey: 'outstandingRegister', icon: Clock, route: '/outstanding-register', domain: 'reports', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 42 },
   // ── Labour cooperative module group (domain: 'labour') ──
   { id: 'workerMaster',    titleKey: 'workerMaster',    icon: HardHat,         route: '/worker-master',   domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 10 },
   { id: 'departmentMaster',titleKey: 'departmentMaster',icon: Landmark,        route: '/department-master', domain: 'labour',   requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 11 },
@@ -115,6 +120,9 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'electionModule',       titleKey: 'electionModule',       icon: Vote,         route: '/election-module',       domain: 'registers', requiredCapabilities: U, order: 15 },
   { id: 'boardOfDirectors',     titleKey: 'boardOfDirectors',     icon: Users2,       route: '/board-of-directors',    domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin'], order: 16 },
   { id: 'flatsRegister',        titleKey: 'flatsRegister',        icon: Building2,    route: '/flats-register',        domain: 'registers', requiredCapabilities: ['housing'], order: 17 },
+  { id: 'complaints',          titleKey: 'complaints',          icon: MessageSquareWarning, route: '/complaints',        domain: 'registers', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 18 },
+  { id: 'parking',             titleKey: 'parking',             icon: Car,          route: '/parking',               domain: 'registers', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 19 },
+  { id: 'transferRegister',    titleKey: 'transferRegister',    icon: ArrowLeftRight, route: '/transfer-register',    domain: 'registers', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 20 },
 
   // ── administration (was settingsNavItems) ──
   { id: 'societySetup',               titleKey: 'societySetup',               icon: Settings,        route: '/society-setup',                domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 0 },

@@ -8,6 +8,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DataProvider, useData } from "@/contexts/DataContext";
 import { LabourProvider } from "@/contexts/LabourDataContext";
+import { HousingProvider } from "@/contexts/HousingDataContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { CapabilityGuard } from "@/components/CapabilityGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -124,6 +125,13 @@ const Features = lazyWithRetry(() => import("./pages/Features"));
 const ProcurementLots = lazyWithRetry(() => import("./pages/ProcurementLots"));
 const FlatsRegister = lazyWithRetry(() => import("./pages/FlatsRegister"));
 const MaintenanceBilling = lazyWithRetry(() => import("./pages/MaintenanceBilling"));
+const ChargeHeads = lazyWithRetry(() => import("./pages/ChargeHeads"));
+const MemberStatement = lazyWithRetry(() => import("./pages/MemberStatement"));
+const FundStatement = lazyWithRetry(() => import("./pages/FundStatement"));
+const OutstandingRegister = lazyWithRetry(() => import("./pages/OutstandingRegister"));
+const Complaints = lazyWithRetry(() => import("./pages/Complaints"));
+const Parking = lazyWithRetry(() => import("./pages/Parking"));
+const TransferRegister = lazyWithRetry(() => import("./pages/TransferRegister"));
 const WorkOrders = lazyWithRetry(() => import("./pages/WorkOrders"));
 const MusterRoll = lazyWithRetry(() => import("./pages/MusterRoll"));
 const WorkerMaster = lazyWithRetry(() => import("./pages/WorkerMaster"));
@@ -311,6 +319,13 @@ const AppRoutes = () => {
       <Route path="/board-of-directors" element={<ProtectedRoute><BoardOfDirectors /></ProtectedRoute>} />
       <Route path="/flats-register" element={<ProtectedRoute><FlatsRegister /></ProtectedRoute>} />
       <Route path="/maintenance-billing" element={<ProtectedRoute><MaintenanceBilling /></ProtectedRoute>} />
+      <Route path="/charge-heads" element={<ProtectedRoute><ChargeHeads /></ProtectedRoute>} />
+      <Route path="/member-statement" element={<ProtectedRoute><MemberStatement /></ProtectedRoute>} />
+      <Route path="/fund-statement" element={<ProtectedRoute><FundStatement /></ProtectedRoute>} />
+      <Route path="/outstanding-register" element={<ProtectedRoute><OutstandingRegister /></ProtectedRoute>} />
+      <Route path="/complaints" element={<ProtectedRoute><Complaints /></ProtectedRoute>} />
+      <Route path="/parking" element={<ProtectedRoute><Parking /></ProtectedRoute>} />
+      <Route path="/transfer-register" element={<ProtectedRoute><TransferRegister /></ProtectedRoute>} />
       <Route path="/work-orders" element={<ProtectedRoute><WorkOrders /></ProtectedRoute>} />
       <Route path="/muster-roll" element={<ProtectedRoute><MusterRoll /></ProtectedRoute>} />
       <Route path="/worker-master" element={<ProtectedRoute><WorkerMaster /></ProtectedRoute>} />
@@ -349,6 +364,7 @@ const App = () => (
       <AuthProvider>
         <DataProvider>
         <LabourProvider>
+        <HousingProvider>
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -356,6 +372,7 @@ const App = () => (
             <AppRoutes />
           </BrowserRouter>
         </TooltipProvider>
+        </HousingProvider>
         </LabourProvider>
         </DataProvider>
       </AuthProvider>
