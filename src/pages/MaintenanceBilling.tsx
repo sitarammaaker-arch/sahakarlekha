@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useHousingData } from '@/contexts/HousingDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -49,13 +49,18 @@ export default function MaintenanceBilling() {
   };
 
   // A flat is billable via the charge-head schedule (if any), else its single monthlyMaintenance.
-  const activeHeads = chargeHeads.filter(h => !h.isDeleted && h.isActive !== false);
-  const billableTotal = (f: HousingFlat) => activeHeads.length > 0 ? billTotal(computeBillLines(f, chargeHeads)) : +(f.monthlyMaintenance || 0);
-  const flats = housingFlats.filter(f => !f.isDeleted);
-  const eligible = flats.filter(f => billableTotal(f) > 0);
+  // Memoised: computeBillLines runs per flat (O(flats × heads)) — only recompute on data change,
+  // not on every render (e.g. typing the month, opening the receive dialog).
+  const eligible = useMemo(() => {
+    const active = chargeHeads.filter(h => !h.isDeleted && h.isActive !== false);
+    const bt = (f: HousingFlat) => active.length > 0 ? billTotal(computeBillLines(f, chargeHeads)) : +(f.monthlyMaintenance || 0);
+    return housingFlats.filter(f => !f.isDeleted && bt(f) > 0);
+  }, [housingFlats, chargeHeads]);
   const periodBills = maintenanceBills.filter(b => !b.isDeleted && b.period === period);
-  const alreadyBilled = new Set(periodBills.map(b => b.flatId));
-  const pending = eligible.filter(f => !alreadyBilled.has(f.id));
+  const pending = useMemo(() => {
+    const billedSet = new Set(maintenanceBills.filter(b => !b.isDeleted && b.period === period).map(b => b.flatId));
+    return eligible.filter(f => !billedSet.has(f.id));
+  }, [eligible, maintenanceBills, period]);
   const periodTotal = periodBills.reduce((s, b) => s + (b.amount || 0), 0);
 
   // All open (unpaid/partial) bills across every month — one place to see total dues.

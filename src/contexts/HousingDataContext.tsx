@@ -22,6 +22,7 @@ import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { computeBillLines, demandLegs, billTotal, round2 } from '@/lib/housing/billing';
 import { plannedBillInterest } from '@/lib/housing/arrears';
+import { buildMemberStatement } from '@/lib/housing/statement';
 import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, Voucher, LedgerAccount } from '@/types';
 
 interface HousingDataContextValue {
@@ -51,7 +52,7 @@ interface HousingDataContextValue {
   // Fund investments (FDR earmarking): Dr investment asset / Cr bank; the fund account is unchanged.
   fundInvestments: HousingFundInvestment[];
   addFundInvestment: (data: { fundAccountId: string; investmentAccountId: string; amount: number; date: string; mode: 'cash' | 'bank'; bankAccountId?: string; instrument?: string; institution?: string; maturityDate?: string; interestRate?: number }) => HousingFundInvestment;
-  redeemFundInvestment: (data: { id: string; date: string; mode: 'cash' | 'bank'; bankAccountId?: string }) => void;
+  redeemFundInvestment: (data: { id: string; date: string; mode: 'cash' | 'bank'; bankAccountId?: string; maturityAmount?: number }) => void;
   deleteFundInvestment: (id: string) => void;
 
   // Operational & governance registers (non-financial CRUD; transfer posts the fee/premium).
@@ -498,22 +499,30 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     return inv;
   }, [accounts, addVoucher, cancelVoucher, user]);
 
-  const redeemFundInvestment = useCallback((data: { id: string; date: string; mode: 'cash' | 'bank'; bankAccountId?: string }) => {
+  const redeemFundInvestment = useCallback((data: { id: string; date: string; mode: 'cash' | 'bank'; bankAccountId?: string; maturityAmount?: number }) => {
     if (guardFYLocked()) return;
     const inv = fundInvestments.find(i => i.id === data.id && !i.isDeleted);
     if (!inv || inv.status === 'redeemed') return;
     const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
+    // Redeem at maturity value if given: principal returns to bank, and any interest earned accrues
+    // DIRECTLY to the fund's own corpus (ring-fenced fund investment income) — consistent with the
+    // direct-to-fund policy. If the fund account is somehow missing, fall back to principal-only.
+    let gross = data.maturityAmount && data.maturityAmount > inv.amount ? round2(data.maturityAmount) : inv.amount;
+    let interest = round2(gross - inv.amount);
+    if (interest > 0 && !accounts.some(a => a.id === inv.fundAccountId)) { gross = inv.amount; interest = 0; }
+    const lines = [
+      { id: lid(), accountId: bankAcc, type: 'Dr' as const, amount: gross },
+      { id: lid(), accountId: inv.investmentAccountId, type: 'Cr' as const, amount: inv.amount },
+    ];
+    if (interest > 0) lines.push({ id: lid(), accountId: inv.fundAccountId, type: 'Cr' as const, amount: interest });
     const v = addVoucher({
       type: 'journal', date: data.date,
-      debitAccountId: bankAcc, creditAccountId: inv.investmentAccountId, amount: inv.amount,
-      narration: `निधि निवेश भुनाया — ${inv.instrument || 'FDR'}`,
+      debitAccountId: bankAcc, creditAccountId: inv.investmentAccountId, amount: gross,
+      narration: `निधि निवेश भुनाया — ${inv.instrument || 'FDR'}${interest > 0 ? ` (मूल ₹${inv.amount} + ब्याज ₹${interest})` : ''}`,
       refType: 'fund.redemption', refId: inv.id,
       createdBy: user?.name || 'System',
-      lines: [
-        { id: lid(), accountId: bankAcc, type: 'Dr', amount: inv.amount },
-        { id: lid(), accountId: inv.investmentAccountId, type: 'Cr', amount: inv.amount },
-      ],
+      lines,
     });
     if (!v.id) return;
     const next: HousingFundInvestment = { ...inv, status: 'redeemed', redemptionVoucherId: v.id };
@@ -526,7 +535,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         toastRef.current({ title: 'भुनाना सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
-    toastRef.current({ title: 'निवेश भुनाया गया', description: `₹${inv.amount} बैंक में वापस`, duration: 6000 });
+    toastRef.current({ title: 'निवेश भुनाया गया', description: `₹${gross} बैंक में वापस${interest > 0 ? ` · ब्याज ₹${interest} निधि में` : ''}`, duration: 6000 });
   }, [fundInvestments, accounts, addVoucher, cancelVoucher, user]);
 
   const deleteFundInvestment = useCallback((id: string) => {
@@ -640,6 +649,14 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const flat = housingFlats.find(f => f.id === data.flatId && !f.isDeleted);
     if (!flat) { toastRef.current({ title: 'फ्लैट नहीं मिला', description: 'Flat not found', variant: 'destructive', duration: 8000 }); return blank; }
     if (!data.toMemberId) { toastRef.current({ title: 'नया सदस्य चुनें', description: 'Select the new owner', variant: 'destructive', duration: 8000 }); return blank; }
+    // No-dues gate (bye-law practice): a flat with outstanding maintenance/interest cannot be
+    // transferred until cleared — reuses the member-statement helper on THIS flat's bills.
+    const flatBills = maintenanceBills.filter(b => !b.isDeleted && b.flatId === flat.id);
+    const flatOutstanding = round2(buildMemberStatement(flatBills, vouchers).outstanding);
+    if (flatOutstanding > 0.005) {
+      toastRef.current({ title: 'बकाया शेष है', description: `इस फ्लैट पर ₹${flatOutstanding} बकाया है — पहले वसूली करें, फिर हस्तांतरण करें।`, variant: 'destructive', duration: 12000 });
+      return blank;
+    }
     const fee = round2(data.transferFee || 0);
     const prem = round2(data.premium || 0);
     const id = crypto.randomUUID();
@@ -677,7 +694,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     });
     toastRef.current({ title: 'फ्लैट हस्तांतरित', description: `${flat.flatNo}${fee + prem > 0 ? ` · ₹${round2(fee + prem)}` : ''}`, duration: 6000 });
     return t;
-  }, [housingFlats, accounts, addVoucher, cancelVoucher, updateHousingFlat, user]);
+  }, [housingFlats, maintenanceBills, vouchers, accounts, addVoucher, cancelVoucher, updateHousingFlat, user]);
 
   const deleteFlatTransfer = useCallback((id: string) => {
     if (guardFYLocked()) return;

@@ -1548,6 +1548,18 @@ create policy "society_rw" on public.maintenance_bills for all to authenticated
   with check (society_id::text in (select public.current_user_society_ids()));
 create unique index if not exists maintenance_bills_flat_period_uniq on public.maintenance_bills ("flatId", period) where ("isDeleted" = false);
 
+-- Housing R1 — society_id load-path indexes (parity with vouchers/sales/members etc.), plus
+-- integrity guards on slot / complaint numbering. RUN once.
+create index if not exists idx_housing_flats_society on public.housing_flats (society_id);
+create index if not exists idx_maintenance_bills_society_period on public.maintenance_bills (society_id, period);
+create index if not exists idx_housing_charge_heads_society on public.housing_charge_heads (society_id);
+create index if not exists idx_housing_fund_investments_society on public.housing_fund_investments (society_id);
+create index if not exists idx_housing_complaints_society on public.housing_complaints (society_id);
+create index if not exists idx_housing_parking_society on public.housing_parking (society_id);
+create index if not exists idx_housing_transfers_society on public.housing_transfers (society_id);
+create unique index if not exists housing_parking_slot_uniq on public.housing_parking (society_id, "slotNo") where ("isDeleted" = false);
+create unique index if not exists housing_complaints_no_uniq on public.housing_complaints (society_id, "complaintNo") where ("isDeleted" = false);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Labour cooperative — Work Orders / labour-contract register (master data; no
 -- accounting in V1). Plain society-scoped table (client upserts directly). RUN once.
