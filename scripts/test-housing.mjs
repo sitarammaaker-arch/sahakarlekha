@@ -408,5 +408,28 @@ function buildAgingRegister(bills, asOn) { const buckets = { '0-30': 0, '31-60':
   ok(bal(noFund) === 0 && noFund.length === 2, 'missing fund account → falls back to principal-only, still balanced (never posts unbalanced)');
 }
 
+// 27. R2a GST: applies only above ₹7,500 taxable base, on gstable heads, balanced into the demand
+{
+  const GST_THRESH = 7500;
+  const gstLine = (lines, enabled, rate, acc) => {
+    if (!enabled || !(rate > 0)) return null;
+    const taxable = round2(lines.filter(l => l.gstable).reduce((s, l) => s + l.amount, 0));
+    if (taxable <= GST_THRESH) return null;
+    const gst = round2(taxable * (rate / 100));
+    if (gst <= 0) return null;
+    return { chargeHeadId: '', name: `GST @${rate}%`, accountId: acc, amount: gst };
+  };
+  const lines = [{ accountId: '4101', gstable: true, amount: 8000 }, { accountId: '1202', gstable: false, amount: 500 }];
+  const g = gstLine(lines, true, 18, '2201');
+  ok(g && g.amount === 1440, 'GST 18% on taxable 8000 = 1440 (fund 500 excluded from base)');
+  ok(g.accountId === '2201', 'GST posts to GST payable (2201)');
+  ok(gstLine([{ accountId: '4101', gstable: true, amount: 7000 }], true, 18, '2201') === null, 'taxable ≤ ₹7,500 → exempt, no GST line');
+  ok(gstLine(lines, false, 18, '2201') === null, 'GST disabled at society level → no GST line');
+  const legs = demandLegs('MR-1', [...lines, g]);
+  const cr = round2(legs.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0));
+  ok(cr === 9940 && legs.find(l => l.type === 'Dr').amount === 9940, 'demand incl GST is balanced (8000 + 500 + 1440)');
+  ok(legs.some(l => l.accountId === '2201' && l.amount === 1440), 'GST leg present and grouped in the demand');
+}
+
 console.log(`[housing-test] ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -30,6 +30,8 @@ export default function TransferRegister() {
   const [premium, setPremium] = useState('');
   const [mode, setMode] = useState<'cash' | 'bank'>('bank');
   const [bankId, setBankId] = useState('');
+  const [resNo, setResNo] = useState('');
+  const [resDate, setResDate] = useState('');
 
   const flats = housingFlats.filter(f => !f.isDeleted);
   const flat = flats.find(f => f.id === flatId);
@@ -44,8 +46,9 @@ export default function TransferRegister() {
       flatId: flat.id, toMemberId, date,
       transferFee: fee ? Number(fee) : undefined, premium: premium ? Number(premium) : undefined,
       mode, bankAccountId: mode === 'bank' ? (bankId || undefined) : undefined,
+      resolutionNo: resNo.trim() || undefined, resolutionDate: resDate || undefined,
     });
-    if (t.id) { setFlatId(''); setToMemberId(''); setFee(''); setPremium(''); }
+    if (t.id) { setFlatId(''); setToMemberId(''); setFee(''); setPremium(''); setResNo(''); setResDate(''); }
   };
 
   const list = transfers.filter(t => !t.isDeleted).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
@@ -115,6 +118,14 @@ export default function TransferRegister() {
                 </Select>
               </div>
             )}
+            <div className="space-y-2">
+              <Label>{hi ? 'प्रस्ताव सं. (समिति/AGM)' : 'Resolution No. (Committee/AGM)'}</Label>
+              <Input value={resNo} onChange={e => setResNo(e.target.value)} placeholder={hi ? 'वैकल्पिक — जैसे R-14/2026' : 'optional — e.g. R-14/2026'} />
+            </div>
+            <div className="space-y-2">
+              <Label>{hi ? 'प्रस्ताव तिथि' : 'Resolution Date'}</Label>
+              <Input type="date" value={resDate} onChange={e => setResDate(e.target.value)} />
+            </div>
           </div>
           <Button onClick={doTransfer} className="w-full">{hi ? 'हस्तांतरण करें' : 'Transfer Flat'}</Button>
           <p className="text-xs text-muted-foreground">{hi ? 'शुल्क → 4201 (आय), प्रीमियम → 1202 (मरम्मत संचय निधि). नया मालिक निर्धारित होगा; अगला बिल नए मालिक के खाते में जाएगा।' : 'Fee → 4201 (income), premium → 1202 (sinking fund). Owner is reassigned; the next bill posts to the new owner.'}</p>
@@ -129,7 +140,7 @@ export default function TransferRegister() {
             <div key={t.id} className="flex items-center justify-between rounded-lg border p-3 text-sm gap-3">
               <div className="min-w-0">
                 <div className="font-medium">{flatLabel(t.flatId)} · {t.date}</div>
-                <div className="text-muted-foreground">{memberLabel(t.fromMemberId)} → {memberLabel(t.toMemberId)}{(t.transferFee || t.premium) ? ` · ${hi ? 'शुल्क' : 'fee'} ${money((t.transferFee || 0) + (t.premium || 0))}` : ''}</div>
+                <div className="text-muted-foreground">{memberLabel(t.fromMemberId)} → {memberLabel(t.toMemberId)}{(t.transferFee || t.premium) ? ` · ${hi ? 'शुल्क' : 'fee'} ${money((t.transferFee || 0) + (t.premium || 0))}` : ''}{t.resolutionNo ? ` · ${hi ? 'प्रस्ताव' : 'Res.'} ${t.resolutionNo}` : ''}</div>
               </div>
               <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { if (window.confirm(hi ? 'हस्तांतरण हटाएँ? (शुल्क voucher रद्द होगा; स्वामित्व स्वतः वापस नहीं होगा)' : 'Delete transfer? (fee voucher is cancelled; ownership is not auto-reverted)')) deleteFlatTransfer(t.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
             </div>

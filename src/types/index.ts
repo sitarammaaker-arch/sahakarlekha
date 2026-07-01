@@ -212,6 +212,8 @@ export interface HousingChargeHead {
   nameEn: string;
   accountId: string;          // target ledger: income (41xx) / fund (1202,1204) / pass-through (2207)
   isFund?: boolean;           // true → credited to a fund/reserve (corpus), NOT I&E income
+  gstable?: boolean;          // true → included in the GST taxable base (R2a)
+  kind?: 'service' | 'non_occupancy' | 'fund' | 'pass_through';  // for NOC cap check (R2c)
   basis: 'fixed' | 'per_sqft';
   rate: number;               // ₹ per flat (fixed) or ₹ per sq ft (per_sqft)
   order?: number;
@@ -226,6 +228,7 @@ export interface MaintenanceBillLine {
   name: string;
   accountId: string;
   isFund?: boolean;
+  gstable?: boolean;
   amount: number;
 }
 
@@ -292,6 +295,8 @@ export interface HousingTransfer {
   transferFee?: number;       // → 4201 Transfer Fee (income)
   premium?: number;           // → 1202 Sinking Fund (corpus), per common bye-law practice
   voucherId?: string;
+  resolutionNo?: string;      // committee/AGM resolution authorising the transfer (governance trail)
+  resolutionDate?: string;
   remarks?: string;
   isDeleted?: boolean;
   createdAt: string;
@@ -729,6 +734,8 @@ export interface SocietySettings {
     totalPayments: number;
   };
   reserveFundPct?: number;      // 0-100, default 25 if undefined (Sec 65 Haryana / varies by state)
+  maintenanceGstEnabled?: boolean; // Housing: charge GST on maintenance (admin decides per CA — ₹7,500/₹20L rule)
+  maintenanceGstRate?: number;     // GST rate % on maintenance (default 18)
   gstin?: string;              // GSTIN (15 chars — state code + PAN + entity code + check digit)
   tan?: string;                // Tax Deduction Account Number (10 chars)
   entityPan?: string;          // Society PAN (10 chars)

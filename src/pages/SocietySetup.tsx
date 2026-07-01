@@ -45,6 +45,8 @@ const SocietySetup: React.FC = () => {
     email: society.email,
     societyType: society.societyType || 'marketing_processing',
     reserveFundPct: society.reserveFundPct ?? 25,
+    maintenanceGstEnabled: society.maintenanceGstEnabled ?? false,
+    maintenanceGstRate: society.maintenanceGstRate ?? 18,
     gstin: society.gstin || '',
     tan: society.tan || '',
     entityPan: society.entityPan || '',
@@ -479,6 +481,30 @@ const SocietySetup: React.FC = () => {
                     {language === 'hi' ? 'सुझाव: 25% (वैकल्पिक — आवंटन के समय बदला जा सकता है)' : 'Suggested 25% (optional — can be changed at appropriation time)'}
                   </p>
                 </div>
+                {form.societyType === 'housing' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>{language === 'hi' ? 'रखरखाव पर GST' : 'GST on Maintenance'}</Label>
+                      <Select value={form.maintenanceGstEnabled ? 'yes' : 'no'} onValueChange={v => setForm(f => ({ ...f, maintenanceGstEnabled: v === 'yes' }))}>
+                        <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="no">{language === 'hi' ? 'नहीं' : 'No'}</SelectItem>
+                          <SelectItem value="yes">{language === 'hi' ? 'हाँ, लागू करें' : 'Yes, apply'}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        {language === 'hi' ? 'CA की सलाह पर चालू करें — GST तभी लगता है जब प्रति-सदस्य रखरखाव ₹7,500/माह से अधिक AND समिति का टर्नओवर ₹20 लाख से अधिक हो।' : 'Enable on your CA’s advice — GST applies only if per-member maintenance exceeds ₹7,500/month AND society turnover exceeds ₹20 lakh.'}
+                      </p>
+                    </div>
+                    {form.maintenanceGstEnabled && (
+                      <div className="space-y-2">
+                        <Label>{language === 'hi' ? 'GST दर (%)' : 'GST Rate (%)'}</Label>
+                        <Input type="number" min={0} max={28} value={form.maintenanceGstRate} onChange={e => setForm(f => ({ ...f, maintenanceGstRate: Number(e.target.value) }))} className="h-11" />
+                        <p className="text-xs text-muted-foreground">{language === 'hi' ? 'सामान्यतः 18%. कर योग्य मदें Charge Heads में "GST लागू" से चुनें।' : 'Usually 18%. Mark taxable heads with "GST applicable" in Charge Heads.'}</p>
+                      </div>
+                    )}
+                  </>
+                )}
                 <div className="space-y-2">
                   <Label>{language === 'hi' ? 'खाता संरचना रीसेट' : 'Reset COA'}</Label>
                   <Button variant="outline" className="h-11 w-full border-destructive text-destructive hover:bg-destructive/10" onClick={handleResetCoaClick}>

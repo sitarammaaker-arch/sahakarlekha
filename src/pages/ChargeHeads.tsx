@@ -17,14 +17,23 @@ const BASES = [
   { id: 'per_sqft', en: '₹ / sq ft', hi: '₹ / वर्ग फुट' },
 ] as const;
 
+type HeadKind = 'service' | 'non_occupancy' | 'fund' | 'pass_through';
+const KINDS: { id: HeadKind; en: string; hi: string }[] = [
+  { id: 'service', en: 'Service', hi: 'सेवा' },
+  { id: 'non_occupancy', en: 'Non-occupancy', hi: 'अनिवासी' },
+  { id: 'fund', en: 'Fund', hi: 'निधि' },
+  { id: 'pass_through', en: 'Pass-through', hi: 'पास-थ्रू' },
+];
+
 // Standard housing charge heads (housing chart codes) — one-click starter schedule.
-const STANDARD = [
-  { code: 'SVC', nameEn: 'Service Charges', nameHi: 'सेवा शुल्क', accountId: '4101', basis: 'fixed' as const },
-  { code: 'WTR', nameEn: 'Water Charges', nameHi: 'जल शुल्क', accountId: '4102', basis: 'fixed' as const },
-  { code: 'PRK', nameEn: 'Parking Charges', nameHi: 'पार्किंग शुल्क', accountId: '4103', basis: 'fixed' as const },
-  { code: 'NOC', nameEn: 'Non-Occupancy Charges', nameHi: 'अनिवासी प्रभार', accountId: '4104', basis: 'fixed' as const },
-  { code: 'SINK', nameEn: 'Sinking Fund', nameHi: 'मरम्मत संचय निधि', accountId: '1202', basis: 'fixed' as const },
-  { code: 'RMF', nameEn: 'Repair & Maintenance Fund', nameHi: 'मरम्मत एवं रखरखाव निधि', accountId: '1204', basis: 'fixed' as const },
+// gstable/kind set to common defaults (water & funds excluded from GST; funds & water are pass-through/corpus).
+const STANDARD: { code: string; nameEn: string; nameHi: string; accountId: string; basis: 'fixed'; gstable: boolean; kind: HeadKind }[] = [
+  { code: 'SVC', nameEn: 'Service Charges', nameHi: 'सेवा शुल्क', accountId: '4101', basis: 'fixed', gstable: true, kind: 'service' },
+  { code: 'WTR', nameEn: 'Water Charges', nameHi: 'जल शुल्क', accountId: '4102', basis: 'fixed', gstable: false, kind: 'pass_through' },
+  { code: 'PRK', nameEn: 'Parking Charges', nameHi: 'पार्किंग शुल्क', accountId: '4103', basis: 'fixed', gstable: true, kind: 'service' },
+  { code: 'NOC', nameEn: 'Non-Occupancy Charges', nameHi: 'अनिवासी प्रभार', accountId: '4104', basis: 'fixed', gstable: true, kind: 'non_occupancy' },
+  { code: 'SINK', nameEn: 'Sinking Fund', nameHi: 'मरम्मत संचय निधि', accountId: '1202', basis: 'fixed', gstable: false, kind: 'fund' },
+  { code: 'RMF', nameEn: 'Repair & Maintenance Fund', nameHi: 'मरम्मत एवं रखरखाव निधि', accountId: '1204', basis: 'fixed', gstable: false, kind: 'fund' },
 ];
 
 export default function ChargeHeads() {
@@ -39,6 +48,8 @@ export default function ChargeHeads() {
   const [accountId, setAccountId] = useState('');
   const [basis, setBasis] = useState<'fixed' | 'per_sqft'>('fixed');
   const [rate, setRate] = useState('');
+  const [gstable, setGstable] = useState(false);
+  const [kind, setKind] = useState<HeadKind>('service');
 
   // Leaf income / fund (equity) / pass-through (liability) accounts are valid charge targets.
   const targetAccounts = accounts.filter(a => !a.isGroup && ['income', 'equity', 'liability'].includes(a.type));
@@ -52,16 +63,23 @@ export default function ChargeHeads() {
   };
   const accLabel = (id: string) => { const a = acc(id); return a ? `${a.id} — ${hi ? a.nameHi : a.name}` : id; };
 
-  const reset = () => { setNameEn(''); setNameHi(''); setAccountId(''); setBasis('fixed'); setRate(''); };
+  const reset = () => { setNameEn(''); setNameHi(''); setAccountId(''); setBasis('fixed'); setRate(''); setGstable(false); setKind('service'); };
+
+  // Sum of active fixed-basis service-charge rates — the base for the non-occupancy 10% cap check.
+  const serviceBase = chargeHeads.filter(h => !h.isDeleted && h.isActive !== false && h.kind === 'service' && h.basis === 'fixed').reduce((s, h) => s + (h.rate || 0), 0);
 
   const save = () => {
     const r = Number(rate);
     if (!nameEn.trim()) { toast({ title: hi ? 'नाम आवश्यक' : 'Name required', variant: 'destructive' }); return; }
     if (!accountId) { toast({ title: hi ? 'खाता चुनें' : 'Pick a target account', variant: 'destructive' }); return; }
     if (!(r >= 0)) { toast({ title: hi ? 'दर दर्ज करें' : 'Enter a valid rate', variant: 'destructive' }); return; }
+    // R2c — soft warning (not a block; state caps vary): non-occupancy > 10% of service charges.
+    if (kind === 'non_occupancy' && basis === 'fixed' && serviceBase > 0 && r > 0.1 * serviceBase) {
+      toast({ title: hi ? 'ध्यान दें — bye-law cap' : 'Note — bye-law cap', description: hi ? `अनिवासी शुल्क ₹${r} सेवा शुल्क (₹${serviceBase}) के 10% (₹${(0.1 * serviceBase).toFixed(0)}) से अधिक है। कई राज्यों में यह सीमा है।` : `Non-occupancy ₹${r} exceeds 10% of service charges (₹${(0.1 * serviceBase).toFixed(0)}). Many states cap this.`, duration: 10000 });
+    }
     const h = addChargeHead({
       nameEn: nameEn.trim(), nameHi: nameHi.trim() || nameEn.trim(),
-      accountId, isFund: isFundAcc(accountId), basis, rate: r,
+      accountId, isFund: isFundAcc(accountId), gstable, kind, basis, rate: r,
       order: (chargeHeads.filter(x => !x.isDeleted).length) + 1, isActive: true,
     });
     if (h.id) { toast({ title: hi ? 'शुल्क मद जोड़ी' : 'Charge head added', description: h.nameEn }); reset(); }
@@ -72,7 +90,7 @@ export default function ChargeHeads() {
     let n = 0;
     STANDARD.forEach((s, i) => {
       if (existing.has(s.accountId) || !acc(s.accountId)) return;
-      addChargeHead({ code: s.code, nameEn: s.nameEn, nameHi: s.nameHi, accountId: s.accountId, isFund: isFundAcc(s.accountId), basis: s.basis, rate: 0, order: chargeHeads.length + i + 1, isActive: true });
+      addChargeHead({ code: s.code, nameEn: s.nameEn, nameHi: s.nameHi, accountId: s.accountId, isFund: isFundAcc(s.accountId), gstable: s.gstable, kind: s.kind, basis: s.basis, rate: 0, order: chargeHeads.length + i + 1, isActive: true });
       n++;
     });
     toast({ title: hi ? 'मानक मदें जोड़ी गईं' : 'Standard heads added', description: hi ? `${n} मदें · दरें भरें` : `${n} heads · now set the rates` });
@@ -125,6 +143,17 @@ export default function ChargeHeads() {
               <Label>{basis === 'per_sqft' ? (hi ? 'दर (₹ / वर्ग फुट)' : 'Rate (₹ / sq ft)') : (hi ? 'राशि (₹ / फ्लैट)' : 'Amount (₹ / flat)')} *</Label>
               <Input type="number" min={0} value={rate} onChange={e => setRate(e.target.value)} placeholder="0" />
             </div>
+            <div className="space-y-2">
+              <Label>{hi ? 'प्रकार' : 'Kind'}</Label>
+              <Select value={kind} onValueChange={v => setKind(v as HeadKind)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{KINDS.map(k => <SelectItem key={k.id} value={k.id}>{hi ? k.hi : k.en}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Switch checked={gstable} onCheckedChange={setGstable} id="gstable" />
+              <Label htmlFor="gstable" className="cursor-pointer">{hi ? 'GST लागू (कर योग्य)' : 'GST applicable (taxable)'}</Label>
+            </div>
           </div>
           <Button onClick={save} className="w-full">{hi ? 'शुल्क मद सेव करें' : 'Save Charge Head'}</Button>
         </CardContent>
@@ -140,6 +169,7 @@ export default function ChargeHeads() {
                 <div className="font-medium flex flex-wrap items-center gap-1">
                   <span>{hi ? h.nameHi : h.nameEn}</span>
                   <Badge variant={h.isFund ? 'default' : 'secondary'}>{kindLabel(h.accountId)}</Badge>
+                  {h.gstable && <Badge variant="outline">GST</Badge>}
                   {h.isActive === false && <Badge variant="outline">{hi ? 'निष्क्रिय' : 'Inactive'}</Badge>}
                 </div>
                 <div className="text-muted-foreground">{accLabel(h.accountId)} · {h.basis === 'per_sqft' ? (hi ? '₹/वर्ग फुट' : '₹/sq ft') : (hi ? '₹/फ्लैट' : '₹/flat')}</div>
