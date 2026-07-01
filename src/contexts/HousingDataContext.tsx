@@ -38,6 +38,11 @@ interface HousingDataContextValue {
   addChargeHead: (data: Omit<HousingChargeHead, 'id' | 'createdAt'>) => HousingChargeHead;
   updateChargeHead: (id: string, data: Partial<HousingChargeHead>) => void;
   deleteChargeHead: (id: string) => void;
+
+  // Fund (reserve) operations — each posts a tagged voucher; the fund account IS the record.
+  recordFundContribution: (data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; remarks?: string }) => Voucher;
+  recordFundInterest: (data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; remarks?: string }) => Voucher;
+  recordFundUtilisation: (data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; purpose?: string }) => Voucher;
 }
 
 const HousingDataContext = createContext<HousingDataContextValue | undefined>(undefined);
@@ -336,11 +341,51 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     return voucher;
   }, [maintenanceBills, accounts, addVoucher, cancelVoucher, user]);
 
+  // ── Fund (reserve) movement — Dr bank / Cr fund (contribution, interest) or Dr fund / Cr bank
+  // (utilisation). The voucher is the record; addVoucher owns the two-step persist + L1 rollback,
+  // so no separate entity to reconcile. FY-lock via guardFYLocked.
+  const FUND_NARRATION: Record<string, string> = {
+    'fund.contribution': 'निधि अंशदान', 'fund.interest': 'निधि ब्याज', 'fund.utilisation': 'निधि उपयोग',
+  };
+  const postFundMovement = useCallback((data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string; refType: string; toFund: boolean }): Voucher => {
+    const sentinel = { id: '', voucherNo: '', type: 'journal', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    if (guardFYLocked()) return sentinel;
+    const fund = accounts.find(a => a.id === data.fundAccountId);
+    if (!fund) { toastRef.current({ title: 'निधि खाता नहीं मिला', description: 'Fund account not found', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    const lid = () => crypto.randomUUID();
+    const note = data.note?.trim() ? ` · ${data.note.trim()}` : '';
+    const debitAcc = data.toFund ? bankAcc : data.fundAccountId;   // toFund → Dr bank/Cr fund; else Dr fund/Cr bank
+    const creditAcc = data.toFund ? data.fundAccountId : bankAcc;
+    const v = addVoucher({
+      type: data.toFund ? 'receipt' : 'payment', date: data.date,
+      debitAccountId: debitAcc, creditAccountId: creditAcc, amount: data.amount,
+      narration: `${FUND_NARRATION[data.refType] || 'निधि'} — ${fund.nameHi || fund.name}${note}`,
+      refType: data.refType, refId: data.fundAccountId,
+      createdBy: user?.name || 'System',
+      lines: [
+        { id: lid(), accountId: debitAcc, type: 'Dr', amount: data.amount },
+        { id: lid(), accountId: creditAcc, type: 'Cr', amount: data.amount },
+      ],
+    });
+    if (v.id) toastRef.current({ title: 'निधि प्रविष्टि दर्ज', description: `${fund.nameHi || fund.name} · ₹${data.amount}`, duration: 6000 });
+    return v;
+  }, [accounts, addVoucher, user]);
+
+  const recordFundContribution = useCallback((data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; remarks?: string }): Voucher =>
+    postFundMovement({ ...data, note: data.remarks, refType: 'fund.contribution', toFund: true }), [postFundMovement]);
+  const recordFundInterest = useCallback((data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; remarks?: string }): Voucher =>
+    postFundMovement({ ...data, note: data.remarks, refType: 'fund.interest', toFund: true }), [postFundMovement]);
+  const recordFundUtilisation = useCallback((data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; purpose?: string }): Voucher =>
+    postFundMovement({ ...data, note: data.purpose, refType: 'fund.utilisation', toFund: false }), [postFundMovement]);
+
   return (
     <HousingDataContext.Provider value={{
       housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat,
       maintenanceBills, generateMaintenanceBills, deleteMaintenanceBill, recordMaintenanceCollection,
       chargeHeads, addChargeHead, updateChargeHead, deleteChargeHead,
+      recordFundContribution, recordFundInterest, recordFundUtilisation,
     }}>
       {children}
     </HousingDataContext.Provider>

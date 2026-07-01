@@ -77,6 +77,7 @@ export const translations: Translations = {
   maintenanceBilling: { hi: 'रखरखाव बिलिंग', en: 'Maintenance Billing' },
   chargeHeads: { hi: 'शुल्क मदें', en: 'Charge Heads' },
   memberStatement: { hi: 'सदस्य विवरण', en: 'Member Statement' },
+  fundStatement: { hi: 'निधि विवरण', en: 'Fund Statement' },
   navLabour: { hi: 'श्रमिक प्रबंधन', en: 'Labour' },
   workerMaster: { hi: 'श्रमिक मास्टर', en: 'Worker Master' },
   departmentMaster: { hi: 'विभाग / नियोक्ता', en: 'Department / Employer' },

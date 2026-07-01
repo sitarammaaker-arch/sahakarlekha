@@ -254,5 +254,73 @@ function buildMemberStatement(bills, vouchers) {
   ok(s.rows[0].balance === 1000 && s.rows[1].balance === 600, 'running balance steps 1000 → 600');
 }
 
+// ── Mirror: src/lib/housing/funds.ts (H3 fund/reserve statement) ──
+function getLines(v) {
+  if (v.lines && v.lines.length > 0) return v.lines;
+  const out = [];
+  if (v.debitAccountId && v.amount > 0) out.push({ accountId: v.debitAccountId, type: 'Dr', amount: v.amount });
+  if (v.creditAccountId && v.amount > 0) out.push({ accountId: v.creditAccountId, type: 'Cr', amount: v.amount });
+  return out;
+}
+function isFundAccount(a) { return !a.isGroup && a.subtype === 'reserve'; }
+function buildFundStatement(fund, vouchers) {
+  const opening = fund.openingBalanceType === 'credit' ? round2(fund.openingBalance || 0) : round2(-(fund.openingBalance || 0));
+  const raw = [];
+  for (const v of vouchers) {
+    if (v.isDeleted) continue;
+    for (const l of getLines(v)) {
+      if (l.accountId !== fund.id) continue;
+      const kind = l.type === 'Dr' ? 'utilisation' : (v.refType === 'fund.interest' ? 'interest' : 'contribution');
+      raw.push({ date: v.date, ref: v.voucherNo, kind, particulars: v.narration || kind, credit: l.type === 'Cr' ? round2(l.amount) : 0, debit: l.type === 'Dr' ? round2(l.amount) : 0 });
+    }
+  }
+  raw.sort((a, b) => a.date.localeCompare(b.date));
+  let bal = opening;
+  const rows = raw.map(r => { bal = round2(bal + r.credit - r.debit); return { ...r, balance: bal }; });
+  const contributions = round2(rows.filter(r => r.kind === 'contribution').reduce((s, r) => s + r.credit, 0));
+  const interest = round2(rows.filter(r => r.kind === 'interest').reduce((s, r) => s + r.credit, 0));
+  const utilisation = round2(rows.filter(r => r.kind === 'utilisation').reduce((s, r) => s + r.debit, 0));
+  const closing = round2(opening + contributions + interest - utilisation);
+  return { opening, contributions, interest, utilisation, closing, rows };
+}
+
+// 18. isFundAccount picks non-group reserve accounts only
+{
+  ok(isFundAccount({ subtype: 'reserve' }) === true, 'reserve account is a fund');
+  ok(isFundAccount({ subtype: 'reserve', isGroup: true }) === false, 'group reserve is not a postable fund');
+  ok(isFundAccount({ subtype: 'surplus' }) === false, 'net surplus is not a fund');
+  ok(isFundAccount({ subtype: 'current_asset' }) === false, 'non-reserve account is not a fund');
+}
+
+// 19. Fund statement: opening + contributions + interest − utilisation = closing (ties to corpus)
+{
+  const fund = { id: '1202', openingBalance: 10000, openingBalanceType: 'credit' };
+  const vouchers = [
+    { voucherNo: 'JV1', date: '2026-07-01', refType: 'maintenance.bill', lines: [{ accountId: '3303', type: 'Dr', amount: 500 }, { accountId: '1202', type: 'Cr', amount: 500 }] }, // billing contribution
+    { voucherNo: 'RC1', date: '2026-07-05', refType: 'fund.contribution', lines: [{ accountId: '3301', type: 'Dr', amount: 2000 }, { accountId: '1202', type: 'Cr', amount: 2000 }] }, // manual top-up
+    { voucherNo: 'IN1', date: '2026-07-10', refType: 'fund.interest', lines: [{ accountId: '3302', type: 'Dr', amount: 800 }, { accountId: '1202', type: 'Cr', amount: 800 }] }, // FDR interest
+    { voucherNo: 'UT1', date: '2026-07-20', refType: 'fund.utilisation', lines: [{ accountId: '1202', type: 'Dr', amount: 3000 }, { accountId: '3302', type: 'Cr', amount: 3000 }] }, // spend
+  ];
+  const s = buildFundStatement(fund, vouchers);
+  ok(s.opening === 10000, 'opening reads the fund credit balance');
+  ok(s.contributions === 2500, 'contributions = billing split + manual top-up (500 + 2000)');
+  ok(s.interest === 800, 'interest = fund.interest credits only');
+  ok(s.utilisation === 3000, 'utilisation = debits to the fund');
+  ok(s.closing === 10300, 'closing = 10000 + 2500 + 800 − 3000');
+  ok(s.rows[s.rows.length - 1].balance === 10300, 'running corpus ends at closing');
+}
+
+// 20. Debit-balance opening is negated; deleted vouchers excluded
+{
+  const fund = { id: '1202', openingBalance: 500, openingBalanceType: 'debit' };
+  const vouchers = [
+    { voucherNo: 'X', date: '2026-07-01', refType: 'fund.contribution', isDeleted: true, lines: [{ accountId: '1202', type: 'Cr', amount: 1000 }] },
+    { voucherNo: 'Y', date: '2026-07-02', refType: 'fund.contribution', lines: [{ accountId: '1202', type: 'Cr', amount: 1000 }] },
+  ];
+  const s = buildFundStatement(fund, vouchers);
+  ok(s.opening === -500, 'debit opening balance is negated for a credit-corpus fund');
+  ok(s.contributions === 1000 && s.closing === 500, 'deleted voucher excluded; closing = -500 + 1000');
+}
+
 console.log(`[housing-test] ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
