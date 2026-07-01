@@ -165,10 +165,23 @@ export interface Member {
   nomineeFatherName?: string;
 }
 
+// Housing cooperative — a building / wing / tower master (for multi-tower societies).
+export interface HousingBuilding {
+  id: string;
+  name: string;               // e.g. "Tower A" / "Wing B"
+  address?: string;
+  floors?: number;
+  totalUnits?: number;
+  remarks?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 // Housing cooperative — a flat/unit in the society, optionally linked to an owner member.
 export interface HousingFlat {
   id: string;
   flatNo: string;
+  buildingId?: string;        // optional link to a HousingBuilding (multi-tower societies)
   blockNo?: string;
   floor?: string;             // floor / level (e.g. "Ground", "3")
   unitType?: string;          // 1BHK / 2BHK / 3BHK / Shop / Office / Other

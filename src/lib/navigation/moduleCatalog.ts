@@ -15,7 +15,7 @@ import {
   Scale, ArrowLeftRight, TrendingUp, FileSpreadsheet, BarChart3, Clock, Percent, TrendingDown, Receipt, Warehouse,
   Package, PiggyBank, FileJson, Hash, Landmark, ScrollText, BookMarked, ShieldCheck, Users2, FileCheck, Shield,
   Coins, Trash2, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks, HardHat,
-  MessageSquareWarning, Car, Wrench,
+  MessageSquareWarning, Car, Wrench, Building,
 } from 'lucide-react';
 import type { Capability, NavDomain, Role } from './capabilities';
 
@@ -60,6 +60,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'procurementLots', titleKey: 'procurementLots', icon: Wheat,         route: '/procurement-lots', domain: 'operations', requiredCapabilities: ['procurement_msp'], order: 10 },
   // ── Housing-cooperative module group (domain: 'housing') — all housing modules live here so
   // a housing society sees ONE organised "Housing" sidebar group (mirrors the Labour group). ──
+  { id: 'buildings', titleKey: 'buildings', icon: Building, route: '/buildings', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 0 },
   { id: 'flatsRegister', titleKey: 'flatsRegister', icon: Building2, route: '/flats-register', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 1 },
   { id: 'chargeHeads', titleKey: 'chargeHeads', icon: ListTree, route: '/charge-heads', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 2 },
   { id: 'maintenanceBilling', titleKey: 'maintenanceBilling', icon: Receipt, route: '/maintenance-billing', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 3 },
