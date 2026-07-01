@@ -20,12 +20,13 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
 import { priceMilk } from '@/lib/dairy/pricing';
-import { resolveMilkProcurementAccountId, resolveMilkBulkSalesAccountId, resolveMilkPayableAccountId, resolveUnionReceivableAccountId, resolveMemberInputReceivableAccountId } from '@/lib/dairy/accounts';
+import { resolveMilkProcurementAccountId, resolveMilkBulkSalesAccountId, resolveMilkPayableAccountId, resolveUnionReceivableAccountId, resolveMemberInputReceivableAccountId, resolveBonusDistributionAccountId, resolveBonusPayableAccountId, resolveDividendDistributionAccountId, resolveDividendPayableAccountId } from '@/lib/dairy/accounts';
 import { computeGross, netPayable, sumDeductions, outstanding, settlementLegs } from '@/lib/dairy/settlement';
 import { memberInputOutstanding, type InputBalance } from '@/lib/dairy/inputs';
+import { computeBonusLines, computeDividendLines, distributionTotal, distributionLegs } from '@/lib/dairy/distribution';
 import { resolveDairyPostingLegs } from '@/lib/dairy/postingRules';
 import { buildEngineVoucherLines } from '@/lib/posting/engineVoucher';
-import type { DairyRateChart, MilkEntry, DairySettlement, DairyDeductionLine, DairyDispatch, DairyInputIssue, Voucher } from '@/types';
+import type { DairyRateChart, MilkEntry, DairySettlement, DairyDeductionLine, DairyDispatch, DairyInputIssue, DairyDistribution, DairyBonusBasis, Voucher } from '@/types';
 
 interface DairyDataContextValue {
   dairyReady: boolean;
@@ -77,6 +78,16 @@ interface DairyDataContextValue {
   /** Dedicated 3305 ledger (null until seeded) + a member's derived input balance for recovery. */
   memberInputReceivableAccountId: string | null;
   getMemberInputBalance: (memberId: string) => InputBalance;
+
+  // Year-end distribution: patronage bonus / dividend (D6, governance-gated)
+  distributions: DairyDistribution[];
+  /** Draft a bonus (milk-supply) or dividend (share-capital) run; computes per-member lines. */
+  createDairyDistribution: (args: { kind: 'bonus'; from: string; to: string; basis: DairyBonusBasis; rate: number } | { kind: 'dividend'; rate: number; fyLabel?: string }) => DairyDistribution;
+  /** Approve (resolutionNo MANDATORY): posts Dr distribution equity / Cr payable for the total. */
+  approveDairyDistribution: (args: { distributionId: string; resolutionNo: string; resolutionDate?: string }) => DairyDistribution;
+  /** Pay the (partial) total: Dr payable / Cr bank|cash; advances amountPaid. */
+  recordDistributionPayment: (args: { distributionId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }) => Voucher;
+  deleteDairyDistribution: (distributionId: string) => void;
 }
 
 const DairyDataContext = createContext<DairyDataContextValue | null>(null);
@@ -111,6 +122,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   const [settlements, setSettlementsState] = useState<DairySettlement[]>(() => storage.getDairySettlements());
   const [dispatches, setDispatchesState] = useState<DairyDispatch[]>(() => storage.getDairyDispatches());
   const [inputIssues, setInputIssuesState] = useState<DairyInputIssue[]>(() => storage.getDairyInputIssues());
+  const [distributions, setDistributionsState] = useState<DairyDistribution[]>(() => storage.getDairyDistributions());
 
   useEffect(() => {
     const sid = user?.societyId;
@@ -168,6 +180,15 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     );
   }, [user?.societyId]);
 
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setDistributionsState([]); return; }
+    supabase.from('dairy_distributions').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setDistributionsState(error || !data ? storage.getDairyDistributions() : (data as DairyDistribution[])),
+      () => setDistributionsState(storage.getDairyDistributions()),
+    );
+  }, [user?.societyId]);
+
   // ── C-A ensure-accounts: seed dedicated milk ledgers for a pre-D1 dairy society (additive) ──
   const seededRef = useRef(false);
   useEffect(() => {
@@ -178,7 +199,9 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const needsProc = resolveMilkProcurementAccountId(accounts) === null;
     const needsSales = resolveMilkBulkSalesAccountId(accounts) === null;
     const needsInput = resolveMemberInputReceivableAccountId(accounts) === null;
-    if (!needsProc && !needsSales && !needsInput) { seededRef.current = true; return; }
+    const needsBonusDist = resolveBonusDistributionAccountId(accounts) === null;
+    const needsBonusPay = resolveBonusPayableAccountId(accounts) === null;
+    if (!needsProc && !needsSales && !needsInput && !needsBonusDist && !needsBonusPay) { seededRef.current = true; return; }
     seededRef.current = true; // attempt once per mount
     if (needsProc) {
       addAccount({ name: 'Milk Procurement (Direct)', nameHi: 'दुग्ध खरीदी लागत (प्रत्यक्ष)', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '5100', subtype: 'milk_procurement' });
@@ -188,6 +211,12 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     }
     if (needsInput) {
       addAccount({ name: 'Member Input Receivable', nameHi: 'सदस्य आदान प्राप्य', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300' });
+    }
+    if (needsBonusDist) {
+      addAccount({ name: 'Patronage Bonus Distribution', nameHi: 'संरक्षण बोनस वितरण', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' });
+    }
+    if (needsBonusPay) {
+      addAccount({ name: 'Bonus Payable', nameHi: 'देय बोनस', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' });
     }
   }, [society?.societyType, society?.fyLocked, accounts, addAccount]);
 
@@ -511,6 +540,102 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     [inputIssues, settlements, accounts],
   );
 
+  // ── Year-end distribution: patronage bonus / dividend (D6, governance-gated) ──
+  const commitDistribution = useCallback((next: DairyDistribution, revertTo: DairyDistribution | null, onFail?: () => void) => {
+    setDistributionsState(prev => { const u = prev.some(d => d.id === next.id) ? prev.map(d => d.id === next.id ? next : d) : [...prev, next]; storage.setDairyDistributions(u); return u; });
+    supabase.from('dairy_distributions').upsert(withSoc(next)).then(({ error }) => {
+      if (error) {
+        console.error('Distribution save error:', error.message);
+        setDistributionsState(prev => { const u = revertTo ? prev.map(d => d.id === next.id ? revertTo : d) : prev.filter(d => d.id !== next.id); storage.setDairyDistributions(u); return u; });
+        onFail?.();
+        toastRef.current({ title: 'वितरण सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas. (Pehli baar: dairy_distributions block chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [societyId]);
+
+  const createDairyDistribution = useCallback((args: { kind: 'bonus'; from: string; to: string; basis: DairyBonusBasis; rate: number } | { kind: 'dividend'; rate: number; fyLabel?: string }): DairyDistribution => {
+    const sentinel = { id: '' } as DairyDistribution;
+    if (guardFYLocked()) return sentinel;
+    if (!(args.rate > 0)) { toastRef.current({ title: 'दर ज़रूरी', description: 'एक धनात्मक दर डालें।', variant: 'destructive' }); return sentinel; }
+    const lines = args.kind === 'bonus'
+      ? computeBonusLines(milkEntries, args.from, args.to, args.basis, args.rate)
+      : computeDividendLines(members.map(m => ({ id: m.id, name: m.name, shareCapital: m.shareCapital })), args.rate);
+    if (lines.length === 0) { toastRef.current({ title: 'कोई राशि नहीं', description: args.kind === 'bonus' ? 'इस अवधि में कोई स्वीकृत दूध नहीं।' : 'किसी सदस्य की शेयर पूंजी नहीं।', variant: 'destructive' }); return sentinel; }
+    const total = distributionTotal(lines);
+    const d: DairyDistribution = {
+      id: crypto.randomUUID(), kind: args.kind, rate: args.rate,
+      from: args.kind === 'bonus' ? args.from : undefined, to: args.kind === 'bonus' ? args.to : undefined,
+      basis: args.kind === 'bonus' ? args.basis : undefined, fyLabel: args.kind === 'dividend' ? args.fyLabel : undefined,
+      resolutionNo: '', lines, total, status: 'draft', amountPaid: 0, createdAt: new Date().toISOString(),
+    };
+    commitDistribution(d, null);
+    toastRef.current({ title: 'वितरण बनाया (draft)', description: `${lines.length} सदस्य · कुल ₹${total.toLocaleString('en-IN')}` });
+    return d;
+  }, [milkEntries, members, commitDistribution]);
+
+  const approveDairyDistribution = useCallback((args: { distributionId: string; resolutionNo: string; resolutionDate?: string }): DairyDistribution => {
+    const sentinel = { id: '' } as DairyDistribution;
+    if (guardFYLocked()) return sentinel;
+    const cur = distributions.find(d => d.id === args.distributionId);
+    if (!cur || cur.status !== 'draft') { toastRef.current({ title: 'पहले से approved', variant: 'destructive' }); return sentinel; }
+    if (!args.resolutionNo || !args.resolutionNo.trim()) { toastRef.current({ title: 'प्रस्ताव संख्या आवश्यक', description: 'बोनस/लाभांश वितरण के लिए सभा/बोर्ड प्रस्ताव संख्या ज़रूरी है।', variant: 'destructive', duration: 10000 }); return sentinel; }
+    const distAcc = cur.kind === 'bonus' ? resolveBonusDistributionAccountId(accounts) : resolveDividendDistributionAccountId(accounts);
+    const payAcc = cur.kind === 'bonus' ? resolveBonusPayableAccountId(accounts) : resolveDividendPayableAccountId(accounts);
+    if (!distAcc || !payAcc) { toastRef.current({ title: 'खाते नहीं मिले', description: 'Distribution / payable ledger missing.', variant: 'destructive', duration: 12000 }); return sentinel; }
+    const legs = distributionLegs(cur.total, distAcc, payAcc);
+    if (legs.length === 0) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'Legs balanced nahi.', variant: 'destructive' }); return sentinel; }
+    const kindHi = cur.kind === 'bonus' ? 'बोनस' : 'लाभांश';
+    const voucher = addVoucher({
+      type: 'journal', date: args.resolutionDate || new Date().toISOString().slice(0, 10),
+      debitAccountId: distAcc, creditAccountId: payAcc, amount: cur.total,
+      lines: legs.map(l => ({ id: crypto.randomUUID(), accountId: l.accountId, type: l.type, amount: l.amount })),
+      narration: `${kindHi} वितरण — प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total} (${cur.lines.length} सदस्य)`,
+      refType: 'dairy.distribution', refId: cur.id,
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+    if (!voucher?.id) return sentinel;
+    const next: DairyDistribution = { ...cur, status: 'approved', resolutionNo: args.resolutionNo.trim(), resolutionDate: args.resolutionDate, voucherId: voucher.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
+    commitDistribution(next, cur, () => cancelVoucher(voucher.id, 'Distribution approval rolled back (cloud save failed)', user?.name || 'System'));
+    toastRef.current({ title: `✅ ${kindHi} approved`, description: `प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total.toLocaleString('en-IN')}` });
+    return next;
+  }, [distributions, accounts, addVoucher, cancelVoucher, commitDistribution, user]);
+
+  const recordDistributionPayment = useCallback((args: { distributionId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }): Voucher => {
+    const sentinel = { id: '' } as Voucher;
+    if (guardFYLocked()) return sentinel;
+    const cur = distributions.find(d => d.id === args.distributionId);
+    if (!cur || cur.status !== 'approved') { toastRef.current({ title: 'पहले approve करें', variant: 'destructive' }); return sentinel; }
+    const outstandingAmt = +(cur.total - cur.amountPaid).toFixed(2);
+    const amount = +Math.min(args.amount, outstandingAmt).toFixed(2);
+    if (!(amount > 0)) { toastRef.current({ title: 'कुछ बकाया नहीं', variant: 'destructive' }); return sentinel; }
+    const payAcc = cur.kind === 'bonus' ? resolveBonusPayableAccountId(accounts) : resolveDividendPayableAccountId(accounts);
+    if (!payAcc) { toastRef.current({ title: 'देय खाता नहीं मिला', variant: 'destructive' }); return sentinel; }
+    const creditAcc = args.mode === 'bank' ? (args.bankAccountId || '3302') : '3301';
+    const kindHi = cur.kind === 'bonus' ? 'बोनस' : 'लाभांश';
+    const voucher = addVoucher({
+      type: 'payment', date: args.date,
+      debitAccountId: payAcc, creditAccountId: creditAcc, amount,
+      lines: [{ id: crypto.randomUUID(), accountId: payAcc, type: 'Dr', amount }, { id: crypto.randomUUID(), accountId: creditAcc, type: 'Cr', amount }],
+      narration: `${kindHi} भुगतान — प्रस्ताव ${cur.resolutionNo}`,
+      refType: 'dairy.distribution.payment', refId: cur.id,
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+    if (!voucher?.id) return sentinel;
+    const next: DairyDistribution = { ...cur, amountPaid: +(cur.amountPaid + amount).toFixed(2) };
+    commitDistribution(next, cur, () => cancelVoucher(voucher.id, 'Distribution payment rolled back (cloud save failed)', user?.name || 'System'));
+    toastRef.current({ title: '✅ भुगतान दर्ज', description: `₹${amount.toLocaleString('en-IN')} — बकाया ₹${(outstandingAmt - amount).toLocaleString('en-IN')}` });
+    return voucher;
+  }, [distributions, accounts, addVoucher, cancelVoucher, commitDistribution, user]);
+
+  const deleteDairyDistribution = useCallback((distributionId: string) => {
+    if (guardFYLocked()) return;
+    const cur = distributions.find(d => d.id === distributionId);
+    if (!cur) return;
+    if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले भुगतान reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
+    if (cur.status === 'approved' && cur.voucherId) cancelVoucher(cur.voucherId, 'Distribution deleted', user?.name || 'System');
+    commitDistribution({ ...cur, isDeleted: true }, cur);
+  }, [distributions, cancelVoucher, commitDistribution, user]);
+
   const resolveMilkRate = useCallback(
     (args: { fat: number; snf: number; qty: number; date?: string; season?: string }) =>
       priceMilk(rateCharts, { fat: args.fat, snf: args.snf, qty: args.qty, date: args.date || new Date().toISOString().slice(0, 10), season: args.season }),
@@ -548,6 +673,11 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       deleteDairyInputIssue,
       memberInputReceivableAccountId: resolveMemberInputReceivableAccountId(accounts),
       getMemberInputBalance,
+      distributions,
+      createDairyDistribution,
+      approveDairyDistribution,
+      recordDistributionPayment,
+      deleteDairyDistribution,
     }}>
       {children}
     </DairyDataContext.Provider>

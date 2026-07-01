@@ -17,6 +17,10 @@ export const DAIRY_ACCOUNT_IDS = {
   milkPayable: '2102',     // Milk Payment Payable
   unionReceivable: '3303', // Union Receivable (Sundry Debtors)
   memberInputReceivable: '3305', // Member Input Receivable (feed/medicine/AI on credit)
+  bonusDistribution: '1210',     // Patronage Bonus Distribution (surplus appropriation)
+  bonusPayable: '2106',          // Bonus Payable
+  dividendDistribution: '1211',  // Dividend Distribution (surplus appropriation)
+  dividendPayable: '2104',       // Dividend Payable
 } as const;
 
 type Acc = Pick<LedgerAccount, 'id' | 'name' | 'nameHi' | 'subtype'> & { isDeleted?: boolean };
@@ -54,3 +58,12 @@ export const resolveUnionReceivableAccountId = (accounts: ReadonlyArray<Acc>): s
 
 export const resolveMemberInputReceivableAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
   findBy(accounts, null, DAIRY_ACCOUNT_IDS.memberInputReceivable, ['सदस्य आदान प्राप्य', 'Member Input Receivable']);
+
+export const resolveBonusDistributionAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
+  findBy(accounts, null, DAIRY_ACCOUNT_IDS.bonusDistribution, ['संरक्षण बोनस वितरण', 'Patronage Bonus Distribution']);
+export const resolveBonusPayableAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
+  findBy(accounts, null, DAIRY_ACCOUNT_IDS.bonusPayable, ['देय बोनस', 'Bonus Payable']);
+export const resolveDividendDistributionAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
+  findBy(accounts, null, DAIRY_ACCOUNT_IDS.dividendDistribution, ['लाभांश वितरण', 'Dividend Distribution']);
+export const resolveDividendPayableAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
+  findBy(accounts, null, DAIRY_ACCOUNT_IDS.dividendPayable, ['देय लाभांश', 'Dividend Payable']);

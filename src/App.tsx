@@ -143,6 +143,7 @@ const FarmerSettlement = lazyWithRetry(() => import("./pages/dairy/FarmerSettlem
 const DairyRegisters = lazyWithRetry(() => import("./pages/dairy/DairyRegisters"));
 const MilkDispatch = lazyWithRetry(() => import("./pages/dairy/MilkDispatch"));
 const DairyInputs = lazyWithRetry(() => import("./pages/dairy/DairyInputs"));
+const DairyDistribution = lazyWithRetry(() => import("./pages/dairy/DairyDistribution"));
 const WorkOrders = lazyWithRetry(() => import("./pages/WorkOrders"));
 const MusterRoll = lazyWithRetry(() => import("./pages/MusterRoll"));
 const WorkerMaster = lazyWithRetry(() => import("./pages/WorkerMaster"));
@@ -347,6 +348,7 @@ const AppRoutes = () => {
       <Route path="/dairy-registers" element={<ProtectedRoute><DairyRegisters /></ProtectedRoute>} />
       <Route path="/milk-dispatch" element={<ProtectedRoute><MilkDispatch /></ProtectedRoute>} />
       <Route path="/dairy-inputs" element={<ProtectedRoute><DairyInputs /></ProtectedRoute>} />
+      <Route path="/dairy-distribution" element={<ProtectedRoute><DairyDistribution /></ProtectedRoute>} />
       <Route path="/work-orders" element={<ProtectedRoute><WorkOrders /></ProtectedRoute>} />
       <Route path="/muster-roll" element={<ProtectedRoute><MusterRoll /></ProtectedRoute>} />
       <Route path="/worker-master" element={<ProtectedRoute><WorkerMaster /></ProtectedRoute>} />

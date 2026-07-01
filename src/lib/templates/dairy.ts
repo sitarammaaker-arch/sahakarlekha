@@ -20,6 +20,7 @@ export const DAIRY_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '1206', name: 'Depreciation Fund',          nameHi: 'ह्रास निधि',               type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
   { id: '1207', name: 'Cattle Development Fund',    nameHi: 'पशु विकास निधि',           type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
   { id: '1208', name: 'Net Surplus / (Deficit)',     nameHi: 'शुद्ध अधिशेष / (घाटा)',    type: 'equity',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'surplus' },
+  { id: '1210', name: 'Patronage Bonus Distribution', nameHi: 'संरक्षण बोनस वितरण',     type: 'equity',    openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
   { id: '1211', name: 'Dividend Distribution',      nameHi: 'लाभांश वितरण',             type: 'equity',    openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
   { id: '4407', name: 'Admission Fee',              nameHi: 'प्रवेश शुल्क',             type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
 
@@ -30,6 +31,7 @@ export const DAIRY_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '2102', name: 'Milk Payment Payable',       nameHi: 'देय दुग्ध भुगतान',         type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
   { id: '2103', name: 'Salary Payable',             nameHi: 'देय वेतन',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
   { id: '2104', name: 'Dividend Payable',           nameHi: 'देय लाभांश',               type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
+  { id: '2106', name: 'Bonus Payable',              nameHi: 'देय बोनस',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
   { id: '2107', name: 'Member Deposits',            nameHi: 'सदस्य जमाराशि',            type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'deposit' },
   { id: '2200', name: 'Statutory Liabilities',      nameHi: 'वैधानिक दायित्व',          type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '2000' },
   { id: '2201', name: 'GST Payable',                nameHi: 'देय GST',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200' },

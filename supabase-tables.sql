@@ -2089,3 +2089,37 @@ create policy "society_rw" on public.dairy_input_issues for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
 create index if not exists idx_dairy_input_issues_society on public.dairy_input_issues (society_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Dairy cooperative (Delivery D6) — year-end patronage BONUS / DIVIDEND runs.
+-- Governance-gated (resolutionNo mandatory at approval). Approval posts Dr
+-- distribution equity / Cr payable (total); payments advance amountPaid. Per-member
+-- breakdown stored in "lines".
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists dairy_distributions (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  kind text,
+  "from" text,
+  "to" text,
+  "fyLabel" text,
+  basis text,
+  rate numeric,
+  "resolutionNo" text,
+  "resolutionDate" text,
+  lines jsonb,
+  total numeric,
+  status text,
+  "amountPaid" numeric default 0,
+  "voucherId" text,
+  "approvedAt" timestamptz,
+  "approvedBy" text,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table public.dairy_distributions enable row level security;
+drop policy if exists "society_rw" on public.dairy_distributions;
+create policy "society_rw" on public.dairy_distributions for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create index if not exists idx_dairy_distributions_society on public.dairy_distributions (society_id);

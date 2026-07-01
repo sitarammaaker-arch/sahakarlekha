@@ -347,5 +347,63 @@ function memberInputOutstanding(issues, settlements, memberId, acct) {
   ok(memberInputOutstanding(issues, [{ memberId: 'm1', deductionLines: [{ accountId: '3305', amount: 5000 }] }], 'm1', '3305').outstanding === 0, 'over-recovery clamps outstanding to 0');
 }
 
+// ── Mirror: src/lib/dairy/distribution.ts (D6 — bonus / dividend) ──
+function computeBonusLines(entries, from, to, basis, rate) {
+  const agg = new Map();
+  for (const e of entries) {
+    if (e.date < from || e.date > to) continue;
+    if (e.qualityDecision === 'rejected') continue;
+    const add = basis === 'per_value' ? (e.amount || 0) : (e.qty || 0);
+    const cur = agg.get(e.memberId) || { name: e.memberName, base: 0 };
+    cur.base += add; agg.set(e.memberId, cur);
+  }
+  return [...agg.entries()].map(([memberId, v]) => ({ memberId, memberName: v.name, base: round2(v.base), amount: round2(v.base * (rate || 0)) }))
+    .filter(l => l.amount > 0).sort((a, b) => a.memberName.localeCompare(b.memberName));
+}
+function computeDividendLines(members, ratePct) {
+  return members.map(m => ({ memberId: m.id, memberName: m.name, base: round2(m.shareCapital || 0), amount: round2((m.shareCapital || 0) * (ratePct || 0) / 100) }))
+    .filter(l => l.amount > 0).sort((a, b) => a.memberName.localeCompare(b.memberName));
+}
+const distributionTotal = (lines) => round2(lines.reduce((s, l) => s + (l.amount || 0), 0));
+function distributionLegs(total, distAcc, payAcc) {
+  const t = round2(total);
+  if (!(t > 0) || !distAcc || !payAcc) return [];
+  return [{ accountId: distAcc, type: 'Dr', amount: t }, { accountId: payAcc, type: 'Cr', amount: t }];
+}
+
+// 21. Bonus lines: per-litre & per-value, rejected/out-of-window excluded
+{
+  const es = [
+    { memberId: 'm1', memberName: 'A', date: '2026-05-02', qty: 100, amount: 3400, qualityDecision: 'accepted' },
+    { memberId: 'm1', memberName: 'A', date: '2026-06-02', qty: 50, amount: 1700 },
+    { memberId: 'm1', memberName: 'A', date: '2026-06-03', qty: 20, amount: 680, qualityDecision: 'rejected' }, // excluded
+    { memberId: 'm2', memberName: 'B', date: '2026-06-02', qty: 200, amount: 6800 },
+    { memberId: 'm1', memberName: 'A', date: '2027-01-01', qty: 999, amount: 9990 }, // out of window
+  ];
+  const perL = computeBonusLines(es, '2026-04-01', '2026-12-31', 'per_litre', 0.5);
+  const a = perL.find(l => l.memberId === 'm1');
+  ok(a.base === 150 && a.amount === 75, 'per-litre bonus: 150 L × 0.5 = 75 (rejected & out-of-window excluded)');
+  ok(perL.find(l => l.memberId === 'm2').amount === 100, 'per-litre bonus m2: 200 × 0.5 = 100');
+  const perV = computeBonusLines(es, '2026-04-01', '2026-12-31', 'per_value', 0.05);
+  ok(perV.find(l => l.memberId === 'm1').amount === 255, 'per-value bonus: (3400+1700) × 0.05 = 255');
+}
+
+// 22. Dividend lines: % of share capital; zero-share members excluded
+{
+  const members = [{ id: 'm1', name: 'A', shareCapital: 1000 }, { id: 'm2', name: 'B', shareCapital: 500 }, { id: 'm3', name: 'C', shareCapital: 0 }];
+  const lines = computeDividendLines(members, 10);
+  ok(lines.length === 2, 'zero-share member excluded');
+  ok(lines.find(l => l.memberId === 'm1').amount === 100, 'dividend 10% of 1000 = 100');
+  ok(distributionTotal(lines) === 150, 'dividend total = 100 + 50');
+}
+
+// 23. Distribution legs: balanced Dr distribution / Cr payable
+{
+  const legs = distributionLegs(150, '1211', '2104');
+  ok(legs.length === 2 && legs[0].accountId === '1211' && legs[0].type === 'Dr' && legs[1].accountId === '2104' && legs[1].amount === 150, 'Dr 1211 dividend-dist / Cr 2104 payable = 150');
+  ok(distributionLegs(0, '1211', '2104').length === 0, 'zero total → no legs');
+  ok(distributionLegs(150, '1211', '').length === 0, 'missing payable → no legs');
+}
+
 console.log(`[dairy-test] ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
