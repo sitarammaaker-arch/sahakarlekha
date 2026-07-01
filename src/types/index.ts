@@ -229,6 +229,25 @@ export interface MaintenanceBillLine {
   amount: number;
 }
 
+// Housing — an investment (FDR/bond) that earmarks a reserve fund's corpus. Posting moves cash
+// into the investment asset (Dr investment / Cr bank); the fund account itself is unchanged.
+export interface HousingFundInvestment {
+  id: string;
+  fundAccountId: string;        // the reserve fund it backs (e.g. 1202 Sinking Fund)
+  investmentAccountId: string;  // the asset account it sits in (e.g. 3201 FDR)
+  instrument?: string;          // FDR / Bond / RD …
+  institution?: string;         // bank / institution
+  amount: number;
+  date: string;
+  maturityDate?: string;
+  interestRate?: number;        // % p.a.
+  voucherId?: string;           // Dr investment / Cr bank
+  redemptionVoucherId?: string; // Dr bank / Cr investment (on redeem)
+  status: 'active' | 'redeemed';
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 // Labour cooperative — a work order / labour contract the society has taken up.
 export interface WorkOrder {
   id: string;

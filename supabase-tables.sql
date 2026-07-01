@@ -1471,6 +1471,33 @@ create policy "society_rw" on public.housing_charge_heads for all to authenticat
   with check (society_id::text in (select public.current_user_society_ids()));
 -- per-flat charge override map (by chargeHeadId; 0 = head not applicable)
 alter table public.housing_flats add column if not exists "chargeOverrides" jsonb;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Housing H3b — fund investments (FDR/bond that earmarks a reserve fund's corpus). Posting is
+-- Dr investment asset / Cr bank; the fund account itself is unchanged. RUN once.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists housing_fund_investments (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "fundAccountId" text,
+  "investmentAccountId" text,
+  instrument text,
+  institution text,
+  amount numeric,
+  date text,
+  "maturityDate" text,
+  "interestRate" numeric,
+  "voucherId" text,
+  "redemptionVoucherId" text,
+  status text default 'active',
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table public.housing_fund_investments enable row level security;
+drop policy if exists "society_rw" on public.housing_fund_investments;
+create policy "society_rw" on public.housing_fund_investments for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
 drop policy if exists "society_rw" on public.maintenance_bills;
 create policy "society_rw" on public.maintenance_bills for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))

@@ -14,13 +14,14 @@ import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
 import { downloadCSV } from '@/lib/exportUtils';
 import { isFundAccount, buildFundStatement } from '@/lib/housing/funds';
-import { PiggyBank, TrendingUp, MinusCircle, PlusCircle, Download } from 'lucide-react';
+import { round2 } from '@/lib/housing/billing';
+import { PiggyBank, TrendingUp, MinusCircle, PlusCircle, Download, Trash2, Landmark } from 'lucide-react';
 
 type OpType = 'interest' | 'utilisation' | 'contribution';
 
 export default function FundStatement() {
   const { accounts, vouchers } = useData();
-  const { recordFundInterest, recordFundUtilisation, recordFundContribution } = useHousingData();
+  const { recordFundInterest, recordFundUtilisation, recordFundContribution, fundInvestments, addFundInvestment, redeemFundInvestment, deleteFundInvestment } = useHousingData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -34,6 +35,41 @@ export default function FundStatement() {
   const [fundId, setFundId] = useState('');
   const fund = funds.find(f => f.id === fundId);
   const statement = useMemo(() => (fund ? buildFundStatement(fund, vouchers) : null), [fund, vouchers]);
+
+  const investAccounts = accounts.filter(a => !a.isGroup && a.type === 'asset');
+  const fundInvs = fundInvestments.filter(i => !i.isDeleted && i.fundAccountId === fundId);
+  const investedActive = fundInvs.filter(i => i.status === 'active').reduce((s, i) => s + (i.amount || 0), 0);
+
+  // Add-investment dialog
+  const [invOpen, setInvOpen] = useState(false);
+  const [invAcc, setInvAcc] = useState('');
+  const [invAmount, setInvAmount] = useState('');
+  const [invDate, setInvDate] = useState(today());
+  const [invInstrument, setInvInstrument] = useState('FDR');
+  const [invInstitution, setInvInstitution] = useState('');
+  const [invMaturity, setInvMaturity] = useState('');
+  const [invRate, setInvRate] = useState('');
+  const [invMode, setInvMode] = useState<'cash' | 'bank'>('bank');
+  const [invBankId, setInvBankId] = useState('');
+
+  const openInvest = () => {
+    setInvAcc(investAccounts.find(a => a.id === '3201')?.id || investAccounts[0]?.id || '');
+    setInvAmount(''); setInvDate(today()); setInvInstrument('FDR'); setInvInstitution(''); setInvMaturity(''); setInvRate('');
+    setInvMode('bank'); setInvBankId(bankAccounts[0]?.id || '');
+    setInvOpen(true);
+  };
+  const saveInvest = () => {
+    if (!fund) return;
+    if (!invAcc) { toast({ title: hi ? 'निवेश खाता चुनें' : 'Pick an investment account', variant: 'destructive' }); return; }
+    if (!(Number(invAmount) > 0)) { toast({ title: hi ? 'राशि डालें' : 'Enter amount', variant: 'destructive' }); return; }
+    const inv = addFundInvestment({
+      fundAccountId: fund.id, investmentAccountId: invAcc, amount: Number(invAmount), date: invDate,
+      mode: invMode, bankAccountId: invMode === 'bank' ? (invBankId || undefined) : undefined,
+      instrument: invInstrument.trim() || undefined, institution: invInstitution.trim() || undefined,
+      maturityDate: invMaturity || undefined, interestRate: invRate ? Number(invRate) : undefined,
+    });
+    if (inv.id) setInvOpen(false);
+  };
 
   // Operation dialog
   const [opOpen, setOpOpen] = useState(false);
@@ -163,8 +199,86 @@ export default function FundStatement() {
               )}
             </CardContent>
           </Card>
+
+          {/* Investments (FDR earmarking) */}
+          <Card>
+            <CardHeader><CardTitle className="text-base flex items-center justify-between">
+              <span className="flex items-center gap-2"><Landmark className="h-4 w-4" />{hi ? 'निवेश (FDR)' : 'Investments (FDR)'} ({fundInvs.length})</span>
+              <Button size="sm" variant="outline" onClick={openInvest} className="gap-1"><PlusCircle className="h-4 w-4" />{hi ? 'निवेश जोड़ें' : 'Add Investment'}</Button>
+            </CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex flex-wrap gap-4 text-sm">
+                <span>{hi ? 'निवेशित' : 'Invested'}: <b>{money(investedActive)}</b></span>
+                <span className="text-muted-foreground">{hi ? 'शेष (नकद/बैंक)' : 'Held as cash/bank'}: {money(round2(statement.closing - investedActive))}</span>
+              </div>
+              {fundInvs.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'इस निधि का कोई निवेश दर्ज नहीं।' : 'No investments recorded for this fund.'}</p>}
+              {fundInvs.map(i => (
+                <div key={i.id} className="flex items-center justify-between rounded-lg border p-3 text-sm gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium">{i.instrument || 'FDR'}{i.institution ? ` · ${i.institution}` : ''} <Badge variant={i.status === 'redeemed' ? 'secondary' : 'default'}>{i.status === 'redeemed' ? (hi ? 'भुनाया' : 'Redeemed') : (hi ? 'सक्रिय' : 'Active')}</Badge></div>
+                    <div className="text-muted-foreground">{money(i.amount)} · {i.date}{i.maturityDate ? ` → ${i.maturityDate}` : ''}{i.interestRate ? ` · ${i.interestRate}%` : ''}</div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {i.status === 'active' && <Button size="sm" variant="outline" onClick={() => redeemFundInvestment({ id: i.id, date: today(), mode: 'bank', bankAccountId: bankAccounts[0]?.id })}>{hi ? 'भुनाएँ' : 'Redeem'}</Button>}
+                    <Button size="sm" variant="ghost" onClick={() => { if (window.confirm(hi ? 'निवेश हटाएँ?' : 'Delete investment?')) deleteFundInvestment(i.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
         </>
       )}
+
+      {/* Add-investment dialog */}
+      <Dialog open={invOpen} onOpenChange={setInvOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{hi ? 'निधि निवेश जोड़ें' : 'Add Fund Investment'}{fund ? ` — ${hi ? fund.nameHi : fund.name}` : ''}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>{hi ? 'निवेश खाता (संपत्ति)' : 'Investment account (asset)'} *</Label>
+              <Select value={invAcc} onValueChange={setInvAcc}>
+                <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
+                <SelectContent>{investAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} — {hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>{hi ? 'राशि' : 'Amount'} *</Label><Input type="number" min={0} value={invAmount} onChange={e => setInvAmount(e.target.value)} placeholder="0" /></div>
+              <div className="space-y-1.5"><Label>{hi ? 'तिथि' : 'Date'} *</Label><Input type="date" value={invDate} onChange={e => setInvDate(e.target.value)} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>{hi ? 'साधन' : 'Instrument'}</Label><Input value={invInstrument} onChange={e => setInvInstrument(e.target.value)} placeholder="FDR" /></div>
+              <div className="space-y-1.5"><Label>{hi ? 'संस्था' : 'Institution'}</Label><Input value={invInstitution} onChange={e => setInvInstitution(e.target.value)} placeholder={hi ? 'बैंक' : 'Bank'} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>{hi ? 'परिपक्वता' : 'Maturity'}</Label><Input type="date" value={invMaturity} onChange={e => setInvMaturity(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>{hi ? 'ब्याज दर (%)' : 'Rate (%)'}</Label><Input type="number" min={0} value={invRate} onChange={e => setInvRate(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} /></div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'किससे भुगतान' : 'Paid from'} *</Label>
+              <Select value={invMode} onValueChange={v => setInvMode(v as 'cash' | 'bank')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">{hi ? 'नकद' : 'Cash'}</SelectItem>
+                  <SelectItem value="bank">{hi ? 'बैंक' : 'Bank'}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {invMode === 'bank' && (
+              <div className="space-y-1.5">
+                <Label>{hi ? 'बैंक खाता' : 'Bank Account'}</Label>
+                <Select value={invBankId} onValueChange={setInvBankId}>
+                  <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
+                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInvOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
+            <Button onClick={saveInvest}>{hi ? 'निवेश दर्ज करें' : 'Record Investment'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Operation dialog */}
       <Dialog open={opOpen} onOpenChange={setOpOpen}>

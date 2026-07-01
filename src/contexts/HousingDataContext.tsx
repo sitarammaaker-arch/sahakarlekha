@@ -22,7 +22,7 @@ import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { computeBillLines, demandLegs, billTotal, round2 } from '@/lib/housing/billing';
 import { plannedBillInterest } from '@/lib/housing/arrears';
-import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, Voucher, LedgerAccount } from '@/types';
+import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, HousingFundInvestment, Voucher, LedgerAccount } from '@/types';
 
 interface HousingDataContextValue {
   housingFlats: HousingFlat[];
@@ -47,6 +47,12 @@ interface HousingDataContextValue {
 
   // Arrears: accrue simple interest on overdue principal up to a date (idempotent per bill).
   runArrearsInterest: (data: { asOnDate: string; annualRatePct: number; flatIds?: string[] }) => { count: number; total: number };
+
+  // Fund investments (FDR earmarking): Dr investment asset / Cr bank; the fund account is unchanged.
+  fundInvestments: HousingFundInvestment[];
+  addFundInvestment: (data: { fundAccountId: string; investmentAccountId: string; amount: number; date: string; mode: 'cash' | 'bank'; bankAccountId?: string; instrument?: string; institution?: string; maturityDate?: string; interestRate?: number }) => HousingFundInvestment;
+  redeemFundInvestment: (data: { id: string; date: string; mode: 'cash' | 'bank'; bankAccountId?: string }) => void;
+  deleteFundInvestment: (id: string) => void;
 }
 
 const HousingDataContext = createContext<HousingDataContextValue | undefined>(undefined);
@@ -73,11 +79,12 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   const [housingFlats, setHousingFlatsState] = useState<HousingFlat[]>(() => storage.getHousingFlats());
   const [maintenanceBills, setMaintenanceBillsState] = useState<MaintenanceBill[]>(() => storage.getMaintenanceBills());
   const [chargeHeads, setChargeHeadsState] = useState<HousingChargeHead[]>(() => storage.getHousingChargeHeads());
+  const [fundInvestments, setFundInvestmentsState] = useState<HousingFundInvestment[]>(() => storage.getHousingFundInvestments());
 
   // Load when the society changes; Supabase is SSOT, localStorage is offline fallback.
   useEffect(() => {
     const sid = user?.societyId;
-    if (!sid) { setHousingFlatsState([]); setMaintenanceBillsState([]); setChargeHeadsState([]); return; }
+    if (!sid) { setHousingFlatsState([]); setMaintenanceBillsState([]); setChargeHeadsState([]); setFundInvestmentsState([]); return; }
     supabase.from('housing_flats').select('*').eq('society_id', sid).then(
       ({ data, error }) => setHousingFlatsState(error || !data ? storage.getHousingFlats() : (data as unknown as HousingFlat[])),
       () => setHousingFlatsState(storage.getHousingFlats()),
@@ -89,6 +96,10 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     supabase.from('housing_charge_heads').select('*').eq('society_id', sid).then(
       ({ data, error }) => setChargeHeadsState(error || !data ? storage.getHousingChargeHeads() : (data as unknown as HousingChargeHead[])),
       () => setChargeHeadsState(storage.getHousingChargeHeads()),
+    );
+    supabase.from('housing_fund_investments').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setFundInvestmentsState(error || !data ? storage.getHousingFundInvestments() : (data as unknown as HousingFundInvestment[])),
+      () => setFundInvestmentsState(storage.getHousingFundInvestments()),
     );
   }, [user?.societyId]);
 
@@ -417,6 +428,93 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     return { count, total: round2(total) };
   }, [accounts, maintenanceBills, vouchers, addVoucher, user]);
 
+  // ── Fund investment (FDR earmarking) — Dr investment asset / Cr bank. The fund corpus (its own
+  // account) is unchanged; this records how the corpus is DEPLOYED. Entity + voucher with RULE-1
+  // rollback (cancel the voucher if the row fails to persist), mirroring the Department pattern.
+  const addFundInvestment = useCallback((data: { fundAccountId: string; investmentAccountId: string; amount: number; date: string; mode: 'cash' | 'bank'; bankAccountId?: string; instrument?: string; institution?: string; maturityDate?: string; interestRate?: number }): HousingFundInvestment => {
+    const blank = { ...data, id: '', status: 'active' as const, createdAt: '' } as HousingFundInvestment;
+    if (guardFYLocked()) return blank;
+    if (!accounts.some(a => a.id === data.fundAccountId) || !accounts.some(a => a.id === data.investmentAccountId)) {
+      toastRef.current({ title: 'खाता नहीं मिला', description: 'निधि या निवेश खाता चार्ट में नहीं है।', variant: 'destructive', duration: 9000 }); return blank;
+    }
+    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'निवेश राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return blank; }
+    const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    const fund = accounts.find(a => a.id === data.fundAccountId)!;
+    const lid = () => crypto.randomUUID();
+    const id = crypto.randomUUID();
+    const v = addVoucher({
+      type: 'journal', date: data.date,
+      debitAccountId: data.investmentAccountId, creditAccountId: bankAcc, amount: data.amount,
+      narration: `निधि निवेश — ${fund.nameHi || fund.name}${data.instrument ? ` · ${data.instrument}` : ''}`,
+      refType: 'fund.investment', refId: id,
+      createdBy: user?.name || 'System',
+      lines: [
+        { id: lid(), accountId: data.investmentAccountId, type: 'Dr', amount: data.amount },
+        { id: lid(), accountId: bankAcc, type: 'Cr', amount: data.amount },
+      ],
+    });
+    if (!v.id) return blank;
+    const inv: HousingFundInvestment = { id, fundAccountId: data.fundAccountId, investmentAccountId: data.investmentAccountId, instrument: data.instrument, institution: data.institution, amount: data.amount, date: data.date, maturityDate: data.maturityDate, interestRate: data.interestRate, voucherId: v.id, status: 'active', isDeleted: false, createdAt: new Date().toISOString() };
+    setFundInvestmentsState(prev => { const u = [...prev, inv]; storage.setHousingFundInvestments(u); return u; });
+    supabase.from('housing_fund_investments').upsert(withSoc(inv)).then(({ error }) => {
+      if (error) {
+        console.error('Fund investment save error:', error.message);
+        setFundInvestmentsState(prev => { const r = prev.filter(x => x.id !== inv.id); storage.setHousingFundInvestments(r); return r; });
+        cancelVoucher(v.id, 'Fund investment save failed (auto-rollback)', user?.name || 'System');
+        toastRef.current({ title: 'निवेश सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. इसका voucher वापस ले लिया गया।`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    toastRef.current({ title: 'निधि निवेश दर्ज', description: `${fund.nameHi || fund.name} · ₹${data.amount}`, duration: 6000 });
+    return inv;
+  }, [accounts, addVoucher, cancelVoucher, user]);
+
+  const redeemFundInvestment = useCallback((data: { id: string; date: string; mode: 'cash' | 'bank'; bankAccountId?: string }) => {
+    if (guardFYLocked()) return;
+    const inv = fundInvestments.find(i => i.id === data.id && !i.isDeleted);
+    if (!inv || inv.status === 'redeemed') return;
+    const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    const lid = () => crypto.randomUUID();
+    const v = addVoucher({
+      type: 'journal', date: data.date,
+      debitAccountId: bankAcc, creditAccountId: inv.investmentAccountId, amount: inv.amount,
+      narration: `निधि निवेश भुनाया — ${inv.instrument || 'FDR'}`,
+      refType: 'fund.redemption', refId: inv.id,
+      createdBy: user?.name || 'System',
+      lines: [
+        { id: lid(), accountId: bankAcc, type: 'Dr', amount: inv.amount },
+        { id: lid(), accountId: inv.investmentAccountId, type: 'Cr', amount: inv.amount },
+      ],
+    });
+    if (!v.id) return;
+    const next: HousingFundInvestment = { ...inv, status: 'redeemed', redemptionVoucherId: v.id };
+    setFundInvestmentsState(prev => { const u = prev.map(i => i.id === inv.id ? next : i); storage.setHousingFundInvestments(u); return u; });
+    supabase.from('housing_fund_investments').upsert(withSoc(next)).then(({ error }) => {
+      if (error) {
+        console.error('Fund investment redeem error:', error.message);
+        setFundInvestmentsState(prev => { const u = prev.map(i => i.id === inv.id ? inv : i); storage.setHousingFundInvestments(u); return u; });
+        cancelVoucher(v.id, 'Redemption rolled back (row update failed)', user?.name || 'System');
+        toastRef.current({ title: 'भुनाना सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    toastRef.current({ title: 'निवेश भुनाया गया', description: `₹${inv.amount} बैंक में वापस`, duration: 6000 });
+  }, [fundInvestments, accounts, addVoucher, cancelVoucher, user]);
+
+  const deleteFundInvestment = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const inv = fundInvestments.find(i => i.id === id);
+    if (!inv) return;
+    if (inv.voucherId) cancelVoucher(inv.voucherId, `Fund investment deleted`, user?.name || 'System');
+    if (inv.redemptionVoucherId) cancelVoucher(inv.redemptionVoucherId, `Fund investment deleted (redemption reversed)`, user?.name || 'System');
+    setFundInvestmentsState(prev => { const u = prev.filter(i => i.id !== id); storage.setHousingFundInvestments(u); return u; });
+    supabase.from('housing_fund_investments').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('Fund investment delete error:', error.message);
+        setFundInvestmentsState(prev => { const u = [...prev, inv]; storage.setHousingFundInvestments(u); return u; });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [fundInvestments, cancelVoucher, user]);
+
   return (
     <HousingDataContext.Provider value={{
       housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat,
@@ -424,6 +522,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       chargeHeads, addChargeHead, updateChargeHead, deleteChargeHead,
       recordFundContribution, recordFundInterest, recordFundUtilisation,
       runArrearsInterest,
+      fundInvestments, addFundInvestment, redeemFundInvestment, deleteFundInvestment,
     }}>
       {children}
     </HousingDataContext.Provider>
