@@ -80,6 +80,7 @@ export default function DairyRegisters() {
                 <Badge variant="secondary">{collection.totalQty.toFixed(1)} {hi ? 'लीटर' : 'L'}</Badge>
                 <Badge variant="secondary">{hi ? 'औसत fat' : 'avg fat'} {collection.avgFat}</Badge>
                 <Badge variant="secondary">{hi ? 'औसत SNF' : 'avg SNF'} {collection.avgSnf}</Badge>
+                {collection.rejectedCount > 0 && <Badge variant="destructive">{hi ? 'अस्वीकृत' : 'rejected'} {collection.rejectedQty.toFixed(1)} {hi ? 'ली' : 'L'} ({collection.rejectedCount})</Badge>}
                 <Badge>{inr(collection.totalAmount)}</Badge>
               </div>
               {collection.rows.length === 0 ? <p className="text-sm text-muted-foreground py-4 text-center">{hi ? 'इस अवधि में कोई संकलन नहीं।' : 'No collection in this period.'}</p> : (
