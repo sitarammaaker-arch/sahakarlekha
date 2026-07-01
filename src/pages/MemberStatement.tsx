@@ -34,7 +34,7 @@ export default function MemberStatement() {
     if (!member) return;
     downloadCSV(
       [hi ? 'तिथि' : 'Date', hi ? 'प्रकार' : 'Type', hi ? 'संदर्भ' : 'Ref', hi ? 'विवरण' : 'Particulars', hi ? 'नाम (मांग)' : 'Debit', hi ? 'जमा (वसूली)' : 'Credit', hi ? 'शेष' : 'Balance'],
-      statement.rows.map(r => [r.date, r.kind === 'demand' ? (hi ? 'मांग' : 'Demand') : (hi ? 'वसूली' : 'Receipt'), r.ref, r.particulars, r.debit || '', r.credit || '', r.balance]),
+      statement.rows.map(r => [r.date, r.kind === 'demand' ? (hi ? 'मांग' : 'Demand') : r.kind === 'interest' ? (hi ? 'ब्याज' : 'Interest') : (hi ? 'वसूली' : 'Receipt'), r.ref, r.particulars, r.debit || '', r.credit || '', r.balance]),
       `member-statement-${member.memberId}`,
     );
   };
@@ -74,9 +74,10 @@ export default function MemberStatement() {
       {member && (
         <>
           {/* Summary */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <SummaryChip label={hi ? 'कुल मांग' : 'Total demanded'} value={money(statement.totalDemanded)} />
-            <SummaryChip label={hi ? 'कुल वसूली' : 'Total received'} value={money(statement.totalReceived)} />
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <SummaryChip label={hi ? 'कुल मांग' : 'Demanded'} value={money(statement.totalDemanded)} />
+            <SummaryChip label={hi ? 'ब्याज' : 'Interest'} value={money(statement.totalInterest)} />
+            <SummaryChip label={hi ? 'कुल वसूली' : 'Received'} value={money(statement.totalReceived)} />
             <SummaryChip label={hi ? 'बकाया' : 'Outstanding'} value={money(statement.outstanding)} amber={statement.outstanding > 0} />
             <SummaryChip label={hi ? 'शेयर पूंजी' : 'Share capital'} value={money(member.shareCapital || 0)} />
           </div>
@@ -114,7 +115,7 @@ export default function MemberStatement() {
                             <TableCell className="whitespace-nowrap">{r.date}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1.5">
-                                <Badge variant={r.kind === 'demand' ? 'outline' : 'default'} className="shrink-0">{r.kind === 'demand' ? (hi ? 'मांग' : 'Demand') : (hi ? 'वसूली' : 'Receipt')}</Badge>
+                                <Badge variant={r.kind === 'demand' ? 'outline' : r.kind === 'interest' ? 'destructive' : 'default'} className="shrink-0">{r.kind === 'demand' ? (hi ? 'मांग' : 'Demand') : r.kind === 'interest' ? (hi ? 'ब्याज' : 'Interest') : (hi ? 'वसूली' : 'Receipt')}</Badge>
                                 <span className="text-xs text-muted-foreground">{r.ref}</span>
                               </div>
                               <div className="text-sm">{r.particulars}</div>

@@ -20,7 +20,8 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
-import { computeBillLines, demandLegs, billTotal } from '@/lib/housing/billing';
+import { computeBillLines, demandLegs, billTotal, round2 } from '@/lib/housing/billing';
+import { plannedBillInterest } from '@/lib/housing/arrears';
 import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, Voucher, LedgerAccount } from '@/types';
 
 interface HousingDataContextValue {
@@ -43,6 +44,9 @@ interface HousingDataContextValue {
   recordFundContribution: (data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; remarks?: string }) => Voucher;
   recordFundInterest: (data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; remarks?: string }) => Voucher;
   recordFundUtilisation: (data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; purpose?: string }) => Voucher;
+
+  // Arrears: accrue simple interest on overdue principal up to a date (idempotent per bill).
+  runArrearsInterest: (data: { asOnDate: string; annualRatePct: number; flatIds?: string[] }) => { count: number; total: number };
 }
 
 const HousingDataContext = createContext<HousingDataContextValue | undefined>(undefined);
@@ -50,7 +54,7 @@ const HousingDataContext = createContext<HousingDataContextValue | undefined>(un
 export function HousingProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   // Compose core (never fork): FY-lock + chart from society; sub-ledgers + vouchers via the core engine.
-  const { society, accounts, members, addAccount, addVoucher, cancelVoucher } = useData();
+  const { society, accounts, members, vouchers, addAccount, addVoucher, cancelVoucher } = useData();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   useEffect(() => { toastRef.current = toast; }, [toast]);
@@ -380,12 +384,46 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   const recordFundUtilisation = useCallback((data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; purpose?: string }): Voucher =>
     postFundMovement({ ...data, note: data.purpose, refType: 'fund.utilisation', toFund: false }), [postFundMovement]);
 
+  // Accrue simple interest on each open bill's outstanding principal up to `asOnDate` at an annual
+  // rate: Dr <member receivable> / Cr 4402 Interest on Defaulters, refType 'maintenance.interest'.
+  // Idempotent per bill — plannedBillInterest charges only the period since the last interest
+  // voucher (derived from vouchers), so re-running the same date charges nothing.
+  const runArrearsInterest = useCallback((data: { asOnDate: string; annualRatePct: number; flatIds?: string[] }): { count: number; total: number } => {
+    if (guardFYLocked()) return { count: 0, total: 0 };
+    if (!(data.annualRatePct > 0)) { toastRef.current({ title: 'ब्याज दर डालें', description: 'वार्षिक ब्याज दर 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return { count: 0, total: 0 }; }
+    if (!accounts.some(a => a.id === '4402')) { toastRef.current({ title: 'खाता नहीं मिला', description: 'ब्याज खाता (4402 — चूककर्ताओं पर ब्याज) चार्ट में नहीं है।', variant: 'destructive', duration: 10000 }); return { count: 0, total: 0 }; }
+    const openBills = maintenanceBills.filter(b => !b.isDeleted && (!data.flatIds || data.flatIds.includes(b.flatId)));
+    const lid = () => crypto.randomUUID();
+    let count = 0, total = 0;
+    for (const bill of openBills) {
+      const p = plannedBillInterest(bill, vouchers, data.asOnDate, data.annualRatePct);
+      if (p.amount <= 0) continue;
+      const rec = bill.receivableAccountId || '3303';
+      const v = addVoucher({
+        type: 'journal', date: data.asOnDate,
+        debitAccountId: rec, creditAccountId: '4402', amount: p.amount,
+        narration: `ब्याज (विलंब) — ${bill.billNo} · ${p.days} दिन @ ${data.annualRatePct}%`,
+        refType: 'maintenance.interest', refId: bill.id,
+        memberId: bill.memberId, createdBy: user?.name || 'System',
+        lines: [
+          { id: lid(), accountId: rec, type: 'Dr', amount: p.amount },
+          { id: lid(), accountId: '4402', type: 'Cr', amount: p.amount },
+        ],
+      });
+      if (v.id) { count++; total = round2(total + p.amount); }
+    }
+    if (count > 0) toastRef.current({ title: 'ब्याज दर्ज हुआ', description: `${count} बिल · कुल ब्याज ₹${round2(total)}`, duration: 7000 });
+    else toastRef.current({ title: 'कोई ब्याज नहीं', description: 'इस तिथि तक कोई नया ब्याज देय नहीं (बकाया नहीं या पहले से लगाया जा चुका)।', variant: 'default', duration: 8000 });
+    return { count, total: round2(total) };
+  }, [accounts, maintenanceBills, vouchers, addVoucher, user]);
+
   return (
     <HousingDataContext.Provider value={{
       housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat,
       maintenanceBills, generateMaintenanceBills, deleteMaintenanceBill, recordMaintenanceCollection,
       chargeHeads, addChargeHead, updateChargeHead, deleteChargeHead,
       recordFundContribution, recordFundInterest, recordFundUtilisation,
+      runArrearsInterest,
     }}>
       {children}
     </HousingDataContext.Provider>

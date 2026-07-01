@@ -61,6 +61,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'chargeHeads', titleKey: 'chargeHeads', icon: ListTree, route: '/charge-heads', domain: 'operations', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 12 },
   { id: 'memberStatement', titleKey: 'memberStatement', icon: BookMarked, route: '/member-statement', domain: 'reports', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 40 },
   { id: 'fundStatement', titleKey: 'fundStatement', icon: PiggyBank, route: '/fund-statement', domain: 'reports', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 41 },
+  { id: 'outstandingRegister', titleKey: 'outstandingRegister', icon: Clock, route: '/outstanding-register', domain: 'reports', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 42 },
   // ── Labour cooperative module group (domain: 'labour') ──
   { id: 'workerMaster',    titleKey: 'workerMaster',    icon: HardHat,         route: '/worker-master',   domain: 'labour',     requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 10 },
   { id: 'departmentMaster',titleKey: 'departmentMaster',icon: Landmark,        route: '/department-master', domain: 'labour',   requiredCapabilities: ['labour'], requiredRoles: ['admin', 'accountant'], order: 11 },

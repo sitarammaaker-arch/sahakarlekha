@@ -200,16 +200,18 @@ function buildMemberStatement(bills, vouchers) {
   const raw = [];
   for (const b of activeBills) raw.push({ date: b.date, kind: 'demand', ref: b.billNo, particulars: `Maintenance ${b.period}`, debit: round2(b.amount), credit: 0, billId: b.id });
   for (const v of vouchers) {
-    if (v.isDeleted) continue;
-    if (v.refType !== 'maintenance.receipt' || !v.refId || !billIds.has(v.refId)) continue;
-    raw.push({ date: v.date, kind: 'receipt', ref: v.voucherNo, particulars: v.narration || 'Receipt', debit: 0, credit: round2(v.amount), billId: v.refId });
+    if (v.isDeleted || !v.refId || !billIds.has(v.refId)) continue;
+    if (v.refType === 'maintenance.receipt') raw.push({ date: v.date, kind: 'receipt', ref: v.voucherNo, particulars: v.narration || 'Receipt', debit: 0, credit: round2(v.amount), billId: v.refId });
+    else if (v.refType === 'maintenance.interest') raw.push({ date: v.date, kind: 'interest', ref: v.voucherNo, particulars: v.narration || 'Interest', debit: round2(v.amount), credit: 0, billId: v.refId });
   }
-  raw.sort((a, b) => a.date.localeCompare(b.date) || (a.kind === b.kind ? 0 : a.kind === 'demand' ? -1 : 1));
+  const ord = (k) => (k === 'receipt' ? 1 : 0);
+  raw.sort((a, b) => a.date.localeCompare(b.date) || ord(a.kind) - ord(b.kind));
   let bal = 0;
   const rows = raw.map(r => { bal = round2(bal + r.debit - r.credit); return { ...r, balance: bal }; });
-  const totalDemanded = round2(rows.reduce((s, r) => s + r.debit, 0));
+  const totalDemanded = round2(rows.filter(r => r.kind === 'demand').reduce((s, r) => s + r.debit, 0));
+  const totalInterest = round2(rows.filter(r => r.kind === 'interest').reduce((s, r) => s + r.debit, 0));
   const totalReceived = round2(rows.reduce((s, r) => s + r.credit, 0));
-  return { rows, totalDemanded, totalReceived, outstanding: round2(totalDemanded - totalReceived) };
+  return { rows, totalDemanded, totalInterest, totalReceived, outstanding: round2(totalDemanded + totalInterest - totalReceived) };
 }
 
 // 15. Statement: demands + linked receipts, chronological running outstanding
@@ -320,6 +322,70 @@ function buildFundStatement(fund, vouchers) {
   const s = buildFundStatement(fund, vouchers);
   ok(s.opening === -500, 'debit opening balance is negated for a credit-corpus fund');
   ok(s.contributions === 1000 && s.closing === 500, 'deleted voucher excluded; closing = -500 + 1000');
+}
+
+// 21. Statement now includes interest charges (kind 'interest', increases outstanding)
+{
+  const bills = [{ id: 'b1', billNo: 'B1', period: '2026-07', date: '2026-07-01', amount: 1500 }];
+  const vouchers = [
+    { voucherNo: 'INT1', refType: 'maintenance.interest', refId: 'b1', date: '2026-08-01', amount: 200 },
+    { voucherNo: 'RCP1', refType: 'maintenance.receipt', refId: 'b1', date: '2026-08-05', amount: 500 },
+  ];
+  const s = buildMemberStatement(bills, vouchers);
+  ok(s.totalDemanded === 1500 && s.totalInterest === 200 && s.totalReceived === 500, 'statement separates demand / interest / receipt totals');
+  ok(s.outstanding === 1200, 'outstanding = demand + interest − receipt (1500 + 200 − 500)');
+  ok(s.rows.some(r => r.kind === 'interest' && r.debit === 200), 'interest row is a debit on the ledger');
+}
+
+// ── Mirror: src/lib/housing/arrears.ts ──
+const MS_DAY = 86400000;
+function daysBetween(from, to) { const a = Date.parse(from), b = Date.parse(to); if (isNaN(a) || isNaN(b)) return 0; return Math.max(0, Math.floor((b - a) / MS_DAY)); }
+function ageBucket(days) { if (days <= 30) return '0-30'; if (days <= 60) return '31-60'; if (days <= 90) return '61-90'; return '90+'; }
+function computeInterest(principal, from, to, rate) { if (!(principal > 0) || !(rate > 0)) return 0; const days = daysBetween(from, to); return round2(principal * (rate / 100) * (days / 365)); }
+function lastInterestDate(billId, vouchers, fallback) { let d = fallback; for (const v of vouchers) { if (v.isDeleted || v.refType !== 'maintenance.interest' || v.refId !== billId) continue; if (v.date > d) d = v.date; } return d; }
+function plannedBillInterest(bill, vouchers, asOn, rate) { const outstanding = round2(Math.max(0, (bill.amount || 0) - (bill.paidAmount || 0))); const fromDate = lastInterestDate(bill.id, vouchers, bill.date); const days = daysBetween(fromDate, asOn); const amount = outstanding > 0 ? computeInterest(outstanding, fromDate, asOn, rate) : 0; return { billId: bill.id, outstanding, fromDate, days, amount }; }
+function buildAgingRegister(bills, asOn) { const buckets = { '0-30': 0, '31-60': 0, '61-90': 0, '90+': 0 }; const rows = []; for (const b of bills) { if (b.isDeleted) continue; const outstanding = round2((b.amount || 0) - (b.paidAmount || 0)); if (outstanding <= 0.005) continue; const days = daysBetween(b.date, asOn); const bucket = ageBucket(days); buckets[bucket] = round2(buckets[bucket] + outstanding); rows.push({ billId: b.id, days, bucket, outstanding }); } const total = round2(rows.reduce((s, r) => s + r.outstanding, 0)); return { rows, buckets, total }; }
+
+// 22. daysBetween + ageBucket boundaries
+{
+  ok(daysBetween('2026-07-01', '2026-07-31') === 30, '30 days between Jul 1 and Jul 31');
+  ok(daysBetween('2026-07-31', '2026-07-01') === 0, 'reverse span clamps to 0');
+  ok(ageBucket(30) === '0-30' && ageBucket(31) === '31-60' && ageBucket(60) === '31-60', 'bucket boundaries at 30/31');
+  ok(ageBucket(90) === '61-90' && ageBucket(91) === '90+', 'bucket boundary at 90/91');
+}
+
+// 23. Simple interest math
+{
+  ok(computeInterest(10000, '2025-07-01', '2026-07-01', 12) === 1200, '12% on 10000 for a year = 1200');
+  ok(computeInterest(10000, '2026-07-01', '2026-07-31', 21) === 172.6, '21% on 10000 for 30 days = 172.60');
+  ok(computeInterest(1000, '2026-07-01', '2026-07-31', 0) === 0, 'zero rate → no interest');
+  ok(computeInterest(0, '2026-07-01', '2026-08-01', 21) === 0, 'zero principal → no interest');
+}
+
+// 24. plannedBillInterest is idempotent via existing interest vouchers
+{
+  const bill = { id: 'b1', amount: 1500, paidAmount: 0, date: '2026-07-01' };
+  const p1 = plannedBillInterest(bill, [], '2026-07-31', 24);
+  ok(p1.outstanding === 1500 && p1.fromDate === '2026-07-01' && p1.days === 30 && p1.amount === 29.59, 'first run charges 30 days from the bill date');
+  const already = [{ refType: 'maintenance.interest', refId: 'b1', date: '2026-07-31', amount: 29.59 }];
+  const p2 = plannedBillInterest(bill, already, '2026-07-31', 24);
+  ok(p2.days === 0 && p2.amount === 0, 're-running the same as-on date charges nothing (idempotent)');
+  const paid = plannedBillInterest({ id: 'b1', amount: 1500, paidAmount: 1500, date: '2026-07-01' }, [], '2026-07-31', 24);
+  ok(paid.outstanding === 0 && paid.amount === 0, 'a fully-paid bill accrues no interest');
+}
+
+// 25. Aging register buckets open bills by age; paid/deleted excluded
+{
+  const bills = [
+    { id: 'b1', billNo: 'B1', period: '2026-06', date: '2026-06-25', amount: 1000, paidAmount: 0 },   // 36 days → 31-60
+    { id: 'b2', billNo: 'B2', period: '2026-07', date: '2026-07-20', amount: 500, paidAmount: 200 },   // 11 days → 0-30, out 300
+    { id: 'b3', billNo: 'B3', period: '2026-01', date: '2026-01-01', amount: 800, paidAmount: 800 },   // paid → excluded
+    { id: 'b4', billNo: 'B4', period: '2026-05', date: '2026-05-01', amount: 400, paidAmount: 0, isDeleted: true },
+  ];
+  const a = buildAgingRegister(bills, '2026-07-31');
+  ok(a.rows.length === 2, 'only open, non-deleted bills are aged');
+  ok(a.buckets['0-30'] === 300 && a.buckets['31-60'] === 1000, 'outstanding bucketed by age');
+  ok(a.total === 1300, 'aging total = sum of open outstanding');
 }
 
 console.log(`[housing-test] ${pass} passed, ${fail} failed`);
