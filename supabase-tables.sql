@@ -1560,6 +1560,15 @@ create index if not exists idx_housing_transfers_society on public.housing_trans
 create unique index if not exists housing_parking_slot_uniq on public.housing_parking (society_id, "slotNo") where ("isDeleted" = false);
 create unique index if not exists housing_complaints_no_uniq on public.housing_complaints (society_id, "complaintNo") where ("isDeleted" = false);
 
+-- Housing R2 — GST on maintenance (society toggle + rate; per charge-head taxable flag & kind),
+-- and governance resolution reference on transfers. RUN once.
+alter table public.society_settings add column if not exists "maintenanceGstEnabled" boolean default false;
+alter table public.society_settings add column if not exists "maintenanceGstRate" numeric default 18;
+alter table public.housing_charge_heads add column if not exists gstable boolean default false;
+alter table public.housing_charge_heads add column if not exists kind text;
+alter table public.housing_transfers add column if not exists "resolutionNo" text;
+alter table public.housing_transfers add column if not exists "resolutionDate" text;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Labour cooperative — Work Orders / labour-contract register (master data; no
 -- accounting in V1). Plain society-scoped table (client upserts directly). RUN once.

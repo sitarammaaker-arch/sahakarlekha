@@ -108,8 +108,11 @@ export default function FundStatement() {
     contribution: { hi: 'अंशदान जोड़ें', en: 'Add Contribution' },
   };
 
+  const [resNo, setResNo] = useState('');
+  const [resDate, setResDate] = useState('');
   const openOp = (t: OpType) => {
     setOpType(t); setAmount(''); setDate(today()); setMode('bank'); setBankId(bankAccounts[0]?.id || ''); setNote('');
+    setResNo(''); setResDate('');
     setOpOpen(true);
   };
 
@@ -119,7 +122,7 @@ export default function FundStatement() {
     if (!(amt > 0)) { toast({ title: hi ? 'राशि डालें' : 'Enter amount', variant: 'destructive' }); return; }
     const common = { fundAccountId: fund.id, amount: amt, mode, bankAccountId: mode === 'bank' ? (bankId || undefined) : undefined, date };
     const v = opType === 'interest' ? recordFundInterest({ ...common, remarks: note.trim() || undefined })
-      : opType === 'utilisation' ? recordFundUtilisation({ ...common, purpose: note.trim() || undefined })
+      : opType === 'utilisation' ? recordFundUtilisation({ ...common, purpose: note.trim() || undefined, resolutionNo: resNo.trim() || undefined, resolutionDate: resDate || undefined })
       : recordFundContribution({ ...common, remarks: note.trim() || undefined });
     if (v.id) setOpOpen(false);
   };
@@ -380,6 +383,15 @@ export default function FundStatement() {
               <Label>{opType === 'utilisation' ? (hi ? 'प्रयोजन' : 'Purpose') : (hi ? 'टिप्पणी' : 'Remarks')}</Label>
               <Input value={note} onChange={e => setNote(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} />
             </div>
+            {opType === 'utilisation' && (
+              <div className="grid grid-cols-2 gap-3 rounded-lg border p-2.5">
+                <div className="space-y-1.5 col-span-2">
+                  <Label className="text-xs text-muted-foreground">{hi ? 'समिति/AGM प्रस्ताव (₹50,000 से ऊपर आवश्यक)' : 'Committee/AGM resolution (required above ₹50,000)'}</Label>
+                </div>
+                <div className="space-y-1.5"><Label>{hi ? 'प्रस्ताव सं.' : 'Resolution No.'}</Label><Input value={resNo} onChange={e => setResNo(e.target.value)} placeholder={hi ? 'जैसे R-12/2026' : 'e.g. R-12/2026'} /></div>
+                <div className="space-y-1.5"><Label>{hi ? 'तिथि' : 'Date'}</Label><Input type="date" value={resDate} onChange={e => setResDate(e.target.value)} /></div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>

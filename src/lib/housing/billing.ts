@@ -27,8 +27,27 @@ export function computeBillLines(flat: HousingFlat, heads: HousingChargeHead[]):
     .filter(h => !h.isDeleted && h.isActive !== false)
     .slice()
     .sort((a, b) => (a.order || 0) - (b.order || 0))
-    .map(h => ({ chargeHeadId: h.id, name: h.nameEn || h.nameHi, accountId: h.accountId, isFund: !!h.isFund, amount: chargeHeadAmount(h, flat) }))
+    .map(h => ({ chargeHeadId: h.id, name: h.nameEn || h.nameHi, accountId: h.accountId, isFund: !!h.isFund, gstable: !!h.gstable, amount: chargeHeadAmount(h, flat) }))
     .filter(l => l.amount > 0);
+}
+
+/**
+ * GST line for a bill (R2a). Real rule: GST applies only when the taxable per-member maintenance
+ * exceeds ₹7,500/month; here the taxable base is the sum of the `gstable` charge-head lines (the
+ * society/admin marks which heads attract GST, per their CA). Returns null when disabled, below
+ * threshold, or zero. The line posts to the GST payable account (grouped by demandLegs).
+ */
+export const GST_MAINTENANCE_THRESHOLD = 7500;
+export function gstLineForBill(
+  lines: MaintenanceBillLine[],
+  opts: { enabled: boolean; rate: number; gstAccountId: string },
+): MaintenanceBillLine | null {
+  if (!opts.enabled || !(opts.rate > 0)) return null;
+  const taxable = round2(lines.filter(l => l.gstable).reduce((s, l) => s + l.amount, 0));
+  if (taxable <= GST_MAINTENANCE_THRESHOLD) return null;
+  const gst = round2(taxable * (opts.rate / 100));
+  if (gst <= 0) return null;
+  return { chargeHeadId: '', name: `GST @${opts.rate}%`, accountId: opts.gstAccountId, isFund: false, gstable: false, amount: gst };
 }
 
 /** Total (₹) of a set of bill lines. */

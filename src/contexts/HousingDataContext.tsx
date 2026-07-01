@@ -20,7 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
-import { computeBillLines, demandLegs, billTotal, round2 } from '@/lib/housing/billing';
+import { computeBillLines, demandLegs, billTotal, round2, gstLineForBill } from '@/lib/housing/billing';
 import { plannedBillInterest } from '@/lib/housing/arrears';
 import { buildMemberStatement } from '@/lib/housing/statement';
 import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, Voucher, LedgerAccount } from '@/types';
@@ -44,7 +44,7 @@ interface HousingDataContextValue {
   // Fund (reserve) operations — each posts a tagged voucher; the fund account IS the record.
   recordFundContribution: (data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; remarks?: string }) => Voucher;
   recordFundInterest: (data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; remarks?: string }) => Voucher;
-  recordFundUtilisation: (data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; purpose?: string }) => Voucher;
+  recordFundUtilisation: (data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; purpose?: string; resolutionNo?: string; resolutionDate?: string }) => Voucher;
 
   // Arrears: accrue simple interest on overdue principal up to a date (idempotent per bill).
   runArrearsInterest: (data: { asOnDate: string; annualRatePct: number; flatIds?: string[] }) => { count: number; total: number };
@@ -67,7 +67,7 @@ interface HousingDataContextValue {
   deleteParking: (id: string) => void;
 
   transfers: HousingTransfer[];
-  recordFlatTransfer: (data: { flatId: string; toMemberId: string; date: string; transferFee?: number; premium?: number; mode?: 'cash' | 'bank'; bankAccountId?: string; remarks?: string }) => HousingTransfer;
+  recordFlatTransfer: (data: { flatId: string; toMemberId: string; date: string; transferFee?: number; premium?: number; mode?: 'cash' | 'bank'; bankAccountId?: string; resolutionNo?: string; resolutionDate?: string; remarks?: string }) => HousingTransfer;
   deleteFlatTransfer: (id: string) => void;
 }
 
@@ -274,6 +274,9 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         : (flat.monthlyMaintenance || 0) > 0
           ? [{ chargeHeadId: '', name: 'Maintenance', accountId: '4101', isFund: false, amount: +flat.monthlyMaintenance.toFixed(2) }]
           : [];
+      // GST (R2a): only when the society has enabled it AND the flat's taxable base > ₹7,500.
+      const gst = gstLineForBill(billLines, { enabled: !!society.maintenanceGstEnabled, rate: society.maintenanceGstRate ?? 18, gstAccountId: '2201' });
+      if (gst && accounts.some(a => a.id === '2201')) billLines.push(gst);
       const amount = billTotal(billLines);
       if (amount <= 0) continue;   // nothing billable for this flat this period
       const rec = resolveReceivable(flat.memberId);
@@ -323,7 +326,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     });
     toastRef.current({ title: 'रखरखाव बिल बने', description: `${created.length} बिल · अवधि ${data.period}`, duration: 6000 });
     return created;
-  }, [accounts, housingFlats, maintenanceBills, chargeHeads, members, addAccount, addVoucher, cancelVoucher, user]);
+  }, [accounts, housingFlats, maintenanceBills, chargeHeads, members, society, addAccount, addVoucher, cancelVoucher, user]);
 
   const deleteMaintenanceBill = useCallback((id: string) => {
     if (guardFYLocked()) return;
@@ -423,8 +426,18 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     postFundMovement({ ...data, note: data.remarks, refType: 'fund.contribution', toFund: true }), [postFundMovement]);
   const recordFundInterest = useCallback((data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; remarks?: string }): Voucher =>
     postFundMovement({ ...data, note: data.remarks, refType: 'fund.interest', toFund: true }), [postFundMovement]);
-  const recordFundUtilisation = useCallback((data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; purpose?: string }): Voucher =>
-    postFundMovement({ ...data, note: data.purpose, refType: 'fund.utilisation', toFund: false }), [postFundMovement]);
+  // Governance gate (R2b): fund utilisation above the threshold requires a committee/AGM
+  // resolution reference; it is stored in the voucher narration for the audit trail.
+  const FUND_RESOLUTION_THRESHOLD = 50000;
+  const recordFundUtilisation = useCallback((data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; purpose?: string; resolutionNo?: string; resolutionDate?: string }): Voucher => {
+    if (data.amount > FUND_RESOLUTION_THRESHOLD && !data.resolutionNo?.trim()) {
+      toastRef.current({ title: 'प्रस्ताव संख्या आवश्यक', description: `₹${FUND_RESOLUTION_THRESHOLD} से ऊपर निधि उपयोग के लिए समिति/AGM प्रस्ताव संख्या दर्ज करना आवश्यक है।`, variant: 'destructive', duration: 12000 });
+      return { id: '', voucherNo: '', type: 'payment', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    }
+    const resNote = data.resolutionNo?.trim() ? `प्रस्ताव ${data.resolutionNo.trim()}${data.resolutionDate ? ` (${data.resolutionDate})` : ''}` : '';
+    const note = [data.purpose?.trim(), resNote].filter(Boolean).join(' · ') || undefined;
+    return postFundMovement({ fundAccountId: data.fundAccountId, amount: data.amount, mode: data.mode, bankAccountId: data.bankAccountId, date: data.date, note, refType: 'fund.utilisation', toFund: false });
+  }, [postFundMovement]);
 
   // Accrue simple interest on each open bill's outstanding principal up to `asOnDate` at an annual
   // rate: Dr <member receivable> / Cr 4402 Interest on Defaulters, refType 'maintenance.interest'.
@@ -643,7 +656,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
 
   // ── Flat transfer — reassign owner + optionally post fee (→ 4201) & premium (→ 1202 corpus).
   // Clears the flat's receivableAccountId so the next bill resolves the NEW owner's sub-ledger.
-  const recordFlatTransfer = useCallback((data: { flatId: string; toMemberId: string; date: string; transferFee?: number; premium?: number; mode?: 'cash' | 'bank'; bankAccountId?: string; remarks?: string }): HousingTransfer => {
+  const recordFlatTransfer = useCallback((data: { flatId: string; toMemberId: string; date: string; transferFee?: number; premium?: number; mode?: 'cash' | 'bank'; bankAccountId?: string; resolutionNo?: string; resolutionDate?: string; remarks?: string }): HousingTransfer => {
     const blank = { id: '', flatId: data.flatId, toMemberId: data.toMemberId, date: data.date, createdAt: '' } as HousingTransfer;
     if (guardFYLocked()) return blank;
     const flat = housingFlats.find(f => f.id === data.flatId && !f.isDeleted);
@@ -681,7 +694,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     }
     const oldOwner = flat.memberId;
     updateHousingFlat(flat.id, { memberId: data.toMemberId, receivableAccountId: undefined, associateMemberId: undefined });
-    const t: HousingTransfer = { id, flatId: flat.id, flatNo: flat.flatNo, fromMemberId: oldOwner, toMemberId: data.toMemberId, date: data.date, transferFee: fee || undefined, premium: prem || undefined, voucherId, remarks: data.remarks, isDeleted: false, createdAt: new Date().toISOString() };
+    const t: HousingTransfer = { id, flatId: flat.id, flatNo: flat.flatNo, fromMemberId: oldOwner, toMemberId: data.toMemberId, date: data.date, transferFee: fee || undefined, premium: prem || undefined, voucherId, resolutionNo: data.resolutionNo?.trim() || undefined, resolutionDate: data.resolutionDate || undefined, remarks: data.remarks, isDeleted: false, createdAt: new Date().toISOString() };
     setTransfersState(prev => { const u = [...prev, t]; storage.setHousingTransfers(u); return u; });
     supabase.from('housing_transfers').upsert(withSoc(t)).then(({ error }) => {
       if (error) {
