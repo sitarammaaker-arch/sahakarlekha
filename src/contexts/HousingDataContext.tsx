@@ -23,7 +23,7 @@ import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { computeBillLines, demandLegs, billTotal, round2, gstLineForBill } from '@/lib/housing/billing';
 import { plannedBillInterest } from '@/lib/housing/arrears';
 import { buildMemberStatement } from '@/lib/housing/statement';
-import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, Voucher, LedgerAccount } from '@/types';
+import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, Voucher, LedgerAccount } from '@/types';
 
 interface HousingDataContextValue {
   housingFlats: HousingFlat[];
@@ -84,6 +84,11 @@ interface HousingDataContextValue {
   addDocument: (data: Omit<HousingDocument, 'id' | 'createdAt'>) => HousingDocument;
   updateDocument: (id: string, data: Partial<HousingDocument>) => void;
   deleteDocument: (id: string) => void;
+
+  buildings: HousingBuilding[];
+  addBuilding: (data: Omit<HousingBuilding, 'id' | 'createdAt'>) => HousingBuilding;
+  updateBuilding: (id: string, data: Partial<HousingBuilding>) => void;
+  deleteBuilding: (id: string) => void;
 }
 
 const HousingDataContext = createContext<HousingDataContextValue | undefined>(undefined);
@@ -117,11 +122,12 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   const [insurances, setInsurancesState] = useState<HousingInsurance[]>(() => storage.getHousingInsurance());
   const [amcs, setAmcsState] = useState<HousingAmc[]>(() => storage.getHousingAmc());
   const [documents, setDocumentsState] = useState<HousingDocument[]>(() => storage.getHousingDocuments());
+  const [buildings, setBuildingsState] = useState<HousingBuilding[]>(() => storage.getHousingBuildings());
 
   // Load when the society changes; Supabase is SSOT, localStorage is offline fallback.
   useEffect(() => {
     const sid = user?.societyId;
-    if (!sid) { setHousingFlatsState([]); setMaintenanceBillsState([]); setChargeHeadsState([]); setFundInvestmentsState([]); setComplaintsState([]); setParkingState([]); setTransfersState([]); setInsurancesState([]); setAmcsState([]); setDocumentsState([]); return; }
+    if (!sid) { setHousingFlatsState([]); setMaintenanceBillsState([]); setChargeHeadsState([]); setFundInvestmentsState([]); setComplaintsState([]); setParkingState([]); setTransfersState([]); setInsurancesState([]); setAmcsState([]); setDocumentsState([]); setBuildingsState([]); return; }
     supabase.from('housing_flats').select('*').eq('society_id', sid).then(
       ({ data, error }) => setHousingFlatsState(error || !data ? storage.getHousingFlats() : (data as unknown as HousingFlat[])),
       () => setHousingFlatsState(storage.getHousingFlats()),
@@ -161,6 +167,10 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     supabase.from('housing_documents').select('*').eq('society_id', sid).then(
       ({ data, error }) => setDocumentsState(error || !data ? storage.getHousingDocuments() : (data as unknown as HousingDocument[])),
       () => setDocumentsState(storage.getHousingDocuments()),
+    );
+    supabase.from('housing_buildings').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setBuildingsState(error || !data ? storage.getHousingBuildings() : (data as unknown as HousingBuilding[])),
+      () => setBuildingsState(storage.getHousingBuildings()),
     );
   }, [user?.societyId]);
 
@@ -856,6 +866,39 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     });
   }, [documents]);
 
+  // ── Building / wing master (operational) ──
+  const addBuilding = useCallback((data: Omit<HousingBuilding, 'id' | 'createdAt'>): HousingBuilding => {
+    if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as HousingBuilding;
+    const p: HousingBuilding = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    setBuildingsState(prev => { const u = [...prev, p]; storage.setHousingBuildings(u); return u; });
+    supabase.from('housing_buildings').upsert(withSoc(p)).then(({ error }) => {
+      if (error) {
+        console.error('Building save error:', error.message);
+        setBuildingsState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingBuildings(r); return r; });
+        toastRef.current({ title: 'भवन सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return p;
+  }, []);
+  const updateBuilding = useCallback((id: string, data: Partial<HousingBuilding>) => {
+    if (guardFYLocked()) return;
+    const old = buildings.find(x => x.id === id);
+    if (!old) return;
+    const updated = { ...old, ...data };
+    setBuildingsState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingBuildings(u); return u; });
+    supabase.from('housing_buildings').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) { console.error('Building update error:', error.message); setBuildingsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingBuildings(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+    });
+  }, [buildings]);
+  const deleteBuilding = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const old = buildings.find(x => x.id === id);
+    setBuildingsState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingBuildings(u); return u; });
+    supabase.from('housing_buildings').delete().eq('id', id).then(({ error }) => {
+      if (error) { console.error('Building delete error:', error.message); if (old) setBuildingsState(prev => { const u = [...prev, old]; storage.setHousingBuildings(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+    });
+  }, [buildings]);
+
   return (
     <HousingDataContext.Provider value={{
       housingFlats, addHousingFlat, updateHousingFlat, deleteHousingFlat,
@@ -870,6 +913,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       insurances, addInsurance, updateInsurance, deleteInsurance,
       amcs, addAmc, updateAmc, deleteAmc,
       documents, addDocument, updateDocument, deleteDocument,
+      buildings, addBuilding, updateBuilding, deleteBuilding,
     }}>
       {children}
     </HousingDataContext.Provider>

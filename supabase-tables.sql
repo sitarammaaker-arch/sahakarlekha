@@ -1619,6 +1619,20 @@ create policy "society_rw" on public.housing_documents for all to authenticated
   with check (society_id::text in (select public.current_user_society_ids()));
 create index if not exists idx_housing_documents_society on public.housing_documents (society_id);
 
+-- Housing — building / wing / tower master (multi-tower societies) + optional flat link. RUN once.
+create table if not exists housing_buildings (
+  id text primary key, society_id text not null default 'SOC001',
+  name text, address text, floors numeric, "totalUnits" numeric, remarks text,
+  "isDeleted" boolean default false, "createdAt" timestamptz default now()
+);
+alter table public.housing_buildings enable row level security;
+drop policy if exists "society_rw" on public.housing_buildings;
+create policy "society_rw" on public.housing_buildings for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create index if not exists idx_housing_buildings_society on public.housing_buildings (society_id);
+alter table public.housing_flats add column if not exists "buildingId" text;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Labour cooperative — Work Orders / labour-contract register (master data; no
 -- accounting in V1). Plain society-scoped table (client upserts directly). RUN once.

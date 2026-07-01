@@ -37,7 +37,9 @@ const effectiveOccupancy = (f: HousingFlat): Occupancy =>
 
 export default function FlatsRegister() {
   const { members } = useData();
-  const { housingFlats, chargeHeads, addHousingFlat, updateHousingFlat, deleteHousingFlat } = useHousingData();
+  const { housingFlats, chargeHeads, buildings, addHousingFlat, updateHousingFlat, deleteHousingFlat } = useHousingData();
+  const buildingList = buildings.filter(b => !b.isDeleted);
+  const buildingName = (id?: string) => buildings.find(b => b.id === id)?.name || '';
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -45,6 +47,7 @@ export default function FlatsRegister() {
 
   // Create form
   const [flatNo, setFlatNo] = useState('');
+  const [buildingId, setBuildingId] = useState('');
   const [blockNo, setBlockNo] = useState('');
   const [floor, setFloor] = useState('');
   const [unitType, setUnitType] = useState('');
@@ -58,6 +61,7 @@ export default function FlatsRegister() {
   const [editOpen, setEditOpen] = useState(false);
   const [editId, setEditId] = useState('');
   const [eFlatNo, setEFlatNo] = useState('');
+  const [eBuildingId, setEBuildingId] = useState('');
   const [eBlockNo, setEBlockNo] = useState('');
   const [eFloor, setEFloor] = useState('');
   const [eUnitType, setEUnitType] = useState('');
@@ -84,7 +88,7 @@ export default function FlatsRegister() {
   const ownerTypeFrom = (o: Occupancy): 'owner' | 'tenant' => (o === 'rented' ? 'tenant' : 'owner');
 
   const resetForm = () => {
-    setFlatNo(''); setBlockNo(''); setFloor(''); setUnitType(''); setMemberId('');
+    setFlatNo(''); setBuildingId(''); setBlockNo(''); setFloor(''); setUnitType(''); setMemberId('');
     setAssociateMemberId(''); setOccupancy('self'); setArea(''); setMaintenance('');
   };
 
@@ -97,6 +101,7 @@ export default function FlatsRegister() {
     }
     const f = addHousingFlat({
       flatNo: flatNo.trim(),
+      buildingId: buildingId || undefined,
       blockNo: blockNo.trim() || undefined,
       floor: floor.trim() || undefined,
       unitType: unitType || undefined,
@@ -112,7 +117,7 @@ export default function FlatsRegister() {
   };
 
   const openEdit = (f: HousingFlat) => {
-    setEditId(f.id); setEFlatNo(f.flatNo); setEBlockNo(f.blockNo || ''); setEFloor(f.floor || '');
+    setEditId(f.id); setEFlatNo(f.flatNo); setEBuildingId(f.buildingId || ''); setEBlockNo(f.blockNo || ''); setEFloor(f.floor || '');
     setEUnitType(f.unitType || ''); setEMemberId(f.memberId || ''); setEAssociateMemberId(f.associateMemberId || '');
     setEOccupancy(effectiveOccupancy(f)); setEArea(f.area ? String(f.area) : ''); setEMaintenance(String(f.monthlyMaintenance));
     setEOverrides(Object.fromEntries(Object.entries(f.chargeOverrides || {}).map(([k, v]) => [k, String(v)])));
@@ -129,7 +134,7 @@ export default function FlatsRegister() {
       if (val !== undefined && val.trim() !== '' && Number(val) >= 0) overrides[headId] = Number(val);
     }
     updateHousingFlat(editId, {
-      flatNo: eFlatNo.trim(), blockNo: eBlockNo.trim() || undefined, floor: eFloor.trim() || undefined,
+      flatNo: eFlatNo.trim(), buildingId: eBuildingId || undefined, blockNo: eBlockNo.trim() || undefined, floor: eFloor.trim() || undefined,
       unitType: eUnitType || undefined, memberId: eMemberId || undefined, associateMemberId: eAssociateMemberId || undefined,
       occupancy: eOccupancy, ownerType: ownerTypeFrom(eOccupancy),
       area: eArea ? Number(eArea) : undefined, monthlyMaintenance: m,
@@ -174,6 +179,18 @@ export default function FlatsRegister() {
               <Label>{hi ? 'फ्लैट / यूनिट नंबर' : 'Flat / Unit No'} *</Label>
               <Input value={flatNo} onChange={e => setFlatNo(e.target.value)} placeholder={hi ? 'जैसे A-101' : 'e.g. A-101'} />
             </div>
+            {buildingList.length > 0 && (
+              <div className="space-y-2">
+                <Label>{hi ? 'भवन / विंग' : 'Building / Wing'}</Label>
+                <Select value={buildingId || NONE} onValueChange={v => setBuildingId(v === NONE ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder={hi ? 'चुनें (वैकल्पिक)' : 'Select (optional)'} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>{hi ? '— कोई नहीं —' : '— None —'}</SelectItem>
+                    {buildingList.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>{hi ? 'ब्लॉक / विंग' : 'Block / Wing'}</Label>
               <Input value={blockNo} onChange={e => setBlockNo(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} />
@@ -251,7 +268,7 @@ export default function FlatsRegister() {
               <div key={f.id} className="flex items-center justify-between rounded-lg border p-3 text-sm gap-3">
                 <div className="min-w-0">
                   <div className="font-medium flex flex-wrap items-center gap-1">
-                    <span>{f.flatNo}{f.blockNo ? ` · ${f.blockNo}` : ''}{f.floor ? ` · ${hi ? 'मंज़िल' : 'Fl'} ${f.floor}` : ''}</span>
+                    <span>{f.flatNo}{f.buildingId ? ` · ${buildingName(f.buildingId)}` : ''}{f.blockNo ? ` · ${f.blockNo}` : ''}{f.floor ? ` · ${hi ? 'मंज़िल' : 'Fl'} ${f.floor}` : ''}</span>
                     {f.unitType && <Badge variant="outline">{unitTypeLabel(f.unitType)}</Badge>}
                     <Badge variant="secondary">{occLabel(occ)}</Badge>
                   </div>
@@ -279,6 +296,18 @@ export default function FlatsRegister() {
               <div className="space-y-1.5"><Label>{hi ? 'फ्लैट नंबर' : 'Flat No'} *</Label><Input value={eFlatNo} onChange={e => setEFlatNo(e.target.value)} /></div>
               <div className="space-y-1.5"><Label>{hi ? 'ब्लॉक' : 'Block'}</Label><Input value={eBlockNo} onChange={e => setEBlockNo(e.target.value)} /></div>
             </div>
+            {buildingList.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>{hi ? 'भवन / विंग' : 'Building / Wing'}</Label>
+                <Select value={eBuildingId || NONE} onValueChange={v => setEBuildingId(v === NONE ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder={hi ? 'चुनें' : 'Select'} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>{hi ? '— कोई नहीं —' : '— None —'}</SelectItem>
+                    {buildingList.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>{hi ? 'मंज़िल' : 'Floor'}</Label><Input value={eFloor} onChange={e => setEFloor(e.target.value)} /></div>
               <div className="space-y-1.5">
