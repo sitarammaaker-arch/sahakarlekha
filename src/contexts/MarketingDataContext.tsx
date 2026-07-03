@@ -65,8 +65,8 @@ interface MarketingDataContextValue {
 
   // Deduction rules / Quality specs / Bardana types (M1d) — config consumed by quality (M2) & settlement (M3)
   deductionRules: DeductionRule[];
-  addDeductionRule: (data: { code: string; basis: string; rate: number; name?: string; nameHi?: string }) => DeductionRule;
-  updateDeductionRule: (id: string, data: Partial<Pick<DeductionRule, 'code' | 'basis' | 'name' | 'nameHi'>> & { rate?: number }) => void;
+  addDeductionRule: (data: { code: string; basis: string; rate: number; accountId?: string; name?: string; nameHi?: string }) => DeductionRule;
+  updateDeductionRule: (id: string, data: Partial<Pick<DeductionRule, 'code' | 'basis' | 'accountId' | 'name' | 'nameHi'>> & { rate?: number }) => void;
   deleteDeductionRule: (id: string) => void;
   qualitySpecs: QualitySpec[];
   addQualitySpec: (data: { cropId: string; seasonId: string; parameter: string; maxLimit: number }) => QualitySpec;
@@ -515,9 +515,9 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   );
 
   // ── Deduction-rule CRUD ────────────────────────────────────────────────────────
-  const addDeductionRule = useCallback((data: { code: string; basis: string; rate: number; name?: string; nameHi?: string }): DeductionRule => {
+  const addDeductionRule = useCallback((data: { code: string; basis: string; rate: number; accountId?: string; name?: string; nameHi?: string }): DeductionRule => {
     const now = new Date().toISOString();
-    const rec: DeductionRule = { id: crypto.randomUUID(), code: data.code, basis: data.basis, rate: { value: data.rate }, name: data.name, nameHi: data.nameHi, createdAt: now, updatedAt: now };
+    const rec: DeductionRule = { id: crypto.randomUUID(), code: data.code, basis: data.basis, rate: { value: data.rate }, accountId: data.accountId, name: data.name, nameHi: data.nameHi, createdAt: now, updatedAt: now };
     if (guardFYLocked()) return { ...rec, id: '', createdAt: '', updatedAt: '' };
     setDeductionRulesState(prev => { const u = [...prev, rec]; storage.setProcurementDeductionRules(u); return u; });
     supabase.from('procurement_deduction_rules').upsert(withSoc(rec)).then(({ error }) => {
@@ -530,7 +530,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     return rec;
   }, [societyId]);
 
-  const updateDeductionRule = useCallback((id: string, data: Partial<Pick<DeductionRule, 'code' | 'basis' | 'name' | 'nameHi'>> & { rate?: number }) => {
+  const updateDeductionRule = useCallback((id: string, data: Partial<Pick<DeductionRule, 'code' | 'basis' | 'accountId' | 'name' | 'nameHi'>> & { rate?: number }) => {
     if (guardFYLocked()) return;
     setDeductionRulesState(prev => {
       const before = prev.find(r => r.id === id);

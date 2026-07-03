@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMarketingData } from '@/contexts/MarketingDataContext';
+import { useData } from '@/contexts/DataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,9 +31,12 @@ export default function ProcurementMasters() {
     qualitySpecs, addQualitySpec, deleteQualitySpec,
     bardanaTypes, addBardanaType, deleteBardanaType,
   } = useMarketingData();
+  const { accounts } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
+  const postableAccounts = accounts.filter(a => !a.isGroup);
+  const accountName = (id?: string) => { const a = accounts.find(x => x.id === id); return a ? (hi ? a.nameHi : a.name) : ''; };
 
   const cropLabel = (c: { name: string; nameHi?: string }) => (hi && c.nameHi ? c.nameHi : c.name);
 
@@ -145,6 +149,7 @@ export default function ProcurementMasters() {
   const [dNameHi, setDNameHi] = useState('');
   const [dBasis, setDBasis] = useState('');
   const [dRate, setDRate] = useState('');
+  const [dAccountId, setDAccountId] = useState('');
   const DED_BASES = [
     { id: 'market_fee', en: 'Market Fee', hi: 'मंडी शुल्क' },
     { id: 'hrdf', en: 'HRDF', hi: 'HRDF' },
@@ -153,13 +158,14 @@ export default function ProcurementMasters() {
     { id: 'shortage', en: 'Shortage', hi: 'घटती' },
     { id: 'other', en: 'Other', hi: 'अन्य' },
   ];
-  const openAddDed = () => { setDName(''); setDNameHi(''); setDBasis(''); setDRate(''); setDedOpen(true); };
+  const openAddDed = () => { setDName(''); setDNameHi(''); setDBasis(''); setDRate(''); setDAccountId(''); setDedOpen(true); };
   const saveDed = () => {
     const r = Number(dRate);
     if (!dName.trim()) { toast({ title: hi ? 'नाम आवश्यक' : 'Name required', variant: 'destructive' }); return; }
     if (!dBasis) { toast({ title: hi ? 'आधार चुनें' : 'Select basis', variant: 'destructive' }); return; }
     if (!(r >= 0)) { toast({ title: hi ? 'दर दर्ज करें' : 'Enter a rate', variant: 'destructive' }); return; }
-    addDeductionRule({ code: dName.trim().toUpperCase().replace(/\s+/g, '_'), basis: dBasis, rate: r, name: dName.trim(), nameHi: dNameHi.trim() || undefined });
+    if (!dAccountId) { toast({ title: hi ? 'खाता चुनें' : 'Select an account', variant: 'destructive' }); return; }
+    addDeductionRule({ code: dName.trim().toUpperCase().replace(/\s+/g, '_'), basis: dBasis, rate: r, accountId: dAccountId, name: dName.trim(), nameHi: dNameHi.trim() || undefined });
     setDedOpen(false);
   };
   const basisLabel = (id: string) => { const b = DED_BASES.find(x => x.id === id); return b ? (hi ? b.hi : b.en) : id; };
@@ -363,7 +369,7 @@ export default function ProcurementMasters() {
                 <div key={r.id} className="flex items-center justify-between rounded-lg border p-3 gap-3">
                   <div className="min-w-0">
                     <div className="font-medium">{hi && r.nameHi ? r.nameHi : (r.name || r.code)} <Badge variant="secondary" className="ml-1">{basisLabel(r.basis)}</Badge></div>
-                    <div className="text-xs text-muted-foreground">{r.rate.value}% {hi ? 'सकल का' : 'of gross'}</div>
+                    <div className="text-xs text-muted-foreground">{r.rate.value}% {hi ? 'सकल का' : 'of gross'}{r.accountId ? ` → ${r.accountId} ${accountName(r.accountId)}` : ''}</div>
                   </div>
                   <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => deleteDeductionRule(r.id)} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
                 </div>
@@ -546,7 +552,15 @@ export default function ProcurementMasters() {
               </div>
               <div className="space-y-1.5"><Label>{hi ? 'दर (% सकल का)' : 'Rate (% of gross)'} *</Label><Input type="number" min={0} step="0.01" value={dRate} onChange={e => setDRate(e.target.value)} placeholder="2" /></div>
             </div>
-            <p className="text-xs text-muted-foreground">{hi ? 'यह नियम निपटान (settlement) के समय कटौती सुझाएगा — अगले चरण में।' : 'This rule will suggest deductions at settlement — in a later step.'}</p>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'खाता (कटौती किसमें जाए)' : 'Account (deduction credits)'} *</Label>
+              <Select value={dAccountId} onValueChange={setDAccountId}>
+                <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
+                <SelectContent>{postableAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} · {hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">{hi ? 'जैसे: TDS→2202, मंडी शुल्क→4202, HRDF→2205, हमाली→4203, कमीशन→4205' : 'e.g. TDS→2202, Market Fee→4202, HRDF→2205, Labour→4203, Commission→4205'}</p>
+            </div>
+            <p className="text-xs text-muted-foreground">{hi ? 'निपटान के समय यह नियम चुनते ही राशि (दर% × सकल) अपने-आप बनकर इसी खाते में पोस्ट होगी।' : 'At settlement, picking this rule auto-computes the amount (rate% × gross) and posts to this account.'}</p>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setDedOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button><Button onClick={saveDed}>{hi ? 'सेव करें' : 'Save'}</Button></DialogFooter>
         </DialogContent>
