@@ -1,5 +1,5 @@
 import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun } from '@/types';
-import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement, Crop, Variety, Season, Agency, ProcurementCentre, MSPRate } from '@/lib/procurement';
+import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement, Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
 export interface VoucherTemplate {
@@ -78,6 +78,9 @@ const KEYS = {
   procurementAgencies: 'sahayata_procurement_agencies',
   procurementCentres: 'sahayata_procurement_centres',
   procurementMspRates: 'sahayata_procurement_msp_rates',
+  procurementDeductionRules: 'sahayata_procurement_deduction_rules',
+  procurementQualitySpecs: 'sahayata_procurement_quality_specs',
+  procurementBardanaTypes: 'sahayata_procurement_bardana_types',
   housingFlats: 'sahayata_housing_flats',
   maintenanceBills: 'sahayata_maintenance_bills',
   housingChargeHeads: 'sahayata_housing_charge_heads',
@@ -804,6 +807,12 @@ export const getProcurementCentres = (): ProcurementCentre[] => get(KEYS.procure
 export const setProcurementCentres = (c: ProcurementCentre[]): void => set(KEYS.procurementCentres, c);
 export const getProcurementMspRates = (): MSPRate[] => get(KEYS.procurementMspRates, []);
 export const setProcurementMspRates = (r: MSPRate[]): void => set(KEYS.procurementMspRates, r);
+export const getProcurementDeductionRules = (): DeductionRule[] => get(KEYS.procurementDeductionRules, []);
+export const setProcurementDeductionRules = (r: DeductionRule[]): void => set(KEYS.procurementDeductionRules, r);
+export const getProcurementQualitySpecs = (): QualitySpec[] => get(KEYS.procurementQualitySpecs, []);
+export const setProcurementQualitySpecs = (s: QualitySpec[]): void => set(KEYS.procurementQualitySpecs, s);
+export const getProcurementBardanaTypes = (): BardanaType[] => get(KEYS.procurementBardanaTypes, []);
+export const setProcurementBardanaTypes = (b: BardanaType[]): void => set(KEYS.procurementBardanaTypes, b);
 export const getProcurementLots = (): ProcurementLot[] => get(KEYS.procurementLots, []);
 export const setProcurementLots = (l: ProcurementLot[]): void => set(KEYS.procurementLots, l);
 export const getProcurementEvents = (): ProcurementEvent[] => get(KEYS.procurementEvents, []);
