@@ -160,11 +160,12 @@ ok(alreadyRequest([pr], 'FI-1') === true && alreadyRequest([pr], 'FI-2') === fal
 
 // 10. Phase 3.2 — Posting Rule resolution (business object only). Mirrors the pure resolver
 //     (src/lib/procurement/postingRules.ts) + DataContext.generatePostingRuleResult.
-const BINDING = { 'stock.procurement': '3403', 'farmer.payable': '2105' };
-const CHART = [{ id: '3403', name: 'Trading Goods' }, { id: '2105', name: 'MSP Payable to Farmers' }];
+// AGENT model (2026-07-03): Dr MSP Receivable (from agency) / Cr MSP Payable (to farmer).
+const BINDING = { 'agency.receivable': '3308', 'farmer.payable': '2105' };
+const CHART = [{ id: '3308', name: 'MSP Receivable' }, { id: '2105', name: 'MSP Payable to Farmers' }];
 const resolvePostingLegs = (requestType, amount, profile, binding, accounts) => {
   const raw = requestType === 'RecogniseProcurement' && profile === 'agency'
-    ? [{ side: 'Dr', accountSelector: 'stock.procurement' }, { side: 'Cr', accountSelector: 'farmer.payable' }]
+    ? [{ side: 'Dr', accountSelector: 'agency.receivable' }, { side: 'Cr', accountSelector: 'farmer.payable' }]
     : [];
   if (raw.length === 0) return [];
   const out = [];
@@ -178,9 +179,9 @@ const resolvePostingLegs = (requestType, amount, profile, binding, accounts) => 
 const srcRequest = { id: 'PR-1', lotId: 'lot-1', jformId: 'JF-1', financialIntentId: 'FI-1', requestType: 'RecogniseProcurement', amount: { amount: 45500, currency: 'INR' } };
 const legs = resolvePostingLegs(srcRequest.requestType, srcRequest.amount, 'agency', BINDING, CHART);
 ok(legs.length === 2 && legs[0].side === 'Dr' && legs[1].side === 'Cr', "resolver: RecogniseProcurement → 2 legs (Dr then Cr)");
-ok(legs[0].accountSelector === 'stock.procurement' && legs[1].accountSelector === 'farmer.payable', 'resolver: symbolic selectors kept for audit');
-ok(legs[0].resolvedAccountId === '3403' && legs[1].resolvedAccountId === '2105', 'resolver: resolvedAccountId frozen from binding');
-ok(legs[0].accountCode === '3403' && legs[0].accountName === 'Trading Goods' && legs[1].accountName === 'MSP Payable to Farmers', 'resolver: accountCode + accountName snapshot frozen from the chart');
+ok(legs[0].accountSelector === 'agency.receivable' && legs[1].accountSelector === 'farmer.payable', 'resolver: symbolic selectors kept for audit');
+ok(legs[0].resolvedAccountId === '3308' && legs[1].resolvedAccountId === '2105', 'resolver: resolvedAccountId frozen from binding (agent model: Dr MSP Receivable / Cr MSP Payable)');
+ok(legs[0].accountCode === '3308' && legs[0].accountName === 'MSP Receivable' && legs[1].accountName === 'MSP Payable to Farmers', 'resolver: accountCode + accountName snapshot frozen from the chart');
 const dr = legs.filter(l => l.side === 'Dr').reduce((s, l) => s + l.amount.amount, 0);
 const cr = legs.filter(l => l.side === 'Cr').reduce((s, l) => s + l.amount.amount, 0);
 ok(dr === cr && dr === srcRequest.amount.amount, 'resolver: legs balanced (∑Dr = ∑Cr = request amount)');
@@ -207,7 +208,7 @@ const buildEngineVoucherLines = (ls) => {
   return out;
 };
 const specs = buildEngineVoucherLines(legs);
-ok(specs.length === 2 && specs[0].accountId === '3403' && specs[1].accountId === '2105', 'engine: maps legs → lines using resolvedAccountId ONLY');
+ok(specs.length === 2 && specs[0].accountId === '3308' && specs[1].accountId === '2105', 'engine: maps legs → lines using resolvedAccountId ONLY');
 ok(specs[0].type === 'Dr' && specs[1].type === 'Cr', 'engine: preserves Dr/Cr sides');
 const edr = specs.filter(s => s.type === 'Dr').reduce((s, x) => s + x.amount, 0);
 const ecr = specs.filter(s => s.type === 'Cr').reduce((s, x) => s + x.amount, 0);
@@ -235,7 +236,7 @@ const buildPayment = (ev, amt, mode, bankId) => {
 };
 const outstandingOf = (ev, payments) => +(ev.amount - payments.filter(v => !v.isDeleted && v.refType === 'farmer.payment' && v.refId === ev.id).reduce((s, v) => s + v.amount, 0)).toFixed(2);
 const statusOf = (ev, payments) => { const out = outstandingOf(ev, payments); const paid = ev.amount - out; return paid <= 0 ? 'unpaid' : out <= 0 ? 'paid' : 'partial'; };
-const pv = { id: 'EV-1', amount: 455000, lines: [{ accountId: '3403', type: 'Dr', amount: 455000 }, { accountId: '2105', type: 'Cr', amount: 455000 }] };
+const pv = { id: 'EV-1', amount: 455000, lines: [{ accountId: '3308', type: 'Dr', amount: 455000 }, { accountId: '2105', type: 'Cr', amount: 455000 }] };
 ok(outstandingOf(pv, []) === 455000 && statusOf(pv, []) === 'unpaid', 'Outstanding = engine voucher amount; status Unpaid when no payments');
 const p1 = buildPayment(pv, 350000, 'cash');
 ok(p1.type === 'payment' && p1.refType === 'farmer.payment' && p1.refId === 'EV-1', 'payment voucher: type=payment, refType=farmer.payment, refId=engineVoucherId');
@@ -265,7 +266,7 @@ const netInfo = (ev, vs) => {
   const outstanding = +(netPayable - paid).toFixed(2);
   return { gross, totalDeductions, netPayable, paid, outstanding };
 };
-const dv = { id: 'EV-2', amount: 455000, lines: [{ accountId: '3403', type: 'Dr', amount: 455000 }, { accountId: '2105', type: 'Cr', amount: 455000 }] };
+const dv = { id: 'EV-2', amount: 455000, lines: [{ accountId: '3308', type: 'Dr', amount: 455000 }, { accountId: '2105', type: 'Cr', amount: 455000 }] };
 const dTds = buildDeduction(dv, '2202', 5000);
 ok(dTds.type === 'journal' && dTds.refType === 'farmer.deduction' && dTds.refId === 'EV-2', 'deduction voucher: type=journal, refType=farmer.deduction, refId=engineVoucherId');
 ok(dTds.debitAccountId === '2105' && dTds.creditAccountId === '2202', 'deduction: Dr payable (2105 = engine Cr leg); Cr the selected account (TDS 2202)');
