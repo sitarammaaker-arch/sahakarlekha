@@ -15,7 +15,8 @@
     "test:accounting": "node scripts/test-accounting.mjs",
     "test:procurement": "node scripts/test-procurement.mjs",
     "test:housing": "node scripts/test-housing.mjs",
-    "test:dairy": "node scripts/test-dairy.mjs"
+    "test:dairy": "node scripts/test-dairy.mjs",
+    "test:marketing": "node scripts/test-marketing.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

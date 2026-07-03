@@ -1208,6 +1208,18 @@ create table if not exists procurement_centres (
   "updatedAt" timestamptz default now()
 );
 create index if not exists idx_procurement_centres_society on procurement_centres(society_id);
+-- Procurement CONFIG master (Marketing M1c): effective-dated MSP rate per crop+season.
+create table if not exists procurement_msp_rates (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "cropId" text,
+  "seasonId" text,
+  rate jsonb,
+  "effectiveFrom" text,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+create index if not exists idx_procurement_msp_rates_society on procurement_msp_rates(society_id);
 create table if not exists procurement_lots (
   id text primary key,
   society_id text not null default 'SOC001',
