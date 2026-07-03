@@ -23,7 +23,7 @@ import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
-import type { Crop, Variety } from '@/lib/procurement';
+import type { Crop, Variety, Season, Agency, ProcurementCentre } from '@/lib/procurement';
 
 interface MarketingDataContextValue {
   marketingReady: boolean;
@@ -40,6 +40,20 @@ interface MarketingDataContextValue {
   addVariety: (data: { cropId: string; name: string; nameHi?: string }) => Variety;
   updateVariety: (id: string, data: Partial<Pick<Variety, 'name' | 'nameHi'>>) => void;
   deleteVariety: (id: string) => void;
+
+  // Procurement masters — Season, Agency, Centre (M1b)
+  seasons: Season[];
+  addSeason: (data: { name: string; cropYear: string; startDate: string; endDate: string; nameHi?: string }) => Season;
+  updateSeason: (id: string, data: Partial<Pick<Season, 'name' | 'cropYear' | 'startDate' | 'endDate' | 'nameHi'>>) => void;
+  deleteSeason: (id: string) => void;
+  agencies: Agency[];
+  addAgency: (data: { name: string; code: string; kind: string; nameHi?: string }) => Agency;
+  updateAgency: (id: string, data: Partial<Pick<Agency, 'name' | 'code' | 'kind' | 'nameHi'>>) => void;
+  deleteAgency: (id: string) => void;
+  centres: ProcurementCentre[];
+  addCentre: (data: { name: string; code: string; agencyId: string; nameHi?: string }) => ProcurementCentre;
+  updateCentre: (id: string, data: Partial<Pick<ProcurementCentre, 'name' | 'code' | 'nameHi'>>) => void;
+  deleteCentre: (id: string) => void;
 }
 
 const MarketingDataContext = createContext<MarketingDataContextValue | null>(null);
@@ -79,6 +93,9 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   // ── Crop & Variety masters (localStorage seed → Supabase load on session) ─────
   const [crops, setCropsState] = useState<Crop[]>(() => storage.getProcurementCrops());
   const [varieties, setVarietiesState] = useState<Variety[]>(() => storage.getProcurementVarieties());
+  const [seasons, setSeasonsState] = useState<Season[]>(() => storage.getProcurementSeasons());
+  const [agencies, setAgenciesState] = useState<Agency[]>(() => storage.getProcurementAgencies());
+  const [centres, setCentresState] = useState<ProcurementCentre[]>(() => storage.getProcurementCentres());
 
   useEffect(() => {
     const sid = user?.societyId;
@@ -95,6 +112,33 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     supabase.from('procurement_varieties').select('*').eq('society_id', sid).then(
       ({ data, error }) => setVarietiesState(error || !data ? storage.getProcurementVarieties() : (data as Variety[])),
       () => setVarietiesState(storage.getProcurementVarieties()),
+    );
+  }, [user?.societyId]);
+
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setSeasonsState([]); return; }
+    supabase.from('procurement_seasons').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setSeasonsState(error || !data ? storage.getProcurementSeasons() : (data as Season[])),
+      () => setSeasonsState(storage.getProcurementSeasons()),
+    );
+  }, [user?.societyId]);
+
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setAgenciesState([]); return; }
+    supabase.from('procurement_agencies').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setAgenciesState(error || !data ? storage.getProcurementAgencies() : (data as Agency[])),
+      () => setAgenciesState(storage.getProcurementAgencies()),
+    );
+  }, [user?.societyId]);
+
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setCentresState([]); return; }
+    supabase.from('procurement_centres').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setCentresState(error || !data ? storage.getProcurementCentres() : (data as ProcurementCentre[])),
+      () => setCentresState(storage.getProcurementCentres()),
     );
   }, [user?.societyId]);
 
@@ -222,6 +266,159 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     });
   }, [varieties, procurementLots, societyId]);
 
+  // ── Season CRUD ────────────────────────────────────────────────────────────────
+  const addSeason = useCallback((data: { name: string; cropYear: string; startDate: string; endDate: string; nameHi?: string }): Season => {
+    const now = new Date().toISOString();
+    const empty = { ...data, id: '', createdAt: '', updatedAt: '' } as Season;
+    if (guardFYLocked()) return empty;
+    const season: Season = { ...data, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
+    setSeasonsState(prev => { const u = [...prev, season]; storage.setProcurementSeasons(u); return u; });
+    supabase.from('procurement_seasons').upsert(withSoc(season)).then(({ error }) => {
+      if (error) {
+        console.error('Season save error:', error.message);
+        setSeasonsState(prev => { const r = prev.filter(s => s.id !== season.id); storage.setProcurementSeasons(r); return r; });
+        toastRef.current({ title: 'सीज़न सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_seasons block chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return season;
+  }, [societyId]);
+
+  const updateSeason = useCallback((id: string, data: Partial<Pick<Season, 'name' | 'cropYear' | 'startDate' | 'endDate' | 'nameHi'>>) => {
+    if (guardFYLocked()) return;
+    setSeasonsState(prev => {
+      const before = prev.find(s => s.id === id);
+      const u = prev.map(s => s.id === id ? { ...s, ...data, updatedAt: new Date().toISOString() } : s);
+      storage.setProcurementSeasons(u);
+      const next = u.find(s => s.id === id);
+      if (next && before) supabase.from('procurement_seasons').upsert(withSoc(next)).then(({ error }) => {
+        if (error) {
+          setSeasonsState(p => { const r = p.map(s => s.id === id ? before : s); storage.setProcurementSeasons(r); return r; });
+          toastRef.current({ title: 'सीज़न अपडेट नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        }
+      });
+      return u;
+    });
+  }, [societyId]);
+
+  const deleteSeason = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    if (procurementLots.some(l => l.seasonId === id)) {
+      toastRef.current({ title: 'सीज़न उपयोग में है', description: 'इस सीज़न के लॉट बन चुके हैं — इसे हटाया नहीं जा सकता।', variant: 'destructive' });
+      return;
+    }
+    const before = seasons.find(s => s.id === id);
+    if (!before) return;
+    setSeasonsState(prev => { const r = prev.filter(s => s.id !== id); storage.setProcurementSeasons(r); return r; });
+    supabase.from('procurement_seasons').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
+      if (error) {
+        setSeasonsState(prev => { const u = [...prev, before]; storage.setProcurementSeasons(u); return u; });
+        toastRef.current({ title: 'सीज़न हटा नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [seasons, procurementLots, societyId]);
+
+  // ── Agency CRUD ────────────────────────────────────────────────────────────────
+  const addAgency = useCallback((data: { name: string; code: string; kind: string; nameHi?: string }): Agency => {
+    const now = new Date().toISOString();
+    const empty = { ...data, id: '', createdAt: '', updatedAt: '' } as Agency;
+    if (guardFYLocked()) return empty;
+    const agency: Agency = { ...data, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
+    setAgenciesState(prev => { const u = [...prev, agency]; storage.setProcurementAgencies(u); return u; });
+    supabase.from('procurement_agencies').upsert(withSoc(agency)).then(({ error }) => {
+      if (error) {
+        console.error('Agency save error:', error.message);
+        setAgenciesState(prev => { const r = prev.filter(a => a.id !== agency.id); storage.setProcurementAgencies(r); return r; });
+        toastRef.current({ title: 'एजेंसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_agencies block chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return agency;
+  }, [societyId]);
+
+  const updateAgency = useCallback((id: string, data: Partial<Pick<Agency, 'name' | 'code' | 'kind' | 'nameHi'>>) => {
+    if (guardFYLocked()) return;
+    setAgenciesState(prev => {
+      const before = prev.find(a => a.id === id);
+      const u = prev.map(a => a.id === id ? { ...a, ...data, updatedAt: new Date().toISOString() } : a);
+      storage.setProcurementAgencies(u);
+      const next = u.find(a => a.id === id);
+      if (next && before) supabase.from('procurement_agencies').upsert(withSoc(next)).then(({ error }) => {
+        if (error) {
+          setAgenciesState(p => { const r = p.map(a => a.id === id ? before : a); storage.setProcurementAgencies(r); return r; });
+          toastRef.current({ title: 'एजेंसी अपडेट नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        }
+      });
+      return u;
+    });
+  }, [societyId]);
+
+  const deleteAgency = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    if (centres.some(c => c.agencyId === id)) {
+      toastRef.current({ title: 'पहले केंद्र हटाएँ', description: 'इस एजेंसी के केंद्र मौजूद हैं — पहले उन्हें हटाएँ, फिर एजेंसी हटाएँ।', variant: 'destructive' });
+      return;
+    }
+    const before = agencies.find(a => a.id === id);
+    if (!before) return;
+    setAgenciesState(prev => { const r = prev.filter(a => a.id !== id); storage.setProcurementAgencies(r); return r; });
+    supabase.from('procurement_agencies').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
+      if (error) {
+        setAgenciesState(prev => { const u = [...prev, before]; storage.setProcurementAgencies(u); return u; });
+        toastRef.current({ title: 'एजेंसी हटी नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhegi.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [agencies, centres, societyId]);
+
+  // ── Procurement Centre CRUD ──────────────────────────────────────────────────────
+  const addCentre = useCallback((data: { name: string; code: string; agencyId: string; nameHi?: string }): ProcurementCentre => {
+    const now = new Date().toISOString();
+    const empty = { ...data, id: '', createdAt: '', updatedAt: '' } as ProcurementCentre;
+    if (guardFYLocked()) return empty;
+    const centre: ProcurementCentre = { ...data, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
+    setCentresState(prev => { const u = [...prev, centre]; storage.setProcurementCentres(u); return u; });
+    supabase.from('procurement_centres').upsert(withSoc(centre)).then(({ error }) => {
+      if (error) {
+        console.error('Centre save error:', error.message);
+        setCentresState(prev => { const r = prev.filter(c => c.id !== centre.id); storage.setProcurementCentres(r); return r; });
+        toastRef.current({ title: 'केंद्र सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_centres block chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return centre;
+  }, [societyId]);
+
+  const updateCentre = useCallback((id: string, data: Partial<Pick<ProcurementCentre, 'name' | 'code' | 'nameHi'>>) => {
+    if (guardFYLocked()) return;
+    setCentresState(prev => {
+      const before = prev.find(c => c.id === id);
+      const u = prev.map(c => c.id === id ? { ...c, ...data, updatedAt: new Date().toISOString() } : c);
+      storage.setProcurementCentres(u);
+      const next = u.find(c => c.id === id);
+      if (next && before) supabase.from('procurement_centres').upsert(withSoc(next)).then(({ error }) => {
+        if (error) {
+          setCentresState(p => { const r = p.map(c => c.id === id ? before : c); storage.setProcurementCentres(r); return r; });
+          toastRef.current({ title: 'केंद्र अपडेट नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        }
+      });
+      return u;
+    });
+  }, [societyId]);
+
+  const deleteCentre = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    if (procurementLots.some(l => l.centreId === id)) {
+      toastRef.current({ title: 'केंद्र उपयोग में है', description: 'इस केंद्र के लॉट बन चुके हैं — इसे हटाया नहीं जा सकता।', variant: 'destructive' });
+      return;
+    }
+    const before = centres.find(c => c.id === id);
+    if (!before) return;
+    setCentresState(prev => { const r = prev.filter(c => c.id !== id); storage.setProcurementCentres(r); return r; });
+    supabase.from('procurement_centres').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
+      if (error) {
+        setCentresState(prev => { const u = [...prev, before]; storage.setProcurementCentres(u); return u; });
+        toastRef.current({ title: 'केंद्र हटा नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [centres, procurementLots, societyId]);
+
   return (
     <MarketingDataContext.Provider value={{
       marketingReady: true,
@@ -235,6 +432,18 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       addVariety,
       updateVariety,
       deleteVariety,
+      seasons,
+      addSeason,
+      updateSeason,
+      deleteSeason,
+      agencies,
+      addAgency,
+      updateAgency,
+      deleteAgency,
+      centres,
+      addCentre,
+      updateCentre,
+      deleteCentre,
     }}>
       {children}
     </MarketingDataContext.Provider>

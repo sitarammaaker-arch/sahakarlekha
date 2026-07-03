@@ -46,7 +46,7 @@ const DEDUCTION_TYPES = [
 
 export default function ProcurementLots() {
   const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, procurementSettlements, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement, recordFarmerPayment } = useData();
-  const { crops, varieties } = useMarketingData();
+  const { crops, varieties, seasons, agencies, centres } = useMarketingData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -55,6 +55,8 @@ export default function ProcurementLots() {
   const [farmerId, setFarmerId] = useState('');
   const [cropId, setCropId] = useState('');
   const [varietyId, setVarietyId] = useState('');
+  const [seasonId, setSeasonId] = useState('');
+  const [centreId, setCentreId] = useState('');
   const [qty, setQty] = useState('');
   const [rate, setRate] = useState('');
 
@@ -104,6 +106,13 @@ export default function ProcurementLots() {
     return v ? (hi && v.nameHi ? v.nameHi : v.name) : id; // legacy lots stored free-text in varietyId
   };
   const cropVarieties = varieties.filter(v => v.cropId === cropId);
+  const seasonLabel = (id?: string) => { const s = seasons.find(x => x.id === id); return s ? (hi && s.nameHi ? s.nameHi : s.name) : ''; };
+  const centreLabel = (id?: string) => {
+    const c = centres.find(x => x.id === id);
+    if (!c) return '';
+    const ag = agencies.find(a => a.id === c.agencyId);
+    return `${hi && c.nameHi ? c.nameHi : c.name}${ag ? ` · ${ag.code || ag.name}` : ''}`;
+  };
   const farmerLabel = (id: string) => { const f = procurementFarmers.find(x => x.id === id); return f ? `${f.farmerName} (${f.farmerCode})` : id; };
   const lotQuality = (lotId: string) => procurementQualityTests.find(q => q.lotId === lotId);
   const lotMoisture = (lotId: string) => procurementMoistureRecords.find(m => m.lotId === lotId);
@@ -222,10 +231,10 @@ export default function ProcurementLots() {
     if (!cropId) { toast({ title: hi ? 'फसल चुनें' : 'Select a crop', variant: 'destructive' }); return; }
     if (!(q > 0)) { toast({ title: hi ? 'मात्रा दर्ज करें' : 'Enter a valid quantity', variant: 'destructive' }); return; }
     if (!(r > 0)) { toast({ title: hi ? 'MSP दर दर्ज करें' : 'Enter a valid MSP rate', variant: 'destructive' }); return; }
-    const lot = addProcurementLot({ farmerId, cropId, varietyId: varietyId || undefined, quantity: { value: q, unit: 'qtl' }, mspRate: { amount: r, currency: 'INR' } });
+    const lot = addProcurementLot({ farmerId, cropId, varietyId: varietyId || undefined, seasonId: seasonId || undefined, centreId: centreId || undefined, quantity: { value: q, unit: 'qtl' }, mspRate: { amount: r, currency: 'INR' } });
     if (lot.id) {
       toast({ title: hi ? 'प्रोक्योरमेंट लॉट बना' : 'Procurement Lot created', description: `${farmerLabel(farmerId)} · ${cropName(cropId)} · ${q} qtl` });
-      setCropId(''); setVarietyId(''); setQty(''); setRate('');
+      setCropId(''); setVarietyId(''); setSeasonId(''); setCentreId(''); setQty(''); setRate('');
     }
   };
 
@@ -257,6 +266,29 @@ export default function ProcurementLots() {
                 </SelectContent>
               </Select>
               <Button variant="outline" onClick={() => setFarmerOpen(true)} className="gap-1"><Plus className="h-4 w-4" />{hi ? 'किसान जोड़ें' : 'Add Farmer'}</Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>{hi ? 'सीज़न' : 'Season'} <span className="text-muted-foreground text-xs">({hi ? 'वैकल्पिक' : 'optional'})</span></Label>
+              <Select value={seasonId || '__none__'} onValueChange={v => setSeasonId(v === '__none__' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder={hi ? 'सीज़न चुनें' : 'Select season'} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">{hi ? '— कोई नहीं —' : '— none —'}</SelectItem>
+                  {seasons.map(s => <SelectItem key={s.id} value={s.id}>{hi && s.nameHi ? s.nameHi : s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>{hi ? 'खरीद केंद्र' : 'Procurement Centre'} <span className="text-muted-foreground text-xs">({hi ? 'वैकल्पिक' : 'optional'})</span></Label>
+              <Select value={centreId || '__none__'} onValueChange={v => setCentreId(v === '__none__' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder={hi ? 'केंद्र चुनें' : 'Select centre'} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">{hi ? '— कोई नहीं —' : '— none —'}</SelectItem>
+                  {centres.map(c => <SelectItem key={c.id} value={c.id}>{centreLabel(c.id)}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -309,6 +341,11 @@ export default function ProcurementLots() {
             <div key={l.id} className="flex items-center justify-between rounded-lg border p-3 text-sm gap-3">
               <div className="min-w-0">
                 <div className="font-medium">{farmerLabel(l.farmerId)} · {cropName(l.cropId)}{l.varietyId ? ` (${varietyLabel(l.varietyId)})` : ''}</div>
+                {(seasonLabel(l.seasonId) || centreLabel(l.centreId)) && (
+                  <div className="text-xs text-muted-foreground">
+                    {[centreLabel(l.centreId), seasonLabel(l.seasonId)].filter(Boolean).join(' · ')}
+                  </div>
+                )}
                 <div className="text-muted-foreground">
                   {l.quantity?.value ?? 0} {l.quantity?.unit ?? 'qtl'} · ₹{l.mspRate?.amount ?? 0}/{hi ? 'क्विंटल' : 'qtl'}
                 </div>

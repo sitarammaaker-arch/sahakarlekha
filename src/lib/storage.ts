@@ -1,5 +1,5 @@
 import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun } from '@/types';
-import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement, Crop, Variety } from '@/lib/procurement';
+import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement, Crop, Variety, Season, Agency, ProcurementCentre } from '@/lib/procurement';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
 export interface VoucherTemplate {
@@ -74,6 +74,9 @@ const KEYS = {
   procurementSettlements: 'sahayata_procurement_settlements',
   procurementCrops: 'sahayata_procurement_crops',
   procurementVarieties: 'sahayata_procurement_varieties',
+  procurementSeasons: 'sahayata_procurement_seasons',
+  procurementAgencies: 'sahayata_procurement_agencies',
+  procurementCentres: 'sahayata_procurement_centres',
   housingFlats: 'sahayata_housing_flats',
   maintenanceBills: 'sahayata_maintenance_bills',
   housingChargeHeads: 'sahayata_housing_charge_heads',
@@ -792,6 +795,12 @@ export const getProcurementCrops = (): Crop[] => get(KEYS.procurementCrops, []);
 export const setProcurementCrops = (c: Crop[]): void => set(KEYS.procurementCrops, c);
 export const getProcurementVarieties = (): Variety[] => get(KEYS.procurementVarieties, []);
 export const setProcurementVarieties = (v: Variety[]): void => set(KEYS.procurementVarieties, v);
+export const getProcurementSeasons = (): Season[] => get(KEYS.procurementSeasons, []);
+export const setProcurementSeasons = (s: Season[]): void => set(KEYS.procurementSeasons, s);
+export const getProcurementAgencies = (): Agency[] => get(KEYS.procurementAgencies, []);
+export const setProcurementAgencies = (a: Agency[]): void => set(KEYS.procurementAgencies, a);
+export const getProcurementCentres = (): ProcurementCentre[] => get(KEYS.procurementCentres, []);
+export const setProcurementCentres = (c: ProcurementCentre[]): void => set(KEYS.procurementCentres, c);
 export const getProcurementLots = (): ProcurementLot[] => get(KEYS.procurementLots, []);
 export const setProcurementLots = (l: ProcurementLot[]): void => set(KEYS.procurementLots, l);
 export const getProcurementEvents = (): ProcurementEvent[] => get(KEYS.procurementEvents, []);

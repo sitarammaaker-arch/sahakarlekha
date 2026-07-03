@@ -8,18 +8,21 @@ export interface Season extends BaseEntity {
   cropYear: string;
   startDate: string;
   endDate: string;
+  nameHi?: string;         // Hindi label; optional, additive
 }
 
 export interface Agency extends BaseEntity {
   name: string;
   code: string;
   kind: string;            // FCI | HAFED | MARKFED | state
+  nameHi?: string;         // Hindi label; optional, additive
 }
 
 export interface ProcurementCentre extends BaseEntity {
   name: string;
   code: string;
   agencyId: string;
+  nameHi?: string;         // Hindi label; optional, additive
 }
 
 export interface Crop extends BaseEntity {
