@@ -24,7 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
 import { pickEffectiveMspRate } from '@/lib/marketing/msp';
-import type { Crop, Variety, Season, Agency, ProcurementCentre, MSPRate } from '@/lib/procurement';
+import type { Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
 
 interface MarketingDataContextValue {
   marketingReady: boolean;
@@ -62,6 +62,18 @@ interface MarketingDataContextValue {
   deleteMspRate: (id: string) => void;
   /** Resolve ₹/qtl for a crop+season in force on `date` (default today); null if none applies. */
   resolveMspRate: (args: { cropId: string; seasonId: string; date?: string }) => number | null;
+
+  // Deduction rules / Quality specs / Bardana types (M1d) — config consumed by quality (M2) & settlement (M3)
+  deductionRules: DeductionRule[];
+  addDeductionRule: (data: { code: string; basis: string; rate: number; name?: string; nameHi?: string }) => DeductionRule;
+  updateDeductionRule: (id: string, data: Partial<Pick<DeductionRule, 'code' | 'basis' | 'name' | 'nameHi'>> & { rate?: number }) => void;
+  deleteDeductionRule: (id: string) => void;
+  qualitySpecs: QualitySpec[];
+  addQualitySpec: (data: { cropId: string; seasonId: string; parameter: string; maxLimit: number }) => QualitySpec;
+  deleteQualitySpec: (id: string) => void;
+  bardanaTypes: BardanaType[];
+  addBardanaType: (data: { name: string; capacityKg: number; nameHi?: string }) => BardanaType;
+  deleteBardanaType: (id: string) => void;
 }
 
 const MarketingDataContext = createContext<MarketingDataContextValue | null>(null);
@@ -105,6 +117,9 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   const [agencies, setAgenciesState] = useState<Agency[]>(() => storage.getProcurementAgencies());
   const [centres, setCentresState] = useState<ProcurementCentre[]>(() => storage.getProcurementCentres());
   const [mspRates, setMspRatesState] = useState<MSPRate[]>(() => storage.getProcurementMspRates());
+  const [deductionRules, setDeductionRulesState] = useState<DeductionRule[]>(() => storage.getProcurementDeductionRules());
+  const [qualitySpecs, setQualitySpecsState] = useState<QualitySpec[]>(() => storage.getProcurementQualitySpecs());
+  const [bardanaTypes, setBardanaTypesState] = useState<BardanaType[]>(() => storage.getProcurementBardanaTypes());
 
   useEffect(() => {
     const sid = user?.societyId;
@@ -157,6 +172,33 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     supabase.from('procurement_msp_rates').select('*').eq('society_id', sid).then(
       ({ data, error }) => setMspRatesState(error || !data ? storage.getProcurementMspRates() : (data as MSPRate[])),
       () => setMspRatesState(storage.getProcurementMspRates()),
+    );
+  }, [user?.societyId]);
+
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setDeductionRulesState([]); return; }
+    supabase.from('procurement_deduction_rules').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setDeductionRulesState(error || !data ? storage.getProcurementDeductionRules() : (data as DeductionRule[])),
+      () => setDeductionRulesState(storage.getProcurementDeductionRules()),
+    );
+  }, [user?.societyId]);
+
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setQualitySpecsState([]); return; }
+    supabase.from('procurement_quality_specs').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setQualitySpecsState(error || !data ? storage.getProcurementQualitySpecs() : (data as QualitySpec[])),
+      () => setQualitySpecsState(storage.getProcurementQualitySpecs()),
+    );
+  }, [user?.societyId]);
+
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setBardanaTypesState([]); return; }
+    supabase.from('procurement_bardana_types').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setBardanaTypesState(error || !data ? storage.getProcurementBardanaTypes() : (data as BardanaType[])),
+      () => setBardanaTypesState(storage.getProcurementBardanaTypes()),
     );
   }, [user?.societyId]);
 
@@ -472,6 +514,110 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     [mspRates],
   );
 
+  // ── Deduction-rule CRUD ────────────────────────────────────────────────────────
+  const addDeductionRule = useCallback((data: { code: string; basis: string; rate: number; name?: string; nameHi?: string }): DeductionRule => {
+    const now = new Date().toISOString();
+    const rec: DeductionRule = { id: crypto.randomUUID(), code: data.code, basis: data.basis, rate: { value: data.rate }, name: data.name, nameHi: data.nameHi, createdAt: now, updatedAt: now };
+    if (guardFYLocked()) return { ...rec, id: '', createdAt: '', updatedAt: '' };
+    setDeductionRulesState(prev => { const u = [...prev, rec]; storage.setProcurementDeductionRules(u); return u; });
+    supabase.from('procurement_deduction_rules').upsert(withSoc(rec)).then(({ error }) => {
+      if (error) {
+        console.error('Deduction rule save error:', error.message);
+        setDeductionRulesState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementDeductionRules(r); return r; });
+        toastRef.current({ title: 'कटौती नियम सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_deduction_rules block + RLS chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return rec;
+  }, [societyId]);
+
+  const updateDeductionRule = useCallback((id: string, data: Partial<Pick<DeductionRule, 'code' | 'basis' | 'name' | 'nameHi'>> & { rate?: number }) => {
+    if (guardFYLocked()) return;
+    setDeductionRulesState(prev => {
+      const before = prev.find(r => r.id === id);
+      const u = prev.map(r => r.id === id ? { ...r, ...data, rate: data.rate != null ? { value: data.rate } : r.rate, updatedAt: new Date().toISOString() } : r);
+      storage.setProcurementDeductionRules(u);
+      const next = u.find(r => r.id === id);
+      if (next && before) supabase.from('procurement_deduction_rules').upsert(withSoc(next)).then(({ error }) => {
+        if (error) {
+          setDeductionRulesState(p => { const r = p.map(x => x.id === id ? before : x); storage.setProcurementDeductionRules(r); return r; });
+          toastRef.current({ title: 'कटौती नियम अपडेट नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        }
+      });
+      return u;
+    });
+  }, [societyId]);
+
+  const deleteDeductionRule = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const before = deductionRules.find(r => r.id === id);
+    if (!before) return;
+    setDeductionRulesState(prev => { const r = prev.filter(x => x.id !== id); storage.setProcurementDeductionRules(r); return r; });
+    supabase.from('procurement_deduction_rules').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
+      if (error) {
+        setDeductionRulesState(prev => { const u = [...prev, before]; storage.setProcurementDeductionRules(u); return u; });
+        toastRef.current({ title: 'कटौती नियम हटा नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [deductionRules, societyId]);
+
+  // ── Quality-spec CRUD (add/delete; specs are per crop+season+parameter) ────────────
+  const addQualitySpec = useCallback((data: { cropId: string; seasonId: string; parameter: string; maxLimit: number }): QualitySpec => {
+    const now = new Date().toISOString();
+    const rec: QualitySpec = { id: crypto.randomUUID(), cropId: data.cropId, seasonId: data.seasonId, parameter: data.parameter, maxLimit: data.maxLimit, createdAt: now, updatedAt: now };
+    if (guardFYLocked()) return { ...rec, id: '', createdAt: '', updatedAt: '' };
+    setQualitySpecsState(prev => { const u = [...prev, rec]; storage.setProcurementQualitySpecs(u); return u; });
+    supabase.from('procurement_quality_specs').upsert(withSoc(rec)).then(({ error }) => {
+      if (error) {
+        console.error('Quality spec save error:', error.message);
+        setQualitySpecsState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementQualitySpecs(r); return r; });
+        toastRef.current({ title: 'गुणवत्ता मानक सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_quality_specs block + RLS chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return rec;
+  }, [societyId]);
+
+  const deleteQualitySpec = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const before = qualitySpecs.find(s => s.id === id);
+    if (!before) return;
+    setQualitySpecsState(prev => { const r = prev.filter(x => x.id !== id); storage.setProcurementQualitySpecs(r); return r; });
+    supabase.from('procurement_quality_specs').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
+      if (error) {
+        setQualitySpecsState(prev => { const u = [...prev, before]; storage.setProcurementQualitySpecs(u); return u; });
+        toastRef.current({ title: 'गुणवत्ता मानक हटा नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [qualitySpecs, societyId]);
+
+  // ── Bardana-type CRUD ──────────────────────────────────────────────────────────
+  const addBardanaType = useCallback((data: { name: string; capacityKg: number; nameHi?: string }): BardanaType => {
+    const now = new Date().toISOString();
+    const rec: BardanaType = { id: crypto.randomUUID(), name: data.name, capacityKg: data.capacityKg, nameHi: data.nameHi, createdAt: now, updatedAt: now };
+    if (guardFYLocked()) return { ...rec, id: '', createdAt: '', updatedAt: '' };
+    setBardanaTypesState(prev => { const u = [...prev, rec]; storage.setProcurementBardanaTypes(u); return u; });
+    supabase.from('procurement_bardana_types').upsert(withSoc(rec)).then(({ error }) => {
+      if (error) {
+        console.error('Bardana type save error:', error.message);
+        setBardanaTypesState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementBardanaTypes(r); return r; });
+        toastRef.current({ title: 'बारदाना सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_bardana_types block + RLS chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return rec;
+  }, [societyId]);
+
+  const deleteBardanaType = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const before = bardanaTypes.find(b => b.id === id);
+    if (!before) return;
+    setBardanaTypesState(prev => { const r = prev.filter(x => x.id !== id); storage.setProcurementBardanaTypes(r); return r; });
+    supabase.from('procurement_bardana_types').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
+      if (error) {
+        setBardanaTypesState(prev => { const u = [...prev, before]; storage.setProcurementBardanaTypes(u); return u; });
+        toastRef.current({ title: 'बारदाना हटा नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [bardanaTypes, societyId]);
+
   return (
     <MarketingDataContext.Provider value={{
       marketingReady: true,
@@ -501,6 +647,16 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       addMspRate,
       deleteMspRate,
       resolveMspRate,
+      deductionRules,
+      addDeductionRule,
+      updateDeductionRule,
+      deleteDeductionRule,
+      qualitySpecs,
+      addQualitySpec,
+      deleteQualitySpec,
+      bardanaTypes,
+      addBardanaType,
+      deleteBardanaType,
     }}>
       {children}
     </MarketingDataContext.Provider>

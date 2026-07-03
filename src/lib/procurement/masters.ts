@@ -53,13 +53,16 @@ export interface QualitySpec extends BaseEntity {
 
 export interface DeductionRule extends BaseEntity {
   code: string;
-  basis: string;           // quality | levy | shortage
-  rate: Percentage;
+  basis: string;           // e.g. market_fee | hrdf | labour | shortage | commission | other
+  rate: Percentage;        // % of gross (application logic lands in settlement, M3)
+  name?: string;           // friendly label; optional, additive
+  nameHi?: string;         // Hindi label; optional, additive
 }
 
 export interface BardanaType extends BaseEntity {
   name: string;
   capacityKg: number;
+  nameHi?: string;         // Hindi label; optional, additive
 }
 
 /**

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Wheat, Plus, Sprout, Pencil, Trash2, CalendarDays, Building2, IndianRupee } from 'lucide-react';
+import { Wheat, Plus, Sprout, Pencil, Trash2, CalendarDays, Building2, IndianRupee, Percent } from 'lucide-react';
 
 const AGENCY_KINDS = ['FCI', 'HAFED', 'MARKFED', 'NAFED', 'state'];
 
@@ -26,6 +26,9 @@ export default function ProcurementMasters() {
     agencies, addAgency, updateAgency, deleteAgency,
     centres, addCentre, updateCentre, deleteCentre,
     mspRates, addMspRate, deleteMspRate,
+    deductionRules, addDeductionRule, deleteDeductionRule,
+    qualitySpecs, addQualitySpec, deleteQualitySpec,
+    bardanaTypes, addBardanaType, deleteBardanaType,
   } = useMarketingData();
   const { language } = useLanguage();
   const { toast } = useToast();
@@ -136,6 +139,62 @@ export default function ProcurementMasters() {
   const seasonName = (id: string) => { const s = seasons.find(x => x.id === id); return s ? (hi && s.nameHi ? s.nameHi : s.name) : id; };
   const sortedMsp = [...mspRates].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1));
 
+  // ── Deduction-rule dialog ──────────────────────────────────────────────────────
+  const [dedOpen, setDedOpen] = useState(false);
+  const [dName, setDName] = useState('');
+  const [dNameHi, setDNameHi] = useState('');
+  const [dBasis, setDBasis] = useState('');
+  const [dRate, setDRate] = useState('');
+  const DED_BASES = [
+    { id: 'market_fee', en: 'Market Fee', hi: 'मंडी शुल्क' },
+    { id: 'hrdf', en: 'HRDF', hi: 'HRDF' },
+    { id: 'labour', en: 'Labour', hi: 'हमाली' },
+    { id: 'commission', en: 'Commission', hi: 'आढ़त' },
+    { id: 'shortage', en: 'Shortage', hi: 'घटती' },
+    { id: 'other', en: 'Other', hi: 'अन्य' },
+  ];
+  const openAddDed = () => { setDName(''); setDNameHi(''); setDBasis(''); setDRate(''); setDedOpen(true); };
+  const saveDed = () => {
+    const r = Number(dRate);
+    if (!dName.trim()) { toast({ title: hi ? 'नाम आवश्यक' : 'Name required', variant: 'destructive' }); return; }
+    if (!dBasis) { toast({ title: hi ? 'आधार चुनें' : 'Select basis', variant: 'destructive' }); return; }
+    if (!(r >= 0)) { toast({ title: hi ? 'दर दर्ज करें' : 'Enter a rate', variant: 'destructive' }); return; }
+    addDeductionRule({ code: dName.trim().toUpperCase().replace(/\s+/g, '_'), basis: dBasis, rate: r, name: dName.trim(), nameHi: dNameHi.trim() || undefined });
+    setDedOpen(false);
+  };
+  const basisLabel = (id: string) => { const b = DED_BASES.find(x => x.id === id); return b ? (hi ? b.hi : b.en) : id; };
+
+  // ── Quality-spec dialog ────────────────────────────────────────────────────────
+  const [qsOpen, setQsOpen] = useState(false);
+  const [qCropId, setQCropId] = useState('');
+  const [qSeasonId, setQSeasonId] = useState('');
+  const [qParam, setQParam] = useState('');
+  const [qMax, setQMax] = useState('');
+  const openAddQs = () => { setQCropId(''); setQSeasonId(''); setQParam(''); setQMax(''); setQsOpen(true); };
+  const saveQs = () => {
+    const m = Number(qMax);
+    if (!qCropId) { toast({ title: hi ? 'फसल चुनें' : 'Select a crop', variant: 'destructive' }); return; }
+    if (!qSeasonId) { toast({ title: hi ? 'सीज़न चुनें' : 'Select a season', variant: 'destructive' }); return; }
+    if (!qParam.trim()) { toast({ title: hi ? 'पैरामीटर आवश्यक' : 'Parameter required', variant: 'destructive' }); return; }
+    if (!(m >= 0)) { toast({ title: hi ? 'अधिकतम सीमा दर्ज करें' : 'Enter max limit', variant: 'destructive' }); return; }
+    addQualitySpec({ cropId: qCropId, seasonId: qSeasonId, parameter: qParam.trim(), maxLimit: m });
+    setQsOpen(false);
+  };
+
+  // ── Bardana dialog ─────────────────────────────────────────────────────────────
+  const [barOpen, setBarOpen] = useState(false);
+  const [bName, setBName] = useState('');
+  const [bNameHi, setBNameHi] = useState('');
+  const [bCap, setBCap] = useState('');
+  const openAddBar = () => { setBName(''); setBNameHi(''); setBCap(''); setBarOpen(true); };
+  const saveBar = () => {
+    const c = Number(bCap);
+    if (!bName.trim()) { toast({ title: hi ? 'नाम आवश्यक' : 'Name required', variant: 'destructive' }); return; }
+    if (!(c > 0)) { toast({ title: hi ? 'क्षमता (kg) दर्ज करें' : 'Enter capacity (kg)', variant: 'destructive' }); return; }
+    addBardanaType({ name: bName.trim(), capacityKg: c, nameHi: bNameHi.trim() || undefined });
+    setBarOpen(false);
+  };
+
   return (
     <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center gap-3">
@@ -154,6 +213,7 @@ export default function ProcurementMasters() {
           <TabsTrigger value="seasons" className="flex-1 gap-1"><CalendarDays className="h-4 w-4" />{hi ? 'सीज़न' : 'Seasons'}</TabsTrigger>
           <TabsTrigger value="agencies" className="flex-1 gap-1"><Building2 className="h-4 w-4" />{hi ? 'एजेंसी व केंद्र' : 'Agencies'}</TabsTrigger>
           <TabsTrigger value="msp" className="flex-1 gap-1"><IndianRupee className="h-4 w-4" />{hi ? 'MSP दर' : 'MSP'}</TabsTrigger>
+          <TabsTrigger value="rules" className="flex-1 gap-1"><Percent className="h-4 w-4" />{hi ? 'नियम' : 'Rules'}</TabsTrigger>
         </TabsList>
 
         {/* ── Crops & Varieties ── */}
@@ -289,6 +349,64 @@ export default function ProcurementMasters() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ── Deduction rules · Quality specs · Bardana ── */}
+        <TabsContent value="rules" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardTitle className="text-base">{hi ? 'कटौती नियम' : 'Deduction Rules'} ({deductionRules.length})</CardTitle>
+              <Button size="sm" className="gap-1" onClick={openAddDed}><Plus className="h-4 w-4" />{hi ? 'नियम' : 'Rule'}</Button>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {deductionRules.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'अभी कोई कटौती नियम नहीं। उदा. मंडी शुल्क 2%।' : 'No deduction rules yet. e.g. Market Fee 2%.'}</p>}
+              {deductionRules.map(r => (
+                <div key={r.id} className="flex items-center justify-between rounded-lg border p-3 gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium">{hi && r.nameHi ? r.nameHi : (r.name || r.code)} <Badge variant="secondary" className="ml-1">{basisLabel(r.basis)}</Badge></div>
+                    <div className="text-xs text-muted-foreground">{r.rate.value}% {hi ? 'सकल का' : 'of gross'}</div>
+                  </div>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => deleteDeductionRule(r.id)} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardTitle className="text-base">{hi ? 'गुणवत्ता मानक' : 'Quality Specs'} ({qualitySpecs.length})</CardTitle>
+              <Button size="sm" className="gap-1" onClick={openAddQs} disabled={crops.length === 0 || seasons.length === 0}><Plus className="h-4 w-4" />{hi ? 'मानक' : 'Spec'}</Button>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {(crops.length === 0 || seasons.length === 0) && <p className="text-sm text-muted-foreground">{hi ? 'पहले फसल व सीज़न जोड़ें।' : 'Add crops & seasons first.'}</p>}
+              {crops.length > 0 && seasons.length > 0 && qualitySpecs.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'अभी कोई मानक नहीं। उदा. गेहूँ · नमी · अधिकतम 12%।' : 'No specs yet. e.g. Wheat · Moisture · max 12%.'}</p>}
+              {qualitySpecs.map(s => (
+                <div key={s.id} className="flex items-center justify-between rounded-lg border p-3 gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium">{cropLabel(crops.find(c => c.id === s.cropId) || { name: s.cropId })} · {s.parameter}</div>
+                    <div className="text-xs text-muted-foreground">{seasonName(s.seasonId)} · {hi ? 'अधिकतम' : 'max'} {s.maxLimit}</div>
+                  </div>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => deleteQualitySpec(s.id)} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardTitle className="text-base">{hi ? 'बारदाना प्रकार' : 'Bardana Types'} ({bardanaTypes.length})</CardTitle>
+              <Button size="sm" className="gap-1" onClick={openAddBar}><Plus className="h-4 w-4" />{hi ? 'बारदाना' : 'Bardana'}</Button>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {bardanaTypes.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'अभी कोई बारदाना प्रकार नहीं। उदा. जूट बैग · 50 kg।' : 'No bardana types yet. e.g. Jute bag · 50 kg.'}</p>}
+              {bardanaTypes.map(b => (
+                <div key={b.id} className="flex items-center justify-between rounded-lg border p-3 gap-3">
+                  <div className="min-w-0"><div className="font-medium">{hi && b.nameHi ? b.nameHi : b.name} <Badge variant="outline" className="ml-1">{b.capacityKg} kg</Badge></div></div>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => deleteBardanaType(b.id)} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Crop dialog */}
@@ -408,6 +526,72 @@ export default function ProcurementMasters() {
             <p className="text-xs text-muted-foreground">{hi ? 'दर बदलने पर नई प्रभावी-तिथि वाली दर जोड़ें — पुरानी दर इतिहास के लिए बनी रहती है।' : 'To revise, add a new rate with a later effective date — the old one stays for history.'}</p>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setMspOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button><Button onClick={saveMsp}>{hi ? 'सेव करें' : 'Save'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deduction-rule dialog */}
+      <Dialog open={dedOpen} onOpenChange={setDedOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{hi ? 'नया कटौती नियम' : 'Add Deduction Rule'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label>{hi ? 'नाम (English)' : 'Name (English)'} *</Label><Input value={dName} onChange={e => setDName(e.target.value)} placeholder="Market Fee" /></div>
+            <div className="space-y-1.5"><Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label><Input value={dNameHi} onChange={e => setDNameHi(e.target.value)} placeholder="मंडी शुल्क" /></div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label>{hi ? 'आधार' : 'Basis'} *</Label>
+                <Select value={dBasis} onValueChange={setDBasis}>
+                  <SelectTrigger><SelectValue placeholder={hi ? 'आधार' : 'Basis'} /></SelectTrigger>
+                  <SelectContent>{DED_BASES.map(b => <SelectItem key={b.id} value={b.id}>{hi ? b.hi : b.en}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label>{hi ? 'दर (% सकल का)' : 'Rate (% of gross)'} *</Label><Input type="number" min={0} step="0.01" value={dRate} onChange={e => setDRate(e.target.value)} placeholder="2" /></div>
+            </div>
+            <p className="text-xs text-muted-foreground">{hi ? 'यह नियम निपटान (settlement) के समय कटौती सुझाएगा — अगले चरण में।' : 'This rule will suggest deductions at settlement — in a later step.'}</p>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setDedOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button><Button onClick={saveDed}>{hi ? 'सेव करें' : 'Save'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quality-spec dialog */}
+      <Dialog open={qsOpen} onOpenChange={setQsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{hi ? 'नया गुणवत्ता मानक' : 'Add Quality Spec'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label>{hi ? 'फसल' : 'Crop'} *</Label>
+                <Select value={qCropId} onValueChange={setQCropId}>
+                  <SelectTrigger><SelectValue placeholder={hi ? 'फसल' : 'Crop'} /></SelectTrigger>
+                  <SelectContent>{crops.map(c => <SelectItem key={c.id} value={c.id}>{cropLabel(c)}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>{hi ? 'सीज़न' : 'Season'} *</Label>
+                <Select value={qSeasonId} onValueChange={setQSeasonId}>
+                  <SelectTrigger><SelectValue placeholder={hi ? 'सीज़न' : 'Season'} /></SelectTrigger>
+                  <SelectContent>{seasons.map(s => <SelectItem key={s.id} value={s.id}>{hi && s.nameHi ? s.nameHi : s.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5"><Label>{hi ? 'पैरामीटर' : 'Parameter'} *</Label><Input value={qParam} onChange={e => setQParam(e.target.value)} placeholder={hi ? 'नमी' : 'Moisture'} /></div>
+              <div className="space-y-1.5"><Label>{hi ? 'अधिकतम सीमा' : 'Max limit'} *</Label><Input type="number" min={0} step="0.1" value={qMax} onChange={e => setQMax(e.target.value)} placeholder="12" /></div>
+            </div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setQsOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button><Button onClick={saveQs}>{hi ? 'सेव करें' : 'Save'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bardana dialog */}
+      <Dialog open={barOpen} onOpenChange={setBarOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{hi ? 'नया बारदाना प्रकार' : 'Add Bardana Type'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label>{hi ? 'नाम (English)' : 'Name (English)'} *</Label><Input value={bName} onChange={e => setBName(e.target.value)} placeholder="Jute bag" /></div>
+            <div className="space-y-1.5"><Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label><Input value={bNameHi} onChange={e => setBNameHi(e.target.value)} placeholder="जूट बैग" /></div>
+            <div className="space-y-1.5"><Label>{hi ? 'क्षमता (kg)' : 'Capacity (kg)'} *</Label><Input type="number" min={0} value={bCap} onChange={e => setBCap(e.target.value)} placeholder="50" /></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setBarOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button><Button onClick={saveBar}>{hi ? 'सेव करें' : 'Save'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

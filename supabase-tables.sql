@@ -1253,6 +1253,56 @@ create policy "society_rw" on public.procurement_centres for all to authenticate
 create policy "society_rw" on public.procurement_msp_rates for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+-- Procurement CONFIG masters (Marketing M1d): deduction rules, quality specs, bardana types.
+-- Consumed by quality (M2) & settlement (M3). RLS policies bundled (see the M1a–c RLS lesson).
+create table if not exists procurement_deduction_rules (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  code text,
+  basis text,
+  rate jsonb,
+  name text,
+  "nameHi" text,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+create index if not exists idx_procurement_deduction_rules_society on procurement_deduction_rules(society_id);
+create table if not exists procurement_quality_specs (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "cropId" text,
+  "seasonId" text,
+  parameter text,
+  "maxLimit" numeric,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+create index if not exists idx_procurement_quality_specs_society on procurement_quality_specs(society_id);
+create table if not exists procurement_bardana_types (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  name text,
+  "capacityKg" numeric,
+  "nameHi" text,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+create index if not exists idx_procurement_bardana_types_society on procurement_bardana_types(society_id);
+alter table public.procurement_deduction_rules enable row level security;
+alter table public.procurement_quality_specs enable row level security;
+alter table public.procurement_bardana_types enable row level security;
+drop policy if exists "society_rw" on public.procurement_deduction_rules;
+drop policy if exists "society_rw" on public.procurement_quality_specs;
+drop policy if exists "society_rw" on public.procurement_bardana_types;
+create policy "society_rw" on public.procurement_deduction_rules for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create policy "society_rw" on public.procurement_quality_specs for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create policy "society_rw" on public.procurement_bardana_types for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
 create table if not exists procurement_lots (
   id text primary key,
   society_id text not null default 'SOC001',
