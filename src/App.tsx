@@ -127,6 +127,7 @@ const Features = lazyWithRetry(() => import("./pages/Features"));
 const ProcurementLots = lazyWithRetry(() => import("./pages/ProcurementLots"));
 const ProcurementMasters = lazyWithRetry(() => import("./pages/marketing/ProcurementMasters"));
 const AgencyReceipts = lazyWithRetry(() => import("./pages/marketing/AgencyReceipts"));
+const ProcurementRegisters = lazyWithRetry(() => import("./pages/marketing/ProcurementRegisters"));
 const FlatsRegister = lazyWithRetry(() => import("./pages/FlatsRegister"));
 const MaintenanceBilling = lazyWithRetry(() => import("./pages/MaintenanceBilling"));
 const ChargeHeads = lazyWithRetry(() => import("./pages/ChargeHeads"));
@@ -330,6 +331,7 @@ const AppRoutes = () => {
       <Route path="/procurement-lots" element={<ProtectedRoute><ProcurementLots /></ProtectedRoute>} />
       <Route path="/procurement-masters" element={<ProtectedRoute><ProcurementMasters /></ProtectedRoute>} />
       <Route path="/agency-receipts" element={<ProtectedRoute><AgencyReceipts /></ProtectedRoute>} />
+      <Route path="/procurement-registers" element={<ProtectedRoute><ProcurementRegisters /></ProtectedRoute>} />
       <Route path="/eway-bill" element={<ProtectedRoute><EWayBill /></ProtectedRoute>} />
       <Route path="/kcc-loan" element={<ProtectedRoute><KccLoan /></ProtectedRoute>} />
       <Route path="/election-module" element={<ProtectedRoute><ElectionModule /></ProtectedRoute>} />
