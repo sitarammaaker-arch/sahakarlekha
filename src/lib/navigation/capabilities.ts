@@ -26,14 +26,15 @@ export type Capability =
   | 'pf_esi';
 
 /** Sidebar groups — 1:1 with today's visual groups, in render order. */
-export type NavDomain = 'core' | 'operations' | 'dairy' | 'labour' | 'housing' | 'reports' | 'registers' | 'administration';
+export type NavDomain = 'core' | 'operations' | 'marketing' | 'dairy' | 'labour' | 'housing' | 'reports' | 'registers' | 'administration';
 
-export const DOMAIN_ORDER: NavDomain[] = ['core', 'operations', 'dairy', 'labour', 'housing', 'reports', 'registers', 'administration'];
+export const DOMAIN_ORDER: NavDomain[] = ['core', 'operations', 'marketing', 'dairy', 'labour', 'housing', 'reports', 'registers', 'administration'];
 
 /** i18n heading key per group (null = no heading, as 'core' renders today). Verified against Sidebar in C2. */
 export const DOMAIN_HEADING_KEY: Record<NavDomain, string | null> = {
   core: null,            // no heading (matches current main group)
   operations: 'operations',
+  marketing: 'navMarketing', // cooperative-marketing module group (MSP procurement, trading, warehouse…)
   dairy: 'navDairy',     // dairy-cooperative module group
   labour: 'navLabour',   // labour-cooperative module group
   housing: 'navHousing', // housing-cooperative module group
