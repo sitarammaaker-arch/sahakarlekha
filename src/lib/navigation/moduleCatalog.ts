@@ -63,7 +63,10 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'dairyInputs', titleKey: 'dairyInputs', icon: PackagePlus,           route: '/dairy-inputs', domain: 'dairy', requiredCapabilities: ['dairy_collection'], requiredRoles: ['admin', 'accountant'], order: 4 },
   { id: 'dairyDistribution', titleKey: 'dairyDistribution', icon: Coins,     route: '/dairy-distribution', domain: 'dairy', requiredCapabilities: ['dairy_collection'], requiredRoles: ['admin', 'accountant'], order: 5 },
   { id: 'dairyRegisters', titleKey: 'dairyRegisters', icon: FileSpreadsheet, route: '/dairy-registers', domain: 'dairy', requiredCapabilities: ['dairy_collection'], requiredRoles: ['admin', 'accountant', 'viewer'], order: 6 },
-  { id: 'procurementLots', titleKey: 'procurementLots', icon: Wheat,         route: '/procurement-lots', domain: 'operations', requiredCapabilities: ['procurement_msp'], order: 10 },
+  // ── Cooperative-marketing module group (domain: 'marketing') — MSP procurement, trading,
+  // warehouse, processing, federation billing. Procurement is the marketing society's core
+  // activity, so it heads this group (moved here from 'operations' in Marketing M0). ──
+  { id: 'procurementLots', titleKey: 'procurementLots', icon: Wheat,         route: '/procurement-lots', domain: 'marketing', requiredCapabilities: ['procurement_msp'], order: 0 },
   // ── Housing-cooperative module group (domain: 'housing') — all housing modules live here so
   // a housing society sees ONE organised "Housing" sidebar group (mirrors the Labour group). ──
   { id: 'buildings', titleKey: 'buildings', icon: Building, route: '/buildings', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 0 },
