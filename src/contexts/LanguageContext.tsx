@@ -90,6 +90,7 @@ export const translations: Translations = {
   navMarketing: { hi: 'विपणन प्रबंधन', en: 'Marketing' },
   procurementMasters: { hi: 'प्रोक्योरमेंट मास्टर', en: 'Procurement Masters' },
   agencyReceipts: { hi: 'HAFED रसीद', en: 'HAFED Receipt' },
+  procurementRegisters: { hi: 'प्रोक्योरमेंट रजिस्टर', en: 'Procurement Registers' },
   navDairy: { hi: 'दुग्ध प्रबंधन', en: 'Dairy' },
   dairyRateCharts: { hi: 'दुग्ध रेट चार्ट', en: 'Milk Rate Charts' },
   farmerSettlement: { hi: 'दुग्ध सेटलमेंट', en: 'Farmer Settlement' },
