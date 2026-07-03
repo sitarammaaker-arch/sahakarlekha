@@ -24,7 +24,12 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
 import { pickEffectiveMspRate } from '@/lib/marketing/msp';
+import { getVoucherLines } from '@/lib/voucherUtils';
 import type { Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
+import type { Voucher } from '@/types';
+
+// MSP Receivable ledger (from the agency) — the CMS/HAFED chart's dedicated account (storage.ts).
+const MSP_RECEIVABLE_ACCOUNT = '3308';
 
 interface MarketingDataContextValue {
   marketingReady: boolean;
@@ -74,6 +79,14 @@ interface MarketingDataContextValue {
   bardanaTypes: BardanaType[];
   addBardanaType: (data: { name: string; capacityKg: number; nameHi?: string }) => BardanaType;
   deleteBardanaType: (id: string) => void;
+
+  // Agency (HAFED) receipts against MSP Receivable (M3c) — derived from vouchers, no stored balance.
+  agencyReceipts: Voucher[];
+  /** Net MSP Receivable outstanding = Σ(3308 Dr) − Σ(3308 Cr) across live vouchers. */
+  agencyReceivableOutstanding: number;
+  /** Record money received from the agency: Dr bank|cash / Cr 3308 MSP Receivable. */
+  recordAgencyReceipt: (data: { amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string }) => Voucher;
+  deleteAgencyReceipt: (voucherId: string) => void;
 }
 
 const MarketingDataContext = createContext<MarketingDataContextValue | null>(null);
@@ -87,7 +100,7 @@ const STANDARD_CROPS: Array<{ name: string; code: string; nameHi: string }> = [
 ];
 
 export function MarketingProvider({ children }: { children: ReactNode }) {
-  const { society, procurementLots } = useData();
+  const { society, procurementLots, accounts, vouchers, addVoucher, cancelVoucher } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
@@ -618,6 +631,42 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     });
   }, [bardanaTypes, societyId]);
 
+  // ── Agency (HAFED) receipts against MSP Receivable (M3c) ──────────────────────────
+  // Derived from vouchers (the voucher IS the record — no stored balance, mirrors farmer payments).
+  const agencyReceipts = vouchers.filter(v => !v.isDeleted && v.refType === 'procurement.agency.receipt');
+  const agencyReceivableOutstanding = +vouchers
+    .filter(v => !v.isDeleted)
+    .reduce((sum, v) => sum + getVoucherLines(v).reduce((s, l) => s + (l.accountId === MSP_RECEIVABLE_ACCOUNT ? (l.type === 'Dr' ? l.amount : -l.amount) : 0), 0), 0)
+    .toFixed(2);
+
+  const recordAgencyReceipt = useCallback((data: { amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string }): Voucher => {
+    const sentinel = { id: '', voucherNo: '', type: 'receipt', date: '', debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    if (guardFYLocked()) return sentinel;
+    const amt = +Number(data.amount).toFixed(2);
+    if (!(amt > 0)) { toastRef.current({ title: 'राशि डालें', variant: 'destructive' }); return sentinel; }
+    if (!accounts.some(a => a.id === MSP_RECEIVABLE_ACCOUNT)) {
+      toastRef.current({ title: 'MSP Receivable खाता नहीं', description: 'इस समिति के चार्ट में 3308 MSP Receivable नहीं है — HAFED रसीद पोस्ट नहीं हो सकती।', variant: 'destructive', duration: 10000 });
+      return sentinel;
+    }
+    const drAcc = data.mode === 'bank' ? (data.bankAccountId || '3302') : '3301';
+    const voucher = addVoucher({
+      type: 'receipt', date: data.date,
+      debitAccountId: drAcc, creditAccountId: MSP_RECEIVABLE_ACCOUNT, amount: amt,
+      lines: [{ id: crypto.randomUUID(), accountId: drAcc, type: 'Dr', amount: amt }, { id: crypto.randomUUID(), accountId: MSP_RECEIVABLE_ACCOUNT, type: 'Cr', amount: amt }],
+      narration: `HAFED/एजेंसी से MSP प्राप्ति${data.note ? ` — ${data.note}` : ''}`,
+      refType: 'procurement.agency.receipt',
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+    if (!voucher?.id) return sentinel;
+    toastRef.current({ title: '✅ रसीद दर्ज', description: `₹${amt.toLocaleString('en-IN')} — बकाया MSP प्राप्य ₹${(agencyReceivableOutstanding - amt).toLocaleString('en-IN')}` });
+    return voucher;
+  }, [accounts, addVoucher, agencyReceivableOutstanding, user]);
+
+  const deleteAgencyReceipt = useCallback((voucherId: string) => {
+    if (guardFYLocked()) return;
+    cancelVoucher(voucherId, 'HAFED receipt reversed', user?.name || 'System');
+  }, [cancelVoucher, user]);
+
   return (
     <MarketingDataContext.Provider value={{
       marketingReady: true,
@@ -657,6 +706,10 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       bardanaTypes,
       addBardanaType,
       deleteBardanaType,
+      agencyReceipts,
+      agencyReceivableOutstanding,
+      recordAgencyReceipt,
+      deleteAgencyReceipt,
     }}>
       {children}
     </MarketingDataContext.Provider>
