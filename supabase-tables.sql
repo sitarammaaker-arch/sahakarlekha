@@ -1173,6 +1173,41 @@ create table if not exists procurement_varieties (
   "updatedAt" timestamptz default now()
 );
 create index if not exists idx_procurement_varieties_society on procurement_varieties(society_id);
+-- Procurement CONFIG masters (Marketing M1b): season, agency, centre. Owned by MarketingDataContext.
+create table if not exists procurement_seasons (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  name text,
+  "cropYear" text,
+  "startDate" text,
+  "endDate" text,
+  "nameHi" text,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+create index if not exists idx_procurement_seasons_society on procurement_seasons(society_id);
+create table if not exists procurement_agencies (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  name text,
+  code text,
+  kind text,
+  "nameHi" text,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+create index if not exists idx_procurement_agencies_society on procurement_agencies(society_id);
+create table if not exists procurement_centres (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  name text,
+  code text,
+  "agencyId" text,
+  "nameHi" text,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+create index if not exists idx_procurement_centres_society on procurement_centres(society_id);
 create table if not exists procurement_lots (
   id text primary key,
   society_id text not null default 'SOC001',

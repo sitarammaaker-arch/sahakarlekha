@@ -39,7 +39,7 @@ interface DataContextType {
   procurementLots: ProcurementLot[];
   procurementEvents: ProcurementEvent[];
   addFarmer: (data: { farmerName: string; fatherName?: string; mobile?: string }) => Farmer;
-  addProcurementLot: (data: { farmerId: string; cropId: string; varietyId?: string; quantity: Quantity; mspRate: Money }) => ProcurementLot;
+  addProcurementLot: (data: { farmerId: string; cropId: string; varietyId?: string; seasonId?: string; centreId?: string; quantity: Quantity; mspRate: Money }) => ProcurementLot;
   procurementQualityTests: QualityTest[];
   procurementMoistureRecords: MoistureRecord[];
   recordQualityInspection: (data: { lotId: string; result: string; moisture: number; inspectedBy?: string }) => QualityTest;
@@ -2208,14 +2208,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   // Create a ProcurementLot + exactly ONE immutable 'lot.created' event (append-only). No voucher.
-  const addProcurementLot = useCallback((data: { farmerId: string; cropId: string; varietyId?: string; quantity: Quantity; mspRate: Money }): ProcurementLot => {
+  const addProcurementLot = useCallback((data: { farmerId: string; cropId: string; varietyId?: string; seasonId?: string; centreId?: string; quantity: Quantity; mspRate: Money }): ProcurementLot => {
     const sentinel: ProcurementLot = { id: '', centreId: '', seasonId: '', cropId: '', farmerId: '', operationalStatus: 'created', financialStatus: 'unbilled', reconciliationStatus: 'pending', createdAt: '', updatedAt: '' };
     if (guardFYLocked()) return sentinel;
     const now = new Date().toISOString();
     const lot: ProcurementLot = {
       id: crypto.randomUUID(),
-      centreId: societyIdRef.current,
-      seasonId: societyRef.current?.financialYear || '',
+      // M1b: real Season/Centre from the masters when provided; else the legacy stubs
+      // (society id / financial year) so pre-M1b callers keep working unchanged.
+      centreId: data.centreId || societyIdRef.current,
+      seasonId: data.seasonId || societyRef.current?.financialYear || '',
       cropId: data.cropId,
       varietyId: data.varietyId || undefined,
       farmerId: data.farmerId,
