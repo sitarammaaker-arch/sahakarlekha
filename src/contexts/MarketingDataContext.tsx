@@ -28,8 +28,10 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import type { Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
 import type { Voucher } from '@/types';
 
-// MSP Receivable ledger (from the agency) — the CMS/HAFED chart's dedicated account (storage.ts).
-const MSP_RECEIVABLE_ACCOUNT = '3308';
+// Dedicated CMS/HAFED-chart ledgers (storage.ts).
+const MSP_RECEIVABLE_ACCOUNT = '3308';        // MSP recoverable from the agency
+const COMMISSION_RECEIVABLE_ACCOUNT = '3314'; // procurement commission receivable
+const PROCUREMENT_COMMISSION_ACCOUNT = '4206';// procurement commission income
 
 interface MarketingDataContextValue {
   marketingReady: boolean;
@@ -53,8 +55,8 @@ interface MarketingDataContextValue {
   updateSeason: (id: string, data: Partial<Pick<Season, 'name' | 'cropYear' | 'startDate' | 'endDate' | 'nameHi'>>) => void;
   deleteSeason: (id: string) => void;
   agencies: Agency[];
-  addAgency: (data: { name: string; code: string; kind: string; nameHi?: string }) => Agency;
-  updateAgency: (id: string, data: Partial<Pick<Agency, 'name' | 'code' | 'kind' | 'nameHi'>>) => void;
+  addAgency: (data: { name: string; code: string; kind: string; nameHi?: string; commissionRate?: number }) => Agency;
+  updateAgency: (id: string, data: Partial<Pick<Agency, 'name' | 'code' | 'kind' | 'nameHi' | 'commissionRate'>>) => void;
   deleteAgency: (id: string) => void;
   centres: ProcurementCentre[];
   addCentre: (data: { name: string; code: string; agencyId: string; nameHi?: string }) => ProcurementCentre;
@@ -87,6 +89,12 @@ interface MarketingDataContextValue {
   /** Record money received from the agency: Dr bank|cash / Cr 3308 MSP Receivable. */
   recordAgencyReceipt: (data: { amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string }) => Voucher;
   deleteAgencyReceipt: (voucherId: string) => void;
+
+  // Procurement commission accrual (M3d) — Dr 3314 Commission Receivable / Cr 4206 Procurement Commission.
+  commissionAccruals: Voucher[];
+  /** Accrue commission for a lot (one per lot). amount = agency rate% × procurement value (caller computes). */
+  accrueProcurementCommission: (data: { lotId: string; amount: number; note?: string }) => Voucher;
+  deleteCommissionAccrual: (voucherId: string) => void;
 }
 
 const MarketingDataContext = createContext<MarketingDataContextValue | null>(null);
@@ -667,6 +675,39 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     cancelVoucher(voucherId, 'HAFED receipt reversed', user?.name || 'System');
   }, [cancelVoucher, user]);
 
+  // ── Procurement commission accrual (M3d) ──────────────────────────────────────────
+  const commissionAccruals = vouchers.filter(v => !v.isDeleted && v.refType === 'procurement.commission');
+
+  const accrueProcurementCommission = useCallback((data: { lotId: string; amount: number; note?: string }): Voucher => {
+    const sentinel = { id: '', voucherNo: '', type: 'journal', date: '', debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    if (guardFYLocked()) return sentinel;
+    const amt = +Number(data.amount).toFixed(2);
+    if (!(amt > 0)) { toastRef.current({ title: 'कमीशन शून्य', description: 'एजेंसी की commission दर 0 है या procurement value शून्य।', variant: 'destructive' }); return sentinel; }
+    // One commission accrual per lot.
+    if (vouchers.some(v => !v.isDeleted && v.refType === 'procurement.commission' && v.refId === data.lotId)) {
+      toastRef.current({ title: 'कमीशन पहले से', description: 'इस लॉट का commission पहले ही दर्ज है।', variant: 'destructive' }); return sentinel;
+    }
+    if (!accounts.some(a => a.id === COMMISSION_RECEIVABLE_ACCOUNT) || !accounts.some(a => a.id === PROCUREMENT_COMMISSION_ACCOUNT)) {
+      toastRef.current({ title: 'कमीशन खाता नहीं', description: 'चार्ट में 3314 Commission Receivable या 4206 Procurement Commission नहीं मिला।', variant: 'destructive', duration: 10000 }); return sentinel;
+    }
+    const voucher = addVoucher({
+      type: 'journal', date: new Date().toISOString().slice(0, 10),
+      debitAccountId: COMMISSION_RECEIVABLE_ACCOUNT, creditAccountId: PROCUREMENT_COMMISSION_ACCOUNT, amount: amt,
+      lines: [{ id: crypto.randomUUID(), accountId: COMMISSION_RECEIVABLE_ACCOUNT, type: 'Dr', amount: amt }, { id: crypto.randomUUID(), accountId: PROCUREMENT_COMMISSION_ACCOUNT, type: 'Cr', amount: amt }],
+      narration: `खरीद कमीशन${data.note ? ` — ${data.note}` : ''}`,
+      refType: 'procurement.commission', refId: data.lotId,
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+    if (!voucher?.id) return sentinel;
+    toastRef.current({ title: '✅ कमीशन दर्ज', description: `₹${amt.toLocaleString('en-IN')} — Dr 3314 / Cr 4206` });
+    return voucher;
+  }, [vouchers, accounts, addVoucher, user]);
+
+  const deleteCommissionAccrual = useCallback((voucherId: string) => {
+    if (guardFYLocked()) return;
+    cancelVoucher(voucherId, 'Commission accrual reversed', user?.name || 'System');
+  }, [cancelVoucher, user]);
+
   return (
     <MarketingDataContext.Provider value={{
       marketingReady: true,
@@ -710,6 +751,9 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       agencyReceivableOutstanding,
       recordAgencyReceipt,
       deleteAgencyReceipt,
+      commissionAccruals,
+      accrueProcurementCommission,
+      deleteCommissionAccrual,
     }}>
       {children}
     </MarketingDataContext.Provider>

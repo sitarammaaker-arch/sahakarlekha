@@ -16,6 +16,7 @@ export interface Agency extends BaseEntity {
   code: string;
   kind: string;            // FCI | HAFED | MARKFED | state
   nameHi?: string;         // Hindi label; optional, additive
+  commissionRate?: number; // % of procurement value the society earns as commission (M3d); optional
 }
 
 export interface ProcurementCentre extends BaseEntity {
