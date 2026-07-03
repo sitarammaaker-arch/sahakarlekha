@@ -1151,6 +1151,28 @@ create table if not exists procurement_farmers (
   "createdAt" timestamptz default now(),
   "updatedAt" timestamptz default now()
 );
+-- Procurement CONFIG masters (Marketing M1a). Owned by MarketingDataContext (config, not the
+-- event-sourced chain). Additive; safe to re-run.
+create table if not exists procurement_crops (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  name text,
+  code text,
+  "nameHi" text,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+create index if not exists idx_procurement_crops_society on procurement_crops(society_id);
+create table if not exists procurement_varieties (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "cropId" text,
+  name text,
+  "nameHi" text,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+create index if not exists idx_procurement_varieties_society on procurement_varieties(society_id);
 create table if not exists procurement_lots (
   id text primary key,
   society_id text not null default 'SOC001',

@@ -25,11 +25,13 @@ export interface ProcurementCentre extends BaseEntity {
 export interface Crop extends BaseEntity {
   name: string;
   code: string;
+  nameHi?: string;         // Hindi label (Hindi-first UI); optional, additive
 }
 
 export interface Variety extends BaseEntity {
   cropId: string;
   name: string;
+  nameHi?: string;         // Hindi label; optional, additive
 }
 
 export interface MSPRate extends BaseEntity {
