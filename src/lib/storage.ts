@@ -1,5 +1,6 @@
 import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement, Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
+import type { Transporter } from '@/lib/marketing/transport';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
 export interface VoucherTemplate {
@@ -81,6 +82,7 @@ const KEYS = {
   procurementDeductionRules: 'sahayata_procurement_deduction_rules',
   procurementQualitySpecs: 'sahayata_procurement_quality_specs',
   procurementBardanaTypes: 'sahayata_procurement_bardana_types',
+  marketingTransporters: 'sahayata_marketing_transporters',
   housingFlats: 'sahayata_housing_flats',
   maintenanceBills: 'sahayata_maintenance_bills',
   housingChargeHeads: 'sahayata_housing_charge_heads',
@@ -813,6 +815,8 @@ export const getProcurementQualitySpecs = (): QualitySpec[] => get(KEYS.procurem
 export const setProcurementQualitySpecs = (s: QualitySpec[]): void => set(KEYS.procurementQualitySpecs, s);
 export const getProcurementBardanaTypes = (): BardanaType[] => get(KEYS.procurementBardanaTypes, []);
 export const setProcurementBardanaTypes = (b: BardanaType[]): void => set(KEYS.procurementBardanaTypes, b);
+export const getMarketingTransporters = (): Transporter[] => get(KEYS.marketingTransporters, []);
+export const setMarketingTransporters = (t: Transporter[]): void => set(KEYS.marketingTransporters, t);
 export const getProcurementLots = (): ProcurementLot[] => get(KEYS.procurementLots, []);
 export const setProcurementLots = (l: ProcurementLot[]): void => set(KEYS.procurementLots, l);
 export const getProcurementEvents = (): ProcurementEvent[] => get(KEYS.procurementEvents, []);

@@ -70,6 +70,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'procurementMasters', titleKey: 'procurementMasters', icon: Table2,  route: '/procurement-masters', domain: 'marketing', requiredCapabilities: ['procurement_msp'], requiredRoles: ['admin', 'accountant'], order: 1 },
   { id: 'agencyReceipts', titleKey: 'agencyReceipts', icon: Landmark,        route: '/agency-receipts', domain: 'marketing', requiredCapabilities: ['procurement_msp'], requiredRoles: ['admin', 'accountant'], order: 2 },
   { id: 'procurementRegisters', titleKey: 'procurementRegisters', icon: FileSpreadsheet, route: '/procurement-registers', domain: 'marketing', requiredCapabilities: ['procurement_msp'], requiredRoles: ['admin', 'accountant', 'viewer'], order: 3 },
+  { id: 'transport', titleKey: 'transport', icon: Truck,                    route: '/transport', domain: 'marketing', requiredCapabilities: ['transport'], requiredRoles: ['admin', 'accountant'], order: 4 },
   // ── Housing-cooperative module group (domain: 'housing') — all housing modules live here so
   // a housing society sees ONE organised "Housing" sidebar group (mirrors the Labour group). ──
   { id: 'buildings', titleKey: 'buildings', icon: Building, route: '/buildings', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 0 },
