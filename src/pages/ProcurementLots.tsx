@@ -46,7 +46,7 @@ const DEDUCTION_TYPES = [
 
 export default function ProcurementLots() {
   const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, procurementSettlements, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement, recordFarmerPayment } = useData();
-  const { crops, varieties, seasons, agencies, centres, resolveMspRate, deductionRules } = useMarketingData();
+  const { crops, varieties, seasons, agencies, centres, resolveMspRate, deductionRules, accrueProcurementCommission, commissionAccruals } = useMarketingData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -189,6 +189,16 @@ export default function ProcurementLots() {
     return { ev, settlement: s, gross, totalDeductions, netPayable, paid, outstanding, payStatus };
   };
   const postableAccounts = accounts.filter(a => !a.isGroup);
+  // M3d — commission: agency via lot's centre; amount = agency rate% × posted procurement value.
+  const lotAgency = (l: (typeof procurementLots)[number]) => { const c = centres.find(x => x.id === l.centreId); return c ? agencies.find(a => a.id === c.agencyId) : undefined; };
+  const commissionForLot = (lotId: string) => commissionAccruals.find(v => v.refId === lotId);
+  const lotCommissionInfo = (l: (typeof procurementLots)[number]) => {
+    const ev = lotEngineVoucher(l.id);
+    const ag = lotAgency(l);
+    if (!ev || !ag || ag.commissionRate == null || !(ag.commissionRate > 0)) return null;
+    const amount = Math.round((ag.commissionRate / 100 * ev.amount + Number.EPSILON) * 100) / 100;
+    return { agency: ag, rate: ag.commissionRate, amount };
+  };
   const openSettlement = (lotId: string) => {
     const s = settlementForLot(lotId);
     if (!s) return;
@@ -403,6 +413,11 @@ export default function ProcurementLots() {
                     {hi ? 'वाउचर' : 'Voucher'}: {lotEngineVoucher(l.id)!.voucherNo}
                   </div>
                 )}
+                {commissionForLot(l.id) && (
+                  <div className="text-xs text-emerald-600 mt-0.5">
+                    {hi ? 'कमीशन' : 'Commission'}: {money(commissionForLot(l.id)!.amount)} · {commissionForLot(l.id)!.voucherNo}
+                  </div>
+                )}
                 {(() => {
                   const pi = payInfo(l.id);
                   const s = pi?.settlement;
@@ -433,6 +448,11 @@ export default function ProcurementLots() {
                 {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="ghost" onClick={() => openSettlement(l.id)}>{hi ? 'देखें' : 'View'}</Button>}
                 {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openPay(l.id)}>{hi ? 'किसान को भुगतान' : 'Pay Farmer'}</Button>}
                 {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding <= 0 && <span className="text-xs text-green-600 font-medium">{hi ? '✓ पूर्ण भुगतान' : '✓ Fully Paid'}</span>}
+                {lotEngineVoucher(l.id) && !commissionForLot(l.id) && lotCommissionInfo(l) && (
+                  <Button size="sm" variant="outline" onClick={() => { const ci = lotCommissionInfo(l); if (ci) accrueProcurementCommission({ lotId: l.id, amount: ci.amount, note: `${ci.rate}% · ${ci.agency.name}` }); }}>
+                    {hi ? 'कमीशन' : 'Commission'} {money(lotCommissionInfo(l)!.amount)}
+                  </Button>
+                )}
               </div>
             </div>
           ))}

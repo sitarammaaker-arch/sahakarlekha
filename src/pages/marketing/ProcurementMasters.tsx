@@ -97,11 +97,13 @@ export default function ProcurementMasters() {
   const [aNameHi, setANameHi] = useState('');
   const [aCode, setACode] = useState('');
   const [aKind, setAKind] = useState('');
-  const openAddAgency = () => { setEditAgId(null); setAName(''); setANameHi(''); setACode(''); setAKind(''); setAgOpen(true); };
-  const openEditAgency = (id: string) => { const a = agencies.find(x => x.id === id); if (!a) return; setEditAgId(id); setAName(a.name); setANameHi(a.nameHi || ''); setACode(a.code); setAKind(a.kind); setAgOpen(true); };
+  const [aCommission, setACommission] = useState('');
+  const openAddAgency = () => { setEditAgId(null); setAName(''); setANameHi(''); setACode(''); setAKind(''); setACommission(''); setAgOpen(true); };
+  const openEditAgency = (id: string) => { const a = agencies.find(x => x.id === id); if (!a) return; setEditAgId(id); setAName(a.name); setANameHi(a.nameHi || ''); setACode(a.code); setAKind(a.kind); setACommission(a.commissionRate != null ? String(a.commissionRate) : ''); setAgOpen(true); };
   const saveAgency = () => {
     if (!aName.trim()) { toast({ title: hi ? 'एजेंसी का नाम आवश्यक' : 'Agency name required', variant: 'destructive' }); return; }
-    const payload = { name: aName.trim(), nameHi: aNameHi.trim() || undefined, code: aCode.trim().toUpperCase(), kind: aKind || 'state' };
+    const commission = aCommission.trim() ? Number(aCommission) : undefined;
+    const payload = { name: aName.trim(), nameHi: aNameHi.trim() || undefined, code: aCode.trim().toUpperCase(), kind: aKind || 'state', commissionRate: commission };
     if (editAgId) updateAgency(editAgId, payload);
     else addAgency(payload);
     setAgOpen(false);
@@ -305,7 +307,7 @@ export default function ProcurementMasters() {
                   <div key={a.id} className="rounded-lg border p-3 space-y-2">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="font-medium">{hi && a.nameHi ? a.nameHi : a.name} <Badge variant="outline" className="ml-1 font-mono">{a.code}</Badge> <Badge variant="secondary" className="ml-1">{a.kind}</Badge></div>
+                        <div className="font-medium">{hi && a.nameHi ? a.nameHi : a.name} <Badge variant="outline" className="ml-1 font-mono">{a.code}</Badge> <Badge variant="secondary" className="ml-1">{a.kind}</Badge>{a.commissionRate != null ? <Badge variant="outline" className="ml-1">{a.commissionRate}% {hi ? 'कमीशन' : 'comm.'}</Badge> : null}</div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEditAgency(a.id)} aria-label="edit"><Pencil className="h-4 w-4" /></Button>
@@ -480,6 +482,11 @@ export default function ProcurementMasters() {
                   <SelectContent>{AGENCY_KINDS.map(k => <SelectItem key={k} value={k}>{k}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'कमीशन दर (% खरीद मूल्य का)' : 'Commission rate (% of procurement value)'}</Label>
+              <Input type="number" min={0} step="0.01" value={aCommission} onChange={e => setACommission(e.target.value)} placeholder="2.5" />
+              <p className="text-[11px] text-muted-foreground">{hi ? 'लॉट पोस्ट होने पर इसी दर से खरीद कमीशन (Dr 3314 / Cr 4206) दर्ज होगा।' : 'Procurement commission (Dr 3314 / Cr 4206) accrues at this rate when a lot is posted.'}</p>
             </div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setAgOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button><Button onClick={saveAgency}>{hi ? 'सेव करें' : 'Save'}</Button></DialogFooter>

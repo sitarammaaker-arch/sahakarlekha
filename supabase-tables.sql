@@ -1193,10 +1193,13 @@ create table if not exists procurement_agencies (
   code text,
   kind text,
   "nameHi" text,
+  "commissionRate" numeric,
   "createdAt" timestamptz default now(),
   "updatedAt" timestamptz default now()
 );
 create index if not exists idx_procurement_agencies_society on procurement_agencies(society_id);
+-- M3d: per-agency commission % (for the already-shipped table).
+alter table procurement_agencies add column if not exists "commissionRate" numeric;
 create table if not exists procurement_centres (
   id text primary key,
   society_id text not null default 'SOC001',
