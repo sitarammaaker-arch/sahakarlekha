@@ -1220,6 +1220,39 @@ create table if not exists procurement_msp_rates (
   "updatedAt" timestamptz default now()
 );
 create index if not exists idx_procurement_msp_rates_society on procurement_msp_rates(society_id);
+-- RLS for the Marketing procurement-master tables (M1a/M1b/M1c) — society-scoped, matching the
+-- procurement_* `society_rw` convention. REQUIRED: RLS is enabled on new public tables, so without
+-- these policies every insert is rejected ("new row violates row-level security policy").
+alter table public.procurement_crops enable row level security;
+alter table public.procurement_varieties enable row level security;
+alter table public.procurement_seasons enable row level security;
+alter table public.procurement_agencies enable row level security;
+alter table public.procurement_centres enable row level security;
+alter table public.procurement_msp_rates enable row level security;
+drop policy if exists "society_rw" on public.procurement_crops;
+drop policy if exists "society_rw" on public.procurement_varieties;
+drop policy if exists "society_rw" on public.procurement_seasons;
+drop policy if exists "society_rw" on public.procurement_agencies;
+drop policy if exists "society_rw" on public.procurement_centres;
+drop policy if exists "society_rw" on public.procurement_msp_rates;
+create policy "society_rw" on public.procurement_crops for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create policy "society_rw" on public.procurement_varieties for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create policy "society_rw" on public.procurement_seasons for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create policy "society_rw" on public.procurement_agencies for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create policy "society_rw" on public.procurement_centres for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+create policy "society_rw" on public.procurement_msp_rates for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
 create table if not exists procurement_lots (
   id text primary key,
   society_id text not null default 'SOC001',
