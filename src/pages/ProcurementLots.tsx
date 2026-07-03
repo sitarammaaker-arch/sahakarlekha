@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { useMarketingData } from '@/contexts/MarketingDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,14 +14,15 @@ import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
 import { Wheat, Plus } from 'lucide-react';
 
-// Phase 1.0 — a small fixed crop list (no Crop master CRUD in scope).
-const CROPS = [
-  { id: 'wheat', name: 'Wheat', nameHi: 'गेहूँ' },
-  { id: 'paddy', name: 'Paddy', nameHi: 'धान' },
-  { id: 'mustard', name: 'Mustard', nameHi: 'सरसों' },
-  { id: 'gram', name: 'Gram', nameHi: 'चना' },
-  { id: 'bajra', name: 'Bajra', nameHi: 'बाजरा' },
-];
+// Legacy crop ids (used before the M1a Crop master). Kept only so lots created earlier still
+// render a readable crop name; new lots pick from the Crop master (useMarketingData().crops).
+const LEGACY_CROPS: Record<string, { name: string; nameHi: string }> = {
+  wheat: { name: 'Wheat', nameHi: 'गेहूँ' },
+  paddy: { name: 'Paddy', nameHi: 'धान' },
+  mustard: { name: 'Mustard', nameHi: 'सरसों' },
+  gram: { name: 'Gram', nameHi: 'चना' },
+  bajra: { name: 'Bajra', nameHi: 'बाजरा' },
+};
 
 const QUALITY_RESULTS = [
   { id: 'accepted', en: 'Accepted', hi: 'स्वीकृत' },
@@ -43,6 +46,7 @@ const DEDUCTION_TYPES = [
 
 export default function ProcurementLots() {
   const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, procurementSettlements, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement, recordFarmerPayment } = useData();
+  const { crops, varieties } = useMarketingData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -50,7 +54,7 @@ export default function ProcurementLots() {
   // Create-lot form
   const [farmerId, setFarmerId] = useState('');
   const [cropId, setCropId] = useState('');
-  const [variety, setVariety] = useState('');
+  const [varietyId, setVarietyId] = useState('');
   const [qty, setQty] = useState('');
   const [rate, setRate] = useState('');
 
@@ -88,7 +92,18 @@ export default function ProcurementLots() {
   const [dedRef, setDedRef] = useState('');
   const [dedRemarks, setDedRemarks] = useState('');
 
-  const cropName = (id: string) => { const c = CROPS.find(x => x.id === id); return c ? (hi ? c.nameHi : c.name) : id; };
+  const cropName = (id: string) => {
+    const c = crops.find(x => x.id === id);
+    if (c) return hi && c.nameHi ? c.nameHi : c.name;
+    const legacy = LEGACY_CROPS[id];
+    return legacy ? (hi ? legacy.nameHi : legacy.name) : id;
+  };
+  const varietyLabel = (id?: string) => {
+    if (!id) return '';
+    const v = varieties.find(x => x.id === id);
+    return v ? (hi && v.nameHi ? v.nameHi : v.name) : id; // legacy lots stored free-text in varietyId
+  };
+  const cropVarieties = varieties.filter(v => v.cropId === cropId);
   const farmerLabel = (id: string) => { const f = procurementFarmers.find(x => x.id === id); return f ? `${f.farmerName} (${f.farmerCode})` : id; };
   const lotQuality = (lotId: string) => procurementQualityTests.find(q => q.lotId === lotId);
   const lotMoisture = (lotId: string) => procurementMoistureRecords.find(m => m.lotId === lotId);
@@ -207,10 +222,10 @@ export default function ProcurementLots() {
     if (!cropId) { toast({ title: hi ? 'फसल चुनें' : 'Select a crop', variant: 'destructive' }); return; }
     if (!(q > 0)) { toast({ title: hi ? 'मात्रा दर्ज करें' : 'Enter a valid quantity', variant: 'destructive' }); return; }
     if (!(r > 0)) { toast({ title: hi ? 'MSP दर दर्ज करें' : 'Enter a valid MSP rate', variant: 'destructive' }); return; }
-    const lot = addProcurementLot({ farmerId, cropId, varietyId: variety.trim() || undefined, quantity: { value: q, unit: 'qtl' }, mspRate: { amount: r, currency: 'INR' } });
+    const lot = addProcurementLot({ farmerId, cropId, varietyId: varietyId || undefined, quantity: { value: q, unit: 'qtl' }, mspRate: { amount: r, currency: 'INR' } });
     if (lot.id) {
       toast({ title: hi ? 'प्रोक्योरमेंट लॉट बना' : 'Procurement Lot created', description: `${farmerLabel(farmerId)} · ${cropName(cropId)} · ${q} qtl` });
-      setCropId(''); setVariety(''); setQty(''); setRate('');
+      setCropId(''); setVarietyId(''); setQty(''); setRate('');
     }
   };
 
@@ -248,16 +263,28 @@ export default function ProcurementLots() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>{hi ? 'फसल' : 'Crop'}</Label>
-              <Select value={cropId} onValueChange={setCropId}>
+              <Select value={cropId} onValueChange={v => { setCropId(v); setVarietyId(''); }}>
                 <SelectTrigger><SelectValue placeholder={hi ? 'फसल चुनें' : 'Select crop'} /></SelectTrigger>
                 <SelectContent>
-                  {CROPS.map(c => <SelectItem key={c.id} value={c.id}>{hi ? c.nameHi : c.name}</SelectItem>)}
+                  {crops.map(c => <SelectItem key={c.id} value={c.id}>{hi && c.nameHi ? c.nameHi : c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {crops.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {hi ? 'कोई फसल नहीं। ' : 'No crops yet. '}
+                  <Link to="/procurement-masters" className="text-primary underline">{hi ? 'प्रोक्योरमेंट मास्टर में जोड़ें' : 'Add in Procurement Masters'}</Link>
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>{hi ? 'किस्म' : 'Variety'}</Label>
-              <Input value={variety} onChange={e => setVariety(e.target.value)} placeholder={hi ? 'किस्म (वैकल्पिक)' : 'Variety (optional)'} />
+              <Select value={varietyId || '__none__'} onValueChange={v => setVarietyId(v === '__none__' ? '' : v)} disabled={!cropId}>
+                <SelectTrigger><SelectValue placeholder={hi ? 'किस्म (वैकल्पिक)' : 'Variety (optional)'} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">{hi ? '— कोई नहीं —' : '— none —'}</SelectItem>
+                  {cropVarieties.map(v => <SelectItem key={v.id} value={v.id}>{hi && v.nameHi ? v.nameHi : v.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>{hi ? 'मात्रा (क्विंटल)' : 'Quantity (qtl)'}</Label>
@@ -281,7 +308,7 @@ export default function ProcurementLots() {
           {lots.map(l => (
             <div key={l.id} className="flex items-center justify-between rounded-lg border p-3 text-sm gap-3">
               <div className="min-w-0">
-                <div className="font-medium">{farmerLabel(l.farmerId)} · {cropName(l.cropId)}{l.varietyId ? ` (${l.varietyId})` : ''}</div>
+                <div className="font-medium">{farmerLabel(l.farmerId)} · {cropName(l.cropId)}{l.varietyId ? ` (${varietyLabel(l.varietyId)})` : ''}</div>
                 <div className="text-muted-foreground">
                   {l.quantity?.value ?? 0} {l.quantity?.unit ?? 'qtl'} · ₹{l.mspRate?.amount ?? 0}/{hi ? 'क्विंटल' : 'qtl'}
                 </div>

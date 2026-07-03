@@ -1,5 +1,5 @@
 import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun } from '@/types';
-import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement } from '@/lib/procurement';
+import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement, Crop, Variety } from '@/lib/procurement';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
 export interface VoucherTemplate {
@@ -72,6 +72,8 @@ const KEYS = {
   procurementPostingRequests: 'sahayata_procurement_posting_requests',
   procurementPostingRuleResults: 'sahayata_procurement_posting_rule_results',
   procurementSettlements: 'sahayata_procurement_settlements',
+  procurementCrops: 'sahayata_procurement_crops',
+  procurementVarieties: 'sahayata_procurement_varieties',
   housingFlats: 'sahayata_housing_flats',
   maintenanceBills: 'sahayata_maintenance_bills',
   housingChargeHeads: 'sahayata_housing_charge_heads',
@@ -786,6 +788,10 @@ export const setMembers = (m: Member[]): void => set(KEYS.members, m);
 // Procurement Phase 1.0 — local repository for farmers / lots / append-only events
 export const getProcurementFarmers = (): Farmer[] => get(KEYS.procurementFarmers, []);
 export const setProcurementFarmers = (f: Farmer[]): void => set(KEYS.procurementFarmers, f);
+export const getProcurementCrops = (): Crop[] => get(KEYS.procurementCrops, []);
+export const setProcurementCrops = (c: Crop[]): void => set(KEYS.procurementCrops, c);
+export const getProcurementVarieties = (): Variety[] => get(KEYS.procurementVarieties, []);
+export const setProcurementVarieties = (v: Variety[]): void => set(KEYS.procurementVarieties, v);
 export const getProcurementLots = (): ProcurementLot[] => get(KEYS.procurementLots, []);
 export const setProcurementLots = (l: ProcurementLot[]): void => set(KEYS.procurementLots, l);
 export const getProcurementEvents = (): ProcurementEvent[] => get(KEYS.procurementEvents, []);
