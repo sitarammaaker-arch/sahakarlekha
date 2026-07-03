@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useMarketingData } from '@/contexts/MarketingDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -46,7 +46,7 @@ const DEDUCTION_TYPES = [
 
 export default function ProcurementLots() {
   const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, procurementSettlements, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement, recordFarmerPayment } = useData();
-  const { crops, varieties, seasons, agencies, centres } = useMarketingData();
+  const { crops, varieties, seasons, agencies, centres, resolveMspRate } = useMarketingData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -59,6 +59,15 @@ export default function ProcurementLots() {
   const [centreId, setCentreId] = useState('');
   const [qty, setQty] = useState('');
   const [rate, setRate] = useState('');
+  const [mspAuto, setMspAuto] = useState(false);
+
+  // Auto-fill the MSP rate from the effective rate master when crop + season are both chosen.
+  // The operator can still edit the rate afterwards (manual override clears the "auto" hint).
+  useEffect(() => {
+    if (!cropId || !seasonId) { setMspAuto(false); return; }
+    const r = resolveMspRate({ cropId, seasonId });
+    if (r != null) { setRate(String(r)); setMspAuto(true); } else { setMspAuto(false); }
+  }, [cropId, seasonId, resolveMspRate]);
 
   // Add-farmer dialog
   const [farmerOpen, setFarmerOpen] = useState(false);
@@ -234,7 +243,7 @@ export default function ProcurementLots() {
     const lot = addProcurementLot({ farmerId, cropId, varietyId: varietyId || undefined, seasonId: seasonId || undefined, centreId: centreId || undefined, quantity: { value: q, unit: 'qtl' }, mspRate: { amount: r, currency: 'INR' } });
     if (lot.id) {
       toast({ title: hi ? 'प्रोक्योरमेंट लॉट बना' : 'Procurement Lot created', description: `${farmerLabel(farmerId)} · ${cropName(cropId)} · ${q} qtl` });
-      setCropId(''); setVarietyId(''); setSeasonId(''); setCentreId(''); setQty(''); setRate('');
+      setCropId(''); setVarietyId(''); setSeasonId(''); setCentreId(''); setQty(''); setRate(''); setMspAuto(false);
     }
   };
 
@@ -323,8 +332,11 @@ export default function ProcurementLots() {
               <Input type="number" min={0} value={qty} onChange={e => setQty(e.target.value)} placeholder="0" />
             </div>
             <div className="space-y-2">
-              <Label>{hi ? 'MSP दर (₹/क्विंटल)' : 'MSP Rate (₹/qtl)'}</Label>
-              <Input type="number" min={0} value={rate} onChange={e => setRate(e.target.value)} placeholder="0" />
+              <Label className="flex items-center gap-2">
+                {hi ? 'MSP दर (₹/क्विंटल)' : 'MSP Rate (₹/qtl)'}
+                {mspAuto && <Badge variant="secondary" className="text-[10px] font-normal">{hi ? 'ऑटो-भरा' : 'auto'}</Badge>}
+              </Label>
+              <Input type="number" min={0} value={rate} onChange={e => { setRate(e.target.value); setMspAuto(false); }} placeholder="0" />
             </div>
           </div>
 

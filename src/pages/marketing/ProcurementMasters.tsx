@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Wheat, Plus, Sprout, Pencil, Trash2, CalendarDays, Building2 } from 'lucide-react';
+import { Wheat, Plus, Sprout, Pencil, Trash2, CalendarDays, Building2, IndianRupee } from 'lucide-react';
 
 const AGENCY_KINDS = ['FCI', 'HAFED', 'MARKFED', 'NAFED', 'state'];
 
@@ -25,6 +25,7 @@ export default function ProcurementMasters() {
     seasons, addSeason, updateSeason, deleteSeason,
     agencies, addAgency, updateAgency, deleteAgency,
     centres, addCentre, updateCentre, deleteCentre,
+    mspRates, addMspRate, deleteMspRate,
   } = useMarketingData();
   const { language } = useLanguage();
   const { toast } = useToast();
@@ -116,6 +117,25 @@ export default function ProcurementMasters() {
     setCenOpen(false);
   };
 
+  // ── MSP rate dialog (add only; rates are effective-dated records) ──────────────────
+  const [mspOpen, setMspOpen] = useState(false);
+  const [mCropId, setMCropId] = useState('');
+  const [mSeasonId, setMSeasonId] = useState('');
+  const [mRate, setMRate] = useState('');
+  const [mFrom, setMFrom] = useState('');
+  const openAddMsp = () => { setMCropId(''); setMSeasonId(''); setMRate(''); setMFrom(new Date().toISOString().slice(0, 10)); setMspOpen(true); };
+  const saveMsp = () => {
+    const r = Number(mRate);
+    if (!mCropId) { toast({ title: hi ? 'फसल चुनें' : 'Select a crop', variant: 'destructive' }); return; }
+    if (!mSeasonId) { toast({ title: hi ? 'सीज़न चुनें' : 'Select a season', variant: 'destructive' }); return; }
+    if (!(r > 0)) { toast({ title: hi ? 'दर दर्ज करें' : 'Enter a rate', variant: 'destructive' }); return; }
+    if (!mFrom) { toast({ title: hi ? 'प्रभावी तिथि चुनें' : 'Select effective date', variant: 'destructive' }); return; }
+    addMspRate({ cropId: mCropId, seasonId: mSeasonId, rate: r, effectiveFrom: mFrom });
+    setMspOpen(false);
+  };
+  const seasonName = (id: string) => { const s = seasons.find(x => x.id === id); return s ? (hi && s.nameHi ? s.nameHi : s.name) : id; };
+  const sortedMsp = [...mspRates].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1));
+
   return (
     <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center gap-3">
@@ -133,6 +153,7 @@ export default function ProcurementMasters() {
           <TabsTrigger value="crops" className="flex-1 gap-1"><Sprout className="h-4 w-4" />{hi ? 'फसल व किस्म' : 'Crops'}</TabsTrigger>
           <TabsTrigger value="seasons" className="flex-1 gap-1"><CalendarDays className="h-4 w-4" />{hi ? 'सीज़न' : 'Seasons'}</TabsTrigger>
           <TabsTrigger value="agencies" className="flex-1 gap-1"><Building2 className="h-4 w-4" />{hi ? 'एजेंसी व केंद्र' : 'Agencies'}</TabsTrigger>
+          <TabsTrigger value="msp" className="flex-1 gap-1"><IndianRupee className="h-4 w-4" />{hi ? 'MSP दर' : 'MSP'}</TabsTrigger>
         </TabsList>
 
         {/* ── Crops & Varieties ── */}
@@ -241,6 +262,33 @@ export default function ProcurementMasters() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ── MSP Rates ── */}
+        <TabsContent value="msp">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardTitle className="text-base">{hi ? 'MSP दरें' : 'MSP Rates'} ({mspRates.length})</CardTitle>
+              <Button size="sm" className="gap-1" onClick={openAddMsp} disabled={crops.length === 0 || seasons.length === 0}><Plus className="h-4 w-4" />{hi ? 'दर' : 'Rate'}</Button>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {(crops.length === 0 || seasons.length === 0) && (
+                <p className="text-sm text-muted-foreground">{hi ? 'पहले फसल व सीज़न जोड़ें, फिर MSP दर।' : 'Add crops & seasons first, then MSP rates.'}</p>
+              )}
+              {crops.length > 0 && seasons.length > 0 && sortedMsp.length === 0 && (
+                <p className="text-sm text-muted-foreground">{hi ? 'अभी कोई MSP दर नहीं। दर जोड़ें — लॉट बनाते समय अपने-आप भर जाएगी।' : 'No MSP rates yet. Add one — it auto-fills when creating a lot.'}</p>
+              )}
+              {sortedMsp.map(r => (
+                <div key={r.id} className="flex items-center justify-between rounded-lg border p-3 gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium">{cropLabel(crops.find(c => c.id === r.cropId) || { name: r.cropId })} · {seasonName(r.seasonId)}</div>
+                    <div className="text-xs text-muted-foreground">₹{r.rate.amount.toLocaleString('en-IN')}/{hi ? 'क्विंटल' : 'qtl'} · {hi ? 'प्रभावी' : 'w.e.f.'} {r.effectiveFrom}</div>
+                  </div>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => deleteMspRate(r.id)} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Crop dialog */}
@@ -331,6 +379,35 @@ export default function ProcurementMasters() {
             <div className="space-y-1.5"><Label>{hi ? 'कोड' : 'Code'}</Label><Input value={cenCode} onChange={e => setCenCode(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} maxLength={12} /></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setCenOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button><Button onClick={saveCentre}>{hi ? 'सेव करें' : 'Save'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MSP rate dialog */}
+      <Dialog open={mspOpen} onOpenChange={setMspOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{hi ? 'नई MSP दर' : 'Add MSP Rate'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>{hi ? 'फसल' : 'Crop'} *</Label>
+              <Select value={mCropId} onValueChange={setMCropId}>
+                <SelectTrigger><SelectValue placeholder={hi ? 'फसल चुनें' : 'Select crop'} /></SelectTrigger>
+                <SelectContent>{crops.map(c => <SelectItem key={c.id} value={c.id}>{cropLabel(c)}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'सीज़न' : 'Season'} *</Label>
+              <Select value={mSeasonId} onValueChange={setMSeasonId}>
+                <SelectTrigger><SelectValue placeholder={hi ? 'सीज़न चुनें' : 'Select season'} /></SelectTrigger>
+                <SelectContent>{seasons.map(s => <SelectItem key={s.id} value={s.id}>{hi && s.nameHi ? s.nameHi : s.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5"><Label>{hi ? 'दर (₹/क्विंटल)' : 'Rate (₹/qtl)'} *</Label><Input type="number" min={0} value={mRate} onChange={e => setMRate(e.target.value)} placeholder="2425" /></div>
+              <div className="space-y-1.5"><Label>{hi ? 'प्रभावी तिथि' : 'Effective from'} *</Label><Input type="date" value={mFrom} onChange={e => setMFrom(e.target.value)} /></div>
+            </div>
+            <p className="text-xs text-muted-foreground">{hi ? 'दर बदलने पर नई प्रभावी-तिथि वाली दर जोड़ें — पुरानी दर इतिहास के लिए बनी रहती है।' : 'To revise, add a new rate with a later effective date — the old one stays for history.'}</p>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setMspOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button><Button onClick={saveMsp}>{hi ? 'सेव करें' : 'Save'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -23,7 +23,8 @@ import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
-import type { Crop, Variety, Season, Agency, ProcurementCentre } from '@/lib/procurement';
+import { pickEffectiveMspRate } from '@/lib/marketing/msp';
+import type { Crop, Variety, Season, Agency, ProcurementCentre, MSPRate } from '@/lib/procurement';
 
 interface MarketingDataContextValue {
   marketingReady: boolean;
@@ -54,6 +55,13 @@ interface MarketingDataContextValue {
   addCentre: (data: { name: string; code: string; agencyId: string; nameHi?: string }) => ProcurementCentre;
   updateCentre: (id: string, data: Partial<Pick<ProcurementCentre, 'name' | 'code' | 'nameHi'>>) => void;
   deleteCentre: (id: string) => void;
+
+  // MSP rates — effective-dated per crop+season (M1c)
+  mspRates: MSPRate[];
+  addMspRate: (data: { cropId: string; seasonId: string; rate: number; effectiveFrom: string }) => MSPRate;
+  deleteMspRate: (id: string) => void;
+  /** Resolve ₹/qtl for a crop+season in force on `date` (default today); null if none applies. */
+  resolveMspRate: (args: { cropId: string; seasonId: string; date?: string }) => number | null;
 }
 
 const MarketingDataContext = createContext<MarketingDataContextValue | null>(null);
@@ -96,6 +104,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   const [seasons, setSeasonsState] = useState<Season[]>(() => storage.getProcurementSeasons());
   const [agencies, setAgenciesState] = useState<Agency[]>(() => storage.getProcurementAgencies());
   const [centres, setCentresState] = useState<ProcurementCentre[]>(() => storage.getProcurementCentres());
+  const [mspRates, setMspRatesState] = useState<MSPRate[]>(() => storage.getProcurementMspRates());
 
   useEffect(() => {
     const sid = user?.societyId;
@@ -139,6 +148,15 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     supabase.from('procurement_centres').select('*').eq('society_id', sid).then(
       ({ data, error }) => setCentresState(error || !data ? storage.getProcurementCentres() : (data as ProcurementCentre[])),
       () => setCentresState(storage.getProcurementCentres()),
+    );
+  }, [user?.societyId]);
+
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setMspRatesState([]); return; }
+    supabase.from('procurement_msp_rates').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setMspRatesState(error || !data ? storage.getProcurementMspRates() : (data as MSPRate[])),
+      () => setMspRatesState(storage.getProcurementMspRates()),
     );
   }, [user?.societyId]);
 
@@ -419,6 +437,41 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     });
   }, [centres, procurementLots, societyId]);
 
+  // ── MSP rate CRUD + resolver ─────────────────────────────────────────────────────
+  const addMspRate = useCallback((data: { cropId: string; seasonId: string; rate: number; effectiveFrom: string }): MSPRate => {
+    const now = new Date().toISOString();
+    const rec: MSPRate = { id: crypto.randomUUID(), cropId: data.cropId, seasonId: data.seasonId, rate: { amount: data.rate, currency: 'INR' }, effectiveFrom: data.effectiveFrom, createdAt: now, updatedAt: now };
+    if (guardFYLocked()) return { ...rec, id: '', createdAt: '', updatedAt: '' };
+    setMspRatesState(prev => { const u = [...prev, rec]; storage.setProcurementMspRates(u); return u; });
+    supabase.from('procurement_msp_rates').upsert(withSoc(rec)).then(({ error }) => {
+      if (error) {
+        console.error('MSP rate save error:', error.message);
+        setMspRatesState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementMspRates(r); return r; });
+        toastRef.current({ title: 'MSP दर सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_msp_rates block chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return rec;
+  }, [societyId]);
+
+  const deleteMspRate = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const before = mspRates.find(r => r.id === id);
+    if (!before) return;
+    setMspRatesState(prev => { const r = prev.filter(x => x.id !== id); storage.setProcurementMspRates(r); return r; });
+    supabase.from('procurement_msp_rates').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
+      if (error) {
+        setMspRatesState(prev => { const u = [...prev, before]; storage.setProcurementMspRates(u); return u; });
+        toastRef.current({ title: 'MSP दर हटी नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhegi.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [mspRates, societyId]);
+
+  const resolveMspRate = useCallback(
+    (args: { cropId: string; seasonId: string; date?: string }) =>
+      pickEffectiveMspRate(mspRates, { cropId: args.cropId, seasonId: args.seasonId, date: args.date || new Date().toISOString().slice(0, 10) }),
+    [mspRates],
+  );
+
   return (
     <MarketingDataContext.Provider value={{
       marketingReady: true,
@@ -444,6 +497,10 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       addCentre,
       updateCentre,
       deleteCentre,
+      mspRates,
+      addMspRate,
+      deleteMspRate,
+      resolveMspRate,
     }}>
       {children}
     </MarketingDataContext.Provider>
