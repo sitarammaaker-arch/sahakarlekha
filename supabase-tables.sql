@@ -1309,6 +1309,24 @@ create policy "society_rw" on public.procurement_quality_specs for all to authen
 create policy "society_rw" on public.procurement_bardana_types for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+-- Marketing Transport (T1): transporter master. RLS bundled (society_rw convention).
+create table if not exists marketing_transporters (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  name text,
+  "nameHi" text,
+  "vehicleNo" text,
+  phone text,
+  "ratePerQtl" numeric,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+create index if not exists idx_marketing_transporters_society on marketing_transporters(society_id);
+alter table public.marketing_transporters enable row level security;
+drop policy if exists "society_rw" on public.marketing_transporters;
+create policy "society_rw" on public.marketing_transporters for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
 create table if not exists procurement_lots (
   id text primary key,
   society_id text not null default 'SOC001',

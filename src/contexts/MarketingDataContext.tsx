@@ -26,6 +26,7 @@ import * as storage from '@/lib/storage';
 import { pickEffectiveMspRate } from '@/lib/marketing/msp';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import type { Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
+import type { Transporter } from '@/lib/marketing/transport';
 import type { Voucher } from '@/types';
 
 // Dedicated CMS/HAFED-chart ledgers (storage.ts).
@@ -90,6 +91,12 @@ interface MarketingDataContextValue {
   recordAgencyReceipt: (data: { amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string }) => Voucher;
   deleteAgencyReceipt: (voucherId: string) => void;
 
+  // Transport — transporter master (T1)
+  transporters: Transporter[];
+  addTransporter: (data: { name: string; nameHi?: string; vehicleNo?: string; phone?: string; ratePerQtl?: number }) => Transporter;
+  updateTransporter: (id: string, data: Partial<Pick<Transporter, 'name' | 'nameHi' | 'vehicleNo' | 'phone' | 'ratePerQtl'>>) => void;
+  deleteTransporter: (id: string) => void;
+
   // Procurement commission accrual (M3d) — Dr 3314 Commission Receivable / Cr 4206 Procurement Commission.
   commissionAccruals: Voucher[];
   /** Accrue commission for a lot (one per lot). amount = agency rate% × procurement value (caller computes). */
@@ -141,6 +148,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   const [deductionRules, setDeductionRulesState] = useState<DeductionRule[]>(() => storage.getProcurementDeductionRules());
   const [qualitySpecs, setQualitySpecsState] = useState<QualitySpec[]>(() => storage.getProcurementQualitySpecs());
   const [bardanaTypes, setBardanaTypesState] = useState<BardanaType[]>(() => storage.getProcurementBardanaTypes());
+  const [transporters, setTransportersState] = useState<Transporter[]>(() => storage.getMarketingTransporters());
 
   useEffect(() => {
     const sid = user?.societyId;
@@ -220,6 +228,15 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     supabase.from('procurement_bardana_types').select('*').eq('society_id', sid).then(
       ({ data, error }) => setBardanaTypesState(error || !data ? storage.getProcurementBardanaTypes() : (data as BardanaType[])),
       () => setBardanaTypesState(storage.getProcurementBardanaTypes()),
+    );
+  }, [user?.societyId]);
+
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setTransportersState([]); return; }
+    supabase.from('marketing_transporters').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setTransportersState(error || !data ? storage.getMarketingTransporters() : (data as Transporter[])),
+      () => setTransportersState(storage.getMarketingTransporters()),
     );
   }, [user?.societyId]);
 
@@ -639,6 +656,52 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     });
   }, [bardanaTypes, societyId]);
 
+  // ── Transporter master CRUD (T1) ─────────────────────────────────────────────────
+  const addTransporter = useCallback((data: { name: string; nameHi?: string; vehicleNo?: string; phone?: string; ratePerQtl?: number }): Transporter => {
+    const now = new Date().toISOString();
+    const rec: Transporter = { ...data, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
+    if (guardFYLocked()) return { ...rec, id: '', createdAt: '', updatedAt: '' };
+    setTransportersState(prev => { const u = [...prev, rec]; storage.setMarketingTransporters(u); return u; });
+    supabase.from('marketing_transporters').upsert(withSoc(rec)).then(({ error }) => {
+      if (error) {
+        console.error('Transporter save error:', error.message);
+        setTransportersState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setMarketingTransporters(r); return r; });
+        toastRef.current({ title: 'ट्रांसपोर्टर सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka marketing_transporters block + RLS chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    return rec;
+  }, [societyId]);
+
+  const updateTransporter = useCallback((id: string, data: Partial<Pick<Transporter, 'name' | 'nameHi' | 'vehicleNo' | 'phone' | 'ratePerQtl'>>) => {
+    if (guardFYLocked()) return;
+    setTransportersState(prev => {
+      const before = prev.find(t => t.id === id);
+      const u = prev.map(t => t.id === id ? { ...t, ...data, updatedAt: new Date().toISOString() } : t);
+      storage.setMarketingTransporters(u);
+      const next = u.find(t => t.id === id);
+      if (next && before) supabase.from('marketing_transporters').upsert(withSoc(next)).then(({ error }) => {
+        if (error) {
+          setTransportersState(p => { const r = p.map(t => t.id === id ? before : t); storage.setMarketingTransporters(r); return r; });
+          toastRef.current({ title: 'ट्रांसपोर्टर अपडेट नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        }
+      });
+      return u;
+    });
+  }, [societyId]);
+
+  const deleteTransporter = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const before = transporters.find(t => t.id === id);
+    if (!before) return;
+    setTransportersState(prev => { const r = prev.filter(t => t.id !== id); storage.setMarketingTransporters(r); return r; });
+    supabase.from('marketing_transporters').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
+      if (error) {
+        setTransportersState(prev => { const u = [...prev, before]; storage.setMarketingTransporters(u); return u; });
+        toastRef.current({ title: 'ट्रांसपोर्टर हटा नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [transporters, societyId]);
+
   // ── Agency (HAFED) receipts against MSP Receivable (M3c) ──────────────────────────
   // Derived from vouchers (the voucher IS the record — no stored balance, mirrors farmer payments).
   const agencyReceipts = vouchers.filter(v => !v.isDeleted && v.refType === 'procurement.agency.receipt');
@@ -747,6 +810,10 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       bardanaTypes,
       addBardanaType,
       deleteBardanaType,
+      transporters,
+      addTransporter,
+      updateTransporter,
+      deleteTransporter,
       agencyReceipts,
       agencyReceivableOutstanding,
       recordAgencyReceipt,
