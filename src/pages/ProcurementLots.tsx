@@ -141,32 +141,30 @@ export default function ProcurementLots() {
     generateJForm({ lotId });
   };
   const lotIntent = (lotId: string) => procurementFinancialIntents.find(i => i.lotId === lotId);
-  const handleGenerateIntent = (jformId: string) => {
-    // generateFinancialIntent shows the success toast (and toasts on FY-lock / missing-J-Form /
-    // duplicate guard). Nothing to do here.
-    generateFinancialIntent({ jformId });
-  };
   const lotPostingRequest = (lotId: string) => procurementPostingRequests.find(p => p.lotId === lotId);
-  const handleGeneratePostingRequest = (financialIntentId: string) => {
-    // generatePostingRequest shows the success toast (and toasts on FY-lock / missing-intent /
-    // duplicate guard). Nothing to do here.
-    generatePostingRequest({ financialIntentId });
-  };
   const lotRuleResult = (lotId: string) => procurementPostingRuleResults.find(r => r.lotId === lotId);
-  const handleResolve = (postingRequestId: string) => {
-    // generatePostingRuleResult shows the success toast (and toasts on FY-lock / missing-request /
-    // duplicate / no-rule guard). Nothing to do here.
-    generatePostingRuleResult({ postingRequestId });
-  };
   // The engine Voucher is the authoritative record (origin='engine' + refType/refId → the result).
   const lotEngineVoucher = (lotId: string) => {
     const rr = lotRuleResult(lotId);
     return rr ? vouchers.find(v => !v.isDeleted && v.origin === 'engine' && v.refType === 'posting.rule.result' && v.refId === rr.id) : undefined;
   };
-  const handlePost = (postingRuleResultId: string) => {
-    // generateEngineVoucher shows the success toast (and toasts on FY-lock / missing-result /
-    // duplicate / unresolved-legs guard). Nothing to do here.
-    generateEngineVoucher({ postingRuleResultId });
+  // M2 hot-path: ONE click runs the whole financial pipeline Intent→PostingRequest→Resolve→Post.
+  // Each generator persists its own immutable business object; we chain on the RETURNED ids (React
+  // state doesn't refresh mid-handler). Resume-safe: reuse any step already done. Each generator
+  // toasts on failure and bails (empty id) — so a broken step stops the chain cleanly.
+  const handlePostToLedger = (lotId: string) => {
+    const jf = lotJForm(lotId);
+    if (!jf) return;
+    let intentId = lotIntent(lotId)?.id;
+    if (!intentId) intentId = generateFinancialIntent({ jformId: jf.id })?.id;
+    if (!intentId) return;
+    let reqId = lotPostingRequest(lotId)?.id;
+    if (!reqId) reqId = generatePostingRequest({ financialIntentId: intentId })?.id;
+    if (!reqId) return;
+    let rrId = lotRuleResult(lotId)?.id;
+    if (!rrId) rrId = generatePostingRuleResult({ postingRequestId: reqId })?.id;
+    if (!rrId) return;
+    if (!lotEngineVoucher(lotId)) generateEngineVoucher({ postingRuleResultId: rrId });
   };
   // Farmer Payment — Payable/Paid/Outstanding are DERIVED from vouchers (no stored balance).
   const money = (n: number) => `₹${(n || 0).toLocaleString('en-IN')}`;
@@ -264,7 +262,8 @@ export default function ProcurementLots() {
     const lot = addProcurementLot({ farmerId, cropId, varietyId: varietyId || undefined, seasonId: seasonId || undefined, centreId: centreId || undefined, quantity: { value: q, unit: 'qtl' }, mspRate: { amount: r, currency: 'INR' } });
     if (lot.id) {
       toast({ title: hi ? 'प्रोक्योरमेंट लॉट बना' : 'Procurement Lot created', description: `${farmerLabel(farmerId)} · ${cropName(cropId)} · ${q} qtl` });
-      setCropId(''); setVarietyId(''); setSeasonId(''); setCentreId(''); setQty(''); setRate(''); setMspAuto(false);
+      // Hot-path: keep season + centre sticky (same for the day's procurement at a centre); reset the rest.
+      setFarmerId(''); setCropId(''); setVarietyId(''); setQty(''); setRate(''); setMspAuto(false);
     }
   };
 
@@ -350,14 +349,14 @@ export default function ProcurementLots() {
             </div>
             <div className="space-y-2">
               <Label>{hi ? 'मात्रा (क्विंटल)' : 'Quantity (qtl)'}</Label>
-              <Input type="number" min={0} value={qty} onChange={e => setQty(e.target.value)} placeholder="0" />
+              <Input type="number" min={0} value={qty} onChange={e => setQty(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveLot(); }} placeholder="0" />
             </div>
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 {hi ? 'MSP दर (₹/क्विंटल)' : 'MSP Rate (₹/qtl)'}
                 {mspAuto && <Badge variant="secondary" className="text-[10px] font-normal">{hi ? 'ऑटो-भरा' : 'auto'}</Badge>}
               </Label>
-              <Input type="number" min={0} value={rate} onChange={e => { setRate(e.target.value); setMspAuto(false); }} placeholder="0" />
+              <Input type="number" min={0} value={rate} onChange={e => { setRate(e.target.value); setMspAuto(false); }} onKeyDown={e => { if (e.key === 'Enter') saveLot(); }} placeholder="0" />
             </div>
           </div>
 
@@ -393,21 +392,6 @@ export default function ProcurementLots() {
                     J-Form: {lotJForm(l.id)!.documentNo} · ₹{lotJForm(l.id)!.net.amount}
                   </div>
                 )}
-                {lotIntent(l.id) && (
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {hi ? 'इंटेंट' : 'Intent'}: {lotIntent(l.id)!.intentType} · ₹{lotIntent(l.id)!.amount.amount}
-                  </div>
-                )}
-                {lotPostingRequest(l.id) && (
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {hi ? 'पोस्टिंग' : 'Posting Req'}: {lotPostingRequest(l.id)!.requestType} · ₹{lotPostingRequest(l.id)!.amount.amount}
-                  </div>
-                )}
-                {lotRuleResult(l.id) && (
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {hi ? 'लेग्स' : 'Legs'}: {lotRuleResult(l.id)!.requestType} · {lotRuleResult(l.id)!.legs.length} legs
-                  </div>
-                )}
                 {lotEngineVoucher(l.id) && (
                   <div className="text-xs text-muted-foreground mt-0.5">
                     {hi ? 'वाउचर' : 'Voucher'}: {lotEngineVoucher(l.id)!.voucherNo}
@@ -439,10 +423,7 @@ export default function ProcurementLots() {
                 <Badge variant="secondary">{l.operationalStatus}</Badge>
                 {!lotQuality(l.id) && <Button size="sm" variant="outline" onClick={() => openQuality(l.id)}>{hi ? 'क्वालिटी' : 'Quality'}</Button>}
                 {!lotJForm(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateJForm(l.id)}>J-Form</Button>}
-                {lotJForm(l.id) && !lotIntent(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateIntent(lotJForm(l.id)!.id)}>{hi ? 'इंटेंट' : 'Intent'}</Button>}
-                {lotIntent(l.id) && !lotPostingRequest(l.id) && <Button size="sm" variant="outline" onClick={() => handleGeneratePostingRequest(lotIntent(l.id)!.id)}>{hi ? 'पोस्टिंग' : 'Posting Req'}</Button>}
-                {lotPostingRequest(l.id) && !lotRuleResult(l.id) && <Button size="sm" variant="outline" onClick={() => handleResolve(lotPostingRequest(l.id)!.id)}>{hi ? 'रिज़ॉल्व' : 'Resolve'}</Button>}
-                {lotRuleResult(l.id) && !lotEngineVoucher(l.id) && <Button size="sm" variant="outline" onClick={() => handlePost(lotRuleResult(l.id)!.id)}>{hi ? 'पोस्ट' : 'Post'}</Button>}
+                {lotJForm(l.id) && !lotEngineVoucher(l.id) && <Button size="sm" onClick={() => handlePostToLedger(l.id)}>{hi ? 'बहीखाता में पोस्ट' : 'Post to Ledger'}</Button>}
                 {lotEngineVoucher(l.id) && !settlementForLot(l.id) && <Button size="sm" variant="outline" onClick={() => handleCreateSettlement(l.id)}>{hi ? 'निपटान बनाएँ' : 'Create Settlement'}</Button>}
                 {settlementForLot(l.id)?.status === 'draft' && <Button size="sm" variant="outline" onClick={() => openSettlement(l.id)}>{hi ? 'निपटान प्रबंधन' : 'Manage Settlement'}</Button>}
                 {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="ghost" onClick={() => openSettlement(l.id)}>{hi ? 'देखें' : 'View'}</Button>}
