@@ -54,7 +54,8 @@ export interface QualitySpec extends BaseEntity {
 export interface DeductionRule extends BaseEntity {
   code: string;
   basis: string;           // e.g. market_fee | hrdf | labour | shortage | commission | other
-  rate: Percentage;        // % of gross (application logic lands in settlement, M3)
+  rate: Percentage;        // % of gross
+  accountId?: string;      // dedicated ledger the deduction CREDITS at settlement (M3b); optional
   name?: string;           // friendly label; optional, additive
   nameHi?: string;         // Hindi label; optional, additive
 }

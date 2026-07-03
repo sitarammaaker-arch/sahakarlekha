@@ -46,7 +46,7 @@ const DEDUCTION_TYPES = [
 
 export default function ProcurementLots() {
   const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, procurementSettlements, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement, recordFarmerPayment } = useData();
-  const { crops, varieties, seasons, agencies, centres, resolveMspRate } = useMarketingData();
+  const { crops, varieties, seasons, agencies, centres, resolveMspRate, deductionRules } = useMarketingData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -209,6 +209,17 @@ export default function ProcurementLots() {
     const t = DEDUCTION_TYPES.find(x => x.id === dedType);
     addSettlementDeductionLine({ settlementId: setlId, deductionType: t ? (hi ? t.hi : t.en) : dedType, accountId: dedAccId, amount: amt, reference: dedRef.trim() || undefined, remarks: dedRemarks.trim() || undefined });
     setDedType(''); setDedAccId(''); setDedAmount(''); setDedRef(''); setDedRemarks('');
+  };
+  // M3b: one-click deduction from a rule — amount = rate% × gross, posted to the rule's dedicated account.
+  const ruleAmount = (ratePct: number, gross: number) => Math.round((ratePct / 100 * gross + Number.EPSILON) * 100) / 100;
+  const addRuleDeduction = (ruleId: string) => {
+    const rule = deductionRules.find(r => r.id === ruleId);
+    const s = procurementSettlements.find(x => x.id === setlId && !x.isDeleted);
+    if (!rule || !s) return;
+    if (!rule.accountId) { toast({ title: hi ? 'नियम में खाता नहीं' : 'Rule has no account', description: hi ? 'प्रोक्योरमेंट मास्टर → नियम में खाता जोड़ें।' : 'Add an account to the rule in Procurement Masters.', variant: 'destructive' }); return; }
+    const amt = ruleAmount(rule.rate.value, s.gross.amount);
+    if (!(amt > 0)) { toast({ title: hi ? 'राशि शून्य' : 'Amount is zero', variant: 'destructive' }); return; }
+    addSettlementDeductionLine({ settlementId: setlId, deductionType: (hi && rule.nameHi ? rule.nameHi : (rule.name || rule.code)), accountId: rule.accountId, amount: amt, reference: `${rule.rate.value}%` });
   };
   const approveSettlement = () => { if (setlId) approveFarmerSettlement({ settlementId: setlId }); };
   const openPay = (lotId: string) => {
@@ -559,8 +570,22 @@ export default function ProcurementLots() {
                 ))}
               </div>
 
+              {currentSettlement.status === 'draft' && deductionRules.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">{hi ? 'नियम से जोड़ें (दर% × सकल, अपने-आप)' : 'Add from a rule (rate% × gross, auto)'}</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {deductionRules.map(r => (
+                      <Button key={r.id} size="sm" variant="secondary" className="h-7 gap-1 text-xs font-normal" onClick={() => addRuleDeduction(r.id)}>
+                        <Plus className="h-3 w-3" />{hi && r.nameHi ? r.nameHi : (r.name || r.code)} {r.rate.value}% · {money(ruleAmount(r.rate.value, currentSettlement.gross.amount))}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {currentSettlement.status === 'draft' && (
                 <div className="space-y-2 rounded-lg border p-3">
+                  <div className="text-xs text-muted-foreground">{hi ? 'या हाथ से जोड़ें:' : 'Or add manually:'}</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <Select value={dedType} onValueChange={onDedType}>
                       <SelectTrigger><SelectValue placeholder={hi ? 'प्रकार' : 'Type'} /></SelectTrigger>

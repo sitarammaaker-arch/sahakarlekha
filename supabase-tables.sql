@@ -1261,12 +1261,15 @@ create table if not exists procurement_deduction_rules (
   code text,
   basis text,
   rate jsonb,
+  "accountId" text,
   name text,
   "nameHi" text,
   "createdAt" timestamptz default now(),
   "updatedAt" timestamptz default now()
 );
 create index if not exists idx_procurement_deduction_rules_society on procurement_deduction_rules(society_id);
+-- M3b: dedicated ledger each deduction rule credits at settlement (for the already-shipped table).
+alter table procurement_deduction_rules add column if not exists "accountId" text;
 create table if not exists procurement_quality_specs (
   id text primary key,
   society_id text not null default 'SOC001',
