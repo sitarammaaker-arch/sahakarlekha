@@ -2299,3 +2299,26 @@ create policy "society_rw" on public.dairy_distributions for all to authenticate
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
 create index if not exists idx_dairy_distributions_society on public.dairy_distributions (society_id);
+
+-- ── Consumer C2 — multi-tier pricing ─────────────────────────────────────────
+-- Effective-dated TIER OVERRIDES (member/wholesale/promo) on top of the base retail
+-- price, which stays on stock_items.saleRate (single source of truth). RLS bundled.
+create table if not exists consumer_price_lists (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "itemId" text,
+  tier text,
+  price numeric,
+  "effectiveFrom" text,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now()
+);
+create index if not exists idx_consumer_price_lists_society on public.consumer_price_lists (society_id);
+alter table public.consumer_price_lists enable row level security;
+drop policy if exists "society_rw" on public.consumer_price_lists;
+create policy "society_rw" on public.consumer_price_lists for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+-- Record the member on a retail-counter sale (member pricing + future patronage). Additive, nullable.
+alter table sales add column if not exists "memberId" text;

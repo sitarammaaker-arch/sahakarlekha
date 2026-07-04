@@ -11,6 +11,7 @@ import { LabourProvider } from "@/contexts/LabourDataContext";
 import { HousingProvider } from "@/contexts/HousingDataContext";
 import { DairyProvider } from "@/contexts/DairyDataContext";
 import { MarketingProvider } from "@/contexts/MarketingDataContext";
+import { ConsumerProvider } from "@/contexts/ConsumerDataContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { CapabilityGuard } from "@/components/CapabilityGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -130,6 +131,7 @@ const AgencyReceipts = lazyWithRetry(() => import("./pages/marketing/AgencyRecei
 const ProcurementRegisters = lazyWithRetry(() => import("./pages/marketing/ProcurementRegisters"));
 const Transport = lazyWithRetry(() => import("./pages/marketing/Transport"));
 const RetailCounter = lazyWithRetry(() => import("./pages/consumer/RetailCounter"));
+const PriceLists = lazyWithRetry(() => import("./pages/consumer/PriceLists"));
 const FlatsRegister = lazyWithRetry(() => import("./pages/FlatsRegister"));
 const MaintenanceBilling = lazyWithRetry(() => import("./pages/MaintenanceBilling"));
 const ChargeHeads = lazyWithRetry(() => import("./pages/ChargeHeads"));
@@ -336,6 +338,7 @@ const AppRoutes = () => {
       <Route path="/procurement-registers" element={<ProtectedRoute><ProcurementRegisters /></ProtectedRoute>} />
       <Route path="/transport" element={<ProtectedRoute><Transport /></ProtectedRoute>} />
       <Route path="/retail-counter" element={<ProtectedRoute><RetailCounter /></ProtectedRoute>} />
+      <Route path="/price-lists" element={<ProtectedRoute><PriceLists /></ProtectedRoute>} />
       <Route path="/eway-bill" element={<ProtectedRoute><EWayBill /></ProtectedRoute>} />
       <Route path="/kcc-loan" element={<ProtectedRoute><KccLoan /></ProtectedRoute>} />
       <Route path="/election-module" element={<ProtectedRoute><ElectionModule /></ProtectedRoute>} />
@@ -401,6 +404,7 @@ const App = () => (
         <HousingProvider>
         <DairyProvider>
         <MarketingProvider>
+        <ConsumerProvider>
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -408,6 +412,7 @@ const App = () => (
             <AppRoutes />
           </BrowserRouter>
         </TooltipProvider>
+        </ConsumerProvider>
         </MarketingProvider>
         </DairyProvider>
         </HousingProvider>

@@ -3685,7 +3685,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Two-step save — same pattern as purchases fix:
     // Step 1: upsert base columns only (schema cache always knows these)
     // Step 2: update GST columns separately (ALTER TABLE columns — schema cache may lag)
-    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, gstVoucherIds: _gv, ...saleBase } = sale;
+    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember, gstVoucherIds: _gv, ...saleBase } = sale;
     supabase.from('sales').upsert(withSoc(saleBase)).then(({ error }) => {
       if (error) {
         console.error('Sale save failed:', error.message);
@@ -3694,9 +3694,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toastRef.current({ title: 'Sale save nahi hua', description: error.message, variant: 'destructive' });
       } else {
         // Step 2: GST columns update (only Sale GST fields — no TDS for sales)
-        supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId })
+        supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember })
           .eq('id', sale.id)
-          .then(({ error: gstErr }) => { if (gstErr) console.warn('Sale GST fields update:', gstErr.message); });
+          .then(({ error: gstErr }) => { if (gstErr) console.warn('Sale GST/extra fields update:', gstErr.message); });
       }
     });
     return sale;
