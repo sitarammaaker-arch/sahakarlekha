@@ -1131,6 +1131,8 @@ export interface StockMovement {
   amount: number;
   referenceNo: string;
   narration: string;
+  batchNo?: string;     // Consumer C8 — batch/lot the movement relates to (esp. expiry/damage write-offs)
+  expiryDate?: string;  // Consumer C8 — expiry date of the written-off/received batch
   createdAt: string;
 }
 

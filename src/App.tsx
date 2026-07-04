@@ -136,6 +136,7 @@ const MemberCredit = lazyWithRetry(() => import("./pages/consumer/MemberCredit")
 const Patronage = lazyWithRetry(() => import("./pages/consumer/Patronage"));
 const ConsumerRegisters = lazyWithRetry(() => import("./pages/consumer/ConsumerRegisters"));
 const Dividend = lazyWithRetry(() => import("./pages/consumer/Dividend"));
+const ExpiryDamage = lazyWithRetry(() => import("./pages/consumer/ExpiryDamage"));
 const FlatsRegister = lazyWithRetry(() => import("./pages/FlatsRegister"));
 const MaintenanceBilling = lazyWithRetry(() => import("./pages/MaintenanceBilling"));
 const ChargeHeads = lazyWithRetry(() => import("./pages/ChargeHeads"));
@@ -347,6 +348,7 @@ const AppRoutes = () => {
       <Route path="/patronage" element={<ProtectedRoute><Patronage /></ProtectedRoute>} />
       <Route path="/consumer-registers" element={<ProtectedRoute><ConsumerRegisters /></ProtectedRoute>} />
       <Route path="/consumer-dividend" element={<ProtectedRoute><Dividend /></ProtectedRoute>} />
+      <Route path="/expiry-damage" element={<ProtectedRoute><ExpiryDamage /></ProtectedRoute>} />
       <Route path="/eway-bill" element={<ProtectedRoute><EWayBill /></ProtectedRoute>} />
       <Route path="/kcc-loan" element={<ProtectedRoute><KccLoan /></ProtectedRoute>} />
       <Route path="/election-module" element={<ProtectedRoute><ElectionModule /></ProtectedRoute>} />

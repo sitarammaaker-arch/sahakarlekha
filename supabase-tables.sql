@@ -2360,3 +2360,7 @@ create policy "society_rw" on public.consumer_patronage_runs for all to authenti
   with check (society_id::text in (select public.current_user_society_ids()));
 -- Consumer C7 — reuse the patronage runs table for share DIVIDEND too (kind discriminator).
 alter table consumer_patronage_runs add column if not exists kind text;
+
+-- Consumer C8 — batch / expiry on stock movements (esp. expiry/damage write-offs). Additive.
+alter table stock_movements add column if not exists "batchNo" text;
+alter table stock_movements add column if not exists "expiryDate" text;
