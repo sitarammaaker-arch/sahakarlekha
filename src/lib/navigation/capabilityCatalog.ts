@@ -38,6 +38,8 @@ export const CAPABILITY_META: CapabilityMeta[] = [
     descHi: 'सदस्य-वार दूध संकलन — मात्रा, फैट, SNF, दर और भुगतान पत्रक।', descEn: 'Member-wise milk collection — quantity, fat, SNF, rate and payout sheet.', docsUrl: '#' },
   { id: 'inventory_sales', category: 'trading', nameHi: 'भंडार एवं बिक्री', nameEn: 'Inventory & Sales',
     descHi: 'माल का स्टॉक, ग्राहक, बिक्री, बिक्री रजिस्टर और स्टॉक मूल्यांकन।', descEn: 'Goods stock, customers, sales, sale register and stock valuation.', docsUrl: '#' },
+  { id: 'pos_billing', category: 'trading', nameHi: 'रिटेल काउंटर (POS)', nameEn: 'Retail Counter (POS)',
+    descHi: 'उपभोक्ता भंडार का तेज़ काउंटर — बारकोड/कीबोर्ड से नकद व बैंक बिक्री, स्टॉक अपने-आप घटता है।', descEn: 'Consumer-store fast counter — barcode/keyboard cash & bank billing; stock reduces automatically.', docsUrl: '#' },
   { id: 'lending', category: 'lending', nameHi: 'ऋण', nameEn: 'Lending',
     descHi: 'सदस्यों को ऋण, ब्याज और KCC से जुड़े रजिस्टर।', descEn: 'Member loans, interest and KCC-related registers.', docsUrl: '#' },
   { id: 'procurement_msp', category: 'procurement', nameHi: 'खरीद / MSP', nameEn: 'Procurement / MSP',

@@ -10,7 +10,7 @@ import type { Capability } from './capabilities';
 export const SOCIETY_TYPE_CAPABILITIES: Record<SocietyType, Capability[]> = {
   marketing_processing: ['inventory_sales', 'procurement_msp', 'transport', 'gst', 'tds'], // trades goods + MSP procurement + transport
   pacs: ['inventory_sales', 'lending', 'procurement_msp', 'gst', 'tds'],      // credit + input distribution + procurement
-  consumer: ['inventory_sales', 'gst', 'tds'],                                // retail store
+  consumer: ['inventory_sales', 'pos_billing', 'gst', 'tds'],                 // retail store + fast POS counter
   dairy: ['dairy_collection', 'inventory_sales', 'gst', 'tds'],               // milk + goods commerce
   housing: ['tds', 'housing'],                                                // service — core accounting + TDS + housing (flats/maintenance)
   sugar: ['inventory_sales', 'procurement_msp', 'gst', 'tds'],                // cane procurement + sugar sales
