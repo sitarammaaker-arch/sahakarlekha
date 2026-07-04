@@ -51,5 +51,63 @@ ok(resolveItemPrice({ id: 'sugar', saleRate: 45 }, 'member', PRICES, '2026-02-01
 // 7. another item resolves independently
 ok(resolveItemPrice({ id: 'rice', saleRate: 55 }, 'member', PRICES, '2026-02-01') === 50, 'rice member price is its own');
 
-console.log(`\nConsumer pricing: ${pass} passed, ${fail} failed`);
+// ── Mirror: src/lib/consumer/credit.ts ──
+const saleTotal = (s) => (typeof s.grandTotal === 'number' && s.grandTotal > 0 ? s.grandTotal : (s.netAmount || 0));
+function memberCreditSales(sales, memberId) {
+  return sales.filter(s => s.memberId === memberId && s.paymentMode === 'credit').slice()
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+function memberRecovered(recoveries, memberId) {
+  return recoveries.filter(r => r.memberId === memberId && !r.isDeleted).reduce((s, r) => s + (r.amount || 0), 0);
+}
+function memberOutstanding(sales, recoveries, memberId) {
+  const billed = memberCreditSales(sales, memberId).reduce((s, x) => s + saleTotal(x), 0);
+  return Math.max(0, billed - memberRecovered(recoveries, memberId));
+}
+function daysBetween(fromDate, asOf) {
+  const a = Date.parse(fromDate), b = Date.parse(asOf);
+  if (!isFinite(a) || !isFinite(b)) return 0;
+  return Math.max(0, Math.floor((b - a) / 86400000));
+}
+function memberAgeing(sales, recoveries, memberId, asOf) {
+  const out = { b0_30: 0, b31_60: 0, b61_90: 0, b90plus: 0, total: 0 };
+  let recovered = memberRecovered(recoveries, memberId);
+  for (const s of memberCreditSales(sales, memberId)) {
+    let unpaid = saleTotal(s);
+    if (recovered > 0) { const applied = Math.min(recovered, unpaid); unpaid -= applied; recovered -= applied; }
+    if (unpaid <= 0) continue;
+    const age = daysBetween(s.date, asOf);
+    if (age <= 30) out.b0_30 += unpaid;
+    else if (age <= 60) out.b31_60 += unpaid;
+    else if (age <= 90) out.b61_90 += unpaid;
+    else out.b90plus += unpaid;
+    out.total += unpaid;
+  }
+  return out;
+}
+
+const SALES = [
+  { id: 's1', memberId: 'M1', paymentMode: 'credit', grandTotal: 500, netAmount: 500, date: '2026-05-01' },
+  { id: 's2', memberId: 'M1', paymentMode: 'credit', grandTotal: 300, netAmount: 300, date: '2026-06-20' },
+  { id: 's3', memberId: 'M1', paymentMode: 'cash',   grandTotal: 999, netAmount: 999, date: '2026-06-25' }, // cash — not credit
+  { id: 's4', memberId: 'M2', paymentMode: 'credit', grandTotal: 200, netAmount: 200, date: '2026-06-01' },
+];
+const RECOVERIES = [
+  { memberId: 'M1', amount: 200 },
+  { memberId: 'M1', amount: 100, isDeleted: true }, // reversed — ignored
+];
+
+// 8. outstanding = Σ credit sales − Σ live recoveries (cash sale + deleted recovery excluded)
+ok(memberOutstanding(SALES, RECOVERIES, 'M1') === 600, 'M1 outstanding = 500+300 − 200 = 600');
+ok(memberOutstanding(SALES, RECOVERIES, 'M2') === 200, 'M2 outstanding = 200 (no recovery)');
+
+// 9. FIFO ageing on 2026-06-30: recovery 200 clears the May-01 sale (age 60), leaving 300 unpaid at age 10
+{
+  const ag = memberAgeing(SALES, RECOVERIES, 'M1', '2026-06-30');
+  ok(ag.total === 600, 'M1 ageing total 600');
+  ok(ag.b0_30 === 300, 'Jun-20 sale (300) sits in 0–30 bucket');
+  ok(ag.b31_60 === 300, 'May-01 sale remainder (500−200=300) sits in 31–60 bucket');
+}
+
+console.log(`\nConsumer pricing + credit: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

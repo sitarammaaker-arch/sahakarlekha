@@ -2322,3 +2322,9 @@ create policy "society_rw" on public.consumer_price_lists for all to authenticat
   with check (society_id::text in (select public.current_user_society_ids()));
 -- Record the member on a retail-counter sale (member pricing + future patronage). Additive, nullable.
 alter table sales add column if not exists "memberId" text;
+
+-- ── Consumer C3 — member store credit ────────────────────────────────────────
+-- Per-member credit limit (0/null = no cap; the POS warns, never blocks). The receivable
+-- control account is created at runtime via addAccount (no table); recoveries are tagged
+-- vouchers (refType 'consumer.member.recovery'); per-member outstanding is derived.
+alter table members add column if not exists "creditLimit" numeric;

@@ -26,15 +26,14 @@ const TODAY = () => new Date().toISOString().split('T')[0];
 const fmt = (amount: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
-// POS tender is cash or bank only. Member credit (paymentMode 'credit') is a
-// separate future slice (needs member receivable sub-ledger + credit limits).
-type CounterTender = Extract<PaymentMode, 'cash' | 'bank'>;
+// POS tender: cash / bank always; 'credit' (member store credit) only when a member is selected.
+type CounterTender = Extract<PaymentMode, 'cash' | 'bank' | 'credit'>;
 
 const RetailCounter: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
   const { sales, stockItems, stockMovements, customers, members, addSale, society } = useData();
-  const { resolvePrice } = useConsumerData();
+  const { resolvePrice, memberReceivableAccountId, getMemberOutstanding } = useConsumerData();
 
   const { toast } = useToast();
 
@@ -69,6 +68,9 @@ const RetailCounter: React.FC = () => {
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberId]);
+
+  // Credit tender is member-only — drop back to cash if the member is cleared.
+  useEffect(() => { if (!memberId && tender === 'credit') setTender('cash'); }, [memberId, tender]);
 
   // ── Derived total (v1 = final-price billing: no separate GST/discount line;
   //    full GST tax-invoices are done on the Sale Management screen) ───────────
@@ -164,9 +166,20 @@ const RetailCounter: React.FC = () => {
       return;
     }
 
+    if (tender === 'credit') {
+      if (!memberId) { toast({ title: hi ? 'उधार के लिए सदस्य चुनें' : 'Select a member for credit', variant: 'destructive' }); return; }
+      if (!memberReceivableAccountId) { toast({ title: hi ? 'सदस्य प्राप्य खाता नहीं मिला' : 'Member receivable account missing', description: hi ? 'एक बार पेज रिफ्रेश करें' : 'Reload the page once', variant: 'destructive' }); return; }
+    }
     const cus = customerId ? customers.find(c => c.id === customerId) : undefined;
     const mem = memberId ? members.find(m => m.id === memberId) : undefined;
     const buyerName = mem?.name || cus?.name || (hi ? 'नकद ग्राहक' : 'Cash Customer');
+    // Credit-limit is a soft warning, never a block (secretary's discretion — L-scope decision).
+    if (tender === 'credit' && mem?.creditLimit && mem.creditLimit > 0) {
+      const projected = getMemberOutstanding(memberId) + total;
+      if (projected > mem.creditLimit) {
+        toast({ title: hi ? 'उधार सीमा से अधिक' : 'Over credit limit', description: hi ? `अनुमानित बकाया ${fmt(projected)} > सीमा ${fmt(mem.creditLimit)} — फिर भी दर्ज हो रही है` : `Projected ${fmt(projected)} > limit ${fmt(mem.creditLimit)} — posting anyway`, variant: 'destructive', duration: 8000 });
+      }
+    }
     try {
       const newSale = addSale({
         date: TODAY(),
@@ -174,6 +187,7 @@ const RetailCounter: React.FC = () => {
         customerPhone: mem?.phone || cus?.phone || undefined,
         customerId: customerId || undefined,
         memberId: memberId || undefined,
+        receivableAccountId: tender === 'credit' ? (memberReceivableAccountId ?? undefined) : undefined,
         items: valid,
         totalAmount: total,
         discount: 0,
@@ -199,7 +213,7 @@ const RetailCounter: React.FC = () => {
         duration: 10000,
       });
     }
-  }, [cart, stockMap, stockItems, customerId, customers, memberId, members, addSale, total, tender, user, hi, toast, focusSearch]);
+  }, [cart, stockMap, stockItems, customerId, customers, memberId, members, memberReceivableAccountId, getMemberOutstanding, addSale, total, tender, user, hi, toast, focusSearch]);
 
   // F2 = complete sale (keyboard-first).
   useEffect(() => {
@@ -413,22 +427,27 @@ const RetailCounter: React.FC = () => {
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">{hi ? 'भुगतान विधि' : 'Tender'}</Label>
                 <div className="flex gap-2">
-                  {(['cash', 'bank'] as CounterTender[]).map(mode => (
+                  {((memberId ? ['cash', 'bank', 'credit'] : ['cash', 'bank']) as CounterTender[]).map(mode => (
                     <button
                       key={mode}
                       type="button"
                       onClick={() => setTender(mode)}
                       className={cn(
-                        'flex-1 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
+                        'flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors',
                         tender === mode
-                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          ? (mode === 'credit' ? 'bg-orange-500 text-white border-orange-500' : 'bg-emerald-600 text-white border-emerald-600')
                           : 'border-gray-200 text-gray-600 hover:bg-gray-50',
                       )}
                     >
-                      {mode === 'cash' ? (hi ? 'नकद' : 'Cash') : (hi ? 'बैंक / UPI' : 'Bank / UPI')}
+                      {mode === 'cash' ? (hi ? 'नकद' : 'Cash') : mode === 'bank' ? (hi ? 'बैंक / UPI' : 'Bank / UPI') : (hi ? 'उधार' : 'Credit')}
                     </button>
                   ))}
                 </div>
+                {memberId && tender === 'credit' && (
+                  <p className="text-[11px] text-orange-600">
+                    {hi ? `इस सदस्य का मौजूदा बकाया: ${fmt(getMemberOutstanding(memberId))}` : `Member's current outstanding: ${fmt(getMemberOutstanding(memberId))}`}
+                  </p>
+                )}
               </div>
 
               <Button onClick={completeSale} disabled={cart.length === 0} className="w-full h-12 text-base gap-2">

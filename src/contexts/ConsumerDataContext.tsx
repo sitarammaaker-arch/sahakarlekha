@@ -20,7 +20,13 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
 import { resolveItemPrice } from '@/lib/consumer/pricing';
-import type { ConsumerPrice, ConsumerPriceTier } from '@/types';
+import { resolveMemberReceivableAccountId, MEMBER_RECEIVABLE_SUBTYPE } from '@/lib/consumer/accounts';
+import { memberOutstanding, memberAgeing, type Ageing, type RecoveryRow } from '@/lib/consumer/credit';
+import { getBankAccountIds } from '@/lib/storage';
+import type { ConsumerPrice, ConsumerPriceTier, Voucher } from '@/types';
+
+const CASH_ACCOUNT = '3301';   // Cash in Hand (CMS chart)
+const RECOVERY_REF = 'consumer.member.recovery';
 
 interface ConsumerDataContextValue {
   consumerReady: boolean;
@@ -32,12 +38,26 @@ interface ConsumerDataContextValue {
   deleteConsumerPrice: (id: string) => void;
   /** Unit price for an item at a tier on a date (default today). Falls back to saleRate. */
   resolvePrice: (item: { id: string; saleRate: number }, tier: string, date?: string) => number;
+
+  // Member store credit (C3). Single "Member Purchase Receivable" control (auto-created);
+  // per-member outstanding is DERIVED from credit sales − recoveries.
+  memberReceivableAccountId: string | null;
+  memberRecoveries: Voucher[];
+  /** Record a recovery receipt against a member's store credit: Dr Cash|Bank / Cr receivable. */
+  recordMemberRecovery: (data: { memberId: string; memberName: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string }) => Voucher | null;
+  deleteMemberRecovery: (voucherId: string) => void;
+  /** Outstanding store credit for a member (Σ credit sales − Σ recoveries, ≥ 0). */
+  getMemberOutstanding: (memberId: string) => number;
+  /** FIFO ageing of a member's unpaid credit (default asOf today). */
+  getMemberAgeing: (memberId: string, asOf?: string) => Ageing;
+  /** Set a member's store-credit limit (0 = no cap). Wraps core updateMember. */
+  setMemberCreditLimit: (memberId: string, limit: number) => void;
 }
 
 const ConsumerDataContext = createContext<ConsumerDataContextValue | null>(null);
 
 export function ConsumerProvider({ children }: { children: ReactNode }) {
-  const { society } = useData();
+  const { society, accounts, addAccount, vouchers, sales, addVoucher, cancelVoucher, updateMember } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
@@ -106,8 +126,68 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     [consumerPrices],
   );
 
+  // ── C3: ensure the "Member Purchase Receivable" control exists (auto-id; NOT 3306, which
+  // is Rent Receivable in the CMS chart). Mirrors the Dairy dedicated-ledger seeder. ──
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current) return;
+    if (society?.societyType !== 'consumer') return;
+    if (!accounts || accounts.length === 0) return;
+    if (society.fyLocked) return; // seeding mutates the chart; retry on a later unlocked load
+    if (resolveMemberReceivableAccountId(accounts) !== null) { seededRef.current = true; return; }
+    seededRef.current = true; // attempt once per mount
+    addAccount({ name: 'Member Purchase Receivable', nameHi: 'सदस्य खरीद प्राप्य', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300', subtype: MEMBER_RECEIVABLE_SUBTYPE });
+  }, [society?.societyType, society?.fyLocked, accounts, addAccount]);
+
+  const memberReceivableAccountId = resolveMemberReceivableAccountId(accounts);
+
+  const memberRecoveries = vouchers.filter(v => v.refType === RECOVERY_REF);
+  const recoveryRows: RecoveryRow[] = memberRecoveries.map(v => ({ memberId: v.memberId, amount: v.amount, isDeleted: v.isDeleted }));
+
+  const getMemberOutstanding = useCallback(
+    (memberId: string) => memberOutstanding(sales, recoveryRows, memberId),
+    [sales, recoveryRows],
+  );
+  const getMemberAgeing = useCallback(
+    (memberId: string, asOf?: string) => memberAgeing(sales, recoveryRows, memberId, asOf || new Date().toISOString().slice(0, 10)),
+    [sales, recoveryRows],
+  );
+
+  const recordMemberRecovery = useCallback((data: { memberId: string; memberName: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string }): Voucher | null => {
+    if (guardFYLocked()) return null;
+    if (!(data.amount > 0)) { toastRef.current({ title: 'मान्य राशि दर्ज करें', variant: 'destructive' }); return null; }
+    if (!memberReceivableAccountId) { toastRef.current({ title: 'सदस्य प्राप्य खाता नहीं मिला', description: 'Member receivable account missing — reload once.', variant: 'destructive' }); return null; }
+    const debit = data.mode === 'cash' ? CASH_ACCOUNT : (data.bankAccountId || getBankAccountIds(accounts)[0] || '3302');
+    return addVoucher({
+      type: 'receipt',
+      date: data.date,
+      debitAccountId: debit,
+      creditAccountId: memberReceivableAccountId,
+      amount: data.amount,
+      memberId: data.memberId,
+      narration: data.note?.trim() || `सदस्य उधार वसूली — ${data.memberName}`,
+      createdBy: user?.name ?? 'Counter',
+      refType: RECOVERY_REF,
+      refId: data.memberId,
+    });
+  }, [memberReceivableAccountId, accounts, addVoucher, user]);
+
+  const deleteMemberRecovery = useCallback((voucherId: string) => {
+    if (guardFYLocked()) return;
+    cancelVoucher(voucherId, 'Member recovery reversed', user?.name ?? 'Counter');
+  }, [cancelVoucher, user]);
+
+  const setMemberCreditLimit = useCallback((memberId: string, limit: number) => {
+    updateMember(memberId, { creditLimit: Math.max(0, limit) });
+  }, [updateMember]);
+
   return (
-    <ConsumerDataContext.Provider value={{ consumerReady: true, guardFYLocked, consumerPrices, addConsumerPrice, deleteConsumerPrice, resolvePrice }}>
+    <ConsumerDataContext.Provider value={{
+      consumerReady: true, guardFYLocked,
+      consumerPrices, addConsumerPrice, deleteConsumerPrice, resolvePrice,
+      memberReceivableAccountId, memberRecoveries, recordMemberRecovery, deleteMemberRecovery,
+      getMemberOutstanding, getMemberAgeing, setMemberCreditLimit,
+    }}>
       {children}
     </ConsumerDataContext.Provider>
   );

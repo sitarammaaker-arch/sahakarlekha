@@ -3619,7 +3619,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Dr: Cash / Bank / Debtor for grand total
     const debitAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
       : data.paymentMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
-      : (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303');
+      // Credit: an explicit receivable account (e.g. Consumer member-receivable control) wins,
+      // else the linked customer's sub-ledger, else Sundry Debtors.
+      : (data.receivableAccountId || (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303'));
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
 
     // Cr: Sales A/c — split by each item's salesAccountId so multi-product societies
@@ -3678,7 +3680,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     });
 
-    const sale: Sale = { ...data, id: saleId, saleNo, voucherId: newVoucher.id, gstVoucherIds: undefined, createdAt: new Date().toISOString() };
+    // receivableAccountId is routing-only (chose the credit debtor above) — never store it on
+    // the sale row (no column; would break a later updateSale upsert).
+    const { receivableAccountId: _omitRcv, ...saleFields } = data;
+    const sale: Sale = { ...saleFields, id: saleId, saleNo, voucherId: newVoucher.id, gstVoucherIds: undefined, createdAt: new Date().toISOString() };
     salesRef.current = [...salesRef.current, sale];
     setSalesState(prev => [...prev, sale]);
 
@@ -3818,7 +3823,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const lines: VoucherLine[] = [];
     const debitAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
       : data.paymentMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
-      : (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303');
+      // Credit: an explicit receivable account (e.g. Consumer member-receivable control) wins,
+      // else the linked customer's sub-ledger, else Sundry Debtors.
+      : (data.receivableAccountId || (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303'));
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
 
     const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0));

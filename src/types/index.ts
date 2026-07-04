@@ -139,6 +139,7 @@ export interface Member {
   memberType: MemberType;
   joinDate: string;
   status: MemberStatus;
+  creditLimit?: number;   // Consumer C3 — max member-store credit outstanding (0/undefined = no cap; POS warns, never blocks)
   // Share Register fields
   shareCertNo?: string;
   shareCount?: number;
@@ -734,6 +735,7 @@ export type AccountSubtype =
   | 'milk_sales'          // dairy — bulk/union milk sales (kept distinct from the generic 4101 sales fallback)
   | 'direct_expense' | 'employee_expense' | 'admin_expense' | 'operational_expense' | 'depreciation_expense' | 'statutory_expense'
   | 'milk_procurement'    // dairy — farmer milk cost (kept distinct from the generic 5101 purchases fallback)
+  | 'member_receivable'   // consumer — member store-credit receivable control (not 3306, which is Rent Receivable)
   | 'suspense';
 
 // ── Annual Review Report (Haryana Marketing Societies) classification tags ──
@@ -1163,6 +1165,7 @@ export interface Sale {
   bankAccountId?: string;  // when paymentMode = 'bank', which bank account to credit
   customerId?: string; // linked registered customer
   memberId?: string;   // Consumer C2 — member buyer at the retail counter (member pricing + future patronage)
+  receivableAccountId?: string; // Consumer C3 — routing only (not persisted): credit-sale debtor account (member receivable control)
   voucherId?: string;
   gstVoucherIds?: string[]; // auto-created GST output journal IDs
   narration: string;
