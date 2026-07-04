@@ -23,7 +23,8 @@ export type Capability =
   | 'tds'
   | 'housing'
   | 'labour'
-  | 'pf_esi';
+  | 'pf_esi'
+  | 'haryana_compliance';  // jurisdiction pack: HAFED annual-review proformas (Haryana marketing only)
 
 /** Sidebar groups — 1:1 with today's visual groups, in render order. */
 export type NavDomain = 'core' | 'operations' | 'marketing' | 'dairy' | 'labour' | 'housing' | 'reports' | 'registers' | 'administration';

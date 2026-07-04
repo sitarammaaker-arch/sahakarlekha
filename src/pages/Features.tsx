@@ -25,8 +25,8 @@ export default function Features() {
   const societyType = society.societyType ?? 'other';
   const typeLabel = SOCIETY_TYPES.find(s => s.value === societyType)?.[hi ? 'labelHi' : 'label'] ?? societyType;
 
-  const entitled = useMemo(() => resolveEntitlements(societyType, societyCapabilities), [societyType, societyCapabilities]);
-  const visible = useMemo(() => resolveCapabilities(societyType, societyCapabilities), [societyType, societyCapabilities]);
+  const entitled = useMemo(() => resolveEntitlements(societyType, societyCapabilities, undefined, society.state), [societyType, societyCapabilities, society.state]);
+  const visible = useMemo(() => resolveCapabilities(societyType, societyCapabilities, undefined, society.state), [societyType, societyCapabilities, society.state]);
 
   const [showOthers, setShowOthers] = useState(false);
   const [search, setSearch] = useState('');

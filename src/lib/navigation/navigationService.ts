@@ -11,10 +11,11 @@ import { resolveCapabilities } from './capabilityResolver';
 
 export interface NavigationService {
   getCatalog: () => ModuleDefinition[];
-  resolveCapabilities: (societyType: SocietyType, rows?: SocietyCapabilityRow[]) => ReturnType<typeof resolveCapabilities>;
+  resolveCapabilities: (societyType: SocietyType, rows?: SocietyCapabilityRow[], state?: string) => ReturnType<typeof resolveCapabilities>;
 }
 
 export const navigationService: NavigationService = {
   getCatalog: () => MODULE_CATALOG,
-  resolveCapabilities: (societyType, rows) => resolveCapabilities(societyType, rows),
+  // `state` enables jurisdiction packs (e.g. Haryana → haryana_compliance) without a server row.
+  resolveCapabilities: (societyType, rows, state) => resolveCapabilities(societyType, rows, undefined, state),
 };

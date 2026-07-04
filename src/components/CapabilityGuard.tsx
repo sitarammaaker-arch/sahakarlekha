@@ -29,7 +29,7 @@ export function CapabilityGuard({ children }: { children: React.ReactNode }) {
   const module = MODULE_CATALOG.find((m) => m.route === location.pathname);
   const ctx: NavContext = {
     societyType,
-    capabilities: navigationService.resolveCapabilities(societyType, societyCapabilities),
+    capabilities: navigationService.resolveCapabilities(societyType, societyCapabilities, society.state),
     hasRole: hasPermission,
     superAdminShowAll: isSuperAdmin, // matches useNavigation — super-admin bypasses gates
   };
