@@ -29,7 +29,7 @@ import type { Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, Deducti
 import type { Transporter } from '@/lib/marketing/transport';
 import type { Voucher } from '@/types';
 
-// Dedicated CMS/HAFED-chart ledgers (storage.ts).
+// Dedicated marketing-chart ledgers (storage.ts).
 const MSP_RECEIVABLE_ACCOUNT = '3308';        // MSP recoverable from the agency
 const COMMISSION_RECEIVABLE_ACCOUNT = '3314'; // procurement commission receivable
 const PROCUREMENT_COMMISSION_ACCOUNT = '4206';// procurement commission income
@@ -83,7 +83,7 @@ interface MarketingDataContextValue {
   addBardanaType: (data: { name: string; capacityKg: number; nameHi?: string }) => BardanaType;
   deleteBardanaType: (id: string) => void;
 
-  // Agency (HAFED) receipts against MSP Receivable (M3c) — derived from vouchers, no stored balance.
+  // Agency receipts against MSP Receivable (M3c) — derived from vouchers, no stored balance.
   agencyReceipts: Voucher[];
   /** Net MSP Receivable outstanding = Σ(3308 Dr) − Σ(3308 Cr) across live vouchers. */
   agencyReceivableOutstanding: number;
@@ -702,7 +702,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     });
   }, [transporters, societyId]);
 
-  // ── Agency (HAFED) receipts against MSP Receivable (M3c) ──────────────────────────
+  // ── Agency receipts against MSP Receivable (M3c) ──────────────────────────
   // Derived from vouchers (the voucher IS the record — no stored balance, mirrors farmer payments).
   const agencyReceipts = vouchers.filter(v => !v.isDeleted && v.refType === 'procurement.agency.receipt');
   const agencyReceivableOutstanding = +vouchers

@@ -13,7 +13,7 @@ import { Landmark, Trash2 } from 'lucide-react';
 
 /**
  * Agency Receipt (Marketing M3c) — records MSP reimbursement received from the procurement agency
- * (HAFED / MARKFED / RAJFED / NAFED / FCI etc. — the society defines its own agency in the master):
+ * (FCI / NAFED / the society's own State Federation etc. — defined in the Agency master):
  * Dr Bank|Cash / Cr 3308 MSP Receivable. Society-level bulk (one receipt clears part of the total
  * 3308 outstanding). The voucher is the record; outstanding is derived from vouchers.
  */

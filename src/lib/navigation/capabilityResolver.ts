@@ -25,6 +25,20 @@ function activeRows(rows: SocietyCapabilityRow[], now: number): SocietyCapabilit
 }
 
 /**
+ * JURISDICTION grants — capabilities auto-entitled by the society's STATE (a `state`-source grant,
+ * per C6.2), computed here from society.state so no server row is needed. State-specific statutory
+ * packs live behind these so the national core never carries one state's format.
+ *   • Haryana (`hr`) marketing/processing → 'haryana_compliance' (HAFED annual-review proformas).
+ * Add other states' packs here (e.g. Punjab → 'punjab_compliance') — the core stays untouched.
+ */
+export function jurisdictionCapabilities(societyType: SocietyType, state?: string): Capability[] {
+  const s = (state || '').trim().toLowerCase();
+  const isHaryana = s === 'hr' || s === 'haryana' || s === 'हरियाणा';
+  if (societyType === 'marketing_processing' && isHaryana) return ['haryana_compliance'];
+  return [];
+}
+
+/**
  * Step 1 — capabilities the society is ENTITLED to. Admin rows are ignored here, so an
  * admin can never entitle an unlicensed capability. (Exported for the C6 admin UI, which
  * must know which capabilities are togglable.)
@@ -33,14 +47,16 @@ export function resolveEntitlements(
   societyType: SocietyType,
   rows: SocietyCapabilityRow[] = [],
   nowMs?: number,
+  state?: string,
 ): Set<Capability> {
   const active = activeRows(rows, nowMs ?? Date.now());
   const template: Capability[] = SOCIETY_TYPE_CAPABILITIES[societyType] ?? [];
+  const jurisdiction = jurisdictionCapabilities(societyType, state);
   const grants = active.filter((r) => r.source !== ADMIN_SOURCE && r.mode === 'grant').map((r) => r.capability);
   const revokes = new Set<Capability>(
     active.filter((r) => r.source !== ADMIN_SOURCE && r.mode === 'revoke').map((r) => r.capability),
   );
-  return new Set<Capability>([...template, ...grants].filter((c) => !revokes.has(c)));
+  return new Set<Capability>([...template, ...jurisdiction, ...grants].filter((c) => !revokes.has(c)));
 }
 
 /**
@@ -53,9 +69,10 @@ export function resolveCapabilities(
   societyType: SocietyType,
   rows: SocietyCapabilityRow[] = [],
   nowMs?: number,
+  state?: string,
 ): Set<Capability> {
   const now = nowMs ?? Date.now();
-  const entitled = resolveEntitlements(societyType, rows, now);
+  const entitled = resolveEntitlements(societyType, rows, now, state);
   const adminHidden = new Set<Capability>(
     activeRows(rows, now)
       .filter((r) => r.source === ADMIN_SOURCE && r.mode === 'revoke')

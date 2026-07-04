@@ -52,6 +52,8 @@ export const CAPABILITY_META: CapabilityMeta[] = [
     descHi: 'TDS रजिस्टर और फॉर्म 16A।', descEn: 'TDS register and Form 16A.', docsUrl: '#' },
   { id: 'pf_esi', category: 'compliance', nameHi: 'EPF / ESI', nameEn: 'EPF / ESI',
     descHi: 'मज़दूरी पर EPF व ESI अंशदान की मासिक गणना, लेखांकन व रजिस्टर। (सीमा से नीचे की समिति इसे बंद कर सकती है।)', descEn: 'Monthly EPF & ESI contribution on wages — computation, posting and register. (Societies below the threshold can turn this off.)', docsUrl: '#' },
+  { id: 'haryana_compliance', category: 'compliance', nameHi: 'हरियाणा RCS / HAFED अनुपालन', nameEn: 'Haryana RCS / HAFED Compliance',
+    descHi: 'हरियाणा की विपणन/प्रसंस्करण समितियों के लिए HAFED वार्षिक समीक्षा प्रारूप — रिकवरेबल्स व कच्ची आढ़त रजिस्टर। केवल हरियाणा में स्वतः सक्रिय।', descEn: 'HAFED annual-review proformas (Recoverables, Kachi Aarat) for Haryana marketing/processing societies. Auto-enabled in Haryana only.', docsUrl: '#' },
 ];
 
 /** Modules that require a given capability — i.e. what a feature toggle shows/hides. */
