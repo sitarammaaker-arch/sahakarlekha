@@ -90,6 +90,7 @@ export const translations: Translations = {
   navConsumer: { hi: 'उपभोक्ता भंडार', en: 'Consumer Store' },
   retailCounter: { hi: 'रिटेल काउंटर (POS)', en: 'Retail Counter (POS)' },
   priceLists: { hi: 'सदस्य मूल्य सूची', en: 'Member Price List' },
+  memberCredit: { hi: 'सदस्य उधार', en: 'Member Credit' },
   navMarketing: { hi: 'विपणन प्रबंधन', en: 'Marketing' },
   procurementMasters: { hi: 'प्रोक्योरमेंट मास्टर', en: 'Procurement Masters' },
   agencyReceipts: { hi: 'एजेंसी रसीद', en: 'Agency Receipt' },
