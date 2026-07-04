@@ -45,6 +45,7 @@ const RetailCounter: React.FC = () => {
   const [tender, setTender] = useState<CounterTender>('cash');
   const [customerId, setCustomerId] = useState('');
   const [memberId, setMemberId] = useState('');
+  const [wholesale, setWholesale] = useState(false);
   const [query, setQuery] = useState('');
   const [lastSaleNo, setLastSaleNo] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -52,22 +53,26 @@ const RetailCounter: React.FC = () => {
   const focusSearch = useCallback(() => setTimeout(() => searchRef.current?.focus(), 0), []);
   useEffect(() => { focusSearch(); }, [focusSearch]);
 
-  // Member selected → member tier price; else base retail (saleRate).
+  // Price precedence: wholesale toggle → wholesale; else member selected → member;
+  // else active promo-or-retail (resolvePrice falls back to saleRate when no tier row).
   const priceFor = useCallback(
-    (si: { id: string; saleRate: number }) => memberId ? resolvePrice(si, 'member') : (si.saleRate || 0),
-    [memberId, resolvePrice],
+    (si: { id: string; saleRate: number }) =>
+      wholesale ? resolvePrice(si, 'wholesale')
+        : memberId ? resolvePrice(si, 'member')
+          : resolvePrice(si, 'promo'),
+    [wholesale, memberId, resolvePrice],
   );
 
-  // Re-price the whole cart when the member is changed (member on → member rates, off → retail).
+  // Re-price the whole cart when the pricing context (member / wholesale) changes.
   useEffect(() => {
     setCart(prev => prev.map(i => {
       const si = stockItems.find(s => s.id === i.itemId);
       if (!si) return i;
-      const r = memberId ? resolvePrice(si, 'member') : (si.saleRate || 0);
+      const r = wholesale ? resolvePrice(si, 'wholesale') : memberId ? resolvePrice(si, 'member') : resolvePrice(si, 'promo');
       return { ...i, rate: r, amount: +(i.qty * r).toFixed(2) };
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [memberId]);
+  }, [memberId, wholesale]);
 
   // Credit tender is member-only — drop back to cash if the member is cleared.
   useEffect(() => { if (!memberId && tender === 'credit') setTender('cash'); }, [memberId, tender]);
@@ -395,10 +400,19 @@ const RetailCounter: React.FC = () => {
                 <span className="text-3xl font-bold text-emerald-700">{fmt(total)}</span>
               </div>
 
+              <button
+                type="button"
+                onClick={() => setWholesale(w => !w)}
+                className={cn('w-full px-3 py-2 rounded-lg text-sm font-medium border transition-colors',
+                  wholesale ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50')}
+              >
+                {wholesale ? (hi ? '✓ थोक भाव लागू' : '✓ Wholesale price on') : (hi ? 'थोक भाव लगाएँ' : 'Apply wholesale price')}
+              </button>
+
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground flex items-center gap-2">
                   {hi ? 'सदस्य (वैकल्पिक)' : 'Member (optional)'}
-                  {memberId && <Badge variant="outline" className="border-emerald-500 text-emerald-700 bg-emerald-50 text-[10px]">{hi ? 'सदस्य दर लागू' : 'member price'}</Badge>}
+                  {memberId && !wholesale && <Badge variant="outline" className="border-emerald-500 text-emerald-700 bg-emerald-50 text-[10px]">{hi ? 'सदस्य दर लागू' : 'member price'}</Badge>}
                 </Label>
                 <Select value={memberId || '__none__'} onValueChange={v => setMemberId(v === '__none__' ? '' : v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>

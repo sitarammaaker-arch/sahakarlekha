@@ -89,7 +89,7 @@ export const translations: Translations = {
   buildings: { hi: 'भवन / विंग', en: 'Buildings / Wings' },
   navConsumer: { hi: 'उपभोक्ता भंडार', en: 'Consumer Store' },
   retailCounter: { hi: 'रिटेल काउंटर (POS)', en: 'Retail Counter (POS)' },
-  priceLists: { hi: 'सदस्य मूल्य सूची', en: 'Member Price List' },
+  priceLists: { hi: 'मूल्य सूची', en: 'Price Lists' },
   memberCredit: { hi: 'सदस्य उधार', en: 'Member Credit' },
   patronage: { hi: 'संरक्षण रिबेट', en: 'Patronage Rebate' },
   consumerRegisters: { hi: 'उपभोक्ता रजिस्टर', en: 'Consumer Registers' },

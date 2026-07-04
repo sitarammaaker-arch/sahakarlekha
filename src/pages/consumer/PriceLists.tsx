@@ -15,7 +15,9 @@ import {
 } from '@/components/ui/table';
 import { Tags, Plus, Trash2 } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import type { ConsumerPriceTier } from '@/types';
 
 const TODAY = () => new Date().toISOString().split('T')[0];
 
@@ -30,8 +32,15 @@ const PriceLists: React.FC = () => {
   const { toast } = useToast();
 
   const [itemId, setItemId] = useState('');
+  const [tier, setTier] = useState<ConsumerPriceTier>('member');
   const [price, setPrice] = useState<number>(0);
   const [effectiveFrom, setEffectiveFrom] = useState(TODAY());
+
+  const TIER_LABEL: Record<ConsumerPriceTier, { hi: string; en: string; cls: string }> = {
+    member: { hi: 'सदस्य', en: 'Member', cls: 'border-emerald-500 text-emerald-700 bg-emerald-50' },
+    wholesale: { hi: 'थोक', en: 'Wholesale', cls: 'border-blue-500 text-blue-700 bg-blue-50' },
+    promo: { hi: 'प्रोमो', en: 'Promo', cls: 'border-orange-500 text-orange-700 bg-orange-50' },
+  };
 
   const itemName = (id: string) => {
     const s = stockItems.find(x => x.id === id);
@@ -39,10 +48,10 @@ const PriceLists: React.FC = () => {
   };
   const baseRate = (id: string) => stockItems.find(x => x.id === id)?.saleRate ?? 0;
 
-  const memberPrices = useMemo(
+  const allPrices = useMemo(
     () => consumerPrices
-      .filter(p => p.tier === 'member' && !p.isDeleted)
-      .sort((a, b) => itemName(a.itemId).localeCompare(itemName(b.itemId)) || (a.effectiveFrom < b.effectiveFrom ? 1 : -1)),
+      .filter(p => !p.isDeleted)
+      .sort((a, b) => itemName(a.itemId).localeCompare(itemName(b.itemId)) || a.tier.localeCompare(b.tier) || (a.effectiveFrom < b.effectiveFrom ? 1 : -1)),
     [consumerPrices, stockItems, hi],
   );
 
@@ -55,8 +64,8 @@ const PriceLists: React.FC = () => {
       toast({ title: hi ? 'मान्य मूल्य दर्ज करें' : 'Enter a valid price', variant: 'destructive' });
       return;
     }
-    addConsumerPrice({ itemId, tier: 'member', price, effectiveFrom });
-    toast({ title: hi ? `सदस्य मूल्य जोड़ा गया — ${itemName(itemId)}` : `Member price added — ${itemName(itemId)}` });
+    addConsumerPrice({ itemId, tier, price, effectiveFrom });
+    toast({ title: hi ? `${TIER_LABEL[tier].hi} मूल्य जोड़ा गया — ${itemName(itemId)}` : `${TIER_LABEL[tier].en} price added — ${itemName(itemId)}` });
     setItemId(''); setPrice(0); setEffectiveFrom(TODAY());
   };
 
@@ -67,21 +76,21 @@ const PriceLists: React.FC = () => {
           <Tags className="h-6 w-6 text-emerald-700" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{hi ? 'सदस्य मूल्य सूची' : 'Member Price List'}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{hi ? 'मूल्य सूची' : 'Price Lists'}</h1>
           <p className="text-sm text-gray-500">{society.name}</p>
         </div>
       </div>
 
       <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
         {hi
-          ? 'यहाँ केवल सदस्य दर (retail से अलग) तय करें। रिटेल दर इन्वेंटरी की बिक्री दर (saleRate) रहती है। नई दर लागू करने के लिए नई "लागू तिथि" वाली पंक्ति जोड़ें — पुरानी पंक्ति इतिहास के लिए बनी रहती है।'
-          : 'Set only the member rate here (distinct from retail). Retail stays the Inventory sale rate. To revise, add a new row with a later effective date — the old row stays for history.'}
+          ? 'सदस्य / थोक / प्रोमो दरें तय करें (रिटेल दर इन्वेंटरी की saleRate रहती है)। काउंटर पर: थोक टॉगल → थोक दर, सदस्य चुना → सदस्य दर, वरना चालू प्रोमो-या-रिटेल। दर बदलने के लिए नई "लागू तिथि" वाली पंक्ति जोड़ें।'
+          : 'Set Member / Wholesale / Promo rates (retail stays the Inventory saleRate). At the counter: wholesale toggle → wholesale, member selected → member, else active promo-or-retail. To revise, add a new row with a later effective date.'}
       </div>
 
       {/* Add form */}
       <Card>
-        <CardHeader className="py-3"><CardTitle className="text-base">{hi ? 'सदस्य दर जोड़ें' : 'Add Member Price'}</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+        <CardHeader className="py-3"><CardTitle className="text-base">{hi ? 'दर जोड़ें' : 'Add Price'}</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
           <div className="space-y-1 sm:col-span-2">
             <Label>{hi ? 'वस्तु' : 'Item'}</Label>
             <Select value={itemId} onValueChange={setItemId}>
@@ -96,14 +105,25 @@ const PriceLists: React.FC = () => {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>{hi ? 'सदस्य दर (₹)' : 'Member Rate (₹)'}</Label>
+            <Label>{hi ? 'श्रेणी' : 'Tier'}</Label>
+            <Select value={tier} onValueChange={v => setTier(v as ConsumerPriceTier)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="member">{hi ? 'सदस्य' : 'Member'}</SelectItem>
+                <SelectItem value="wholesale">{hi ? 'थोक' : 'Wholesale'}</SelectItem>
+                <SelectItem value="promo">{hi ? 'प्रोमो' : 'Promo'}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>{hi ? 'दर (₹)' : 'Rate (₹)'}</Label>
             <Input type="number" min={0} step={0.01} value={price} onChange={e => setPrice(Math.max(0, Number(e.target.value)))} />
           </div>
           <div className="space-y-1">
             <Label>{hi ? 'लागू तिथि' : 'Effective From'}</Label>
             <Input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)} />
           </div>
-          <div className="sm:col-span-4 flex justify-end">
+          <div className="sm:col-span-5 flex justify-end">
             <Button onClick={handleAdd} className="gap-1"><Plus className="h-4 w-4" />{hi ? 'जोड़ें' : 'Add'}</Button>
           </div>
         </CardContent>
@@ -116,25 +136,28 @@ const PriceLists: React.FC = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>{hi ? 'वस्तु' : 'Item'}</TableHead>
+                <TableHead>{hi ? 'श्रेणी' : 'Tier'}</TableHead>
                 <TableHead className="text-right">{hi ? 'रिटेल दर' : 'Retail Rate'}</TableHead>
-                <TableHead className="text-right">{hi ? 'सदस्य दर' : 'Member Rate'}</TableHead>
+                <TableHead className="text-right">{hi ? 'दर' : 'Rate'}</TableHead>
                 <TableHead>{hi ? 'लागू तिथि' : 'Effective From'}</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {memberPrices.length === 0 ? (
+              {allPrices.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-10 text-gray-400">
-                    {hi ? 'कोई सदस्य दर तय नहीं — ऊपर से जोड़ें' : 'No member prices set — add one above'}
+                  <TableCell colSpan={6} className="text-center py-10 text-gray-400">
+                    {hi ? 'कोई दर तय नहीं — ऊपर से जोड़ें' : 'No prices set — add one above'}
                   </TableCell>
                 </TableRow>
-              ) : memberPrices.map(p => {
+              ) : allPrices.map(p => {
                 const retail = baseRate(p.itemId);
                 const cheaper = p.price < retail;
+                const tl = TIER_LABEL[p.tier];
                 return (
                   <TableRow key={p.id}>
                     <TableCell className="font-medium">{itemName(p.itemId)}</TableCell>
+                    <TableCell><Badge variant="outline" className={cn('text-[10px]', tl.cls)}>{hi ? tl.hi : tl.en}</Badge></TableCell>
                     <TableCell className="text-right text-gray-500">{fmt(retail)}</TableCell>
                     <TableCell className="text-right font-semibold">
                       {fmt(p.price)}
