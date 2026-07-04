@@ -7,14 +7,27 @@
  * recoveries (see credit.ts) rather than per-member sub-ledgers, so the chart stays small.
  */
 
-export const MEMBER_RECEIVABLE_SUBTYPE = 'member_receivable';
-const NAME_HINTS = ['member purchase receivable', 'सदस्य खरीद प्राप्य', 'member receivable'];
+type Acc = { id: string; name?: string; subtype?: string; isGroup?: boolean };
 
-export function resolveMemberReceivableAccountId(
-  accounts: ReadonlyArray<{ id: string; name?: string; subtype?: string; isGroup?: boolean }>,
-): string | null {
-  const bySubtype = accounts.find(a => !a.isGroup && a.subtype === MEMBER_RECEIVABLE_SUBTYPE);
+const resolveBy = (accounts: ReadonlyArray<Acc>, subtype: string, nameHints: string[]): string | null => {
+  const bySubtype = accounts.find(a => !a.isGroup && a.subtype === subtype);
   if (bySubtype) return bySubtype.id;
-  const byName = accounts.find(a => !a.isGroup && a.name && NAME_HINTS.includes(a.name.trim().toLowerCase()));
+  const byName = accounts.find(a => !a.isGroup && a.name && nameHints.includes(a.name.trim().toLowerCase()));
   return byName ? byName.id : null;
+};
+
+export const MEMBER_RECEIVABLE_SUBTYPE = 'member_receivable';
+export const PATRONAGE_DISTRIBUTION_SUBTYPE = 'patronage_distribution';
+export const REBATE_PAYABLE_SUBTYPE = 'rebate_payable';
+
+export function resolveMemberReceivableAccountId(accounts: ReadonlyArray<Acc>): string | null {
+  return resolveBy(accounts, MEMBER_RECEIVABLE_SUBTYPE, ['member purchase receivable', 'सदस्य खरीद प्राप्य', 'member receivable']);
+}
+
+export function resolvePatronageDistributionAccountId(accounts: ReadonlyArray<Acc>): string | null {
+  return resolveBy(accounts, PATRONAGE_DISTRIBUTION_SUBTYPE, ['patronage rebate distribution', 'संरक्षण रिबेट वितरण', 'patronage distribution']);
+}
+
+export function resolveRebatePayableAccountId(accounts: ReadonlyArray<Acc>): string | null {
+  return resolveBy(accounts, REBATE_PAYABLE_SUBTYPE, ['member rebate payable', 'देय सदस्य रिबेट', 'rebate payable']);
 }
