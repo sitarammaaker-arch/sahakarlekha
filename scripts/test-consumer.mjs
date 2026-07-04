@@ -225,5 +225,30 @@ function computeDividendLines(members, ratePct) {
   ok(lines.find(l => l.memberId === 'M2').amount === 800, 'Bhola 8% of 10000 = 800');
 }
 
-console.log(`\nConsumer pricing + credit + patronage + registers + dividend: ${pass} passed, ${fail} failed`);
+// ── Mirror: src/lib/consumer/registers.ts buildWriteoffRegister ──
+const WRITEOFF_REF_PREFIX = 'WOFF:';
+function buildWriteoffRegister(movements) {
+  const rows = movements
+    .filter(m => m.type === 'adjustment' && m.qty < 0 && (m.referenceNo || '').startsWith(WRITEOFF_REF_PREFIX))
+    .map(m => ({ itemId: m.itemId, date: m.date, qty: Math.abs(m.qty), reason: (m.referenceNo || '').slice(WRITEOFF_REF_PREFIX.length) || 'other', value: Math.abs(m.amount || 0), batchNo: m.batchNo, expiryDate: m.expiryDate }))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  return { rows, totalQty: Math.round(rows.reduce((s, r) => s + r.qty, 0) * 100) / 100, totalValue: Math.round(rows.reduce((s, r) => s + r.value, 0) * 100) / 100 };
+}
+
+// 20. write-off register picks only WOFF-tagged negative adjustments, newest first, with totals
+{
+  const movs = [
+    { type: 'purchase', qty: 100, amount: 1000, date: '2026-07-01', itemId: 'A', referenceNo: 'PUR/1' },
+    { type: 'adjustment', qty: -5, amount: 55, date: '2026-07-02', itemId: 'A', referenceNo: 'WOFF:expiry', batchNo: 'B1', expiryDate: '2026-07-01' },
+    { type: 'adjustment', qty: -3, amount: 33, date: '2026-07-04', itemId: 'A', referenceNo: 'WOFF:damage' },
+    { type: 'adjustment', qty: 10, amount: 0, date: '2026-07-03', itemId: 'A', referenceNo: 'ADJ' }, // positive adj — not a write-off
+    { type: 'sale', qty: 2, amount: 40, date: '2026-07-03', itemId: 'A', referenceNo: 'SL/1' }, // sale — excluded
+  ];
+  const reg = buildWriteoffRegister(movs);
+  ok(reg.rows.length === 2, 'only 2 WOFF-tagged negative adjustments');
+  ok(reg.rows[0].reason === 'damage' && reg.rows[1].reason === 'expiry', 'newest first (damage 07-04 before expiry 07-02)');
+  ok(reg.totalQty === 8 && reg.totalValue === 88, 'totals qty 8 / value 88');
+}
+
+console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

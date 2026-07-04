@@ -36,6 +36,28 @@ export function buildCounterSummary(
   return { count, total, tenders };
 }
 
+// Expiry/damage write-offs are negative stock adjustments tagged referenceNo 'WOFF:<reason>'.
+export const WRITEOFF_REF_PREFIX = 'WOFF:';
+export interface WriteoffMovement { type: string; qty: number; amount?: number; referenceNo?: string; date: string; itemId: string; batchNo?: string; expiryDate?: string; narration?: string; }
+export interface WriteoffRow { itemId: string; date: string; qty: number; reason: string; value: number; batchNo?: string; expiryDate?: string; narration?: string; }
+export interface WriteoffRegister { rows: WriteoffRow[]; totalQty: number; totalValue: number; }
+
+/** All expiry/damage/shrinkage write-offs (negative adjustments tagged WOFF:), newest first. */
+export function buildWriteoffRegister(movements: ReadonlyArray<WriteoffMovement>): WriteoffRegister {
+  const rows: WriteoffRow[] = movements
+    .filter(m => m.type === 'adjustment' && m.qty < 0 && (m.referenceNo || '').startsWith(WRITEOFF_REF_PREFIX))
+    .map(m => ({
+      itemId: m.itemId, date: m.date, qty: Math.abs(m.qty), reason: (m.referenceNo || '').slice(WRITEOFF_REF_PREFIX.length) || 'other',
+      value: Math.abs(m.amount || 0), batchNo: m.batchNo, expiryDate: m.expiryDate, narration: m.narration,
+    }))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  return {
+    rows,
+    totalQty: Math.round(rows.reduce((s, r) => s + r.qty, 0) * 100) / 100,
+    totalValue: Math.round(rows.reduce((s, r) => s + r.value, 0) * 100) / 100,
+  };
+}
+
 export interface OutstandingRow { memberId: string; memberName: string; outstanding: number; ageing: Ageing; }
 export interface OutstandingRegister { rows: OutstandingRow[]; totalOutstanding: number; totalAgeing: Ageing; }
 

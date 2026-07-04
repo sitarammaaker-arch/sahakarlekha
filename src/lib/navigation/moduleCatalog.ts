@@ -15,7 +15,7 @@ import {
   Scale, ArrowLeftRight, TrendingUp, FileSpreadsheet, BarChart3, Clock, Percent, TrendingDown, Receipt, Warehouse,
   Package, PiggyBank, FileJson, Hash, Landmark, ScrollText, BookMarked, ShieldCheck, Users2, FileCheck, Shield,
   Coins, Trash2, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks, HardHat,
-  MessageSquareWarning, Car, Wrench, Building, ScanBarcode, Tags,
+  MessageSquareWarning, Car, Wrench, Building, ScanBarcode, Tags, PackageX,
 } from 'lucide-react';
 import type { Capability, NavDomain, Role } from './capabilities';
 
@@ -69,6 +69,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'retailCounter', titleKey: 'retailCounter', icon: ScanBarcode,       route: '/retail-counter', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 0 },
   { id: 'priceLists',    titleKey: 'priceLists',    icon: Tags,              route: '/price-lists',    domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 1 },
   { id: 'memberCredit',  titleKey: 'memberCredit',  icon: HandCoins,         route: '/member-credit',  domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2 },
+  { id: 'expiryDamage',  titleKey: 'expiryDamage',  icon: PackageX,          route: '/expiry-damage',  domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2.5 },
   { id: 'patronage',     titleKey: 'patronage',     icon: Coins,             route: '/patronage',      domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 3 },
   { id: 'consumerDividend', titleKey: 'consumerDividend', icon: Landmark, route: '/consumer-dividend', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 4 },
   { id: 'consumerRegisters', titleKey: 'consumerRegisters', icon: FileSpreadsheet, route: '/consumer-registers', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant', 'viewer'], order: 5 },
