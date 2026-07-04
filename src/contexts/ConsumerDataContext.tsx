@@ -20,9 +20,9 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
 import { resolveItemPrice } from '@/lib/consumer/pricing';
-import { resolveMemberReceivableAccountId, resolvePatronageDistributionAccountId, resolveRebatePayableAccountId, MEMBER_RECEIVABLE_SUBTYPE, PATRONAGE_DISTRIBUTION_SUBTYPE, REBATE_PAYABLE_SUBTYPE } from '@/lib/consumer/accounts';
+import { resolveMemberReceivableAccountId, resolvePatronageDistributionAccountId, resolveRebatePayableAccountId, resolveDividendDistributionAccountId, resolveDividendPayableAccountId, MEMBER_RECEIVABLE_SUBTYPE, PATRONAGE_DISTRIBUTION_SUBTYPE, REBATE_PAYABLE_SUBTYPE, DIVIDEND_DISTRIBUTION_SUBTYPE, DIVIDEND_PAYABLE_SUBTYPE } from '@/lib/consumer/accounts';
 import { memberOutstanding, memberAgeing, type Ageing, type RecoveryRow } from '@/lib/consumer/credit';
-import { computePatronageLines, patronageTotal, patronageLegs } from '@/lib/consumer/patronage';
+import { computePatronageLines, computeDividendLines, patronageTotal, patronageLegs } from '@/lib/consumer/patronage';
 import { getBankAccountIds } from '@/lib/storage';
 import type { ConsumerPrice, ConsumerPriceTier, Voucher, PatronageRun } from '@/types';
 
@@ -58,6 +58,8 @@ interface ConsumerDataContextValue {
   patronageRuns: PatronageRun[];
   /** Preview + create a draft run: rebate = ratePct% of each active member's purchases in [from,to]. */
   createPatronageRun: (args: { from: string; to: string; ratePct: number; fyLabel?: string }) => PatronageRun | null;
+  /** Preview + create a draft DIVIDEND run: ratePct% of each active member's paid-up share capital. */
+  createDividendRun: (args: { ratePct: number; fyLabel?: string }) => PatronageRun | null;
   /** Approve (resolution no. mandatory) → posts Dr patronage-distribution / Cr member-rebate-payable. */
   approvePatronageRun: (args: { runId: string; resolutionNo: string; resolutionDate?: string }) => PatronageRun | null;
   /** Pay out an approved run: Dr rebate-payable / Cr Cash|Bank (clamped to outstanding). */
@@ -148,11 +150,15 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const needRecv = resolveMemberReceivableAccountId(accounts) === null;
     const needDist = resolvePatronageDistributionAccountId(accounts) === null;
     const needPay = resolveRebatePayableAccountId(accounts) === null;
-    if (!needRecv && !needDist && !needPay) { seededRef.current = true; return; }
+    const needDivDist = resolveDividendDistributionAccountId(accounts) === null;
+    const needDivPay = resolveDividendPayableAccountId(accounts) === null;
+    if (!needRecv && !needDist && !needPay && !needDivDist && !needDivPay) { seededRef.current = true; return; }
     seededRef.current = true; // attempt once per mount
     if (needRecv) addAccount({ name: 'Member Purchase Receivable', nameHi: 'सदस्य खरीद प्राप्य', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300', subtype: MEMBER_RECEIVABLE_SUBTYPE });
     if (needDist) addAccount({ name: 'Patronage Rebate Distribution', nameHi: 'संरक्षण रिबेट वितरण', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: PATRONAGE_DISTRIBUTION_SUBTYPE });
     if (needPay) addAccount({ name: 'Member Rebate Payable', nameHi: 'देय सदस्य रिबेट', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: REBATE_PAYABLE_SUBTYPE });
+    if (needDivDist) addAccount({ name: 'Dividend Distribution', nameHi: 'लाभांश वितरण', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: DIVIDEND_DISTRIBUTION_SUBTYPE });
+    if (needDivPay) addAccount({ name: 'Dividend Payable', nameHi: 'देय लाभांश', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: DIVIDEND_PAYABLE_SUBTYPE });
   }, [society?.societyType, society?.fyLocked, accounts, addAccount]);
 
   const memberReceivableAccountId = resolveMemberReceivableAccountId(accounts);
@@ -226,19 +232,33 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const lines = computePatronageLines(sales, members, { from: args.from, to: args.to, ratePct: args.ratePct });
     if (lines.length === 0) { toastRef.current({ title: 'कोई राशि नहीं', description: 'इस अवधि में किसी सक्रिय सदस्य की खरीद नहीं।', variant: 'destructive' }); return null; }
     const total = patronageTotal(lines);
-    const run: PatronageRun = { id: crypto.randomUUID(), from: args.from, to: args.to, ratePct: args.ratePct, fyLabel: args.fyLabel, resolutionNo: '', lines, total, status: 'draft', amountPaid: 0, createdAt: new Date().toISOString() };
+    const run: PatronageRun = { id: crypto.randomUUID(), kind: 'patronage', from: args.from, to: args.to, ratePct: args.ratePct, fyLabel: args.fyLabel, resolutionNo: '', lines, total, status: 'draft', amountPaid: 0, createdAt: new Date().toISOString() };
     commitPatronageRun(run, null);
     toastRef.current({ title: 'रिबेट रन बनाया (draft)', description: `${lines.length} सदस्य · कुल ₹${total.toLocaleString('en-IN')}` });
     return run;
   }, [sales, members, guardFYLocked, commitPatronageRun]);
+
+  const createDividendRun = useCallback((args: { ratePct: number; fyLabel?: string }): PatronageRun | null => {
+    if (guardFYLocked()) return null;
+    if (!(args.ratePct > 0)) { toastRef.current({ title: 'दर ज़रूरी', description: 'धनात्मक लाभांश % डालें।', variant: 'destructive' }); return null; }
+    const lines = computeDividendLines(members, args.ratePct);
+    if (lines.length === 0) { toastRef.current({ title: 'कोई राशि नहीं', description: 'किसी सक्रिय सदस्य की शेयर पूंजी नहीं।', variant: 'destructive' }); return null; }
+    const total = patronageTotal(lines);
+    const run: PatronageRun = { id: crypto.randomUUID(), kind: 'dividend', from: '', to: '', ratePct: args.ratePct, fyLabel: args.fyLabel, resolutionNo: '', lines, total, status: 'draft', amountPaid: 0, createdAt: new Date().toISOString() };
+    commitPatronageRun(run, null);
+    toastRef.current({ title: 'लाभांश रन बनाया (draft)', description: `${lines.length} सदस्य · कुल ₹${total.toLocaleString('en-IN')}` });
+    return run;
+  }, [members, guardFYLocked, commitPatronageRun]);
 
   const approvePatronageRun = useCallback((args: { runId: string; resolutionNo: string; resolutionDate?: string }): PatronageRun | null => {
     if (guardFYLocked()) return null;
     const cur = patronageRuns.find(r => r.id === args.runId);
     if (!cur || cur.status !== 'draft') { toastRef.current({ title: 'पहले से approved', variant: 'destructive' }); return null; }
     if (!args.resolutionNo || !args.resolutionNo.trim()) { toastRef.current({ title: 'प्रस्ताव संख्या आवश्यक', description: 'रिबेट वितरण के लिए सभा/बोर्ड प्रस्ताव संख्या ज़रूरी है।', variant: 'destructive', duration: 10000 }); return null; }
-    const distAcc = resolvePatronageDistributionAccountId(accounts);
-    const payAcc = resolveRebatePayableAccountId(accounts);
+    const isDiv = cur.kind === 'dividend';
+    const label = isDiv ? 'लाभांश' : 'संरक्षण रिबेट';
+    const distAcc = isDiv ? resolveDividendDistributionAccountId(accounts) : resolvePatronageDistributionAccountId(accounts);
+    const payAcc = isDiv ? resolveDividendPayableAccountId(accounts) : resolveRebatePayableAccountId(accounts);
     if (!distAcc || !payAcc) { toastRef.current({ title: 'खाते नहीं मिले', description: 'Distribution / payable ledger missing — reload once.', variant: 'destructive', duration: 12000 }); return null; }
     const legs = patronageLegs(cur.total, distAcc, payAcc);
     if (legs.length === 0) { toastRef.current({ title: 'पोस्ट नहीं हुआ', variant: 'destructive' }); return null; }
@@ -246,14 +266,14 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       type: 'journal', date: args.resolutionDate || new Date().toISOString().slice(0, 10),
       debitAccountId: distAcc, creditAccountId: payAcc, amount: cur.total,
       lines: legs.map(l => ({ id: crypto.randomUUID(), accountId: l.accountId, type: l.type, amount: l.amount })),
-      narration: `संरक्षण रिबेट वितरण — प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total} (${cur.lines.length} सदस्य)`,
-      refType: 'consumer.patronage', refId: cur.id,
+      narration: `${label} वितरण — प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total} (${cur.lines.length} सदस्य)`,
+      refType: isDiv ? 'consumer.dividend' : 'consumer.patronage', refId: cur.id,
       createdBy: user?.name || 'admin',
     } as Parameters<typeof addVoucher>[0]);
     if (!voucher?.id) return null;
     const next: PatronageRun = { ...cur, status: 'approved', resolutionNo: args.resolutionNo.trim(), resolutionDate: args.resolutionDate, voucherId: voucher.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
-    commitPatronageRun(next, cur, () => cancelVoucher(voucher.id, 'Patronage approval rolled back (cloud save failed)', user?.name || 'System'));
-    toastRef.current({ title: '✅ रिबेट approved', description: `प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total.toLocaleString('en-IN')}` });
+    commitPatronageRun(next, cur, () => cancelVoucher(voucher.id, `${label} approval rolled back (cloud save failed)`, user?.name || 'System'));
+    toastRef.current({ title: `✅ ${label} approved`, description: `प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total.toLocaleString('en-IN')}` });
     return next;
   }, [patronageRuns, accounts, addVoucher, cancelVoucher, guardFYLocked, commitPatronageRun, user]);
 
@@ -264,15 +284,16 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const outstandingAmt = +(cur.total - cur.amountPaid).toFixed(2);
     const amount = +Math.min(args.amount, outstandingAmt).toFixed(2);
     if (!(amount > 0)) { toastRef.current({ title: 'कुछ बकाया नहीं', variant: 'destructive' }); return null; }
-    const payAcc = resolveRebatePayableAccountId(accounts);
+    const isDiv = cur.kind === 'dividend';
+    const payAcc = isDiv ? resolveDividendPayableAccountId(accounts) : resolveRebatePayableAccountId(accounts);
     if (!payAcc) { toastRef.current({ title: 'देय खाता नहीं मिला', variant: 'destructive' }); return null; }
     const creditAcc = args.mode === 'bank' ? (args.bankAccountId || getBankAccountIds(accounts)[0] || '3302') : CASH_ACCOUNT;
     const voucher = addVoucher({
       type: 'payment', date: args.date,
       debitAccountId: payAcc, creditAccountId: creditAcc, amount,
       lines: [{ id: crypto.randomUUID(), accountId: payAcc, type: 'Dr', amount }, { id: crypto.randomUUID(), accountId: creditAcc, type: 'Cr', amount }],
-      narration: `संरक्षण रिबेट भुगतान — प्रस्ताव ${cur.resolutionNo}`,
-      refType: 'consumer.patronage.payment', refId: cur.id,
+      narration: `${isDiv ? 'लाभांश' : 'संरक्षण रिबेट'} भुगतान — प्रस्ताव ${cur.resolutionNo}`,
+      refType: isDiv ? 'consumer.dividend.payment' : 'consumer.patronage.payment', refId: cur.id,
       createdBy: user?.name || 'admin',
     } as Parameters<typeof addVoucher>[0]);
     if (!voucher?.id) return null;
@@ -297,7 +318,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       consumerPrices, addConsumerPrice, deleteConsumerPrice, resolvePrice,
       memberReceivableAccountId, memberRecoveries, recordMemberRecovery, deleteMemberRecovery,
       getMemberOutstanding, getMemberAgeing, setMemberCreditLimit,
-      patronageRuns, createPatronageRun, approvePatronageRun, recordPatronagePayment, deletePatronageRun,
+      patronageRuns, createPatronageRun, createDividendRun, approvePatronageRun, recordPatronagePayment, deletePatronageRun,
     }}>
       {children}
     </ConsumerDataContext.Provider>

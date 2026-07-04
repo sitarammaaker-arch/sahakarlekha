@@ -738,6 +738,8 @@ export type AccountSubtype =
   | 'member_receivable'   // consumer — member store-credit receivable control (not 3306, which is Rent Receivable)
   | 'patronage_distribution' // consumer — year-end patronage rebate appropriation (equity)
   | 'rebate_payable'      // consumer — member patronage rebate payable (liability)
+  | 'dividend_distribution' // consumer — dividend on share capital appropriation (equity)
+  | 'dividend_payable'    // consumer — member dividend payable (liability)
   | 'suspense';
 
 // ── Annual Review Report (Haryana Marketing Societies) classification tags ──
@@ -1204,10 +1206,11 @@ export interface PatronageLine {
 }
 export interface PatronageRun {
   id: string;
+  kind?: 'patronage' | 'dividend'; // default 'patronage' (rebate on purchases); 'dividend' = % of share capital
   fyLabel?: string;        // financial-year label (display)
-  from: string;            // purchase window start
+  from: string;            // purchase window start (patronage); dividend uses fyLabel only
   to: string;              // purchase window end
-  ratePct: number;         // rebate % of purchase value
+  ratePct: number;         // rebate % of purchase value, or dividend % of share capital
   resolutionNo: string;    // GOVERNANCE — mandatory at approval
   resolutionDate?: string;
   lines: PatronageLine[];

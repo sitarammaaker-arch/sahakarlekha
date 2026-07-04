@@ -37,6 +37,21 @@ export function computePatronageLines(
     .sort((a, b) => a.memberName.localeCompare(b.memberName));
 }
 
+/** Dividend lines: ratePct% of paid-up share capital of ACTIVE members. */
+export function computeDividendLines(
+  members: ReadonlyArray<{ id: string; name: string; shareCapital?: number; status?: string }>,
+  ratePct: number,
+): PatronageLine[] {
+  return members
+    .filter(m => !(m.status && m.status !== 'active'))
+    .map(m => {
+      const base = round2(m.shareCapital || 0);
+      return { memberId: m.id, memberName: m.name, base, amount: round2(base * (ratePct || 0) / 100) };
+    })
+    .filter(l => l.amount > 0)
+    .sort((a, b) => a.memberName.localeCompare(b.memberName));
+}
+
 export const patronageTotal = (lines: ReadonlyArray<PatronageLine>): number =>
   round2(lines.reduce((s, l) => s + (l.amount || 0), 0));
 

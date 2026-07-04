@@ -2358,3 +2358,5 @@ drop policy if exists "society_rw" on public.consumer_patronage_runs;
 create policy "society_rw" on public.consumer_patronage_runs for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+-- Consumer C7 — reuse the patronage runs table for share DIVIDEND too (kind discriminator).
+alter table consumer_patronage_runs add column if not exists kind text;
