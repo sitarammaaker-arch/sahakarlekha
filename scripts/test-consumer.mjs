@@ -202,5 +202,28 @@ const CSALES = [
   ok(reg.rows.length === 1 && reg.rows[0].memberId === 'M1' && reg.totalOutstanding === 300, 'only M1 has outstanding 300');
 }
 
-console.log(`\nConsumer pricing + credit + patronage + registers: ${pass} passed, ${fail} failed`);
+// ── Mirror: src/lib/consumer/patronage.ts computeDividendLines ──
+function computeDividendLines(members, ratePct) {
+  return members
+    .filter(m => !(m.status && m.status !== 'active'))
+    .map(m => { const base = round(m.shareCapital || 0); return { memberId: m.id, memberName: m.name, base, amount: round(base * (ratePct || 0) / 100) }; })
+    .filter(l => l.amount > 0)
+    .sort((a, b) => a.memberName.localeCompare(b.memberName));
+}
+
+// 19. dividend = ratePct% of paid-up share capital, active members only
+{
+  const dm = [
+    { id: 'M1', name: 'Asha', shareCapital: 5000, status: 'active' },
+    { id: 'M2', name: 'Bhola', shareCapital: 10000, status: 'active' },
+    { id: 'M3', name: 'Chand', shareCapital: 8000, status: 'inactive' }, // excluded
+    { id: 'M4', name: 'Devi', shareCapital: 0, status: 'active' },       // no capital → no line
+  ];
+  const lines = computeDividendLines(dm, 8);
+  ok(lines.length === 2, 'only 2 active members with share capital');
+  ok(lines.find(l => l.memberId === 'M1').amount === 400, 'Asha 8% of 5000 = 400');
+  ok(lines.find(l => l.memberId === 'M2').amount === 800, 'Bhola 8% of 10000 = 800');
+}
+
+console.log(`\nConsumer pricing + credit + patronage + registers + dividend: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

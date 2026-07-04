@@ -38,7 +38,7 @@ const Patronage: React.FC = () => {
   const [payMode, setPayMode] = useState<'cash' | 'bank'>('cash');
   const [payDate, setPayDate] = useState(TODAY());
 
-  const runs = useMemo(() => patronageRuns.filter(r => !r.isDeleted).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)), [patronageRuns]);
+  const runs = useMemo(() => patronageRuns.filter(r => !r.isDeleted && r.kind !== 'dividend').sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)), [patronageRuns]);
   const selected = selectedId ? runs.find(r => r.id === selectedId) : undefined;
   const netProfit = useMemo(() => { try { return getProfitLoss().netProfit; } catch { return 0; } }, [getProfitLoss]);
 

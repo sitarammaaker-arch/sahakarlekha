@@ -19,6 +19,8 @@ const resolveBy = (accounts: ReadonlyArray<Acc>, subtype: string, nameHints: str
 export const MEMBER_RECEIVABLE_SUBTYPE = 'member_receivable';
 export const PATRONAGE_DISTRIBUTION_SUBTYPE = 'patronage_distribution';
 export const REBATE_PAYABLE_SUBTYPE = 'rebate_payable';
+export const DIVIDEND_DISTRIBUTION_SUBTYPE = 'dividend_distribution';
+export const DIVIDEND_PAYABLE_SUBTYPE = 'dividend_payable';
 
 export function resolveMemberReceivableAccountId(accounts: ReadonlyArray<Acc>): string | null {
   return resolveBy(accounts, MEMBER_RECEIVABLE_SUBTYPE, ['member purchase receivable', 'सदस्य खरीद प्राप्य', 'member receivable']);
@@ -30,4 +32,12 @@ export function resolvePatronageDistributionAccountId(accounts: ReadonlyArray<Ac
 
 export function resolveRebatePayableAccountId(accounts: ReadonlyArray<Acc>): string | null {
   return resolveBy(accounts, REBATE_PAYABLE_SUBTYPE, ['member rebate payable', 'देय सदस्य रिबेट', 'rebate payable']);
+}
+
+export function resolveDividendDistributionAccountId(accounts: ReadonlyArray<Acc>): string | null {
+  return resolveBy(accounts, DIVIDEND_DISTRIBUTION_SUBTYPE, ['dividend distribution', 'लाभांश वितरण']);
+}
+
+export function resolveDividendPayableAccountId(accounts: ReadonlyArray<Acc>): string | null {
+  return resolveBy(accounts, DIVIDEND_PAYABLE_SUBTYPE, ['dividend payable', 'देय लाभांश']);
 }
