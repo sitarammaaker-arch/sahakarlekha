@@ -134,6 +134,7 @@ const RetailCounter = lazyWithRetry(() => import("./pages/consumer/RetailCounter
 const PriceLists = lazyWithRetry(() => import("./pages/consumer/PriceLists"));
 const MemberCredit = lazyWithRetry(() => import("./pages/consumer/MemberCredit"));
 const Patronage = lazyWithRetry(() => import("./pages/consumer/Patronage"));
+const ConsumerRegisters = lazyWithRetry(() => import("./pages/consumer/ConsumerRegisters"));
 const FlatsRegister = lazyWithRetry(() => import("./pages/FlatsRegister"));
 const MaintenanceBilling = lazyWithRetry(() => import("./pages/MaintenanceBilling"));
 const ChargeHeads = lazyWithRetry(() => import("./pages/ChargeHeads"));
@@ -343,6 +344,7 @@ const AppRoutes = () => {
       <Route path="/price-lists" element={<ProtectedRoute><PriceLists /></ProtectedRoute>} />
       <Route path="/member-credit" element={<ProtectedRoute><MemberCredit /></ProtectedRoute>} />
       <Route path="/patronage" element={<ProtectedRoute><Patronage /></ProtectedRoute>} />
+      <Route path="/consumer-registers" element={<ProtectedRoute><ConsumerRegisters /></ProtectedRoute>} />
       <Route path="/eway-bill" element={<ProtectedRoute><EWayBill /></ProtectedRoute>} />
       <Route path="/kcc-loan" element={<ProtectedRoute><KccLoan /></ProtectedRoute>} />
       <Route path="/election-module" element={<ProtectedRoute><ElectionModule /></ProtectedRoute>} />

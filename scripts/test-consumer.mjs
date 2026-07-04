@@ -153,5 +153,54 @@ const PMEMBERS = [
 // 16. zero rate → no lines
 ok(computePatronageLines(PSALES, PMEMBERS, { from: '2025-04-01', to: '2026-03-31', ratePct: 0 }).length === 0, 'rate 0 → no rebate lines');
 
-console.log(`\nConsumer pricing + credit + patronage: ${pass} passed, ${fail} failed`);
+// ── Mirror: src/lib/consumer/registers.ts ──
+function buildCounterSummary(sales, from, to) {
+  const tenders = { cash: { amount: 0, count: 0 }, bank: { amount: 0, count: 0 }, credit: { amount: 0, count: 0 } };
+  let count = 0, total = 0;
+  for (const s of sales) {
+    if (s.date < from || s.date > to) continue;
+    const v = saleTotal(s);
+    const t = (s.paymentMode === 'cash' || s.paymentMode === 'bank' || s.paymentMode === 'credit') ? s.paymentMode : 'cash';
+    tenders[t].amount = Math.round((tenders[t].amount + v) * 100) / 100; tenders[t].count += 1;
+    total = Math.round((total + v) * 100) / 100; count += 1;
+  }
+  return { count, total, tenders };
+}
+function buildOutstandingRegister(members, sales, recoveries, asOf) {
+  const rows = [];
+  for (const m of members) {
+    const outstanding = memberOutstanding(sales, recoveries, m.id);
+    if (outstanding <= 0) continue;
+    rows.push({ memberId: m.id, memberName: m.name, outstanding, ageing: memberAgeing(sales, recoveries, m.id, asOf) });
+  }
+  rows.sort((a, b) => b.outstanding - a.outstanding);
+  return { rows, totalOutstanding: Math.round(rows.reduce((s, r) => s + r.outstanding, 0) * 100) / 100 };
+}
+
+const CSALES = [
+  { paymentMode: 'cash',   grandTotal: 100, netAmount: 100, date: '2026-07-04' },
+  { paymentMode: 'bank',   grandTotal: 250, netAmount: 250, date: '2026-07-04' },
+  { paymentMode: 'credit', grandTotal: 300, netAmount: 300, date: '2026-07-04', memberId: 'M1' },
+  { paymentMode: 'cash',   grandTotal: 999, netAmount: 999, date: '2026-07-01' }, // outside the day
+];
+
+// 17. counter Z-report splits by tender within the window
+{
+  const sum = buildCounterSummary(CSALES, '2026-07-04', '2026-07-04');
+  ok(sum.count === 3 && sum.total === 650, 'day total 3 bills / 650 (2026-07-01 excluded)');
+  ok(sum.tenders.cash.amount === 100 && sum.tenders.bank.amount === 250 && sum.tenders.credit.amount === 300, 'per-tender split correct');
+}
+
+// 18. outstanding register lists only members with dues, sorted desc
+{
+  const reg = buildOutstandingRegister(
+    [{ id: 'M1', name: 'Asha', status: 'active' }, { id: 'M2', name: 'Bhola', status: 'active' }],
+    [{ id: 'x', memberId: 'M1', paymentMode: 'credit', grandTotal: 300, netAmount: 300, date: '2026-07-04' }],
+    [],
+    '2026-07-04',
+  );
+  ok(reg.rows.length === 1 && reg.rows[0].memberId === 'M1' && reg.totalOutstanding === 300, 'only M1 has outstanding 300');
+}
+
+console.log(`\nConsumer pricing + credit + patronage + registers: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
