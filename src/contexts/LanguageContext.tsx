@@ -89,7 +89,7 @@ export const translations: Translations = {
   buildings: { hi: 'भवन / विंग', en: 'Buildings / Wings' },
   navMarketing: { hi: 'विपणन प्रबंधन', en: 'Marketing' },
   procurementMasters: { hi: 'प्रोक्योरमेंट मास्टर', en: 'Procurement Masters' },
-  agencyReceipts: { hi: 'HAFED रसीद', en: 'HAFED Receipt' },
+  agencyReceipts: { hi: 'एजेंसी रसीद', en: 'Agency Receipt' },
   procurementRegisters: { hi: 'प्रोक्योरमेंट रजिस्टर', en: 'Procurement Registers' },
   transport: { hi: 'परिवहन', en: 'Transport' },
   navDairy: { hi: 'दुग्ध प्रबंधन', en: 'Dairy' },

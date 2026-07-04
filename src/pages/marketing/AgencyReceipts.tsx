@@ -12,7 +12,8 @@ import { getBankAccountIds } from '@/lib/storage';
 import { Landmark, Trash2 } from 'lucide-react';
 
 /**
- * HAFED / Agency Receipt (Marketing M3c) — records MSP reimbursement received from the agency:
+ * Agency Receipt (Marketing M3c) — records MSP reimbursement received from the procurement agency
+ * (HAFED / MARKFED / RAJFED / NAFED / FCI etc. — the society defines its own agency in the master):
  * Dr Bank|Cash / Cr 3308 MSP Receivable. Society-level bulk (one receipt clears part of the total
  * 3308 outstanding). The voucher is the record; outstanding is derived from vouchers.
  */
@@ -53,7 +54,7 @@ export default function AgencyReceipts() {
           <Landmark className="h-6 w-6 text-primary" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">{hi ? 'HAFED / एजेंसी रसीद' : 'HAFED / Agency Receipt'}</h1>
+          <h1 className="text-2xl font-bold">{hi ? 'एजेंसी रसीद' : 'Agency Receipt'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'एजेंसी से MSP प्रतिपूर्ति दर्ज करें (Dr बैंक / Cr MSP प्राप्य)' : 'Record MSP reimbursement from the agency (Dr Bank / Cr MSP Receivable)'}</p>
         </div>
       </div>

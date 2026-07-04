@@ -46,7 +46,7 @@ const FEATURES = [
 ];
 
 const SOCIETY_TYPES = [
-  { icon: Wheat, name: 'Marketing Society', nameHi: 'विपणन समिति', desc: 'Hafed/FCI agent, MSP procurement' },
+  { icon: Wheat, name: 'Marketing Society', nameHi: 'विपणन समिति', desc: 'MSP procurement, agency commission' },
   { icon: Landmark, name: 'PACS', nameHi: 'प्राथमिक कृषि ऋण समिति', desc: 'Member loans, DCCB/NABARD' },
   { icon: ShoppingCart, name: 'Consumer Store', nameHi: 'उपभोक्ता भंडार', desc: 'Retail operations, inventory' },
   { icon: Milk, name: 'Dairy Cooperative', nameHi: 'दुग्ध सहकारी', desc: 'Milk collection, BMC, cattle feed' },

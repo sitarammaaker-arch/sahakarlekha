@@ -13,7 +13,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Wheat, Plus, Sprout, Pencil, Trash2, CalendarDays, Building2, IndianRupee, Percent } from 'lucide-react';
 
-const AGENCY_KINDS = ['FCI', 'HAFED', 'MARKFED', 'NAFED', 'state'];
+// Generic, national categories (every state has its own apex federation — HAFED/MARKFED/RAJFED/PCF…);
+// the society enters its specific agency NAME and picks a category here.
+const AGENCY_KINDS = ['FCI', 'NAFED', 'NCCF', 'State Federation', 'State Civil Supplies', 'Other'];
 
 /**
  * Procurement Masters (Marketing M1a + M1b) — Crop, Variety, Season, Agency & Centre master data.
@@ -300,7 +302,7 @@ export default function ProcurementMasters() {
               <Button size="sm" className="gap-1" onClick={openAddAgency}><Plus className="h-4 w-4" />{hi ? 'एजेंसी' : 'Agency'}</Button>
             </CardHeader>
             <CardContent className="space-y-2">
-              {agencies.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'अभी कोई एजेंसी नहीं। उदा. HAFED, FCI।' : 'No agencies yet. e.g. HAFED, FCI.'}</p>}
+              {agencies.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'अभी कोई एजेंसी नहीं। अपने राज्य की एजेंसी जोड़ें — उदा. FCI, NAFED, या राज्य फेडरेशन (HAFED/MARKFED/RAJFED…)।' : 'No agencies yet. Add your state’s agency — e.g. FCI, NAFED, or your State Federation (HAFED/MARKFED/RAJFED…).'}</p>}
               {agencies.map(a => {
                 const cs = centres.filter(c => c.agencyId === a.id);
                 return (
@@ -471,7 +473,7 @@ export default function ProcurementMasters() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{editAgId ? (hi ? 'एजेंसी संपादित करें' : 'Edit Agency') : (hi ? 'नई एजेंसी' : 'Add Agency')}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5"><Label>{hi ? 'नाम (English)' : 'Name (English)'} *</Label><Input value={aName} onChange={e => setAName(e.target.value)} placeholder="HAFED" /></div>
+            <div className="space-y-1.5"><Label>{hi ? 'नाम (English)' : 'Name (English)'} *</Label><Input value={aName} onChange={e => setAName(e.target.value)} placeholder="HAFED / MARKFED / RAJFED / NAFED…" /></div>
             <div className="space-y-1.5"><Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label><Input value={aNameHi} onChange={e => setANameHi(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} /></div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5"><Label>{hi ? 'कोड' : 'Code'}</Label><Input value={aCode} onChange={e => setACode(e.target.value)} placeholder="HFD" maxLength={8} /></div>
