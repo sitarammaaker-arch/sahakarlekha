@@ -716,7 +716,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     const amt = +Number(data.amount).toFixed(2);
     if (!(amt > 0)) { toastRef.current({ title: 'राशि डालें', variant: 'destructive' }); return sentinel; }
     if (!accounts.some(a => a.id === MSP_RECEIVABLE_ACCOUNT)) {
-      toastRef.current({ title: 'MSP Receivable खाता नहीं', description: 'इस समिति के चार्ट में 3308 MSP Receivable नहीं है — HAFED रसीद पोस्ट नहीं हो सकती।', variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: 'MSP Receivable खाता नहीं', description: 'इस समिति के चार्ट में 3308 MSP Receivable नहीं है — एजेंसी रसीद पोस्ट नहीं हो सकती।', variant: 'destructive', duration: 10000 });
       return sentinel;
     }
     const drAcc = data.mode === 'bank' ? (data.bankAccountId || '3302') : '3301';
@@ -724,7 +724,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       type: 'receipt', date: data.date,
       debitAccountId: drAcc, creditAccountId: MSP_RECEIVABLE_ACCOUNT, amount: amt,
       lines: [{ id: crypto.randomUUID(), accountId: drAcc, type: 'Dr', amount: amt }, { id: crypto.randomUUID(), accountId: MSP_RECEIVABLE_ACCOUNT, type: 'Cr', amount: amt }],
-      narration: `HAFED/एजेंसी से MSP प्राप्ति${data.note ? ` — ${data.note}` : ''}`,
+      narration: `एजेंसी से MSP प्राप्ति${data.note ? ` — ${data.note}` : ''}`,
       refType: 'procurement.agency.receipt',
       createdBy: user?.name || 'admin',
     } as Parameters<typeof addVoucher>[0]);
@@ -735,7 +735,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
 
   const deleteAgencyReceipt = useCallback((voucherId: string) => {
     if (guardFYLocked()) return;
-    cancelVoucher(voucherId, 'HAFED receipt reversed', user?.name || 'System');
+    cancelVoucher(voucherId, 'Agency receipt reversed', user?.name || 'System');
   }, [cancelVoucher, user]);
 
   // ── Procurement commission accrual (M3d) ──────────────────────────────────────────

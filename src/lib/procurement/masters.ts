@@ -14,7 +14,7 @@ export interface Season extends BaseEntity {
 export interface Agency extends BaseEntity {
   name: string;
   code: string;
-  kind: string;            // FCI | HAFED | MARKFED | state
+  kind: string;            // category: FCI | NAFED | NCCF | State Federation | State Civil Supplies | Other
   nameHi?: string;         // Hindi label; optional, additive
   commissionRate?: number; // % of procurement value the society earns as commission (M3d); optional
 }
