@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
+import { useConsumerData } from '@/contexts/ConsumerDataContext';
 import { computeStockMap } from '@/lib/stockUtils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,7 +33,8 @@ type CounterTender = Extract<PaymentMode, 'cash' | 'bank'>;
 const RetailCounter: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { sales, stockItems, stockMovements, customers, addSale, society } = useData();
+  const { sales, stockItems, stockMovements, customers, members, addSale, society } = useData();
+  const { resolvePrice } = useConsumerData();
 
   const { toast } = useToast();
 
@@ -43,12 +45,30 @@ const RetailCounter: React.FC = () => {
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [tender, setTender] = useState<CounterTender>('cash');
   const [customerId, setCustomerId] = useState('');
+  const [memberId, setMemberId] = useState('');
   const [query, setQuery] = useState('');
   const [lastSaleNo, setLastSaleNo] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const focusSearch = useCallback(() => setTimeout(() => searchRef.current?.focus(), 0), []);
   useEffect(() => { focusSearch(); }, [focusSearch]);
+
+  // Member selected → member tier price; else base retail (saleRate).
+  const priceFor = useCallback(
+    (si: { id: string; saleRate: number }) => memberId ? resolvePrice(si, 'member') : (si.saleRate || 0),
+    [memberId, resolvePrice],
+  );
+
+  // Re-price the whole cart when the member is changed (member on → member rates, off → retail).
+  useEffect(() => {
+    setCart(prev => prev.map(i => {
+      const si = stockItems.find(s => s.id === i.itemId);
+      if (!si) return i;
+      const r = memberId ? resolvePrice(si, 'member') : (si.saleRate || 0);
+      return { ...i, rate: r, amount: +(i.qty * r).toFixed(2) };
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memberId]);
 
   // ── Derived total (v1 = final-price billing: no separate GST/discount line;
   //    full GST tax-invoices are done on the Sale Management screen) ───────────
@@ -78,18 +98,19 @@ const RetailCounter: React.FC = () => {
           ? { ...i, qty: i.qty + 1, amount: +((i.qty + 1) * i.rate).toFixed(2) }
           : i);
       }
+      const rate = priceFor(match);
       return [...prev, {
         itemId: match.id,
         itemName: hi ? (match.nameHi || match.name) : match.name,
         unit: match.unit,
         qty: 1,
-        rate: match.saleRate,
-        amount: +match.saleRate.toFixed(2),
+        rate,
+        amount: +rate.toFixed(2),
       }];
     });
     setQuery('');
     focusSearch();
-  }, [query, stockItems, hi, toast, focusSearch]);
+  }, [query, stockItems, hi, toast, focusSearch, priceFor]);
 
   const setQty = (itemId: string, qty: number) =>
     setCart(prev => prev.map(i => i.itemId === itemId
@@ -144,12 +165,15 @@ const RetailCounter: React.FC = () => {
     }
 
     const cus = customerId ? customers.find(c => c.id === customerId) : undefined;
+    const mem = memberId ? members.find(m => m.id === memberId) : undefined;
+    const buyerName = mem?.name || cus?.name || (hi ? 'नकद ग्राहक' : 'Cash Customer');
     try {
       const newSale = addSale({
         date: TODAY(),
-        customerName: cus?.name || (hi ? 'नकद ग्राहक' : 'Cash Customer'),
-        customerPhone: cus?.phone || undefined,
+        customerName: buyerName,
+        customerPhone: mem?.phone || cus?.phone || undefined,
         customerId: customerId || undefined,
+        memberId: memberId || undefined,
         items: valid,
         totalAmount: total,
         discount: 0,
@@ -158,12 +182,13 @@ const RetailCounter: React.FC = () => {
         cgstAmount: 0, sgstAmount: 0, igstAmount: 0,
         taxAmount: 0, grandTotal: total,
         paymentMode: tender,
-        narration: hi ? 'रिटेल काउंटर बिक्री' : 'Retail counter sale',
+        narration: mem ? (hi ? `रिटेल काउंटर बिक्री — सदस्य ${mem.memberId}` : `Retail counter sale — member ${mem.memberId}`) : (hi ? 'रिटेल काउंटर बिक्री' : 'Retail counter sale'),
         createdBy: user?.name ?? 'Counter',
       });
       setLastSaleNo(newSale.saleNo);
       setCart([]);
       setCustomerId('');
+      setMemberId('');
       toast({ title: hi ? `बिक्री दर्ज: ${newSale.saleNo}` : `Sale posted: ${newSale.saleNo}` });
       focusSearch();
     } catch (err) {
@@ -174,7 +199,7 @@ const RetailCounter: React.FC = () => {
         duration: 10000,
       });
     }
-  }, [cart, stockMap, stockItems, customerId, customers, addSale, total, tender, user, hi, toast, focusSearch]);
+  }, [cart, stockMap, stockItems, customerId, customers, memberId, members, addSale, total, tender, user, hi, toast, focusSearch]);
 
   // F2 = complete sale (keyboard-first).
   useEffect(() => {
@@ -354,6 +379,22 @@ const RetailCounter: React.FC = () => {
               <div className="flex justify-between items-baseline border-b pb-3">
                 <span className="text-sm text-gray-500">{hi ? 'कुल देय' : 'Amount Due'}</span>
                 <span className="text-3xl font-bold text-emerald-700">{fmt(total)}</span>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground flex items-center gap-2">
+                  {hi ? 'सदस्य (वैकल्पिक)' : 'Member (optional)'}
+                  {memberId && <Badge variant="outline" className="border-emerald-500 text-emerald-700 bg-emerald-50 text-[10px]">{hi ? 'सदस्य दर लागू' : 'member price'}</Badge>}
+                </Label>
+                <Select value={memberId || '__none__'} onValueChange={v => setMemberId(v === '__none__' ? '' : v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">{hi ? '— सदस्य नहीं —' : '— No member —'}</SelectItem>
+                    {members.filter(m => m.status === 'active').map(m => (
+                      <SelectItem key={m.id} value={m.id}>{m.memberId} · {m.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-1">

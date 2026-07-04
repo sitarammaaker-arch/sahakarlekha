@@ -1162,11 +1162,29 @@ export interface Sale {
   paymentMode: PaymentMode;
   bankAccountId?: string;  // when paymentMode = 'bank', which bank account to credit
   customerId?: string; // linked registered customer
+  memberId?: string;   // Consumer C2 — member buyer at the retail counter (member pricing + future patronage)
   voucherId?: string;
   gstVoucherIds?: string[]; // auto-created GST output journal IDs
   narration: string;
   createdAt: string;
   createdBy: string;
+}
+
+// ── Consumer store — multi-tier pricing (C2) ─────────────────────────────────
+// Retail price stays on StockItem.saleRate (base, single source of truth). A
+// ConsumerPrice row holds only a TIER OVERRIDE, effective-dated (latest
+// effectiveFrom ≤ date wins). Schema supports all tiers; C2 UI exposes 'member'.
+export type ConsumerPriceTier = 'member' | 'wholesale' | 'promo';
+
+export interface ConsumerPrice {
+  id: string;
+  itemId: string;
+  tier: ConsumerPriceTier;
+  price: number;
+  effectiveFrom: string;   // ISO date; the price applies on/after this date
+  isDeleted?: boolean;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 // ── Purchase ──────────────────────────────────────────────────────────────────

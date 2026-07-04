@@ -1,4 +1,4 @@
-import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun } from '@/types';
+import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun, ConsumerPrice } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement, Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
 import type { Transporter } from '@/lib/marketing/transport';
 
@@ -83,6 +83,7 @@ const KEYS = {
   procurementQualitySpecs: 'sahayata_procurement_quality_specs',
   procurementBardanaTypes: 'sahayata_procurement_bardana_types',
   marketingTransporters: 'sahayata_marketing_transporters',
+  consumerPrices: 'sahayata_consumer_prices',
   housingFlats: 'sahayata_housing_flats',
   maintenanceBills: 'sahayata_maintenance_bills',
   housingChargeHeads: 'sahayata_housing_charge_heads',
@@ -809,6 +810,8 @@ export const getProcurementCentres = (): ProcurementCentre[] => get(KEYS.procure
 export const setProcurementCentres = (c: ProcurementCentre[]): void => set(KEYS.procurementCentres, c);
 export const getProcurementMspRates = (): MSPRate[] => get(KEYS.procurementMspRates, []);
 export const setProcurementMspRates = (r: MSPRate[]): void => set(KEYS.procurementMspRates, r);
+export const getConsumerPrices = (): ConsumerPrice[] => get(KEYS.consumerPrices, []);
+export const setConsumerPrices = (p: ConsumerPrice[]): void => set(KEYS.consumerPrices, p);
 export const getProcurementDeductionRules = (): DeductionRule[] => get(KEYS.procurementDeductionRules, []);
 export const setProcurementDeductionRules = (r: DeductionRule[]): void => set(KEYS.procurementDeductionRules, r);
 export const getProcurementQualitySpecs = (): QualitySpec[] => get(KEYS.procurementQualitySpecs, []);
