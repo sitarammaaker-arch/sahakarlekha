@@ -2328,3 +2328,33 @@ alter table sales add column if not exists "memberId" text;
 -- control account is created at runtime via addAccount (no table); recoveries are tagged
 -- vouchers (refType 'consumer.member.recovery'); per-member outstanding is derived.
 alter table members add column if not exists "creditLimit" numeric;
+
+-- ── Consumer C4 — patronage rebate ───────────────────────────────────────────
+-- Year-end member rebate on purchases (draft → approved, resolution-gated). The
+-- distribution/payable accounts are created at runtime via addAccount (no table). RLS bundled.
+-- ("from"/"to" are quoted — reserved words.)
+create table if not exists consumer_patronage_runs (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "fyLabel" text,
+  "from" text,
+  "to" text,
+  "ratePct" numeric,
+  "resolutionNo" text,
+  "resolutionDate" text,
+  lines jsonb default '[]',
+  total numeric,
+  status text,
+  "amountPaid" numeric default 0,
+  "voucherId" text,
+  "approvedAt" text,
+  "approvedBy" text,
+  "isDeleted" boolean default false,
+  "createdAt" text
+);
+create index if not exists idx_consumer_patronage_runs_society on public.consumer_patronage_runs (society_id);
+alter table public.consumer_patronage_runs enable row level security;
+drop policy if exists "society_rw" on public.consumer_patronage_runs;
+create policy "society_rw" on public.consumer_patronage_runs for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));

@@ -109,5 +109,49 @@ ok(memberOutstanding(SALES, RECOVERIES, 'M2') === 200, 'M2 outstanding = 200 (no
   ok(ag.b31_60 === 300, 'May-01 sale remainder (500−200=300) sits in 31–60 bucket');
 }
 
-console.log(`\nConsumer pricing + credit: ${pass} passed, ${fail} failed`);
+// ── Mirror: src/lib/consumer/patronage.ts ──
+const saleValue2 = (s) => (typeof s.grandTotal === 'number' && s.grandTotal > 0 ? s.grandTotal : (s.netAmount || 0));
+function computePatronageLines(sales, members, args) {
+  const purchase = new Map();
+  for (const s of sales) {
+    if (!s.memberId) continue;
+    if (s.date < args.from || s.date > args.to) continue;
+    purchase.set(s.memberId, (purchase.get(s.memberId) || 0) + saleValue2(s));
+  }
+  return members
+    .filter(m => !(m.status && m.status !== 'active'))
+    .map(m => { const base = round(purchase.get(m.id) || 0); return { memberId: m.id, memberName: m.name, base, amount: round(base * (args.ratePct || 0) / 100) }; })
+    .filter(l => l.amount > 0)
+    .sort((a, b) => a.memberName.localeCompare(b.memberName));
+}
+const round = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+const PSALES = [
+  { memberId: 'M1', grandTotal: 1000, netAmount: 1000, date: '2025-06-10' },
+  { memberId: 'M1', grandTotal: 500,  netAmount: 500,  date: '2026-01-05' }, // same member, in window
+  { memberId: 'M2', grandTotal: 2000, netAmount: 2000, date: '2025-09-01' },
+  { memberId: 'M3', grandTotal: 800,  netAmount: 800,  date: '2025-09-01' }, // inactive member — excluded
+  { memberId: 'M1', grandTotal: 400,  netAmount: 400,  date: '2024-12-31' }, // before window — excluded
+  {                  grandTotal: 999,  netAmount: 999,  date: '2025-09-01' }, // walk-in (no member) — excluded
+];
+const PMEMBERS = [
+  { id: 'M1', name: 'Asha', status: 'active' },
+  { id: 'M2', name: 'Bhola', status: 'active' },
+  { id: 'M3', name: 'Chand', status: 'inactive' },
+];
+
+// 15. rebate = ratePct% of each active member's in-window purchases; inactive + walk-in + out-of-window excluded
+{
+  const lines = computePatronageLines(PSALES, PMEMBERS, { from: '2025-04-01', to: '2026-03-31', ratePct: 2 });
+  ok(lines.length === 2, 'only 2 active members with in-window purchases (M3 inactive excluded)');
+  const asha = lines.find(l => l.memberId === 'M1');
+  ok(asha && asha.base === 1500 && asha.amount === 30, 'Asha base 1000+500=1500, rebate 2% = 30 (Dec-2024 sale excluded)');
+  const bhola = lines.find(l => l.memberId === 'M2');
+  ok(bhola && bhola.base === 2000 && bhola.amount === 40, 'Bhola base 2000, rebate 40');
+}
+
+// 16. zero rate → no lines
+ok(computePatronageLines(PSALES, PMEMBERS, { from: '2025-04-01', to: '2026-03-31', ratePct: 0 }).length === 0, 'rate 0 → no rebate lines');
+
+console.log(`\nConsumer pricing + credit + patronage: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

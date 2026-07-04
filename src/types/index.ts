@@ -736,6 +736,8 @@ export type AccountSubtype =
   | 'direct_expense' | 'employee_expense' | 'admin_expense' | 'operational_expense' | 'depreciation_expense' | 'statutory_expense'
   | 'milk_procurement'    // dairy — farmer milk cost (kept distinct from the generic 5101 purchases fallback)
   | 'member_receivable'   // consumer — member store-credit receivable control (not 3306, which is Rent Receivable)
+  | 'patronage_distribution' // consumer — year-end patronage rebate appropriation (equity)
+  | 'rebate_payable'      // consumer — member patronage rebate payable (liability)
   | 'suspense';
 
 // ── Annual Review Report (Haryana Marketing Societies) classification tags ──
@@ -1188,6 +1190,35 @@ export interface ConsumerPrice {
   isDeleted?: boolean;
   createdAt: string;
   updatedAt?: string;
+}
+
+// ── Consumer store — patronage rebate (C4) ───────────────────────────────────
+// Year-end member rebate proportional to the member's PURCHASES (turnover), from net
+// surplus, resolution-gated. Mirrors the Dairy distribution aggregate (draft → approved,
+// one appropriation voucher Dr patronage-distribution / Cr member-rebate-payable).
+export interface PatronageLine {
+  memberId: string;
+  memberName: string;
+  base: number;    // member's purchase value the rebate was computed on
+  amount: number;
+}
+export interface PatronageRun {
+  id: string;
+  fyLabel?: string;        // financial-year label (display)
+  from: string;            // purchase window start
+  to: string;              // purchase window end
+  ratePct: number;         // rebate % of purchase value
+  resolutionNo: string;    // GOVERNANCE — mandatory at approval
+  resolutionDate?: string;
+  lines: PatronageLine[];
+  total: number;
+  status: 'draft' | 'approved';
+  amountPaid: number;
+  voucherId?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  isDeleted?: boolean;
+  createdAt: string;
 }
 
 // ── Purchase ──────────────────────────────────────────────────────────────────
