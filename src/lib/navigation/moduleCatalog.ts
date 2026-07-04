@@ -70,6 +70,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'priceLists',    titleKey: 'priceLists',    icon: Tags,              route: '/price-lists',    domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 1 },
   { id: 'memberCredit',  titleKey: 'memberCredit',  icon: HandCoins,         route: '/member-credit',  domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2 },
   { id: 'patronage',     titleKey: 'patronage',     icon: Coins,             route: '/patronage',      domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 3 },
+  { id: 'consumerRegisters', titleKey: 'consumerRegisters', icon: FileSpreadsheet, route: '/consumer-registers', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant', 'viewer'], order: 4 },
   // ── Cooperative-marketing module group (domain: 'marketing') — MSP procurement, trading,
   // warehouse, processing, federation billing. Procurement is the marketing society's core
   // activity, so it heads this group (moved here from 'operations' in Marketing M0). ──
