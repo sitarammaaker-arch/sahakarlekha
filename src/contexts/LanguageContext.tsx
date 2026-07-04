@@ -87,6 +87,8 @@ export const translations: Translations = {
   amc: { hi: 'AMC / अनुबंध', en: 'AMC / Contracts' },
   legalDocuments: { hi: 'कानूनी / दस्तावेज़', en: 'Legal / Documents' },
   buildings: { hi: 'भवन / विंग', en: 'Buildings / Wings' },
+  navConsumer: { hi: 'उपभोक्ता भंडार', en: 'Consumer Store' },
+  retailCounter: { hi: 'रिटेल काउंटर (POS)', en: 'Retail Counter (POS)' },
   navMarketing: { hi: 'विपणन प्रबंधन', en: 'Marketing' },
   procurementMasters: { hi: 'प्रोक्योरमेंट मास्टर', en: 'Procurement Masters' },
   agencyReceipts: { hi: 'एजेंसी रसीद', en: 'Agency Receipt' },
