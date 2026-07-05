@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Download, TrendingUp, TrendingDown, Percent, ClipboardList, FileSpreadsheet } from 'lucide-react';
+import { FileText, Download, TrendingUp, TrendingDown, Percent, ClipboardList, FileSpreadsheet, Undo2 } from 'lucide-react';
 import { generateGstSummaryPDF } from '@/lib/pdf';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -29,7 +29,7 @@ function fyBounds(fy: string): { from: string; to: string } {
 }
 
 export default function GstSummary() {
-  const { sales, purchases, customers, society } = useData();
+  const { sales, purchases, customers, society, stockItems } = useData();
   const { salesReturns, purchaseReturns } = useConsumerData();
   const { language } = useLanguage();
 
@@ -76,6 +76,48 @@ export default function GstSummary() {
 
   // Customer map for B2B lookup
   const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
+  const saleById = useMemo(() => new Map(sales.map(s => [s.id, s])), [sales]);
+
+  // Active sales-return credit notes in range (GSTR-1 outward side only).
+  const activeSalesReturns = useMemo(() =>
+    salesReturns.filter(r => !r.isDeleted && r.date >= fromDate && r.date <= toDate),
+    [salesReturns, fromDate, toDate]);
+
+  // Classify each sales-return credit note for GSTR-1:
+  //   registered customer (has GSTIN) → CDNR (reported separately; B2B stays gross)
+  //   unregistered (B2C / member)     → netted into B2CS rate-wise
+  //   all returns                     → net the HSN summary (qty + taxable + tax)
+  const stateCode = (society as unknown as { stateCode?: string }).stateCode || '09';
+  const returnClassification = useMemo(() => {
+    const cdnr = new Map<string, { ctin: string; custName: string; notes: Array<{ nt_num: string; nt_dt: string; val: number; rate: number; txval: number; iamt: number; camt: number; samt: number }> }>();
+    const b2cByRate = new Map<number, { rate: number; taxableValue: number; igst: number; cgst: number; sgst: number }>();
+    const hsnDelta = new Map<string, { qty: number; taxableValue: number; igst: number; cgst: number; sgst: number }>();
+    for (const r of activeSalesReturns) {
+      const sale = saleById.get(r.originalSaleId);
+      const rate = sale ? (sale.cgstPct + sale.sgstPct + sale.igstPct)
+        : (r.netAmount > 0 ? Math.round((r.taxAmount / r.netAmount) * 100) : 0);
+      const cust = r.customerId ? customerMap.get(r.customerId) : undefined;
+      if (cust?.gstNo) {
+        const bucket = cdnr.get(cust.gstNo) ?? { ctin: cust.gstNo, custName: cust.name || r.customerName, notes: [] };
+        bucket.notes.push({ nt_num: r.returnNo, nt_dt: r.date, val: r.grandTotal, rate, txval: r.netAmount, iamt: r.igstAmount, camt: r.cgstAmount, samt: r.sgstAmount });
+        cdnr.set(cust.gstNo, bucket);
+      } else {
+        const b = b2cByRate.get(rate) ?? { rate, taxableValue: 0, igst: 0, cgst: 0, sgst: 0 };
+        b.taxableValue += r.netAmount; b.igst += r.igstAmount; b.cgst += r.cgstAmount; b.sgst += r.sgstAmount;
+        b2cByRate.set(rate, b);
+      }
+      const denom = r.netAmount > 0 ? r.netAmount : 1;
+      for (const it of r.items) {
+        const hsn = stockItems.find(s => s.id === it.itemId)?.hsnCode || 'N/A';
+        const ratio = it.amount / denom;
+        const d = hsnDelta.get(hsn) ?? { qty: 0, taxableValue: 0, igst: 0, cgst: 0, sgst: 0 };
+        d.qty += it.qty; d.taxableValue += it.amount;
+        d.igst += r.igstAmount * ratio; d.cgst += r.cgstAmount * ratio; d.sgst += r.sgstAmount * ratio;
+        hsnDelta.set(hsn, d);
+      }
+    }
+    return { cdnr: Array.from(cdnr.values()), b2cByRate, hsnDelta };
+  }, [activeSalesReturns, saleById, customerMap, stockItems]);
 
   // ── Output Tax (Sales) ─────────────────────────────────────────────────────
   interface GstSlabRow {
@@ -178,8 +220,14 @@ export default function GstSummary() {
       existing.count++;
       map.set(rate, existing);
     }
+    // B2C sales-return credit notes net into B2CS rate-wise (may go negative — valid in GSTR-1).
+    for (const [rate, r] of returnClassification.b2cByRate) {
+      const e = map.get(rate) ?? { rate, taxableValue: 0, igst: 0, cgst: 0, sgst: 0, count: 0 };
+      e.taxableValue -= r.taxableValue; e.igst -= r.igst; e.cgst -= r.cgst; e.sgst -= r.sgst;
+      map.set(rate, e);
+    }
     return Array.from(map.values()).sort((a, b) => a.rate - b.rate);
-  }, [activeSales, b2bIds]);
+  }, [activeSales, b2bIds, returnClassification]);
 
   // ── GSTR-1: HSN Summary (from sale items with hsnCode) ───────────────────
   const hsnSummary = useMemo(() => {
@@ -204,8 +252,15 @@ export default function GstSummary() {
         map.set(hsn, existing);
       }
     }
+    // Sales-return credit notes reduce the HSN summary (qty + taxable + tax), net of returns.
+    for (const [hsn, d] of returnClassification.hsnDelta) {
+      const e = map.get(hsn) ?? { hsn, description: hsn, uqc: 'NOS', totalQty: 0, taxableValue: 0, igst: 0, cgst: 0, sgst: 0 };
+      e.totalQty -= d.qty; e.taxableValue -= d.taxableValue;
+      e.igst -= d.igst; e.cgst -= d.cgst; e.sgst -= d.sgst;
+      map.set(hsn, e);
+    }
     return Array.from(map.values()).sort((a, b) => a.hsn.localeCompare(b.hsn));
-  }, [activeSales]);
+  }, [activeSales, returnClassification]);
 
   // ── GSTR-3B: Table 3.1 outward supplies ─────────────────────────────────
   const outwardTaxable = { taxable: outputTotals.taxable, igst: outputTotals.igst, cgst: outputTotals.cgst, sgst: outputTotals.sgst };
@@ -445,6 +500,24 @@ export default function GstSummary() {
       csamt: 0,
     }));
 
+    // CDNR — credit notes issued to registered (GSTIN) customers (sales returns).
+    const cdnrArr = returnClassification.cdnr.map(c => ({
+      ctin: c.ctin,
+      nt: c.notes.map(n => ({
+        ntty: 'C',
+        nt_num: n.nt_num,
+        nt_dt: n.nt_dt,
+        val: n.val,
+        pos: stateCode,
+        rchrg: 'N',
+        inv_typ: 'R',
+        itms: [{
+          num: 1,
+          itm_det: { rt: n.rate, txval: n.txval, iamt: n.iamt, camt: n.camt, samt: n.samt, csamt: 0 },
+        }],
+      })),
+    }));
+
     const payload = {
       version: 'GST3.0.4',
       hash: 'hash',
@@ -452,6 +525,7 @@ export default function GstSummary() {
       fp,
       b2b: b2bArr,
       b2cs: b2csArr,
+      ...(cdnrArr.length > 0 ? { cdnr: cdnrArr } : {}),
       hsn: { data: hsnArr },
     };
 
@@ -504,6 +578,22 @@ export default function GstSummary() {
         styles: { fontSize: 7, cellPadding: 1.5 },
         headStyles: { fillColor: [21, 128, 61], textColor: 255, fontStyle: 'bold', fontSize: 7 },
         columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+      });
+    }
+
+    // 9B — CDNR: credit notes to registered customers (sales returns)
+    const cdnrRows = returnClassification.cdnr.flatMap(c => c.notes.map(n => [n.nt_num, n.nt_dt, c.ctin, pct(n.rate), (-n.txval).toFixed(2), (-n.iamt).toFixed(2), (-n.camt).toFixed(2), (-n.samt).toFixed(2)]));
+    if (cdnrRows.length > 0) {
+      const y3 = (doc as any).lastAutoTable.finalY + 8;
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+      doc.text('9B — Credit Notes (Registered) — Sales Returns', 14, y3);
+      autoTable(doc, {
+        startY: y3 + 4,
+        head: [['Note No', 'Date', 'GSTIN', 'Rate %', 'Taxable', 'IGST', 'CGST', 'SGST']],
+        body: cdnrRows,
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [190, 24, 93], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+        columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' } },
       });
     }
 
@@ -948,12 +1038,55 @@ export default function GstSummary() {
               </CardContent>
             </Card>
 
+            {/* CDNR — Credit Notes (Registered) — Sales Returns */}
+            {returnClassification.cdnr.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Undo2 className="h-4 w-4 text-rose-600" />
+                    {hi ? '9B — क्रेडिट नोट (GSTIN ग्राहक) — बिक्री वापसी' : '9B — Credit Notes (Registered) — Sales Returns'}
+                    <Badge variant="secondary" className="ml-auto">{returnClassification.cdnr.reduce((n, c) => n + c.notes.length, 0)}</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{hi ? 'नोट नं.' : 'Note No'}</TableHead>
+                        <TableHead>{hi ? 'तिथि' : 'Date'}</TableHead>
+                        <TableHead>GSTIN</TableHead>
+                        <TableHead>{hi ? 'दर' : 'Rate'}</TableHead>
+                        <TableHead className="text-right">{hi ? 'कर योग्य (−)' : 'Taxable (−)'}</TableHead>
+                        <TableHead className="text-right">IGST</TableHead>
+                        <TableHead className="text-right">CGST</TableHead>
+                        <TableHead className="text-right">SGST</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {returnClassification.cdnr.flatMap(c => c.notes.map(n => (
+                        <TableRow key={n.nt_num}>
+                          <TableCell className="font-mono text-sm">{n.nt_num}</TableCell>
+                          <TableCell>{n.nt_dt}</TableCell>
+                          <TableCell className="font-mono text-xs">{c.ctin}</TableCell>
+                          <TableCell><Badge variant="outline" className="font-mono">{pct(n.rate)}</Badge></TableCell>
+                          <TableCell className="text-right font-mono text-rose-700">{fmt(-n.txval)}</TableCell>
+                          <TableCell className="text-right font-mono text-rose-700">{fmt(-n.iamt)}</TableCell>
+                          <TableCell className="text-right font-mono text-rose-700">{fmt(-n.camt)}</TableCell>
+                          <TableCell className="text-right font-mono text-rose-700">{fmt(-n.samt)}</TableCell>
+                        </TableRow>
+                      )))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+
             {/* B2CS */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <ClipboardList className="h-4 w-4 text-orange-600" />
-                  {hi ? 'B2CS — उपभोक्ता बिक्री (दर-अनुसार)' : 'B2CS — Consumer Sales (by Rate)'}
+                  {hi ? 'B2CS — उपभोक्ता बिक्री (दर-अनुसार, वापसी घटाकर)' : 'B2CS — Consumer Sales (by Rate, net of returns)'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
