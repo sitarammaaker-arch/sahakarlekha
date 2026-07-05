@@ -1,4 +1,4 @@
-import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun, ConsumerPrice, PatronageRun, PurchaseOrder, SalesReturn, PurchaseReturn, BankReconciliationRecord, TdsEntry, TdsChallan } from '@/types';
+import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun, ConsumerPrice, PatronageRun, PurchaseOrder, SalesReturn, PurchaseReturn, BankReconciliationRecord, TdsEntry, TdsChallan, TdsChallanLink } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement, Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
 import type { Transporter } from '@/lib/marketing/transport';
 
@@ -91,6 +91,7 @@ const KEYS = {
   bankReconciliations: 'sahayata_bank_reconciliations',
   tdsEntries: 'sahayata_tds_entries',
   tdsChallans: 'sahayata_tds_challans',
+  tdsChallanLinks: 'sahayata_tds_challan_links',
   housingFlats: 'sahayata_housing_flats',
   maintenanceBills: 'sahayata_maintenance_bills',
   housingChargeHeads: 'sahayata_housing_charge_heads',
@@ -833,6 +834,8 @@ export const getTdsEntries = (): TdsEntry[] => get(KEYS.tdsEntries, []);
 export const setTdsEntries = (r: TdsEntry[]): void => set(KEYS.tdsEntries, r);
 export const getTdsChallans = (): TdsChallan[] => get(KEYS.tdsChallans, []);
 export const setTdsChallans = (r: TdsChallan[]): void => set(KEYS.tdsChallans, r);
+export const getTdsChallanLinks = (): TdsChallanLink[] => get(KEYS.tdsChallanLinks, []);
+export const setTdsChallanLinks = (r: TdsChallanLink[]): void => set(KEYS.tdsChallanLinks, r);
 export const getProcurementDeductionRules = (): DeductionRule[] => get(KEYS.procurementDeductionRules, []);
 export const setProcurementDeductionRules = (r: DeductionRule[]): void => set(KEYS.procurementDeductionRules, r);
 export const getProcurementQualitySpecs = (): QualitySpec[] => get(KEYS.procurementQualitySpecs, []);

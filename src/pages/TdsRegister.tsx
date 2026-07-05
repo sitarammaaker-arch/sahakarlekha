@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { generate26QText, download26Q, validate26QData, getQuarterFromDate, getQuarterDueDate } from '@/lib/tds26q';
-import type { TdsEntry, TdsChallan, TdsSection, TdsDeducteeType, TdsQuarter } from '@/types';
+import type { TdsEntry, TdsChallan, TdsChallanLink, TdsSection, TdsDeducteeType, TdsQuarter } from '@/types';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -90,8 +90,9 @@ const TdsRegister: React.FC = () => {
   // State — manual entries + challans (persisted; Supabase-first, localStorage fallback)
   const [entries, setEntries] = useState<TdsEntry[]>(() => storage.getTdsEntries());
   const [challans, setChallans] = useState<TdsChallan[]>(() => storage.getTdsChallans());
+  const [links, setLinks] = useState<TdsChallanLink[]>(() => storage.getTdsChallanLinks());
   useEffect(() => {
-    if (!user?.societyId) { setEntries([]); setChallans([]); return; }
+    if (!user?.societyId) { setEntries([]); setChallans([]); setLinks([]); return; }
     supabase.from('tds_entries').select('*').eq('society_id', user.societyId).then(
       ({ data, error }) => setEntries(error || !data ? storage.getTdsEntries() : (data as TdsEntry[])),
       () => setEntries(storage.getTdsEntries()),
@@ -99,6 +100,10 @@ const TdsRegister: React.FC = () => {
     supabase.from('tds_challans').select('*').eq('society_id', user.societyId).then(
       ({ data, error }) => setChallans(error || !data ? storage.getTdsChallans() : (data as TdsChallan[])),
       () => setChallans(storage.getTdsChallans()),
+    );
+    supabase.from('tds_challan_links').select('*').eq('society_id', user.societyId).then(
+      ({ data, error }) => setLinks(error || !data ? storage.getTdsChallanLinks() : (data as TdsChallanLink[])),
+      () => setLinks(storage.getTdsChallanLinks()),
     );
   }, [user?.societyId]);
   const [selectedQuarter, setSelectedQuarter] = useState<TdsQuarter>(() => getQuarterFromDate(new Date().toISOString().split('T')[0]));
@@ -141,7 +146,13 @@ const TdsRegister: React.FC = () => {
   // Combined entries (auto-imported + persisted manual, excluding soft-deleted)
   const activeManualEntries = useMemo(() => entries.filter(e => !e.isDeleted), [entries]);
   const activeChallans = useMemo(() => challans.filter(c => !c.isDeleted), [challans]);
-  const allEntries = useMemo(() => [...purchaseTdsEntries, ...activeManualEntries], [purchaseTdsEntries, activeManualEntries]);
+  // Resolve challan links onto entries (works for auto `pur-<id>` + manual alike) so
+  // the 26Q export + display see the linkage without any change to tds26q.ts.
+  const linkMap = useMemo(() => { const m = new Map<string, string>(); for (const l of links) { if (l.challanId) m.set(l.entryId, l.challanId); } return m; }, [links]);
+  const allEntries = useMemo(
+    () => [...purchaseTdsEntries, ...activeManualEntries].map(e => { const c = linkMap.get(e.id); return c ? { ...e, challanId: c } : e; }),
+    [purchaseTdsEntries, activeManualEntries, linkMap],
+  );
   const quarterEntries = allEntries.filter(e => e.quarter === selectedQuarter && e.financialYear === fy);
   const quarterChallans = activeChallans.filter(c => c.quarter === selectedQuarter && c.financialYear === fy);
 
@@ -154,6 +165,21 @@ const TdsRegister: React.FC = () => {
   // ── RULE-1 persistence helpers ────────────────────────────────────────────
   const persistEntries = (next: TdsEntry[]) => { setEntries(next); storage.setTdsEntries(next); };
   const persistChallans = (next: TdsChallan[]) => { setChallans(next); storage.setTdsChallans(next); };
+  const persistLinks = (next: TdsChallanLink[]) => { setLinks(next); storage.setTdsChallanLinks(next); };
+
+  // Assign an entry to a challan ('' = unlink). RULE-1 rollback on cloud-fail.
+  const setEntryChallan = (entryId: string, challanId: string) => {
+    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    const prev = links;
+    persistLinks(challanId ? [...links.filter(l => l.entryId !== entryId), { entryId, challanId }] : links.filter(l => l.entryId !== entryId));
+    if (challanId) {
+      supabase.from('tds_challan_links').upsert(withSoc({ entryId, challanId }), { onConflict: 'society_id,entryId' }).then(({ error }) => {
+        if (error) { console.error('TDS link save error:', error.message); persistLinks(prev); toast({ title: hi ? 'चालान लिंक सेव नहीं हुआ' : 'Challan link not saved', description: `Cloud save fail — ${error.message}. (Pehli baar: tds_challan_links block chalayein.)`, variant: 'destructive', duration: 12000 }); }
+      });
+    } else {
+      supabase.from('tds_challan_links').delete().eq('society_id', societyId).eq('entryId', entryId).then(({ error }) => { if (error) console.warn('TDS link delete sync:', error.message); });
+    }
+  };
 
   // Add manual entry
   const handleAddEntry = () => {
@@ -359,7 +385,14 @@ const TdsRegister: React.FC = () => {
         <TabsContent value="entries">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <CardTitle className="text-base">{hi ? 'TDS कटौती' : 'TDS Deductions'} — {selectedQuarter}</CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-base">{hi ? 'TDS कटौती' : 'TDS Deductions'} — {selectedQuarter}</CardTitle>
+                {quarterEntries.filter(e => !e.challanId).length > 0 && (
+                  <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                    {quarterEntries.filter(e => !e.challanId).length} {hi ? 'बिना चालान' : 'unlinked'}
+                  </Badge>
+                )}
+              </div>
               <Button size="sm" className="gap-1" onClick={() => setShowAddEntry(true)}>
                 <Plus className="h-4 w-4" /> {hi ? 'मैन्युअल जोड़ें' : 'Add Manual'}
               </Button>
@@ -377,12 +410,13 @@ const TdsRegister: React.FC = () => {
                     <TableHead className="text-right">{hi ? 'TDS राशि' : 'TDS Amt'}</TableHead>
                     <TableHead>{hi ? 'स्रोत' : 'Source'}</TableHead>
                     <TableHead>{hi ? 'स्थिति' : 'Status'}</TableHead>
+                    <TableHead>{hi ? 'चालान' : 'Challan'}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {quarterEntries.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                         {hi ? 'इस तिमाही में कोई TDS एंट्री नहीं' : 'No TDS entries for this quarter'}
                       </TableCell>
                     </TableRow>
@@ -413,6 +447,17 @@ const TdsRegister: React.FC = () => {
                           }
                         </TableCell>
                         <TableCell>{statusBadge(entry.status)}</TableCell>
+                        <TableCell>
+                          <Select value={entry.challanId || 'none'} onValueChange={v => setEntryChallan(entry.id, v === 'none' ? '' : v)}>
+                            <SelectTrigger className="h-7 w-36 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">{hi ? '— कोई नहीं —' : '— None —'}</SelectItem>
+                              {quarterChallans.map(ch => (
+                                <SelectItem key={ch.id} value={ch.id}>{(ch.bsrCode || '—')}/{(ch.challanSerial || '—')}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -422,7 +467,7 @@ const TdsRegister: React.FC = () => {
                       <TableCell className="text-right">{fmt(quarterEntries.reduce((s, e) => s + e.grossAmount, 0))}</TableCell>
                       <TableCell />
                       <TableCell className="text-right text-primary">{fmt(totalDeducted)}</TableCell>
-                      <TableCell colSpan={2} />
+                      <TableCell colSpan={3} />
                     </TableRow>
                   )}
                 </TableBody>

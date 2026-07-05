@@ -2558,3 +2558,20 @@ drop policy if exists "society_rw" on public.tds_challans;
 create policy "society_rw" on public.tds_challans for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ── TDS — challan<->entry links (makes 26Q tie deductees to real challans) ────
+-- Keyed by the stable entry id ('pur-<purchaseId>' for auto entries, uuid for
+-- manual). Composite PK so the same entryId can exist per society. Resolved onto
+-- entries at render — no change to the 26Q generator.
+create table if not exists tds_challan_links (
+  society_id text not null default 'SOC001',
+  "entryId" text not null,
+  "challanId" text,
+  primary key (society_id, "entryId")
+);
+create index if not exists idx_tds_challan_links_society on public.tds_challan_links (society_id);
+alter table public.tds_challan_links enable row level security;
+drop policy if exists "society_rw" on public.tds_challan_links;
+create policy "society_rw" on public.tds_challan_links for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
