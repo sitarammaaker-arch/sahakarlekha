@@ -671,5 +671,38 @@ function generalRepayment(loan, totalAmt, interestAmt, mode) {
   ok(dr === cr && dr === 1200, 'general loan repayment voucher is balanced (1200 == 1200)');
 }
 
+// ── Payroll accrual: process → accrue (Dr 5201/Cr 2103), pay → clear (Dr 2103/Cr Bank) ──
+// Mirrors the salary voucher lifecycle in DataContext (H8+).
+function accrualLines(net) {
+  return [{ accountId: '5201', type: 'Dr', amount: net }, { accountId: '2103', type: 'Cr', amount: net }];
+}
+function paymentLines(net, mode, wasAccrued) {
+  const bank = mode === 'bank' ? '3302' : '3301';
+  const debit = wasAccrued ? '2103' : '5201'; // accrued → clear liability; legacy → expense-on-pay
+  return [{ accountId: debit, type: 'Dr', amount: net }, { accountId: bank, type: 'Cr', amount: net }];
+}
+{
+  const net = 20000;
+  const acc = accrualLines(net);
+  ok(acc[0].accountId === '5201' && acc[0].type === 'Dr', 'accrual: Dr Salary Expense 5201');
+  ok(acc[1].accountId === '2103' && acc[1].type === 'Cr', 'accrual: Cr Salary Payable 2103');
+  // paid after accrual → clears the liability, does NOT re-expense
+  const pay = paymentLines(net, 'bank', true);
+  ok(pay[0].accountId === '2103' && pay[0].type === 'Dr', 'payment (accrued): Dr Salary Payable 2103 (clears liability)');
+  ok(pay[1].accountId === '3302' && pay[1].type === 'Cr', 'payment: Cr Bank');
+  // net effect of accrual + payment on each account
+  const legs = [...acc, ...pay];
+  const bal = (a) => legs.filter(l => l.accountId === a).reduce((s, l) => s + (l.type === 'Dr' ? l.amount : -l.amount), 0);
+  ok(bal('5201') === 20000, 'net effect: Salary Expense debited once (20000) — no double-count');
+  ok(bal('2103') === 0, 'net effect: Salary Payable nets to zero (accrued then cleared)');
+  ok(bal('3302') === -20000, 'net effect: Bank credited once (cash out 20000)');
+  // legacy record (never accrued) pays the OLD way so its books stay correct
+  const legacy = paymentLines(net, 'cash', false);
+  ok(legacy[0].accountId === '5201' && legacy[1].accountId === '3301', 'legacy (no accrual): Dr 5201 / Cr Cash (expense-on-pay fallback)');
+  // both vouchers balanced
+  const balanced = (ls) => ls.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0) === ls.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0);
+  ok(balanced(acc) && balanced(pay) && balanced(legacy), 'accrual, payment, legacy vouchers all balanced');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
