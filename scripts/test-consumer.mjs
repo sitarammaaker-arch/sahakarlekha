@@ -540,5 +540,33 @@ function panFromGstin(gstin) {
   ok(panFromGstin('  09abcde1234f1z5 ') === 'ABCDE1234F', 'trims + uppercases before extracting');
 }
 
+// ── TDS: challan<->entry link resolution + 26Q grouping ─────────────────────
+// Mirrors TdsRegister.tsx: a persisted link map resolves challanId onto entries
+// (auto `pur-<id>` + manual alike); 26Q groups deductees under their challan.
+function resolveLinks(entries, links) {
+  const m = new Map();
+  for (const l of links) { if (l.challanId) m.set(l.entryId, l.challanId); }
+  return entries.map(e => { const c = m.get(e.id); return c ? { ...e, challanId: c } : e; });
+}
+{
+  const entries = [
+    { id: 'pur-1', tdsAmount: 100 },   // auto entry (derived)
+    { id: 'uuid-2', tdsAmount: 50 },   // manual entry
+    { id: 'uuid-3', tdsAmount: 25 },   // manual, stays unlinked
+  ];
+  const links = [{ entryId: 'pur-1', challanId: 'CH1' }, { entryId: 'uuid-2', challanId: 'CH1' }];
+  const resolved = resolveLinks(entries, links);
+  ok(resolved.find(e => e.id === 'pur-1').challanId === 'CH1', 'link resolves onto an auto (pur-) entry');
+  ok(resolved.find(e => e.id === 'uuid-2').challanId === 'CH1', 'link resolves onto a manual entry');
+  ok(resolved.find(e => e.id === 'uuid-3').challanId === undefined, 'unlinked entry keeps no challan');
+  // 26Q grouping: entries under CH1 vs unlinked
+  const underCh1 = resolved.filter(e => e.challanId === 'CH1');
+  ok(underCh1.length === 2 && underCh1.reduce((s, e) => s + e.tdsAmount, 0) === 150, '26Q: 2 deductees under CH1, total TDS 150');
+  ok(resolved.filter(e => !e.challanId).length === 1, '26Q: 1 entry still in the unlinked block');
+  // removing a link (challanId '' → dropped) unlinks it
+  const after = resolveLinks(entries, links.filter(l => l.entryId !== 'pur-1'));
+  ok(after.find(e => e.id === 'pur-1').challanId === undefined, 'unlink removes the resolved challan');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

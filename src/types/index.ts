@@ -1643,6 +1643,14 @@ export interface TdsEntry {
   createdAt: string;
 }
 
+// Links a TDS entry (manual OR auto-imported `pur-<id>`) to the challan it was
+// deposited under. Persisted separately keyed by the stable entry id, so it works
+// for derived auto entries too. Resolved onto entries at render for 26Q accuracy.
+export interface TdsChallanLink {
+  entryId: string;
+  challanId: string;
+}
+
 export interface TdsChallan {
   id: string;
   bsrCode: string;                // 7 digit bank BSR code
