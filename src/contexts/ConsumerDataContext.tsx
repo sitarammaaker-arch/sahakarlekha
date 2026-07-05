@@ -71,7 +71,7 @@ const ConsumerDataContext = createContext<ConsumerDataContextValue | null>(null)
 
 export function ConsumerProvider({ children }: { children: ReactNode }) {
   const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember } = useData();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
   const withSoc = <T extends object>(d: T) => ({ ...d, society_id: societyId });
@@ -149,6 +149,11 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     // when a consumer society is still cached on the login screen). Guard BEFORE setting
     // seededRef so it retries after login. (Deps include user?.societyId.)
     if (!user?.societyId) return;
+    // A platform super-admin is JWT-less (societyId 'PLATFORM', no Supabase auth.uid) → the
+    // society-scoped `accounts` RLS rejects any insert ("new row violates row-level security
+    // policy for table accounts"). Never seed the chart from the super-admin context; a real
+    // society user (with a session) seeds it on their normal login.
+    if (isSuperAdmin) return;
     if (society?.societyType !== 'consumer') return;
     if (!accounts || accounts.length === 0) return;
     if (society.fyLocked) return; // seeding mutates the chart; retry on a later unlocked load
@@ -164,7 +169,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (needPay) addAccount({ name: 'Member Rebate Payable', nameHi: 'देय सदस्य रिबेट', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: REBATE_PAYABLE_SUBTYPE });
     if (needDivDist) addAccount({ name: 'Dividend Distribution', nameHi: 'लाभांश वितरण', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: DIVIDEND_DISTRIBUTION_SUBTYPE });
     if (needDivPay) addAccount({ name: 'Dividend Payable', nameHi: 'देय लाभांश', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: DIVIDEND_PAYABLE_SUBTYPE });
-  }, [user?.societyId, society?.societyType, society?.fyLocked, accounts, addAccount]);
+  }, [user?.societyId, isSuperAdmin, society?.societyType, society?.fyLocked, accounts, addAccount]);
 
   const memberReceivableAccountId = resolveMemberReceivableAccountId(accounts);
 
