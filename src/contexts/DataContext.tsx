@@ -99,6 +99,7 @@ interface DataContextType {
   deleteMember: (id: string) => void;
   refundShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
   purchaseShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
+  transferShareCapital: (fromMemberId: string, toMemberId: string, amount: number, date: string) => void;
 
 
   workOrders: WorkOrder[];
@@ -1862,6 +1863,48 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
   }, [accounts, addVoucher, user]);
+
+  // Transfer shares from one member to another (sale/gift/nomination). Share capital total
+  // is unchanged — it's a reclassification between members. Posted as two net-zero vouchers
+  // bridged by the Suspense account (9999) so BOTH member sub-ledgers reflect the move
+  // (each voucher carries a single memberId): the transferor gets Dr 1102 / Cr 9999, the
+  // transferee gets Dr 9999 / Cr 1102. GL 1102 + 9999 both net to zero.
+  const transferShareCapital = useCallback((fromMemberId: string, toMemberId: string, amount: number, date: string) => {
+    if (guardFYLocked()) return;
+    if (fromMemberId === toMemberId) { toastRef.current({ title: 'Invalid transfer', description: 'Choose a different recipient.', variant: 'destructive' }); return; }
+    const from = membersRef.current.find(m => m.id === fromMemberId);
+    const to = membersRef.current.find(m => m.id === toMemberId);
+    if (!from || !to) return;
+    const amt = Math.round((Math.max(0, Math.min(amount, from.shareCapital || 0))) * 100) / 100;
+    if (!(amt > 0)) { toastRef.current({ title: 'Invalid amount', description: 'Amount must be > 0 and ≤ the sender\'s share capital.', variant: 'destructive' }); return; }
+    const SUSPENSE = '9999';
+    addVoucher({
+      type: 'journal', date, debitAccountId: ACCOUNT_IDS.SHARE_CAP, creditAccountId: SUSPENSE, amount: amt,
+      narration: `Shares transferred from ${from.name} to ${to.name} — ${date}`,
+      createdBy: user?.name ?? 'System', memberId: fromMemberId,
+    });
+    addVoucher({
+      type: 'journal', date, debitAccountId: SUSPENSE, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: amt,
+      narration: `Shares transferred from ${from.name} to ${to.name} — ${date}`,
+      createdBy: user?.name ?? 'System', memberId: toMemberId,
+    });
+    const beforeFrom = from, beforeTo = to;
+    const updFrom = { ...from, shareCapital: Math.round(((from.shareCapital || 0) - amt) * 100) / 100 };
+    const updTo = { ...to, shareCapital: Math.round(((to.shareCapital || 0) + amt) * 100) / 100 };
+    const applyBoth = (a: Member, b: Member) => {
+      membersRef.current = membersRef.current.map(m => m.id === a.id ? a : m.id === b.id ? b : m);
+      setMembersState(prev => prev.map(m => m.id === a.id ? a : m.id === b.id ? b : m));
+    };
+    applyBoth(updFrom, updTo);
+    const rollback = () => { applyBoth(beforeFrom, beforeTo); toastRef.current({ title: 'शेयर स्थानांतरण सेव नहीं हुआ', description: 'Cloud save fail — transfer rolled back.', variant: 'destructive', duration: 12000 }); };
+    supabase.from('members').upsert(withSoc(updFrom)).then(({ error }) => {
+      if (error) { console.error('Share transfer (from) sync:', error.message); rollback(); return; }
+      supabase.from('members').upsert(withSoc(updTo)).then(({ error: e2 }) => {
+        if (e2) { console.error('Share transfer (to) sync:', e2.message); rollback(); }
+        else toastRef.current({ title: '✅ शेयर स्थानांतरित', description: `₹${amt.toLocaleString('en-IN')} · ${from.name} → ${to.name}` });
+      });
+    });
+  }, [addVoucher, user]);
 
   // ── Housing Flats/Units register (master data; Member-pattern persistence + RULE-1 rollback) ──
   // ── Labour Work Orders register (master data; Member-pattern persistence + RULE-1 rollback) ──
@@ -5047,7 +5090,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
       recordFarmerPayment,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
-      addMember, updateMember, deleteMember, refundShareCapital, purchaseShareCapital, approveMember, rejectMember,
+      addMember, updateMember, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, approveMember, rejectMember,
       workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
       musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,

@@ -16,7 +16,7 @@ import type { Member } from '@/types';
 
 const ShareRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { members, updateMember, refundShareCapital, purchaseShareCapital, society } = useData();
+  const { members, updateMember, refundShareCapital, purchaseShareCapital, transferShareCapital, society } = useData();
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
@@ -174,6 +174,7 @@ const ShareRegister: React.FC = () => {
                       <div className="flex gap-1 items-center">
                         <ShareTxnButton member={m} hi={hi} kind="purchase" onSubmit={purchaseShareCapital} />
                         {m.shareCapital > 0 && <ShareTxnButton member={m} hi={hi} kind="refund" onSubmit={refundShareCapital} />}
+                        {m.shareCapital > 0 && <TransferShareButton member={m} members={approvedMembers} hi={hi} onTransfer={transferShareCapital} />}
                         <Button variant="ghost" size="icon" onClick={() => openEdit(m)}>
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -287,6 +288,52 @@ function ShareTxnButton({ member, hi, kind, onSubmit }: { member: Member; hi: bo
               <Button variant="outline" onClick={() => setOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
               <Button disabled={!(val > 0) || overCap} onClick={() => { onSubmit(member.id, val, mode, date); setOpen(false); setAmt(''); }}>
                 {isRefund ? (hi ? 'वापसी दर्ज करें' : 'Post Refund') : (hi ? 'शेयर जोड़ें' : 'Add Shares')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function TransferShareButton({ member, members, hi, onTransfer }: { member: Member; members: Member[]; hi: boolean; onTransfer: (fromId: string, toId: string, amount: number, date: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [toId, setToId] = useState('');
+  const [amt, setAmt] = useState('');
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const val = Number(amt) || 0;
+  const cap = member.shareCapital || 0;
+  const recipients = members.filter(m => m.id !== member.id);
+
+  return (
+    <>
+      <Button variant="outline" size="sm" className="h-8" onClick={() => setOpen(true)}>{hi ? 'स्थानांतरण' : 'Transfer'}</Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>{hi ? 'शेयर स्थानांतरण' : 'Transfer Shares'} — {member.name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{hi ? 'उपलब्ध शेयर पूँजी:' : 'Available share capital:'} <strong>{cap.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' })}</strong></p>
+            <div>
+              <Label>{hi ? 'किसे स्थानांतरित करें' : 'Transfer to'}</Label>
+              <select value={toId} onChange={e => setToId(e.target.value)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <option value="">{hi ? '— सदस्य चुनें —' : '— Select member —'}</option>
+                {recipients.map(m => <option key={m.id} value={m.id}>{m.memberId} · {m.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label>{hi ? 'राशि' : 'Amount'}</Label>
+              <Input type="number" value={amt} onChange={e => setAmt(e.target.value)} max={cap} />
+            </div>
+            <div>
+              <Label>{hi ? 'तिथि' : 'Date'}</Label>
+              <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+            <p className="text-[11px] text-muted-foreground">{hi ? 'शेयर पूँजी सदस्यों के बीच स्थानांतरित होगी (कुल अपरिवर्तित); दोनों की बही में दिखेगा।' : 'Moves share capital between members (total unchanged); shows in both member ledgers.'}</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+              <Button disabled={!toId || !(val > 0) || val > cap} onClick={() => { onTransfer(member.id, toId, val, date); setOpen(false); setAmt(''); setToId(''); }}>
+                {hi ? 'स्थानांतरित करें' : 'Transfer'}
               </Button>
             </div>
           </div>
