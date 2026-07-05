@@ -65,7 +65,7 @@ const TODAY = new Date().toISOString().split('T')[0];
 
 const BankReconciliation: React.FC = () => {
   const { language } = useLanguage();
-  const { vouchers, accounts, society, getAccountBalance, clearVoucher, unclearVoucher } = useData();
+  const { vouchers, accounts, society, getAccountBalance, clearVoucher, unclearVoucher, addVoucher } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -145,6 +145,46 @@ const BankReconciliation: React.FC = () => {
   const isReconciled = difference !== null && Math.abs(difference) < 0.01;
 
   const getAccountName = (id: string) => accounts.find(a => a.id === id)?.name ?? id;
+
+  // ── Unmatched statement lines → post an adjusting entry (bank charges/interest/TDS) ──
+  const rowMatchesVoucher = (row: CsvRow) => {
+    const amt = row.credit > 0 ? row.credit : row.debit;
+    const isDeposit = row.credit > 0;
+    return vouchers.some(v => !v.isDeleted && v.date === row.date &&
+      Math.abs((isDeposit ? bankDrAmt(v) : bankCrAmt(v)) - amt) < 1 &&
+      getVoucherLines(v).some(l => l.accountId === activeBankId && l.type === (isDeposit ? 'Dr' : 'Cr')));
+  };
+  const unmatchedRows = useMemo(
+    () => csvRows.map((row, i) => ({ row, i })).filter(({ row }) => (row.credit > 0 || row.debit > 0) && !rowMatchesVoucher(row)),
+    [csvRows, vouchers, activeBankId],
+  );
+  const [rowContra, setRowContra] = useState<Record<number, string>>({});
+  // Leaf (postable) accounts only — never post into a group/header account.
+  const leafParentIds = useMemo(() => new Set(accounts.map(a => a.parentId).filter(Boolean)), [accounts]);
+  const contraOptions = (isDeposit: boolean) => accounts.filter(a =>
+    a.id !== activeBankId && !leafParentIds.has(a.id) &&
+    (isDeposit ? ['income', 'liability', 'asset'].includes(a.type) : ['expense', 'asset'].includes(a.type)));
+
+  const postAdjustment = (idx: number) => {
+    const row = csvRows[idx];
+    const contraId = rowContra[idx];
+    if (!row || !contraId) { toast({ title: hi ? 'खाता चुनें' : 'Pick a contra account', variant: 'destructive' }); return; }
+    const isDeposit = row.credit > 0;
+    const amount = isDeposit ? row.credit : row.debit;
+    if (!(amount > 0)) return;
+    const lid = () => crypto.randomUUID();
+    const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = isDeposit
+      ? [{ id: lid(), accountId: activeBankId, type: 'Dr', amount }, { id: lid(), accountId: contraId, type: 'Cr', amount }]
+      : [{ id: lid(), accountId: contraId, type: 'Dr', amount }, { id: lid(), accountId: activeBankId, type: 'Cr', amount }];
+    addVoucher({
+      type: isDeposit ? 'receipt' : 'payment', date: row.date, lines,
+      debitAccountId: isDeposit ? activeBankId : contraId, creditAccountId: isDeposit ? contraId : activeBankId, amount,
+      narration: row.description || (hi ? 'बैंक समायोजन' : 'Bank adjustment'),
+      createdBy: user?.name || 'System', isCleared: true, clearedDate: row.date,
+    } as Parameters<typeof addVoucher>[0]);
+    setRowContra(prev => { const n = { ...prev }; delete n[idx]; return n; });
+    toast({ title: hi ? '✅ प्रविष्टि दर्ज (मिलान हुआ)' : '✅ Entry posted & cleared', description: `${fmt(amount)} · ${getAccountName(contraId)}` });
+  };
 
   // ── Save reconciliation sign-off (RULE-1 safe) ────────────────────────────
   const withSoc = <T extends object>(d: T) => ({ ...d, society_id: societyId });
@@ -391,6 +431,68 @@ const BankReconciliation: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Unmatched statement lines → post adjusting entry */}
+      {unmatchedRows.length > 0 && (
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-base flex items-center gap-2 text-orange-700">
+              <AlertCircle className="h-4 w-4" />
+              {language === 'hi' ? 'बिना मिलान स्टेटमेंट पंक्तियाँ' : 'Unmatched statement lines'}
+              <Badge variant="secondary" className="ml-auto">{unmatchedRows.length}</Badge>
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              {language === 'hi'
+                ? 'बैंक शुल्क / ब्याज / TDS — खाता चुनकर पुस्तकों में दर्ज करें (स्वतः मिलान भी हो जाएगा)।'
+                : 'Bank charges / interest / TDS — pick an account to post them into the books (auto-marked cleared).'}
+            </p>
+          </CardHeader>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{language === 'hi' ? 'तिथि' : 'Date'}</TableHead>
+                  <TableHead>{language === 'hi' ? 'विवरण' : 'Description'}</TableHead>
+                  <TableHead>{language === 'hi' ? 'प्रकार' : 'Type'}</TableHead>
+                  <TableHead className="text-right">{language === 'hi' ? 'राशि' : 'Amount'}</TableHead>
+                  <TableHead>{language === 'hi' ? 'सामने वाला खाता' : 'Contra account'}</TableHead>
+                  <TableHead className="w-20" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {unmatchedRows.map(({ row, i }) => {
+                  const isDeposit = row.credit > 0;
+                  const amount = isDeposit ? row.credit : row.debit;
+                  return (
+                    <TableRow key={i}>
+                      <TableCell className="text-sm">{fmtDate(row.date)}</TableCell>
+                      <TableCell className="max-w-[180px] truncate text-sm">{row.description || '—'}</TableCell>
+                      <TableCell>
+                        {isDeposit
+                          ? <Badge className="bg-green-100 text-green-800 border-green-200 text-[10px]">{language === 'hi' ? 'जमा' : 'In'}</Badge>
+                          : <Badge className="bg-red-100 text-red-800 border-red-200 text-[10px]">{language === 'hi' ? 'नामे' : 'Out'}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{fmt(amount)}</TableCell>
+                      <TableCell>
+                        <select value={rowContra[i] || ''} onChange={e => setRowContra(p => ({ ...p, [i]: e.target.value }))}
+                          className="h-8 w-44 rounded-md border border-input bg-background px-2 text-xs">
+                          <option value="">{language === 'hi' ? 'खाता चुनें' : 'Select account'}</option>
+                          {contraOptions(isDeposit).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                      </TableCell>
+                      <TableCell>
+                        <Button size="sm" disabled={!rowContra[i]} onClick={() => postAdjustment(i)}>
+                          {language === 'hi' ? 'दर्ज करें' : 'Post'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* BRS Summary */}
       <Card>

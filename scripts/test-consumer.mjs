@@ -586,5 +586,28 @@ function resolveStateCode(gstin, stateName) { return stateCodeFromGstin(gstin) |
   ok(resolveStateCode(undefined, undefined) === '', 'resolveStateCode: nothing resolvable → empty (caller flags missing)');
 }
 
+// ── BRS: unmatched statement line → adjusting entry direction (Dr/Cr routing) ──
+// Mirrors postAdjustment in BankReconciliation.tsx.
+function adjustmentLines(row, bankId, contraId) {
+  const isDeposit = row.credit > 0;
+  const amount = isDeposit ? row.credit : row.debit;
+  return isDeposit
+    ? [{ accountId: bankId, type: 'Dr', amount }, { accountId: contraId, type: 'Cr', amount }]   // money in
+    : [{ accountId: contraId, type: 'Dr', amount }, { accountId: bankId, type: 'Cr', amount }];  // money out
+}
+{
+  // Interest credited (money into bank) → Dr Bank / Cr Interest Income
+  const inLines = adjustmentLines({ credit: 500, debit: 0 }, 'BANK', 'INT_INC');
+  ok(inLines[0].accountId === 'BANK' && inLines[0].type === 'Dr' && inLines[0].amount === 500, 'interest: Dr Bank 500');
+  ok(inLines[1].accountId === 'INT_INC' && inLines[1].type === 'Cr', 'interest: Cr Income');
+  // Bank charge (money out) → Dr Bank Charges / Cr Bank
+  const outLines = adjustmentLines({ credit: 0, debit: 120 }, 'BANK', 'BANK_CHG');
+  ok(outLines[0].accountId === 'BANK_CHG' && outLines[0].type === 'Dr' && outLines[0].amount === 120, 'charge: Dr Expense 120');
+  ok(outLines[1].accountId === 'BANK' && outLines[1].type === 'Cr', 'charge: Cr Bank');
+  // both legs balance
+  const bal = (ls) => ls.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0) === ls.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0);
+  ok(bal(inLines) && bal(outLines), 'adjusting entry is balanced (Dr == Cr)');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
