@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -110,9 +111,38 @@ const LoanForm: React.FC<LoanFormProps> = ({ form, setForm, hi, members, onSubmi
 
 const LoanRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { members, loans, addLoan, updateLoan, deleteLoan, society, getTrialBalance } = useData();
+  const { members, loans, addLoan, updateLoan, deleteLoan, society, getTrialBalance, addVoucher, accounts } = useData();
+  const { user } = useAuth();
   const { toast } = useToast();
   const hi = language === 'hi';
+
+  // Record a loan repayment: post a receipt voucher (Dr Cash/Bank / Cr Loans&Advances
+  // 3304 principal / Cr Interest Income 4408 interest), then bump repaidAmount. Only the
+  // principal reduces outstanding; interest is booked as income. Fixes the GL gap where
+  // editing repaidAmount recorded the cash nowhere.
+  const recordRepayment = (loan: Loan, totalAmt: number, interestAmt: number, mode: 'cash' | 'bank', date: string) => {
+    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+    const interest = round2(Math.max(0, Math.min(interestAmt, totalAmt)));
+    const principal = round2(totalAmt - interest);
+    const newRepaid = round2(loan.repaidAmount + principal);
+    const loanAccId = accounts.find(a => a.id === '3304' || (a.parentId === '3300' && /loan/i.test(a.name)))?.id || '3304';
+    const debitAccId = mode === 'bank' ? (accounts.find(a => a.id === '3302')?.id || '3302') : '3301';
+    const lid = () => crypto.randomUUID();
+    const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: debitAccId, type: 'Dr', amount: totalAmt }];
+    if (principal > 0) lines.push({ id: lid(), accountId: loanAccId, type: 'Cr', amount: principal });
+    if (interest > 0) lines.push({ id: lid(), accountId: accounts.find(a => a.id === '4408' || /interest/i.test(a.name))?.id || '4408', type: 'Cr', amount: interest });
+    const member = members.find(m => m.id === loan.memberId);
+    try {
+      addVoucher({
+        type: 'receipt', date, debitAccountId: debitAccId, creditAccountId: loanAccId, amount: totalAmt, lines,
+        narration: `Loan repayment — ${member?.name || loan.memberId} (${loan.loanNo})${interest > 0 ? ` incl. interest ₹${interest.toLocaleString('en-IN')}` : ''}`,
+        createdBy: user?.name ?? 'System', memberId: loan.memberId,
+      } as Parameters<typeof addVoucher>[0]);
+    } catch { /* best-effort ledger post; loan record still updates */ }
+    updateLoan(loan.id, { repaidAmount: newRepaid, status: (loan.amount - newRepaid) <= 0.005 ? 'cleared' : loan.status });
+    toast({ title: hi ? '✅ चुकौती दर्ज (बही में पोस्ट)' : '✅ Repayment recorded & posted', description: `₹${totalAmt.toLocaleString('en-IN')}${interest > 0 ? ` · ${hi ? 'ब्याज' : 'interest'} ₹${interest.toLocaleString('en-IN')}` : ''}` });
+  };
   const approvedMembers = useMemo(() => members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved'), [members]);
 
   const [search, setSearch] = useState('');
@@ -358,7 +388,8 @@ const LoanRegister: React.FC = () => {
                       <TableCell className="text-sm">{l.dueDate}</TableCell>
                       <TableCell>{statusBadge(l.status)}</TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 items-center">
+                          {outstanding > 0.005 && <LoanRepayButton loan={l} hi={hi} onRepay={recordRepayment} />}
                           <Button variant="ghost" size="icon" onClick={() => openEdit(l)}><Edit className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setDeleteId(l.id)}><Trash2 className="h-4 w-4" /></Button>
                         </div>
@@ -410,5 +441,57 @@ const LoanRegister: React.FC = () => {
     </div>
   );
 };
+
+function LoanRepayButton({ loan, hi, onRepay }: { loan: Loan; hi: boolean; onRepay: (loan: Loan, total: number, interest: number, mode: 'cash' | 'bank', date: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [amt, setAmt] = useState('');
+  const [interest, setInterest] = useState('');
+  const [mode, setMode] = useState<'cash' | 'bank'>('cash');
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const total = Number(amt) || 0;
+  const int = Number(interest) || 0;
+  const principal = Math.max(0, total - int);
+  const outstanding = loan.amount - loan.repaidAmount;
+
+  return (
+    <>
+      <Button variant="outline" size="sm" className="h-8" onClick={() => setOpen(true)}>{hi ? 'चुकौती' : 'Repay'}</Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>{hi ? 'चुकौती दर्ज करें' : 'Record Repayment'} — {loan.loanNo}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{hi ? 'बकाया:' : 'Outstanding:'} <strong>{outstanding.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' })}</strong></p>
+            <div>
+              <Label>{hi ? 'कुल चुकौती राशि' : 'Total Repayment Amount'}</Label>
+              <Input type="number" value={amt} onChange={e => setAmt(e.target.value)} />
+            </div>
+            <div>
+              <Label>{hi ? 'इसमें ब्याज (वैकल्पिक)' : 'Of which interest (optional)'}</Label>
+              <Input type="number" value={interest} onChange={e => setInterest(e.target.value)} max={total} placeholder="0" />
+              {total > 0 && <p className="text-xs text-muted-foreground mt-1">{hi ? 'मूलधन' : 'Principal'}: ₹{principal.toLocaleString('en-IN')} · {hi ? 'ब्याज' : 'Interest'}: ₹{int.toLocaleString('en-IN')}</p>}
+            </div>
+            <div>
+              <Label>{hi ? 'भुगतान विधि' : 'Payment mode'}</Label>
+              <select value={mode} onChange={e => setMode(e.target.value as 'cash' | 'bank')} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <option value="cash">{hi ? 'नकद' : 'Cash'}</option>
+                <option value="bank">{hi ? 'बैंक' : 'Bank'}</option>
+              </select>
+            </div>
+            <div>
+              <Label>{hi ? 'तिथि' : 'Date'}</Label>
+              <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+              <Button disabled={!(total > 0) || int > total} onClick={() => { onRepay(loan, total, int, mode, date); setOpen(false); setAmt(''); setInterest(''); }}>
+                {hi ? 'सहेजें व पोस्ट करें' : 'Save & Post'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 export default LoanRegister;
