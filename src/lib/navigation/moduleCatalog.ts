@@ -15,7 +15,7 @@ import {
   Scale, ArrowLeftRight, TrendingUp, FileSpreadsheet, BarChart3, Clock, Percent, TrendingDown, Receipt, Warehouse,
   Package, PiggyBank, FileJson, Hash, Landmark, ScrollText, BookMarked, ShieldCheck, Users2, FileCheck, Shield,
   Coins, Trash2, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks, HardHat,
-  MessageSquareWarning, Car, Wrench, Building, ScanBarcode, Tags, PackageX,
+  MessageSquareWarning, Car, Wrench, Building, ScanBarcode, Tags, PackageX, Undo2,
 } from 'lucide-react';
 import type { Capability, NavDomain, Role } from './capabilities';
 
@@ -67,6 +67,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   // and (future slices) member credit sales, multi-tier pricing, patronage rebate. Reuses the
   // shared sales/inventory engines; only consumer-specific screens live in this group. ──
   { id: 'retailCounter', titleKey: 'retailCounter', icon: ScanBarcode,       route: '/retail-counter', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 0 },
+  { id: 'salesReturn',   titleKey: 'salesReturn',   icon: Undo2,             route: '/sales-return',   domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 0.5 },
   { id: 'priceLists',    titleKey: 'priceLists',    icon: Tags,              route: '/price-lists',    domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 1 },
   { id: 'memberCredit',  titleKey: 'memberCredit',  icon: HandCoins,         route: '/member-credit',  domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2 },
   { id: 'expiryDamage',  titleKey: 'expiryDamage',  icon: PackageX,          route: '/expiry-damage',  domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2.5 },

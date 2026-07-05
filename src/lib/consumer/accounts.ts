@@ -21,6 +21,7 @@ export const PATRONAGE_DISTRIBUTION_SUBTYPE = 'patronage_distribution';
 export const REBATE_PAYABLE_SUBTYPE = 'rebate_payable';
 export const DIVIDEND_DISTRIBUTION_SUBTYPE = 'dividend_distribution';
 export const DIVIDEND_PAYABLE_SUBTYPE = 'dividend_payable';
+export const SALES_RETURN_SUBTYPE = 'sales_return';
 
 export function resolveMemberReceivableAccountId(accounts: ReadonlyArray<Acc>): string | null {
   return resolveBy(accounts, MEMBER_RECEIVABLE_SUBTYPE, ['member purchase receivable', 'सदस्य खरीद प्राप्य', 'member receivable']);
@@ -40,4 +41,8 @@ export function resolveDividendDistributionAccountId(accounts: ReadonlyArray<Acc
 
 export function resolveDividendPayableAccountId(accounts: ReadonlyArray<Acc>): string | null {
   return resolveBy(accounts, DIVIDEND_PAYABLE_SUBTYPE, ['dividend payable', 'देय लाभांश']);
+}
+
+export function resolveSalesReturnAccountId(accounts: ReadonlyArray<Acc>): string | null {
+  return resolveBy(accounts, SALES_RETURN_SUBTYPE, ['sales return', 'returns inward', 'बिक्री वापसी']);
 }
