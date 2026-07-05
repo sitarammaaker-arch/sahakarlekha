@@ -263,11 +263,18 @@ export default function GstSummary() {
   }, [activeSales, returnClassification]);
 
   // ── GSTR-3B: Table 3.1 outward supplies ─────────────────────────────────
-  const outwardTaxable = { taxable: outputTotals.taxable, igst: outputTotals.igst, cgst: outputTotals.cgst, sgst: outputTotals.sgst };
-  const outwardNil = useMemo(() => {
-    const s = activeSales.filter(s => s.taxAmount === 0);
-    return { taxable: s.reduce((a, r) => a + r.netAmount, 0), igst: 0, cgst: 0, sgst: 0 };
-  }, [activeSales]);
+  // Partition taxable value correctly: 3.1(a) is "other than nil/exempt", so nil-rated
+  // sales belong ONLY to 3.1(c). Returns net into the bucket that matches the original
+  // supply (taxable return → 3.1(a); nil return → 3.1(c)). Tax figures are unchanged
+  // (nil carries zero tax) and already net of returns via outputTotals.
+  const outward31 = useMemo(() => {
+    let taxableVal = 0, nilVal = 0;
+    for (const s of activeSales) { if (s.taxAmount > 0) taxableVal += s.netAmount; else nilVal += s.netAmount; }
+    for (const r of activeSalesReturns) { if (r.taxAmount > 0) taxableVal -= r.netAmount; else nilVal -= r.netAmount; }
+    return { taxableVal, nilVal };
+  }, [activeSales, activeSalesReturns]);
+  const outwardTaxable = { taxable: outward31.taxableVal, igst: outputTotals.igst, cgst: outputTotals.cgst, sgst: outputTotals.sgst };
+  const outwardNil = { taxable: outward31.nilVal, igst: 0, cgst: 0, sgst: 0 };
 
   // ── GSTR-3B: Table 4 ITC ─────────────────────────────────────────────────
   // (A) ITC Available = GROSS purchase ITC; (B) ITC Reversed = purchase returns (debit notes);
@@ -341,7 +348,7 @@ export default function GstSummary() {
   const handleGstr3bJson = () => {
     const payload = {
       gstin: society.gstin || 'GSTIN_NOT_SET',
-      ret_period: fromDate.slice(0, 7).replace('-', ''),
+      ret_period: fromDate.slice(5, 7) + fromDate.slice(0, 4), // MMYYYY (GSTN format)
       sup_details: {
         osup_det: { txval: outwardTaxable.taxable, iamt: outwardTaxable.igst, camt: outwardTaxable.cgst, samt: outwardTaxable.sgst, csamt: 0 },
         osup_zero: { txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0 },
