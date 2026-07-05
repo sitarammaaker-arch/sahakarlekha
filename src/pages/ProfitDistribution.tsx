@@ -170,6 +170,40 @@ const ProfitDistribution: React.FC = () => {
     toast({ title: hi ? `✅ ${n} सदस्यों को डिविडेंड भुगतान` : `✅ Dividend paid to ${n} members`, description: fmt(settlementRows.reduce((s, r) => s + r.dividend, 0)) });
   };
 
+  // ── Dividend PAYMENT REGISTER — who's been paid, who's pending ─────────────
+  // Joins each member's ENTITLED dividend (settlementRows) with the actual
+  // per-member payment vouchers (Dr 1211, memberId-tagged) for audit evidence.
+  const paidByMember = useMemo(() => {
+    const m = new Map<string, { amount: number; voucherNo: string; date: string }>();
+    for (const v of vouchers) {
+      if (v.isDeleted || !v.memberId || !v.narration?.includes(fy)) continue;
+      if (!/dividend paid|डिविडेंड भुगतान/i.test(v.narration)) continue;
+      if (!getVoucherLines(v).some(l => l.accountId === ACC_DIVIDEND && l.type === 'Dr')) continue;
+      const prev = m.get(v.memberId);
+      m.set(v.memberId, { amount: Math.round(((prev?.amount || 0) + v.amount) * 100) / 100, voucherNo: v.voucherNo || prev?.voucherNo || '', date: v.date });
+    }
+    return m;
+  }, [vouchers, fy]);
+  const paymentRegister = useMemo(() =>
+    settlementRows.map(r => {
+      const paid = paidByMember.get(r.id);
+      const paidAmt = paid?.amount || 0;
+      const status: 'paid' | 'partial' | 'pending' =
+        paidAmt >= r.dividend - 0.01 ? 'paid' : paidAmt > 0 ? 'partial' : 'pending';
+      return { ...r, paidAmt, voucherNo: paid?.voucherNo || '', paidDate: paid?.date || '', status };
+    }),
+    [settlementRows, paidByMember]);
+  const regTotalEntitled = paymentRegister.reduce((s, r) => s + r.dividend, 0);
+  const regTotalPaid = paymentRegister.reduce((s, r) => s + r.paidAmt, 0);
+  const regPendingCount = paymentRegister.filter(r => r.status !== 'paid').length;
+
+  const exportPaymentRegister = () =>
+    downloadCSV(
+      ['Member', 'Entitled Dividend', 'Paid', 'Voucher No', 'Paid Date', 'Status'],
+      paymentRegister.map(r => [r.name, r.dividend, r.paidAmt, r.voucherNo || '—', r.paidDate || '—', r.status]),
+      'dividend-payment-register',
+    );
+
   // ── Post journals ──────────────────────────────────────────────────────────
   // Appropriations (reserve/education) are OPTIONAL — never block dividend/bonus.
   const canPost = ((!divPosted && totalDividend > 0) || (!bonusPosted && bonusAmount > 0)) && remaining >= 0;
@@ -593,6 +627,66 @@ const ProfitDistribution: React.FC = () => {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Dividend payment register (who's paid / pending) ── */}
+      {divPosted && paymentRegister.length > 0 && (
+        <Card>
+          <CardHeader className="py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4 text-amber-600" />
+                {hi ? 'डिविडेंड भुगतान रजिस्टर' : 'Dividend Payment Register'}
+              </CardTitle>
+              {regPendingCount === 0
+                ? <Badge className="bg-green-100 text-green-800 border-green-200"><CheckCircle2 className="h-3 w-3 mr-1" />{hi ? 'सभी भुगतान हुए' : 'All paid'}</Badge>
+                : <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">{regPendingCount} {hi ? 'बाकी' : 'pending'}</Badge>}
+              <Button variant="outline" size="sm" className="ml-auto gap-1" onClick={exportPaymentRegister}>
+                <Download className="h-4 w-4" />CSV
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{hi ? 'सदस्य' : 'Member'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'देय डिविडेंड' : 'Entitled'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'भुगतान' : 'Paid'}</TableHead>
+                  <TableHead>{hi ? 'वाउचर नं.' : 'Voucher No.'}</TableHead>
+                  <TableHead>{hi ? 'तिथि' : 'Date'}</TableHead>
+                  <TableHead>{hi ? 'स्थिति' : 'Status'}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paymentRegister.map(r => (
+                  <TableRow key={r.id}>
+                    <TableCell className="text-sm">{r.name}</TableCell>
+                    <TableCell className="text-right font-mono">{fmt(r.dividend)}</TableCell>
+                    <TableCell className="text-right font-mono">{r.paidAmt > 0 ? fmt(r.paidAmt) : '—'}</TableCell>
+                    <TableCell className="font-mono text-xs">{r.voucherNo || '—'}</TableCell>
+                    <TableCell className="text-sm">{r.paidDate ? fmtDate(r.paidDate) : '—'}</TableCell>
+                    <TableCell>
+                      {r.status === 'paid'
+                        ? <Badge className="bg-green-100 text-green-800 border-green-200 text-[10px]">{hi ? 'भुगतान हुआ' : 'Paid'}</Badge>
+                        : r.status === 'partial'
+                          ? <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[10px]">{hi ? 'आंशिक' : 'Partial'}</Badge>
+                          : <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px]">{hi ? 'बाकी' : 'Pending'}</Badge>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                <TableRow className="bg-muted/50 font-bold">
+                  <TableCell>{hi ? 'कुल' : 'Total'}</TableCell>
+                  <TableCell className="text-right font-mono">{fmt(regTotalEntitled)}</TableCell>
+                  <TableCell className="text-right font-mono">{fmt(regTotalPaid)}</TableCell>
+                  <TableCell colSpan={3} className="text-xs text-muted-foreground">
+                    {hi ? 'बकाया' : 'Outstanding'}: {fmt(Math.max(0, Math.round((regTotalEntitled - regTotalPaid) * 100) / 100))}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}
