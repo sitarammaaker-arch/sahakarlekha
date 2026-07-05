@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -20,6 +20,7 @@ import { Settings, Building2, Calendar, Wallet, Save, History, HardDrive, Downlo
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { getVoucherLines } from '@/lib/voucherUtils';
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
 import { SOCIETY_TEMPLATES } from '@/lib/storage';
 import type { SocietyType } from '@/types';
@@ -197,6 +198,23 @@ const SocietySetup: React.FC = () => {
 
   // --- P5-1: New FY Rollover Wizard ---
   const [rolloverOpen, setRolloverOpen] = useState(false);
+
+  // Un-appropriated surplus = net surplus − everything already moved out of Net Surplus
+  // (1208) this FY to any reserve/fund/dividend/bonus. A positive value at rollover means
+  // the surplus would carry forward un-appropriated (a bye-law concern) — warn, don't block.
+  const unAppropriatedSurplus = useMemo(() => {
+    let netProfit = 0;
+    try { netProfit = getProfitLoss().netProfit || 0; } catch { netProfit = 0; }
+    if (netProfit <= 0) return 0;
+    const appropriated = vouchers
+      .filter(v => !(v as { isDeleted?: boolean }).isDeleted && v.narration?.includes(society.financialYear))
+      .reduce((sum, v) => {
+        const lines = getVoucherLines(v);
+        if (!lines.some(l => l.accountId === '1208' && l.type === 'Dr')) return sum;
+        return sum + lines.filter(l => l.type === 'Cr' && l.accountId !== '1208').reduce((s, l) => s + l.amount, 0);
+      }, 0);
+    return Math.round((netProfit - appropriated) * 100) / 100;
+  }, [getProfitLoss, vouchers, society.financialYear]);
 
   const handleRolloverFY = () => {
     const [startYY, endYY] = society.financialYear.split('-');
@@ -712,6 +730,14 @@ const SocietySetup: React.FC = () => {
                             {item}
                           </div>
                         ))}
+                        {unAppropriatedSurplus > 1 && (
+                          <div className="flex items-start gap-1.5 text-xs text-amber-700 mt-1">
+                            <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                            {language === 'hi'
+                              ? `₹${unAppropriatedSurplus.toLocaleString('en-IN')} सरप्लस अभी आवंटित नहीं — पहले "फंड आवंटन" में पोस्ट करें।`
+                              : `Rs. ${unAppropriatedSurplus.toLocaleString('en-IN')} surplus not yet appropriated — post it in "Fund Appropriation" first.`}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1100,6 +1126,16 @@ const SocietySetup: React.FC = () => {
                     </li>
                   ))}
                 </ul>
+                {unAppropriatedSurplus > 1 && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                    <span>
+                      {language === 'hi'
+                        ? `₹${unAppropriatedSurplus.toLocaleString('en-IN')} सरप्लस अभी रिज़र्व/शिक्षा फंड या डिविडेंड में आवंटित नहीं हुआ — रोलओवर के बाद यह बिना-आवंटित आगे चला जाएगा। पहले "फंड आवंटन" में पोस्ट करना उचित है (उपनियमों अनुसार अनुशंसित; अनिवार्य नहीं)।`
+                        : `Rs. ${unAppropriatedSurplus.toLocaleString('en-IN')} of surplus has not been appropriated to reserve/education funds or dividend — after rollover it carries forward un-appropriated. Consider posting it in "Fund Appropriation" first (recommended per bye-laws; not mandatory).`}
+                    </span>
+                  </div>
+                )}
                 <p className="font-medium text-foreground">
                   {language === 'hi'
                     ? 'यह क्रिया पूर्ववत नहीं की जा सकती। क्या आप निश्चित हैं?'

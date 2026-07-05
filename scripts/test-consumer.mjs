@@ -828,5 +828,40 @@ function yearObjections(all, fy) {
   ok(yearObjections(all, '2025-26').length === 0, 'a year with no objections yields an empty list (report notes "none")');
 }
 
+// ── Year-end rollover: un-appropriated surplus warning ──────────────────────
+// Mirrors unAppropriatedSurplus in SocietySetup.tsx: netProfit − (Cr legs of any
+// voucher that Dr's Net Surplus 1208, for this FY).
+function unAppropriated(netProfit, vouchers, fy) {
+  if (netProfit <= 0) return 0;
+  const appropriated = vouchers
+    .filter(v => !v.isDeleted && (v.narration || '').includes(fy))
+    .reduce((sum, v) => {
+      const lines = v.lines || [];
+      if (!lines.some(l => l.accountId === '1208' && l.type === 'Dr')) return sum;
+      return sum + lines.filter(l => l.type === 'Cr' && l.accountId !== '1208').reduce((s, l) => s + l.amount, 0);
+    }, 0);
+  return Math.round((netProfit - appropriated) * 100) / 100;
+}
+{
+  const fy = '2024-25';
+  // Surplus 100000; reserve 25000 + education 1000 + dividend 4000 posted = 30000 appropriated
+  const vs = [
+    { narration: `Reserve Fund Appropriation @ 25% — FY ${fy}`, lines: [{ accountId: '1208', type: 'Dr', amount: 25000 }, { accountId: '1201', type: 'Cr', amount: 25000 }] },
+    { narration: `Education Fund Appropriation — FY ${fy}`, lines: [{ accountId: '1208', type: 'Dr', amount: 1000 }, { accountId: '1203', type: 'Cr', amount: 1000 }] },
+    { narration: `Dividend Appropriation — FY ${fy}`, lines: [{ accountId: '1208', type: 'Dr', amount: 4000 }, { accountId: '1211', type: 'Cr', amount: 4000 }] },
+    { narration: `Some other voucher — FY ${fy}`, lines: [{ accountId: '3301', type: 'Dr', amount: 500 }, { accountId: '4101', type: 'Cr', amount: 500 }] }, // not an appropriation
+  ];
+  ok(unAppropriated(100000, vs, fy) === 70000, 'un-appropriated = 100000 − (25000+1000+4000) = 70000 → warns at rollover');
+  // fully appropriated → no warning
+  const full = [{ narration: `Reserve Fund — FY ${fy}`, lines: [{ accountId: '1208', type: 'Dr', amount: 100000 }, { accountId: '1201', type: 'Cr', amount: 100000 }] }];
+  ok(unAppropriated(100000, full, fy) === 0, 'fully appropriated surplus → no rollover warning');
+  // deficit (loss) → nothing to appropriate
+  ok(unAppropriated(-5000, [], fy) === 0, 'a deficit year has no un-appropriated surplus');
+  // prior-FY appropriation does not reduce this FY surplus
+  ok(unAppropriated(100000, [{ narration: `Reserve — FY 2023-24`, lines: [{ accountId: '1208', type: 'Dr', amount: 100000 }, { accountId: '1201', type: 'Cr', amount: 100000 }] }], fy) === 100000, 'prior-FY appropriation ignored');
+  // deleted appropriation ignored
+  ok(unAppropriated(100000, [{ isDeleted: true, narration: `Reserve — FY ${fy}`, lines: [{ accountId: '1208', type: 'Dr', amount: 100000 }, { accountId: '1201', type: 'Cr', amount: 100000 }] }], fy) === 100000, 'deleted appropriation ignored');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
