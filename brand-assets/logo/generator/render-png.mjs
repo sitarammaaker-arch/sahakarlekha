@@ -20,6 +20,10 @@ const jobs = [
   ['SL_B-02_logo-with-tagline_v1.0.svg', 'SL_B-02_logo-with-tagline_2000.png', 2000, null],
   ['SL_B-02_tile-mono-white_v1.0.svg', 'SL_B-02_tile-mono-white_512.png', 512, null],
   ['SL_B-02_tile-mono-navy_v1.0.svg', 'SL_B-02_tile-mono-navy_512.png', 512, null],
+  // transparent-bg reversed variants (for decks/videos on navy surfaces)
+  ['SL_B-02_logo-horizontal-reversed_v1.0.svg', 'SL_B-02_logo-horizontal-reversed_2000.png', 2000, null],
+  ['SL_B-02_logo-horizontal-clean-reversed_v1.0.svg', 'SL_B-02_logo-horizontal-clean-reversed_2000.png', 2000, null],
+  ['SL_B-02_logo-horizontal-clean_v1.0.svg', 'SL_B-02_logo-horizontal-clean_2000.png', 2000, null],
 ];
 
 for (const [svgFile, outFile, width, background] of jobs) {

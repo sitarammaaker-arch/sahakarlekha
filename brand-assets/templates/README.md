@@ -1,4 +1,26 @@
-# B-04 Template Masters — Social & Video
+# B-04 Template Masters
+
+Three systems: **social/video** (JSON → PNG), **A4 documents** (HTML →
+print-to-PDF), **deck** (PPTX master). All brand-locked.
+
+## Deck master (`deck/SL_B-04_deck-master_hien_v1.0.pptx`)
+
+8 ready layouts: title · section divider · bullets · two-column+screenshot ·
+stat cards · table · chart · closing. Each slide's **speaker notes** explain
+what to edit. Copy the file, keep the layouts, replace the sample text.
+**One-time setup on the presenting machine:** install the fonts from
+`brand-assets/fonts` (select all TTFs → right-click → Install) — otherwise
+Windows shows Devanagari in Nirmala UI (readable, but off-brand).
+Regenerate the master itself: `npm run gen:deck` (layout changes = Brand
+Book change — founder sign-off).
+
+## A4 document (`document/SL_B-04_doc-a4_hien_v1.0.html`)
+
+Copy → edit `<main>` → open in Chrome → Ctrl+P → Save as PDF (A4,
+✓ Background graphics). Letterhead, tables, callouts, checklist, CTA box,
+signature row, tricolor footer built in. Fonts load from the repo — offline OK.
+
+# Social & Video (JSON-driven)
 
 Brand-locked, JSON-driven social media templates. Layout, colors, logo,
 tricolor strip are **law** (from the Brand Book); you edit only the words.
