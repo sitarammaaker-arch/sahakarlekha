@@ -609,5 +609,39 @@ function adjustmentLines(row, bankId, contraId) {
   ok(bal(inLines) && bal(outLines), 'adjusting entry is balanced (Dr == Cr)');
 }
 
+// ── KCC loan repayment: principal/interest split + balanced receipt voucher ──
+// Mirrors handleRepayment in KccLoan.tsx.
+function repaymentPosting(loan, totalAmt, interestAmt, mode) {
+  const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const interest = r2(Math.max(0, Math.min(interestAmt, totalAmt)));
+  const principal = r2(totalAmt - interest);
+  const debitAcc = mode === 'bank' ? '3302' : '3301';
+  const lines = [{ accountId: debitAcc, type: 'Dr', amount: totalAmt }];
+  if (principal > 0) lines.push({ accountId: '3313', type: 'Cr', amount: principal });
+  if (interest > 0) lines.push({ accountId: '4408', type: 'Cr', amount: interest });
+  return {
+    lines, principal, interest,
+    newRepaid: r2(loan.repaidAmount + principal),
+    newOutstanding: Math.max(0, r2(loan.outstandingAmount - principal)),
+  };
+}
+{
+  const loan = { repaidAmount: 0, outstandingAmount: 10000 };
+  // ₹2000 repayment, ₹300 of which is interest → Dr Bank 2000 / Cr Loan 1700 / Cr Interest 300
+  const p = repaymentPosting(loan, 2000, 300, 'bank');
+  ok(p.principal === 1700 && p.interest === 300, 'repayment split: principal 1700, interest 300');
+  ok(p.lines[0].accountId === '3302' && p.lines[0].type === 'Dr' && p.lines[0].amount === 2000, 'Dr Bank 2000');
+  ok(p.lines.some(l => l.accountId === '3313' && l.type === 'Cr' && l.amount === 1700), 'Cr KCC Loan 1700 (principal)');
+  ok(p.lines.some(l => l.accountId === '4408' && l.type === 'Cr' && l.amount === 300), 'Cr Interest Income 300');
+  const dr = p.lines.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0);
+  const cr = p.lines.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0);
+  ok(dr === cr, 'repayment voucher is balanced (Dr == Cr)');
+  // only principal reduces outstanding; interest does not
+  ok(p.newOutstanding === 8300 && p.newRepaid === 1700, 'only principal reduces outstanding: 10000−1700=8300');
+  // pure-principal repayment (no interest) → 2 lines, cash
+  const p2 = repaymentPosting(loan, 1000, 0, 'cash');
+  ok(p2.lines.length === 2 && p2.lines[0].accountId === '3301' && p2.interest === 0, 'pure-principal cash repayment: Dr Cash / Cr Loan, no interest line');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

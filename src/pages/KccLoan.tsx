@@ -149,11 +149,32 @@ export default function KccLoan() {
     toast({ title: hi ? 'KCC ऋण दर्ज किया गया' : 'KCC Loan recorded' });
   }, [form, loans, accounts, user, hi, societyId]);
 
-  const handleRepayment = useCallback(async (loanId: string, repayAmt: number) => {
+  const handleRepayment = useCallback(async (loanId: string, totalAmt: number, interestAmt: number, mode: 'cash' | 'bank', date: string) => {
+    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', description: hi ? 'ऑडिट-लॉक होने पर दर्ज नहीं कर सकते।' : 'Cannot record while FY is audit-locked.', variant: 'destructive' }); return; }
     const loan = loans.find(l => l.id === loanId);
     if (!loan) return;
-    const newRepaid = loan.repaidAmount + repayAmt;
-    const newOutstanding = Math.max(0, loan.outstandingAmount - repayAmt);
+    const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+    const interest = round2(Math.max(0, Math.min(interestAmt, totalAmt)));
+    const principal = round2(totalAmt - interest);
+    const newRepaid = round2(loan.repaidAmount + principal);           // only principal reduces the loan
+    const newOutstanding = Math.max(0, round2(loan.outstandingAmount - principal));
+
+    // Post the receipt: Dr Cash/Bank (total) / Cr KCC Loan (principal) / Cr Interest Income (interest).
+    const loanAccId = accounts.find(a => a.id === '3313' || a.name.toLowerCase().includes('kcc') || a.name.toLowerCase().includes('crop loan'))?.id || '3313';
+    const debitAccId = mode === 'bank' ? (accounts.find(a => a.id === '3302')?.id || '3302') : '3301';
+    const lid = () => crypto.randomUUID();
+    const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: debitAccId, type: 'Dr', amount: totalAmt }];
+    if (principal > 0) lines.push({ id: lid(), accountId: loanAccId, type: 'Cr', amount: principal });
+    if (interest > 0) lines.push({ id: lid(), accountId: accounts.find(a => a.id === '4408' || a.name.toLowerCase().includes('interest'))?.id || '4408', type: 'Cr', amount: interest });
+    let voucherId: string | undefined;
+    try {
+      const v = addVoucher({
+        date, type: 'receipt', debitAccountId: debitAccId, creditAccountId: loanAccId, amount: totalAmt, lines,
+        narration: `KCC Loan repayment — ${loan.memberName} (${loan.loanNo})${interest > 0 ? ` incl. interest ₹${interest.toLocaleString('en-IN')}` : ''}`,
+        createdBy: user?.name || '',
+      } as Parameters<typeof addVoucher>[0]);
+      voucherId = v?.id || undefined;
+    } catch { /* ledger post best-effort; loan record still updates */ }
 
     const { error } = await kccLoanUpdate(loanId, { repaidAmount: newRepaid, outstandingAmount: newOutstanding });
     if (error) {
@@ -162,8 +183,8 @@ export default function KccLoan() {
     setLoans(prev => prev.map(l =>
       l.id !== loanId ? l : { ...l, repaidAmount: newRepaid, outstandingAmount: newOutstanding }
     ));
-    toast({ title: hi ? 'चुकौती दर्ज की गई' : 'Repayment recorded' });
-  }, [loans, hi, toast]);
+    toast({ title: hi ? '✅ चुकौती दर्ज (बही में पोस्ट)' : '✅ Repayment recorded & posted', description: `${totalAmt.toLocaleString('en-IN')}${interest > 0 ? ` · ${hi ? 'ब्याज' : 'interest'} ₹${interest.toLocaleString('en-IN')}` : ''}${voucherId ? '' : hi ? ' (वाउचर पोस्ट नहीं हुआ)' : ' (voucher not posted)'}` });
+  }, [loans, accounts, society, addVoucher, user, hi, toast]);
 
   const kccHeaders = ['Loan No.', 'Member', 'Crop', 'Season', 'Hectare', 'Sanctioned', 'Drawn', 'Repaid', 'Outstanding', 'Rate %', 'Due Date', 'Status'];
 
@@ -416,9 +437,15 @@ export default function KccLoan() {
   );
 }
 
-function RepayButton({ loan, hi, onRepay }: { loan: KccLoan; hi: boolean; onRepay: (id: string, amt: number) => void }) {
+function RepayButton({ loan, hi, onRepay }: { loan: KccLoan; hi: boolean; onRepay: (id: string, total: number, interest: number, mode: 'cash' | 'bank', date: string) => void }) {
   const [open, setOpen] = useState(false);
   const [amt, setAmt] = useState('');
+  const [interest, setInterest] = useState('');
+  const [mode, setMode] = useState<'cash' | 'bank'>('cash');
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const total = Number(amt) || 0;
+  const int = Number(interest) || 0;
+  const principal = Math.max(0, total - int);
 
   return (
     <>
@@ -432,12 +459,30 @@ function RepayButton({ loan, hi, onRepay }: { loan: KccLoan; hi: boolean; onRepa
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">{hi ? 'बकाया:' : 'Outstanding:'} <strong>{loan.outstandingAmount.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' })}</strong></p>
-            <Label>{hi ? 'चुकौती राशि' : 'Repayment Amount'}</Label>
-            <Input type="number" value={amt} onChange={e => setAmt(e.target.value)} max={loan.outstandingAmount} />
+            <div>
+              <Label>{hi ? 'कुल चुकौती राशि' : 'Total Repayment Amount'}</Label>
+              <Input type="number" value={amt} onChange={e => setAmt(e.target.value)} />
+            </div>
+            <div>
+              <Label>{hi ? 'इसमें ब्याज (वैकल्पिक)' : 'Of which interest (optional)'}</Label>
+              <Input type="number" value={interest} onChange={e => setInterest(e.target.value)} max={total} placeholder="0" />
+              {total > 0 && <p className="text-xs text-muted-foreground mt-1">{hi ? 'मूलधन' : 'Principal'}: ₹{principal.toLocaleString('en-IN')} · {hi ? 'ब्याज' : 'Interest'}: ₹{int.toLocaleString('en-IN')}</p>}
+            </div>
+            <div>
+              <Label>{hi ? 'भुगतान विधि' : 'Payment mode'}</Label>
+              <select value={mode} onChange={e => setMode(e.target.value as 'cash' | 'bank')} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <option value="cash">{hi ? 'नकद' : 'Cash'}</option>
+                <option value="bank">{hi ? 'बैंक' : 'Bank'}</option>
+              </select>
+            </div>
+            <div>
+              <Label>{hi ? 'तिथि' : 'Date'}</Label>
+              <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+            </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
-              <Button onClick={() => { if (Number(amt) > 0) { onRepay(loan.id, Number(amt)); setOpen(false); } }}>
-                {hi ? 'सहेजें' : 'Save'}
+              <Button disabled={!(total > 0) || int > total} onClick={() => { onRepay(loan.id, total, int, mode, date); setOpen(false); setAmt(''); setInterest(''); }}>
+                {hi ? 'सहेजें व पोस्ट करें' : 'Save & Post'}
               </Button>
             </div>
           </div>
