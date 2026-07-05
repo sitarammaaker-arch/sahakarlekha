@@ -91,6 +91,8 @@ const ProfitDistribution: React.FC = () => {
   const [dividendRate, setDividendRate] = useState('');   // % of share capital
   const [bonusAmt, setBonusAmt]         = useState('');   // flat amount
   const [confirmOpen, setConfirmOpen]   = useState(false);
+  const [payMode, setPayMode]           = useState<'cash' | 'bank'>('cash');
+  const [payDate, setPayDate]           = useState(() => new Date().toISOString().split('T')[0]);
 
   const dividendRatePct = parseFloat(dividendRate) || 0;
   const bonusAmount     = parseFloat(bonusAmt) || 0;
@@ -131,6 +133,41 @@ const ProfitDistribution: React.FC = () => {
       });
     });
     return bal;
+  };
+
+  // ── Dividend PAYMENT (settlement) ──────────────────────────────────────────
+  // Appropriation only credits the payable (Cr 1211). Settlement pays members
+  // (Dr 1211 / Cr Cash-Bank) so the liability clears and each member's ledger
+  // shows the dividend received.
+  const existingDivPayment = useMemo(() =>
+    vouchers.find(v => !v.isDeleted && v.narration.includes(fy) && /dividend paid|डिविडेंड भुगतान/i.test(v.narration)
+      && getVoucherLines(v).some(l => l.accountId === ACC_DIVIDEND && l.type === 'Dr')),
+    [vouchers, fy]);
+  const divPaid = !!existingDivPayment;
+  // Per-member split of the POSTED dividend, proportional to share capital (exact, and
+  // robust after a refresh when the rate input has reset).
+  const settlementRows = useMemo(() => {
+    if (!divPosted || totalShareCapital <= 0) return [] as { id: string; name: string; dividend: number }[];
+    return activeMembers
+      .map(m => ({ id: m.id, name: m.name, dividend: Math.round((m.shareCapital || 0) / totalShareCapital * postedDividend * 100) / 100 }))
+      .filter(r => r.dividend > 0);
+  }, [divPosted, activeMembers, totalShareCapital, postedDividend]);
+
+  const settleDividend = () => {
+    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    if (!divPosted || divPaid || settlementRows.length === 0) return;
+    const creditAcc = payMode === 'bank' ? (accounts.find(a => a.id === '3302')?.id || '3302') : '3301';
+    let n = 0;
+    for (const r of settlementRows) {
+      addVoucher({
+        type: 'payment', date: payDate,
+        debitAccountId: ACC_DIVIDEND, creditAccountId: creditAcc, amount: r.dividend,
+        narration: `Dividend paid to ${r.name} — FY ${fy}`,
+        createdBy: user?.name ?? 'System', memberId: r.id,
+      });
+      n++;
+    }
+    toast({ title: hi ? `✅ ${n} सदस्यों को डिविडेंड भुगतान` : `✅ Dividend paid to ${n} members`, description: fmt(settlementRows.reduce((s, r) => s + r.dividend, 0)) });
   };
 
   // ── Post journals ──────────────────────────────────────────────────────────
@@ -508,6 +545,54 @@ const ProfitDistribution: React.FC = () => {
                 ))}
               </TableBody>
             </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Dividend settlement (pay members) ── */}
+      {divPosted && (
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Coins className="h-4 w-4 text-amber-600" />
+              {hi ? 'सदस्यों को डिविडेंड भुगतान' : 'Pay Dividend to Members'}
+              {divPaid
+                ? <Badge className="ml-auto bg-green-100 text-green-800 border-green-200"><CheckCircle2 className="h-3 w-3 mr-1" />{hi ? 'भुगतान हुआ' : 'Paid'}</Badge>
+                : <Badge variant="outline" className="ml-auto bg-amber-50 text-amber-700 border-amber-200">{hi ? 'देय' : 'Payable'} {fmt(postedDividend)}</Badge>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {divPaid ? (
+              <p className="text-sm text-muted-foreground">
+                {hi ? 'डिविडेंड देय (1211) सदस्यों को चुकता कर दिया गया है — प्रत्येक सदस्य की बही में दिख रहा है।' : 'The dividend payable (1211) has been settled to members — visible in each member ledger.'}
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  {hi ? 'अपॉइंटमेंट पोस्ट हो चुका (Cr 1211)। नीचे भुगतान करने पर प्रत्येक सदस्य को शेयर-पूँजी अनुपात में डिविडेंड चुकता होगा (Dr 1211 / Cr नकद-बैंक)।'
+                      : 'Appropriation is posted (Cr 1211). Paying below settles each member their dividend, split by share capital (Dr 1211 / Cr Cash-Bank).'}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                  <div className="space-y-1">
+                    <Label>{hi ? 'भुगतान विधि' : 'Payment mode'}</Label>
+                    <select value={payMode} onChange={e => setPayMode(e.target.value as 'cash' | 'bank')} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+                      <option value="cash">{hi ? 'नकद' : 'Cash'}</option>
+                      <option value="bank">{hi ? 'बैंक' : 'Bank'}</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1"><Label>{hi ? 'तिथि' : 'Date'}</Label><Input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} /></div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">{settlementRows.length} {hi ? 'सदस्य' : 'members'}</p>
+                    <p className="text-lg font-bold text-amber-700">{fmt(settlementRows.reduce((s, r) => s + r.dividend, 0))}</p>
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button className="gap-1 bg-amber-600 hover:bg-amber-700" disabled={settlementRows.length === 0} onClick={settleDividend}>
+                    <Coins className="h-4 w-4" />{hi ? 'डिविडेंड भुगतान करें' : 'Pay Dividend'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
