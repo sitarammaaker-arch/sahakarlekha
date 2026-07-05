@@ -359,5 +359,58 @@ ok(Object.values(CODE39).every(p => p.length === 9 && (p.match(/w/g)||[]).length
   ok(reversed === 20, 'deleted purchase return excluded from ITC reversal');
 }
 
+// ── GSTR-1: sales-return credit notes → CDNR (registered) vs net B2CS + net HSN ──
+// Mirrors GstSummary.returnClassification + b2csSummary/hsnSummary netting.
+function classifyReturns(returns, saleById, customerMap, stockItems) {
+  const cdnr = new Map(), b2cByRate = new Map(), hsnDelta = new Map();
+  for (const r of returns) {
+    if (r.isDeleted) continue;
+    const sale = saleById.get(r.originalSaleId);
+    const rate = sale ? (sale.cgstPct + sale.sgstPct + sale.igstPct)
+      : (r.netAmount > 0 ? Math.round((r.taxAmount / r.netAmount) * 100) : 0);
+    const cust = r.customerId ? customerMap.get(r.customerId) : undefined;
+    if (cust?.gstNo) {
+      const b = cdnr.get(cust.gstNo) ?? { ctin: cust.gstNo, notes: [] };
+      b.notes.push({ nt_num: r.returnNo, rate, txval: r.netAmount, tax: r.taxAmount });
+      cdnr.set(cust.gstNo, b);
+    } else {
+      const b = b2cByRate.get(rate) ?? { rate, taxableValue: 0, tax: 0 };
+      b.taxableValue += r.netAmount; b.tax += r.taxAmount; b2cByRate.set(rate, b);
+    }
+    for (const it of r.items) {
+      const hsn = (stockItems.find(s => s.id === it.itemId) || {}).hsnCode || 'N/A';
+      const d = hsnDelta.get(hsn) ?? { qty: 0, taxable: 0 };
+      d.qty += it.qty; d.taxable += it.amount; hsnDelta.set(hsn, d);
+    }
+  }
+  return { cdnr: [...cdnr.values()], b2cByRate, hsnDelta };
+}
+{
+  const saleById = new Map([
+    ['S1', { id: 'S1', cgstPct: 9, sgstPct: 9, igstPct: 0 }],   // 18% B2B sale
+    ['S2', { id: 'S2', cgstPct: 2.5, sgstPct: 2.5, igstPct: 0 }], // 5% B2C sale
+  ]);
+  const customerMap = new Map([['C1', { id: 'C1', name: 'Registered Traders', gstNo: '09ABCDE1234F1Z5' }]]);
+  const stockItems = [{ id: 'I1', hsnCode: '1006' }];
+  const returns = [
+    // registered credit note → CDNR
+    { returnNo: 'SRET/1', originalSaleId: 'S1', customerId: 'C1', netAmount: 1000, taxAmount: 180, grandTotal: 1180, items: [{ itemId: 'I1', qty: 5, amount: 1000 }] },
+    // unregistered (member/B2C) credit note → nets B2CS
+    { returnNo: 'SRET/2', originalSaleId: 'S2', customerId: undefined, netAmount: 400, taxAmount: 20, grandTotal: 420, items: [{ itemId: 'I1', qty: 2, amount: 400 }] },
+    // deleted → ignored
+    { returnNo: 'SRET/3', originalSaleId: 'S2', isDeleted: true, netAmount: 999, taxAmount: 50, grandTotal: 1049, items: [] },
+  ];
+  const c = classifyReturns(returns, saleById, customerMap, stockItems);
+  ok(c.cdnr.length === 1 && c.cdnr[0].ctin === '09ABCDE1234F1Z5', 'registered return → CDNR keyed by GSTIN');
+  ok(c.cdnr[0].notes[0].rate === 18 && c.cdnr[0].notes[0].txval === 1000, 'CDNR note carries rate 18 + taxable 1000 from original sale');
+  ok(!c.b2cByRate.has(18), 'registered return NOT in B2CS');
+  ok(c.b2cByRate.get(5) && c.b2cByRate.get(5).taxableValue === 400, 'B2C return nets into B2CS at 5% (−400)');
+  // net B2CS: gross 5% sales 1000 − returns 400 = 600
+  const grossB2cs5 = 1000;
+  ok(grossB2cs5 - c.b2cByRate.get(5).taxableValue === 600, 'B2CS 5% net = gross 1000 − return 400 = 600');
+  // HSN net: qty 5+2 = 7 reduced from HSN 1006 (deleted return excluded)
+  ok(c.hsnDelta.get('1006') && c.hsnDelta.get('1006').qty === 7 && c.hsnDelta.get('1006').taxable === 1400, 'HSN 1006 delta: qty 7, taxable 1400 (deleted excluded)');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
