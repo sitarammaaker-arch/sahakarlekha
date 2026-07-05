@@ -272,5 +272,39 @@ function poToPurchaseItems(items) {
   ok(pItems.length === 1 && pItems[0].itemId === 'A' && pItems[0].qty === 8 && pItems[0].amount === 352, 'GRN → 1 purchase line (Sugar × 8 = 352), zero-received Salt dropped');
 }
 
+// ── Mirror: src/lib/consumer/barcode.ts (Code 39) ──
+const CODE39 = {
+  '0':'nnnwwnwnn','1':'wnnwnnnnw','2':'nnwwnnnnw','3':'wnwwnnnnn','4':'nnnwwnnnw','5':'wnnwwnnnn','6':'nnwwwnnnn','7':'nnnwnnwnw','8':'wnnwnnwnn','9':'nnwwnnwnn',
+  'A':'wnnnnwnnw','B':'nnwnnwnnw','C':'wnwnnwnnn','D':'nnnnwwnnw','E':'wnnnwwnnn','F':'nnwnwwnnn','G':'nnnnnwwnw','H':'wnnnnwwnn','I':'nnwnnwwnn','J':'nnnnwwwnn',
+  'K':'wnnnnnnww','L':'nnwnnnnww','M':'wnwnnnnwn','N':'nnnnwnnww','O':'wnnnwnnwn','P':'nnwnwnnwn','Q':'nnnnnnwww','R':'wnnnnnwwn','S':'nnwnnnwwn','T':'nnnnwnwwn',
+  'U':'wwnnnnnnw','V':'nwwnnnnnw','W':'wwwnnnnnn','X':'nwnnwnnnw','Y':'wwnnwnnnn','Z':'nwwnwnnnn','-':'nwnnnnwnw','.':'wwnnnnwnn',' ':'nwwnnnwnn','$':'nwnwnwnnn',
+  '/':'nwnwnnnwn','+':'nwnnnwnwn','%':'nnnwnwnwn','*':'nwnnwnwnn',
+};
+const sanitizeCode39 = (raw) => (raw||'').toUpperCase().split('').filter(c => c !== '*' && CODE39[c]).join('');
+function code39Segments(raw) {
+  const value = `*${sanitizeCode39(raw)}*`;
+  const segs = [];
+  for (let ci=0; ci<value.length; ci++) {
+    const p = CODE39[value[ci]];
+    for (let ei=0; ei<9; ei++) segs.push({ black: ei%2===0, units: p[ei]==='w'?3:1 });
+    if (ci<value.length-1) segs.push({ black:false, units:1 });
+  }
+  return segs;
+}
+
+// 22. sanitise to the Code 39 charset (upper-case, drop unsupported + '*')
+ok(sanitizeCode39('itm/001') === 'ITM/001', 'lowercase → upper, / kept');
+ok(sanitizeCode39('a!b*c') === 'ABC', "'!' and '*' dropped");
+
+// 23. every Code 39 character has exactly 3 wide elements (table invariant)
+ok(Object.values(CODE39).every(p => p.length === 9 && (p.match(/w/g)||[]).length === 3), 'all 43 patterns are 9 elements with 3 wides');
+
+// 24. segment structure: '*A*' → 3 chars × 9 + 2 inter-char gaps = 29; starts with a narrow bar
+{
+  const segs = code39Segments('A');
+  ok(segs.length === 29, "'A' → 29 segments (3 chars × 9 + 2 gaps)");
+  ok(segs[0].black === true && segs[0].units === 1, 'first segment is a narrow bar (start *)');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

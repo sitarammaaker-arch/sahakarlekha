@@ -93,6 +93,7 @@ export const translations: Translations = {
   memberCredit: { hi: 'सदस्य उधार', en: 'Member Credit' },
   expiryDamage: { hi: 'समाप्ति एवं क्षति', en: 'Expiry & Damage' },
   purchaseOrders: { hi: 'खरीद ऑर्डर (PO)', en: 'Purchase Orders' },
+  barcodeLabels: { hi: 'बारकोड लेबल', en: 'Barcode Labels' },
   patronage: { hi: 'संरक्षण रिबेट', en: 'Patronage Rebate' },
   consumerDividend: { hi: 'लाभांश', en: 'Dividend' },
   consumerRegisters: { hi: 'उपभोक्ता रजिस्टर', en: 'Consumer Registers' },
