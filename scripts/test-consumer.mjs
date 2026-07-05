@@ -785,5 +785,29 @@ function purchasePosting(member, amount, mode) {
   ok(r.newShareCapital === 3000, 'purchase 2000 then refund 2000 → back to 3000');
 }
 
+// ── Share transfer between members: two net-zero vouchers via suspense 9999 ──
+// Mirrors transferShareCapital in DataContext.
+function transferPosting(from, to, amount) {
+  const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const amt = r2(Math.max(0, Math.min(amount, from.shareCapital || 0)));
+  const vFrom = [{ accountId: '1102', type: 'Dr', amount: amt }, { accountId: '9999', type: 'Cr', amount: amt }]; // memberId = from
+  const vTo   = [{ accountId: '9999', type: 'Dr', amount: amt }, { accountId: '1102', type: 'Cr', amount: amt }]; // memberId = to
+  return { amt, vFrom, vTo, newFrom: r2((from.shareCapital || 0) - amt), newTo: r2((to.shareCapital || 0) + amt) };
+}
+{
+  const from = { shareCapital: 5000 }, to = { shareCapital: 1000 };
+  const t = transferPosting(from, to, 2000);
+  ok(t.vFrom[0].accountId === '1102' && t.vFrom[0].type === 'Dr' && t.vFrom[1].accountId === '9999', 'transferor voucher: Dr Share Capital 1102 / Cr Suspense 9999');
+  ok(t.vTo[0].accountId === '9999' && t.vTo[0].type === 'Dr' && t.vTo[1].accountId === '1102' && t.vTo[1].type === 'Cr', 'transferee voucher: Dr Suspense 9999 / Cr Share Capital 1102');
+  ok(t.newFrom === 3000 && t.newTo === 3000, 'holdings move: from 5000→3000, to 1000→3000');
+  // GL net effect: 1102 unchanged, 9999 nets to zero
+  const legs = [...t.vFrom, ...t.vTo];
+  const net = (a) => legs.filter(l => l.accountId === a).reduce((s, l) => s + (l.type === 'Dr' ? l.amount : -l.amount), 0);
+  ok(net('1102') === 0, 'GL: Share Capital 1102 total unchanged (transfer, not issue/refund)');
+  ok(net('9999') === 0, 'GL: Suspense 9999 nets to zero');
+  // capped at sender holdings
+  ok(transferPosting(from, to, 9999).amt === 5000, 'transfer capped at sender share capital (5000)');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
