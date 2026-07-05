@@ -1639,6 +1639,7 @@ export interface TdsEntry {
   quarter: TdsQuarter;
   financialYear: string;
   status: TdsStatus;
+  isDeleted?: boolean;
   createdAt: string;
 }
 
@@ -1652,5 +1653,6 @@ export interface TdsChallan {
   quarter: TdsQuarter;
   financialYear: string;
   status: 'paid' | 'pending';
+  isDeleted?: boolean;
   createdAt: string;
 }

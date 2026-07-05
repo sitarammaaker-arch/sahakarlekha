@@ -2,10 +2,12 @@
  * TDS Register — Quarterly TDS tracking + Form 26Q export
  * Auto-imports from purchases, allows manual entries, challan linking, 26Q text export
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
+import { supabase } from '@/lib/supabase';
+import * as storage from '@/lib/storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Download, Plus, AlertTriangle, CheckCircle2, Clock, FileSpreadsheet, Calendar } from 'lucide-react';
+import { FileText, Download, Plus, AlertTriangle, CheckCircle2, Clock, FileSpreadsheet, Calendar, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
@@ -24,6 +26,14 @@ import type { TdsEntry, TdsChallan, TdsSection, TdsDeducteeType, TdsQuarter } fr
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
+
+// Extract PAN (chars 3–12) from a GSTIN, but ONLY when it's a well-formed 15-char
+// GSTIN — otherwise return '' so a missing/short GSTIN can't produce a corrupt PAN
+// that silently breaks 26Q export.
+const panFromGstin = (gstin?: string): string => {
+  const g = (gstin || '').trim().toUpperCase();
+  return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/.test(g) ? g.substring(2, 12) : '';
+};
 
 const TDS_SECTIONS: { value: TdsSection; label: string; rate: string }[] = [
   { value: '192', label: 'Sec 192 — Salary', rate: 'Slab' },
@@ -74,10 +84,23 @@ const TdsRegister: React.FC = () => {
   const { toast } = useToast();
   const hi = language === 'hi';
   const fy = society.financialYear;
+  const societyId = user?.societyId || 'SOC001';
+  const withSoc = <T extends object>(d: T) => ({ ...d, society_id: societyId });
 
-  // State
-  const [entries, setEntries] = useState<TdsEntry[]>([]);
-  const [challans, setChallans] = useState<TdsChallan[]>([]);
+  // State — manual entries + challans (persisted; Supabase-first, localStorage fallback)
+  const [entries, setEntries] = useState<TdsEntry[]>(() => storage.getTdsEntries());
+  const [challans, setChallans] = useState<TdsChallan[]>(() => storage.getTdsChallans());
+  useEffect(() => {
+    if (!user?.societyId) { setEntries([]); setChallans([]); return; }
+    supabase.from('tds_entries').select('*').eq('society_id', user.societyId).then(
+      ({ data, error }) => setEntries(error || !data ? storage.getTdsEntries() : (data as TdsEntry[])),
+      () => setEntries(storage.getTdsEntries()),
+    );
+    supabase.from('tds_challans').select('*').eq('society_id', user.societyId).then(
+      ({ data, error }) => setChallans(error || !data ? storage.getTdsChallans() : (data as TdsChallan[])),
+      () => setChallans(storage.getTdsChallans()),
+    );
+  }, [user?.societyId]);
   const [selectedQuarter, setSelectedQuarter] = useState<TdsQuarter>(() => getQuarterFromDate(new Date().toISOString().split('T')[0]));
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [showAddChallan, setShowAddChallan] = useState(false);
@@ -98,7 +121,7 @@ const TdsRegister: React.FC = () => {
         return {
           id: `pur-${p.id}`,
           date: p.date,
-          deducteePan: supplier?.gstNo?.substring(2, 12) || '',
+          deducteePan: panFromGstin(supplier?.gstNo),
           deducteeName: p.supplierName || supplier?.name || '',
           deducteeType: 'firm' as TdsDeducteeType,
           section: '194Q' as TdsSection,
@@ -115,10 +138,12 @@ const TdsRegister: React.FC = () => {
       });
   }, [purchases, suppliers, fy]);
 
-  // Combined entries (auto + manual)
-  const allEntries = useMemo(() => [...purchaseTdsEntries, ...entries], [purchaseTdsEntries, entries]);
+  // Combined entries (auto-imported + persisted manual, excluding soft-deleted)
+  const activeManualEntries = useMemo(() => entries.filter(e => !e.isDeleted), [entries]);
+  const activeChallans = useMemo(() => challans.filter(c => !c.isDeleted), [challans]);
+  const allEntries = useMemo(() => [...purchaseTdsEntries, ...activeManualEntries], [purchaseTdsEntries, activeManualEntries]);
   const quarterEntries = allEntries.filter(e => e.quarter === selectedQuarter && e.financialYear === fy);
-  const quarterChallans = challans.filter(c => c.quarter === selectedQuarter && c.financialYear === fy);
+  const quarterChallans = activeChallans.filter(c => c.quarter === selectedQuarter && c.financialYear === fy);
 
   // Stats
   const totalDeducted = quarterEntries.reduce((s, e) => s + e.tdsAmount, 0);
@@ -126,8 +151,13 @@ const TdsRegister: React.FC = () => {
   const totalPending = totalDeducted - totalDeposited;
   const dueDate = getQuarterDueDate(selectedQuarter, fy);
 
+  // ── RULE-1 persistence helpers ────────────────────────────────────────────
+  const persistEntries = (next: TdsEntry[]) => { setEntries(next); storage.setTdsEntries(next); };
+  const persistChallans = (next: TdsChallan[]) => { setChallans(next); storage.setTdsChallans(next); };
+
   // Add manual entry
   const handleAddEntry = () => {
+    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', description: hi ? 'ऑडिट-लॉक होने पर जोड़ नहीं सकते।' : 'Cannot add while FY is audit-locked.', variant: 'destructive' }); return; }
     const entry: TdsEntry = {
       ...entryForm,
       id: crypto.randomUUID(),
@@ -136,14 +166,24 @@ const TdsRegister: React.FC = () => {
       tdsAmount: +(entryForm.grossAmount * entryForm.tdsRate / 100).toFixed(2),
       createdAt: new Date().toISOString(),
     };
-    setEntries(prev => [...prev, entry]);
+    const prev = entries;
+    persistEntries([...entries, entry]);
     setShowAddEntry(false);
     setEntryForm(EMPTY_ENTRY());
-    toast({ title: hi ? 'TDS एंट्री जोड़ी गई' : 'TDS entry added' });
+    supabase.from('tds_entries').upsert(withSoc(entry)).then(({ error }) => {
+      if (error) {
+        console.error('TDS entry save error:', error.message);
+        persistEntries(prev); // RULE-1 rollback
+        toast({ title: hi ? 'TDS एंट्री सेव नहीं हुई' : 'TDS entry not saved', description: `Cloud save fail — ${error.message}. (Pehli baar: tds_entries block chalayein.)`, variant: 'destructive', duration: 12000 });
+      } else {
+        toast({ title: hi ? '✅ TDS एंट्री जोड़ी गई' : '✅ TDS entry added' });
+      }
+    });
   };
 
   // Add challan
   const handleAddChallan = () => {
+    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', description: hi ? 'ऑडिट-लॉक होने पर जोड़ नहीं सकते।' : 'Cannot add while FY is audit-locked.', variant: 'destructive' }); return; }
     const challan: TdsChallan = {
       ...challanForm,
       id: crypto.randomUUID(),
@@ -151,10 +191,31 @@ const TdsRegister: React.FC = () => {
       quarter: selectedQuarter,
       createdAt: new Date().toISOString(),
     };
-    setChallans(prev => [...prev, challan]);
+    const prev = challans;
+    persistChallans([...challans, challan]);
     setShowAddChallan(false);
     setChallanForm(EMPTY_CHALLAN());
-    toast({ title: hi ? 'चालान जोड़ा गया' : 'Challan added' });
+    supabase.from('tds_challans').upsert(withSoc(challan)).then(({ error }) => {
+      if (error) {
+        console.error('TDS challan save error:', error.message);
+        persistChallans(prev); // RULE-1 rollback
+        toast({ title: hi ? 'चालान सेव नहीं हुआ' : 'Challan not saved', description: `Cloud save fail — ${error.message}. (Pehli baar: tds_challans block chalayein.)`, variant: 'destructive', duration: 12000 });
+      } else {
+        toast({ title: hi ? '✅ चालान जोड़ा गया' : '✅ Challan added' });
+      }
+    });
+  };
+
+  // Delete a manual entry / challan (auto-imported purchase entries can't be deleted here)
+  const handleDeleteEntry = (id: string) => {
+    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    persistEntries(entries.filter(e => e.id !== id));
+    supabase.from('tds_entries').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) console.warn('TDS entry delete sync:', error.message); });
+  };
+  const handleDeleteChallan = (id: string) => {
+    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    persistChallans(challans.filter(c => c.id !== id));
+    supabase.from('tds_challans').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) console.warn('TDS challan delete sync:', error.message); });
   };
 
   // 26Q Export
@@ -343,7 +404,12 @@ const TdsRegister: React.FC = () => {
                         <TableCell>
                           {entry.purchaseId
                             ? <Badge variant="outline" className="text-xs bg-blue-50">Auto</Badge>
-                            : <Badge variant="outline" className="text-xs bg-amber-50">Manual</Badge>
+                            : <span className="inline-flex items-center gap-1">
+                                <Badge variant="outline" className="text-xs bg-amber-50">Manual</Badge>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:text-red-700" title={hi ? 'हटाएं' : 'Delete'} onClick={() => handleDeleteEntry(entry.id)}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </span>
                           }
                         </TableCell>
                         <TableCell>{statusBadge(entry.status)}</TableCell>
@@ -426,9 +492,14 @@ const TdsRegister: React.FC = () => {
                         <TableCell>{ch.bankName}</TableCell>
                         <TableCell className="text-right font-bold">{fmt(ch.amount)}</TableCell>
                         <TableCell>
-                          <Badge className={ch.status === 'paid' ? 'bg-success/20 text-success' : 'bg-amber-100 text-amber-700'}>
-                            {ch.status === 'paid' ? (hi ? 'भुगतान' : 'Paid') : (hi ? 'लंबित' : 'Pending')}
-                          </Badge>
+                          <span className="inline-flex items-center gap-1">
+                            <Badge className={ch.status === 'paid' ? 'bg-success/20 text-success' : 'bg-amber-100 text-amber-700'}>
+                              {ch.status === 'paid' ? (hi ? 'भुगतान' : 'Paid') : (hi ? 'लंबित' : 'Pending')}
+                            </Badge>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:text-red-700" title={hi ? 'हटाएं' : 'Delete'} onClick={() => handleDeleteChallan(ch.id)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </span>
                         </TableCell>
                       </TableRow>
                     ))
