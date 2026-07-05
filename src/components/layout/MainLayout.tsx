@@ -48,7 +48,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'
         )}
       >
-        <div className="p-4 md:p-6">
+        {/* pb-24 keeps bottom content (Save buttons etc.) clear of the fixed FeedbackFab (bottom-5, ~3rem tall). */}
+        <div className="p-4 md:p-6 pb-24 md:pb-24">
           <ModuleGlossaryBar />
           {children}
         </div>
