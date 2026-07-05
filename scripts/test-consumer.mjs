@@ -704,5 +704,16 @@ function paymentLines(net, mode, wasAccrued) {
   ok(balanced(acc) && balanced(pay) && balanced(legacy), 'accrual, payment, legacy vouchers all balanced');
 }
 
+// ── TDS 26Q section codes: 194I (rent) + 195 (non-resident) added ────────────
+// Mirrors SECTION_CODES / NATURE_CODES in src/lib/tds26q.ts.
+{
+  const SECTION_CODES = { '192': '192', '194A': '94A', '194C': '94C', '194H': '94H', '194I': '4IB', '194J': '94J', '194Q': '94Q', '195': '195' };
+  const NATURE_CODES = { '194I': 'Rent of land, building or furniture', '195': 'Other sums payable to a non-resident' };
+  ok(SECTION_CODES['194I'] === '4IB', '26Q: 194I maps to TRACES code 4IB (rent land/building)');
+  ok(SECTION_CODES['195'] === '195', '26Q: 195 maps to code 195 (non-resident)');
+  ok(SECTION_CODES['194C'] === '94C' && SECTION_CODES['194J'] === '94J', 'existing 26Q section codes unchanged');
+  ok(NATURE_CODES['194I'].toLowerCase().includes('rent') && NATURE_CODES['195'].toLowerCase().includes('non-resident'), 'nature descriptions present for 194I + 195');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

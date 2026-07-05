@@ -40,8 +40,10 @@ const TDS_SECTIONS: { value: TdsSection; label: string; rate: string }[] = [
   { value: '194A', label: 'Sec 194A — Interest', rate: '10%' },
   { value: '194C', label: 'Sec 194C — Contractor', rate: '1%/2%' },
   { value: '194H', label: 'Sec 194H — Commission', rate: '2%' },
+  { value: '194I', label: 'Sec 194I — Rent (land/building)', rate: '10%' },
   { value: '194J', label: 'Sec 194J — Professional', rate: '10%' },
   { value: '194Q', label: 'Sec 194Q — Purchase', rate: '0.1%' },
+  { value: '195', label: 'Sec 195 — Non-resident', rate: 'Varies' },
 ];
 
 const QUARTERS: { value: TdsQuarter; label: string; months: string }[] = [

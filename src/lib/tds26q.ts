@@ -19,8 +19,10 @@ const SECTION_CODES: Record<string, string> = {
   '194A': '94A',
   '194C': '94C',
   '194H': '94H',
+  '194I': '4IB',
   '194J': '94J',
   '194Q': '94Q',
+  '195': '195',
 };
 
 // Nature of payment codes (TRACES standard)
@@ -29,8 +31,10 @@ const NATURE_CODES: Record<string, string> = {
   '194A': 'Interest other than Interest on securities',
   '194C': 'Payment to Contractors',
   '194H': 'Commission or Brokerage',
+  '194I': 'Rent of land, building or furniture',
   '194J': 'Fees for Professional or Technical Services',
   '194Q': 'Payment for purchase of goods',
+  '195': 'Other sums payable to a non-resident',
 };
 
 export interface Generate26QOptions {
