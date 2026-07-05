@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { useConsumerData } from '@/contexts/ConsumerDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,7 @@ function fyBounds(fy: string): { from: string; to: string } {
 
 export default function GstSummary() {
   const { sales, purchases, customers, society } = useData();
+  const { salesReturns } = useConsumerData();
   const { language } = useLanguage();
 
   const { from: defaultFrom, to: defaultTo } = fyBounds(society.financialYear);
@@ -41,6 +43,19 @@ export default function GstSummary() {
   const activeSales = useMemo(() =>
     sales.filter(s => !(s as any).isDeleted && s.date >= fromDate && s.date <= toDate),
     [sales, fromDate, toDate]);
+
+  // Sales returns reduce output GST liability (credit notes). Netted into output totals.
+  const returnTotals = useMemo(() => {
+    const r = salesReturns.filter(x => !x.isDeleted && x.date >= fromDate && x.date <= toDate);
+    return {
+      taxable: r.reduce((s, x) => s + x.netAmount, 0),
+      cgst: r.reduce((s, x) => s + x.cgstAmount, 0),
+      sgst: r.reduce((s, x) => s + x.sgstAmount, 0),
+      igst: r.reduce((s, x) => s + x.igstAmount, 0),
+      tax: r.reduce((s, x) => s + x.taxAmount, 0),
+      grand: r.reduce((s, x) => s + x.grandTotal, 0),
+    };
+  }, [salesReturns, fromDate, toDate]);
 
   const activePurchases = useMemo(() =>
     purchases.filter(p => !(p as any).isDeleted && p.date >= fromDate && p.date <= toDate),
@@ -84,13 +99,13 @@ export default function GstSummary() {
     [activeSales]);
 
   const outputTotals = useMemo(() => ({
-    taxable: activeSales.reduce((s, r) => s + r.netAmount, 0),
-    cgst: activeSales.reduce((s, r) => s + r.cgstAmount, 0),
-    sgst: activeSales.reduce((s, r) => s + r.sgstAmount, 0),
-    igst: activeSales.reduce((s, r) => s + r.igstAmount, 0),
-    tax: activeSales.reduce((s, r) => s + r.taxAmount, 0),
-    grand: activeSales.reduce((s, r) => s + r.grandTotal, 0),
-  }), [activeSales]);
+    taxable: activeSales.reduce((s, r) => s + r.netAmount, 0) - returnTotals.taxable,
+    cgst: activeSales.reduce((s, r) => s + r.cgstAmount, 0) - returnTotals.cgst,
+    sgst: activeSales.reduce((s, r) => s + r.sgstAmount, 0) - returnTotals.sgst,
+    igst: activeSales.reduce((s, r) => s + r.igstAmount, 0) - returnTotals.igst,
+    tax: activeSales.reduce((s, r) => s + r.taxAmount, 0) - returnTotals.tax,
+    grand: activeSales.reduce((s, r) => s + r.grandTotal, 0) - returnTotals.grand,
+  }), [activeSales, returnTotals]);
 
   // ── Input Tax Credit (Purchases) ──────────────────────────────────────────
   const itcByRate = useMemo(() => {

@@ -60,18 +60,21 @@ function memberCreditSales(sales, memberId) {
 function memberRecovered(recoveries, memberId) {
   return recoveries.filter(r => r.memberId === memberId && !r.isDeleted).reduce((s, r) => s + (r.amount || 0), 0);
 }
-function memberOutstanding(sales, recoveries, memberId) {
+function memberReturnAdjusted(returns, memberId) {
+  return returns.filter(r => r.memberId === memberId && r.refundMode === 'credit-adjust' && !r.isDeleted).reduce((s, r) => s + (r.grandTotal || 0), 0);
+}
+function memberOutstanding(sales, recoveries, memberId, returns = []) {
   const billed = memberCreditSales(sales, memberId).reduce((s, x) => s + saleTotal(x), 0);
-  return Math.max(0, billed - memberRecovered(recoveries, memberId));
+  return Math.max(0, billed - memberRecovered(recoveries, memberId) - memberReturnAdjusted(returns, memberId));
 }
 function daysBetween(fromDate, asOf) {
   const a = Date.parse(fromDate), b = Date.parse(asOf);
   if (!isFinite(a) || !isFinite(b)) return 0;
   return Math.max(0, Math.floor((b - a) / 86400000));
 }
-function memberAgeing(sales, recoveries, memberId, asOf) {
+function memberAgeing(sales, recoveries, memberId, asOf, returns = []) {
   const out = { b0_30: 0, b31_60: 0, b61_90: 0, b90plus: 0, total: 0 };
-  let recovered = memberRecovered(recoveries, memberId);
+  let recovered = memberRecovered(recoveries, memberId) + memberReturnAdjusted(returns, memberId);
   for (const s of memberCreditSales(sales, memberId)) {
     let unpaid = saleTotal(s);
     if (recovered > 0) { const applied = Math.min(recovered, unpaid); unpaid -= applied; recovered -= applied; }
@@ -111,16 +114,21 @@ ok(memberOutstanding(SALES, RECOVERIES, 'M2') === 200, 'M2 outstanding = 200 (no
 
 // ── Mirror: src/lib/consumer/patronage.ts ──
 const saleValue2 = (s) => (typeof s.grandTotal === 'number' && s.grandTotal > 0 ? s.grandTotal : (s.netAmount || 0));
-function computePatronageLines(sales, members, args) {
+function computePatronageLines(sales, members, args, returns = []) {
   const purchase = new Map();
   for (const s of sales) {
     if (!s.memberId) continue;
     if (s.date < args.from || s.date > args.to) continue;
     purchase.set(s.memberId, (purchase.get(s.memberId) || 0) + saleValue2(s));
   }
+  for (const r of returns) {
+    if (!r.memberId || r.isDeleted) continue;
+    if (r.date < args.from || r.date > args.to) continue;
+    purchase.set(r.memberId, (purchase.get(r.memberId) || 0) - (r.grandTotal || 0));
+  }
   return members
     .filter(m => !(m.status && m.status !== 'active'))
-    .map(m => { const base = round(purchase.get(m.id) || 0); return { memberId: m.id, memberName: m.name, base, amount: round(base * (args.ratePct || 0) / 100) }; })
+    .map(m => { const base = round(Math.max(0, purchase.get(m.id) || 0)); return { memberId: m.id, memberName: m.name, base, amount: round(base * (args.ratePct || 0) / 100) }; })
     .filter(l => l.amount > 0)
     .sort((a, b) => a.memberName.localeCompare(b.memberName));
 }
@@ -304,6 +312,25 @@ ok(Object.values(CODE39).every(p => p.length === 9 && (p.match(/w/g)||[]).length
   const segs = code39Segments('A');
   ok(segs.length === 29, "'A' → 29 segments (3 chars × 9 + 2 gaps)");
   ok(segs[0].black === true && segs[0].units === 1, 'first segment is a narrow bar (start *)');
+}
+
+// ── Sales Return — nets member outstanding (credit-adjust) + patronage turnover ──
+{
+  const rsales = [{ id: 's1', memberId: 'M1', paymentMode: 'credit', grandTotal: 500, netAmount: 500, date: '2026-06-01' }];
+  const rrec = [];
+  // credit-adjust return of 200 → outstanding 500 − 200 = 300
+  const rret = [{ memberId: 'M1', grandTotal: 200, refundMode: 'credit-adjust', date: '2026-06-05' }];
+  ok(memberOutstanding(rsales, rrec, 'M1', rret) === 300, 'credit-adjust return reduces member outstanding (500−200=300)');
+  // a CASH-refund return does NOT reduce credit outstanding
+  const rretCash = [{ memberId: 'M1', grandTotal: 200, refundMode: 'cash', date: '2026-06-05' }];
+  ok(memberOutstanding(rsales, rrec, 'M1', rretCash) === 500, 'cash-refund return does NOT touch credit outstanding');
+  // deleted return ignored
+  ok(memberOutstanding(rsales, rrec, 'M1', [{ memberId: 'M1', grandTotal: 200, refundMode: 'credit-adjust', date: '2026-06-05', isDeleted: true }]) === 500, 'deleted return ignored');
+  // patronage: member turnover 500 − return 200 = 300 → rebate 2% = 6
+  const pmembers = [{ id: 'M1', name: 'Asha', status: 'active' }];
+  const preturns = [{ memberId: 'M1', grandTotal: 200, date: '2026-06-05' }];
+  const lines = computePatronageLines([{ memberId: 'M1', grandTotal: 500, netAmount: 500, date: '2026-06-01' }], pmembers, { from: '2026-04-01', to: '2027-03-31', ratePct: 2 }, preturns);
+  ok(lines[0] && lines[0].base === 300 && lines[0].amount === 6, 'patronage nets return: base 300, rebate 6');
 }
 
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);

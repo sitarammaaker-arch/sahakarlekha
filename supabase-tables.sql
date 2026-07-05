@@ -2396,3 +2396,38 @@ drop policy if exists "society_rw" on public.consumer_purchase_orders;
 create policy "society_rw" on public.consumer_purchase_orders for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ── Consumer — Sales Return (credit note) ────────────────────────────────────
+-- Reverses a posted sale (full/partial). Accounting is done via the core voucher
+-- engine (Dr Sales Return + Dr GST 2201 / Cr refund a/c); this table is the source
+-- document + register. Goods go back via a positive stock_movements adjustment.
+create table if not exists sales_returns (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "returnNo" text,
+  date text,
+  "originalSaleId" text,
+  "saleNo" text,
+  "customerName" text,
+  "memberId" text,
+  "customerId" text,
+  items jsonb default '[]',
+  "netAmount" numeric,
+  "cgstAmount" numeric,
+  "sgstAmount" numeric,
+  "igstAmount" numeric,
+  "taxAmount" numeric,
+  "grandTotal" numeric,
+  "refundMode" text,
+  "bankAccountId" text,
+  "voucherId" text,
+  "isDeleted" boolean default false,
+  "createdBy" text,
+  "createdAt" text
+);
+create index if not exists idx_sales_returns_society on public.sales_returns (society_id);
+alter table public.sales_returns enable row level security;
+drop policy if exists "society_rw" on public.sales_returns;
+create policy "society_rw" on public.sales_returns for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));

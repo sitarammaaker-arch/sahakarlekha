@@ -40,14 +40,24 @@ export function memberRecovered(recoveries: ReadonlyArray<RecoveryRow>, memberId
     .reduce((sum, r) => sum + (r.amount || 0), 0);
 }
 
-/** Outstanding = Σ credit sales − Σ recoveries, clamped ≥ 0. */
+export interface ReturnRow { memberId?: string; grandTotal?: number; refundMode?: string; isDeleted?: boolean; }
+
+/** Credit-adjusted sales returns for a member (these reduce the receivable, like a recovery). */
+export function memberReturnAdjusted(returns: ReadonlyArray<ReturnRow>, memberId: string): number {
+  return returns
+    .filter(r => r.memberId === memberId && r.refundMode === 'credit-adjust' && !r.isDeleted)
+    .reduce((sum, r) => sum + (r.grandTotal || 0), 0);
+}
+
+/** Outstanding = Σ credit sales − Σ recoveries − Σ credit-adjusted returns, clamped ≥ 0. */
 export function memberOutstanding(
   sales: ReadonlyArray<CreditSaleRow>,
   recoveries: ReadonlyArray<RecoveryRow>,
   memberId: string,
+  returns: ReadonlyArray<ReturnRow> = [],
 ): number {
   const billed = memberCreditSales(sales, memberId).reduce((s, x) => s + saleTotal(x), 0);
-  return Math.max(0, billed - memberRecovered(recoveries, memberId));
+  return Math.max(0, billed - memberRecovered(recoveries, memberId) - memberReturnAdjusted(returns, memberId));
 }
 
 export interface Ageing { b0_30: number; b31_60: number; b61_90: number; b90plus: number; total: number; }
@@ -68,9 +78,11 @@ export function memberAgeing(
   recoveries: ReadonlyArray<RecoveryRow>,
   memberId: string,
   asOf: string,
+  returns: ReadonlyArray<ReturnRow> = [],
 ): Ageing {
   const out: Ageing = { b0_30: 0, b31_60: 0, b61_90: 0, b90plus: 0, total: 0 };
-  let recovered = memberRecovered(recoveries, memberId);
+  // Credit-adjusted returns reduce the receivable exactly like a recovery (FIFO against oldest).
+  let recovered = memberRecovered(recoveries, memberId) + memberReturnAdjusted(returns, memberId);
   for (const s of memberCreditSales(sales, memberId)) {
     let unpaid = saleTotal(s);
     if (recovered > 0) {

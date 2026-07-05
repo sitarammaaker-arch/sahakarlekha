@@ -131,6 +131,7 @@ const AgencyReceipts = lazyWithRetry(() => import("./pages/marketing/AgencyRecei
 const ProcurementRegisters = lazyWithRetry(() => import("./pages/marketing/ProcurementRegisters"));
 const Transport = lazyWithRetry(() => import("./pages/marketing/Transport"));
 const RetailCounter = lazyWithRetry(() => import("./pages/consumer/RetailCounter"));
+const SalesReturn = lazyWithRetry(() => import("./pages/consumer/SalesReturn"));
 const PriceLists = lazyWithRetry(() => import("./pages/consumer/PriceLists"));
 const MemberCredit = lazyWithRetry(() => import("./pages/consumer/MemberCredit"));
 const Patronage = lazyWithRetry(() => import("./pages/consumer/Patronage"));
@@ -345,6 +346,7 @@ const AppRoutes = () => {
       <Route path="/procurement-registers" element={<ProtectedRoute><ProcurementRegisters /></ProtectedRoute>} />
       <Route path="/transport" element={<ProtectedRoute><Transport /></ProtectedRoute>} />
       <Route path="/retail-counter" element={<ProtectedRoute><RetailCounter /></ProtectedRoute>} />
+      <Route path="/sales-return" element={<ProtectedRoute><SalesReturn /></ProtectedRoute>} />
       <Route path="/price-lists" element={<ProtectedRoute><PriceLists /></ProtectedRoute>} />
       <Route path="/member-credit" element={<ProtectedRoute><MemberCredit /></ProtectedRoute>} />
       <Route path="/patronage" element={<ProtectedRoute><Patronage /></ProtectedRoute>} />

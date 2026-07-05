@@ -740,6 +740,7 @@ export type AccountSubtype =
   | 'rebate_payable'      // consumer — member patronage rebate payable (liability)
   | 'dividend_distribution' // consumer — dividend on share capital appropriation (equity)
   | 'dividend_payable'    // consumer — member dividend payable (liability)
+  | 'sales_return'        // consumer — Sales Return / Returns Inward (contra-income, debit)
   | 'suspense';
 
 // ── Annual Review Report (Haryana Marketing Societies) classification tags ──
@@ -1258,6 +1259,43 @@ export interface PurchaseOrder {
   purchaseNo?: string;
   notes?: string;
   isDeleted?: boolean;
+  createdAt: string;
+}
+
+// ── Consumer store — Sales Return / Returns Inward ───────────────────────────
+// Reverses a posted sale (fully/partially): goods back in stock, income reduced via a
+// dedicated Sales Return contra account, GST output reversed, refund by cash/bank or
+// adjusted against the buyer's credit. Linked to the original sale.
+export type SalesReturnRefund = 'cash' | 'bank' | 'credit-adjust';
+export interface SalesReturnItem {
+  itemId: string;
+  itemName: string;
+  unit: string;
+  qty: number;   // quantity returned
+  rate: number;
+  amount: number;
+}
+export interface SalesReturn {
+  id: string;
+  returnNo: string;
+  date: string;
+  originalSaleId: string;
+  saleNo: string;
+  customerName: string;
+  memberId?: string;
+  customerId?: string;
+  items: SalesReturnItem[];
+  netAmount: number;      // returned taxable value
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  taxAmount: number;      // GST reversed
+  grandTotal: number;     // netAmount + taxAmount
+  refundMode: SalesReturnRefund;
+  bankAccountId?: string;
+  voucherId?: string;
+  isDeleted?: boolean;
+  createdBy: string;
   createdAt: string;
 }
 

@@ -20,12 +20,14 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
 import { resolveItemPrice } from '@/lib/consumer/pricing';
-import { resolveMemberReceivableAccountId, resolvePatronageDistributionAccountId, resolveRebatePayableAccountId, resolveDividendDistributionAccountId, resolveDividendPayableAccountId, MEMBER_RECEIVABLE_SUBTYPE, PATRONAGE_DISTRIBUTION_SUBTYPE, REBATE_PAYABLE_SUBTYPE, DIVIDEND_DISTRIBUTION_SUBTYPE, DIVIDEND_PAYABLE_SUBTYPE } from '@/lib/consumer/accounts';
+import { resolveMemberReceivableAccountId, resolvePatronageDistributionAccountId, resolveRebatePayableAccountId, resolveDividendDistributionAccountId, resolveDividendPayableAccountId, resolveSalesReturnAccountId, MEMBER_RECEIVABLE_SUBTYPE, PATRONAGE_DISTRIBUTION_SUBTYPE, REBATE_PAYABLE_SUBTYPE, DIVIDEND_DISTRIBUTION_SUBTYPE, DIVIDEND_PAYABLE_SUBTYPE, SALES_RETURN_SUBTYPE } from '@/lib/consumer/accounts';
 import { memberOutstanding, memberAgeing, type Ageing, type RecoveryRow } from '@/lib/consumer/credit';
 import { computePatronageLines, computeDividendLines, patronageTotal, patronageLegs } from '@/lib/consumer/patronage';
 import { poTotal, poReceivedTotal, poToPurchaseItems } from '@/lib/consumer/purchaseOrder';
 import { getBankAccountIds } from '@/lib/storage';
-import type { ConsumerPrice, ConsumerPriceTier, Voucher, PatronageRun, PurchaseOrder, PurchaseOrderItem, Purchase } from '@/types';
+import type { ConsumerPrice, ConsumerPriceTier, Voucher, PatronageRun, PurchaseOrder, PurchaseOrderItem, Purchase, SalesReturn, SalesReturnItem, SalesReturnRefund } from '@/types';
+
+const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
 
 const CASH_ACCOUNT = '3301';   // Cash in Hand (CMS chart)
 const RECOVERY_REF = 'consumer.member.recovery';
@@ -76,12 +78,18 @@ interface ConsumerDataContextValue {
   receivePurchaseOrder: (id: string, data: { receivedQty?: Record<string, number>; paymentMode: 'cash' | 'bank' | 'credit'; bankAccountId?: string; date: string }) => Purchase | null;
   cancelPurchaseOrder: (id: string) => void;
   deletePurchaseOrder: (id: string) => void;
+
+  // Sales Return (Feature 1) — reverse a posted sale; goods back in stock, income reduced,
+  // GST output reversed, refund by cash/bank or adjusted against member/customer credit.
+  salesReturns: SalesReturn[];
+  addSalesReturn: (data: { originalSaleId: string; items: SalesReturnItem[]; refundMode: SalesReturnRefund; bankAccountId?: string; date: string }) => SalesReturn | null;
+  deleteSalesReturn: (id: string) => void;
 }
 
 const ConsumerDataContext = createContext<ConsumerDataContextValue | null>(null);
 
 export function ConsumerProvider({ children }: { children: ReactNode }) {
-  const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase } = useData();
+  const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase, addStockMovement } = useData();
   const { user, isSuperAdmin } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
@@ -173,27 +181,41 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const needPay = resolveRebatePayableAccountId(accounts) === null;
     const needDivDist = resolveDividendDistributionAccountId(accounts) === null;
     const needDivPay = resolveDividendPayableAccountId(accounts) === null;
-    if (!needRecv && !needDist && !needPay && !needDivDist && !needDivPay) { seededRef.current = true; return; }
+    const needSalesRet = resolveSalesReturnAccountId(accounts) === null;
+    if (!needRecv && !needDist && !needPay && !needDivDist && !needDivPay && !needSalesRet) { seededRef.current = true; return; }
     seededRef.current = true; // attempt once per mount
     if (needRecv) addAccount({ name: 'Member Purchase Receivable', nameHi: 'सदस्य खरीद प्राप्य', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300', subtype: MEMBER_RECEIVABLE_SUBTYPE });
     if (needDist) addAccount({ name: 'Patronage Rebate Distribution', nameHi: 'संरक्षण रिबेट वितरण', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: PATRONAGE_DISTRIBUTION_SUBTYPE });
     if (needPay) addAccount({ name: 'Member Rebate Payable', nameHi: 'देय सदस्य रिबेट', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: REBATE_PAYABLE_SUBTYPE });
     if (needDivDist) addAccount({ name: 'Dividend Distribution', nameHi: 'लाभांश वितरण', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: DIVIDEND_DISTRIBUTION_SUBTYPE });
     if (needDivPay) addAccount({ name: 'Dividend Payable', nameHi: 'देय लाभांश', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: DIVIDEND_PAYABLE_SUBTYPE });
+    if (needSalesRet) addAccount({ name: 'Sales Return', nameHi: 'बिक्री वापसी', type: 'income', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '4100', subtype: SALES_RETURN_SUBTYPE });
   }, [user?.societyId, isSuperAdmin, society?.societyType, society?.fyLocked, accounts, addAccount]);
 
   const memberReceivableAccountId = resolveMemberReceivableAccountId(accounts);
+
+  // ── Sales Returns (Feature 1) — state + load ────────────────────────────────
+  const [salesReturns, setSalesReturnsState] = useState<SalesReturn[]>(() => storage.getSalesReturns());
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setSalesReturnsState([]); return; }
+    supabase.from('sales_returns').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setSalesReturnsState(error || !data ? storage.getSalesReturns() : (data as SalesReturn[])),
+      () => setSalesReturnsState(storage.getSalesReturns()),
+    );
+  }, [user?.societyId]);
+  const activeReturns = salesReturns.filter(r => !r.isDeleted);
 
   const memberRecoveries = vouchers.filter(v => v.refType === RECOVERY_REF);
   const recoveryRows: RecoveryRow[] = memberRecoveries.map(v => ({ memberId: v.memberId, amount: v.amount, isDeleted: v.isDeleted }));
 
   const getMemberOutstanding = useCallback(
-    (memberId: string) => memberOutstanding(sales, recoveryRows, memberId),
-    [sales, recoveryRows],
+    (memberId: string) => memberOutstanding(sales, recoveryRows, memberId, activeReturns),
+    [sales, recoveryRows, activeReturns],
   );
   const getMemberAgeing = useCallback(
-    (memberId: string, asOf?: string) => memberAgeing(sales, recoveryRows, memberId, asOf || new Date().toISOString().slice(0, 10)),
-    [sales, recoveryRows],
+    (memberId: string, asOf?: string) => memberAgeing(sales, recoveryRows, memberId, asOf || new Date().toISOString().slice(0, 10), activeReturns),
+    [sales, recoveryRows, activeReturns],
   );
 
   const recordMemberRecovery = useCallback((data: { memberId: string; memberName: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string }): Voucher | null => {
@@ -250,14 +272,14 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   const createPatronageRun = useCallback((args: { from: string; to: string; ratePct: number; fyLabel?: string }): PatronageRun | null => {
     if (guardFYLocked()) return null;
     if (!(args.ratePct > 0)) { toastRef.current({ title: 'दर ज़रूरी', description: 'धनात्मक रिबेट % डालें।', variant: 'destructive' }); return null; }
-    const lines = computePatronageLines(sales, members, { from: args.from, to: args.to, ratePct: args.ratePct });
+    const lines = computePatronageLines(sales, members, { from: args.from, to: args.to, ratePct: args.ratePct }, activeReturns);
     if (lines.length === 0) { toastRef.current({ title: 'कोई राशि नहीं', description: 'इस अवधि में किसी सक्रिय सदस्य की खरीद नहीं।', variant: 'destructive' }); return null; }
     const total = patronageTotal(lines);
     const run: PatronageRun = { id: crypto.randomUUID(), kind: 'patronage', from: args.from, to: args.to, ratePct: args.ratePct, fyLabel: args.fyLabel, resolutionNo: '', lines, total, status: 'draft', amountPaid: 0, createdAt: new Date().toISOString() };
     commitPatronageRun(run, null);
     toastRef.current({ title: 'रिबेट रन बनाया (draft)', description: `${lines.length} सदस्य · कुल ₹${total.toLocaleString('en-IN')}` });
     return run;
-  }, [sales, members, guardFYLocked, commitPatronageRun]);
+  }, [sales, members, activeReturns, guardFYLocked, commitPatronageRun]);
 
   const createDividendRun = useCallback((args: { ratePct: number; fyLabel?: string }): PatronageRun | null => {
     if (guardFYLocked()) return null;
@@ -425,6 +447,86 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     commitPO({ ...cur, isDeleted: true }, cur);
   }, [purchaseOrders, guardFYLocked, commitPO]);
 
+  // ── Sales Return (Feature 1) ────────────────────────────────────────────────
+  const commitSalesReturn = useCallback((next: SalesReturn, revertTo: SalesReturn | null, onFail?: () => void) => {
+    setSalesReturnsState(prev => { const u = prev.some(r => r.id === next.id) ? prev.map(r => r.id === next.id ? next : r) : [...prev, next]; storage.setSalesReturns(u); return u; });
+    supabase.from('sales_returns').upsert(withSoc(next)).then(({ error }) => {
+      if (error) {
+        console.error('Sales return save error:', error.message);
+        setSalesReturnsState(prev => { const u = revertTo ? prev.map(r => r.id === next.id ? revertTo : r) : prev.filter(r => r.id !== next.id); storage.setSalesReturns(u); return u; });
+        onFail?.();
+        toastRef.current({ title: 'बिक्री वापसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. (Pehli baar: sales_returns block chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [societyId]);
+
+  const addSalesReturn = useCallback((data: { originalSaleId: string; items: SalesReturnItem[]; refundMode: SalesReturnRefund; bankAccountId?: string; date: string }): SalesReturn | null => {
+    if (guardFYLocked()) return null;
+    const sale = sales.find(s => s.id === data.originalSaleId && !(s as { isDeleted?: boolean }).isDeleted);
+    if (!sale) { toastRef.current({ title: 'मूल बिक्री नहीं मिली', variant: 'destructive' }); return null; }
+    const salesReturnAccId = resolveSalesReturnAccountId(accounts);
+    if (!salesReturnAccId) { toastRef.current({ title: 'बिक्री वापसी खाता नहीं मिला', description: 'Sales Return account missing — reload once.', variant: 'destructive', duration: 12000 }); return null; }
+    const items = data.items.filter(i => i.itemId && i.qty > 0).map(i => ({ ...i, amount: round2(i.qty * i.rate) }));
+    if (items.length === 0) { toastRef.current({ title: 'कोई मात्रा नहीं', description: 'कम-से-कम एक वस्तु की वापसी मात्रा डालें।', variant: 'destructive' }); return null; }
+    // Cap: returned qty (incl. prior returns) must not exceed sold qty.
+    const priorByItem = new Map<string, number>();
+    salesReturns.filter(r => !r.isDeleted && r.originalSaleId === sale.id).forEach(r => r.items.forEach(it => priorByItem.set(it.itemId, (priorByItem.get(it.itemId) || 0) + it.qty)));
+    for (const it of items) {
+      const sold = sale.items.find(si => si.itemId === it.itemId)?.qty || 0;
+      if (it.qty + (priorByItem.get(it.itemId) || 0) > sold) { toastRef.current({ title: 'बेची गई मात्रा से अधिक वापसी नहीं', description: it.itemName, variant: 'destructive' }); return null; }
+    }
+    const netAmount = round2(items.reduce((s, i) => s + i.amount, 0));
+    // Proportional GST reversal from the original sale.
+    const ratio = (sale.netAmount || 0) > 0 ? netAmount / sale.netAmount : 0;
+    const cgstAmount = round2((sale.cgstAmount || 0) * ratio);
+    const sgstAmount = round2((sale.sgstAmount || 0) * ratio);
+    const igstAmount = round2((sale.igstAmount || 0) * ratio);
+    const taxAmount = round2(cgstAmount + sgstAmount + igstAmount);
+    const grandTotal = round2(netAmount + taxAmount);
+    if (!(grandTotal > 0)) { toastRef.current({ title: 'वापसी राशि शून्य', variant: 'destructive' }); return null; }
+    const fy = society.financialYear;
+    const seq = salesReturns.filter(r => r.returnNo?.includes(fy)).reduce((m, r) => { const x = r.returnNo?.match(/\/(\d+)$/); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0) + 1;
+    const returnNo = `SRET/${fy}/${String(seq).padStart(3, '0')}`;
+    // Refund destination: cash/bank, else adjust the buyer's credit (member receivable / debtor).
+    const creditAccId = data.refundMode === 'cash' ? '3301'
+      : data.refundMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || '3302')
+      : (sale.memberId ? (resolveMemberReceivableAccountId(accounts) || '3303') : (sale.customerId ? '3303' : '3303'));
+    const lid = () => crypto.randomUUID();
+    const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: salesReturnAccId, type: 'Dr', amount: netAmount }];
+    if (taxAmount > 0) lines.push({ id: lid(), accountId: '2201', type: 'Dr', amount: taxAmount });
+    lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: grandTotal });
+    const voucher = addVoucher({
+      type: 'credit_note', date: data.date,
+      debitAccountId: salesReturnAccId, creditAccountId: creditAccId, amount: grandTotal, lines,
+      narration: `बिक्री वापसी — ${sale.saleNo}`, refType: 'sale.return', refId: sale.id,
+      createdBy: user?.name ?? 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+    if (!voucher?.id) return null;
+    // Goods back in stock (positive adjustment; canonical stock formula adds it).
+    items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: returnNo, narration: `Sales return ${sale.saleNo}` }));
+    const ret: SalesReturn = {
+      id: lid(), returnNo, date: data.date, originalSaleId: sale.id, saleNo: sale.saleNo,
+      customerName: sale.customerName, memberId: sale.memberId, customerId: sale.customerId,
+      items, netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal,
+      refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: voucher.id,
+      createdBy: user?.name ?? 'admin', createdAt: new Date().toISOString(),
+    };
+    commitSalesReturn(ret, null, () => cancelVoucher(voucher.id, 'Sales return rolled back (cloud save failed)', user?.name || 'System'));
+    toastRef.current({ title: `✅ वापसी दर्ज — ${returnNo}`, description: `स्टॉक वापस + ₹${grandTotal.toLocaleString('en-IN')}` });
+    return ret;
+  }, [sales, salesReturns, accounts, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitSalesReturn, user]);
+
+  const deleteSalesReturn = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const cur = salesReturns.find(r => r.id === id);
+    if (!cur || cur.isDeleted) return;
+    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Sales return deleted', user?.name || 'System');
+    // Reverse the stock that was added back (compensating negative adjustment).
+    const today = new Date().toISOString().slice(0, 10);
+    cur.items.forEach(it => addStockMovement({ date: today, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: `${cur.returnNo}/REV`, narration: `Sales return reversed ${cur.saleNo}` }));
+    commitSalesReturn({ ...cur, isDeleted: true }, cur);
+  }, [salesReturns, guardFYLocked, cancelVoucher, addStockMovement, commitSalesReturn, user]);
+
   return (
     <ConsumerDataContext.Provider value={{
       consumerReady: true, guardFYLocked,
@@ -433,6 +535,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       getMemberOutstanding, getMemberAgeing, setMemberCreditLimit,
       patronageRuns, createPatronageRun, createDividendRun, approvePatronageRun, recordPatronagePayment, deletePatronageRun,
       purchaseOrders, createPurchaseOrder, approvePurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder, deletePurchaseOrder,
+      salesReturns, addSalesReturn, deleteSalesReturn,
     }}>
       {children}
     </ConsumerDataContext.Provider>

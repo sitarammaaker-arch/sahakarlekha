@@ -15,11 +15,12 @@ export const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 1
 const saleValue = (s: { grandTotal?: number; netAmount?: number }): number =>
   typeof s.grandTotal === 'number' && s.grandTotal > 0 ? s.grandTotal : (s.netAmount || 0);
 
-/** Per-active-member rebate on purchases in [from,to]. ratePct = % of purchase value. */
+/** Per-active-member rebate on NET purchases (sales − returns) in [from,to]. ratePct = %. */
 export function computePatronageLines(
   sales: ReadonlyArray<{ memberId?: string; grandTotal?: number; netAmount?: number; date: string }>,
   members: ReadonlyArray<{ id: string; name: string; status?: string }>,
   args: { from: string; to: string; ratePct: number },
+  returns: ReadonlyArray<{ memberId?: string; grandTotal?: number; date: string; isDeleted?: boolean }> = [],
 ): PatronageLine[] {
   const purchase = new Map<string, number>();
   for (const s of sales) {
@@ -27,10 +28,16 @@ export function computePatronageLines(
     if (s.date < args.from || s.date > args.to) continue;
     purchase.set(s.memberId, (purchase.get(s.memberId) || 0) + saleValue(s));
   }
+  // Returns reduce turnover so a member is not rebated on goods they returned.
+  for (const r of returns) {
+    if (!r.memberId || r.isDeleted) continue;
+    if (r.date < args.from || r.date > args.to) continue;
+    purchase.set(r.memberId, (purchase.get(r.memberId) || 0) - (r.grandTotal || 0));
+  }
   return members
     .filter(m => !(m.status && m.status !== 'active'))   // members on the rolls only
     .map(m => {
-      const base = round2(purchase.get(m.id) || 0);
+      const base = round2(Math.max(0, purchase.get(m.id) || 0));
       return { memberId: m.id, memberName: m.name, base, amount: round2(base * (args.ratePct || 0) / 100) };
     })
     .filter(l => l.amount > 0)
