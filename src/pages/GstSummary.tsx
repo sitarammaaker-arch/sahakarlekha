@@ -30,7 +30,7 @@ function fyBounds(fy: string): { from: string; to: string } {
 
 export default function GstSummary() {
   const { sales, purchases, customers, society } = useData();
-  const { salesReturns } = useConsumerData();
+  const { salesReturns, purchaseReturns } = useConsumerData();
   const { language } = useLanguage();
 
   const { from: defaultFrom, to: defaultTo } = fyBounds(society.financialYear);
@@ -56,6 +56,19 @@ export default function GstSummary() {
       grand: r.reduce((s, x) => s + x.grandTotal, 0),
     };
   }, [salesReturns, fromDate, toDate]);
+
+  // Purchase returns reverse Input Tax Credit (debit notes). Netted into ITC totals + GSTR-3B ITC-Reversed.
+  const purchaseReturnTotals = useMemo(() => {
+    const r = purchaseReturns.filter(x => !x.isDeleted && x.date >= fromDate && x.date <= toDate);
+    return {
+      taxable: r.reduce((s, x) => s + x.netAmount, 0),
+      cgst: r.reduce((s, x) => s + x.cgstAmount, 0),
+      sgst: r.reduce((s, x) => s + x.sgstAmount, 0),
+      igst: r.reduce((s, x) => s + x.igstAmount, 0),
+      tax: r.reduce((s, x) => s + x.taxAmount, 0),
+      grand: r.reduce((s, x) => s + x.grandTotal, 0),
+    };
+  }, [purchaseReturns, fromDate, toDate]);
 
   const activePurchases = useMemo(() =>
     purchases.filter(p => !(p as any).isDeleted && p.date >= fromDate && p.date <= toDate),
@@ -126,13 +139,13 @@ export default function GstSummary() {
   }, [activePurchases]);
 
   const itcTotals = useMemo(() => ({
-    taxable: activePurchases.reduce((s, r) => s + r.netAmount, 0),
-    cgst: activePurchases.reduce((s, r) => s + r.cgstAmount, 0),
-    sgst: activePurchases.reduce((s, r) => s + r.sgstAmount, 0),
-    igst: activePurchases.reduce((s, r) => s + r.igstAmount, 0),
-    tax: activePurchases.reduce((s, r) => s + r.taxAmount, 0),
-    grand: activePurchases.reduce((s, r) => s + r.grandTotal, 0),
-  }), [activePurchases]);
+    taxable: activePurchases.reduce((s, r) => s + r.netAmount, 0) - purchaseReturnTotals.taxable,
+    cgst: activePurchases.reduce((s, r) => s + r.cgstAmount, 0) - purchaseReturnTotals.cgst,
+    sgst: activePurchases.reduce((s, r) => s + r.sgstAmount, 0) - purchaseReturnTotals.sgst,
+    igst: activePurchases.reduce((s, r) => s + r.igstAmount, 0) - purchaseReturnTotals.igst,
+    tax: activePurchases.reduce((s, r) => s + r.taxAmount, 0) - purchaseReturnTotals.tax,
+    grand: activePurchases.reduce((s, r) => s + r.grandTotal, 0) - purchaseReturnTotals.grand,
+  }), [activePurchases, purchaseReturnTotals]);
 
   // Net GST payable / refundable
   const netCgst = outputTotals.cgst - itcTotals.cgst;
@@ -202,7 +215,16 @@ export default function GstSummary() {
   }, [activeSales]);
 
   // ── GSTR-3B: Table 4 ITC ─────────────────────────────────────────────────
-  const itcAvailable = { taxable: itcTotals.taxable, igst: itcTotals.igst, cgst: itcTotals.cgst, sgst: itcTotals.sgst };
+  // (A) ITC Available = GROSS purchase ITC; (B) ITC Reversed = purchase returns (debit notes);
+  // (C) Net ITC = A − B, which equals the netted itcTotals used in the summary + net payable.
+  const itcAvailable = {
+    taxable: itcTotals.taxable + purchaseReturnTotals.taxable,
+    igst: itcTotals.igst + purchaseReturnTotals.igst,
+    cgst: itcTotals.cgst + purchaseReturnTotals.cgst,
+    sgst: itcTotals.sgst + purchaseReturnTotals.sgst,
+  };
+  const itcReversed = { igst: purchaseReturnTotals.igst, cgst: purchaseReturnTotals.cgst, sgst: purchaseReturnTotals.sgst };
+  const itcNet = { igst: itcTotals.igst, cgst: itcTotals.cgst, sgst: itcTotals.sgst };
 
   // ── Reconciliation: month-wise comparison ─────────────────────────────────
   const reconData = useMemo(() => {
@@ -282,7 +304,7 @@ export default function GstSummary() {
         ],
         itc_rev: [
           { ty: 'RUL_42_43', iamt: 0, camt: 0, samt: 0, csamt: 0 },
-          { ty: 'OTH', iamt: 0, camt: 0, samt: 0, csamt: 0 },
+          { ty: 'OTH', iamt: itcReversed.igst, camt: itcReversed.cgst, samt: itcReversed.sgst, csamt: 0 },
         ],
       },
       intr_ltfee: { intr_details: { iamt: 0, camt: 0, samt: 0, csamt: 0 } },
@@ -325,8 +347,8 @@ export default function GstSummary() {
       head: [['4', 'Eligible ITC', 'IGST', 'CGST', 'SGST', 'Cess']],
       body: [
         ['(A)(v)', 'ITC Available — All other ITC (purchases)', itcAvailable.igst.toFixed(2), itcAvailable.cgst.toFixed(2), itcAvailable.sgst.toFixed(2), '0.00'],
-        ['(B)', 'ITC Reversed', '0.00', '0.00', '0.00', '0.00'],
-        ['(C)', 'Net ITC Available [(A)-(B)]', itcAvailable.igst.toFixed(2), itcAvailable.cgst.toFixed(2), itcAvailable.sgst.toFixed(2), '0.00'],
+        ['(B)', 'ITC Reversed (purchase returns / debit notes)', itcReversed.igst.toFixed(2), itcReversed.cgst.toFixed(2), itcReversed.sgst.toFixed(2), '0.00'],
+        ['(C)', 'Net ITC Available [(A)-(B)]', itcNet.igst.toFixed(2), itcNet.cgst.toFixed(2), itcNet.sgst.toFixed(2), '0.00'],
       ],
       styles: { fontSize: 7, cellPadding: 1.5 },
       headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold', fontSize: 7 },
@@ -351,7 +373,7 @@ export default function GstSummary() {
       head: [['6.1', 'Payment of Tax', 'IGST', 'CGST', 'SGST', 'Cess']],
       body: [
         ['Tax payable', 'Total Tax Payable (Output)', outwardTaxable.igst.toFixed(2), outwardTaxable.cgst.toFixed(2), outwardTaxable.sgst.toFixed(2), '0.00'],
-        ['Less ITC', 'Input Tax Credit Utilised', itcAvailable.igst.toFixed(2), itcAvailable.cgst.toFixed(2), itcAvailable.sgst.toFixed(2), '0.00'],
+        ['Less ITC', 'Input Tax Credit Utilised', itcNet.igst.toFixed(2), itcNet.cgst.toFixed(2), itcNet.sgst.toFixed(2), '0.00'],
         ['Net', 'Tax to be paid in Cash', Math.max(0, netIgst).toFixed(2), Math.max(0, netCgst).toFixed(2), Math.max(0, netSgst).toFixed(2), '0.00'],
       ],
       styles: { fontSize: 7, cellPadding: 1.5 },
@@ -1127,17 +1149,17 @@ export default function GstSummary() {
                     </TableRow>
                     <TableRow>
                       <TableCell className="font-mono text-xs">(B)</TableCell>
-                      <TableCell className="text-sm">{hi ? 'ITC उलटाई' : 'ITC Reversed'}</TableCell>
-                      <TableCell className="text-right font-mono">—</TableCell>
-                      <TableCell className="text-right font-mono">—</TableCell>
-                      <TableCell className="text-right font-mono">—</TableCell>
+                      <TableCell className="text-sm">{hi ? 'ITC उलटाई (खरीद वापसी)' : 'ITC Reversed (purchase returns)'}</TableCell>
+                      <TableCell className="text-right font-mono">{itcReversed.igst > 0 ? `(${fmt(itcReversed.igst)})` : '—'}</TableCell>
+                      <TableCell className="text-right font-mono">{itcReversed.cgst > 0 ? `(${fmt(itcReversed.cgst)})` : '—'}</TableCell>
+                      <TableCell className="text-right font-mono">{itcReversed.sgst > 0 ? `(${fmt(itcReversed.sgst)})` : '—'}</TableCell>
                     </TableRow>
                     <TableRow className="bg-muted/50 font-semibold">
                       <TableCell className="font-mono text-xs">(C)</TableCell>
                       <TableCell className="text-sm">{hi ? 'शुद्ध उपलब्ध ITC [(A)-(B)]' : 'Net ITC Available [(A)-(B)]'}</TableCell>
-                      <TableCell className="text-right font-mono text-blue-700">{fmt(itcAvailable.igst)}</TableCell>
-                      <TableCell className="text-right font-mono text-blue-700">{fmt(itcAvailable.cgst)}</TableCell>
-                      <TableCell className="text-right font-mono text-blue-700">{fmt(itcAvailable.sgst)}</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">{fmt(itcNet.igst)}</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">{fmt(itcNet.cgst)}</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">{fmt(itcNet.sgst)}</TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>
@@ -1170,9 +1192,9 @@ export default function GstSummary() {
                     </TableRow>
                     <TableRow>
                       <TableCell>{hi ? 'ITC से समायोजित' : 'Adjusted from ITC'}</TableCell>
-                      <TableCell className="text-right font-mono text-blue-700">({fmt(itcAvailable.igst)})</TableCell>
-                      <TableCell className="text-right font-mono text-blue-700">({fmt(itcAvailable.cgst)})</TableCell>
-                      <TableCell className="text-right font-mono text-blue-700">({fmt(itcAvailable.sgst)})</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">({fmt(itcNet.igst)})</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">({fmt(itcNet.cgst)})</TableCell>
+                      <TableCell className="text-right font-mono text-blue-700">({fmt(itcNet.sgst)})</TableCell>
                     </TableRow>
                     <TableRow className="bg-muted/50 font-bold">
                       <TableCell>{hi ? 'नकद में देय कर' : 'Tax to be paid in Cash'}</TableCell>

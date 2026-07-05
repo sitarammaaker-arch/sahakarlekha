@@ -1299,6 +1299,42 @@ export interface SalesReturn {
   createdAt: string;
 }
 
+// ── Consumer store — Purchase Return / Returns Outward (Debit Note) ──────────
+// Reverses a posted purchase (fully/partially): goods leave stock (back to supplier),
+// Purchases A/c reduced per-item (faithful inverse), GST ITC reversed, refund by
+// cash/bank or adjusted against the supplier's payable. Linked to the original purchase.
+export type PurchaseReturnRefund = 'cash' | 'bank' | 'credit-adjust';
+export interface PurchaseReturnItem {
+  itemId: string;
+  itemName: string;
+  unit: string;
+  qty: number;   // quantity returned to supplier
+  rate: number;
+  amount: number;
+}
+export interface PurchaseReturn {
+  id: string;
+  returnNo: string;
+  date: string;
+  originalPurchaseId: string;
+  purchaseNo: string;
+  supplierName: string;
+  supplierId?: string;
+  items: PurchaseReturnItem[];
+  netAmount: number;      // returned taxable value
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  taxAmount: number;      // GST ITC reversed
+  grandTotal: number;     // netAmount + taxAmount
+  refundMode: PurchaseReturnRefund;
+  bankAccountId: string | undefined;
+  voucherId?: string;
+  isDeleted?: boolean;
+  createdBy: string;
+  createdAt: string;
+}
+
 // ── Purchase ──────────────────────────────────────────────────────────────────
 export interface PurchaseItem {
   itemId: string;
