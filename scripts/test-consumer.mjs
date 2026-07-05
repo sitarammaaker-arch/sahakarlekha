@@ -715,5 +715,32 @@ function paymentLines(net, mode, wasAccrued) {
   ok(NATURE_CODES['194I'].toLowerCase().includes('rent') && NATURE_CODES['195'].toLowerCase().includes('non-resident'), 'nature descriptions present for 194I + 195');
 }
 
+// ── Dividend settlement: per-member split (by share capital) + Dr 1211 / Cr Cash ──
+// Mirrors settlementRows + settleDividend in ProfitDistribution.tsx.
+function settlementRows(members, postedDividend) {
+  const totalShare = members.reduce((s, m) => s + (m.shareCapital || 0), 0);
+  if (totalShare <= 0) return [];
+  return members
+    .map(m => ({ id: m.id, dividend: Math.round((m.shareCapital || 0) / totalShare * postedDividend * 100) / 100 }))
+    .filter(r => r.dividend > 0);
+}
+function paymentVoucher(dividend, mode) {
+  const credit = mode === 'bank' ? '3302' : '3301';
+  return [{ accountId: '1211', type: 'Dr', amount: dividend }, { accountId: credit, type: 'Cr', amount: dividend }];
+}
+{
+  // total posted dividend 3000, split 2:1 by share capital (2000 vs 1000) → 2000, 1000
+  const members = [{ id: 'M1', shareCapital: 2000 }, { id: 'M2', shareCapital: 1000 }, { id: 'M3', shareCapital: 0 }];
+  const rows = settlementRows(members, 3000);
+  ok(rows.length === 2, 'only members with share capital get a dividend (M3 with 0 excluded)');
+  ok(rows.find(r => r.id === 'M1').dividend === 2000 && rows.find(r => r.id === 'M2').dividend === 1000, 'dividend split by share capital: 2000 / 1000');
+  ok(Math.abs(rows.reduce((s, r) => s + r.dividend, 0) - 3000) < 0.01, 'settled total matches the posted dividend (3000)');
+  // each payment clears the payable: Dr 1211 / Cr Cash-Bank
+  const v = paymentVoucher(2000, 'bank');
+  ok(v[0].accountId === '1211' && v[0].type === 'Dr', 'settlement: Dr Dividend Payable 1211 (clears liability)');
+  ok(v[1].accountId === '3302' && v[1].type === 'Cr', 'settlement: Cr Bank');
+  ok(v.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0) === v.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0), 'settlement voucher balanced');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
