@@ -25,7 +25,7 @@ import { memberOutstanding, memberAgeing, type Ageing, type RecoveryRow } from '
 import { computePatronageLines, computeDividendLines, patronageTotal, patronageLegs } from '@/lib/consumer/patronage';
 import { poTotal, poReceivedTotal, poToPurchaseItems } from '@/lib/consumer/purchaseOrder';
 import { getBankAccountIds } from '@/lib/storage';
-import type { ConsumerPrice, ConsumerPriceTier, Voucher, PatronageRun, PurchaseOrder, PurchaseOrderItem, Purchase, SalesReturn, SalesReturnItem, SalesReturnRefund } from '@/types';
+import type { ConsumerPrice, ConsumerPriceTier, Voucher, PatronageRun, PurchaseOrder, PurchaseOrderItem, Purchase, SalesReturn, SalesReturnItem, SalesReturnRefund, PurchaseReturn, PurchaseReturnItem, PurchaseReturnRefund } from '@/types';
 
 const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -84,12 +84,16 @@ interface ConsumerDataContextValue {
   salesReturns: SalesReturn[];
   addSalesReturn: (data: { originalSaleId: string; items: SalesReturnItem[]; refundMode: SalesReturnRefund; bankAccountId?: string; date: string }) => SalesReturn | null;
   deleteSalesReturn: (id: string) => void;
+
+  purchaseReturns: PurchaseReturn[];
+  addPurchaseReturn: (data: { originalPurchaseId: string; items: PurchaseReturnItem[]; refundMode: PurchaseReturnRefund; bankAccountId?: string; date: string }) => PurchaseReturn | null;
+  deletePurchaseReturn: (id: string) => void;
 }
 
 const ConsumerDataContext = createContext<ConsumerDataContextValue | null>(null);
 
 export function ConsumerProvider({ children }: { children: ReactNode }) {
-  const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase, addStockMovement } = useData();
+  const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase, addStockMovement, purchases, suppliers, stockItems } = useData();
   const { user, isSuperAdmin } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
@@ -205,6 +209,16 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     );
   }, [user?.societyId]);
   const activeReturns = salesReturns.filter(r => !r.isDeleted);
+
+  const [purchaseReturns, setPurchaseReturnsState] = useState<PurchaseReturn[]>(() => storage.getPurchaseReturns());
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setPurchaseReturnsState([]); return; }
+    supabase.from('purchase_returns').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setPurchaseReturnsState(error || !data ? storage.getPurchaseReturns() : (data as PurchaseReturn[])),
+      () => setPurchaseReturnsState(storage.getPurchaseReturns()),
+    );
+  }, [user?.societyId]);
 
   const memberRecoveries = vouchers.filter(v => v.refType === RECOVERY_REF);
   const recoveryRows: RecoveryRow[] = memberRecoveries.map(v => ({ memberId: v.memberId, amount: v.amount, isDeleted: v.isDeleted }));
@@ -527,6 +541,95 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     commitSalesReturn({ ...cur, isDeleted: true }, cur);
   }, [salesReturns, guardFYLocked, cancelVoucher, addStockMovement, commitSalesReturn, user]);
 
+  // ── Purchase Return / Returns Outward — Debit Note (Feature 2) ───────────────
+  const commitPurchaseReturn = useCallback((next: PurchaseReturn, revertTo: PurchaseReturn | null, onFail?: () => void) => {
+    setPurchaseReturnsState(prev => { const u = prev.some(r => r.id === next.id) ? prev.map(r => r.id === next.id ? next : r) : [...prev, next]; storage.setPurchaseReturns(u); return u; });
+    supabase.from('purchase_returns').upsert(withSoc(next)).then(({ error }) => {
+      if (error) {
+        console.error('Purchase return save error:', error.message);
+        setPurchaseReturnsState(prev => { const u = revertTo ? prev.map(r => r.id === next.id ? revertTo : r) : prev.filter(r => r.id !== next.id); storage.setPurchaseReturns(u); return u; });
+        onFail?.();
+        toastRef.current({ title: 'खरीद वापसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. (Pehli baar: purchase_returns block chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [societyId]);
+
+  const addPurchaseReturn = useCallback((data: { originalPurchaseId: string; items: PurchaseReturnItem[]; refundMode: PurchaseReturnRefund; bankAccountId?: string; date: string }): PurchaseReturn | null => {
+    if (guardFYLocked()) return null;
+    const purchase = purchases.find(p => p.id === data.originalPurchaseId && !(p as { isDeleted?: boolean }).isDeleted);
+    if (!purchase) { toastRef.current({ title: 'मूल खरीद नहीं मिली', variant: 'destructive' }); return null; }
+    const items = data.items.filter(i => i.itemId && i.qty > 0).map(i => ({ ...i, amount: round2(i.qty * i.rate) }));
+    if (items.length === 0) { toastRef.current({ title: 'कोई मात्रा नहीं', description: 'कम-से-कम एक वस्तु की वापसी मात्रा डालें।', variant: 'destructive' }); return null; }
+    // Cap: returned qty (incl. prior returns) must not exceed purchased qty.
+    const priorByItem = new Map<string, number>();
+    purchaseReturns.filter(r => !r.isDeleted && r.originalPurchaseId === purchase.id).forEach(r => r.items.forEach(it => priorByItem.set(it.itemId, (priorByItem.get(it.itemId) || 0) + it.qty)));
+    for (const it of items) {
+      const bought = purchase.items.find(pi => pi.itemId === it.itemId)?.qty || 0;
+      if (it.qty + (priorByItem.get(it.itemId) || 0) > bought) { toastRef.current({ title: 'खरीदी गई मात्रा से अधिक वापसी नहीं', description: it.itemName, variant: 'destructive' }); return null; }
+    }
+    const netAmount = round2(items.reduce((s, i) => s + i.amount, 0));
+    // Proportional GST-ITC reversal from the original purchase.
+    const ratio = (purchase.netAmount || 0) > 0 ? netAmount / purchase.netAmount : 0;
+    const cgstAmount = round2((purchase.cgstAmount || 0) * ratio);
+    const sgstAmount = round2((purchase.sgstAmount || 0) * ratio);
+    const igstAmount = round2((purchase.igstAmount || 0) * ratio);
+    const taxAmount = round2(cgstAmount + sgstAmount + igstAmount);
+    const grandTotal = round2(netAmount + taxAmount);
+    if (!(grandTotal > 0)) { toastRef.current({ title: 'वापसी राशि शून्य', variant: 'destructive' }); return null; }
+    const fy = society.financialYear;
+    const seq = purchaseReturns.filter(r => r.returnNo?.includes(fy)).reduce((m, r) => { const x = r.returnNo?.match(/\/(\d+)$/); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0) + 1;
+    const returnNo = `PRET/${fy}/${String(seq).padStart(3, '0')}`;
+    // Refund source: cash/bank received back, else adjust the supplier's payable.
+    const supplierAccId = purchase.supplierId ? (suppliers.find(s => s.id === purchase.supplierId)?.accountId || '2101') : '2101';
+    const debitAccId = data.refundMode === 'cash' ? '3301'
+      : data.refundMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || '3302')
+      : supplierAccId;
+    const lid = () => crypto.randomUUID();
+    // Cr: Purchases A/c — split by each item's purchaseAccountId (faithful inverse of the purchase Dr).
+    const totalItemAmount = items.reduce((s, i) => s + i.amount, 0) || 1;
+    const purchaseAccBuckets = new Map<string, number>();
+    items.forEach(it => {
+      const acc = stockItems.find(s => s.id === it.itemId)?.purchaseAccountId || '5101';
+      const itemNet = (it.amount / totalItemAmount) * netAmount;
+      purchaseAccBuckets.set(acc, (purchaseAccBuckets.get(acc) || 0) + itemNet);
+    });
+    const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [];
+    purchaseAccBuckets.forEach((amt, accId) => { const r = round2(amt); if (r > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: r }); });
+    if (taxAmount > 0) lines.push({ id: lid(), accountId: '3310', type: 'Cr', amount: taxAmount });
+    lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
+    const primaryCrAcc = purchaseAccBuckets.size > 0 ? [...purchaseAccBuckets.keys()][0] : '5101';
+    const voucher = addVoucher({
+      type: 'debit_note', date: data.date,
+      debitAccountId: debitAccId, creditAccountId: primaryCrAcc, amount: grandTotal, lines,
+      narration: `खरीद वापसी — ${purchase.purchaseNo}`, refType: 'purchase.return', refId: purchase.id,
+      createdBy: user?.name ?? 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+    if (!voucher?.id) return null;
+    // Goods leave stock (negative adjustment; canonical stock formula subtracts it).
+    items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: returnNo, narration: `Purchase return ${purchase.purchaseNo}` }));
+    const ret: PurchaseReturn = {
+      id: lid(), returnNo, date: data.date, originalPurchaseId: purchase.id, purchaseNo: purchase.purchaseNo,
+      supplierName: purchase.supplierName, supplierId: purchase.supplierId,
+      items, netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal,
+      refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: voucher.id,
+      createdBy: user?.name ?? 'admin', createdAt: new Date().toISOString(),
+    };
+    commitPurchaseReturn(ret, null, () => cancelVoucher(voucher.id, 'Purchase return rolled back (cloud save failed)', user?.name || 'System'));
+    toastRef.current({ title: `✅ खरीद वापसी दर्ज — ${returnNo}`, description: `स्टॉक कम + ₹${grandTotal.toLocaleString('en-IN')}` });
+    return ret;
+  }, [purchases, purchaseReturns, suppliers, stockItems, accounts, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitPurchaseReturn, user]);
+
+  const deletePurchaseReturn = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const cur = purchaseReturns.find(r => r.id === id);
+    if (!cur || cur.isDeleted) return;
+    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Purchase return deleted', user?.name || 'System');
+    // Restore the stock that left (compensating positive adjustment).
+    const today = new Date().toISOString().slice(0, 10);
+    cur.items.forEach(it => addStockMovement({ date: today, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: `${cur.returnNo}/REV`, narration: `Purchase return reversed ${cur.purchaseNo}` }));
+    commitPurchaseReturn({ ...cur, isDeleted: true }, cur);
+  }, [purchaseReturns, guardFYLocked, cancelVoucher, addStockMovement, commitPurchaseReturn, user]);
+
   return (
     <ConsumerDataContext.Provider value={{
       consumerReady: true, guardFYLocked,
@@ -536,6 +639,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       patronageRuns, createPatronageRun, createDividendRun, approvePatronageRun, recordPatronagePayment, deletePatronageRun,
       purchaseOrders, createPurchaseOrder, approvePurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder, deletePurchaseOrder,
       salesReturns, addSalesReturn, deleteSalesReturn,
+      purchaseReturns, addPurchaseReturn, deletePurchaseReturn,
     }}>
       {children}
     </ConsumerDataContext.Provider>

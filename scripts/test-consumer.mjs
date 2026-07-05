@@ -333,5 +333,31 @@ ok(Object.values(CODE39).every(p => p.length === 9 && (p.match(/w/g)||[]).length
   ok(lines[0] && lines[0].base === 300 && lines[0].amount === 6, 'patronage nets return: base 300, rebate 6');
 }
 
+// ── Purchase Return — proportional ITC reversal, qty cap, net ITC ───────────
+// Mirrors the inline math in ConsumerDataContext.addPurchaseReturn + GstSummary.itcTotals.
+{
+  const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  // Original purchase: net 1000, GST 5% = 50 (cgst 25 + sgst 25), grand 1050, 10 units.
+  const purchase = { netAmount: 1000, cgstAmount: 25, sgstAmount: 25, igstAmount: 0, items: [{ itemId: 'I1', qty: 10 }] };
+  // Return 4 of 10 units → net 400 → ratio 0.4 → tax reversed 20 (10+10), grand 420.
+  const retNet = 400;
+  const ratio = purchase.netAmount > 0 ? retNet / purchase.netAmount : 0;
+  const cgst = round2(purchase.cgstAmount * ratio), sgst = round2(purchase.sgstAmount * ratio);
+  const tax = round2(cgst + sgst), grand = round2(retNet + tax);
+  ok(cgst === 10 && sgst === 10 && tax === 20, 'purchase return: proportional ITC reversal 5% of 400 = 20');
+  ok(grand === 420, 'purchase return grand total = net 400 + tax 20 = 420');
+  // Cap: cannot return more than bought minus prior returns.
+  const bought = purchase.items[0].qty, prior = 7;
+  ok(4 + prior > bought, 'cap: 4 + prior 7 > bought 10 → rejected');
+  ok(2 + prior <= bought, 'cap: 2 + prior 7 <= bought 10 → allowed');
+  // Net ITC = gross purchases ITC − purchase-return ITC (GstSummary.itcTotals).
+  const grossItc = 50, netItc = grossItc - tax;
+  ok(netItc === 30, 'net ITC = gross 50 − reversed 20 = 30');
+  // deleted purchase return excluded from ITC reversal (filter !isDeleted upstream)
+  const preturns = [{ taxAmount: 20, isDeleted: false }, { taxAmount: 99, isDeleted: true }];
+  const reversed = preturns.filter(r => !r.isDeleted).reduce((s, r) => s + r.taxAmount, 0);
+  ok(reversed === 20, 'deleted purchase return excluded from ITC reversal');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

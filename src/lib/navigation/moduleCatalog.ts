@@ -72,6 +72,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'memberCredit',  titleKey: 'memberCredit',  icon: HandCoins,         route: '/member-credit',  domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2 },
   { id: 'expiryDamage',  titleKey: 'expiryDamage',  icon: PackageX,          route: '/expiry-damage',  domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2.5 },
   { id: 'purchaseOrders', titleKey: 'purchaseOrders', icon: ClipboardList,   route: '/purchase-orders', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2.7 },
+  { id: 'purchaseReturn', titleKey: 'purchaseReturn', icon: Undo2,           route: '/purchase-return', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2.75 },
   { id: 'barcodeLabels', titleKey: 'barcodeLabels', icon: ScanBarcode,       route: '/barcode-labels', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2.8 },
   { id: 'patronage',     titleKey: 'patronage',     icon: Coins,             route: '/patronage',      domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 3 },
   { id: 'consumerDividend', titleKey: 'consumerDividend', icon: Landmark, route: '/consumer-dividend', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 4 },

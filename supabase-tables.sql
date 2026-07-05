@@ -2431,3 +2431,37 @@ drop policy if exists "society_rw" on public.sales_returns;
 create policy "society_rw" on public.sales_returns for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ── Consumer — Purchase Return (debit note) ──────────────────────────────────
+-- Reverses a posted purchase (full/partial). Accounting via the core voucher engine
+-- (Cr Purchases per-item + Cr GST ITC 3310 / Dr supplier|cash|bank); this table is the
+-- source document + register. Goods leave via a negative stock_movements adjustment.
+create table if not exists purchase_returns (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "returnNo" text,
+  date text,
+  "originalPurchaseId" text,
+  "purchaseNo" text,
+  "supplierName" text,
+  "supplierId" text,
+  items jsonb default '[]',
+  "netAmount" numeric,
+  "cgstAmount" numeric,
+  "sgstAmount" numeric,
+  "igstAmount" numeric,
+  "taxAmount" numeric,
+  "grandTotal" numeric,
+  "refundMode" text,
+  "bankAccountId" text,
+  "voucherId" text,
+  "isDeleted" boolean default false,
+  "createdBy" text,
+  "createdAt" text
+);
+create index if not exists idx_purchase_returns_society on public.purchase_returns (society_id);
+alter table public.purchase_returns enable row level security;
+drop policy if exists "society_rw" on public.purchase_returns;
+create policy "society_rw" on public.purchase_returns for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
