@@ -2506,3 +2506,55 @@ drop policy if exists "society_rw" on public.bank_reconciliations;
 create policy "society_rw" on public.bank_reconciliations for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ── TDS — persist manually-added deductions + challans (fixes RULE-1 data loss) ──
+-- Auto-imported purchase TDS is derived (not stored here); these tables hold the
+-- MANUAL entries (salary/rent/professional) + challan deposits the register adds.
+create table if not exists tds_entries (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  date text,
+  "deducteePan" text,
+  "deducteeName" text,
+  "deducteeType" text,
+  section text,
+  "natureOfPayment" text,
+  "grossAmount" numeric,
+  "tdsRate" numeric,
+  "tdsAmount" numeric,
+  "challanId" text,
+  "voucherId" text,
+  "purchaseId" text,
+  quarter text,
+  "financialYear" text,
+  status text,
+  "isDeleted" boolean default false,
+  "createdAt" text
+);
+create index if not exists idx_tds_entries_society on public.tds_entries (society_id);
+alter table public.tds_entries enable row level security;
+drop policy if exists "society_rw" on public.tds_entries;
+create policy "society_rw" on public.tds_entries for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));
+
+create table if not exists tds_challans (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "bsrCode" text,
+  "challanDate" text,
+  "challanSerial" text,
+  amount numeric,
+  "bankName" text,
+  quarter text,
+  "financialYear" text,
+  status text,
+  "isDeleted" boolean default false,
+  "createdAt" text
+);
+create index if not exists idx_tds_challans_society on public.tds_challans (society_id);
+alter table public.tds_challans enable row level security;
+drop policy if exists "society_rw" on public.tds_challans;
+create policy "society_rw" on public.tds_challans for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));

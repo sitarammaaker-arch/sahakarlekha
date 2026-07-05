@@ -526,5 +526,19 @@ function brs(bookBalance, unclearedDeposits, unclearedPayments, statementBalance
   ok(brs(5000, 0, 0, 5000).isReconciled === true, 'BRS: clean books reconcile to book balance');
 }
 
+// ── TDS: PAN-from-GSTIN sanitizer (guards 26Q export from corrupt PAN) ──────
+// Mirrors panFromGstin in TdsRegister.tsx.
+function panFromGstin(gstin) {
+  const g = (gstin || '').trim().toUpperCase();
+  return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/.test(g) ? g.substring(2, 12) : '';
+}
+{
+  ok(panFromGstin('09ABCDE1234F1Z5') === 'ABCDE1234F', 'PAN extracted from a valid 15-char GSTIN');
+  ok(panFromGstin('') === '', 'empty GSTIN → empty PAN (not corrupt)');
+  ok(panFromGstin(undefined) === '', 'missing GSTIN → empty PAN');
+  ok(panFromGstin('09ABC') === '', 'short/invalid GSTIN → empty PAN (no silent truncation)');
+  ok(panFromGstin('  09abcde1234f1z5 ') === 'ABCDE1234F', 'trims + uppercases before extracting');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
