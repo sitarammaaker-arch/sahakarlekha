@@ -120,7 +120,8 @@ export default function DairyDistribution() {
 
   const [kind, setKind] = useState<'bonus' | 'dividend'>('bonus');
   const [from, setFrom] = useState(society?.financialYearStart || today());
-  const [to, setTo] = useState(society?.financialYearEnd || today());
+  // SocietySettings has no financialYearEnd — derive it from the FY label ("2024-25" → 2025-03-31).
+  const [to, setTo] = useState(society?.financialYear ? `${parseInt(society.financialYear.split('-')[0], 10) + 1}-03-31` : today());
   const [basis, setBasis] = useState<DairyBonusBasis>('per_litre');
   const [rate, setRate] = useState('');
   const [fyLabel, setFyLabel] = useState(society?.financialYear || '');
