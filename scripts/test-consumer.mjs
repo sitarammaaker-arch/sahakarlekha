@@ -441,5 +441,42 @@ function outward31(activeSales, activeReturns) {
   ok(retPeriod === '072026', 'GSTR-3B ret_period is MMYYYY (072026), not YYYYMM');
 }
 
+// ── POS GST: inclusive extraction from MRP (registered) / Bill of Supply (not) ──
+// Mirrors src/lib/consumer/posGst.ts computeCartGst.
+function computeCartGst(items, opts) {
+  const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const grandTotal = r2(items.reduce((s, i) => s + (i.amount || 0), 0));
+  if (!opts.gstRegistered) return { netAmount: grandTotal, cgstAmount: 0, sgstAmount: 0, taxAmount: 0, grandTotal, cgstPct: 0, sgstPct: 0 };
+  let taxTotal = 0;
+  for (const it of items) {
+    const rate = it.gstRate || 0;
+    if (rate > 0 && it.amount > 0) { const taxable = r2((it.amount * 100) / (100 + rate)); taxTotal += r2(it.amount - taxable); }
+  }
+  const cgstAmount = r2(r2(taxTotal) / 2);
+  const taxAmount = r2(taxTotal);
+  const sgstAmount = r2(taxAmount - cgstAmount);
+  const netAmount = r2(grandTotal - taxAmount);
+  const effRate = netAmount > 0 ? r2((taxAmount / netAmount) * 100) : 0;
+  const halfPct = r2(effRate / 2);
+  return { netAmount, cgstAmount, sgstAmount, taxAmount, grandTotal, cgstPct: halfPct, sgstPct: halfPct };
+}
+{
+  // single 5% item, MRP 105 inclusive → taxable 100, tax 5 (2.5+2.5); customer still pays 105
+  const g1 = computeCartGst([{ amount: 105, gstRate: 5 }], { gstRegistered: true });
+  ok(g1.netAmount === 100 && g1.taxAmount === 5 && g1.cgstAmount === 2.5 && g1.sgstAmount === 2.5, 'POS 5% inclusive: net 100, tax 5 (2.5+2.5)');
+  ok(g1.grandTotal === 105 && g1.cgstPct === 2.5, 'POS grand unchanged 105; effective half-rate 2.5%');
+  ok(Math.abs(g1.netAmount + g1.taxAmount - g1.grandTotal) < 0.001, 'POS net + tax == grand (no drift)');
+  // exempt item (no gstRate) → no tax
+  const g2 = computeCartGst([{ amount: 200 }], { gstRegistered: true });
+  ok(g2.netAmount === 200 && g2.taxAmount === 0, 'POS exempt item: full taxable, zero tax');
+  // mixed basket 105@5% + 118@18% → net 200, tax 23, grand 223
+  const g3 = computeCartGst([{ amount: 105, gstRate: 5 }, { amount: 118, gstRate: 18 }], { gstRegistered: true });
+  ok(g3.netAmount === 200 && g3.taxAmount === 23 && g3.grandTotal === 223, 'POS mixed basket: net 200, tax 23, grand 223');
+  ok(g3.cgstAmount === 11.5 && g3.sgstAmount === 11.5, 'POS mixed basket split 11.5 + 11.5');
+  // unregistered society → Bill of Supply, no GST even with rated items
+  const g4 = computeCartGst([{ amount: 105, gstRate: 5 }], { gstRegistered: false });
+  ok(g4.taxAmount === 0 && g4.netAmount === 105, 'unregistered society: no GST (Bill of Supply)');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
