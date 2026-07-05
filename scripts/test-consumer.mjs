@@ -250,5 +250,27 @@ function buildWriteoffRegister(movements) {
   ok(reg.totalQty === 8 && reg.totalValue === 88, 'totals qty 8 / value 88');
 }
 
+// ── Mirror: src/lib/consumer/purchaseOrder.ts ──
+const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+const lineAmount = (qty, rate) => r2((qty || 0) * (rate || 0));
+const poTotal = (items) => r2(items.reduce((s, i) => s + (i.amount || 0), 0));
+const poReceivedTotal = (items) => r2(items.reduce((s, i) => s + lineAmount(i.receivedQty ?? i.qty, i.rate), 0));
+function poToPurchaseItems(items) {
+  return items.map(i => { const qty = i.receivedQty ?? i.qty; return { itemId: i.itemId, itemName: i.itemName, unit: i.unit, qty, rate: i.rate, amount: lineAmount(qty, i.rate) }; }).filter(i => i.qty > 0);
+}
+
+// 21. PO total = Σ amount; received total honours receivedQty; partial GRN drops zero-received lines
+{
+  const items = [
+    { itemId: 'A', itemName: 'Sugar', unit: 'kg', qty: 10, rate: 44, amount: 440 },
+    { itemId: 'B', itemName: 'Salt', unit: 'kg', qty: 5, rate: 15, amount: 75 },
+  ];
+  ok(poTotal(items) === 515, 'PO ordered total 10×44 + 5×15 = 515');
+  const received = [{ ...items[0], receivedQty: 8 }, { ...items[1], receivedQty: 0 }]; // 8 sugar, 0 salt
+  ok(poReceivedTotal(received) === 352, 'received total = 8×44 = 352 (salt 0)');
+  const pItems = poToPurchaseItems(received);
+  ok(pItems.length === 1 && pItems[0].itemId === 'A' && pItems[0].qty === 8 && pItems[0].amount === 352, 'GRN → 1 purchase line (Sugar × 8 = 352), zero-received Salt dropped');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

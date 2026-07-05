@@ -2364,3 +2364,35 @@ alter table consumer_patronage_runs add column if not exists kind text;
 -- Consumer C8 — batch / expiry on stock movements (esp. expiry/damage write-offs). Additive.
 alter table stock_movements add column if not exists "batchNo" text;
 alter table stock_movements add column if not exists "expiryDate" text;
+
+-- ── Consumer C-PO — Purchase Order + GRN (approval-driven procurement) ────────
+-- PO/GRN are tracking documents; goods receipt creates the real Purchase (invoice)
+-- via addPurchase (existing sales/purchases tables). RLS bundled.
+create table if not exists consumer_purchase_orders (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "poNo" text,
+  date text,
+  "supplierId" text,
+  "supplierName" text,
+  "supplierPhone" text,
+  "expectedDate" text,
+  items jsonb default '[]',
+  total numeric,
+  status text,
+  "approvedBy" text,
+  "approvedAt" text,
+  "resolutionNo" text,
+  "receivedAt" text,
+  "purchaseId" text,
+  "purchaseNo" text,
+  notes text,
+  "isDeleted" boolean default false,
+  "createdAt" text
+);
+create index if not exists idx_consumer_purchase_orders_society on public.consumer_purchase_orders (society_id);
+alter table public.consumer_purchase_orders enable row level security;
+drop policy if exists "society_rw" on public.consumer_purchase_orders;
+create policy "society_rw" on public.consumer_purchase_orders for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));

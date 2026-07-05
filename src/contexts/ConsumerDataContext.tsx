@@ -23,8 +23,9 @@ import { resolveItemPrice } from '@/lib/consumer/pricing';
 import { resolveMemberReceivableAccountId, resolvePatronageDistributionAccountId, resolveRebatePayableAccountId, resolveDividendDistributionAccountId, resolveDividendPayableAccountId, MEMBER_RECEIVABLE_SUBTYPE, PATRONAGE_DISTRIBUTION_SUBTYPE, REBATE_PAYABLE_SUBTYPE, DIVIDEND_DISTRIBUTION_SUBTYPE, DIVIDEND_PAYABLE_SUBTYPE } from '@/lib/consumer/accounts';
 import { memberOutstanding, memberAgeing, type Ageing, type RecoveryRow } from '@/lib/consumer/credit';
 import { computePatronageLines, computeDividendLines, patronageTotal, patronageLegs } from '@/lib/consumer/patronage';
+import { poTotal, poReceivedTotal, poToPurchaseItems } from '@/lib/consumer/purchaseOrder';
 import { getBankAccountIds } from '@/lib/storage';
-import type { ConsumerPrice, ConsumerPriceTier, Voucher, PatronageRun } from '@/types';
+import type { ConsumerPrice, ConsumerPriceTier, Voucher, PatronageRun, PurchaseOrder, PurchaseOrderItem, Purchase } from '@/types';
 
 const CASH_ACCOUNT = '3301';   // Cash in Hand (CMS chart)
 const RECOVERY_REF = 'consumer.member.recovery';
@@ -65,12 +66,22 @@ interface ConsumerDataContextValue {
   /** Pay out an approved run: Dr rebate-payable / Cr Cash|Bank (clamped to outstanding). */
   recordPatronagePayment: (args: { runId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }) => Voucher | null;
   deletePatronageRun: (runId: string) => void;
+
+  // Purchase Order + GRN (approval-driven procurement). PO/GRN are tracking docs; goods
+  // receipt creates the actual Purchase (invoice) via the shared addPurchase engine.
+  purchaseOrders: PurchaseOrder[];
+  createPurchaseOrder: (data: { supplierId?: string; supplierName: string; supplierPhone?: string; date: string; expectedDate?: string; items: PurchaseOrderItem[]; notes?: string }) => PurchaseOrder | null;
+  approvePurchaseOrder: (id: string, data: { resolutionNo?: string }) => PurchaseOrder | null;
+  /** Goods receipt (GRN): create the Purchase invoice for received qty, mark PO received. */
+  receivePurchaseOrder: (id: string, data: { receivedQty?: Record<string, number>; paymentMode: 'cash' | 'bank' | 'credit'; bankAccountId?: string; date: string }) => Purchase | null;
+  cancelPurchaseOrder: (id: string) => void;
+  deletePurchaseOrder: (id: string) => void;
 }
 
 const ConsumerDataContext = createContext<ConsumerDataContextValue | null>(null);
 
 export function ConsumerProvider({ children }: { children: ReactNode }) {
-  const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember } = useData();
+  const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase } = useData();
   const { user, isSuperAdmin } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
@@ -322,6 +333,98 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     commitPatronageRun({ ...cur, isDeleted: true }, cur);
   }, [patronageRuns, cancelVoucher, guardFYLocked, commitPatronageRun, user]);
 
+  // ── Purchase Order + GRN (approval-driven procurement) ──────────────────────
+  const [purchaseOrders, setPOState] = useState<PurchaseOrder[]>(() => storage.getConsumerPurchaseOrders());
+  useEffect(() => {
+    const sid = user?.societyId;
+    if (!sid) { setPOState([]); return; }
+    supabase.from('consumer_purchase_orders').select('*').eq('society_id', sid).then(
+      ({ data, error }) => setPOState(error || !data ? storage.getConsumerPurchaseOrders() : (data as PurchaseOrder[])),
+      () => setPOState(storage.getConsumerPurchaseOrders()),
+    );
+  }, [user?.societyId]);
+
+  const commitPO = useCallback((next: PurchaseOrder, revertTo: PurchaseOrder | null, onFail?: () => void) => {
+    setPOState(prev => { const u = prev.some(p => p.id === next.id) ? prev.map(p => p.id === next.id ? next : p) : [...prev, next]; storage.setConsumerPurchaseOrders(u); return u; });
+    supabase.from('consumer_purchase_orders').upsert(withSoc(next)).then(({ error }) => {
+      if (error) {
+        console.error('PO save error:', error.message);
+        setPOState(prev => { const u = revertTo ? prev.map(p => p.id === next.id ? revertTo : p) : prev.filter(p => p.id !== next.id); storage.setConsumerPurchaseOrders(u); return u; });
+        onFail?.();
+        toastRef.current({ title: 'खरीद ऑर्डर सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. (Pehli baar: consumer_purchase_orders block chalayein.)`, variant: 'destructive', duration: 12000 });
+      }
+    });
+  }, [societyId]);
+
+  const createPurchaseOrder = useCallback((data: { supplierId?: string; supplierName: string; supplierPhone?: string; date: string; expectedDate?: string; items: PurchaseOrderItem[]; notes?: string }): PurchaseOrder | null => {
+    if (guardFYLocked()) return null;
+    const items = data.items.filter(i => i.itemId && i.qty > 0);
+    if (items.length === 0) { toastRef.current({ title: 'कोई वस्तु नहीं', description: 'कम-से-कम एक वस्तु + मात्रा डालें।', variant: 'destructive' }); return null; }
+    if (!data.supplierName?.trim()) { toastRef.current({ title: 'आपूर्तिकर्ता चुनें', variant: 'destructive' }); return null; }
+    const fy = society.financialYear;
+    const seq = purchaseOrders.filter(p => p.poNo?.includes(fy)).reduce((m, p) => { const x = p.poNo?.match(/\/(\d+)$/); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0) + 1;
+    const po: PurchaseOrder = {
+      id: crypto.randomUUID(), poNo: `PO/${fy}/${String(seq).padStart(3, '0')}`,
+      date: data.date, supplierId: data.supplierId, supplierName: data.supplierName.trim(), supplierPhone: data.supplierPhone,
+      expectedDate: data.expectedDate, items, total: poTotal(items), status: 'draft', notes: data.notes, createdAt: new Date().toISOString(),
+    };
+    commitPO(po, null);
+    toastRef.current({ title: `खरीद ऑर्डर बना — ${po.poNo}`, description: `${items.length} वस्तु · ₹${po.total.toLocaleString('en-IN')}` });
+    return po;
+  }, [purchaseOrders, society.financialYear, guardFYLocked, commitPO]);
+
+  const approvePurchaseOrder = useCallback((id: string, data: { resolutionNo?: string }): PurchaseOrder | null => {
+    if (guardFYLocked()) return null;
+    const cur = purchaseOrders.find(p => p.id === id);
+    if (!cur || cur.status !== 'draft') { toastRef.current({ title: 'केवल draft ऑर्डर approve होगा', variant: 'destructive' }); return null; }
+    const next: PurchaseOrder = { ...cur, status: 'approved', approvedBy: user?.name || 'admin', approvedAt: new Date().toISOString(), resolutionNo: data.resolutionNo?.trim() || undefined };
+    commitPO(next, cur);
+    toastRef.current({ title: `✅ ऑर्डर approved — ${cur.poNo}` });
+    return next;
+  }, [purchaseOrders, guardFYLocked, commitPO, user]);
+
+  const receivePurchaseOrder = useCallback((id: string, data: { receivedQty?: Record<string, number>; paymentMode: 'cash' | 'bank' | 'credit'; bankAccountId?: string; date: string }): Purchase | null => {
+    if (guardFYLocked()) return null;
+    const cur = purchaseOrders.find(p => p.id === id);
+    if (!cur || cur.status !== 'approved') { toastRef.current({ title: 'पहले ऑर्डर approve करें', variant: 'destructive' }); return null; }
+    const items: PurchaseOrderItem[] = cur.items.map(i => ({ ...i, receivedQty: data.receivedQty?.[i.itemId] ?? i.qty }));
+    const purchaseItems = poToPurchaseItems(items);
+    if (purchaseItems.length === 0) { toastRef.current({ title: 'कोई माल प्राप्त नहीं', description: 'कम-से-कम एक वस्तु की received मात्रा डालें।', variant: 'destructive' }); return null; }
+    const total = poReceivedTotal(items);
+    try {
+      const purchase = addPurchase({
+        date: data.date, supplierName: cur.supplierName, supplierPhone: cur.supplierPhone, supplierId: cur.supplierId,
+        items: purchaseItems, totalAmount: total, discount: 0, netAmount: total,
+        cgstPct: 0, sgstPct: 0, igstPct: 0, tdsPct: 0, cgstAmount: 0, sgstAmount: 0, igstAmount: 0, tdsAmount: 0,
+        taxAmount: 0, grandTotal: total, paymentMode: data.paymentMode, bankAccountId: data.bankAccountId,
+        narration: `PO ${cur.poNo} — माल प्राप्ति (GRN)`, createdBy: user?.name ?? 'admin',
+      });
+      if (!purchase?.id) return null;
+      const next: PurchaseOrder = { ...cur, items, status: 'received', receivedAt: new Date().toISOString(), purchaseId: purchase.id, purchaseNo: purchase.purchaseNo };
+      commitPO(next, cur);
+      toastRef.current({ title: `✅ माल प्राप्त — ${purchase.purchaseNo}`, description: 'स्टॉक अपडेट + खरीद दर्ज' });
+      return purchase;
+    } catch (err) {
+      toastRef.current({ title: 'माल प्राप्ति दर्ज नहीं हुई', description: err instanceof Error ? err.message : undefined, variant: 'destructive', duration: 10000 });
+      return null;
+    }
+  }, [purchaseOrders, guardFYLocked, commitPO, addPurchase, user]);
+
+  const cancelPurchaseOrder = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const cur = purchaseOrders.find(p => p.id === id);
+    if (!cur) return;
+    if (cur.status === 'received') { toastRef.current({ title: 'माल प्राप्त हो चुका', description: 'received ऑर्डर cancel नहीं होगा।', variant: 'destructive' }); return; }
+    commitPO({ ...cur, status: 'cancelled' }, cur);
+  }, [purchaseOrders, guardFYLocked, commitPO]);
+
+  const deletePurchaseOrder = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const cur = purchaseOrders.find(p => p.id === id);
+    if (!cur) return;
+    commitPO({ ...cur, isDeleted: true }, cur);
+  }, [purchaseOrders, guardFYLocked, commitPO]);
+
   return (
     <ConsumerDataContext.Provider value={{
       consumerReady: true, guardFYLocked,
@@ -329,6 +432,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       memberReceivableAccountId, memberRecoveries, recordMemberRecovery, deleteMemberRecovery,
       getMemberOutstanding, getMemberAgeing, setMemberCreditLimit,
       patronageRuns, createPatronageRun, createDividendRun, approvePatronageRun, recordPatronagePayment, deletePatronageRun,
+      purchaseOrders, createPurchaseOrder, approvePurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder, deletePurchaseOrder,
     }}>
       {children}
     </ConsumerDataContext.Provider>

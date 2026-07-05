@@ -1226,6 +1226,41 @@ export interface PatronageRun {
   createdAt: string;
 }
 
+// ── Consumer store — Purchase Order + GRN (approval-driven procurement) ───────
+// PO and GRN are non-financial TRACKING documents; the actual inventory + accounting
+// posting happens when goods are received (GRN) by creating a Purchase via addPurchase.
+export type PurchaseOrderStatus = 'draft' | 'approved' | 'received' | 'cancelled';
+export interface PurchaseOrderItem {
+  itemId: string;
+  itemName: string;
+  unit: string;
+  qty: number;          // ordered quantity
+  receivedQty?: number; // set at goods receipt (GRN); defaults to qty
+  rate: number;
+  amount: number;
+}
+export interface PurchaseOrder {
+  id: string;
+  poNo: string;
+  date: string;
+  supplierId?: string;
+  supplierName: string;
+  supplierPhone?: string;
+  expectedDate?: string;
+  items: PurchaseOrderItem[];
+  total: number;
+  status: PurchaseOrderStatus;
+  approvedBy?: string;
+  approvedAt?: string;
+  resolutionNo?: string;      // optional committee/board approval reference
+  receivedAt?: string;
+  purchaseId?: string;        // the Purchase (invoice) created on goods receipt
+  purchaseNo?: string;
+  notes?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 // ── Purchase ──────────────────────────────────────────────────────────────────
 export interface PurchaseItem {
   itemId: string;
