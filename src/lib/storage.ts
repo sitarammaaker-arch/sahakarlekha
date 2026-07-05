@@ -1,4 +1,4 @@
-import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun, ConsumerPrice, PatronageRun } from '@/types';
+import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun, ConsumerPrice, PatronageRun, PurchaseOrder } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement, Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
 import type { Transporter } from '@/lib/marketing/transport';
 
@@ -85,6 +85,7 @@ const KEYS = {
   marketingTransporters: 'sahayata_marketing_transporters',
   consumerPrices: 'sahayata_consumer_prices',
   consumerPatronageRuns: 'sahayata_consumer_patronage_runs',
+  consumerPurchaseOrders: 'sahayata_consumer_purchase_orders',
   housingFlats: 'sahayata_housing_flats',
   maintenanceBills: 'sahayata_maintenance_bills',
   housingChargeHeads: 'sahayata_housing_charge_heads',
@@ -815,6 +816,8 @@ export const getConsumerPrices = (): ConsumerPrice[] => get(KEYS.consumerPrices,
 export const setConsumerPrices = (p: ConsumerPrice[]): void => set(KEYS.consumerPrices, p);
 export const getConsumerPatronageRuns = (): PatronageRun[] => get(KEYS.consumerPatronageRuns, []);
 export const setConsumerPatronageRuns = (r: PatronageRun[]): void => set(KEYS.consumerPatronageRuns, r);
+export const getConsumerPurchaseOrders = (): PurchaseOrder[] => get(KEYS.consumerPurchaseOrders, []);
+export const setConsumerPurchaseOrders = (p: PurchaseOrder[]): void => set(KEYS.consumerPurchaseOrders, p);
 export const getProcurementDeductionRules = (): DeductionRule[] => get(KEYS.procurementDeductionRules, []);
 export const setProcurementDeductionRules = (r: DeductionRule[]): void => set(KEYS.procurementDeductionRules, r);
 export const getProcurementQualitySpecs = (): QualitySpec[] => get(KEYS.procurementQualitySpecs, []);
