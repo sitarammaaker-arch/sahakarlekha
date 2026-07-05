@@ -892,5 +892,45 @@ function classifyShareTxn(lines) {
   ok(net === 3000, 'register net (5000−2000−1000+1000) = 3000 = net share capital movement');
 }
 
+// ── Dividend Payment Register: entitled vs paid join + status ───────────────
+// Mirrors paymentRegister in ProfitDistribution.tsx: each member's entitled
+// dividend joined with their Dr-1211 payment vouchers → paid/partial/pending.
+function paymentRegister(entitled, paidVouchers) {
+  const paidBy = new Map();
+  for (const v of paidVouchers) {
+    if (v.isDeleted || !v.memberId) continue;
+    const prev = paidBy.get(v.memberId);
+    paidBy.set(v.memberId, { amount: Math.round(((prev?.amount || 0) + v.amount) * 100) / 100 });
+  }
+  return entitled.map(r => {
+    const paidAmt = paidBy.get(r.id)?.amount || 0;
+    const status = paidAmt >= r.dividend - 0.01 ? 'paid' : paidAmt > 0 ? 'partial' : 'pending';
+    return { ...r, paidAmt, status };
+  });
+}
+{
+  const entitled = [
+    { id: 'M1', dividend: 2000 },
+    { id: 'M2', dividend: 1000 },
+    { id: 'M3', dividend: 500 },
+  ];
+  const paid = [
+    { memberId: 'M1', amount: 2000 },                    // fully paid
+    { memberId: 'M2', amount: 400 },                     // partial
+    { memberId: 'M2', amount: 100 },                     // second partial (accumulates to 500)
+    { memberId: 'M3', amount: 500, isDeleted: true },    // deleted → ignored
+  ];
+  const reg = paymentRegister(entitled, paid);
+  ok(reg.find(r => r.id === 'M1').status === 'paid', 'fully-paid member → Paid');
+  const m2 = reg.find(r => r.id === 'M2');
+  ok(m2.status === 'partial' && m2.paidAmt === 500, 'two partial payments accumulate (400+100=500) → Partial');
+  ok(reg.find(r => r.id === 'M3').status === 'pending' && reg.find(r => r.id === 'M3').paidAmt === 0, 'deleted payment ignored → member still Pending');
+  const totalEntitled = reg.reduce((s, r) => s + r.dividend, 0);
+  const totalPaid = reg.reduce((s, r) => s + r.paidAmt, 0);
+  ok(totalEntitled === 3500 && totalPaid === 2500 && (totalEntitled - totalPaid) === 1000, 'outstanding = entitled 3500 − paid 2500 = 1000');
+  // exact-amount edge: paid within a paisa counts as paid (rounding tolerance)
+  ok(paymentRegister([{ id: 'X', dividend: 100 }], [{ memberId: 'X', amount: 99.995 }])[0].status === 'paid', 'sub-paisa rounding tolerance → Paid');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
