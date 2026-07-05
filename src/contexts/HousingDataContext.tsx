@@ -719,9 +719,9 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
       const feeAcc = accounts.some(a => a.id === '4201') ? '4201' : '4400';
       const premAcc = accounts.some(a => a.id === '1202') ? '1202' : feeAcc;
-      const lines = [{ id: lid(), accountId: bankAcc, type: 'Dr' as const, amount: round2(fee + prem) }];
-      if (fee > 0) lines.push({ id: lid(), accountId: feeAcc, type: 'Cr' as const, amount: fee });
-      if (prem > 0) lines.push({ id: lid(), accountId: premAcc, type: 'Cr' as const, amount: prem });
+      const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: bankAcc, type: 'Dr', amount: round2(fee + prem) }];
+      if (fee > 0) lines.push({ id: lid(), accountId: feeAcc, type: 'Cr', amount: fee });
+      if (prem > 0) lines.push({ id: lid(), accountId: premAcc, type: 'Cr', amount: prem });
       const v = addVoucher({
         type: 'receipt', date: data.date,
         debitAccountId: bankAcc, creditAccountId: feeAcc, amount: round2(fee + prem),
