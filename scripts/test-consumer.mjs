@@ -412,5 +412,34 @@ function classifyReturns(returns, saleById, customerMap, stockItems) {
   ok(c.hsnDelta.get('1006') && c.hsnDelta.get('1006').qty === 7 && c.hsnDelta.get('1006').taxable === 1400, 'HSN 1006 delta: qty 7, taxable 1400 (deleted excluded)');
 }
 
+// ── GSTR-3B: Table 3.1 taxable/nil partition + ret_period MMYYYY ─────────────
+// Mirrors GstSummary.outward31 (3.1a excludes nil; returns net into matching bucket).
+function outward31(activeSales, activeReturns) {
+  let taxableVal = 0, nilVal = 0;
+  for (const s of activeSales) { if (s.taxAmount > 0) taxableVal += s.netAmount; else nilVal += s.netAmount; }
+  for (const r of activeReturns) { if (r.taxAmount > 0) taxableVal -= r.netAmount; else nilVal -= r.netAmount; }
+  return { taxableVal, nilVal };
+}
+{
+  const sales = [
+    { netAmount: 1000, taxAmount: 180 }, // taxable 18%
+    { netAmount: 500, taxAmount: 0 },    // nil-rated
+  ];
+  // taxable return 200 → nets 3.1(a); nil return 100 → nets 3.1(c)
+  const returns = [
+    { netAmount: 200, taxAmount: 36 },
+    { netAmount: 100, taxAmount: 0 },
+  ];
+  const o = outward31(sales, returns);
+  ok(o.taxableVal === 800, '3.1(a) taxable value excludes nil, nets taxable return: 1000−200=800');
+  ok(o.nilVal === 400, '3.1(c) nil value nets nil return: 500−100=400 (not double-counted in 3.1a)');
+  // nil sale is NOT in 3.1(a)
+  ok(o.taxableVal !== 1000 + 500, 'nil sale not double-counted into 3.1(a)');
+  // ret_period MMYYYY (GSTN) from an ISO fromDate
+  const fromDate = '2026-07-01';
+  const retPeriod = fromDate.slice(5, 7) + fromDate.slice(0, 4);
+  ok(retPeriod === '072026', 'GSTR-3B ret_period is MMYYYY (072026), not YYYYMM');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
