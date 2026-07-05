@@ -47,6 +47,7 @@ const RetailCounter: React.FC = () => {
   const [memberId, setMemberId] = useState('');
   const [wholesale, setWholesale] = useState(false);
   const [query, setQuery] = useState('');
+  const [highlightIdx, setHighlightIdx] = useState(0);
   const [lastSaleNo, setLastSaleNo] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -83,21 +84,24 @@ const RetailCounter: React.FC = () => {
 
   const hi = language === 'hi';
 
-  // ── Add item by barcode / code / name ──────────────────────────────────────
-  const addByQuery = useCallback(() => {
+  // ── Live suggestions (name / code / barcode contains) — the dropdown list ────
+  const matches = useMemo(() => {
     const raw = query.trim();
-    if (!raw) return;
+    if (!raw) return [] as typeof stockItems;
     const q = raw.toLowerCase();
-    const active = stockItems.filter(s => s.isActive);
-    // Exact barcode / item-code first (a real scan), then name contains.
-    const match =
-      active.find(s => s.barcodeValue && s.barcodeValue.toLowerCase() === q) ||
-      active.find(s => s.itemCode && s.itemCode.toLowerCase() === q) ||
-      active.find(s => s.name.toLowerCase().includes(q) || (s.nameHi ?? '').includes(raw));
-    if (!match) {
-      toast({ title: hi ? 'वस्तु नहीं मिली' : 'Item not found', description: raw, variant: 'destructive' });
-      return;
-    }
+    return stockItems.filter(s => s.isActive && (
+      (s.barcodeValue && s.barcodeValue.toLowerCase().includes(q)) ||
+      (s.itemCode && s.itemCode.toLowerCase().includes(q)) ||
+      s.name.toLowerCase().includes(q) ||
+      (s.nameHi ?? '').includes(raw)
+    )).slice(0, 8);
+  }, [query, stockItems]);
+
+  // Keep the highlighted row in range as the list changes.
+  useEffect(() => { setHighlightIdx(0); }, [query]);
+
+  // Add a specific item to the cart (or bump its qty), then clear + refocus.
+  const addItem = useCallback((match: typeof stockItems[number]) => {
     setCart(prev => {
       const idx = prev.findIndex(i => i.itemId === match.id);
       if (idx >= 0) {
@@ -106,18 +110,33 @@ const RetailCounter: React.FC = () => {
           : i);
       }
       const rate = priceFor(match);
-      return [...prev, {
-        itemId: match.id,
-        itemName: hi ? (match.nameHi || match.name) : match.name,
-        unit: match.unit,
-        qty: 1,
-        rate,
-        amount: +rate.toFixed(2),
-      }];
+      return [...prev, { itemId: match.id, itemName: hi ? (match.nameHi || match.name) : match.name, unit: match.unit, qty: 1, rate, amount: +rate.toFixed(2) }];
     });
     setQuery('');
     focusSearch();
-  }, [query, stockItems, hi, toast, focusSearch, priceFor]);
+  }, [priceFor, hi, focusSearch]);
+
+  // Enter / "+ Add": an exact barcode|code scan wins; else the highlighted suggestion.
+  const addByQuery = useCallback(() => {
+    const raw = query.trim();
+    if (!raw) return;
+    const q = raw.toLowerCase();
+    const exact = stockItems.find(s => s.isActive && ((s.barcodeValue && s.barcodeValue.toLowerCase() === q) || (s.itemCode && s.itemCode.toLowerCase() === q)));
+    const pick = exact || matches[highlightIdx] || matches[0];
+    if (!pick) {
+      toast({ title: hi ? 'वस्तु नहीं मिली' : 'Item not found', description: raw, variant: 'destructive' });
+      return;
+    }
+    addItem(pick);
+  }, [query, stockItems, matches, highlightIdx, addItem, toast, hi]);
+
+  // Keyboard nav for the suggestion list.
+  const onSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightIdx(i => Math.min(i + 1, Math.max(0, matches.length - 1))); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightIdx(i => Math.max(i - 1, 0)); }
+    else if (e.key === 'Enter') { e.preventDefault(); addByQuery(); }
+    else if (e.key === 'Escape') { setQuery(''); }
+  }, [matches.length, addByQuery]);
 
   const setQty = (itemId: string, qty: number) =>
     setCart(prev => prev.map(i => i.itemId === itemId
@@ -307,18 +326,48 @@ const RetailCounter: React.FC = () => {
           <Card>
             <CardContent className="pt-4">
               <Label className="text-xs text-muted-foreground">
-                {hi ? 'बारकोड स्कैन करें या नाम/कोड लिखकर Enter दबाएँ' : 'Scan barcode, or type name/code and press Enter'}
+                {hi ? 'बारकोड स्कैन करें, या नाम/कोड लिखें — सूची से चुनें (↑↓ + Enter) या click करें' : 'Scan barcode, or type name/code — pick from the list (↑↓ + Enter) or click'}
               </Label>
               <div className="flex gap-2 mt-1">
-                <Input
-                  ref={searchRef}
-                  autoFocus
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addByQuery(); } }}
-                  placeholder={hi ? 'बारकोड / वस्तु का नाम…' : 'Barcode / item name…'}
-                  className="text-base"
-                />
+                <div className="relative flex-1">
+                  <Input
+                    ref={searchRef}
+                    autoFocus
+                    autoComplete="off"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    onKeyDown={onSearchKeyDown}
+                    placeholder={hi ? 'बारकोड / वस्तु का नाम…' : 'Barcode / item name…'}
+                    className="text-base w-full"
+                  />
+                  {query.trim() && matches.length > 0 && (
+                    <div className="absolute z-20 mt-1 w-full bg-white border rounded-lg shadow-lg max-h-72 overflow-auto">
+                      {matches.map((m, i) => {
+                        const avail = stockMap[m.id] ?? 0;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); addItem(m); }}
+                            onMouseEnter={() => setHighlightIdx(i)}
+                            className={cn('w-full text-left px-3 py-2 flex items-center justify-between gap-2 border-b last:border-b-0', i === highlightIdx ? 'bg-emerald-50' : 'hover:bg-gray-50')}
+                          >
+                            <span className="font-medium">{hi ? (m.nameHi || m.name) : m.name}<span className="text-xs text-muted-foreground ml-1">/ {m.unit}</span></span>
+                            <span className="text-xs text-right shrink-0">
+                              <span className={cn('font-mono', avail > 0 ? 'text-emerald-700' : 'text-red-600')}>{hi ? 'स्टॉक' : 'stock'} {avail}</span>
+                              <span className="ml-2 font-semibold">{fmt(priceFor(m))}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {query.trim() && matches.length === 0 && (
+                    <div className="absolute z-20 mt-1 w-full bg-white border rounded-lg shadow-lg px-3 py-2 text-sm text-muted-foreground">
+                      {hi ? 'कोई वस्तु नहीं मिली' : 'No item found'}
+                    </div>
+                  )}
+                </div>
                 <Button onClick={addByQuery} className="gap-1 shrink-0">
                   <Plus className="h-4 w-4" />
                   {hi ? 'जोड़ें' : 'Add'}
