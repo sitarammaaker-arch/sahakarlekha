@@ -1335,6 +1335,27 @@ export interface PurchaseReturn {
   createdAt: string;
 }
 
+// ── Bank Reconciliation — saved month-end sign-off snapshot (audit trail) ─────
+// A completed BRS: book balance + uncleared items → derived vs entered statement
+// balance, with who reconciled and when. Kept for audit evidence + reprint.
+export interface BankReconciliationRecord {
+  id: string;
+  bankAccountId: string;
+  bankAccountName: string;
+  asOfDate: string;
+  statementBalance: number;
+  bookBalance: number;
+  unclearedDepositsTotal: number;
+  unclearedPaymentsTotal: number;
+  unclearedDepositIds: string[];
+  unclearedPaymentIds: string[];
+  difference: number;
+  isReconciled: boolean;
+  reconciledBy: string;
+  reconciledAt: string;
+  isDeleted?: boolean;
+}
+
 // ── Purchase ──────────────────────────────────────────────────────────────────
 export interface PurchaseItem {
   itemId: string;

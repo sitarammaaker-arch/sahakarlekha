@@ -2478,3 +2478,31 @@ create unique index if not exists uniq_purchases_society_no on public.purchases 
 create unique index if not exists uniq_sales_returns_society_no on public.sales_returns (society_id, "returnNo");
 create unique index if not exists uniq_purchase_returns_society_no on public.purchase_returns (society_id, "returnNo");
 create unique index if not exists uniq_vouchers_society_no on public.vouchers (society_id, "voucherNo");
+
+-- ── Bank Reconciliation — saved month-end sign-off (audit trail) ─────────────
+-- A completed BRS snapshot: book balance + uncleared items vs entered statement
+-- balance, who reconciled and when. Reprintable audit evidence. RLS bundled.
+create table if not exists bank_reconciliations (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "bankAccountId" text,
+  "bankAccountName" text,
+  "asOfDate" text,
+  "statementBalance" numeric,
+  "bookBalance" numeric,
+  "unclearedDepositsTotal" numeric,
+  "unclearedPaymentsTotal" numeric,
+  "unclearedDepositIds" jsonb default '[]',
+  "unclearedPaymentIds" jsonb default '[]',
+  difference numeric,
+  "isReconciled" boolean default false,
+  "reconciledBy" text,
+  "reconciledAt" text,
+  "isDeleted" boolean default false
+);
+create index if not exists idx_bank_reconciliations_society on public.bank_reconciliations (society_id);
+alter table public.bank_reconciliations enable row level security;
+drop policy if exists "society_rw" on public.bank_reconciliations;
+create policy "society_rw" on public.bank_reconciliations for all to authenticated
+  using (society_id::text in (select public.current_user_society_ids()))
+  with check (society_id::text in (select public.current_user_society_ids()));

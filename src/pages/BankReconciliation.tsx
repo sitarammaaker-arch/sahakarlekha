@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,12 +11,17 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Building2, CheckCircle2, AlertCircle, Upload } from 'lucide-react';
+import { Building2, CheckCircle2, AlertCircle, Upload, Save, FileDown, History, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
+import * as storage from '@/lib/storage';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import type { BankReconciliationRecord } from '@/types';
 
 import * as XLSX from 'xlsx';
 
@@ -60,12 +66,25 @@ const TODAY = new Date().toISOString().split('T')[0];
 const BankReconciliation: React.FC = () => {
   const { language } = useLanguage();
   const { vouchers, accounts, society, getAccountBalance, clearVoucher, unclearVoucher } = useData();
+  const { user } = useAuth();
   const { toast } = useToast();
+  const hi = language === 'hi';
+  const societyId = user?.societyId || 'SOC001';
 
   const [asOfDate, setAsOfDate] = useState(TODAY);
   const [statementBalance, setStatementBalance] = useState<number | ''>('');
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
   const [autoMatched, setAutoMatched] = useState(0);
+
+  // Saved reconciliation sign-off records (page-local; Supabase-first, localStorage fallback).
+  const [records, setRecords] = useState<BankReconciliationRecord[]>(() => storage.getBankReconciliations());
+  useEffect(() => {
+    if (!user?.societyId) { setRecords([]); return; }
+    supabase.from('bank_reconciliations').select('*').eq('society_id', user.societyId).then(
+      ({ data, error }) => setRecords(error || !data ? storage.getBankReconciliations() : (data as BankReconciliationRecord[])),
+      () => setRecords(storage.getBankReconciliations()),
+    );
+  }, [user?.societyId]);
 
   const bankIds = useMemo(() => getBankAccountIds(accounts), [accounts]);
   const [selectedBank, setSelectedBank] = useState('');
@@ -126,6 +145,113 @@ const BankReconciliation: React.FC = () => {
   const isReconciled = difference !== null && Math.abs(difference) < 0.01;
 
   const getAccountName = (id: string) => accounts.find(a => a.id === id)?.name ?? id;
+
+  // ── Save reconciliation sign-off (RULE-1 safe) ────────────────────────────
+  const withSoc = <T extends object>(d: T) => ({ ...d, society_id: societyId });
+  const persistRecords = (next: BankReconciliationRecord[]) => { setRecords(next); storage.setBankReconciliations(next); };
+
+  const saveReconciliation = () => {
+    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', description: hi ? 'ऑडिट-लॉक होने पर सहेज नहीं सकते।' : 'Cannot save while FY is audit-locked.', variant: 'destructive' }); return; }
+    if (!activeBankId) { toast({ title: hi ? 'बैंक खाता चुनें' : 'Select a bank account', variant: 'destructive' }); return; }
+    if (statementBalance === '') { toast({ title: hi ? 'पहले स्टेटमेंट शेष दर्ज करें' : 'Enter the statement balance first', variant: 'destructive' }); return; }
+    const rec: BankReconciliationRecord = {
+      id: crypto.randomUUID(), bankAccountId: activeBankId, bankAccountName: bankAccount?.name || activeBankId,
+      asOfDate, statementBalance: Number(statementBalance), bookBalance,
+      unclearedDepositsTotal: totalUnclearedDeposits, unclearedPaymentsTotal: totalUnclearedPayments,
+      unclearedDepositIds: unclearedDeposits.map(v => v.id), unclearedPaymentIds: unclearedPayments.map(v => v.id),
+      difference: difference ?? 0, isReconciled: !!isReconciled,
+      reconciledBy: user?.name || 'System', reconciledAt: new Date().toISOString(),
+    };
+    const prev = records;
+    persistRecords([rec, ...records]);
+    supabase.from('bank_reconciliations').upsert(withSoc(rec)).then(({ error }) => {
+      if (error) {
+        console.error('BRS save error:', error.message);
+        persistRecords(prev); // RULE-1 rollback
+        toast({ title: hi ? 'समाधान सेव नहीं हुआ' : 'Reconciliation not saved', description: `Cloud save fail — ${error.message}. (Pehli baar: bank_reconciliations block chalayein.)`, variant: 'destructive', duration: 12000 });
+      } else {
+        toast({ title: hi ? '✅ समाधान सहेजा गया' : '✅ Reconciliation saved', description: rec.isReconciled ? (hi ? 'समाधित' : 'Reconciled') : (hi ? `अंतर ${fmt(Math.abs(rec.difference))}` : `Difference ${fmt(Math.abs(rec.difference))}`) });
+      }
+    });
+  };
+
+  const deleteReconciliation = (id: string) => {
+    const prev = records;
+    persistRecords(records.filter(r => r.id !== id));
+    supabase.from('bank_reconciliations').update({ isDeleted: true }).eq('id', id).then(({ error }) => {
+      if (error) { persistRecords(prev); toast({ title: hi ? 'हटाया नहीं गया' : 'Delete failed', description: error.message, variant: 'destructive' }); }
+    });
+  };
+
+  // ── Printable BRS statement (PDF) ─────────────────────────────────────────
+  const resolveVouchers = (ids: string[]) => ids.map(id => vouchers.find(v => v.id === id)).filter(Boolean) as typeof vouchers;
+  const buildBrsPdf = (
+    r: { bankAccountId: string; bankAccountName: string; asOfDate: string; bookBalance: number; statementBalance: number;
+         unclearedDepositsTotal: number; unclearedPaymentsTotal: number; difference: number; isReconciled: boolean;
+         reconciledBy: string; reconciledAt: string },
+    deposits: typeof vouchers, payments: typeof vouchers,
+  ) => {
+    const drOf = (v: typeof vouchers[0]) => getVoucherLines(v).filter(l => l.accountId === r.bankAccountId && l.type === 'Dr').reduce((s, l) => s + l.amount, 0);
+    const crOf = (v: typeof vouchers[0]) => getVoucherLines(v).filter(l => l.accountId === r.bankAccountId && l.type === 'Cr').reduce((s, l) => s + l.amount, 0);
+    const doc = new jsPDF();
+    const w = doc.internal.pageSize.getWidth();
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('BANK RECONCILIATION STATEMENT', w / 2, 16, { align: 'center' });
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text(society.name, w / 2, 23, { align: 'center' });
+    const sub = [society.registrationNo ? `Reg: ${society.registrationNo}` : null, `Bank: ${r.bankAccountName}`, `As of: ${r.asOfDate}`].filter(Boolean).join('   |   ');
+    doc.text(sub, w / 2, 29, { align: 'center' });
+    autoTable(doc, {
+      startY: 36,
+      head: [['Particulars', 'Amount (Rs.)']],
+      body: [
+        ['Balance as per Cash Book (Bank A/c)', r.bookBalance.toFixed(2)],
+        [`Less: Deposits in transit (not yet in statement) [${deposits.length}]`, '- ' + r.unclearedDepositsTotal.toFixed(2)],
+        [`Add: Outstanding cheques (not yet presented) [${payments.length}]`, '+ ' + r.unclearedPaymentsTotal.toFixed(2)],
+        ['Derived Balance as per Bank Statement', (r.bookBalance - r.unclearedDepositsTotal + r.unclearedPaymentsTotal).toFixed(2)],
+        ['Balance as per Bank Statement (entered)', r.statementBalance.toFixed(2)],
+        ['Difference', r.difference.toFixed(2)],
+      ],
+      styles: { fontSize: 9, cellPadding: 2 },
+      headStyles: { fillColor: [41, 82, 163], textColor: 255 },
+      columnStyles: { 1: { halign: 'right' } },
+    });
+    let y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 7;
+    doc.setFont('helvetica', 'bold');
+    if (r.isReconciled) { doc.setTextColor(21, 128, 61); doc.text('RECONCILED — difference NIL', 14, y); }
+    else { doc.setTextColor(190, 24, 61); doc.text(`NOT RECONCILED — difference Rs. ${Math.abs(r.difference).toFixed(2)}`, 14, y); }
+    doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+    if (deposits.length) {
+      y += 6; doc.setFontSize(10); doc.text('Deposits in transit', 14, y);
+      autoTable(doc, { startY: y + 2, head: [['Date', 'Voucher', 'Narration', 'Amount']],
+        body: deposits.map(v => [v.date, v.voucherNo || '', (v.narration || '').slice(0, 60), drOf(v).toFixed(2)]),
+        styles: { fontSize: 8, cellPadding: 1.5 }, headStyles: { fillColor: [180, 83, 9], textColor: 255, fontSize: 8 }, columnStyles: { 3: { halign: 'right' } } });
+    }
+    if (payments.length) {
+      y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+      doc.setFontSize(10); doc.text('Outstanding cheques', 14, y);
+      autoTable(doc, { startY: y + 2, head: [['Date', 'Voucher', 'Narration', 'Amount']],
+        body: payments.map(v => [v.date, v.voucherNo || '', (v.narration || '').slice(0, 60), crOf(v).toFixed(2)]),
+        styles: { fontSize: 8, cellPadding: 1.5 }, headStyles: { fillColor: [21, 128, 61], textColor: 255, fontSize: 8 }, columnStyles: { 3: { halign: 'right' } } });
+    }
+    const fy = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+    doc.setFontSize(9);
+    doc.text(`Reconciled by: ${r.reconciledBy}     On: ${new Date(r.reconciledAt).toLocaleString('en-IN')}`, 14, fy);
+    doc.text('Prepared by: ____________            Verified by: ____________', 14, fy + 10);
+    doc.save(`BRS_${r.bankAccountName.replace(/\s+/g, '_')}_${r.asOfDate}.pdf`);
+  };
+
+  const downloadCurrentBrs = () => {
+    if (!activeBankId) { toast({ title: hi ? 'बैंक खाता चुनें' : 'Select a bank account', variant: 'destructive' }); return; }
+    buildBrsPdf({
+      bankAccountId: activeBankId, bankAccountName: bankAccount?.name || activeBankId, asOfDate, bookBalance,
+      statementBalance: statementBalance === '' ? 0 : Number(statementBalance),
+      unclearedDepositsTotal: totalUnclearedDeposits, unclearedPaymentsTotal: totalUnclearedPayments,
+      difference: difference ?? 0, isReconciled: !!isReconciled, reconciledBy: user?.name || 'System', reconciledAt: new Date().toISOString(),
+    }, unclearedDeposits, unclearedPayments);
+  };
+
+  const activeRecords = useMemo(() => records.filter(r => !r.isDeleted).sort((a, b) => b.reconciledAt.localeCompare(a.reconciledAt)), [records]);
 
   return (
     <div className="p-4 space-y-4">
@@ -325,8 +451,70 @@ const BankReconciliation: React.FC = () => {
               </div>
             )}
           </div>
+          <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t">
+            <Button size="sm" onClick={saveReconciliation} className="gap-1">
+              <Save className="h-4 w-4" />{hi ? 'समाधान सहेजें (साइन-ऑफ)' : 'Save reconciliation (sign-off)'}
+            </Button>
+            <Button size="sm" variant="outline" onClick={downloadCurrentBrs} className="gap-1">
+              <FileDown className="h-4 w-4" />{hi ? 'BRS विवरण (PDF)' : 'BRS statement (PDF)'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Past reconciliations (audit sign-off log) */}
+      {activeRecords.length > 0 && (
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <History className="h-4 w-4 text-blue-600" />
+              {hi ? 'सहेजे गए समाधान (ऑडिट रिकॉर्ड)' : 'Saved reconciliations (audit log)'}
+              <Badge variant="secondary" className="ml-auto">{activeRecords.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{hi ? 'तिथि तक' : 'As of'}</TableHead>
+                  <TableHead>{hi ? 'बैंक' : 'Bank'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'स्टेटमेंट शेष' : 'Statement'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'अंतर' : 'Difference'}</TableHead>
+                  <TableHead>{hi ? 'स्थिति' : 'Status'}</TableHead>
+                  <TableHead>{hi ? 'द्वारा' : 'By'}</TableHead>
+                  <TableHead className="w-20 text-right">{hi ? 'क्रिया' : 'Actions'}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {activeRecords.map(r => (
+                  <TableRow key={r.id}>
+                    <TableCell>{fmtDate(r.asOfDate)}</TableCell>
+                    <TableCell className="text-sm">{r.bankAccountName}</TableCell>
+                    <TableCell className="text-right font-mono">{fmt(r.statementBalance)}</TableCell>
+                    <TableCell className="text-right font-mono">{fmt(r.difference)}</TableCell>
+                    <TableCell>
+                      {r.isReconciled
+                        ? <Badge className="bg-green-100 text-green-800 border-green-200 text-[10px]">{hi ? 'समाधित' : 'Reconciled'}</Badge>
+                        : <Badge className="bg-red-100 text-red-800 border-red-200 text-[10px]">{hi ? 'अंतर' : 'Diff'}</Badge>}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{r.reconciledBy}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title={hi ? 'पुनः प्रिंट' : 'Reprint'}
+                        onClick={() => buildBrsPdf(r, resolveVouchers(r.unclearedDepositIds), resolveVouchers(r.unclearedPaymentIds))}>
+                        <FileDown className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" title={hi ? 'हटाएं' : 'Delete'}
+                        onClick={() => deleteReconciliation(r.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Uncleared Deposits */}
       <Card>

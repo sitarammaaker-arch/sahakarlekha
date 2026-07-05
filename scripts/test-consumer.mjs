@@ -506,5 +506,25 @@ function nextDocSeq(existingNumbers, fy) {
   ok(nextDocSeq(['SRET/2025-26/002', undefined, 'SRET/2025-26/005'], '2025-26') === 6, 'nextDocSeq: skips null, picks max+1 = 6');
 }
 
+// ── Bank Reconciliation: classic BRS formula + reconciled check ─────────────
+// Mirrors BankReconciliation.tsx: derived = book − depositsInTransit + outstandingCheques.
+function brs(bookBalance, unclearedDeposits, unclearedPayments, statementBalance) {
+  const derived = bookBalance - unclearedDeposits + unclearedPayments;
+  const difference = statementBalance - derived;
+  return { derived, difference, isReconciled: Math.abs(difference) < 0.01 };
+}
+{
+  // Book 10000; a 2000 deposit-in-transit (in books, not yet in bank) and a 1500
+  // outstanding cheque (issued, not presented). Statement should read 10000−2000+1500 = 9500.
+  const a = brs(10000, 2000, 1500, 9500);
+  ok(a.derived === 9500, 'BRS derived = book 10000 − deposits 2000 + cheques 1500 = 9500');
+  ok(a.difference === 0 && a.isReconciled === true, 'BRS reconciled when statement matches derived');
+  // Statement off by 100 → not reconciled, difference surfaced
+  const b = brs(10000, 2000, 1500, 9600);
+  ok(b.difference === 100 && b.isReconciled === false, 'BRS flags a 100 difference as not reconciled');
+  // No uncleared items → derived == book
+  ok(brs(5000, 0, 0, 5000).isReconciled === true, 'BRS: clean books reconcile to book balance');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
