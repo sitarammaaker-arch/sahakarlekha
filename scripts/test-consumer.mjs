@@ -809,5 +809,24 @@ function transferPosting(from, to, amount) {
   ok(transferPosting(from, to, 9999).amt === 5000, 'transfer capped at sender share capital (5000)');
 }
 
+// ── Audit Certificate: pull Audit Register objections for the FY (para-sorted) ──
+// Mirrors yearObjections in AuditCertificate.tsx.
+function yearObjections(all, fy) {
+  return all.filter(o => o.auditYear === fy)
+    .sort((a, b) => (a.paraNo || '').localeCompare(b.paraNo || '', undefined, { numeric: true }));
+}
+{
+  const all = [
+    { paraNo: '2', auditYear: '2024-25', objection: 'Cash shortage', category: 'accounts', status: 'pending' },
+    { paraNo: '10', auditYear: '2024-25', objection: 'Late filing', category: 'compliance', status: 'rectified' },
+    { paraNo: '1', auditYear: '2024-25', objection: 'Missing bills', category: 'accounts', status: 'pending' },
+    { paraNo: '1', auditYear: '2023-24', objection: 'Prior year', category: 'accounts', status: 'pending' }, // other FY
+  ];
+  const y = yearObjections(all, '2024-25');
+  ok(y.length === 3, 'only this-FY objections included (prior-year excluded)');
+  ok(y[0].paraNo === '1' && y[1].paraNo === '2' && y[2].paraNo === '10', 'objections numeric-sorted by para: 1, 2, 10 (not 1, 10, 2)');
+  ok(yearObjections(all, '2025-26').length === 0, 'a year with no objections yields an empty list (report notes "none")');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

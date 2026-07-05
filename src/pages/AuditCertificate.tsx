@@ -28,10 +28,17 @@ const fmt = (n: number) =>
 
 const AuditCertificate: React.FC = () => {
   const { language } = useLanguage();
-  const { society, accounts, vouchers, members, getProfitLoss } = useData();
+  const { society, accounts, vouchers, members, getProfitLoss, auditObjections } = useData();
 
   const hi = language === 'hi';
   const fy = society.financialYear;
+
+  // Audit Register objections for this year — flow into the certificate as formal
+  // observations/qualifications so the auditor doesn't re-type them by hand.
+  const yearObjections = useMemo(
+    () => auditObjections.filter(o => o.auditYear === fy).sort((a, b) => (a.paraNo || '').localeCompare(b.paraNo || '', undefined, { numeric: true })),
+    [auditObjections, fy],
+  );
 
   // ── Auto-computed figures ─────────────────────────────────────────────────
   // NOTE: getProfitLoss() returns `totalExpenses` (plural). Reading `totalExpense`
@@ -99,6 +106,8 @@ const AuditCertificate: React.FC = () => {
     ['Audit Classification', `Class ${classif}`],
     ['Auditor Name', auditorName || '—'],
     ['Auditor Reg. No.', auditorRegNo || '—'],
+    ['Audit Objections (count)', yearObjections.length],
+    ...yearObjections.map(o => [`Objection Para ${o.paraNo || '—'} (${o.category}, ${o.status})`, o.objection || '—']),
   ];
 
   const handleCSV = () =>
@@ -146,8 +155,8 @@ const AuditCertificate: React.FC = () => {
       y += 5.5;
     };
 
-    row('Total Income (Receipts)', `Rs. ${fmt(totalIncome)}`);
-    row('Total Expenditure (Payments)', `Rs. ${fmt(totalExpenses)}`);
+    row('Total Income (Income & Expenditure)', `Rs. ${fmt(totalIncome)}`);
+    row('Total Expenditure (Income & Expenditure)', `Rs. ${fmt(totalExpenses)}`);
     doc.setFont('helvetica', 'bold');
     row(netProfit >= 0 ? 'Net Surplus' : 'Net Deficit', `Rs. ${fmt(Math.abs(netProfit))}`);
     doc.setFont('helvetica', 'normal');
@@ -160,6 +169,20 @@ const AuditCertificate: React.FC = () => {
     hline();
     line('AUDIT CLASSIFICATION', 0, true);
     line(`This Society is classified as: Class "${classif}"`, 4);
+    space();
+
+    hline();
+    line('AUDIT OBJECTIONS (from Audit Register)', 0, true);
+    if (yearObjections.length > 0) {
+      yearObjections.forEach((o, i) => {
+        const amt = o.amountInvolved > 0 ? `  [Rs. ${fmt(o.amountInvolved)}]` : '';
+        line(`${i + 1}. Para ${o.paraNo || '—'} (${o.category}) — ${o.status}${amt}`, 4, true);
+        if (o.objection?.trim()) line(o.objection.trim(), 8);
+        if (o.actionTaken?.trim()) line(`Action taken: ${o.actionTaken.trim()}`, 8);
+      });
+    } else {
+      line('No audit objections recorded in the Audit Register for this year.', 4);
+    }
     space();
 
     hline();
@@ -245,6 +268,12 @@ const AuditCertificate: React.FC = () => {
           {hi
             ? 'वित्तीय आंकड़े स्वतः भरे जाते हैं। ऑडिटर की जानकारी और टिप्पणी भरें, फिर PDF डाउनलोड करें।'
             : 'Financial figures are auto-filled from accounts. Fill auditor details and observations, then download PDF.'}
+          {' '}
+          {yearObjections.length > 0
+            ? (hi
+                ? `ऑडिट रजिस्टर से ${yearObjections.length} आपत्ति${yearObjections.length > 1 ? 'याँ' : ''} इस रिपोर्ट में शामिल होंगी।`
+                : `${yearObjections.length} objection${yearObjections.length > 1 ? 's' : ''} from the Audit Register will be included in this report.`)
+            : (hi ? 'ऑडिट रजिस्टर में इस वर्ष कोई आपत्ति नहीं।' : 'No Audit Register objections for this year.')}
         </span>
       </div>
 
