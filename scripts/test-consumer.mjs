@@ -863,5 +863,34 @@ function unAppropriated(netProfit, vouchers, fy) {
   ok(unAppropriated(100000, [{ isDeleted: true, narration: `Reserve — FY ${fy}`, lines: [{ accountId: '1208', type: 'Dr', amount: 100000 }, { accountId: '1201', type: 'Cr', amount: 100000 }] }], fy) === 100000, 'deleted appropriation ignored');
 }
 
+// ── Share Transaction Register: structural classification of 1102 vouchers ──
+// Mirrors shareTxns in ShareRegister.tsx: Cr 1102 = in (issue, or transfer-in when
+// the 9999 suspense leg is present); Dr 1102 = out (refund / transfer-out).
+function classifyShareTxn(lines) {
+  const cr = lines.filter(l => l.accountId === '1102' && l.type === 'Cr').reduce((s, l) => s + l.amount, 0);
+  const dr = lines.filter(l => l.accountId === '1102' && l.type === 'Dr').reduce((s, l) => s + l.amount, 0);
+  if (cr === 0 && dr === 0) return null;
+  const viaSuspense = lines.some(l => l.accountId === '9999');
+  return { type: cr > 0 ? (viaSuspense ? 'transfer-in' : 'issue') : (viaSuspense ? 'transfer-out' : 'refund'), amountIn: cr, amountOut: dr };
+}
+{
+  // join receipt / additional purchase: Dr Cash / Cr 1102 → issue
+  const issue = classifyShareTxn([{ accountId: '3301', type: 'Dr', amount: 5000 }, { accountId: '1102', type: 'Cr', amount: 5000 }]);
+  ok(issue.type === 'issue' && issue.amountIn === 5000, 'Dr Cash / Cr 1102 → issue/purchase (in 5000)');
+  // refund: Dr 1102 / Cr Bank → refund
+  const refund = classifyShareTxn([{ accountId: '1102', type: 'Dr', amount: 2000 }, { accountId: '3302', type: 'Cr', amount: 2000 }]);
+  ok(refund.type === 'refund' && refund.amountOut === 2000, 'Dr 1102 / Cr Bank → refund (out 2000)');
+  // transfer legs via suspense 9999
+  const tOut = classifyShareTxn([{ accountId: '1102', type: 'Dr', amount: 1000 }, { accountId: '9999', type: 'Cr', amount: 1000 }]);
+  const tIn = classifyShareTxn([{ accountId: '9999', type: 'Dr', amount: 1000 }, { accountId: '1102', type: 'Cr', amount: 1000 }]);
+  ok(tOut.type === 'transfer-out' && tIn.type === 'transfer-in', 'suspense 9999 leg marks transfer-out / transfer-in');
+  // non-share voucher ignored
+  ok(classifyShareTxn([{ accountId: '3301', type: 'Dr', amount: 500 }, { accountId: '4101', type: 'Cr', amount: 500 }]) === null, 'voucher not touching 1102 is excluded');
+  // register net = in − out ties to holdings movement
+  const rows = [issue, refund, tOut, tIn];
+  const net = rows.reduce((s, r) => s + r.amountIn - r.amountOut, 0);
+  ok(net === 3000, 'register net (5000−2000−1000+1000) = 3000 = net share capital movement');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

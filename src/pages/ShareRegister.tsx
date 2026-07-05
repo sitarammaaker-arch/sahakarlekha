@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { getVoucherLines } from '@/lib/voucherUtils';
+import { downloadCSV } from '@/lib/exportUtils';
+import { fmtDate } from '@/lib/dateUtils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,14 +12,14 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BookMarked, Download, Search, Edit, Users } from 'lucide-react';
+import { BookMarked, Download, Search, Edit, Users, History } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateShareRegisterPDF } from '@/lib/pdf';
 import type { Member } from '@/types';
 
 const ShareRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { members, updateMember, refundShareCapital, purchaseShareCapital, transferShareCapital, society } = useData();
+  const { members, updateMember, refundShareCapital, purchaseShareCapital, transferShareCapital, society, vouchers } = useData();
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
@@ -35,6 +38,50 @@ const ShareRegister: React.FC = () => {
   const totalShares = approvedMembers.reduce((s, m) => s + (m.shareCount || 0), 0);
   const totalCapital = approvedMembers.reduce((s, m) => s + m.shareCapital, 0);
   const withNominee = approvedMembers.filter(m => m.nomineeName).length;
+
+  // ── Share TRANSACTION register — every voucher touching Share Capital 1102,
+  //    classified structurally (the 9999 suspense leg marks a member-to-member
+  //    transfer): issue/purchase (Cr 1102), refund (Dr 1102), transfer in/out.
+  const [txnMemberId, setTxnMemberId] = useState('all');
+  type ShareTxnType = 'issue' | 'refund' | 'transfer-in' | 'transfer-out';
+  const shareTxns = useMemo(() => {
+    const rows: { id: string; date: string; voucherNo: string; memberId?: string; memberName: string; type: ShareTxnType; amountIn: number; amountOut: number; narration: string }[] = [];
+    for (const v of vouchers) {
+      if (v.isDeleted) continue;
+      const lines = getVoucherLines(v);
+      const cr = lines.filter(l => l.accountId === '1102' && l.type === 'Cr').reduce((s, l) => s + l.amount, 0);
+      const dr = lines.filter(l => l.accountId === '1102' && l.type === 'Dr').reduce((s, l) => s + l.amount, 0);
+      if (cr === 0 && dr === 0) continue;
+      const viaSuspense = lines.some(l => l.accountId === '9999');
+      const type: ShareTxnType = cr > 0 ? (viaSuspense ? 'transfer-in' : 'issue') : (viaSuspense ? 'transfer-out' : 'refund');
+      const member = members.find(m => m.id === v.memberId);
+      rows.push({
+        id: v.id, date: v.date, voucherNo: v.voucherNo || '', memberId: v.memberId,
+        memberName: member?.name || '—', type, amountIn: cr, amountOut: dr, narration: v.narration || '',
+      });
+    }
+    return rows.sort((a, b) => a.date.localeCompare(b.date) || a.voucherNo.localeCompare(b.voucherNo, undefined, { numeric: true }));
+  }, [vouchers, members]);
+  const filteredTxns = useMemo(
+    () => txnMemberId === 'all' ? shareTxns : shareTxns.filter(t => t.memberId === txnMemberId),
+    [shareTxns, txnMemberId],
+  );
+  const txnTotalIn = filteredTxns.reduce((s, t) => s + t.amountIn, 0);
+  const txnTotalOut = filteredTxns.reduce((s, t) => s + t.amountOut, 0);
+
+  const TXN_LABEL: Record<ShareTxnType, { hi: string; en: string; cls: string }> = {
+    issue: { hi: 'निर्गम/खरीद', en: 'Issue/Purchase', cls: 'bg-green-100 text-green-800 border-green-200' },
+    refund: { hi: 'वापसी', en: 'Refund', cls: 'bg-red-100 text-red-800 border-red-200' },
+    'transfer-in': { hi: 'स्थानांतरण प्राप्त', en: 'Transfer In', cls: 'bg-blue-100 text-blue-800 border-blue-200' },
+    'transfer-out': { hi: 'स्थानांतरण भेजा', en: 'Transfer Out', cls: 'bg-amber-100 text-amber-800 border-amber-200' },
+  };
+
+  const exportTxnCsv = () =>
+    downloadCSV(
+      ['Date', 'Voucher No', 'Member', 'Type', 'In (Cr)', 'Out (Dr)', 'Narration'],
+      filteredTxns.map(t => [t.date, t.voucherNo, t.memberName, TXN_LABEL[t.type].en, t.amountIn, t.amountOut, t.narration]),
+      'share-transactions',
+    );
 
   const openEdit = (m: Member) => {
     setEditMember(m);
@@ -182,6 +229,73 @@ const ShareRegister: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* ── Share Transaction Register — chronological issue/refund/transfer log ── */}
+      <Card>
+        <CardHeader className="py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <History className="h-4 w-4 text-primary" />
+              {hi ? 'शेयर लेन-देन रजिस्टर' : 'Share Transaction Register'}
+              <Badge variant="secondary">{filteredTxns.length}</Badge>
+            </CardTitle>
+            <div className="ml-auto flex items-center gap-2">
+              <select value={txnMemberId} onChange={e => setTxnMemberId(e.target.value)}
+                className="h-8 w-44 rounded-md border border-input bg-background px-2 text-xs">
+                <option value="all">{hi ? '— सभी सदस्य —' : '— All members —'}</option>
+                {approvedMembers.map(m => <option key={m.id} value={m.id}>{m.memberId} · {m.name}</option>)}
+              </select>
+              <Button variant="outline" size="sm" className="gap-1" onClick={exportTxnCsv} disabled={filteredTxns.length === 0}>
+                <Download className="h-4 w-4" />CSV
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{hi ? 'तिथि' : 'Date'}</TableHead>
+                <TableHead>{hi ? 'वाउचर नं.' : 'Voucher No.'}</TableHead>
+                <TableHead>{hi ? 'सदस्य' : 'Member'}</TableHead>
+                <TableHead>{hi ? 'प्रकार' : 'Type'}</TableHead>
+                <TableHead className="text-right">{hi ? 'जमा (₹)' : 'In (₹)'}</TableHead>
+                <TableHead className="text-right">{hi ? 'नामे (₹)' : 'Out (₹)'}</TableHead>
+                <TableHead>{hi ? 'विवरण' : 'Narration'}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredTxns.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    {hi ? 'कोई शेयर लेन-देन नहीं (नए वाउचर यहाँ स्वतः दिखेंगे)' : 'No share transactions yet (new vouchers appear here automatically)'}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                <>
+                  {filteredTxns.map(t => (
+                    <TableRow key={t.id}>
+                      <TableCell className="text-sm whitespace-nowrap">{fmtDate(t.date)}</TableCell>
+                      <TableCell className="font-mono text-xs">{t.voucherNo || '—'}</TableCell>
+                      <TableCell className="text-sm">{t.memberName}</TableCell>
+                      <TableCell><Badge variant="outline" className={`text-[10px] ${TXN_LABEL[t.type].cls}`}>{hi ? TXN_LABEL[t.type].hi : TXN_LABEL[t.type].en}</Badge></TableCell>
+                      <TableCell className="text-right font-mono text-green-700">{t.amountIn > 0 ? fmt(t.amountIn) : ''}</TableCell>
+                      <TableCell className="text-right font-mono text-red-600">{t.amountOut > 0 ? fmt(t.amountOut) : ''}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-[220px] truncate">{t.narration}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-muted/50 font-bold">
+                    <TableCell colSpan={4}>{hi ? 'कुल' : 'Total'}</TableCell>
+                    <TableCell className="text-right font-mono text-green-700">{fmt(txnTotalIn)}</TableCell>
+                    <TableCell className="text-right font-mono text-red-600">{fmt(txnTotalOut)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{hi ? 'शुद्ध' : 'Net'}: {fmt(txnTotalIn - txnTotalOut)}</TableCell>
+                  </TableRow>
+                </>
               )}
             </TableBody>
           </Table>
