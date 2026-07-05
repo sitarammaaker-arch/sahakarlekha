@@ -1,0 +1,14 @@
+{
+  "name": "sl-template-renderer",
+  "private": true,
+  "description": "Renders SVG marketing templates to PNG with brand fonts",
+  "type": "module",
+  "scripts": {
+    "gen": "node gen/gen-social.mjs"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "opentype.js": "^1.3.4",
+    "harfbuzzjs": "^1.4.0"
+  }
+}
