@@ -1598,7 +1598,8 @@ export interface SalaryRecord {
   deductions: number;
   netSalary: number;
   paymentMode: PaymentMode;
-  voucherId?: string;
+  voucherId?: string;         // payment voucher (Dr Salary Payable / Cr Bank), set when paid
+  accrualVoucherId?: string;  // accrual voucher (Dr Salary Expense / Cr Salary Payable), set at processing
   isPaid: boolean;
   paidDate?: string;
   createdAt: string;

@@ -4335,7 +4335,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const m = r.slipNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
     }, 0);
     const slipNo = `SAL/${fy}/${String(maxSlipNum + 1).padStart(3, '0')}`;
-    const record: SalaryRecord = { ...data, id: crypto.randomUUID(), slipNo, createdAt: new Date().toISOString() };
+    const base: SalaryRecord = { ...data, id: crypto.randomUUID(), slipNo, createdAt: new Date().toISOString() };
+    // Accrual (H8+): recognise the salary expense + liability the moment it is processed,
+    // regardless of payment — Dr Salary Expense 5201 / Cr Salary Payable 2103. Payment later
+    // clears the liability. Dated at the salary month-end when parseable, else the process date.
+    let accrualVoucherId: string | undefined;
+    if ((base.netSalary || 0) > 0) {
+      const emp = employees.find(e => e.id === base.employeeId);
+      const payableAcc = accounts.find(a => a.id === '2103')?.id || '2103';
+      const accrualDate = /^\d{4}-\d{2}$/.test(base.month || '')
+        ? new Date(Number(base.month.slice(0, 4)), Number(base.month.slice(5, 7)), 0).toISOString().split('T')[0]
+        : base.createdAt.split('T')[0];
+      const lid = () => crypto.randomUUID();
+      try {
+        const av = addVoucher({
+          type: 'journal', date: accrualDate, debitAccountId: '5201', creditAccountId: payableAcc, amount: base.netSalary,
+          lines: [{ id: lid(), accountId: '5201', type: 'Dr', amount: base.netSalary }, { id: lid(), accountId: payableAcc, type: 'Cr', amount: base.netSalary }],
+          narration: `Salary accrual: ${emp?.name || ''} - ${base.month} (${slipNo})`,
+          createdBy: 'System',
+        });
+        accrualVoucherId = av?.id || undefined;
+      } catch { /* accrual best-effort; record still saves */ }
+    }
+    const record: SalaryRecord = { ...base, accrualVoucherId };
     salaryRecordsRef.current = [...salaryRecordsRef.current, record];
     setSalaryRecordsState(prev => { const updated = [...prev, record]; return updated; });
     supabase.from('salary_records').upsert(withSoc(record)).then(({ error }) => {
@@ -4347,7 +4369,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
     return record;
-  }, [society.financialYear]);
+  }, [society.financialYear, addVoucher, accounts, employees]);
 
   const updateSalaryRecord = useCallback((id: string, data: Partial<SalaryRecord>) => {
     if (guardFYLocked()) return;
@@ -4374,16 +4396,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       merged.voucherId = undefined;
     } else if (!oldRecord.isPaid && data.isPaid && !oldRecord.voucherId) {
-      // (b) Create new payment voucher
+      // (b) Create the payment voucher. If the salary was accrued (Cr Salary Payable 2103),
+      // payment CLEARS that liability (Dr 2103 / Cr Bank). Legacy records with no accrual fall
+      // back to the old expense-on-pay (Dr 5201 / Cr Bank) so their books stay correct.
       const emp = employees.find(e => e.id === oldRecord.employeeId);
       const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+      const debitAcc = oldRecord.accrualVoucherId ? (accounts.find(a => a.id === '2103')?.id || '2103') : '5201';
       const newV = addVoucher({
         type: 'payment' as const,
         date: merged.paidDate || new Date().toISOString().split('T')[0],
-        debitAccountId: '5201',
+        debitAccountId: debitAcc,
         creditAccountId: creditAcc,
         amount: merged.netSalary,
-        narration: `Salary: ${emp?.name || ''} - ${oldRecord.month}`,
+        narration: `Salary paid: ${emp?.name || ''} - ${oldRecord.month}`,
         createdBy: 'System',
       });
       if (newV.id) merged.voucherId = newV.id;
@@ -4397,8 +4422,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (v && !v.isDeleted) {
           const emp = employees.find(e => e.id === oldRecord.employeeId);
           const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+          const payDebit = oldRecord.accrualVoucherId ? (accounts.find(a => a.id === '2103')?.id || '2103') : '5201';
           const newLines: VoucherLine[] = [
-            { id: lid(), accountId: '5201', type: 'Dr', amount: merged.netSalary },
+            { id: lid(), accountId: payDebit, type: 'Dr', amount: merged.netSalary },
             { id: lid(), accountId: creditAcc, type: 'Cr', amount: merged.netSalary },
           ];
           const updatedV: Voucher = {
@@ -4407,7 +4433,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             creditAccountId: creditAcc,
             amount: merged.netSalary,
             lines: newLines,
-            narration: `Salary: ${emp?.name || ''} - ${oldRecord.month}`,
+            narration: `Salary paid: ${emp?.name || ''} - ${oldRecord.month}`,
           };
           setVouchersState(prev => prev.map(x => x.id === v.id ? updatedV : x));
           supabase.from('vouchers').upsert(withSoc(updatedV)).then(({ error }) => {
@@ -4415,6 +4441,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             else syncEntries(updatedV);
           });
         }
+      }
+    }
+
+    // Accrual re-sync: if the salary AMOUNT changed and the record was accrued, keep the
+    // accrual voucher (Dr 5201 / Cr 2103) in step so the expense + liability stay correct.
+    if (data.netSalary !== undefined && data.netSalary !== oldRecord.netSalary && oldRecord.accrualVoucherId) {
+      const av = vouchersRef.current.find(x => x.id === oldRecord.accrualVoucherId);
+      if (av && !av.isDeleted && !isEngineVoucher(av)) {
+        const payableAcc = accounts.find(a => a.id === '2103')?.id || '2103';
+        const accLines: VoucherLine[] = [
+          { id: lid(), accountId: '5201', type: 'Dr', amount: merged.netSalary },
+          { id: lid(), accountId: payableAcc, type: 'Cr', amount: merged.netSalary },
+        ];
+        const updatedAv: Voucher = { ...av, amount: merged.netSalary, creditAccountId: payableAcc, lines: accLines };
+        setVouchersState(prev => prev.map(x => x.id === av.id ? updatedAv : x));
+        supabase.from('vouchers').upsert(withSoc(updatedAv)).then(({ error }) => {
+          if (error) console.error('Salary accrual resync:', error.message);
+          else syncEntries(updatedAv);
+        });
       }
     }
 
@@ -4432,12 +4477,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const deleteSalaryRecord = useCallback((id: string) => {
     if (guardFYLocked()) return;
-    // H8: Cascade-cancel the linked payment voucher (if any) so accounting reverses
+    // H8+: Cascade-cancel BOTH the accrual and the payment vouchers so the expense,
+    // liability and cash all reverse cleanly.
     const record = salaryRecordsRef.current.find(r => r.id === id);
-    if (record?.voucherId) {
-      const v = vouchersRef.current.find(x => x.id === record.voucherId);
+    const cancelIds = [record?.voucherId, record?.accrualVoucherId].filter(Boolean) as string[];
+    for (const vid of cancelIds) {
+      const v = vouchersRef.current.find(x => x.id === vid);
       if (v && !v.isDeleted && !isEngineVoucher(v)) {
-        const cancelled = { ...v, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy: 'System', deletedReason: `Salary slip ${record.slipNo} deleted` };
+        const cancelled = { ...v, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy: 'System', deletedReason: `Salary slip ${record?.slipNo} deleted` };
         setVouchersState(prev => prev.map(x => x.id === v.id ? cancelled : x));
         supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', v.id).then(({ error }) => {
           if (error) console.error('Salary voucher cancel sync:', error.message);

@@ -2584,3 +2584,8 @@ alter table eway_bills add column if not exists "transporterName" text;
 alter table eway_bills add column if not exists "transporterGstin" text;
 alter table eway_bills add column if not exists "transDocNo" text;
 alter table eway_bills add column if not exists "transDocDate" text;
+
+-- ── Payroll accrual — link a salary record to its accrual voucher (additive) ──
+-- On processing, salary posts Dr Salary Expense 5201 / Cr Salary Payable 2103; payment
+-- later clears the liability. This column tracks the accrual voucher for update/delete.
+alter table salary_records add column if not exists "accrualVoucherId" text;
