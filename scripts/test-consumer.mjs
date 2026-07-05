@@ -763,5 +763,27 @@ function refundPosting(member, amount, mode) {
   ok(refundPosting(member, 5000, 'cash').newShareCapital === 0, 'full refund → share capital 0');
 }
 
+// ── Additional share purchase: Dr Cash-Bank / Cr Share Capital 1102; increases holdings ──
+// Mirrors purchaseShareCapital in DataContext (inverse of the refund).
+function purchasePosting(member, amount, mode) {
+  const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const buy = r2(Math.max(0, amount));
+  const debit = mode === 'bank' ? '3302' : '3301';
+  const lines = [{ accountId: debit, type: 'Dr', amount: buy }, { accountId: '1102', type: 'Cr', amount: buy }];
+  return { buy, lines, newShareCapital: r2((member.shareCapital || 0) + buy) };
+}
+{
+  const member = { shareCapital: 3000 };
+  const p = purchasePosting(member, 2000, 'cash');
+  ok(p.lines[0].accountId === '3301' && p.lines[0].type === 'Dr' && p.lines[0].amount === 2000, 'purchase: Dr Cash 2000');
+  ok(p.lines[1].accountId === '1102' && p.lines[1].type === 'Cr', 'purchase: Cr Share Capital 1102');
+  ok(p.newShareCapital === 5000, 'purchase increases share capital 3000 → 5000');
+  ok(p.lines.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0) === p.lines.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0), 'purchase voucher balanced');
+  // purchase then refund round-trips back to original holdings + net-zero 1102 movement
+  const afterBuy = { shareCapital: p.newShareCapital };
+  const r = refundPosting(afterBuy, 2000, 'cash');
+  ok(r.newShareCapital === 3000, 'purchase 2000 then refund 2000 → back to 3000');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

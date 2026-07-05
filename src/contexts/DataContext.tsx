@@ -98,6 +98,7 @@ interface DataContextType {
   updateMember: (id: string, data: Partial<Member>) => void;
   deleteMember: (id: string) => void;
   refundShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
+  purchaseShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
 
 
   workOrders: WorkOrder[];
@@ -1825,6 +1826,39 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toastRef.current({ title: 'शेयर वापसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
       } else {
         toastRef.current({ title: '✅ शेयर पूँजी वापस', description: `₹${refund.toLocaleString('en-IN')} · ${member.name}` });
+      }
+    });
+  }, [accounts, addVoucher, user]);
+
+  // Additional share purchase — a member buys MORE shares over time. Inverse of the
+  // refund: posts a SEPARATE dated voucher Dr Cash-Bank / Cr Share Capital 1102
+  // (memberId-tagged); the original join receipt stays intact so net 1102 =
+  // issued + purchases = current holdings, matching the increased member.shareCapital.
+  const purchaseShareCapital = useCallback((memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => {
+    if (guardFYLocked()) return;
+    const member = membersRef.current.find(m => m.id === memberId);
+    if (!member) return;
+    const buy = Math.round((Math.max(0, amount)) * 100) / 100;
+    if (!(buy > 0)) { toastRef.current({ title: 'Invalid amount', description: 'Amount must be > 0.', variant: 'destructive' }); return; }
+    const debitAcc = mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    addVoucher({
+      type: 'receipt', date,
+      debitAccountId: debitAcc, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: buy,
+      narration: `Additional share capital from ${member.name} — ${date}`,
+      createdBy: user?.name ?? 'System', memberId,
+    });
+    const before = member;
+    const updated = { ...member, shareCapital: Math.round(((member.shareCapital || 0) + buy) * 100) / 100 };
+    membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
+    setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
+    supabase.from('members').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Share purchase member sync:', error.message);
+        membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
+        setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
+        toastRef.current({ title: 'अतिरिक्त शेयर सेव नहीं हुए', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      } else {
+        toastRef.current({ title: '✅ अतिरिक्त शेयर पूँजी', description: `₹${buy.toLocaleString('en-IN')} · ${member.name}` });
       }
     });
   }, [accounts, addVoucher, user]);
@@ -5013,7 +5047,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
       recordFarmerPayment,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
-      addMember, updateMember, deleteMember, refundShareCapital, approveMember, rejectMember,
+      addMember, updateMember, deleteMember, refundShareCapital, purchaseShareCapital, approveMember, rejectMember,
       workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
       musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
