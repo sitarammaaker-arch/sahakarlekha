@@ -742,5 +742,26 @@ function paymentVoucher(dividend, mode) {
   ok(v.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0) === v.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0), 'settlement voucher balanced');
 }
 
+// ── Share capital refund: Dr Share Capital 1102 / Cr Cash-Bank; reduces holdings ──
+// Mirrors refundShareCapital in DataContext.
+function refundPosting(member, amount, mode) {
+  const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const refund = r2(Math.max(0, Math.min(amount, member.shareCapital || 0)));
+  const credit = mode === 'bank' ? '3302' : '3301';
+  const lines = [{ accountId: '1102', type: 'Dr', amount: refund }, { accountId: credit, type: 'Cr', amount: refund }];
+  return { refund, lines, newShareCapital: r2((member.shareCapital || 0) - refund) };
+}
+{
+  const member = { shareCapital: 5000 };
+  const p = refundPosting(member, 2000, 'bank');
+  ok(p.lines[0].accountId === '1102' && p.lines[0].type === 'Dr' && p.lines[0].amount === 2000, 'refund: Dr Share Capital 1102');
+  ok(p.lines[1].accountId === '3302' && p.lines[1].type === 'Cr', 'refund: Cr Bank');
+  ok(p.newShareCapital === 3000, 'refund reduces member share capital 5000 → 3000');
+  ok(p.lines.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0) === p.lines.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0), 'refund voucher balanced');
+  // over-refund is capped at current holdings; full refund zeroes it
+  ok(refundPosting(member, 9999, 'cash').refund === 5000, 'refund capped at current share capital (5000)');
+  ok(refundPosting(member, 5000, 'cash').newShareCapital === 0, 'full refund → share capital 0');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

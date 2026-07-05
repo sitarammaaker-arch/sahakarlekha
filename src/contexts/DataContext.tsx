@@ -97,6 +97,7 @@ interface DataContextType {
   addMember: (data: Omit<Member, 'id'>) => Member;
   updateMember: (id: string, data: Partial<Member>) => void;
   deleteMember: (id: string) => void;
+  refundShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
 
 
   workOrders: WorkOrder[];
@@ -1793,6 +1794,40 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     console.info(`[AUDIT-DELETE] Member id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
+
+  // Refund / withdraw a member's share capital (resignation, death, partial surrender).
+  // Posts a SEPARATE dated voucher Dr Share Capital 1102 / Cr Cash-Bank (memberId-tagged)
+  // — the original join receipt is left intact, so net 1102 = issued − refunds = current
+  // holdings, matching the reduced member.shareCapital used for dividends. Updates the
+  // member row DIRECTLY (not via updateMember) so the join receipt is not resynced/rewritten.
+  const refundShareCapital = useCallback((memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => {
+    if (guardFYLocked()) return;
+    const member = membersRef.current.find(m => m.id === memberId);
+    if (!member) return;
+    const refund = Math.round((Math.max(0, Math.min(amount, member.shareCapital || 0))) * 100) / 100;
+    if (!(refund > 0)) { toastRef.current({ title: 'Invalid amount', description: 'Refund must be > 0 and ≤ current share capital.', variant: 'destructive' }); return; }
+    const creditAcc = mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    addVoucher({
+      type: 'payment', date,
+      debitAccountId: ACCOUNT_IDS.SHARE_CAP, creditAccountId: creditAcc, amount: refund,
+      narration: `Share Capital refunded to ${member.name} — ${date}`,
+      createdBy: user?.name ?? 'System', memberId,
+    });
+    const before = member;
+    const updated = { ...member, shareCapital: Math.round(((member.shareCapital || 0) - refund) * 100) / 100 };
+    membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
+    setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
+    supabase.from('members').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Share refund member sync:', error.message);
+        membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
+        setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
+        toastRef.current({ title: 'शेयर वापसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      } else {
+        toastRef.current({ title: '✅ शेयर पूँजी वापस', description: `₹${refund.toLocaleString('en-IN')} · ${member.name}` });
+      }
+    });
+  }, [accounts, addVoucher, user]);
 
   // ── Housing Flats/Units register (master data; Member-pattern persistence + RULE-1 rollback) ──
   // ── Labour Work Orders register (master data; Member-pattern persistence + RULE-1 rollback) ──
@@ -4978,7 +5013,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
       recordFarmerPayment,
       addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
-      addMember, updateMember, deleteMember, approveMember, rejectMember,
+      addMember, updateMember, deleteMember, refundShareCapital, approveMember, rejectMember,
       workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
       musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,

@@ -16,7 +16,7 @@ import type { Member } from '@/types';
 
 const ShareRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { members, updateMember, society } = useData();
+  const { members, updateMember, refundShareCapital, society } = useData();
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
@@ -171,9 +171,12 @@ const ShareRegister: React.FC = () => {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(m)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-1 items-center">
+                        {m.shareCapital > 0 && <RefundShareButton member={m} hi={hi} onRefund={refundShareCapital} />}
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(m)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -238,5 +241,50 @@ const ShareRegister: React.FC = () => {
     </div>
   );
 };
+
+function RefundShareButton({ member, hi, onRefund }: { member: Member; hi: boolean; onRefund: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [amt, setAmt] = useState('');
+  const [mode, setMode] = useState<'cash' | 'bank'>('cash');
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const val = Number(amt) || 0;
+  const fmtC = (n: number) => n.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' });
+
+  return (
+    <>
+      <Button variant="outline" size="sm" className="h-8" onClick={() => setOpen(true)}>{hi ? 'वापसी' : 'Refund'}</Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>{hi ? 'शेयर पूँजी वापसी' : 'Refund Share Capital'} — {member.name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{hi ? 'वर्तमान शेयर पूँजी:' : 'Current share capital:'} <strong>{fmtC(member.shareCapital || 0)}</strong></p>
+            <div>
+              <Label>{hi ? 'वापसी राशि' : 'Refund Amount'}</Label>
+              <Input type="number" value={amt} onChange={e => setAmt(e.target.value)} max={member.shareCapital || 0} />
+            </div>
+            <div>
+              <Label>{hi ? 'भुगतान विधि' : 'Payment mode'}</Label>
+              <select value={mode} onChange={e => setMode(e.target.value as 'cash' | 'bank')} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <option value="cash">{hi ? 'नकद' : 'Cash'}</option>
+                <option value="bank">{hi ? 'बैंक' : 'Bank'}</option>
+              </select>
+            </div>
+            <div>
+              <Label>{hi ? 'तिथि' : 'Date'}</Label>
+              <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+            <p className="text-[11px] text-muted-foreground">{hi ? 'Dr शेयर पूँजी / Cr नकद-बैंक — मूल रसीद अपरिवर्तित रहेगी।' : 'Posts Dr Share Capital / Cr Cash-Bank; the original receipt stays intact.'}</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+              <Button disabled={!(val > 0) || val > (member.shareCapital || 0)} onClick={() => { onRefund(member.id, val, mode, date); setOpen(false); setAmt(''); }}>
+                {hi ? 'वापसी दर्ज करें' : 'Post Refund'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 export default ShareRegister;
