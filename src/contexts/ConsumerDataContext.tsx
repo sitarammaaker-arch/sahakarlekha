@@ -144,6 +144,11 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   const seededRef = useRef(false);
   useEffect(() => {
     if (seededRef.current) return;
+    // Only seed once AUTHENTICATED — addAccount writes to the society-scoped `accounts` table,
+    // which RLS rejects pre-login (no session → the "SOC001" fallback fails the with-check, e.g.
+    // when a consumer society is still cached on the login screen). Guard BEFORE setting
+    // seededRef so it retries after login. (Deps include user?.societyId.)
+    if (!user?.societyId) return;
     if (society?.societyType !== 'consumer') return;
     if (!accounts || accounts.length === 0) return;
     if (society.fyLocked) return; // seeding mutates the chart; retry on a later unlocked load
@@ -159,7 +164,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (needPay) addAccount({ name: 'Member Rebate Payable', nameHi: 'देय सदस्य रिबेट', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: REBATE_PAYABLE_SUBTYPE });
     if (needDivDist) addAccount({ name: 'Dividend Distribution', nameHi: 'लाभांश वितरण', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: DIVIDEND_DISTRIBUTION_SUBTYPE });
     if (needDivPay) addAccount({ name: 'Dividend Payable', nameHi: 'देय लाभांश', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: DIVIDEND_PAYABLE_SUBTYPE });
-  }, [society?.societyType, society?.fyLocked, accounts, addAccount]);
+  }, [user?.societyId, society?.societyType, society?.fyLocked, accounts, addAccount]);
 
   const memberReceivableAccountId = resolveMemberReceivableAccountId(accounts);
 
