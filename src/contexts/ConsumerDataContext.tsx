@@ -25,6 +25,7 @@ import { memberOutstanding, memberAgeing, type Ageing, type RecoveryRow } from '
 import { computePatronageLines, computeDividendLines, patronageTotal, patronageLegs } from '@/lib/consumer/patronage';
 import { poTotal, poReceivedTotal, poToPurchaseItems } from '@/lib/consumer/purchaseOrder';
 import { getBankAccountIds } from '@/lib/storage';
+import { isUniqueViolation, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import type { ConsumerPrice, ConsumerPriceTier, Voucher, PatronageRun, PurchaseOrder, PurchaseOrderItem, Purchase, SalesReturn, SalesReturnItem, SalesReturnRefund, PurchaseReturn, PurchaseReturnItem, PurchaseReturnRefund } from '@/types';
 
 const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -464,14 +465,29 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   // ── Sales Return (Feature 1) ────────────────────────────────────────────────
   const commitSalesReturn = useCallback((next: SalesReturn, revertTo: SalesReturn | null, onFail?: () => void) => {
     setSalesReturnsState(prev => { const u = prev.some(r => r.id === next.id) ? prev.map(r => r.id === next.id ? next : r) : [...prev, next]; storage.setSalesReturns(u); return u; });
-    supabase.from('sales_returns').upsert(withSoc(next)).then(({ error }) => {
-      if (error) {
+    // On a duplicate returnNo (another till minted the same number), bump + retry.
+    // revertTo === null means a fresh insert — the only case eligible for renumber.
+    const attempt = (row: SalesReturn, tries: number) => {
+      supabase.from('sales_returns').upsert(withSoc(row)).then(({ error }) => {
+        if (!error) return;
+        if (isUniqueViolation(error) && revertTo === null && tries < MAX_RENUMBER_RETRIES) {
+          setSalesReturnsState(prev => {
+            const fy = societyRef.current.financialYear;
+            const seq = nextDocSeq(prev.filter(r => r.id !== row.id).map(r => r.returnNo), fy);
+            const renumbered = { ...row, returnNo: `SRET/${fy}/${String(seq).padStart(3, '0')}` };
+            const u = prev.map(r => r.id === row.id ? renumbered : r); storage.setSalesReturns(u);
+            attempt(renumbered, tries + 1);
+            return u;
+          });
+          return;
+        }
         console.error('Sales return save error:', error.message);
-        setSalesReturnsState(prev => { const u = revertTo ? prev.map(r => r.id === next.id ? revertTo : r) : prev.filter(r => r.id !== next.id); storage.setSalesReturns(u); return u; });
+        setSalesReturnsState(prev => { const u = revertTo ? prev.map(r => r.id === row.id ? revertTo : r) : prev.filter(r => r.id !== row.id); storage.setSalesReturns(u); return u; });
         onFail?.();
         toastRef.current({ title: 'बिक्री वापसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. (Pehli baar: sales_returns block chalayein.)`, variant: 'destructive', duration: 12000 });
-      }
-    });
+      });
+    };
+    attempt(next, 0);
   }, [societyId]);
 
   const addSalesReturn = useCallback((data: { originalSaleId: string; items: SalesReturnItem[]; refundMode: SalesReturnRefund; bankAccountId?: string; date: string }): SalesReturn | null => {
@@ -544,14 +560,27 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   // ── Purchase Return / Returns Outward — Debit Note (Feature 2) ───────────────
   const commitPurchaseReturn = useCallback((next: PurchaseReturn, revertTo: PurchaseReturn | null, onFail?: () => void) => {
     setPurchaseReturnsState(prev => { const u = prev.some(r => r.id === next.id) ? prev.map(r => r.id === next.id ? next : r) : [...prev, next]; storage.setPurchaseReturns(u); return u; });
-    supabase.from('purchase_returns').upsert(withSoc(next)).then(({ error }) => {
-      if (error) {
+    const attempt = (row: PurchaseReturn, tries: number) => {
+      supabase.from('purchase_returns').upsert(withSoc(row)).then(({ error }) => {
+        if (!error) return;
+        if (isUniqueViolation(error) && revertTo === null && tries < MAX_RENUMBER_RETRIES) {
+          setPurchaseReturnsState(prev => {
+            const fy = societyRef.current.financialYear;
+            const seq = nextDocSeq(prev.filter(r => r.id !== row.id).map(r => r.returnNo), fy);
+            const renumbered = { ...row, returnNo: `PRET/${fy}/${String(seq).padStart(3, '0')}` };
+            const u = prev.map(r => r.id === row.id ? renumbered : r); storage.setPurchaseReturns(u);
+            attempt(renumbered, tries + 1);
+            return u;
+          });
+          return;
+        }
         console.error('Purchase return save error:', error.message);
-        setPurchaseReturnsState(prev => { const u = revertTo ? prev.map(r => r.id === next.id ? revertTo : r) : prev.filter(r => r.id !== next.id); storage.setPurchaseReturns(u); return u; });
+        setPurchaseReturnsState(prev => { const u = revertTo ? prev.map(r => r.id === row.id ? revertTo : r) : prev.filter(r => r.id !== row.id); storage.setPurchaseReturns(u); return u; });
         onFail?.();
         toastRef.current({ title: 'खरीद वापसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. (Pehli baar: purchase_returns block chalayein.)`, variant: 'destructive', duration: 12000 });
-      }
-    });
+      });
+    };
+    attempt(next, 0);
   }, [societyId]);
 
   const addPurchaseReturn = useCallback((data: { originalPurchaseId: string; items: PurchaseReturnItem[]; refundMode: PurchaseReturnRefund; bankAccountId?: string; date: string }): PurchaseReturn | null => {

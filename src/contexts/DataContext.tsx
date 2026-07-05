@@ -19,6 +19,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } from '@/lib/storage';
+import { isUniqueViolation, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
@@ -959,8 +960,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
     };
 
-    supabase.from('vouchers').upsert(withSoc(baseCols)).then(({ error }) => {
+    // Feature 6: a duplicate voucherNo (another till minted it) fails the base upsert
+    // with 23505 — keep the prefix+FY, bump to max+1, restamp state, and retry.
+    const renumberVoucher = (cur: string | undefined): string => {
+      const m = cur?.match(/^(.*)\/(\d+)$/);
+      const head = m ? m[1] : (cur || '');
+      let max = 0;
+      for (const vx of vouchersRef.current) {
+        const mm = vx.voucherNo?.match(/^(.*)\/(\d+)$/);
+        if (mm && mm[1] === head) max = Math.max(max, parseInt(mm[2], 10));
+      }
+      return `${head}/${String(max + 1).padStart(3, '0')}`;
+    };
+    const attemptBase = (cols: typeof baseCols, tries: number) => {
+    supabase.from('vouchers').upsert(withSoc(cols)).then(({ error }) => {
       if (error) {
+        if (isUniqueViolation(error) && !opts.isUpdate && tries < MAX_RENUMBER_RETRIES) {
+          const newNo = renumberVoucher((cols as { voucherNo?: string }).voucherNo);
+          vouchersRef.current = vouchersRef.current.map(x => x.id === v.id ? { ...x, voucherNo: newNo } : x);
+          setVouchersState(prev => prev.map(x => x.id === v.id ? { ...x, voucherNo: newNo } : x));
+          attemptBase({ ...cols, voucherNo: newNo }, tries + 1);
+          return;
+        }
         handleBaseFailure(error.message);
         return;
       }
@@ -1011,6 +1032,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const msg = rejection instanceof Error ? rejection.message : String(rejection);
       handleBaseFailure(`Network/promise rejection: ${msg}`);
     });
+    };
+    attemptBase(baseCols, 0);
   };
 
   const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }): Voucher => {
@@ -3709,19 +3732,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Step 1: upsert base columns only (schema cache always knows these)
     // Step 2: update GST columns separately (ALTER TABLE columns — schema cache may lag)
     const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember, gstVoucherIds: _gv, ...saleBase } = sale;
-    supabase.from('sales').upsert(withSoc(saleBase)).then(({ error }) => {
-      if (error) {
+    // Feature 6: a duplicate saleNo (another till) makes the base upsert fail with 23505 —
+    // bump to the next number, restamp local state, and retry (only saleNo changes).
+    const attemptSaleSave = (base: typeof saleBase, tries: number) => {
+      supabase.from('sales').upsert(withSoc(base)).then(({ error }) => {
+        if (!error) {
+          // Step 2: GST columns update (only Sale GST fields — no TDS for sales)
+          supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember })
+            .eq('id', sale.id)
+            .then(({ error: gstErr }) => { if (gstErr) console.warn('Sale GST/extra fields update:', gstErr.message); });
+          return;
+        }
+        if (isUniqueViolation(error) && tries < MAX_RENUMBER_RETRIES) {
+          const seq = nextDocSeq(salesRef.current.filter(s => s.id !== sale.id).map(s => s.saleNo), fy);
+          const newNo = `SL/${fy}/${String(seq).padStart(3, '0')}`;
+          salesRef.current = salesRef.current.map(s => s.id === sale.id ? { ...s, saleNo: newNo } : s);
+          setSalesState(prev => prev.map(s => s.id === sale.id ? { ...s, saleNo: newNo } : s));
+          attemptSaleSave({ ...base, saleNo: newNo }, tries + 1);
+          return;
+        }
         console.error('Sale save failed:', error.message);
         salesRef.current = salesRef.current.filter(s => s.id !== sale.id);
         setSalesState(prev => prev.filter(s => s.id !== sale.id));
         toastRef.current({ title: 'Sale save nahi hua', description: error.message, variant: 'destructive' });
-      } else {
-        // Step 2: GST columns update (only Sale GST fields — no TDS for sales)
-        supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember })
-          .eq('id', sale.id)
-          .then(({ error: gstErr }) => { if (gstErr) console.warn('Sale GST/extra fields update:', gstErr.message); });
-      }
-    });
+      });
+    };
+    attemptSaleSave(saleBase, 0);
     return sale;
   }, [society.financialYear, customers, accounts, addVoucher, stockItems]);
 
@@ -4019,19 +4055,31 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Step 1: upsert ONLY the original-table base columns (schema cache always knows these → never fails)
     // Step 2: update GST/TDS columns separately (added via ALTER TABLE — schema cache may lag)
     const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, taxVoucherIds: _tv, ...purchaseBase } = purchase;
-    supabase.from('purchases').upsert(withSoc(purchaseBase)).then(({ error }) => {
-      if (error) {
+    // Feature 6: duplicate purchaseNo (another till) → 23505; bump + retry (only purchaseNo changes).
+    const attemptPurchaseSave = (base: typeof purchaseBase, tries: number) => {
+      supabase.from('purchases').upsert(withSoc(base)).then(({ error }) => {
+        if (!error) {
+          // Step 2: GST/TDS columns update (safe — if this fails, base record is already saved)
+          supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId })
+            .eq('id', purchase.id)
+            .then(({ error: gstErr }) => { if (gstErr) console.warn('Purchase GST fields update:', gstErr.message); });
+          return;
+        }
+        if (isUniqueViolation(error) && tries < MAX_RENUMBER_RETRIES) {
+          const seq = nextDocSeq(purchasesRef.current.filter(p => p.id !== purchase.id).map(p => p.purchaseNo), fy);
+          const newNo = `PUR/${fy}/${String(seq).padStart(3, '0')}`;
+          purchasesRef.current = purchasesRef.current.map(p => p.id === purchase.id ? { ...p, purchaseNo: newNo } : p);
+          setPurchasesState(prev => prev.map(p => p.id === purchase.id ? { ...p, purchaseNo: newNo } : p));
+          attemptPurchaseSave({ ...base, purchaseNo: newNo }, tries + 1);
+          return;
+        }
         console.error('Purchase save failed:', error.message);
         purchasesRef.current = purchasesRef.current.filter(p => p.id !== purchase.id);
         setPurchasesState(prev => prev.filter(p => p.id !== purchase.id));
         toastRef.current({ title: 'Purchase save nahi hua', description: error.message, variant: 'destructive' });
-      } else {
-        // Step 2: GST/TDS columns update (safe — if this fails, base record is already saved)
-        supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId })
-          .eq('id', purchase.id)
-          .then(({ error: gstErr }) => { if (gstErr) console.warn('Purchase GST fields update:', gstErr.message); });
-      }
-    });
+      });
+    };
+    attemptPurchaseSave(purchaseBase, 0);
     return purchase;
   }, [society.financialYear, suppliers, accounts, addVoucher, stockItems]);
 

@@ -2465,3 +2465,16 @@ drop policy if exists "society_rw" on public.purchase_returns;
 create policy "society_rw" on public.purchase_returns for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ── Feature 6 — Server-side document numbering: per-society UNIQUE guard ──────
+-- The DB physically rejects a duplicate document number within a society, so two
+-- devices (tills) can never persist the same SL/PUR/SRET/PRET/voucher number.
+-- The client detects the 23505 violation, bumps to the next number, and retries.
+-- ⚠️ These indexes fail to BUILD if existing data already has duplicates — run the
+-- pre-check queries in the completion report FIRST and de-dupe if any are found.
+-- (NULL numbers are treated as distinct by Postgres, so legacy null rows are fine.)
+create unique index if not exists uniq_sales_society_no on public.sales (society_id, "saleNo");
+create unique index if not exists uniq_purchases_society_no on public.purchases (society_id, "purchaseNo");
+create unique index if not exists uniq_sales_returns_society_no on public.sales_returns (society_id, "returnNo");
+create unique index if not exists uniq_purchase_returns_society_no on public.purchase_returns (society_id, "returnNo");
+create unique index if not exists uniq_vouchers_society_no on public.vouchers (society_id, "voucherNo");

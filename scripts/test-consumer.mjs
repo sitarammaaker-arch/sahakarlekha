@@ -478,5 +478,33 @@ function computeCartGst(items, opts) {
   ok(g4.taxAmount === 0 && g4.netAmount === 105, 'unregistered society: no GST (Bill of Supply)');
 }
 
+// ── Feature 6: server-side document numbering helpers (src/lib/dbRetry.ts) ────
+function isUniqueViolation(error) {
+  if (!error) return false;
+  if (error.code === '23505') return true;
+  const m = (error.message || '').toLowerCase();
+  return m.includes('duplicate key value') || m.includes('unique constraint') || m.includes('already exists');
+}
+function nextDocSeq(existingNumbers, fy) {
+  let max = 0;
+  for (const no of existingNumbers) {
+    if (!no || !no.includes(fy)) continue;
+    const m = no.match(/\/(\d+)$/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return max + 1;
+}
+{
+  ok(isUniqueViolation({ code: '23505' }) === true, 'isUniqueViolation: pg code 23505');
+  ok(isUniqueViolation({ message: 'duplicate key value violates unique constraint' }) === true, 'isUniqueViolation: duplicate-key message');
+  ok(isUniqueViolation({ message: 'network timeout' }) === false, 'isUniqueViolation: unrelated error → false');
+  ok(isUniqueViolation(null) === false, 'isUniqueViolation: null → false');
+  // renumber lands on the next free number for the same FY
+  ok(nextDocSeq(['SL/2025-26/001', 'SL/2025-26/003'], '2025-26') === 4, 'nextDocSeq: max(1,3)+1 = 4');
+  ok(nextDocSeq([], '2025-26') === 1, 'nextDocSeq: empty → 1');
+  ok(nextDocSeq(['SL/2024-25/009'], '2025-26') === 1, 'nextDocSeq: other-FY numbers ignored');
+  ok(nextDocSeq(['SRET/2025-26/002', undefined, 'SRET/2025-26/005'], '2025-26') === 6, 'nextDocSeq: skips null, picks max+1 = 6');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
