@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/table';
 import { ScanBarcode, Trash2, Plus, Minus, AlertTriangle, Printer, X, CheckCircle2 } from 'lucide-react';
 import { generateSaleInvoicePDF } from '@/lib/pdf';
+import { computeCartGst } from '@/lib/consumer/posGst';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { SaleItem, PaymentMode } from '@/types';
@@ -78,9 +79,14 @@ const RetailCounter: React.FC = () => {
   // Credit tender is member-only — drop back to cash if the member is cleared.
   useEffect(() => { if (!memberId && tender === 'credit') setTender('cash'); }, [memberId, tender]);
 
-  // ── Derived total (v1 = final-price billing: no separate GST/discount line;
-  //    full GST tax-invoices are done on the Sale Management screen) ───────────
+  // ── Derived total — final (MRP-inclusive) price the customer pays. When the
+  //    society is GST-registered, GST is EXTRACTED from this price (inclusive),
+  //    so the total never changes; the receipt becomes a valid Tax Invoice. ────
   const total = useMemo(() => cart.reduce((s, i) => s + i.amount, 0), [cart]);
+  const cartGst = useMemo(() => computeCartGst(
+    cart.map(i => ({ amount: i.amount, gstRate: stockItems.find(s => s.id === i.itemId)?.gstRate })),
+    { gstRegistered: !!(society as { gstin?: string }).gstin },
+  ), [cart, stockItems, society]);
 
   const hi = language === 'hi';
 
@@ -204,6 +210,11 @@ const RetailCounter: React.FC = () => {
         toast({ title: hi ? 'उधार सीमा से अधिक' : 'Over credit limit', description: hi ? `अनुमानित बकाया ${fmt(projected)} > सीमा ${fmt(mem.creditLimit)} — फिर भी दर्ज हो रही है` : `Projected ${fmt(projected)} > limit ${fmt(mem.creditLimit)} — posting anyway`, variant: 'destructive', duration: 8000 });
       }
     }
+    // GST-inclusive extraction from the shelf price (registered society only; exempt items → 0).
+    const gst = computeCartGst(
+      valid.map(i => ({ amount: i.amount, gstRate: stockItems.find(s => s.id === i.itemId)?.gstRate })),
+      { gstRegistered: !!(society as { gstin?: string }).gstin },
+    );
     try {
       const newSale = addSale({
         date: TODAY(),
@@ -215,10 +226,10 @@ const RetailCounter: React.FC = () => {
         items: valid,
         totalAmount: total,
         discount: 0,
-        netAmount: total,
-        cgstPct: 0, sgstPct: 0, igstPct: 0,
-        cgstAmount: 0, sgstAmount: 0, igstAmount: 0,
-        taxAmount: 0, grandTotal: total,
+        netAmount: gst.netAmount,
+        cgstPct: gst.cgstPct, sgstPct: gst.sgstPct, igstPct: gst.igstPct,
+        cgstAmount: gst.cgstAmount, sgstAmount: gst.sgstAmount, igstAmount: gst.igstAmount,
+        taxAmount: gst.taxAmount, grandTotal: gst.grandTotal,
         paymentMode: tender,
         narration: mem ? (hi ? `रिटेल काउंटर बिक्री — सदस्य ${mem.memberId}` : `Retail counter sale — member ${mem.memberId}`) : (hi ? 'रिटेल काउंटर बिक्री' : 'Retail counter sale'),
         createdBy: user?.name ?? 'Counter',
@@ -237,7 +248,7 @@ const RetailCounter: React.FC = () => {
         duration: 10000,
       });
     }
-  }, [cart, stockMap, stockItems, customerId, customers, memberId, members, memberReceivableAccountId, getMemberOutstanding, addSale, total, tender, user, hi, toast, focusSearch]);
+  }, [cart, stockMap, stockItems, customerId, customers, memberId, members, memberReceivableAccountId, getMemberOutstanding, addSale, total, tender, user, hi, toast, focusSearch, society]);
 
   // F2 = complete sale (keyboard-first).
   useEffect(() => {
@@ -267,9 +278,9 @@ const RetailCounter: React.FC = () => {
         totalAmount: sale.totalAmount,
         discount: sale.discount || 0,
         netAmount: sale.netAmount,
-        cgstPct: 0, sgstPct: 0, igstPct: 0,
-        cgstAmount: 0, sgstAmount: 0, igstAmount: 0,
-        taxAmount: 0,
+        cgstPct: sale.cgstPct || 0, sgstPct: sale.sgstPct || 0, igstPct: sale.igstPct || 0,
+        cgstAmount: sale.cgstAmount || 0, sgstAmount: sale.sgstAmount || 0, igstAmount: sale.igstAmount || 0,
+        taxAmount: sale.taxAmount || 0,
         grandTotal: sale.grandTotal || sale.netAmount,
         paymentMode: sale.paymentMode,
         narration: sale.narration,
@@ -444,9 +455,18 @@ const RetailCounter: React.FC = () => {
               <CardTitle className="text-base">{hi ? 'भुगतान' : 'Payment'}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex justify-between items-baseline border-b pb-3">
-                <span className="text-sm text-gray-500">{hi ? 'कुल देय' : 'Amount Due'}</span>
-                <span className="text-3xl font-bold text-emerald-700">{fmt(total)}</span>
+              <div className="border-b pb-3">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-sm text-gray-500">{hi ? 'कुल देय' : 'Amount Due'}</span>
+                  <span className="text-3xl font-bold text-emerald-700">{fmt(total)}</span>
+                </div>
+                {cartGst.taxAmount > 0 && (
+                  <p className="text-[11px] text-muted-foreground text-right mt-1">
+                    {hi
+                      ? `मूल्य में GST ₹${cartGst.taxAmount.toFixed(2)} शामिल (कर योग्य ₹${cartGst.netAmount.toFixed(2)})`
+                      : `incl. GST ₹${cartGst.taxAmount.toFixed(2)} (taxable ₹${cartGst.netAmount.toFixed(2)})`}
+                  </p>
+                )}
               </div>
 
               <button
