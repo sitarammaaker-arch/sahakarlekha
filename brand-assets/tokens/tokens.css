@@ -1,0 +1,33 @@
+/* SahakarLekha Brand Tokens (B-03 v1.0) — generated from tokens.json.
+ * For marketing pages/HTML assets. The app keeps its own tokens in src/index.css;
+ * these mirror them — if the app changes, update BOTH. */
+:root {
+  /* brand */
+  --sl-navy: #153f79;        /* hsl(215 70% 28%) primary / trust */
+  --sl-orange: #f48525;      /* hsl(28 90% 55%)  accent / single CTA */
+  --sl-navy-dark: #122d54;   /* hsl(215 65% 20%) depth shapes */
+  --sl-white: #ffffff;
+
+  /* semantic */
+  --sl-success: #1f9350;
+  --sl-warning: #f59f0a;
+  --sl-destructive: #db2424;
+  --sl-info: #2999a3;
+
+  /* neutral */
+  --sl-fg: #1d2330;
+  --sl-fg-muted: #676f7e;
+  --sl-bg-secondary: #e9edf2;
+  --sl-bg-muted: #f3f5f7;
+  --sl-border: #d1d8e0;
+
+  /* type */
+  --sl-font-devanagari: 'Hind', 'Noto Sans Devanagari', sans-serif;
+  --sl-font-latin: 'Inter', system-ui, sans-serif;
+  --sl-leading-devanagari: 1.5;
+
+  /* layout */
+  --sl-space: 8px;
+  --sl-radius-card: 12px;
+  --sl-radius-button: 8px;
+}
