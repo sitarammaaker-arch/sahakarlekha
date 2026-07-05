@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<title>सहकार लेखा — One-Page Product Sheet (S-01, hi)</title>
+<!--
+  S-01 ONE-PAGE PRODUCT SHEET (Hindi) v1.0 — the universal leave-behind.
+  Print: Chrome → Ctrl+P → Save as PDF → A4 → ✓ Background graphics.
+  Built on the B-04 A4 master. Copy changes need founder approval.
+-->
+<style>
+  @font-face { font-family: 'Hind'; src: url('../../fonts/Hind-Regular.ttf'); font-weight: 400; }
+  @font-face { font-family: 'Hind'; src: url('../../fonts/Hind-Medium.ttf'); font-weight: 500; }
+  @font-face { font-family: 'Hind'; src: url('../../fonts/Hind-SemiBold.ttf'); font-weight: 600; }
+  @font-face { font-family: 'Hind'; src: url('../../fonts/Hind-Bold.ttf'); font-weight: 700; }
+  @font-face { font-family: 'Inter'; src: url('../../fonts/Inter-Regular.ttf'); font-weight: 400; }
+  @font-face { font-family: 'Inter'; src: url('../../fonts/Inter-SemiBold.ttf'); font-weight: 600; }
+  @font-face { font-family: 'Inter'; src: url('../../fonts/Inter-Bold.ttf'); font-weight: 700; }
+  :root {
+    --navy: #153f79; --orange: #f48525; --navy-dark: #122d54; --green: #1f9350;
+    --teal: #2999a3; --fg: #1d2330; --fg-muted: #676f7e;
+    --bg-sec: #e9edf2; --bg-muted: #f3f5f7; --border: #d1d8e0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body { font-family: 'Hind', 'Noto Sans Devanagari', sans-serif; font-size: 10.5pt; line-height: 1.5; color: var(--fg); background: #fff; }
+  .latin, .num { font-family: 'Inter', system-ui, sans-serif; }
+  @page { size: A4; margin: 0; }
+  .page { width: 210mm; height: 297mm; margin: 0 auto; position: relative; padding: 12mm 15mm 24mm; background: #fff; overflow: hidden; }
+  @media screen { body { background: #e9edf2; padding: 24px 0; } .page { box-shadow: 0 4px 16px rgba(18,45,84,.12); } }
+
+  .lh-head { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 4mm; border-bottom: 0.6mm solid var(--navy); margin-bottom: 6mm; }
+  .lh-head img.logo { height: 14mm; display: block; }
+  .lh-contact { text-align: right; font-size: 8pt; line-height: 1.5; color: var(--fg-muted); font-weight: 500; }
+  .lh-contact .site { color: var(--navy); font-weight: 600; font-family: 'Inter', sans-serif; }
+
+  h1 { font-size: 20pt; font-weight: 700; color: var(--navy); line-height: 1.3; }
+  .subtitle { font-size: 11.5pt; color: var(--fg-muted); margin: 1mm 0 5mm; font-weight: 500; }
+
+  .stats { display: flex; gap: 5mm; margin-bottom: 6mm; }
+  .stat { flex: 1; background: var(--bg-muted); border-radius: 3mm; text-align: center; padding: 3.5mm 2mm 3mm; }
+  .stat .n { font-family: 'Inter', sans-serif; font-size: 19pt; font-weight: 700; color: var(--navy); line-height: 1.15; }
+  .stat:nth-child(2) .n { color: var(--teal); }
+  .stat:nth-child(3) .n { color: var(--orange); }
+  .stat .l { font-size: 9pt; color: var(--fg); font-weight: 500; }
+
+  h2 { font-size: 13pt; font-weight: 600; color: var(--navy); margin: 0 0 3mm; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3.5mm 5mm; margin-bottom: 6mm; }
+  .feat { background: var(--bg-muted); border-radius: 2.5mm; padding: 3mm 4mm; }
+  .feat .t { font-weight: 600; color: var(--navy-dark); font-size: 10.5pt; }
+  .feat .d { font-size: 9.5pt; color: var(--fg-muted); line-height: 1.45; }
+
+  .steps { display: flex; gap: 5mm; margin-bottom: 6mm; }
+  .step { flex: 1; display: flex; gap: 3mm; align-items: flex-start; }
+  .step .no { flex: 0 0 7mm; height: 7mm; border-radius: 50%; background: var(--navy); color: #fff; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 11pt; display: flex; align-items: center; justify-content: center; }
+  .step .tx { font-size: 9.5pt; line-height: 1.45; }
+  .step .tx b { display: block; font-size: 10pt; color: var(--navy-dark); }
+
+  .cta-box { background: var(--navy); color: #fff; border-radius: 3mm; padding: 5mm 6mm; display: flex; align-items: center; gap: 6mm; }
+  .cta-box .txt { flex: 1; }
+  .cta-box .big { font-size: 13.5pt; font-weight: 700; line-height: 1.35; }
+  .cta-box .sub { font-size: 9.5pt; color: #d1d8e0; margin-top: 1mm; }
+  .cta-box .pill { display: inline-block; background: var(--orange); color: #fff; border-radius: 10mm; padding: 2.2mm 7mm; font-weight: 600; font-size: 11.5pt; margin-top: 3mm; font-family: 'Inter', sans-serif; }
+  .qr { flex: 0 0 30mm; text-align: center; background: #fff; border-radius: 2.5mm; padding: 2.5mm 2.5mm 2mm; }
+  .qr img { width: 25mm; height: 25mm; display: block; margin: 0 auto; }
+  .qr .ql { font-size: 7.5pt; color: var(--navy); font-weight: 600; line-height: 1.3; margin-top: 1mm; }
+
+  .trust { font-size: 8.5pt; color: var(--fg-muted); margin-top: 4mm; }
+
+  .lh-foot { position: absolute; left: 0; right: 0; bottom: 0; height: 16mm; padding: 0 15mm; display: flex; align-items: center; justify-content: space-between; font-size: 8pt; color: var(--fg-muted); }
+  .lh-foot .stripe { position: absolute; left: 0; right: 0; bottom: 0; height: 2.4mm; display: flex; flex-direction: column; }
+  .lh-foot .stripe span { flex: 1; }
+  .lh-foot .stripe .s1 { background: var(--orange); }
+  .lh-foot .stripe .s2 { background: #fff; border-top: 0.1mm solid var(--border); }
+  .lh-foot .stripe .s3 { background: var(--green); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="lh-head">
+    <img class="logo" src="../../logo/SL_B-02_logo-horizontal-clean_v1.0.svg" alt="सहकार लेखा">
+    <div class="lh-contact">
+      <span class="site">sahakarlekha.com</span><br>
+      WhatsApp: <span class="latin">+91 94679 18545</span><br>
+      <span class="latin">@sahakarlekha</span>
+    </div>
+  </header>
+
+  <h1>सहकारी समितियों का अपना सॉफ्टवेयर</h1>
+  <p class="subtitle">PACS से housing तक — हर समिति के लिए मुफ़्त, हिंदी-first, audit-ready accounting</p>
+
+  <div class="stats">
+    <div class="stat"><div class="n">8</div><div class="l">प्रकार की समितियाँ</div></div>
+    <div class="stat"><div class="n">36</div><div class="l">राज्य / UT</div></div>
+    <div class="stat"><div class="n">₹0</div><div class="l">लागत — बिल्कुल मुफ़्त</div></div>
+  </div>
+
+  <h2>क्यों सहकार लेखा?</h2>
+  <div class="grid">
+    <div class="feat"><div class="t">सिर्फ़ समितियों के लिए बना है</div>
+      <div class="d">Share capital, dividend, सदस्य register, MSP खरीद — सब built-in। Tally जैसे generic software में ये है ही नहीं।</div></div>
+    <div class="feat"><div class="t">Audit-ready, हमेशा</div>
+      <div class="d">तलपट, बैलेंस शीट, आय-व्यय — one click। FY lock और साफ़ audit trail के साथ।</div></div>
+    <div class="feat"><div class="t">आपकी भाषा में</div>
+      <div class="d">पूरा software, guide और support हिंदी में — English भी साथ में। Staff को नया कुछ रटना नहीं पड़ता।</div></div>
+    <div class="feat"><div class="t">TDS और GST तैयार</div>
+      <div class="d">TDS 26Q, GST reports — deadline से पहले, बिना CA के चक्कर लगाए।</div></div>
+    <div class="feat"><div class="t">Inventory, ऋण और ब्याज</div>
+      <div class="d">खाद-बीज stock, KCC/ऋण खाते, ब्याज की गणना अपने आप — सब एक ही जगह।</div></div>
+    <div class="feat"><div class="t">मुफ़्त certificate course</div>
+      <div class="d">10-part हिंदी course + certificate — आपका staff खुद expert बन जाता है। sahakarlekha.com/guide</div></div>
+  </div>
+
+  <h2>कैसे शुरू करें? — सिर्फ़ 5 मिनट</h2>
+  <div class="steps">
+    <div class="step"><div class="no">1</div><div class="tx"><b>Website खोलें</b>sahakarlekha.com पर जाएँ — mobile या computer, दोनों चलेंगे</div></div>
+    <div class="step"><div class="no">2</div><div class="tx"><b>समिति register करें</b>नाम, प्रकार और राज्य चुनें — कोई fees नहीं, कोई card नहीं</div></div>
+    <div class="step"><div class="no">3</div><div class="tx"><b>पहली entry करें</b>Voucher डालें — बैलेंस शीट उसी दिन तैयार</div></div>
+  </div>
+
+  <div class="cta-box">
+    <div class="txt">
+      <div class="big">आज ही अपनी समिति का हिसाब digital करें</div>
+      <div class="sub">आपका data आपका है — कभी भी export करें। कोई hidden charge नहीं।</div>
+      <span class="pill">sahakarlekha.com</span>
+    </div>
+    <div class="qr">
+      <img src="data:image/png;base64,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" alt="QR: sahakarlekha.com">
+      <div class="ql">स्कैन करें —<br>मुफ़्त शुरू करें</div>
+    </div>
+  </div>
+
+  <p class="trust">भारत का इकलौता cooperative-specific accounting platform · Cloud-based — data सुरक्षित और हर जगह उपलब्ध</p>
+
+  <footer class="lh-foot">
+    <span>सहकार लेखा — सहकारी समितियों का अपना सॉफ्टवेयर</span>
+    <span class="latin">sahakarlekha.com</span>
+    <div class="stripe"><span class="s1"></span><span class="s2"></span><span class="s3"></span></div>
+  </footer>
+
+</div>
+</body>
+</html>
