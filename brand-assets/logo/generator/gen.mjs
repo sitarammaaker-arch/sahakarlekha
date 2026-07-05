@@ -152,6 +152,15 @@ svgFile('SL_B-02_logo-horizontal_v1.0.svg', lockW, TH,
 svgFile('SL_B-02_logo-horizontal-reversed_v1.0.svg', lockW, TH,
   tileSmall() + lockup(WHITE, ORANGE), 'SahakarLekha logo reversed');
 
+// clean variant: wordmark only, no URL line — for letterheads/contexts that
+// already show the domain elsewhere. Wordmark vertically centered on tile.
+const wordDyC = 64 - (word.bb.y1 + word.bb.y2) / 2;
+const lockWC = textX + word.advance + 6;
+svgFile('SL_B-02_logo-horizontal-clean_v1.0.svg', lockWC, TH,
+  tileSmall() + g(textX, wordDyC, p(word.d, NAVY)), 'SahakarLekha logo clean');
+svgFile('SL_B-02_logo-horizontal-clean-reversed_v1.0.svg', lockWC, TH,
+  tileSmall() + g(textX, wordDyC, p(word.d, WHITE)), 'SahakarLekha logo clean reversed');
+
 // ---------- 3. STACKED ----------
 const ST = 160, kS = ST / T;
 const stackW = Math.max(word.advance, ST) + 48;

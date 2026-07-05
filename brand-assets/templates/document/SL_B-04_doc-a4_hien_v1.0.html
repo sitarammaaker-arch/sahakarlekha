@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<title>सहकार लेखा — A4 Document Template (B-04)</title>
+<!--
+  B-04 A4 DOCUMENT + LETTERHEAD MASTER v1.0
+  HOW TO USE:
+   1. Copy this file, replace the sample content inside <main> (keep the classes).
+   2. Open in Chrome/Edge → Ctrl+P → Destination "Save as PDF"
+      → Paper A4 → Margins "Default" → ✓ Background graphics → Save.
+   3. Fonts load from ../../fonts (works offline). Logo is the baked-path SVG
+      master — renders correctly everywhere.
+  RULES (Brand Book): don't change colors/fonts/header/footer. Hindi first,
+  English second. One orange CTA max per document.
+-->
+<style>
+  @font-face { font-family: 'Hind'; src: url('../../fonts/Hind-Regular.ttf'); font-weight: 400; }
+  @font-face { font-family: 'Hind'; src: url('../../fonts/Hind-Medium.ttf'); font-weight: 500; }
+  @font-face { font-family: 'Hind'; src: url('../../fonts/Hind-SemiBold.ttf'); font-weight: 600; }
+  @font-face { font-family: 'Hind'; src: url('../../fonts/Hind-Bold.ttf'); font-weight: 700; }
+  @font-face { font-family: 'Inter'; src: url('../../fonts/Inter-Regular.ttf'); font-weight: 400; }
+  @font-face { font-family: 'Inter'; src: url('../../fonts/Inter-SemiBold.ttf'); font-weight: 600; }
+  @font-face { font-family: 'Inter'; src: url('../../fonts/Inter-Bold.ttf'); font-weight: 700; }
+
+  :root {
+    --navy: #153f79; --orange: #f48525; --navy-dark: #122d54;
+    --green: #1f9350; --teal: #2999a3;
+    --fg: #1d2330; --fg-muted: #676f7e;
+    --bg-sec: #e9edf2; --bg-muted: #f3f5f7; --border: #d1d8e0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #fff; }
+  body {
+    font-family: 'Hind', 'Noto Sans Devanagari', sans-serif;
+    font-size: 11.5pt; line-height: 1.55; color: var(--fg);
+  }
+  .latin, .num { font-family: 'Inter', system-ui, sans-serif; }
+
+  @page { size: A4; margin: 0; }
+  .page {
+    width: 210mm; min-height: 297mm; margin: 0 auto; position: relative;
+    padding: 14mm 16mm 26mm 16mm; background: #fff;
+    display: flow-root;
+  }
+  @media print {
+    .page { margin: 0; box-shadow: none; page-break-after: always; }
+  }
+  @media screen {
+    body { background: #e9edf2; padding: 24px 0; }
+    .page { box-shadow: 0 4px 16px rgba(18,45,84,.12); margin-bottom: 24px; }
+  }
+
+  /* ---------- letterhead header ---------- */
+  .lh-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding-bottom: 6mm; border-bottom: 0.6mm solid var(--navy); margin-bottom: 8mm;
+  }
+  .lh-head img.logo { height: 15mm; display: block; }
+  .lh-contact {
+    text-align: right; font-size: 8.5pt; line-height: 1.5; color: var(--fg-muted);
+    font-weight: 500;
+  }
+  .lh-contact .site { color: var(--navy); font-weight: 600; font-family: 'Inter', sans-serif; }
+
+  /* ---------- footer (repeats via position:fixed in print) ---------- */
+  .lh-foot {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 18mm;
+    padding: 0 16mm; display: flex; align-items: center; justify-content: space-between;
+    font-size: 8.5pt; color: var(--fg-muted);
+  }
+  .lh-foot .stripe {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 2.4mm; display: flex; flex-direction: column;
+  }
+  .lh-foot .stripe span { flex: 1; display: block; }
+  .lh-foot .stripe .s1 { background: var(--orange); }
+  .lh-foot .stripe .s2 { background: #fff; border-top: 0.1mm solid var(--border); }
+  .lh-foot .stripe .s3 { background: var(--green); }
+
+  /* ---------- content blocks ---------- */
+  h1 { font-size: 21pt; font-weight: 700; color: var(--navy); line-height: 1.35; margin: 0 0 2mm; }
+  .subtitle { font-size: 12pt; color: var(--fg-muted); margin: 0 0 8mm; font-weight: 500; }
+  h2 {
+    font-size: 14pt; font-weight: 600; color: var(--navy);
+    margin: 8mm 0 3mm; padding-bottom: 1.5mm; border-bottom: 0.3mm solid var(--border);
+  }
+  h3 { font-size: 12pt; font-weight: 600; color: var(--navy-dark); margin: 5mm 0 2mm; }
+  p { margin: 0 0 3.5mm; }
+  ul, ol { margin: 0 0 3.5mm 6mm; }
+  li { margin-bottom: 1.5mm; }
+  strong { font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; margin: 3mm 0 5mm; font-size: 10.5pt; }
+  th {
+    background: var(--navy); color: #fff; font-weight: 600; text-align: left;
+    padding: 2.2mm 3mm;
+  }
+  td { padding: 2mm 3mm; border-bottom: 0.2mm solid var(--border); }
+  tr:nth-child(even) td { background: var(--bg-muted); }
+  td.num, th.num { text-align: right; font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums; }
+
+  .callout {
+    background: var(--bg-sec); border-left: 1.2mm solid var(--navy);
+    border-radius: 2mm; padding: 4mm 5mm; margin: 4mm 0;
+  }
+  .callout.tip { border-left-color: var(--green); }
+  .callout .label { font-weight: 600; color: var(--navy); display: block; margin-bottom: 1mm; }
+
+  .checklist { list-style: none; margin-left: 0; }
+  .checklist li { padding-left: 7mm; position: relative; }
+  .checklist li::before {
+    content: ''; position: absolute; left: 0; top: 1.2mm; width: 4mm; height: 4mm;
+    border-radius: 1mm; border: 0.4mm solid var(--green);
+    background: transparent;
+  }
+  .checklist li.done::before { background: var(--green); }
+  .checklist li.done::after {
+    content: ''; position: absolute; left: 0.9mm; top: 2.1mm; width: 2mm; height: 1mm;
+    border-left: 0.5mm solid #fff; border-bottom: 0.5mm solid #fff; transform: rotate(-45deg);
+  }
+
+  .cta-box {
+    background: var(--navy); color: #fff; border-radius: 3mm;
+    padding: 5mm 6mm; margin: 6mm 0; display: flex; align-items: center; gap: 6mm;
+    justify-content: space-between;
+  }
+  .cta-box .big { font-size: 13pt; font-weight: 600; }
+  .cta-box .pill {
+    background: var(--orange); color: #fff; border-radius: 10mm; white-space: nowrap;
+    padding: 2.5mm 7mm; font-weight: 600; font-size: 11.5pt;
+  }
+
+  .sign-row { display: flex; justify-content: space-between; margin-top: 14mm; }
+  .sign { width: 55mm; text-align: center; font-size: 10pt; color: var(--fg-muted); }
+  .sign .line { border-top: 0.3mm solid var(--fg-muted); margin-bottom: 1.5mm; }
+
+  .muted { color: var(--fg-muted); font-size: 9.5pt; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- ============ LETTERHEAD (LOCKED) ============ -->
+  <header class="lh-head">
+    <img class="logo" src="../../logo/SL_B-02_logo-horizontal-clean_v1.0.svg" alt="सहकार लेखा">
+    <div class="lh-contact">
+      <span class="site">sahakarlekha.com</span><br>
+      WhatsApp: <span class="latin">+91 94679 18545</span><br>
+      <span class="latin">@sahakarlekha</span>
+    </div>
+  </header>
+
+  <!-- ============ SAMPLE CONTENT — REPLACE EVERYTHING IN <main> ============ -->
+  <main>
+    <h1>दस्तावेज़ का शीर्षक यहाँ लिखें</h1>
+    <p class="subtitle">उप-शीर्षक — एक पंक्ति में दस्तावेज़ का उद्देश्य</p>
+
+    <h2>1. अनुभाग शीर्षक</h2>
+    <p>सामान्य paragraph ऐसा दिखेगा। हिंदी पहले, English बाद में। Statutory
+    शब्द वैसे ही रहते हैं जैसे sector बोलता है — बैलेंस शीट, तलपट, TDS 26Q,
+    GST। रक़म हमेशा Indian grouping में: <strong class="num">₹1,12,500</strong>।</p>
+
+    <h3>1.1 उप-अनुभाग</h3>
+    <ul>
+      <li>Bullet list का उदाहरण — छोटे, साफ़ बिंदु।</li>
+      <li>दूसरा बिंदु <strong>ज़रूरी शब्द bold</strong> के साथ।</li>
+    </ul>
+
+    <h2>2. Table का उदाहरण</h2>
+    <table>
+      <thead>
+        <tr><th>विवरण</th><th>अवधि</th><th class="num">राशि</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>सदस्यता शुल्क</td><td>2025-26</td><td class="num">₹52,000</td></tr>
+        <tr><td>खाद बिक्री</td><td>2025-26</td><td class="num">₹8,45,600</td></tr>
+        <tr><td>ऋण वसूली</td><td>2025-26</td><td class="num">₹3,12,500</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <span class="label">📌 ध्यान दें</span>
+      Callout box — किसी ज़रूरी बात को highlight करने के लिए। Navy border =
+      सूचना; green border (class "tip") = सुझाव।
+    </div>
+
+    <h2>3. Checklist का उदाहरण</h2>
+    <ul class="checklist">
+      <li class="done">पूरा हो चुका काम — भरा हुआ green box</li>
+      <li>बाक़ी काम — खाली box</li>
+      <li>तीसरा काम</li>
+    </ul>
+
+    <div class="cta-box">
+      <span class="big">आज ही अपनी समिति का हिसाब शुरू करें — बिल्कुल मुफ़्त</span>
+      <span class="pill">sahakarlekha.com</span>
+    </div>
+
+    <div class="sign-row">
+      <div class="sign"><div class="line"></div>तैयारकर्ता</div>
+      <div class="sign"><div class="line"></div>सचिव / अध्यक्ष</div>
+    </div>
+  </main>
+
+  <!-- ============ FOOTER (LOCKED) ============ -->
+  <footer class="lh-foot">
+    <span>सहकार लेखा — सहकारी समितियों का अपना सॉफ्टवेयर</span>
+    <span class="latin">sahakarlekha.com</span>
+    <div class="stripe"><span class="s1"></span><span class="s2"></span><span class="s3"></span></div>
+  </footer>
+
+</div>
+
+</body>
+</html>
