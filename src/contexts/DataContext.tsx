@@ -3497,7 +3497,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return m ? Math.max(max, parseInt(m[1])) : max;
       }, 0);
       const itemCode = `ITM/${String(maxNum + 1).padStart(3, '0')}`;
-      newItem = { ...data, id: crypto.randomUUID(), itemCode };
+      // Consumer stores: give new items a default Sales/Purchase A/c (RULE-4 default 4101/5101)
+      // so a non-technical operator isn't blocked by the "assign a Sales/Purchase A/c" guard on
+      // the first sale/purchase. They can still reassign for per-category routing. Scoped to
+      // consumer so marketing/dairy keep their mandatory dedicated-account routing.
+      const consumerDefaults = societyRef.current?.societyType === 'consumer'
+        ? { salesAccountId: data.salesAccountId || '4101', purchaseAccountId: data.purchaseAccountId || '5101' }
+        : null;
+      newItem = { ...data, ...consumerDefaults, id: crypto.randomUUID(), itemCode };
       persistStockItem(newItem, { onBaseFail: () => setStockItemsState(p => p.filter(i => i.id !== newItem.id)) });
       return [...prev, newItem];
     });
@@ -3508,7 +3515,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     setStockItemsState(prev => {
       const before = prev.find(i => i.id === id);
-      const updated = prev.map(i => i.id === id ? { ...i, ...data } : i);
+      const updated = prev.map(i => {
+        if (i.id !== id) return i;
+        const merged = { ...i, ...data };
+        // Consumer stores: backfill a default Sales/Purchase A/c on save if still unset, so a
+        // pre-existing item (created before this default) becomes sellable without the operator
+        // needing to know about ledger accounts. (Same RULE-4 default; consumer-scoped.)
+        if (societyRef.current?.societyType === 'consumer') {
+          if (!merged.salesAccountId) merged.salesAccountId = '4101';
+          if (!merged.purchaseAccountId) merged.purchaseAccountId = '5101';
+        }
+        return merged;
+      });
       const updatedItem = updated.find(i => i.id === id);
       if (updatedItem && before) persistStockItem(updatedItem, { onBaseFail: () => setStockItemsState(p => p.map(i => i.id === id ? before : i)) });
       return updated;
