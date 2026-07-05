@@ -643,5 +643,33 @@ function repaymentPosting(loan, totalAmt, interestAmt, mode) {
   ok(p2.lines.length === 2 && p2.lines[0].accountId === '3301' && p2.interest === 0, 'pure-principal cash repayment: Dr Cash / Cr Loan, no interest line');
 }
 
+// ── General loan repayment: posts to Loans & Advances 3304 (not KCC 3313) ────
+// Mirrors recordRepayment in LoanRegister.tsx (loan account 3304; status -> cleared).
+function generalRepayment(loan, totalAmt, interestAmt, mode) {
+  const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const interest = r2(Math.max(0, Math.min(interestAmt, totalAmt)));
+  const principal = r2(totalAmt - interest);
+  const debitAcc = mode === 'bank' ? '3302' : '3301';
+  const lines = [{ accountId: debitAcc, type: 'Dr', amount: totalAmt }];
+  if (principal > 0) lines.push({ accountId: '3304', type: 'Cr', amount: principal });
+  if (interest > 0) lines.push({ accountId: '4408', type: 'Cr', amount: interest });
+  const newRepaid = r2(loan.repaidAmount + principal);
+  return { lines, principal, interest, newRepaid, status: (loan.amount - newRepaid) <= 0.005 ? 'cleared' : loan.status };
+}
+{
+  const loan = { amount: 5000, repaidAmount: 4000, status: 'active' };
+  // final ₹1000 repayment clears the loan → Dr Cash 1000 / Cr Loans&Advances 1000
+  const p = generalRepayment(loan, 1000, 0, 'cash');
+  ok(p.lines.some(l => l.accountId === '3304' && l.type === 'Cr' && l.amount === 1000), 'general loan repayment credits Loans & Advances 3304');
+  ok(p.lines[0].accountId === '3301' && p.lines[0].type === 'Dr', 'Dr Cash for cash mode');
+  ok(p.status === 'cleared' && p.newRepaid === 5000, 'fully repaid loan is marked cleared');
+  // partial with interest → balanced, still active
+  const p2 = generalRepayment({ amount: 5000, repaidAmount: 0, status: 'active' }, 1200, 200, 'bank');
+  ok(p2.principal === 1000 && p2.interest === 200 && p2.status === 'active', 'partial repayment stays active; principal 1000, interest 200');
+  const dr = p2.lines.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0);
+  const cr = p2.lines.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0);
+  ok(dr === cr && dr === 1200, 'general loan repayment voucher is balanced (1200 == 1200)');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
