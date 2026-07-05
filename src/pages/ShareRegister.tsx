@@ -16,7 +16,7 @@ import type { Member } from '@/types';
 
 const ShareRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { members, updateMember, refundShareCapital, society } = useData();
+  const { members, updateMember, refundShareCapital, purchaseShareCapital, society } = useData();
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
@@ -172,7 +172,8 @@ const ShareRegister: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1 items-center">
-                        {m.shareCapital > 0 && <RefundShareButton member={m} hi={hi} onRefund={refundShareCapital} />}
+                        <ShareTxnButton member={m} hi={hi} kind="purchase" onSubmit={purchaseShareCapital} />
+                        {m.shareCapital > 0 && <ShareTxnButton member={m} hi={hi} kind="refund" onSubmit={refundShareCapital} />}
                         <Button variant="ghost" size="icon" onClick={() => openEdit(m)}>
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -242,25 +243,33 @@ const ShareRegister: React.FC = () => {
   );
 };
 
-function RefundShareButton({ member, hi, onRefund }: { member: Member; hi: boolean; onRefund: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void }) {
+function ShareTxnButton({ member, hi, kind, onSubmit }: { member: Member; hi: boolean; kind: 'purchase' | 'refund'; onSubmit: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void }) {
   const [open, setOpen] = useState(false);
   const [amt, setAmt] = useState('');
   const [mode, setMode] = useState<'cash' | 'bank'>('cash');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const val = Number(amt) || 0;
+  const isRefund = kind === 'refund';
+  const cap = member.shareCapital || 0;
+  const overCap = isRefund && val > cap;
   const fmtC = (n: number) => n.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' });
+  const btnLabel = isRefund ? (hi ? 'वापसी' : 'Refund') : (hi ? 'शेयर जोड़ें' : 'Add Shares');
+  const title = isRefund ? (hi ? 'शेयर पूँजी वापसी' : 'Refund Share Capital') : (hi ? 'अतिरिक्त शेयर पूँजी' : 'Additional Share Capital');
+  const help = isRefund
+    ? (hi ? 'Dr शेयर पूँजी / Cr नकद-बैंक — मूल रसीद अपरिवर्तित रहेगी।' : 'Posts Dr Share Capital / Cr Cash-Bank; the original receipt stays intact.')
+    : (hi ? 'Dr नकद-बैंक / Cr शेयर पूँजी — नई दिनांकित रसीद।' : 'Posts Dr Cash-Bank / Cr Share Capital; a new dated receipt.');
 
   return (
     <>
-      <Button variant="outline" size="sm" className="h-8" onClick={() => setOpen(true)}>{hi ? 'वापसी' : 'Refund'}</Button>
+      <Button variant="outline" size="sm" className="h-8" onClick={() => setOpen(true)}>{btnLabel}</Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>{hi ? 'शेयर पूँजी वापसी' : 'Refund Share Capital'} — {member.name}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{title} — {member.name}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">{hi ? 'वर्तमान शेयर पूँजी:' : 'Current share capital:'} <strong>{fmtC(member.shareCapital || 0)}</strong></p>
+            <p className="text-sm text-muted-foreground">{hi ? 'वर्तमान शेयर पूँजी:' : 'Current share capital:'} <strong>{fmtC(cap)}</strong></p>
             <div>
-              <Label>{hi ? 'वापसी राशि' : 'Refund Amount'}</Label>
-              <Input type="number" value={amt} onChange={e => setAmt(e.target.value)} max={member.shareCapital || 0} />
+              <Label>{isRefund ? (hi ? 'वापसी राशि' : 'Refund Amount') : (hi ? 'राशि' : 'Amount')}</Label>
+              <Input type="number" value={amt} onChange={e => setAmt(e.target.value)} {...(isRefund ? { max: cap } : {})} />
             </div>
             <div>
               <Label>{hi ? 'भुगतान विधि' : 'Payment mode'}</Label>
@@ -273,11 +282,11 @@ function RefundShareButton({ member, hi, onRefund }: { member: Member; hi: boole
               <Label>{hi ? 'तिथि' : 'Date'}</Label>
               <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
             </div>
-            <p className="text-[11px] text-muted-foreground">{hi ? 'Dr शेयर पूँजी / Cr नकद-बैंक — मूल रसीद अपरिवर्तित रहेगी।' : 'Posts Dr Share Capital / Cr Cash-Bank; the original receipt stays intact.'}</p>
+            <p className="text-[11px] text-muted-foreground">{help}</p>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
-              <Button disabled={!(val > 0) || val > (member.shareCapital || 0)} onClick={() => { onRefund(member.id, val, mode, date); setOpen(false); setAmt(''); }}>
-                {hi ? 'वापसी दर्ज करें' : 'Post Refund'}
+              <Button disabled={!(val > 0) || overCap} onClick={() => { onSubmit(member.id, val, mode, date); setOpen(false); setAmt(''); }}>
+                {isRefund ? (hi ? 'वापसी दर्ज करें' : 'Post Refund') : (hi ? 'शेयर जोड़ें' : 'Add Shares')}
               </Button>
             </div>
           </div>
