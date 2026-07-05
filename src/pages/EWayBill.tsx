@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast';
 import { Download, Truck, Copy, CheckCircle2, Hash } from 'lucide-react';
 import { ewayBillSelect, ewayBillInsert, ewayBillUpdate } from '@/lib/supabaseService';
+import { resolveStateCode, stateCodeFromGstin } from '@/lib/gstStates';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -31,13 +32,17 @@ interface EWayEntry {
   transportMode: string;
   vehicleNo: string;
   distance: number;
+  transporterName?: string;
+  transporterGstin?: string;
+  transDocNo?: string;
+  transDocDate?: string;
   ewbNo: string;
 }
 
 const transportModes = ['Road', 'Rail', 'Air', 'Ship'];
 
 export default function EWayBill() {
-  const { sales, purchases, stockItems, society } = useData();
+  const { sales, purchases, stockItems, customers, suppliers, society } = useData();
   const { user } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
@@ -52,6 +57,10 @@ export default function EWayBill() {
   const [transportMode, setTransportMode] = useState('Road');
   const [vehicleNo, setVehicleNo] = useState('');
   const [distance, setDistance] = useState('');
+  const [transporterName, setTransporterName] = useState('');
+  const [transporterGstin, setTransporterGstin] = useState('');
+  const [transDocNo, setTransDocNo] = useState('');
+  const [transDocDate, setTransDocDate] = useState('');
   const [generatedJson, setGeneratedJson] = useState<string>('');
 
   // Load from Supabase
@@ -87,6 +96,31 @@ export default function EWayBill() {
     const isSale = sourceType === 'sale';
     const s = doc as any;
 
+    // Resolve the CONSIGNEE from the linked master (customer for a sale, supplier
+    // for a purchase) — the sale/purchase row only stores the id + name.
+    const party = isSale
+      ? customers.find(c => c.id === s.customerId)
+      : suppliers.find(sp => sp.id === s.supplierId);
+    const toGstin = (party?.gstin || party?.gstNo || '').trim().toUpperCase() || 'URP';
+    const toTrdName = party?.name || (isSale ? s.customerName : s.supplierName) || '';
+    const toAddr1 = party?.addressLine1 || party?.address || '';
+    const toPinCode = (party?.pincode || '').trim();
+    const toStateCode = resolveStateCode(toGstin === 'URP' ? undefined : toGstin, party?.state || party?.placeOfSupply);
+    const fromStateCode = stateCodeFromGstin(society.gstin) || '09';
+
+    // ── Pre-generate validation: refuse to emit a JSON the portal will reject ──
+    const problems: string[] = [];
+    if (!society.gstin) problems.push(hi ? 'समिति का GSTIN (Society Setup में भरें)' : 'Society GSTIN (fill in Society Setup)');
+    if (!/^[0-9]{6}$/.test(toPinCode)) problems.push(hi ? 'प्राप्तकर्ता का 6-अंकीय पिन कोड (ग्राहक/आपूर्तिकर्ता मास्टर में)' : "recipient's 6-digit pincode (in customer/supplier master)");
+    if (!toStateCode) problems.push(hi ? 'प्राप्तकर्ता का राज्य (GSTIN या राज्य नाम)' : "recipient's state (GSTIN or state name)");
+    if (!toAddr1) problems.push(hi ? 'प्राप्तकर्ता का पता' : "recipient's address");
+    if (transportMode === 'Road' && !(parseInt(distance) > 0)) problems.push(hi ? 'दूरी (km) — सड़क परिवहन के लिए आवश्यक' : 'distance (km) — required for road');
+    if (transporterGstin && !stateCodeFromGstin(transporterGstin)) problems.push(hi ? 'ट्रांसपोर्टर GSTIN सही नहीं है' : 'transporter GSTIN is not valid');
+    if (problems.length > 0) {
+      toast({ title: hi ? 'e-Way Bill अधूरा है' : 'e-Way Bill is incomplete', description: (hi ? 'भरें: ' : 'Missing: ') + problems.join(' · '), variant: 'destructive', duration: 12000 });
+      return;
+    }
+
     const itemList = (s.items || []).map((item: any) => {
       const stockItem = stockItems.find(si => si.id === item.itemId);
       return {
@@ -106,12 +140,12 @@ export default function EWayBill() {
         fromTrdName: society.name,
         fromAddr1: society.address || '',
         fromPinCode: society.pinCode || '000000',
-        fromStateCode: (society.gstin || '').slice(0, 2) || '09',
-        toGstin: isSale ? (s.customerGst || 'URP') : (s.supplierGst || 'URP'),
-        toTrdName: isSale ? s.customerName : s.supplierName,
-        toAddr1: '',
-        toPinCode: '000000',
-        toStateCode: (society.gstin || '').slice(0, 2) || '09',
+        fromStateCode,
+        toGstin,
+        toTrdName,
+        toAddr1,
+        toPinCode,
+        toStateCode,
         transactionType: isSale ? 1 : 2,
         supplyType: isSale ? 'O' : 'I',
         subSupplyType: 1,
@@ -126,6 +160,10 @@ export default function EWayBill() {
         totInvValue: s.grandTotal,
         transMode: transportModes.indexOf(transportMode) + 1,
         transDistance: parseInt(distance) || 0,
+        transporterId: transporterGstin.trim().toUpperCase() || undefined,
+        transporterName: transporterName.trim() || undefined,
+        transDocNo: transDocNo.trim() || undefined,
+        transDocDate: transDocDate || undefined,
         vehicleNo: vehicleNo.toUpperCase(),
         vehicleType: 'R',
         itemList,
@@ -140,7 +178,8 @@ export default function EWayBill() {
       type: sourceType,
       docNo: isSale ? s.saleNo : s.purchaseNo,
       date: s.date,
-      partyName: isSale ? s.customerName : s.supplierName,
+      partyName: toTrdName,
+      partyGst: toGstin,
       items: itemList,
       totalTaxable: s.netAmount,
       totalGst: s.taxAmount,
@@ -148,6 +187,10 @@ export default function EWayBill() {
       transportMode,
       vehicleNo: vehicleNo.toUpperCase(),
       distance: parseInt(distance) || 0,
+      transporterName: transporterName.trim() || undefined,
+      transporterGstin: transporterGstin.trim().toUpperCase() || undefined,
+      transDocNo: transDocNo.trim() || undefined,
+      transDocDate: transDocDate || undefined,
       ewbNo: '',
       society_id: societyId,
     };
@@ -267,6 +310,22 @@ export default function EWayBill() {
               <div>
                 <Label>{hi ? 'दूरी (km)' : 'Distance (km)'}</Label>
                 <Input type="number" value={distance} onChange={e => setDistance(e.target.value)} placeholder="100" />
+              </div>
+              <div>
+                <Label>{hi ? 'ट्रांसपोर्टर नाम' : 'Transporter Name'}</Label>
+                <Input value={transporterName} onChange={e => setTransporterName(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} />
+              </div>
+              <div>
+                <Label>{hi ? 'ट्रांसपोर्टर GSTIN' : 'Transporter GSTIN'}</Label>
+                <Input value={transporterGstin} onChange={e => setTransporterGstin(e.target.value.toUpperCase())} placeholder="09ABCDE1234F1Z5" />
+              </div>
+              <div>
+                <Label>{hi ? 'ट्रांसपोर्ट दस्तावेज़ नं.' : 'Transport Doc No.'}</Label>
+                <Input value={transDocNo} onChange={e => setTransDocNo(e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} />
+              </div>
+              <div>
+                <Label>{hi ? 'ट्रांसपोर्ट दस्तावेज़ तिथि' : 'Transport Doc Date'}</Label>
+                <Input type="date" value={transDocDate} onChange={e => setTransDocDate(e.target.value)} />
               </div>
             </div>
 

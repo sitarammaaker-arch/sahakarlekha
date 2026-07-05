@@ -568,5 +568,23 @@ function resolveLinks(entries, links) {
   ok(after.find(e => e.id === 'pur-1').challanId === undefined, 'unlink removes the resolved challan');
 }
 
+// ── e-Way Bill: GST state-code resolution (recipient state for the NIC JSON) ──
+// Mirrors src/lib/gstStates.ts.
+const GST_STATE_CODES = { 'uttar pradesh': '09', 'maharashtra': '27', 'delhi': '07', 'tamil nadu': '33' };
+function stateCodeFromGstin(gstin) { const g = (gstin || '').trim().toUpperCase(); return /^[0-3][0-9][A-Z0-9]{13}$/.test(g) ? g.slice(0, 2) : ''; }
+function stateCodeFromName(name) { return GST_STATE_CODES[(name || '').trim().toLowerCase()] || ''; }
+function resolveStateCode(gstin, stateName) { return stateCodeFromGstin(gstin) || stateCodeFromName(stateName); }
+{
+  ok(stateCodeFromGstin('09ABCDE1234F1Z5') === '09', 'state code from a valid GSTIN prefix');
+  ok(stateCodeFromGstin('URP') === '' && stateCodeFromGstin('') === '', 'invalid/empty GSTIN → no state code');
+  ok(stateCodeFromName('Uttar Pradesh') === '09' && stateCodeFromName('uttar pradesh') === '09', 'state code from name (case-insensitive)');
+  ok(stateCodeFromName('Atlantis') === '', 'unknown state name → empty');
+  // registered recipient → GSTIN wins even if a (different) name is given
+  ok(resolveStateCode('27ABCDE1234F1Z5', 'Delhi') === '27', 'resolveStateCode: GSTIN prefix wins for registered party');
+  // unregistered (URP) recipient → fall back to the state name
+  ok(resolveStateCode(undefined, 'Tamil Nadu') === '33', 'resolveStateCode: falls back to state name when unregistered');
+  ok(resolveStateCode(undefined, undefined) === '', 'resolveStateCode: nothing resolvable → empty (caller flags missing)');
+}
+
 console.log(`\nConsumer full-suite: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

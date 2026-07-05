@@ -2575,3 +2575,12 @@ drop policy if exists "society_rw" on public.tds_challan_links;
 create policy "society_rw" on public.tds_challan_links for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+
+-- ── e-Way Bill — transporter details (additive; makes the NIC JSON portal-valid) ──
+-- Consignee (to*) is re-resolved live from the customer/supplier master, so only
+-- the manually-entered transporter fields need persisting on the saved bill.
+alter table eway_bills add column if not exists "partyGst" text;
+alter table eway_bills add column if not exists "transporterName" text;
+alter table eway_bills add column if not exists "transporterGstin" text;
+alter table eway_bills add column if not exists "transDocNo" text;
+alter table eway_bills add column if not exists "transDocDate" text;
