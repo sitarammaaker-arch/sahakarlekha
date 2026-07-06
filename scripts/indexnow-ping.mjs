@@ -42,7 +42,10 @@ if (!urlList.length) {
   process.exit(1);
 }
 
-const res = await fetch('https://api.indexnow.org/indexnow', {
+// bing.com/indexnow propagates to ALL IndexNow engines; api.indexnow.org was
+// observed caching a negative key-validation (403) from before the key file
+// deployed, while Bing validated fine.
+const res = await fetch('https://www.bing.com/indexnow', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json; charset=utf-8' },
   body: JSON.stringify({ host: HOST, key: KEY, keyLocation: `${SITE}/${KEY}.txt`, urlList }),
