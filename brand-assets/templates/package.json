@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "gen": "node gen/gen-social.mjs",
-    "gen:deck": "node gen/gen-deck.mjs"
+    "gen:deck": "node gen/gen-deck.mjs",
+    "gen:youtube": "node gen/gen-youtube.mjs"
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
