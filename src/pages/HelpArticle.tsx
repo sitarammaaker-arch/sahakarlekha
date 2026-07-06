@@ -16,6 +16,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { trackEvent } from '@/lib/analytics';
 import { findHelpTask, relatedHelpTasks } from '@/content/help';
 import { findEntry } from '@/content/guide';
+import { cookbookForHelp } from '@/content/relatedContent';
+import { COOKBOOK_ENTRIES } from '@/content/cookbook';
 import { Home, ChevronRight, Clock, BarChart3, ArrowRight, BookOpen, AlertTriangle, ListChecks } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
@@ -74,6 +76,10 @@ const HelpArticle: React.FC = () => {
   const guide = task.guideSlug ? findEntry(task.guideSlug) : null;
   const related = relatedHelpTasks(slug);
   const ctaTo = isAuthenticated ? task.deepLink.route : `/register?next=${encodeURIComponent(task.deepLink.route)}`;
+  // GOS-11: task → the journal entry it produces (cookbook edge)
+  const cookbookLinks = cookbookForHelp(slug)
+    .map((s) => COOKBOOK_ENTRIES.find((e) => e.slug === s))
+    .filter((e): e is NonNullable<typeof e> => e != null);
 
   return (
     <PublicLayout>
@@ -167,6 +173,25 @@ const HelpArticle: React.FC = () => {
               </CardContent>
             </Card>
           </Link>
+        )}
+
+        {/* Cookbook edge: which journal entries this task creates (GOS-11) */}
+        {cookbookLinks.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-sm font-semibold text-foreground mb-3">📒 इससे जुड़ी entries (कुकबुक)</h2>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {cookbookLinks.map((e) => (
+                <Link key={e.slug} to={`/cookbook/${e.slug}`} className="block">
+                  <Card className="hover:border-primary/40 hover:bg-primary/5 transition-colors">
+                    <CardContent className="p-4">
+                      <p className="font-medium text-foreground flex items-center gap-1">{e.title} <ArrowRight className="h-3.5 w-3.5 text-primary" /></p>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{e.scenario}</p>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Was this helpful? */}

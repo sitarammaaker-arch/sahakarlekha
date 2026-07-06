@@ -12,6 +12,7 @@
     "validate:glossary": "node scripts/validate-glossary.mjs",
     "test:calc": "node scripts/test-calculators.mjs",
     "test:nav": "node scripts/test-nav.mjs",
+    "test:related": "node scripts/test-related.mjs",
     "test:accounting": "node scripts/test-accounting.mjs",
     "test:procurement": "node scripts/test-procurement.mjs",
     "test:housing": "node scripts/test-housing.mjs",

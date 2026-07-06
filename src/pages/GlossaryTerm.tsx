@@ -15,6 +15,7 @@ import HelpfulWidget from '@/components/HelpfulWidget';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findTerm, learningPath, allGlossary } from '@/content/glossary';
 import { calculatorsForGlossary } from '@/content/calculators';
+import { blogForGlossary } from '@/content/relatedContent';
 import {
   Home, ChevronRight, BookOpen, ArrowRight, Lightbulb, AlertTriangle, Link2,
   GraduationCap, MonitorPlay, FileText, ShieldCheck, Languages, Compass, Calculator as CalcIcon,
@@ -87,6 +88,7 @@ const GlossaryTerm: React.FC = () => {
   const path = learningPath(slug);
   const internalNonModule = term.internalLinks.filter((l) => !term.modules.includes(l));
   const calcs = calculatorsForGlossary(slug);
+  const pairedBlog = blogForGlossary(slug); // GOS-11: definition → narrative deep-dive
 
   return (
     <PublicLayout>
@@ -199,6 +201,18 @@ const GlossaryTerm: React.FC = () => {
               ))}
             </div>
           </Field>
+        )}
+
+        {/* Paired narrative article (GOS-11: glossary → blog edge) */}
+        {pairedBlog && (
+          <Link to={`/blog/${pairedBlog.slug}`} className="mt-7 block">
+            <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors">
+              <CardContent className="p-5">
+                <p className="text-xs font-semibold text-primary uppercase tracking-wide">📝 पूरा लेख पढ़ें · ब्लॉग</p>
+                <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{pairedBlog.title} <ArrowRight className="h-4 w-4" /></p>
+              </CardContent>
+            </Card>
+          </Link>
         )}
 
         {/* Related knowledge: guide/blog/faq (only real, navigable links — no dead "coming soon") */}

@@ -16,6 +16,8 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findPost, loadBlogRaw, readingMinutes, relatedPosts, publishedOrder, isPublished } from '@/content/blog';
 import { guideForBlog } from '@/content/crossLinks';
 import { calculatorForArticle } from '@/content/calculators';
+import { helpForBlog } from '@/content/relatedContent';
+import { HELP_TASKS } from '@/content/help';
 import { ACCENTS, formatDate } from '@/components/blog/blogTheme';
 import {
   Home, ChevronRight, ChevronLeft, Calendar, Clock, List, ArrowRight,
@@ -139,6 +141,10 @@ const BlogPost: React.FC = () => {
   const related = relatedPosts(slug, 3);
   const deepGuide = guideForBlog(slug);
   const pairedCalc = calculatorForArticle(slug);
+  // GOS-11: narrative → task edge ("पढ़ा, अब करें") — the help layer converts.
+  const helpTasks = helpForBlog(slug)
+    .map((s) => HELP_TASKS.find((t) => t.slug === s))
+    .filter((t): t is NonNullable<typeof t> => t != null);
   const pub = publishedOrder();
   const idx = pub.findIndex((p) => p.slug === slug);
   const prev = idx > 0 ? pub[idx - 1] : null;
@@ -171,11 +177,12 @@ const BlogPost: React.FC = () => {
           <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight mt-4">{post.title}</h1>
           <p className="text-white/90 text-lg mt-4 max-w-2xl">{post.excerpt}</p>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-white/85 mt-6">
-            <span className="inline-flex items-center gap-1.5 font-medium">
+            <Link to="/about" className="inline-flex items-center gap-1.5 font-medium hover:text-white underline-offset-2 hover:underline">
               <span className="h-7 w-7 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">स</span>
               SahakarLekha टीम
-            </span>
+            </Link>
             <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" /> {formatDate(post.date)}</span>
+            {post.updated && <span className="inline-flex items-center gap-1">अपडेट: {formatDate(post.updated)}</span>}
             <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4" /> {readingMinutes(slug)} मिनट</span>
           </div>
         </div>
@@ -220,6 +227,23 @@ const BlogPost: React.FC = () => {
                   </CardContent>
                 </Card>
               </Link>
+            )}
+
+            {/* Task-layer edge: do it now in the Help Center (GOS-11) */}
+            {helpTasks.length > 0 && (
+              <div className="mt-6 grid sm:grid-cols-2 gap-3">
+                {helpTasks.map((t) => (
+                  <Link key={t.slug} to={`/help/${t.slug}`} className="block">
+                    <Card className="h-full border-emerald-300/50 bg-emerald-50 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-950/40 transition-colors">
+                      <CardContent className="p-5">
+                        <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">📋 अभी करें · मदद केंद्र</p>
+                        <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{t.title} <ArrowRight className="h-4 w-4" /></p>
+                        <p className="text-xs text-muted-foreground mt-1">{t.estTime} · स्टेप-बाय-स्टेप</p>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
             )}
 
             {/* Inline CTA */}

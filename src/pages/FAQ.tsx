@@ -111,11 +111,18 @@ const FAQ: React.FC = () => {
             <br />
             Get in touch — we are here to help.
           </p>
-          <Link to="/contact">
-            <Button size="lg" variant="secondary" className="gap-2">
-              संपर्क करें / Contact Us <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+          <div className="flex flex-wrap justify-center gap-3">
+            <Link to="/register">
+              <Button size="lg" variant="secondary" className="gap-2">
+                मुफ्त रजिस्टर करें / Start Free <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Link to="/contact">
+              <Button size="lg" variant="outline" className="gap-2 bg-transparent text-white border-white/60 hover:bg-white/10 hover:text-white">
+                संपर्क करें / Contact Us <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
         </div>
       </section>
     </PublicLayout>

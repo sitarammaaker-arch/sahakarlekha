@@ -14,6 +14,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { trackEvent } from '@/lib/analytics';
 import { findCookbookEntry, relatedCookbookEntries } from '@/content/cookbook';
 import { findEntry } from '@/content/guide';
+import { helpForCookbook } from '@/content/relatedContent';
+import { HELP_TASKS } from '@/content/help';
 import { Home, ChevronRight, ArrowRight, BookOpen, AlertTriangle } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
@@ -55,6 +57,10 @@ const CookbookEntry: React.FC = () => {
 
   const guide = entry.guideSlug ? findEntry(entry.guideSlug) : null;
   const related = relatedCookbookEntries(slug);
+  // GOS-11: reverse edge — the help task(s) whose flow produces this entry
+  const helpTasks = helpForCookbook(slug)
+    .map((s) => HELP_TASKS.find((t) => t.slug === s))
+    .filter((t): t is NonNullable<typeof t> => t != null);
   const ctaTo = entry.deepLink
     ? (isAuthenticated ? entry.deepLink.route : `/register?next=${encodeURIComponent(entry.deepLink.route)}`)
     : null;
@@ -137,6 +143,22 @@ const CookbookEntry: React.FC = () => {
               </CardContent>
             </Card>
           </Link>
+        )}
+
+        {/* Help edge: the step-by-step task behind this entry (GOS-11) */}
+        {helpTasks.length > 0 && (
+          <div className="mt-6 grid sm:grid-cols-2 gap-3">
+            {helpTasks.map((t) => (
+              <Link key={t.slug} to={`/help/${t.slug}`} className="block">
+                <Card className="border-emerald-300/50 bg-emerald-50 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-950/40 transition-colors">
+                  <CardContent className="p-4">
+                    <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">📋 स्टेप-बाय-स्टेप · मदद केंद्र</p>
+                    <p className="font-medium text-foreground mt-1 flex items-center gap-1">{t.title} <ArrowRight className="h-3.5 w-3.5" /></p>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
         )}
 
         <div className="mt-8"><HelpfulWidget /></div>

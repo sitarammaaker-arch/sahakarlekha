@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { SOCIETY_TYPES, findSocietyType } from '@/content/societyTypes';
 import { STATES } from '@/content/states';
+import { contentForSociety } from '@/content/relatedContent';
+import RelatedKnowledge from '@/components/RelatedKnowledge';
 import { ArrowRight, CheckCircle2, AlertTriangle, GraduationCap, ShieldCheck, Home } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
@@ -183,6 +185,9 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> हिंदी + English</span>
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> 100% मुफ़्त</span>
         </div>
+
+        {/* Knowledge-graph edges: type-specific guide/blog/help/cookbook (GOS-11) */}
+        <RelatedKnowledge links={contentForSociety(data.slug)} heading={`${data.nameHi} के लिए और सीखें`} />
 
         {/* English SEO paragraph */}
         <p className="mt-8 text-sm text-muted-foreground leading-relaxed border-t pt-6">{data.seoEn}</p>

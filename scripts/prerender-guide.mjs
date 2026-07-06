@@ -42,6 +42,7 @@ const COOKBOOK_FILE = resolve(ROOT, 'src', 'content', 'cookbook', 'index.ts');
 const GLOSSARY_DIR = resolve(ROOT, 'docs', 'kpp', 'wave-1-active');
 const CALC_FILE = resolve(ROOT, 'src', 'content', 'calculators', 'index.ts');
 const FAQ_FILE = resolve(ROOT, 'src', 'content', 'faq.ts');
+const RELATED_FILE = resolve(ROOT, 'src', 'content', 'relatedContent.ts');
 const COURSE = 'सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स';
 
 // Honest per-surface "content last changed" dates. These change ONLY when the
@@ -111,6 +112,23 @@ function shell({ crumbs = [], current = '', html }) {
 const registerCta = (next) =>
   `<p style="margin-top:24px"><a href="/register${next ? `?next=${encodeURIComponent(next)}` : ''}"><strong>अपनी समिति का खाता मुफ्त में डिजिटल कीजिए — रजिस्टर करें →</strong></a></p>`;
 
+/** GOS-11: render a SurfaceLinks bundle ({guide/blog: Refs, help/cookbook: slugs}) as an "और सीखें" block. */
+function surfaceLinksHtml(links, DATA, heading = 'और सीखें') {
+  if (!links) return '';
+  const parts = [];
+  for (const r of links.guide || []) parts.push(`<a href="/guide/${r.slug}">${esc(r.title)}</a>`);
+  for (const r of links.blog || []) parts.push(`<a href="/blog/${r.slug}">${esc(r.title)}</a>`);
+  for (const s of links.help || []) {
+    const t = (DATA.help || []).find((x) => x.slug === s);
+    if (t) parts.push(`<a href="/help/${s}">${esc(t.title)}</a>`);
+  }
+  for (const s of links.cookbook || []) {
+    const e = (DATA.cookbook || []).find((x) => x.slug === s);
+    if (e) parts.push(`<a href="/cookbook/${s}">${esc(e.title)}</a>`);
+  }
+  return parts.length ? `<h2>${esc(heading)}</h2><p>${parts.join(' · ')}</p>` : '';
+}
+
 /* ---------------- registry data via esbuild (pure-data TS modules) ---------------- */
 
 async function loadModule(entry) {
@@ -140,12 +158,13 @@ async function loadData() {
     ['faq', FAQ_FILE, 'FAQ_CATEGORIES'],
     ['society', SOCIETY_TYPES, 'SOCIETY_TYPES'],
     ['states', STATES_FILE, 'STATES'],
+    ['rel', RELATED_FILE, null], // whole module (edge maps + helpers), GOS-11
   ];
   for (const [key, file, exportName] of jobs) {
     try {
       if (!existsSync(file)) { data[key] = null; continue; }
       const mod = await loadModule(file);
-      data[key] = mod[exportName] || null;
+      data[key] = exportName ? (mod[exportName] || null) : mod;
       if (!data[key]) console.warn(`[prerender] ${exportName} not found in ${basename(file)} — bodies skipped for that surface.`);
     } catch (e) {
       data[key] = null;
@@ -284,6 +303,7 @@ function softwarePages(DATA) {
               (t.painsHi && t.painsHi.length ? `<h2>आम चुनौतियाँ</h2><ul>${t.painsHi.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : '') +
               (t.solvesHi && t.solvesHi.length ? `<h2>SahakarLekha कैसे मदद करता है</h2><ul>${t.solvesHi.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : '') +
               (t.seoEn ? `<p lang="en">${esc(t.seoEn)}</p>` : '') +
+              surfaceLinksHtml(DATA.rel && DATA.rel.SOCIETY_CONTENT && DATA.rel.SOCIETY_CONTENT[slug], DATA, `${t.nameHi} के लिए और सीखें`) +
               `<p><a href="/guide">मुफ़्त गाइड से सीखें</a> · <a href="/software">सभी समिति-प्रकार देखें</a></p>` +
               registerCta(),
           })
@@ -332,6 +352,7 @@ function statePages(DATA) {
                 : '') +
               (s.compliance && s.compliance.length ? `<h2>अनुपालन</h2><ul>${s.compliance.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : '') +
               (s.seoEn ? `<p lang="en">${esc(s.seoEn)}</p>` : '') +
+              surfaceLinksHtml(DATA.rel && DATA.rel.STATE_CONTENT && DATA.rel.STATE_CONTENT[slug], DATA, `${s.nameHi} की समितियों के लिए और सीखें`) +
               `<p><a href="/software">सभी समिति-प्रकार</a> · <a href="/guide">मुफ़्त गाइड</a></p>` +
               registerCta(),
           })
@@ -354,7 +375,7 @@ function statePages(DATA) {
 
 /* ---------------- blog routes (regex meta + .md body; can't esbuild-load) ---------------- */
 
-function blogPages() {
+function blogPages(DATA) {
   const posts = [];
   if (existsSync(BLOG_FILE)) {
     const src = readFileSync(BLOG_FILE, 'utf-8');
@@ -394,10 +415,13 @@ function blogPages() {
     try {
       const mdFile = resolve(BLOG_DIR, `${p.slug}.md`);
       if (existsSync(mdFile)) {
+        // GOS-11: narrative → task edge into the static body too
+        const helpSlugs = (DATA.rel && DATA.rel.BLOG_HELP && DATA.rel.BLOG_HELP[p.slug]) || [];
+        const helpLinks = surfaceLinksHtml({ help: helpSlugs }, DATA, 'अभी करें (मदद केंद्र)');
         body = shell({
           crumbs: [['/blog', 'ब्लॉग']],
           current: p.title,
-          html: md(readFileSync(mdFile, 'utf-8')) + registerCta(),
+          html: md(readFileSync(mdFile, 'utf-8')) + helpLinks + registerCta(),
         });
       }
     } catch { /* body optional */ }
@@ -433,7 +457,8 @@ function blogPages() {
 
 /* ---------------- help routes (regex meta + registry-data body) ---------------- */
 
-function helpBody(t) {
+function helpBody(t, DATA) {
+  const cookbookSlugs = (DATA.rel && DATA.rel.HELP_COOKBOOK && DATA.rel.HELP_COOKBOOK[t.slug]) || [];
   return shell({
     crumbs: [['/help', 'मदद केंद्र']],
     current: t.title,
@@ -450,6 +475,7 @@ function helpBody(t) {
       (t.faqs && t.faqs.length
         ? `<h2>अक्सर पूछे जाने वाले प्रश्न</h2>` + t.faqs.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join('') : '') +
       (t.guideSlug ? `<p>पूरा समझें: <a href="/guide/${t.guideSlug}">गहराई से गाइड अध्याय</a></p>` : '') +
+      surfaceLinksHtml({ cookbook: cookbookSlugs }, DATA, 'इससे जुड़ी entries (कुकबुक)') +
       (t.related && t.related.length
         ? `<p>जुड़े काम: ${t.related.map((r) => `<a href="/help/${r}">${r.replace(/-/g, ' ')}</a>`).join(' · ')}</p>` : '') +
       registerCta(t.deepLink && t.deepLink.route),
@@ -500,7 +526,7 @@ function helpPages(DATA) {
         title,
         description,
         lastmod: (t && t.updated) || LASTMOD.help,
-        body: t ? helpBody(t) : undefined,
+        body: t ? helpBody(t, DATA) : undefined,
         jsonLd: [
           { '@context': 'https://schema.org', '@type': 'Article', headline: title, description, inLanguage: 'hi', url, publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE } },
           crumb([
@@ -516,7 +542,8 @@ function helpPages(DATA) {
 
 /* ---------------- cookbook routes (regex meta + registry-data body) ---------------- */
 
-function cookbookBody(e) {
+function cookbookBody(e, DATA) {
+  const helpSlugs = (DATA.rel && DATA.rel.helpForCookbook) ? DATA.rel.helpForCookbook(e.slug) : [];
   return shell({
     crumbs: [['/cookbook', 'एंट्री कुकबुक']],
     current: e.title,
@@ -532,6 +559,7 @@ function cookbookBody(e) {
       (e.narration ? `<p><strong>विवरण (Narration):</strong> ${esc(e.narration)}</p>` : '') +
       (e.notes && e.notes.length ? `<h2>ध्यान रखें</h2><ul>${e.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : '') +
       (e.guideSlug ? `<p>पूरा समझें: <a href="/guide/${e.guideSlug}">गाइड अध्याय</a></p>` : '') +
+      surfaceLinksHtml({ help: helpSlugs }, DATA, 'स्टेप-बाय-स्टेप (मदद केंद्र)') +
       (e.related && e.related.length
         ? `<p>जुड़ी एंट्रियाँ: ${e.related.map((r) => `<a href="/cookbook/${r}">${r.replace(/-/g, ' ')}</a>`).join(' · ')}</p>` : '') +
       registerCta(e.deepLink && e.deepLink.route),
@@ -582,7 +610,7 @@ function cookbookPages(DATA) {
         title,
         description,
         lastmod: (e && e.updated) || LASTMOD.cookbook,
-        body: e ? cookbookBody(e) : undefined,
+        body: e ? cookbookBody(e, DATA) : undefined,
         jsonLd: [
           { '@context': 'https://schema.org', '@type': 'Article', headline: title, description, inLanguage: 'hi', url, publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE } },
           crumb([
@@ -619,7 +647,7 @@ const kiPlain = (s) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-function glossaryPages() {
+function glossaryPages(DATA) {
   const pages = [
     {
       path: '/glossary',
@@ -699,6 +727,11 @@ function glossaryPages() {
           (s['common misconceptions'] ? `<h2>आम गलतफ़हमियाँ</h2>${md(s['common misconceptions'].replace(/\[\[[^\]]*\]\]/g, ''))}` : '') +
           (s['learning objectives'] ? `<h2>सीखने के लक्ष्य</h2>${md(s['learning objectives'].replace(/\[\[[^\]]*\]\]/g, ''))}` : '') +
           (related.length ? `<h2>जुड़े विषय</h2><p>${related.join(' · ')}</p>` : '') +
+          (() => {
+            // GOS-11: definition → narrative edge in the static body too
+            const pb = DATA.rel && DATA.rel.GLOSSARY_BLOG && DATA.rel.GLOSSARY_BLOG[t.slug];
+            return pb ? `<p>पूरा लेख पढ़ें: <a href="/blog/${pb.slug}">${esc(pb.title)}</a></p>` : '';
+          })() +
           (internalLinks.length ? `<p>और पढ़ें: ${internalLinks.map((l) => `<a href="${l}">${l}</a>`).join(' · ')}</p>` : '') +
           registerCta(),
       }),
@@ -720,7 +753,8 @@ function glossaryPages() {
 
 /* ---------------- calculator routes (regex meta + registry-data body) ---------------- */
 
-function calcBody(c) {
+function calcBody(c, DATA) {
+  const cookbookSlugs = (DATA.rel && DATA.rel.CALC_COOKBOOK && DATA.rel.CALC_COOKBOOK[c.slug]) || [];
   return shell({
     crumbs: [['/tools', 'कैलकुलेटर']],
     current: c.hindiName,
@@ -734,6 +768,7 @@ function calcBody(c) {
       (c.mistakes ? `<h2>आम गलतियाँ</h2>${md(c.mistakes)}` : '') +
       (c.faqs && c.faqs.length
         ? `<h2>अक्सर पूछे जाने वाले प्रश्न</h2>` + c.faqs.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join('') : '') +
+      surfaceLinksHtml({ cookbook: cookbookSlugs }, DATA, 'एंट्री कैसे दर्ज करें (कुकबुक)') +
       (c.relatedGlossary && c.relatedGlossary.length
         ? `<p>जुड़े शब्द: ${c.relatedGlossary.map((g) => `<a href="/glossary/${g}">${g.replace(/-/g, ' ')}</a>`).join(' · ')}</p>` : '') +
       (c.relatedArticles && c.relatedArticles.length
@@ -779,7 +814,7 @@ function calculatorPages(DATA) {
         title,
         description,
         lastmod: (c && c.updated) || LASTMOD.calc,
-        body: c ? calcBody(c) : undefined,
+        body: c ? calcBody(c, DATA) : undefined,
         jsonLd: [
           {
             '@context': 'https://schema.org', '@type': 'WebApplication', name: title, description,
@@ -977,7 +1012,7 @@ try {
   const template = readFileSync(TEMPLATE, 'utf-8');
   const DATA = await loadData();
 
-  const blog = blogPages();
+  const blog = blogPages(DATA);
   const pages = [
     ...guidePages(),
     ...softwarePages(DATA),
@@ -985,7 +1020,7 @@ try {
     ...blog,
     ...helpPages(DATA),
     ...cookbookPages(DATA),
-    ...glossaryPages(),
+    ...glossaryPages(DATA),
     ...calculatorPages(DATA),
     ...staticExtraPages(DATA),
   ];

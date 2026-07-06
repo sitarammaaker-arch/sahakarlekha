@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findState } from '@/content/states';
 import { SOCIETY_TYPES } from '@/content/societyTypes';
+import { contentForState } from '@/content/relatedContent';
+import RelatedKnowledge from '@/components/RelatedKnowledge';
 import { ArrowRight, CheckCircle2, GraduationCap, ShieldCheck, Home, Scale } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
@@ -20,11 +22,9 @@ const StateLanding: React.FC = () => {
   const { state } = useParams();
   const data = state ? findState(state) : null;
 
-  // Unknown / missing state → send to the software hub.
-  if (!data) return <Navigate to="/software" replace />;
-
-  const path = `/cooperative-software/${data.slug}`;
-  useDocumentMeta({
+  const path = data ? `/cooperative-software/${data.slug}` : '';
+  // Hook must run unconditionally (rules-of-hooks) — all fields are undefined-safe.
+  useDocumentMeta(data ? {
     title: data.metaTitle,
     description: data.metaDescription,
     canonicalPath: path,
@@ -51,7 +51,10 @@ const StateLanding: React.FC = () => {
         ],
       },
     },
-  });
+  } : {});
+
+  // Unknown / missing state → send to the software hub.
+  if (!data) return <Navigate to="/software" replace />;
 
   return (
     <PublicLayout>
@@ -116,6 +119,9 @@ const StateLanding: React.FC = () => {
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> हिंदी + English</span>
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> 100% मुफ़्त</span>
         </div>
+
+        {/* Knowledge-graph edges: state-specific guide/blog/cookbook (GOS-11) */}
+        <RelatedKnowledge links={contentForState(data.slug)} heading={`${data.nameHi} की समितियों के लिए और सीखें`} />
 
         {/* English SEO paragraph */}
         <p className="mt-8 text-sm text-muted-foreground leading-relaxed border-t pt-6">{data.seoEn}</p>

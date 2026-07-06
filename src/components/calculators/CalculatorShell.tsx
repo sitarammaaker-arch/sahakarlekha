@@ -17,6 +17,8 @@ import HelpfulWidget from '@/components/HelpfulWidget';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findTerm } from '@/content/glossary';
 import { relatedCalculators, type CalcConfig } from '@/content/calculators';
+import { cookbookForCalc } from '@/content/relatedContent';
+import { COOKBOOK_ENTRIES } from '@/content/cookbook';
 import {
   Home, ChevronRight, Calculator as CalcIcon, ArrowRight, Sigma, BookOpen, Lightbulb,
   AlertTriangle, Link2, FileText, MonitorPlay, Printer, ShieldCheck, GraduationCap, HelpCircle,
@@ -273,6 +275,30 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
             </div>
           </Section>
         )}
+
+        {/* Cookbook edge: how to RECORD what this calculator computes (GOS-11) */}
+        {(() => {
+          const entries = cookbookForCalc(config.slug)
+            .map((s) => COOKBOOK_ENTRIES.find((e) => e.slug === s))
+            .filter((e): e is NonNullable<typeof e> => e != null);
+          if (!entries.length) return null;
+          return (
+            <Section icon={<BookOpen className="h-4 w-4 text-amber-600" />} title="एंट्री कैसे दर्ज करें (कुकबुक)">
+              <div className="grid sm:grid-cols-2 gap-3">
+                {entries.map((e) => (
+                  <Link key={e.slug} to={`/cookbook/${e.slug}`} className="block">
+                    <Card className="hover:border-primary/40 hover:bg-primary/5 transition-colors">
+                      <CardContent className="p-4">
+                        <p className="font-medium text-foreground flex items-center gap-1">{e.title} <ArrowRight className="h-3.5 w-3.5 text-primary" /></p>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{e.scenario}</p>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            </Section>
+          );
+        })()}
 
         {/* Related articles + help */}
         {(config.relatedArticles.length > 0 || (config.relatedHelp && config.relatedHelp.length > 0)) && (

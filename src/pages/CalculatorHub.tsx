@@ -6,6 +6,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { CALCULATORS } from '@/content/calculators';
@@ -92,6 +93,20 @@ const CalculatorHub: React.FC = () => {
             </Link>
           ))}
         </div>
+
+        {/* Register CTA (GOS-12) */}
+        <Card className="mt-10 bg-primary/5 border-primary/20">
+          <CardContent className="p-6 text-center">
+            <p className="font-bold text-lg text-foreground">गणना से आगे — पूरा हिसाब अपने-आप</p>
+            <p className="text-sm text-muted-foreground mt-1 max-w-xl mx-auto">
+              SahakarLekha में ब्याज, डेप्रिसिएशन, GST/TDS की गणना एंट्री के साथ अपने-आप होती है — बिल्कुल मुफ्त।
+            </p>
+            <div className="flex flex-wrap gap-3 justify-center mt-4">
+              <Link to="/register"><Button className="gap-2">मुफ्त रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
+              <Link to="/cookbook"><Button variant="outline">एंट्री कुकबुक देखें</Button></Link>
+            </div>
+          </CardContent>
+        </Card>
       </main>
     </PublicLayout>
   );
