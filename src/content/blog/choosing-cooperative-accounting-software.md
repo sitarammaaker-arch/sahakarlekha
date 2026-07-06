@@ -30,7 +30,7 @@
 **क्या कोई भी अकाउंटिंग सॉफ्टवेयर चलेगा?** — सहकारी ज़रूरतें (सदस्य/शेयर/ऑडिट) खास हैं; सामान्य टूल पूरा फिट नहीं।
 **क्या महँगा सॉफ्टवेयर बेहतर होता है?** — नहीं; फिट व आसानी ज़्यादा मायने रखती है (अच्छे विकल्प मुफ्त भी)।
 
-**जुड़े शब्द:** [लेखा सॉफ्टवेयर कैसे चुनें](/glossary/choosing-accounting-software) · [क्लाउड लेखांकन](/glossary/cloud-accounting) · [SaaS](/glossary/saas) · [डेटा बैकअप](/glossary/data-backup) · [डिजिटल क्यों](/glossary/why-go-digital)
+**जुड़े शब्द:** [लेखा सॉफ्टवेयर कैसे चुनें](/glossary/choosing-software) · [क्लाउड लेखांकन](/glossary/cloud-accounting) · [SaaS](/glossary/saas) · [डेटा बैकअप](/glossary/data-backup) · [डिजिटल क्यों](/glossary/why-go-digital)
 
 ## तीन बातें याद रखें
 - 🎯 समितियों के लिए ही बना टूल चुनें।

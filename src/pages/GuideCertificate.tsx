@@ -18,6 +18,7 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { makeCertNumber, formatCertDate } from '@/lib/guideCertId';
 import RatingWidget from '@/components/RatingWidget';
 import { supabase } from '@/lib/supabase';
+import { trackEvent } from '@/lib/analytics';
 import { Award, Printer, CheckCircle2, Circle, ArrowRight, Home, ChevronRight, ShieldCheck, Pencil, Loader2, Download, MessageCircle } from 'lucide-react';
 
 const NAME_KEY = 'sl_guide_name';
@@ -119,6 +120,8 @@ const GuideCertificate: React.FC = () => {
     lsSet(CLAIMED_KEY, '1');
     setClaimed(true);
     setSubmitting(false);
+    // GOS-20: course-completion conversion (count only, no holder details).
+    trackEvent('certificate_earned', { parts: total });
   };
 
   const handleDownloadPdf = async () => {

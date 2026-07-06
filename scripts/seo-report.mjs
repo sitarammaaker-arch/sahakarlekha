@@ -1,0 +1,139 @@
+// GOS-22 — Indexability Priority Queue. Turns the built site (+ an optional GSC
+// performance export) into an actionable weekly report:
+//   npm run build   (dist must exist)
+//   npm run seo:report
+// Optional GSC join: export Search Console → Performance → Pages as CSV and save
+// it to docs/gos/gsc/pages.csv (columns: Page/URL, Clicks, Impressions, CTR, Position).
+// Output: docs/gos/reports/seo-report-<date>.md
+//
+// Signals per page (all computed from dist — the exact HTML crawlers see):
+//   inlinks   — internal <a href> pointing at the page from OTHER prerendered bodies
+//   words     — visible text length of the static body
+//   lastmod   — from the generated child sitemaps
+//   clicks/impressions/position — from the GSC CSV when present
+// Risk score = thin content + few inlinks (+ zero impressions when GSC data exists).
+
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, statSync } from 'node:fs';
+import { dirname, resolve, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const DIST = resolve(ROOT, 'dist');
+const SITE = 'https://sahakarlekha.com';
+const GSC_CSV = resolve(ROOT, 'docs', 'gos', 'gsc', 'pages.csv');
+const OUT_DIR = resolve(ROOT, 'docs', 'gos', 'reports');
+
+if (!existsSync(DIST)) {
+  console.error('[seo-report] dist/ not found — run `npm run build` first.');
+  process.exit(1);
+}
+
+/* ---- 1. page inventory from the generated child sitemaps ---- */
+const pages = new Map(); // path -> { lastmod, priority }
+for (const f of readdirSync(DIST).filter((f) => /^sitemap-.*\.xml$/.test(f))) {
+  const xml = readFileSync(resolve(DIST, f), 'utf-8');
+  for (const m of xml.matchAll(/<url>\s*<loc>([^<]+)<\/loc>\s*<lastmod>([^<]+)<\/lastmod>[\s\S]*?<priority>([^<]+)<\/priority>/g)) {
+    const path = m[1].replace(SITE, '') || '/';
+    pages.set(path, { lastmod: m[2], priority: parseFloat(m[3]), inlinks: 0, words: 0 });
+  }
+}
+
+/* ---- 2. body text + internal-link graph from prerendered HTML ---- */
+function* htmlFiles(dir) {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    if (e.isDirectory() && e.name !== 'assets') yield* htmlFiles(p);
+    else if (e.name === 'index.html') yield p;
+  }
+}
+const bodyOf = (html) => {
+  const i = html.indexOf('<div id="root">');
+  if (i < 0) return '';
+  const j = html.indexOf('<script type="module"', i);
+  return html.slice(i, j > i ? j : undefined);
+};
+for (const file of htmlFiles(DIST)) {
+  const from = '/' + file.slice(DIST.length + 1).replace(/[\\/]index\.html$/, '').replace(/\\/g, '/');
+  const fromPath = from === '/index.html' ? '/' : from;
+  const body = bodyOf(readFileSync(file, 'utf-8'));
+  if (!body) continue;
+  const words = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().split(' ').length;
+  if (pages.has(fromPath)) pages.get(fromPath).words = words;
+  for (const m of body.matchAll(/<a[^>]+href="(\/[^"#?]*)/g)) {
+    const to = m[1].replace(/\/$/, '') || '/';
+    if (to !== fromPath && pages.has(to)) pages.get(to).inlinks++;
+  }
+}
+
+/* ---- 3. optional GSC performance join ---- */
+let gsc = null;
+if (existsSync(GSC_CSV)) {
+  gsc = new Map();
+  const lines = readFileSync(GSC_CSV, 'utf-8').split(/\r?\n/).filter(Boolean);
+  for (const line of lines.slice(1)) {
+    // naive CSV: URL never contains a comma on this export
+    const [url, clicks, impressions, ctr, position] = line.split(',');
+    if (!url || !url.startsWith('http')) continue;
+    gsc.set(url.replace(SITE, '') || '/', {
+      clicks: +clicks || 0, impressions: +impressions || 0,
+      ctr: ctr || '', position: parseFloat(position) || 0,
+    });
+  }
+}
+
+/* ---- 4. score + report ---- */
+const rows = [...pages.entries()].map(([path, p]) => {
+  const g = gsc ? gsc.get(path) : null;
+  let risk = 0;
+  const why = [];
+  if (p.words < 150) { risk += 3; why.push('thin'); }
+  else if (p.words < 300) { risk += 1; why.push('short'); }
+  if (p.inlinks === 0) { risk += 3; why.push('orphan'); }
+  else if (p.inlinks <= 2) { risk += 1; why.push('few-links'); }
+  if (gsc) {
+    if (!g || g.impressions === 0) { risk += 3; why.push('no-impressions'); }
+    else if (g.clicks === 0 && g.impressions >= 20) { risk += 2; why.push('zero-CTR'); }
+    else if (g.position > 10 && g.impressions >= 20) { risk += 1; why.push('page-2+'); }
+  }
+  return { path, ...p, g, risk, why: why.join(', ') };
+});
+
+const orphans = rows.filter((r) => r.inlinks === 0);
+const thin = rows.filter((r) => r.words > 0 && r.words < 150);
+const queue = rows.filter((r) => r.risk > 0).sort((a, b) => b.risk - a.risk || a.inlinks - b.inlinks).slice(0, 40);
+const today = new Date().toISOString().slice(0, 10);
+
+const line = (r) =>
+  `| ${r.path} | ${r.risk} | ${r.inlinks} | ${r.words} | ${r.lastmod} | ` +
+  (gsc ? `${r.g ? r.g.clicks : '—'} | ${r.g ? r.g.impressions : '—'} | ${r.g ? r.g.position.toFixed(1) : '—'} | ` : '') +
+  `${r.why} |`;
+
+const md = `# SEO Report — ${today}
+
+Generated by \`npm run seo:report\` (from dist/ ${gsc ? '+ GSC pages.csv' : '— NO GSC csv found; drop the Performance→Pages export at docs/gos/gsc/pages.csv for click/position signals'}).
+
+## Summary
+- Pages in sitemaps: **${pages.size}**
+- Orphan pages (0 internal inlinks in static bodies): **${orphans.length}**
+- Thin pages (<150 words static body): **${thin.length}**
+- Median inlinks: **${[...rows].map((r) => r.inlinks).sort((a, b) => a - b)[Math.floor(rows.length / 2)]}**
+
+## Priority Queue (top ${queue.length} — fix from the top)
+
+| Page | Risk | Inlinks | Words | Lastmod | ${gsc ? 'Clicks | Impr | Pos | ' : ''}Why |
+|---|---|---|---|---|${gsc ? '---|---|---|' : ''}---|
+${queue.map(line).join('\n')}
+
+## Suggested actions
+- **orphan** → add the page to a hub list / related-content edge (relatedContent.ts)
+- **thin** → enrich the source content (KI file / registry entry), not the template
+- **zero-CTR** → rewrite metaTitle/metaDescription (promise + keyword, ≤60 chars)
+- **page-2+** → add internal links from high-traffic pages + expand the content
+- **no-impressions** → Request Indexing in GSC; check the page appears in its child sitemap
+`;
+
+mkdirSync(OUT_DIR, { recursive: true });
+const out = resolve(OUT_DIR, `seo-report-${today}.md`);
+writeFileSync(out, md, 'utf-8');
+console.log(`[seo-report] ${pages.size} pages · ${orphans.length} orphans · ${thin.length} thin · queue=${queue.length}`);
+console.log(`[seo-report] wrote ${out}`);

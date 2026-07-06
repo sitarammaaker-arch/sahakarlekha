@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import GuideMarkdown from '@/components/guide/GuideMarkdown';
 import HelpfulWidget from '@/components/HelpfulWidget';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { trackEvent } from '@/lib/analytics';
 import { findTerm } from '@/content/glossary';
 import { relatedCalculators, type CalcConfig } from '@/content/calculators';
 import { cookbookForCalc } from '@/content/relatedContent';
@@ -46,7 +47,16 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
     try { return config.compute(values); } catch { return { ok: false, stats: [], note: 'गणना में त्रुटि — कृपया मान जाँचें।' }; }
   }, [config, values]);
 
-  const set = (key: string, val: string) => setValues((p) => ({ ...p, [key]: val }));
+  // GOS-20: count real usage once per calculator visit (first input change, not page view).
+  const usedRef = React.useRef(false);
+  React.useEffect(() => { usedRef.current = false; }, [config.slug]);
+  const set = (key: string, val: string) => {
+    if (!usedRef.current) {
+      usedRef.current = true;
+      trackEvent('calculator_used', { calc: config.slug });
+    }
+    setValues((p) => ({ ...p, [key]: val }));
+  };
 
   const url = `${SITE}/tools/${config.slug}`;
   const jsonLd = [

@@ -112,12 +112,21 @@ function shell({ crumbs = [], current = '', html }) {
 const registerCta = (next) =>
   `<p style="margin-top:24px"><a href="/register${next ? `?next=${encodeURIComponent(next)}` : ''}"><strong>अपनी समिति का खाता मुफ्त में डिजिटल कीजिए — रजिस्टर करें →</strong></a></p>`;
 
+/** Routes worth linking in CRAWLER-facing static bodies (public surfaces only —
+    app-module deep links are noindexed and would just leak crawl signals). */
+const PUBLIC_PREFIXES = ['/guide', '/blog', '/help', '/cookbook', '/glossary', '/tools', '/software', '/cooperative-software', '/register', '/faq', '/pricing', '/about', '/contact', '/search', '/ask'];
+const isPublicRoute = (l) => PUBLIC_PREFIXES.some((p) => l === p || l.startsWith(p + '/') || l.startsWith(p + '?'));
+
+/** A blog link is emitted in static bodies ONLY once the post is live (scheduled
+    drip posts would otherwise be broken links until their publish date). */
+const blogIsLive = (DATA, slug) => !DATA.publishedBlog || DATA.publishedBlog.has(slug);
+
 /** GOS-11: render a SurfaceLinks bundle ({guide/blog: Refs, help/cookbook: slugs}) as an "और सीखें" block. */
 function surfaceLinksHtml(links, DATA, heading = 'और सीखें') {
   if (!links) return '';
   const parts = [];
   for (const r of links.guide || []) parts.push(`<a href="/guide/${r.slug}">${esc(r.title)}</a>`);
-  for (const r of links.blog || []) parts.push(`<a href="/blog/${r.slug}">${esc(r.title)}</a>`);
+  for (const r of (links.blog || []).filter((r) => blogIsLive(DATA, r.slug))) parts.push(`<a href="/blog/${r.slug}">${esc(r.title)}</a>`);
   for (const s of links.help || []) {
     const t = (DATA.help || []).find((x) => x.slug === s);
     if (t) parts.push(`<a href="/help/${s}">${esc(t.title)}</a>`);
@@ -707,7 +716,9 @@ function glossaryPages(DATA) {
       if (slug) related.push(`<a href="/glossary/${slug}">${esc(label)}</a>`);
       else if (label) related.push(esc(label));
     }
-    const internalLinks = Array.from((s['internal links'] || '').matchAll(/(^|[\s·])(\/[a-z0-9/:_-]+)/gi)).map((mm) => mm[2]);
+    const internalLinks = Array.from((s['internal links'] || '').matchAll(/(^|[\s·])(\/[a-z0-9/:_-]+)/gi))
+      .map((mm) => mm[2])
+      .filter(isPublicRoute); // app-module links stay on the live page, not in crawler HTML
 
     pages.push({
       path: `/glossary/${t.slug}`,
@@ -730,7 +741,7 @@ function glossaryPages(DATA) {
           (() => {
             // GOS-11: definition → narrative edge in the static body too
             const pb = DATA.rel && DATA.rel.GLOSSARY_BLOG && DATA.rel.GLOSSARY_BLOG[t.slug];
-            return pb ? `<p>पूरा लेख पढ़ें: <a href="/blog/${pb.slug}">${esc(pb.title)}</a></p>` : '';
+            return pb && blogIsLive(DATA, pb.slug) ? `<p>पूरा लेख पढ़ें: <a href="/blog/${pb.slug}">${esc(pb.title)}</a></p>` : '';
           })() +
           (internalLinks.length ? `<p>और पढ़ें: ${internalLinks.map((l) => `<a href="${l}">${l}</a>`).join(' · ')}</p>` : '') +
           registerCta(),
@@ -771,8 +782,11 @@ function calcBody(c, DATA) {
       surfaceLinksHtml({ cookbook: cookbookSlugs }, DATA, 'एंट्री कैसे दर्ज करें (कुकबुक)') +
       (c.relatedGlossary && c.relatedGlossary.length
         ? `<p>जुड़े शब्द: ${c.relatedGlossary.map((g) => `<a href="/glossary/${g}">${g.replace(/-/g, ' ')}</a>`).join(' · ')}</p>` : '') +
-      (c.relatedArticles && c.relatedArticles.length
-        ? `<p>गहराई से पढ़ें: ${c.relatedArticles.map((a) => `<a href="/blog/${a.slug}">${esc(a.title)}</a>`).join(' · ')}</p>` : '') +
+      (() => {
+        const liveArticles = (c.relatedArticles || []).filter((a) => blogIsLive(DATA, a.slug));
+        return liveArticles.length
+          ? `<p>गहराई से पढ़ें: ${liveArticles.map((a) => `<a href="/blog/${a.slug}">${esc(a.title)}</a>`).join(' · ')}</p>` : '';
+      })() +
       (c.related && c.related.length
         ? `<p>और कैलकुलेटर: ${c.related.map((r) => `<a href="/tools/${r}">${r.replace(/-/g, ' ')}</a>`).join(' · ')}</p>` : '') +
       registerCta(),
@@ -1011,6 +1025,18 @@ try {
   }
   const template = readFileSync(TEMPLATE, 'utf-8');
   const DATA = await loadData();
+
+  // Published (live-today) blog slugs — body builders use this so static HTML
+  // never links to a still-scheduled drip post.
+  DATA.publishedBlog = new Set();
+  if (existsSync(BLOG_FILE)) {
+    const src = readFileSync(BLOG_FILE, 'utf-8');
+    const today = new Date().toISOString().slice(0, 10);
+    // same proven per-post pattern as blogPages(): slug → metaTitle → metaDescription → date
+    for (const m of src.matchAll(/slug:\s*'([^']+)'[\s\S]*?metaTitle:\s*'(?:[^'\\]|\\.)*'[\s\S]*?metaDescription:\s*'(?:[^'\\]|\\.)*'[\s\S]*?date:\s*'([^']+)'/g)) {
+      if (m[2] <= today) DATA.publishedBlog.add(m[1]);
+    }
+  }
 
   const blog = blogPages(DATA);
   const pages = [

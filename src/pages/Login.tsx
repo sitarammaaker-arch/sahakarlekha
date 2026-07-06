@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { trackEvent } from '@/lib/analytics';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,6 +44,7 @@ const Login: React.FC = () => {
     try {
       const success = await login(email, password);
       if (success) {
+        trackEvent('login', { method: 'email' });
         navigate('/dashboard');
       } else {
         setError(language === 'hi' ? 'गलत ईमेल या पासवर्ड' : 'Invalid email or password');

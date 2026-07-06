@@ -7,6 +7,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { INDIAN_STATES } from '@/lib/constants';
 import { getStateAuditFormat } from '@/lib/stateAuditFormats';
+import { trackEvent } from '@/lib/analytics';
 
 
 // G1 FIX: Use Rs. prefix — Helvetica font lacks the ₹ glyph, causing garbled output
@@ -217,6 +218,9 @@ export function addHeader(
   doc: jsPDF, title: string, society: SocietySettings, subtitle?: string,
   options?: { reportCode?: string; generatedBy?: string }
 ): { startY: number; font: string; reportId: string } {
+  // GOS-20: every report PDF passes through addHeader — the one central place
+  // to count downloads (report name only, never society data).
+  trackEvent('pdf_download', { report: options?.reportCode || title });
   const font = setupFont(doc);
   const pageW = doc.internal.pageSize.width;
   const cx = pageW / 2;

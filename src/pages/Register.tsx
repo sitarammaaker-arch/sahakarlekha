@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { trackEvent } from '@/lib/analytics';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -171,6 +172,8 @@ const Register: React.FC = () => {
       }
 
       setSuccess(true);
+      // GOS-20: the #1 conversion event of the whole funnel (no PII in params).
+      trackEvent('sign_up', { method: 'email' });
     } catch {
       setError('Registration failed. Please check your connection and try again.');
     } finally {

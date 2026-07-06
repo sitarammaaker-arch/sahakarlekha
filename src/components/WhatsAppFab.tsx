@@ -5,6 +5,7 @@
  */
 import React from 'react';
 import { WHATSAPP_NUMBER, WHATSAPP_ICON_PATHS, SocialIcon } from '@/lib/socials';
+import { trackEvent } from '@/lib/analytics';
 
 const PREFILL = 'नमस्ते! मुझे SahakarLekha (सहकारलेखा) के बारे में जानकारी चाहिए।';
 
@@ -16,6 +17,7 @@ const WhatsAppFab: React.FC = () => {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={() => trackEvent('whatsapp_click', { location: 'fab', page: window.location.pathname })}
       aria-label="WhatsApp पर संपर्क करें"
       title="WhatsApp पर पूछें"
       className="no-print print:hidden fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-full bg-[#25D366] text-white shadow-lg shadow-black/20 hover:bg-[#1ebe57] hover:shadow-xl transition-all px-4 py-3"

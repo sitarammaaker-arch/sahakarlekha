@@ -20,6 +20,7 @@ import PublicLayout from '@/components/PublicLayout';
 import Testimonials from '@/components/Testimonials';
 import EmailCapture from '@/components/EmailCapture';
 import { SOCIAL_CHANNELS, SocialIcon, WHATSAPP_NUMBER } from '@/lib/socials';
+import { trackEvent } from '@/lib/analytics';
 import {
   BookOpen, Shield, Users, BarChart3, FileText, Globe,
   CheckCircle2, XCircle, ArrowRight, Building2, Milk, Home, Factory,
@@ -32,6 +33,7 @@ const DEMO_VIDEO_ID = '';                 // e.g. 'dQw4w9WgXcQ'
 const WHATSAPP = WHATSAPP_NUMBER;          // central number from socials.tsx
 // Sample report is generated on-demand from a fictional demo society — no static asset.
 const handleSampleReport = async () => {
+  trackEvent('sample_report_generated', { source: 'landing' });
   const { generateSampleReportPDF } = await import('@/lib/sampleReport');
   generateSampleReportPDF();
 };
@@ -95,14 +97,18 @@ const TESTIMONIALS: { quoteHi: string; quoteEn: string; name: string; role: stri
 
 /* ─── Screenshot with graceful fallback: shows the real /guide-shots image when
    present, otherwise renders the supplied fallback (mock UI / placeholder). ─── */
-const Figure: React.FC<{ file: string; alt: string; fallback: React.ReactNode }> = ({ file, alt, fallback }) => {
+const Figure: React.FC<{ file: string; alt: string; fallback: React.ReactNode; priority?: boolean }> = ({ file, alt, fallback, priority }) => {
   const [failed, setFailed] = React.useState(false);
   if (failed) return <>{fallback}</>;
   return (
     <img
       src={`/guide-shots/${file}`}
       alt={alt}
-      loading="lazy"
+      // GOS-21: the hero screenshot is the LCP element — load it eagerly at high
+      // priority; every other shot stays lazy. NOTE: React 18 only passes the
+      // lowercase `fetchpriority` attribute through (camelCase lands in React 19).
+      loading={priority ? 'eager' : 'lazy'}
+      {...(priority ? ({ fetchpriority: 'high' } as React.ImgHTMLAttributes<HTMLImageElement>) : {})}
       onError={() => setFailed(true)}
       className="rounded-xl border shadow-md w-full max-w-full h-auto ring-1 ring-black/5"
     />
@@ -193,7 +199,7 @@ const LandingPage: React.FC = () => {
           </div>
 
           <div className="relative min-w-0">
-            <Figure file="hero-dashboard.png" alt="SahakarLekha dashboard" fallback={<MockDashboard />} />
+            <Figure file="hero-dashboard.webp" alt="SahakarLekha dashboard" fallback={<MockDashboard />} priority />
           </div>
         </div>
 

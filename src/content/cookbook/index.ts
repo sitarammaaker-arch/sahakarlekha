@@ -139,7 +139,7 @@ export const COOKBOOK_ENTRIES: CookbookEntry[] = [
     ],
     deepLink: { route: '/members', label: 'App में सदस्य जोड़ें' },
     guideSlug: 'member-management',
-    related: ['dividend-declared', 'loan-disbursed'],
+    related: ['dividend-paid', 'loan-disbursed'],
   },
   {
     slug: 'loan-disbursed',
@@ -708,7 +708,7 @@ export const COOKBOOK_ENTRIES: CookbookEntry[] = [
     narration: 'ऑडिट शुल्क — वर्ष ___',
     notes: ['ऑडिट शुल्क पर भी TDS लागू हो सकता है (professional fee) — तब Cr में TDS Payable अलग।'],
     guideSlug: 'expense-dictionary',
-    related: ['expense-paid', 'audit-report'],
+    related: ['expense-paid', 'tds-deposit'],
   },
   {
     slug: 'reserve-fund-investment',

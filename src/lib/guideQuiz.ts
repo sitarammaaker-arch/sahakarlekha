@@ -4,6 +4,7 @@
  * certificate page stay in sync.
  */
 import { useSyncExternalStore } from 'react';
+import { trackEvent } from '@/lib/analytics';
 
 const KEY = 'sl_guide_quizzes';
 
@@ -31,6 +32,8 @@ function persist() {
 }
 
 export function setQuizPassed(partId: string, passed: boolean) {
+  // GOS-20: fire only on a NEW pass (retakes of an already-passed part don't recount).
+  if (passed && !state.has(partId)) trackEvent('quiz_passed', { part: partId });
   const next = new Set(state);
   if (passed) next.add(partId);
   else next.delete(partId);

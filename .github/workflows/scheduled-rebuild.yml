@@ -52,6 +52,16 @@ jobs:
           fi
           curl -fsS -X POST "$HOOK" && echo "Triggered Vercel rebuild."
 
+      - name: Ping IndexNow after deploy (Bing/Yandex)
+        if: steps.due.outputs.due == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then echo "No deploy fired — skipping ping."; exit 0; fi
+          echo "Waiting 4 min for the Vercel build to go live…"
+          sleep 240
+          node scripts/indexnow-ping.mjs --live || echo "IndexNow ping failed (non-fatal)."
+
       - name: Skip note
         if: steps.due.outputs.due != 'true' && github.event_name != 'workflow_dispatch'
         run: echo "No scheduled post due today/yesterday (IST) — deploy skipped."
