@@ -34,6 +34,8 @@ export interface CookbookEntry {
   /** related in-depth guide chapter (L7) */
   guideSlug?: string;
   related?: string[];
+  /** ISO date of the last real content change — drives the sitemap <lastmod> */
+  updated?: string;
 }
 
 export const COOKBOOK_ENTRIES: CookbookEntry[] = [

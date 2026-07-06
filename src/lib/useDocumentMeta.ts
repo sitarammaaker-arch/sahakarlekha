@@ -37,8 +37,10 @@ export function useDocumentMeta(opts: {
   canonicalPath?: string;
   /** Optional JSON-LD structured data injected as a <script> in <head> while this page is mounted. */
   jsonLd?: object | object[];
+  /** Optional robots directive (e.g. 'noindex') applied while this page is mounted. */
+  robots?: string;
 }) {
-  const { title, description, canonicalPath, jsonLd } = opts;
+  const { title, description, canonicalPath, jsonLd, robots } = opts;
   // Stringify once so the effect dep is stable across re-renders (inline objects change identity each render).
   const jsonLdStr = jsonLd ? JSON.stringify(jsonLd) : undefined;
   useEffect(() => {
@@ -60,6 +62,9 @@ export function useDocumentMeta(opts: {
     if (title) {
       set(metaByProp('og:title'), 'content', title);
       set(metaByName('twitter:title'), 'content', title);
+    }
+    if (robots) {
+      set(metaByName('robots'), 'content', robots);
     }
     if (canonicalPath) {
       const canon = ensure('link[rel="canonical"]', () => {
@@ -90,5 +95,21 @@ export function useDocumentMeta(opts: {
         else el.setAttribute(attr, old);
       }
     };
-  }, [title, description, canonicalPath, jsonLdStr]);
+  }, [title, description, canonicalPath, jsonLdStr, robots]);
+}
+
+/**
+ * Mark the current page noindex while mounted (app-only/protected/404 pages).
+ * Restores the previous robots value on unmount so public pages are unaffected.
+ */
+export function useNoIndex() {
+  useEffect(() => {
+    const el = metaByName('robots');
+    const prev = el.getAttribute('content');
+    el.setAttribute('content', 'noindex');
+    return () => {
+      if (prev == null) el.removeAttribute('content');
+      else el.setAttribute('content', prev);
+    };
+  }, []);
 }

@@ -153,6 +153,13 @@ const GlossaryTerm: React.FC = () => {
           </Field>
         )}
 
+        {/* Learning objectives (from the KI — was parsed but never shown) */}
+        {term.learningObjectives && (
+          <Field icon={<GraduationCap className="h-4 w-4 text-emerald-600" />} title="इस शब्द से आप क्या सीखेंगे">
+            <GuideMarkdown source={term.learningObjectives} />
+          </Field>
+        )}
+
         {/* Related concepts (link active glossary terms) */}
         {term.related.length > 0 && (
           <Field icon={<Link2 className="h-4 w-4 text-violet-500" />} title="जुड़े विषय">

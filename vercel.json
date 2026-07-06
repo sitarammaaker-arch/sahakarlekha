@@ -286,6 +286,16 @@
       "permanent": true
     }
   ],
+  "headers": [
+    {
+      "source": "/(dashboard|society-setup|backup-restore|user-management|super-admin|vouchers|compound-voucher|cash-book|bank-book|bank-reconciliation|ledger|ledger-heads|day-book|trial-balance|balance-sheet|profit-loss|trading-account|receipts-payments|reports|members|member-application|share-register|opening-balances|sales|purchases|features|depreciation-schedule)",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+    },
+    {
+      "source": "/(dashboard|society-setup|backup-restore|user-management|super-admin|vouchers|compound-voucher|cash-book|bank-book|bank-reconciliation|ledger|ledger-heads|day-book|trial-balance|balance-sheet|profit-loss|trading-account|receipts-payments|reports|members|member-application|share-register|opening-balances|sales|purchases|features|depreciation-schedule)/:path*",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+    }
+  ],
   "rewrites": [
     {
       "source": "/((?!api/).*)",

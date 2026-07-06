@@ -58,6 +58,7 @@ export interface CalcConfig {
   relatedModules: { route: string; label: string }[];
   faqs?: CalcFaq[];                          // → FAQ section + FAQPage JSON-LD
   related?: string[];                        // related calculator slugs (cluster)
+  updated?: string;                          // ISO date of last real content change → sitemap <lastmod>
   nev?: boolean;          // statutory-adjacent (rates user-entered) → show note
 }
 

@@ -42,6 +42,8 @@ export interface HelpTask {
   guideSlug?: string;
   /** related help-task slugs */
   related?: string[];
+  /** ISO date of the last real content change — drives the sitemap <lastmod> */
+  updated?: string;
 }
 
 export const HELP_TASKS: HelpTask[] = [

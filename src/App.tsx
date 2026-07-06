@@ -16,6 +16,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { CapabilityGuard } from "@/components/CapabilityGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePageTracking } from "@/lib/analytics";
+import { useNoIndex } from "@/lib/useDocumentMeta";
 
 // Auto-recover from stale-chunk errors after a new deploy. When the app has stayed
 // open across a deploy, an old hashed chunk filename can 404 on the CDN and the
@@ -206,6 +207,9 @@ preloadHindiFont();
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
   const { isLoading } = useData();
+  // App-only screens must never be indexed (robots.txt + X-Robots-Tag are the
+  // other two layers; this covers any route a crawler still reaches with JS).
+  useNoIndex();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;

@@ -1,8 +1,13 @@
 name: Scheduled rebuild (publish drip)
 
-# Triggers a Vercel rebuild daily so scheduled (future-dated) blog posts get their
+# Triggers a Vercel rebuild so scheduled (future-dated) blog posts get their
 # static HTML + sitemap entry on time. The blog INDEX reveals posts client-side on
 # their date already; this keeps the prerendered pages and sitemap in sync for SEO.
+#
+# GOS-05 guard: the hook fires ONLY when a post's publish date is today/yesterday
+# (IST). A no-change daily redeploy would churn nothing but still re-crawl signals;
+# skipping it keeps deploys (and sitemap fetches) meaningful. Manual runs from the
+# Actions tab always deploy.
 #
 # One-time setup (you):
 #   1. Vercel → Project → Settings → Git → Deploy Hooks → create a hook (branch: main).
@@ -18,7 +23,26 @@ jobs:
   redeploy:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Check whether a scheduled post is due (today/yesterday IST)
+        id: due
+        run: |
+          node -e "
+            const fs = require('fs');
+            const src = fs.readFileSync('src/content/blog/index.ts', 'utf8');
+            const dates = [...src.matchAll(/date:\s*'(\d{4}-\d{2}-\d{2})'/g)].map(m => m[1]);
+            const day = (ms) => new Date(ms).toISOString().slice(0, 10);
+            const IST = 5.5 * 3600 * 1000;
+            const today = day(Date.now() + IST);
+            const yesterday = day(Date.now() + IST - 86400000);
+            const due = dates.some(d => d === today || d === yesterday);
+            console.log('today(IST)=' + today + ' due=' + due);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'due=' + due + '\n');
+          "
+
       - name: Trigger Vercel deploy hook
+        if: steps.due.outputs.due == 'true' || github.event_name == 'workflow_dispatch'
         env:
           HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
         run: |
@@ -27,3 +51,7 @@ jobs:
             exit 0
           fi
           curl -fsS -X POST "$HOOK" && echo "Triggered Vercel rebuild."
+
+      - name: Skip note
+        if: steps.due.outputs.due != 'true' && github.event_name != 'workflow_dispatch'
+        run: echo "No scheduled post due today/yesterday (IST) — deploy skipped."
