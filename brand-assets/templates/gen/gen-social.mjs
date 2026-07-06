@@ -57,24 +57,29 @@ const ser = cmds => cmds.map(c => {
 }).join('');
 
 function shapeText(text, fontKey, size) {
+  // HarfBuzz guesses ONE script per buffer — a line starting with Latin
+  // ("audit के दिन…") would skip Indic reordering and break ि matras.
+  // So split into script runs and shape each separately.
+  const runs = text.match(/[ऀ-ॿ‌‍]+|[^ऀ-ॿ‌‍]+/g) || [];
   const { hbFont, upem, ot } = loadFont(fontKey);
-  const buf = new HbBuffer();
-  buf.addText(text);
-  buf.guessSegmentProperties();
-  hbShape(hbFont, buf);
-  const glyphs = buf.getGlyphInfosAndPositions();
   const scale = size / upem;
   let penX = 0, parts = [], bb = null;
-  for (const g of glyphs) {
-    const p = ot.glyphs.get(g.codepoint)
-      .getPath((penX + (g.xOffset || 0)) * scale, -((g.yOffset || 0)) * scale, size);
-    const d = ser(p.commands);
-    if (d) {
-      parts.push(d);
-      const b = p.getBoundingBox();
-      bb = bb ? { x1: Math.min(bb.x1, b.x1), y1: Math.min(bb.y1, b.y1), x2: Math.max(bb.x2, b.x2), y2: Math.max(bb.y2, b.y2) } : { ...b };
+  for (const run of runs) {
+    const buf = new HbBuffer();
+    buf.addText(run);
+    buf.guessSegmentProperties(); // single-script run → correct guess
+    hbShape(hbFont, buf);
+    for (const g of buf.getGlyphInfosAndPositions()) {
+      const p = ot.glyphs.get(g.codepoint)
+        .getPath((penX + (g.xOffset || 0)) * scale, -((g.yOffset || 0)) * scale, size);
+      const d = ser(p.commands);
+      if (d) {
+        parts.push(d);
+        const b = p.getBoundingBox();
+        bb = bb ? { x1: Math.min(bb.x1, b.x1), y1: Math.min(bb.y1, b.y1), x2: Math.max(bb.x2, b.x2), y2: Math.max(bb.y2, b.y2) } : { ...b };
+      }
+      penX += g.xAdvance;
     }
-    penX += g.xAdvance;
   }
   const d = parts.join(' ');
   if (d.includes('NaN')) throw new Error(`NaN shaping "${text}"`);

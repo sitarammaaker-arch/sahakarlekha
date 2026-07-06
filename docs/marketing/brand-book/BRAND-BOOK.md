@@ -54,7 +54,7 @@ patient. Never a startup bro, never a sarkari circular, never flashy.
 
 **Everyday Hinglish first, plain English second.** बोलचाल की भाषा — शुद्ध
 साहित्यिक हिन्दी नहीं। Statutory words stay exact and untranslated where the
-sector uses them: बैलेंस शीट, तलपट, TDS, 26Q, GST, ऑडिट.
+sector uses them: बैलेंस शीट, ट्रायल बैलेंस, TDS, 26Q, GST, ऑडिट.
 
 | Do | Don't |
 |---|---|

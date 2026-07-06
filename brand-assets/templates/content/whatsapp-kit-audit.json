@@ -1,0 +1,10 @@
+{
+  "status": {
+    "badge": "आज की टिप",
+    "hook1": "Audit की तैयारी",
+    "hook2": "रोज़ अपने आप",
+    "support": ["हर entry के साथ reports तैयार —", "audit के दिन कोई भागदौड़ नहीं"],
+    "checks": ["ट्रायल बैलेंस one click", "FY lock सुविधा", "साफ़ audit trail"],
+    "cta": "मुफ़्त शुरू करें"
+  }
+}

@@ -208,7 +208,7 @@ Sources: [Ministry of Cooperation — Computerization of PACS](https://www.coope
   bro; NOT a sarkari circular.
 - **Voice:** everyday Hinglish first (per standing rule — bolchaal, not shuddh
   Hindi), plain English second. Numbers and statutory terms stay exact
-  (26Q, तलपट, बैलेंस शीट). Reassure, then instruct. Never fear-monger about
+  (26Q, Trial Balance, बैलेंस शीट). Reassure, then instruct. Never fear-monger about
   audits — respect the reader's izzat.
 - **Messaging pillars (all assets must ladder to one of these):**
   1. **सिर्फ़ सहकारी समितियों के लिए** — built only for cooperatives (8 types, share capital, dividend, MSP, RCS formats).
