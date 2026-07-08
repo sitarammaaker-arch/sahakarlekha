@@ -17,8 +17,9 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, History, Search } from 'lucide-react';
+import { PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, History, Search, Percent } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
+import { sbInterest } from '@/lib/depositInterest';
 import { useToast } from '@/hooks/use-toast';
 import type { DepositType, DepositAccount } from '@/types';
 
@@ -34,7 +35,7 @@ const today = () => new Date().toISOString().split('T')[0];
 const Deposits: React.FC = () => {
   const { language } = useLanguage();
   const { hasPermission } = useAuth();
-  const { members, depositAccounts, addDepositAccount, postDepositTransaction, getDepositTransactions } = useData();
+  const { members, depositAccounts, addDepositAccount, postDepositTransaction, postDepositInterest, getDepositTransactions } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
   const canEdit = hasPermission(['admin', 'accountant']);
@@ -77,6 +78,24 @@ const Deposits: React.FC = () => {
     if (postDepositTransaction(txnAcct.id, txnKind, amt, txnMode, txnDate)) setTxnAcct(null);
   };
   const txnOverBalance = txnKind === 'withdraw' && txnAcct ? (Number(txnAmt) || 0) > txnAcct.balance : false;
+
+  // ── Interest dialog ────────────────────────────────────────────────────────
+  const [intAcct, setIntAcct] = useState<DepositAccount | null>(null);
+  const [intDays, setIntDays] = useState('90');
+  const [intAmt, setIntAmt] = useState('');
+  const [intDate, setIntDate] = useState(today());
+  const openInterest = (a: DepositAccount) => {
+    setIntAcct(a); setIntDays('90'); setIntDate(today());
+    setIntAmt(String(sbInterest(a.balance, a.interestRate || 0, 90)));   // quarterly suggestion
+  };
+  const recomputeInterest = (days: string) => {
+    setIntDays(days);
+    if (intAcct) setIntAmt(String(sbInterest(intAcct.balance, intAcct.interestRate || 0, Number(days) || 0)));
+  };
+  const submitInterest = () => {
+    if (!intAcct) return;
+    if (postDepositInterest(intAcct.id, Number(intAmt) || 0, intDate)) setIntAcct(null);
+  };
 
   // ── Transaction history dialog ─────────────────────────────────────────────
   const [historyAcct, setHistoryAcct] = useState<DepositAccount | null>(null);
@@ -142,6 +161,7 @@ const Deposits: React.FC = () => {
                           <>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50" title={hi ? 'जमा' : 'Deposit'} onClick={() => openTxn(d, 'deposit')}><ArrowDownCircle className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600 hover:bg-amber-50" title={hi ? 'निकासी' : 'Withdraw'} onClick={() => openTxn(d, 'withdraw')}><ArrowUpCircle className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 hover:bg-indigo-50" title={hi ? 'ब्याज जमा करें' : 'Credit interest'} onClick={() => openInterest(d)}><Percent className="h-4 w-4" /></Button>
                           </>
                         )}
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50" title={hi ? 'लेनदेन' : 'Transactions'} onClick={() => setHistoryAcct(d)}><History className="h-4 w-4" /></Button>
@@ -237,6 +257,37 @@ const Deposits: React.FC = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setTxnAcct(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
             <Button disabled={!(Number(txnAmt) > 0) || txnOverBalance} onClick={submitTxn}>{hi ? 'दर्ज करें' : 'Post'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Interest dialog */}
+      <Dialog open={!!intAcct} onOpenChange={o => { if (!o) setIntAcct(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle>{hi ? 'ब्याज जमा' : 'Credit Interest'} — {intAcct?.accountNo}</DialogTitle></DialogHeader>
+          {intAcct && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">{hi ? 'शेष:' : 'Balance:'} <strong>{fmt(intAcct.balance)}</strong> · {hi ? 'दर' : 'Rate'} {intAcct.interestRate ?? 0}% p.a.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">{hi ? 'अवधि (दिन)' : 'Period (days)'}</Label>
+                  <Input type="number" className="mt-1" value={intDays} onChange={e => recomputeInterest(e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">{hi ? 'तिथि' : 'Date'}</Label>
+                  <Input type="date" className="mt-1" value={intDate} onChange={e => setIntDate(e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">{hi ? 'ब्याज राशि (गणना — बदल सकते हैं)' : 'Interest amount (computed — editable)'}</Label>
+                <Input type="number" className="mt-1" value={intAmt} onChange={e => setIntAmt(e.target.value)} />
+              </div>
+              <p className="text-[11px] text-muted-foreground">{hi ? 'Dr ब्याज व्यय (5604) / Cr जमा — शेष में जुड़ेगा।' : 'Dr Interest expense (5604) / Cr deposit — added to the balance.'}</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIntAcct(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+            <Button disabled={!(Number(intAmt) > 0)} onClick={submitInterest}>{hi ? 'जमा करें' : 'Credit'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

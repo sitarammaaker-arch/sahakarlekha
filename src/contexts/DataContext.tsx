@@ -73,6 +73,7 @@ interface DataContextType {
   depositTransactions: DepositTransaction[];
   addDepositAccount: (data: Omit<DepositAccount, 'id' | 'accountNo' | 'balance' | 'status' | 'createdAt'> & { openingAmount?: number; mode?: 'cash' | 'bank' }) => DepositAccount | null;
   postDepositTransaction: (accountId: string, txnType: 'deposit' | 'withdraw', amount: number, mode: 'cash' | 'bank', date: string) => boolean;
+  postDepositInterest: (accountId: string, amount: number, date: string) => boolean;
   getDepositTransactions: (accountId: string) => DepositTransaction[];
   assets: Asset[];
 
@@ -2274,6 +2275,48 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     toastRef.current({ title: txnType === 'deposit' ? '✅ जमा' : '✅ निकासी', description: `${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · शेष ₹${newBal.toLocaleString('en-IN')}` });
     return true;
   }, [accounts, addVoucher]);
+
+  // Credit interest to a deposit account: Dr Interest-on-Deposits expense (5604 Interest on
+  // Borrowings — member deposits are borrowings from members) / Cr the deposit liability.
+  // Not a cash movement — it increases the member's balance.
+  const postDepositInterest = useCallback((accountId: string, amount: number, date: string): boolean => {
+    if (guardFYLocked()) return false;
+    const acct = depositAccountsRef.current.find(d => d.id === accountId);
+    if (!acct) return false;
+    if (acct.status !== 'active') { toastRef.current({ title: 'खाता सक्रिय नहीं', description: 'Only active deposit accounts can accrue interest.', variant: 'destructive' }); return false; }
+    const amt = Math.round(amount * 100) / 100;
+    if (!(amt > 0)) { toastRef.current({ title: 'अमान्य राशि', description: 'Interest must be greater than 0.', variant: 'destructive' }); return false; }
+    const liability = depositLiabilityAccount(acct.depositType);
+    const member = membersRef.current.find(m => m.id === acct.memberId);
+    const voucher = addVoucher({
+      type: 'journal', date, debitAccountId: '5604', creditAccountId: liability, amount: amt,
+      narration: `Interest on ${acct.depositType} deposit ${acct.accountNo}${member ? ' · ' + member.name : ''}`,
+      createdBy: userRef.current?.name ?? 'System', memberId: acct.memberId,
+    });
+    if (!voucher?.id) return false;
+    const before = acct;
+    const newBal = applyDepositTxn(acct.balance, 'interest', amt);
+    const updated = { ...acct, balance: newBal };
+    depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? updated : d);
+    setDepositAccountsState(prev => prev.map(d => d.id === accountId ? updated : d));
+    supabase.from('deposit_accounts').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Deposit interest balance sync:', error.message);
+        depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
+        setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
+        toastRef.current({ title: 'ब्याज सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    const txn: DepositTransaction = {
+      id: crypto.randomUUID(), depositAccountId: accountId, date, txnType: 'interest', amount: amt, mode: 'cash',
+      voucherId: voucher.id, balanceAfter: newBal, createdAt: new Date().toISOString(),
+    };
+    setDepositTransactionsState(prev => [...prev, txn]);
+    supabase.from('deposit_transactions').upsert(withSoc(txn)).then(({ error }) => { if (error) console.warn('Deposit interest txn sync:', error.message); });
+    emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { balance: before.balance }, after: { balance: newBal, interest: amt } });
+    toastRef.current({ title: '✅ ब्याज जमा', description: `${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · शेष ₹${newBal.toLocaleString('en-IN')}` });
+    return true;
+  }, [addVoucher]);
 
   const getDepositTransactions = useCallback((accountId: string): DepositTransaction[] =>
     depositTransactions.filter(t => t.depositAccountId === accountId)
@@ -5487,7 +5530,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   return (
     <DataContext.Provider value={{
       vouchers, members, accounts, society, loans, assets, auditObjections,
-      depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, getDepositTransactions,
+      depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, getDepositTransactions,
       stockItems, stockMovements, sales, purchases, employees, salaryRecords,
       suppliers, customers, kccLoans, societyCapabilities, setCapabilityHidden,
       procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
