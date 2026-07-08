@@ -5,7 +5,7 @@ import type {
   Voucher, VoucherEditSnapshot, VoucherLine, VoucherType, Member, MemberStatus, LedgerAccount, SocietySettings, BillAllocation,
   AccountBalance, CashBookEntry, BankBookEntry, MemberLedgerEntry, ReceiptsPaymentsData,
   Loan, Asset, AuditObjection, Recoverable, KachiAaratEntry, P7Entry,
-  DepositAccount, DepositTransaction, DepositType, DepositTxnType,
+  DepositAccount, DepositTransaction, DepositType, DepositTxnType, ComplianceFiling,
   StockItem, StockMovement,
   Sale, Purchase,
   Employee, SalaryRecord, PaymentMode,
@@ -76,6 +76,9 @@ interface DataContextType {
   postDepositInterest: (accountId: string, amount: number, date: string) => boolean;
   closeDepositAccount: (accountId: string, mode: 'cash' | 'bank', date: string) => boolean;
   getDepositTransactions: (accountId: string) => DepositTransaction[];
+  markComplianceFiled: (itemId: string, note?: string) => void;
+  unmarkComplianceFiled: (itemId: string) => void;
+  getComplianceFiledIds: () => string[];
   assets: Asset[];
 
   addVoucher: (data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }) => Voucher;
@@ -320,6 +323,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loans, setLoansState] = useState<Loan[]>([]);
   const [depositAccounts, setDepositAccountsState] = useState<DepositAccount[]>([]);
   const [depositTransactions, setDepositTransactionsState] = useState<DepositTransaction[]>([]);
+  const [complianceFilings, setComplianceFilingsState] = useState<ComplianceFiling[]>([]);
   const [societyCapabilities, setSocietyCapabilitiesState] = useState<SocietyCapabilityRow[]>([]);
   const [procurementFarmers, setProcurementFarmersState] = useState<Farmer[]>(() => storage.getProcurementFarmers());
   const [procurementLots, setProcurementLotsState] = useState<ProcurementLot[]>(() => storage.getProcurementLots());
@@ -341,6 +345,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => { loansRef.current = loans; }, [loans]);
   const depositAccountsRef = useRef<DepositAccount[]>(depositAccounts);
   useEffect(() => { depositAccountsRef.current = depositAccounts; }, [depositAccounts]);
+  const complianceFilingsRef = useRef<ComplianceFiling[]>(complianceFilings);
+  useEffect(() => { complianceFilingsRef.current = complianceFilings; }, [complianceFilings]);
   const [assets, setAssetsState] = useState<Asset[]>([]);
   const assetsRef = useRef<Asset[]>(assets);
   useEffect(() => { assetsRef.current = assets; }, [assets]);
@@ -389,7 +395,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Reset all state to empty before loading new society's data
     setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
-    setDepositAccountsState([]); setDepositTransactionsState([]);
+    setDepositAccountsState([]); setDepositTransactionsState([]); setComplianceFilingsState([]);
     setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
     setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]); setProcurementSettlementsState([]); setWorkOrdersState([]); setMusterEntriesState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
@@ -531,6 +537,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         );
         supabase.from('deposit_transactions').select('*').eq('society_id', sid).then(
           ({ data, error }) => { if (!error && data) setDepositTransactionsState(data as DepositTransaction[]); },
+          () => { /* table absent pre-migration — ignore */ },
+        );
+        supabase.from('compliance_filings').select('*').eq('society_id', sid).then(
+          ({ data, error }) => { if (!error && data) setComplianceFilingsState(data as ComplianceFiling[]); },
           () => { /* table absent pre-migration — ignore */ },
         );
 
@@ -2354,6 +2364,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     depositTransactions.filter(t => t.depositAccountId === accountId)
       .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt)),
     [depositTransactions]);
+
+  // ECR-13: mark a compliance calendar item as filed (idempotent) / unmark it.
+  const markComplianceFiled = useCallback((itemId: string, note?: string): void => {
+    if (complianceFilingsRef.current.some(f => f.itemId === itemId)) return;
+    const filing: ComplianceFiling = { id: crypto.randomUUID(), itemId, filedAt: new Date().toISOString().split('T')[0], filedBy: userRef.current?.name, note };
+    complianceFilingsRef.current = [...complianceFilingsRef.current, filing];
+    setComplianceFilingsState(prev => [...prev, filing]);
+    supabase.from('compliance_filings').upsert(withSoc(filing)).then(({ error }) => {
+      if (error) {
+        console.error('Compliance filing sync:', error.message);
+        complianceFilingsRef.current = complianceFilingsRef.current.filter(f => f.id !== filing.id);
+        setComplianceFilingsState(prev => prev.filter(f => f.id !== filing.id));   // RULE 1: roll back
+        toastRef.current({ title: 'सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 10000 });
+      }
+    });
+    emitAudit({ entityType: 'compliance', entityId: itemId, action: 'update', after: { filed: true } });
+  }, []);
+  const unmarkComplianceFiled = useCallback((itemId: string): void => {
+    const filing = complianceFilingsRef.current.find(f => f.itemId === itemId);
+    if (!filing) return;
+    complianceFilingsRef.current = complianceFilingsRef.current.filter(f => f.itemId !== itemId);
+    setComplianceFilingsState(prev => prev.filter(f => f.itemId !== itemId));
+    supabase.from('compliance_filings').delete().eq('id', filing.id).then(({ error }) => { if (error) console.warn('Compliance filing delete:', error.message); });
+    emitAudit({ entityType: 'compliance', entityId: itemId, action: 'update', after: { filed: false } });
+  }, []);
+  const getComplianceFiledIds = useCallback((): string[] => complianceFilings.map(f => f.itemId), [complianceFilings]);
 
   // ── Housing Flats/Units register (master data; Member-pattern persistence + RULE-1 rollback) ──
   // ── Labour Work Orders register (master data; Member-pattern persistence + RULE-1 rollback) ──
@@ -5591,6 +5627,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     <DataContext.Provider value={{
       vouchers, members, accounts, society, loans, assets, auditObjections,
       depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,
+      markComplianceFiled, unmarkComplianceFiled, getComplianceFiledIds,
       stockItems, stockMovements, sales, purchases, employees, salaryRecords,
       suppliers, customers, kccLoans, societyCapabilities, setCapabilityHidden,
       procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,

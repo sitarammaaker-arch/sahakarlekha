@@ -8,10 +8,12 @@
 import React, { useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CalendarClock, AlertTriangle } from 'lucide-react';
+import { CalendarClock, AlertTriangle, CheckCircle2, RotateCcw } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
 import { buildComplianceCalendar, type ComplianceCategory, type ComplianceStatus } from '@/lib/complianceCalendar';
 
@@ -27,12 +29,16 @@ const STATUS_META: Record<ComplianceStatus, { hi: string; en: string; cls: strin
   overdue:    { hi: 'बीत गई', en: 'Overdue', cls: 'bg-red-100 text-red-800 border-red-300' },
   'due-soon': { hi: 'जल्द देय', en: 'Due soon', cls: 'bg-orange-100 text-orange-800 border-orange-300' },
   upcoming:   { hi: 'आगामी', en: 'Upcoming', cls: 'bg-slate-100 text-slate-700 border-slate-300' },
+  filed:      { hi: 'फाइल हो गई', en: 'Filed', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
 };
 
 const ComplianceCalendar: React.FC = () => {
   const { language } = useLanguage();
-  const { society, employees } = useData();
+  const { society, employees, getComplianceFiledIds, markComplianceFiled, unmarkComplianceFiled } = useData();
+  const { hasPermission } = useAuth();
   const hi = language === 'hi';
+  const canEdit = hasPermission(['admin', 'accountant']);
+  const filedIds = getComplianceFiledIds();
 
   const items = useMemo(() => {
     const asOf = new Date().toISOString().split('T')[0];
@@ -41,8 +47,8 @@ const ComplianceCalendar: React.FC = () => {
       hasEmployees,
       tan: !!society.tan?.trim(),
       gstin: !!society.gstin?.trim(),
-    });
-  }, [society.tan, society.gstin, employees]);
+    }, { filedIds });
+  }, [society.tan, society.gstin, employees, filedIds]);
 
   const overdue = items.filter(i => i.status === 'overdue').length;
   const dueSoon = items.filter(i => i.status === 'due-soon').length;
@@ -87,6 +93,7 @@ const ComplianceCalendar: React.FC = () => {
                   <TableHead>{hi ? 'देय तिथि' : 'Due date'}</TableHead>
                   <TableHead className="text-right">{hi ? 'शेष दिन' : 'Days left'}</TableHead>
                   <TableHead>{hi ? 'स्थिति' : 'Status'}</TableHead>
+                  {canEdit && <TableHead className="text-center">{hi ? 'कार्रवाई' : 'Action'}</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -98,6 +105,19 @@ const ComplianceCalendar: React.FC = () => {
                     <TableCell className="text-sm">{fmtDate(it.dueDate)}</TableCell>
                     <TableCell className="text-right text-sm">{it.daysLeft < 0 ? `${-it.daysLeft} ${hi ? 'दिन पहले' : 'd ago'}` : `${it.daysLeft} ${hi ? 'दिन' : 'd'}`}</TableCell>
                     <TableCell><Badge variant="outline" className={STATUS_META[it.status].cls}>{hi ? STATUS_META[it.status].hi : STATUS_META[it.status].en}</Badge></TableCell>
+                    {canEdit && (
+                      <TableCell className="text-center">
+                        {it.status === 'filed' ? (
+                          <Button variant="ghost" size="sm" className="h-8 gap-1 text-muted-foreground" onClick={() => unmarkComplianceFiled(it.id)}>
+                            <RotateCcw className="h-3.5 w-3.5" />{hi ? 'हटाएं' : 'Undo'}
+                          </Button>
+                        ) : (
+                          <Button variant="ghost" size="sm" className="h-8 gap-1 text-emerald-700 hover:bg-emerald-50" onClick={() => markComplianceFiled(it.id)}>
+                            <CheckCircle2 className="h-3.5 w-3.5" />{hi ? 'फाइल हुआ' : 'Mark filed'}
+                          </Button>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

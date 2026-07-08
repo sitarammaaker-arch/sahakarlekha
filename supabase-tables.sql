@@ -2738,3 +2738,22 @@ alter table employees add column if not exists "esiNo" text;
 
 -- Payroll — employee PAN for Form 24Q (ECR-14 slice 4)
 alter table employees add column if not exists "pan" text;
+
+-- ══ Compliance calendar — filed tracking (ECR-13 slice 2) ═════════════════════
+-- Marks a statutory calendar item (e.g. "tds-2024-04") as filed so it stops
+-- showing as overdue/due. RLS = app-layer (society_id).
+create table if not exists compliance_filings (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "itemId" text,
+  "filedAt" text,
+  "filedBy" text,
+  note text
+);
+create index if not exists compliance_filings_scope_idx on compliance_filings (society_id, "itemId");
+alter table compliance_filings enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='compliance_filings' and policyname='allow_all') then
+    create policy "allow_all" on compliance_filings for all using (true) with check (true);
+  end if;
+end $$;

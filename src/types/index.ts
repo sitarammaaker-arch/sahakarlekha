@@ -582,6 +582,15 @@ export interface DepositAccount {
   createdAt: string;
 }
 
+// ECR-13: a compliance calendar item marked as filed/done.
+export interface ComplianceFiling {
+  id: string;
+  itemId: string;      // the compliance item id (e.g. "tds-2024-04", "24q-q1-2024")
+  filedAt: string;     // ISO date
+  filedBy?: string;
+  note?: string;
+}
+
 export interface DepositTransaction {
   id: string;
   depositAccountId: string;

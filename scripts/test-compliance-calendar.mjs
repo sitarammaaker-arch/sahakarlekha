@@ -11,8 +11,9 @@ function buildComplianceCalendar(asOf, app, opts = {}) {
   const back = opts.monthsBack ?? 2, fwd = opts.monthsForward ?? 3;
   const winBack = opts.windowBackDays ?? 45, winFwd = opts.windowFwdDays ?? 150;
   const [ay, am] = asOf.split('-').map(Number);
+  const filed = new Set(opts.filedIds ?? []);
   const items = [];
-  const push = (id, title, category, dueDate, period) => { const dl = daysBetween(asOf, dueDate); items.push({ id, title, category, dueDate, period, daysLeft: dl, status: statusOf(dl) }); };
+  const push = (id, title, category, dueDate, period) => { const dl = daysBetween(asOf, dueDate); items.push({ id, title, category, dueDate, period, daysLeft: dl, status: filed.has(id) ? 'filed' : statusOf(dl) }); };
   for (let k = -back; k <= fwd; k++) {
     const [ly, lm] = addMonthsYM(ay, am, k);
     const [dy, dm] = addMonthsYM(ly, lm, 1);
@@ -69,6 +70,13 @@ ok(full.every(i => i.daysLeft >= -45 && i.daysLeft <= 150), 'items within [-45, 
 
 // 8. Sorted ascending by due date.
 ok(full.every((it, i) => i === 0 || full[i - 1].dueDate <= it.dueDate), 'sorted by due date');
+
+// 9. Filed tracking — a filed item shows status 'filed' (never overdue), others unaffected.
+const withFiled = buildComplianceCalendar('2024-05-10', { hasEmployees: true, tan: true, gstin: true }, { filedIds: ['tds-2024-04'] });
+const filedTds = find(withFiled, i => i.id === 'tds-2024-04');
+ok(filedTds && filedTds.status === 'filed', 'filed TDS shows status filed (not overdue)');
+ok(find(withFiled, i => i.id === 'gstr3b-2024-04').status !== 'filed', 'other items unaffected by filing');
+ok(withFiled.filter(i => i.status === 'overdue').length < full.filter(i => i.status === 'overdue').length, 'filing reduces overdue count');
 
 console.log(`\nCompliance calendar (pure): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

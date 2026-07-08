@@ -14,7 +14,7 @@ export interface ComplianceApplicability {
   gstin?: boolean;  // GST returns applicable
 }
 export type ComplianceCategory = 'PF' | 'ESI' | 'TDS' | 'GST' | 'IncomeTax' | 'Audit';
-export type ComplianceStatus = 'overdue' | 'due-soon' | 'upcoming';
+export type ComplianceStatus = 'overdue' | 'due-soon' | 'upcoming' | 'filed';
 
 export interface ComplianceItem {
   id: string;
@@ -46,6 +46,7 @@ export interface CalendarOptions {
   monthsForward?: number;  // recurring months after asOf (default 3)
   windowBackDays?: number; // keep items no older than this (default 45)
   windowFwdDays?: number;  // keep items no further than this (default 150)
+  filedIds?: string[];     // item ids already filed → status 'filed' (never overdue/due-soon)
 }
 
 /** Build the compliance calendar around `asOf` (YYYY-MM-DD) for the applicable heads. */
@@ -53,10 +54,11 @@ export function buildComplianceCalendar(asOf: string, app: ComplianceApplicabili
   const back = opts.monthsBack ?? 2, fwd = opts.monthsForward ?? 3;
   const winBack = opts.windowBackDays ?? 45, winFwd = opts.windowFwdDays ?? 150;
   const [ay, am] = asOf.split('-').map(Number);
+  const filed = new Set(opts.filedIds ?? []);
   const items: ComplianceItem[] = [];
   const push = (id: string, title: string, category: ComplianceCategory, dueDate: string, period: string) => {
     const daysLeft = daysBetween(asOf, dueDate);
-    items.push({ id, title, category, dueDate, period, daysLeft, status: statusOf(daysLeft) });
+    items.push({ id, title, category, dueDate, period, daysLeft, status: filed.has(id) ? 'filed' : statusOf(daysLeft) });
   };
 
   // Monthly heads — month L's liability is due in month L+1.
