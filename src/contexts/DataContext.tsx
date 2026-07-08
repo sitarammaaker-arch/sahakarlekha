@@ -29,6 +29,7 @@ import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { sumActiveMemberShareCapital, reconcileShareCapital, type ShareCapitalReconciliation } from '@/lib/shareReconciliation';
 import { can as rbacCan, type Permission } from '@/lib/rbac';
 import { splitVoucherExtras, extrasFailureToast } from '@/lib/voucherPersistence';
+import { shareOpPosting, validateShareOp, applyShareOp, type ShareOpType } from '@/lib/shareOps';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLines } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
@@ -106,6 +107,8 @@ interface DataContextType {
   refundShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
   purchaseShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
   transferShareCapital: (fromMemberId: string, toMemberId: string, amount: number, date: string) => void;
+  shareOperation: (memberId: string, type: ShareOpType, amount: number, opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string; date?: string; reason?: string }) => boolean;
+  getMemberShareReconciliation: (memberId: string) => ShareCapitalReconciliation | null;
 
 
   workOrders: WorkOrder[];
@@ -2007,6 +2010,48 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, [accounts, addVoucher, user]);
 
+  // ECR-16 / MS-02: statutory share operations — bonus / forfeit / redeem / surrender.
+  // Posts the SHARE_CAP voucher and moves member.shareCapital by the same amount so the
+  // per-member ledger (getMemberLedger) and the scalar stay in lock-step. Mirrors the
+  // refundShareCapital pattern (post voucher → adjust scalar → RULE 1 rollback on failure).
+  const shareOperation = useCallback((memberId: string, type: ShareOpType, amount: number,
+    opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string; date?: string; reason?: string }): boolean => {
+    if (guardFYLocked()) return false;
+    const member = membersRef.current.find(m => m.id === memberId);
+    if (!member) return false;
+    const amt = Math.round(amount * 100) / 100;
+    const v = validateShareOp(type, amt, member.shareCapital || 0);
+    if (!v.ok) { toastRef.current({ title: 'अमान्य शेयर संचालन', description: v.error, variant: 'destructive', duration: 9000 }); return false; }
+    const date = opts?.date || new Date().toISOString().split('T')[0];
+    if (guardPeriodLock(date)) return false;
+    const payout = opts?.mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const reserve = opts?.reserveAccountId || '1201';
+    const posting = shareOpPosting(type, { shareCap: ACCOUNT_IDS.SHARE_CAP, payout, reserve });
+    const LABELS: Record<ShareOpType, string> = { bonus: 'Bonus shares issued to', forfeit: 'Shares forfeited from', redeem: 'Shares redeemed for', surrender: 'Shares surrendered by' };
+    const voucher = addVoucher({
+      type: posting.usesCash ? 'payment' : 'journal', date,
+      debitAccountId: posting.debitAccountId, creditAccountId: posting.creditAccountId, amount: amt,
+      narration: `${LABELS[type]} ${member.name}${opts?.reason ? ' — ' + opts.reason : ''}`,
+      createdBy: userRef.current?.name ?? 'System', memberId,
+    });
+    if (!voucher?.id) return false; // addVoucher blocked (FY-lock / period-lock / unbalanced)
+    const before = member;
+    const updated = { ...member, shareCapital: applyShareOp(type, member.shareCapital || 0, amt) };
+    membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
+    setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
+    supabase.from('members').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Share operation member sync:', error.message);
+        membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
+        setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
+        toastRef.current({ title: 'शेयर संचालन सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital }, after: { shareCapital: updated.shareCapital }, reason: `share:${type}${opts?.reason ? ' — ' + opts.reason : ''}` });
+    toastRef.current({ title: '✅ शेयर संचालन दर्ज', description: `${LABELS[type]} ${member.name} · ₹${amt.toLocaleString('en-IN')}`, variant: 'default' });
+    return true;
+  }, [accounts, addVoucher]);
+
   // Additional share purchase — a member buys MORE shares over time. Inverse of the
   // refund: posts a SEPARATE dated voucher Dr Cash-Bank / Cr Share Capital 1102
   // (memberId-tagged); the original join receipt stays intact so net 1102 =
@@ -3245,6 +3290,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     return result;
   }, [members, activeVouchers]);
+
+  // ECR-16 / MS-03: per-member share reconciliation — the voucher-derived ledger balance
+  // vs the member.shareCapital scalar (extends the global P0 #4 reconciliation to each member).
+  const getMemberShareReconciliation = useCallback((memberId: string): ShareCapitalReconciliation | null => {
+    const member = members.find(m => m.id === memberId);
+    if (!member) return null;
+    const entries = getMemberLedger(memberId);
+    const ledgerBalance = entries.length ? entries[entries.length - 1].balance : (member.shareCapital || 0);
+    return reconcileShareCapital(member.shareCapital || 0, ledgerBalance);
+  }, [members, getMemberLedger]);
 
   const addLoan = useCallback((data: Omit<Loan, 'id' | 'loanNo' | 'createdAt'>): Loan => {
     if (guardFYLocked()) return { ...data, id: '' } as unknown as Loan;
@@ -5290,7 +5345,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
       recordFarmerPayment,
       addVoucher, updateVoucher, cancelVoucher, reverseVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
-      addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, approveMember, rejectMember,
+      addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
       workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
       musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
