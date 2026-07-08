@@ -143,6 +143,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'shareRegister',        titleKey: 'shareRegister',        icon: BookMarked,   route: '/share-register',        domain: 'registers', requiredCapabilities: U, order: 0 },
   { id: 'loanRegister',         titleKey: 'loanRegister',         icon: Landmark,     route: '/loan-register',         domain: 'registers', requiredCapabilities: ['lending'], order: 1 },
   { id: 'loanInterest',         titleKey: 'loanInterest',         icon: Percent,      route: '/loan-interest',         domain: 'registers', requiredCapabilities: ['lending'], requiredRoles: ['admin', 'accountant'], order: 2 },
+  { id: 'deposits',             titleKey: 'deposits',             icon: PiggyBank,    route: '/deposits',              domain: 'registers', requiredCapabilities: ['lending'], order: 2.5 },
   { id: 'assetRegister',        titleKey: 'assetRegister',        icon: Package,      route: '/asset-register',        domain: 'registers', requiredCapabilities: U, order: 3 },
   { id: 'depreciationSchedule', titleKey: 'depreciationSchedule', icon: TrendingDown, route: '/depreciation-schedule', domain: 'registers', requiredCapabilities: U, order: 4 },
   { id: 'auditRegister',        titleKey: 'auditRegister',        icon: ShieldCheck,  route: '/audit-register',        domain: 'registers', requiredCapabilities: U, order: 5 },

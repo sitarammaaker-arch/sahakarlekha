@@ -560,6 +560,39 @@ export interface Loan {
   createdAt: string;
 }
 
+// ── Deposits (Core for Credit/PACS) — SB / FD / RD / Pigmy ─────────────────────
+export type DepositType = 'SB' | 'FD' | 'RD' | 'PIGMY';
+export type DepositTxnType = 'open' | 'deposit' | 'withdraw';
+export type DepositStatus = 'active' | 'closed' | 'matured';
+
+// A member deposit account (a liability the society owes the member). The FD/RD/Pigmy
+// fields are nullable so later product slices reuse this shape without a schema change.
+export interface DepositAccount {
+  id: string;
+  accountNo: string;
+  memberId: string;
+  depositType: DepositType;
+  openDate: string;
+  balance: number;
+  interestRate?: number;       // p.a. — used from the interest slice onward
+  maturityDate?: string;       // FD/RD
+  installmentAmount?: number;  // RD/Pigmy
+  status: DepositStatus;
+  createdAt: string;
+}
+
+export interface DepositTransaction {
+  id: string;
+  depositAccountId: string;
+  date: string;
+  txnType: DepositTxnType;
+  amount: number;
+  mode: 'cash' | 'bank';
+  voucherId?: string;
+  balanceAfter: number;
+  createdAt: string;
+}
+
 // ── Dairy / Milk society — daily collection register + member payout ──────────
 export type MilkShift = 'morning' | 'evening';
 export type MilkQualityDecision = 'accepted' | 'accepted_cut' | 'rejected';

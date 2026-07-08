@@ -5,6 +5,7 @@ import type {
   Voucher, VoucherEditSnapshot, VoucherLine, VoucherType, Member, MemberStatus, LedgerAccount, SocietySettings, BillAllocation,
   AccountBalance, CashBookEntry, BankBookEntry, MemberLedgerEntry, ReceiptsPaymentsData,
   Loan, Asset, AuditObjection, Recoverable, KachiAaratEntry, P7Entry,
+  DepositAccount, DepositTransaction, DepositType, DepositTxnType,
   StockItem, StockMovement,
   Sale, Purchase,
   Employee, SalaryRecord, PaymentMode,
@@ -30,6 +31,7 @@ import { sumActiveMemberShareCapital, reconcileShareCapital, type ShareCapitalRe
 import { can as rbacCan, type Permission } from '@/lib/rbac';
 import { splitVoucherExtras, extrasFailureToast } from '@/lib/voucherPersistence';
 import { shareOpPosting, validateShareOp, applyShareOp, type ShareOpType } from '@/lib/shareOps';
+import { depositLiabilityAccount, depositPosting, applyDepositTxn, validateDepositTxn } from '@/lib/depositEngine';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLines } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
@@ -67,6 +69,11 @@ interface DataContextType {
   approveFarmerSettlement: (data: { settlementId: string }) => FarmerSettlement;
   recordFarmerPayment: (data: { engineVoucherId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; paymentDate: string; reference?: string; remarks?: string }) => Voucher;
   loans: Loan[];
+  depositAccounts: DepositAccount[];
+  depositTransactions: DepositTransaction[];
+  addDepositAccount: (data: Omit<DepositAccount, 'id' | 'accountNo' | 'balance' | 'status' | 'createdAt'> & { openingAmount?: number; mode?: 'cash' | 'bank' }) => DepositAccount | null;
+  postDepositTransaction: (accountId: string, txnType: 'deposit' | 'withdraw', amount: number, mode: 'cash' | 'bank', date: string) => boolean;
+  getDepositTransactions: (accountId: string) => DepositTransaction[];
   assets: Asset[];
 
   addVoucher: (data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }) => Voucher;
@@ -309,6 +316,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return true; // blocked
   }, []);
   const [loans, setLoansState] = useState<Loan[]>([]);
+  const [depositAccounts, setDepositAccountsState] = useState<DepositAccount[]>([]);
+  const [depositTransactions, setDepositTransactionsState] = useState<DepositTransaction[]>([]);
   const [societyCapabilities, setSocietyCapabilitiesState] = useState<SocietyCapabilityRow[]>([]);
   const [procurementFarmers, setProcurementFarmersState] = useState<Farmer[]>(() => storage.getProcurementFarmers());
   const [procurementLots, setProcurementLotsState] = useState<ProcurementLot[]>(() => storage.getProcurementLots());
@@ -328,6 +337,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
   const loansRef = useRef<Loan[]>(loans);
   useEffect(() => { loansRef.current = loans; }, [loans]);
+  const depositAccountsRef = useRef<DepositAccount[]>(depositAccounts);
+  useEffect(() => { depositAccountsRef.current = depositAccounts; }, [depositAccounts]);
   const [assets, setAssetsState] = useState<Asset[]>([]);
   const assetsRef = useRef<Asset[]>(assets);
   useEffect(() => { assetsRef.current = assets; }, [assets]);
@@ -376,6 +387,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Reset all state to empty before loading new society's data
     setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
+    setDepositAccountsState([]); setDepositTransactionsState([]);
     setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
     setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]); setProcurementSettlementsState([]); setWorkOrdersState([]); setMusterEntriesState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
@@ -507,6 +519,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             })));
           },
           () => setSocietyCapabilitiesState([]),
+        );
+
+        // Deposits module — independent, error-tolerant load (a missing table pre-migration
+        // NEVER breaks the main data load).
+        supabase.from('deposit_accounts').select('*').eq('society_id', sid).then(
+          ({ data, error }) => { if (!error && data) setDepositAccountsState(data as DepositAccount[]); },
+          () => { /* table absent pre-migration — ignore */ },
+        );
+        supabase.from('deposit_transactions').select('*').eq('society_id', sid).then(
+          ({ data, error }) => { if (!error && data) setDepositTransactionsState(data as DepositTransaction[]); },
+          () => { /* table absent pre-migration — ignore */ },
         );
 
         // Procurement Phase 1.0 — error-tolerant load (Supabase → localStorage fallback). Independent
@@ -2151,6 +2174,111 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
     });
   }, [accounts, addVoucher, user]);
+
+  // ══ Deposits module (Core for Credit/PACS) — SB / FD / RD / Pigmy ═══════════
+  // A member deposit is a LIABILITY (society owes the member). Slice 1 wires SB
+  // open/deposit/withdraw: each cash movement posts a voucher (Dr/Cr the 2107/2108
+  // liability) and updates the account balance + the deposit sub-ledger.
+  const nextDepositAccountNo = (type: DepositType): string => {
+    const yy = (societyRef.current?.financialYear || '').split('-')[0] || new Date().toISOString().slice(0, 4);
+    const n = depositAccountsRef.current.filter(d => d.depositType === type).length + 1;
+    return `${type}/${yy}/${String(n).padStart(4, '0')}`;
+  };
+
+  // Post the cash voucher + sub-ledger transaction for a deposit movement. Returns the
+  // new balance, or null if the voucher was blocked (FY/period lock / unbalanced).
+  const postDepositLeg = (acct: DepositAccount, txnType: DepositTxnType, amount: number, mode: 'cash' | 'bank', date: string): number | null => {
+    const liability = depositLiabilityAccount(acct.depositType);
+    const cashBank = mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const posting = depositPosting(txnType, { liability, cashBank });
+    const member = membersRef.current.find(m => m.id === acct.memberId);
+    const voucher = addVoucher({
+      type: txnType === 'withdraw' ? 'payment' : 'receipt', date,
+      debitAccountId: posting.debitAccountId, creditAccountId: posting.creditAccountId, amount,
+      narration: `${acct.depositType} ${txnType} — ${acct.accountNo}${member ? ' · ' + member.name : ''}`,
+      createdBy: userRef.current?.name ?? 'System', memberId: acct.memberId,
+    });
+    if (!voucher?.id) return null;
+    const balanceAfter = applyDepositTxn(acct.balance, txnType, amount);
+    const txn: DepositTransaction = {
+      id: crypto.randomUUID(), depositAccountId: acct.id, date, txnType, amount, mode,
+      voucherId: voucher.id, balanceAfter, createdAt: new Date().toISOString(),
+    };
+    setDepositTransactionsState(prev => [...prev, txn]);
+    supabase.from('deposit_transactions').upsert(withSoc(txn)).then(({ error }) => {
+      if (error) console.warn('Deposit txn sync failed (run latest migration):', error.message);
+    });
+    return balanceAfter;
+  };
+
+  const addDepositAccount = useCallback((data: Omit<DepositAccount, 'id' | 'accountNo' | 'balance' | 'status' | 'createdAt'> & { openingAmount?: number; mode?: 'cash' | 'bank' }): DepositAccount | null => {
+    if (guardFYLocked()) return null;
+    const { openingAmount = 0, mode = 'cash', ...rest } = data;
+    const acct: DepositAccount = {
+      ...rest, id: crypto.randomUUID(), accountNo: nextDepositAccountNo(data.depositType),
+      balance: 0, status: 'active', createdAt: new Date().toISOString(),
+    };
+    depositAccountsRef.current = [...depositAccountsRef.current, acct];
+    setDepositAccountsState(prev => [...prev, acct]);
+    const persist = (a: DepositAccount) => supabase.from('deposit_accounts').upsert(withSoc(a)).then(({ error }) => {
+      if (error) {
+        console.error('Deposit account sync:', error.message);
+        depositAccountsRef.current = depositAccountsRef.current.filter(d => d.id !== a.id);
+        setDepositAccountsState(prev => prev.filter(d => d.id !== a.id));   // RULE 1: roll back
+        toastRef.current({ title: 'जमा खाता सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    // Opening deposit (if any) posts a voucher + first transaction, then re-persist with the balance.
+    const opening = Math.round(Math.max(0, openingAmount) * 100) / 100;
+    if (opening > 0) {
+      const newBal = postDepositLeg(acct, 'open', opening, mode, acct.openDate);
+      if (newBal !== null) {
+        const withBal = { ...acct, balance: newBal };
+        depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === acct.id ? withBal : d);
+        setDepositAccountsState(prev => prev.map(d => d.id === acct.id ? withBal : d));
+        persist(withBal);
+        emitAudit({ entityType: 'deposit', entityId: acct.id, action: 'create', after: { accountNo: acct.accountNo, type: acct.depositType, opening } });
+        toastRef.current({ title: '✅ जमा खाता खुला', description: `${acct.accountNo} · ₹${opening.toLocaleString('en-IN')}` });
+        return withBal;
+      }
+    }
+    persist(acct);
+    emitAudit({ entityType: 'deposit', entityId: acct.id, action: 'create', after: { accountNo: acct.accountNo, type: acct.depositType } });
+    toastRef.current({ title: '✅ जमा खाता खुला', description: acct.accountNo });
+    return acct;
+  }, [accounts, addVoucher]);
+
+  const postDepositTransaction = useCallback((accountId: string, txnType: 'deposit' | 'withdraw', amount: number, mode: 'cash' | 'bank', date: string): boolean => {
+    if (guardFYLocked()) return false;
+    const acct = depositAccountsRef.current.find(d => d.id === accountId);
+    if (!acct) return false;
+    if (acct.status !== 'active') { toastRef.current({ title: 'खाता सक्रिय नहीं', description: 'Only active deposit accounts can transact.', variant: 'destructive' }); return false; }
+    const amt = Math.round(amount * 100) / 100;
+    const v = validateDepositTxn(txnType, amt, acct.balance);
+    if (!v.ok) { toastRef.current({ title: 'अमान्य लेनदेन', description: v.error, variant: 'destructive', duration: 9000 }); return false; }
+    const before = acct;
+    const newBal = postDepositLeg(acct, txnType, amt, mode, date);
+    if (newBal === null) return false; // voucher blocked
+    const updated = { ...acct, balance: newBal };
+    depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? updated : d);
+    setDepositAccountsState(prev => prev.map(d => d.id === accountId ? updated : d));
+    supabase.from('deposit_accounts').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Deposit txn balance sync:', error.message);
+        depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
+        setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
+        toastRef.current({ title: 'लेनदेन सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { balance: before.balance }, after: { balance: newBal, txn: txnType, amount: amt } });
+    toastRef.current({ title: txnType === 'deposit' ? '✅ जमा' : '✅ निकासी', description: `${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · शेष ₹${newBal.toLocaleString('en-IN')}` });
+    return true;
+  }, [accounts, addVoucher]);
+
+  const getDepositTransactions = useCallback((accountId: string): DepositTransaction[] =>
+    depositTransactions.filter(t => t.depositAccountId === accountId)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt)),
+    [depositTransactions]);
 
   // ── Housing Flats/Units register (master data; Member-pattern persistence + RULE-1 rollback) ──
   // ── Labour Work Orders register (master data; Member-pattern persistence + RULE-1 rollback) ──
@@ -5359,6 +5487,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   return (
     <DataContext.Provider value={{
       vouchers, members, accounts, society, loans, assets, auditObjections,
+      depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, getDepositTransactions,
       stockItems, stockMovements, sales, purchases, employees, salaryRecords,
       suppliers, customers, kccLoans, societyCapabilities, setCapabilityHidden,
       procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,

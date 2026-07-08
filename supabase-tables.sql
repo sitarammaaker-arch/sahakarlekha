@@ -2676,3 +2676,45 @@ alter table eway_bills add column if not exists "transDocDate" text;
 -- On processing, salary posts Dr Salary Expense 5201 / Cr Salary Payable 2103; payment
 -- later clears the liability. This column tracks the accrual voucher for update/delete.
 alter table salary_records add column if not exists "accrualVoucherId" text;
+
+-- ══ Deposits module (Core for Credit/PACS) — SB / FD / RD / Pigmy ═════════════
+-- A member deposit is a LIABILITY (society owes the member). Balances sit in COA
+-- 2107 (Savings/Member Deposits) / 2108 (Fixed Deposits). Each cash movement also
+-- posts a voucher; these tables are the deposit sub-ledger. RLS = app-layer (society_id).
+create table if not exists deposit_accounts (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "accountNo" text,
+  "memberId" text,
+  "depositType" text,
+  "openDate" text,
+  balance numeric default 0,
+  "interestRate" numeric,
+  "maturityDate" text,
+  "installmentAmount" numeric,
+  status text default 'active',
+  "createdAt" timestamp default now()
+);
+create table if not exists deposit_transactions (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "depositAccountId" text,
+  date text,
+  "txnType" text,
+  amount numeric,
+  mode text,
+  "voucherId" text,
+  "balanceAfter" numeric,
+  "createdAt" timestamp default now()
+);
+create index if not exists deposit_txn_acct_idx on deposit_transactions (society_id, "depositAccountId", date);
+alter table deposit_accounts enable row level security;
+alter table deposit_transactions enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='deposit_accounts' and policyname='allow_all') then
+    create policy "allow_all" on deposit_accounts for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='deposit_transactions' and policyname='allow_all') then
+    create policy "allow_all" on deposit_transactions for all using (true) with check (true);
+  end if;
+end $$;
