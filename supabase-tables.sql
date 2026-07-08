@@ -500,6 +500,12 @@ alter table vouchers add column if not exists "approvalRemarks" text;
 alter table vouchers add column if not exists "approvedBy" text;
 alter table vouchers add column if not exists "approvedAt" text;
 
+-- ECR-08 (P1 #8): reversal-not-edit. reversalOf = the original this voucher reverses;
+-- reversedBy = the reversal voucher id set on the original. Written via targeted best-effort
+-- .update() (like the delete columns), so base upserts stay safe before this runs.
+alter table vouchers add column if not exists "reversalOf" text;
+alter table vouchers add column if not exists "reversedBy" text;
+
 -- Salary Records: allowances breakdown
 alter table salary_records add column if not exists "hraAllowance" numeric default 0;
 alter table salary_records add column if not exists "taAllowance" numeric default 0;

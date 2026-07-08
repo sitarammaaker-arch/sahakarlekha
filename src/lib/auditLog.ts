@@ -12,7 +12,7 @@
  */
 import { supabase } from '@/lib/supabase';
 
-export type AuditAction = 'create' | 'update' | 'delete' | 'approve' | 'reject' | 'cancel' | 'restore';
+export type AuditAction = 'create' | 'update' | 'delete' | 'approve' | 'reject' | 'cancel' | 'restore' | 'reverse';
 
 export interface AuditActor {
   name?: string | null;

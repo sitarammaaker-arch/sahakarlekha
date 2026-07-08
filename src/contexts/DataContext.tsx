@@ -71,6 +71,7 @@ interface DataContextType {
   addVoucher: (data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }) => Voucher;
   updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => void;
   cancelVoucher: (id: string, reason: string, deletedBy: string) => boolean;
+  reverseVoucher: (id: string, reason: string) => Voucher | null;
   restoreVoucher: (id: string) => void;
   clearVoucher: (id: string, clearedDate?: string) => void;
   unclearVoucher: (id: string) => void;
@@ -215,6 +216,15 @@ interface DataContextType {
   getEntityLinks: (entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan' | 'asset', id: string) => EntityLink[];
   isLoading: boolean;
 }
+
+// ── ECR-08 (P1 #8): reversal-not-edit pure helpers ────────────────────────────
+// Flip Dr↔Cr for each line (amount unchanged) to build a contra reversal. Pure.
+const reverseEntryLines = (lines: VoucherLine[]): VoucherLine[] =>
+  lines.map(l => ({ ...l, type: (l.type === 'Dr' ? 'Cr' : 'Dr') as 'Dr' | 'Cr' }));
+// In-place edit forbidden (correct via reversal instead) when the voucher is already
+// reversed, or is posted-under-control (opt-in maker-checker regime + approved). Pure.
+const isEditLocked = (v: Pick<Voucher, 'reversedBy' | 'approvalStatus'>, approvalRequired: boolean): boolean =>
+  !!v.reversedBy || (!!approvalRequired && v.approvalStatus === 'approved');
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
@@ -1302,6 +1312,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!current) return;
     // ECR-07: can neither edit a voucher within a locked period nor move one into it.
     if (guardPeriodLock(current.date, data.date)) return;
+    // ECR-08: a reversed voucher — or an approved one under maker-checker — is edit-locked;
+    // corrections must go through a reversal, not an in-place edit.
+    if (isEditLocked(current, !!societyRef.current?.approvalRequired)) {
+      toastRef.current({
+        title: '🔁 सीधे edit नहीं / Use reversal',
+        description: current.reversedBy
+          ? 'यह वाउचर पहले ही reverse हो चुका है — edit नहीं हो सकता।'
+          : 'Approved voucher सीधे edit नहीं होता — correction के लिए इसे reverse करें (Reversal voucher बनेगा)।',
+        variant: 'destructive', duration: 9000,
+      });
+      return;
+    }
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
     // Capture edit audit snapshot — only track the fields that actually changed
     const changedFields = (Object.keys(data) as (keyof typeof data)[]).filter(
@@ -1382,6 +1404,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return false;
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
+    // ECR-08: a reversed voucher must not also be cancelled — its reversal would then
+    // net against nothing (phantom entry). Correction already stands via the reversal.
+    if (current.reversedBy) {
+      toastRef.current({ title: 'रद्द नहीं होगा', description: 'यह वाउचर reverse हो चुका है — इसकी reversal entry ही correction है। इसे cancel न करें।', variant: 'destructive', duration: 9000 });
+      return false;
+    }
 
     // 🔒 Block deletion of vouchers ACTIVELY linked to a Purchase / Sale parent.
     // If the parent purchase/sale no longer points to THIS voucher (i.e., it's an
@@ -1476,6 +1504,54 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return true;
   }, []);
+
+  // ECR-08 (P1 #8): correct a posted voucher by posting a LINKED contra reversal (Dr↔Cr
+  // swapped) instead of editing it in place. Both entries stay in the ledger (net zero),
+  // audit-visible — unlike a soft-delete. The reversal is dated today (must be in an open
+  // period). Reversal linkage (reversalOf / reversedBy) is persisted via targeted best-effort
+  // .update() so the base upserts stay safe before the migration runs.
+  const reverseVoucher = useCallback((id: string, reason: string): Voucher | null => {
+    if (guardFYLocked()) return null;
+    const current = vouchersRef.current.find(v => v.id === id);
+    if (!current) return null;
+    if (current.isDeleted) { toastRef.current({ title: 'रद्द वाउचर', description: 'रद्द किया हुआ वाउचर reverse नहीं होता।', variant: 'destructive' }); return null; }
+    if (current.reversedBy) { toastRef.current({ title: 'पहले से reversed', description: `यह वाउचर पहले ही reverse हो चुका है।`, variant: 'destructive' }); return null; }
+    if (current.reversalOf) { toastRef.current({ title: 'यह स्वयं reversal है', description: 'Reversal entry को दोबारा reverse नहीं किया जाता।', variant: 'destructive' }); return null; }
+    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return null; }
+    const revDate = new Date().toISOString().split('T')[0];
+    if (guardPeriodLock(revDate)) return null; // reversal must post into an open period
+
+    // Build the contra reversal: swap Dr/Cr (and flip each compound line). addVoucher runs
+    // its own FY/period-lock + balance checks and returns id:'' on failure.
+    const revLines = current.lines ? reverseEntryLines(current.lines).map(l => ({ ...l, id: crypto.randomUUID() })) : undefined;
+    const reversal = addVoucher({
+      type: current.type,
+      date: revDate,
+      debitAccountId: current.creditAccountId,
+      creditAccountId: current.debitAccountId,
+      amount: current.amount,
+      narration: `Reversal of ${current.voucherNo}${reason ? ' — ' + reason : ''}`,
+      memberId: current.memberId,
+      lines: revLines,
+    });
+    if (!reversal?.id) return null; // addVoucher blocked (FY-lock / unbalanced / etc.)
+
+    // Link both sides. reversalOf/reversedBy are late-added columns → targeted best-effort
+    // .update() (same approach as the delete columns), never part of a base upsert.
+    const linkedReversal = { ...reversal, reversalOf: current.id };
+    const linkedOriginal = { ...current, reversedBy: reversal.id };
+    vouchersRef.current = vouchersRef.current.map(v => v.id === reversal.id ? linkedReversal : v.id === id ? linkedOriginal : v);
+    setVouchersState(prev => prev.map(v => v.id === reversal.id ? linkedReversal : v.id === id ? linkedOriginal : v));
+    supabase.from('vouchers').update({ reversalOf: current.id }).eq('id', reversal.id).then(({ error }) => {
+      if (error) console.warn('Reversal link (reversalOf) not persisted — run latest migration:', error.message);
+    });
+    supabase.from('vouchers').update({ reversedBy: reversal.id }).eq('id', id).then(({ error }) => {
+      if (error) console.warn('Reversal link (reversedBy) not persisted — run latest migration:', error.message);
+    });
+    emitAudit({ entityType: 'voucher', entityId: id, action: 'reverse', before: { reversedBy: null }, after: { reversedBy: reversal.id }, reason });
+    toastRef.current({ title: '🔁 Reversal बन गया', description: `${current.voucherNo} के लिए reversal ${reversal.voucherNo} पोस्ट हो गया। दोनों entries ledger में दिखेंगी (net zero)।`, variant: 'default', duration: 8000 });
+    return reversal;
+  }, [addVoucher]);
 
   const restoreVoucher = useCallback((id: string) => {
     if (guardFYLocked()) return;
@@ -5166,7 +5242,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
       procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
       recordFarmerPayment,
-      addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
+      addVoucher, updateVoucher, cancelVoucher, reverseVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
       addMember, updateMember, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, approveMember, rejectMember,
       workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
       musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
