@@ -21,6 +21,7 @@ import { PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, History, Search, Perce
 import { fmtDate } from '@/lib/dateUtils';
 import { sbInterest } from '@/lib/depositInterest';
 import { buildRdSchedule, missedCount } from '@/lib/rdSchedule';
+import { pigmyAgents, pigmyAccountsForAgent, collectionTotal } from '@/lib/pigmy';
 import { useToast } from '@/hooks/use-toast';
 import type { DepositType, DepositAccount } from '@/types';
 
@@ -55,7 +56,7 @@ const Deposits: React.FC = () => {
 
   // ── Open account dialog ────────────────────────────────────────────────────
   const [openNew, setOpenNew] = useState(false);
-  const emptyForm = { memberId: '', depositType: 'SB' as DepositType, openDate: today(), interestRate: '', openingAmount: '', installmentAmount: '', maturityDate: '', mode: 'cash' as 'cash' | 'bank' };
+  const emptyForm = { memberId: '', depositType: 'SB' as DepositType, openDate: today(), interestRate: '', openingAmount: '', installmentAmount: '', maturityDate: '', agent: '', mode: 'cash' as 'cash' | 'bank' };
   const [form, setForm] = useState(emptyForm);
   const submitNew = () => {
     if (!form.memberId) { toast({ title: hi ? 'सदस्य चुनें' : 'Select a member', variant: 'destructive' }); return; }
@@ -64,9 +65,35 @@ const Deposits: React.FC = () => {
       interestRate: form.interestRate ? Number(form.interestRate) : undefined,
       installmentAmount: form.installmentAmount ? Number(form.installmentAmount) : undefined,
       maturityDate: form.maturityDate || undefined,
+      agent: form.agent.trim() || undefined,
       openingAmount: form.openingAmount ? Number(form.openingAmount) : 0, mode: form.mode,
     });
     if (created) { setOpenNew(false); setForm(emptyForm); }
+  };
+
+  // ── Pigmy daily collection ─────────────────────────────────────────────────
+  const [collectOpen, setCollectOpen] = useState(false);
+  const [collectAgent, setCollectAgent] = useState('');
+  const [collectDate, setCollectDate] = useState(today());
+  const [collectAmts, setCollectAmts] = useState<Record<string, string>>({});
+  const agents = pigmyAgents(depositAccounts);
+  const agentAccounts = collectAgent ? pigmyAccountsForAgent(depositAccounts, collectAgent) : [];
+  const collectSum = collectionTotal(agentAccounts.map(a => collectAmts[a.id]));
+  const selectAgent = (ag: string) => {
+    setCollectAgent(ag);
+    const pre: Record<string, string> = {};
+    pigmyAccountsForAgent(depositAccounts, ag).forEach(a => { if (a.installmentAmount) pre[a.id] = String(a.installmentAmount); });
+    setCollectAmts(pre);
+  };
+  const openCollect = () => { setCollectDate(today()); selectAgent(agents[0] || ''); setCollectOpen(true); };
+  const postCollection = () => {
+    let posted = 0;
+    for (const a of agentAccounts) {
+      const amt = Number(collectAmts[a.id]) || 0;
+      if (amt > 0 && postDepositTransaction(a.id, 'deposit', amt, 'cash', collectDate)) posted++;
+    }
+    if (posted > 0) toast({ title: hi ? `${posted} संग्रह दर्ज` : `${posted} collections posted`, description: fmt(collectSum) });
+    setCollectOpen(false);
   };
 
   // ── Deposit / Withdraw dialog ──────────────────────────────────────────────
@@ -135,7 +162,12 @@ const Deposits: React.FC = () => {
           <p className="text-sm text-gray-500">{hi ? 'सदस्य जमा खाते — खोलें, जमा करें, निकासी करें' : 'Member deposit accounts — open, deposit, withdraw'}</p>
         </div>
         {canEdit && (
-          <Button className="ml-auto gap-2" onClick={() => setOpenNew(true)}><Plus className="h-4 w-4" />{hi ? 'नया खाता' : 'New Account'}</Button>
+          <div className="ml-auto flex gap-2">
+            {agents.length > 0 && (
+              <Button variant="outline" className="gap-2" onClick={openCollect}><PiggyBank className="h-4 w-4" />{hi ? 'दैनिक संग्रह' : 'Daily Collection'}</Button>
+            )}
+            <Button className="gap-2" onClick={() => setOpenNew(true)}><Plus className="h-4 w-4" />{hi ? 'नया खाता' : 'New Account'}</Button>
+          </div>
         )}
       </div>
 
@@ -249,6 +281,12 @@ const Deposits: React.FC = () => {
                   <Input type="number" className="mt-1" value={form.installmentAmount} onChange={e => setForm(f => ({ ...f, installmentAmount: e.target.value }))} placeholder="0" />
                 </div>
               )}
+              {form.depositType === 'PIGMY' && (
+                <div>
+                  <Label className="text-xs">{hi ? 'एजेंट (संग्राहक)' : 'Agent (collector)'}</Label>
+                  <Input className="mt-1" value={form.agent} onChange={e => setForm(f => ({ ...f, agent: e.target.value }))} placeholder={hi ? 'एजेंट का नाम' : 'Agent name'} />
+                </div>
+              )}
             </div>
             {Number(form.openingAmount) > 0 && (
               <div>
@@ -358,6 +396,57 @@ const Deposits: React.FC = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setCloseAcct(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
             <Button onClick={submitClose}>{closeAcct && isTerm(closeAcct) ? (hi ? 'परिपक्व करें' : 'Mature') : (hi ? 'बंद करें' : 'Close')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pigmy daily collection dialog */}
+      <Dialog open={collectOpen} onOpenChange={setCollectOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>{hi ? 'पिग्मी दैनिक संग्रह' : 'Pigmy Daily Collection'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">{hi ? 'एजेंट' : 'Agent'}</Label>
+                <Select value={collectAgent} onValueChange={selectAgent}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>{agents.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">{hi ? 'तिथि' : 'Date'}</Label>
+                <Input type="date" className="mt-1" value={collectDate} onChange={e => setCollectDate(e.target.value)} />
+              </div>
+            </div>
+            <div className="max-h-[45vh] overflow-y-auto border rounded-md">
+              {agentAccounts.length === 0 ? (
+                <p className="p-4 text-center text-sm text-muted-foreground">{hi ? 'इस एजेंट का कोई पिग्मी खाता नहीं।' : 'No pigmy accounts for this agent.'}</p>
+              ) : (
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>{hi ? 'खाता' : 'Account'}</TableHead>
+                    <TableHead>{hi ? 'सदस्य' : 'Member'}</TableHead>
+                    <TableHead className="text-right w-28">{hi ? 'राशि' : 'Amount'}</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {agentAccounts.map(a => (
+                      <TableRow key={a.id}>
+                        <TableCell className="font-mono text-xs">{a.accountNo}</TableCell>
+                        <TableCell className="text-sm">{memberName(a.memberId)}</TableCell>
+                        <TableCell className="text-right">
+                          <Input type="number" className="h-8 w-24 ml-auto" value={collectAmts[a.id] ?? ''} onChange={e => setCollectAmts(m => ({ ...m, [a.id]: e.target.value }))} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+            <p className="text-sm text-right">{hi ? 'कुल' : 'Total'}: <strong>{fmt(collectSum)}</strong></p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCollectOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+            <Button disabled={!(collectSum > 0)} onClick={postCollection}>{hi ? 'संग्रह दर्ज करें' : 'Post Collection'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

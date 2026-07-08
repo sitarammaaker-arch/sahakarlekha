@@ -2718,3 +2718,6 @@ do $$ begin
     create policy "allow_all" on deposit_transactions for all using (true) with check (true);
   end if;
 end $$;
+
+-- Deposits — Pigmy daily-collection agent (slice 5)
+alter table deposit_accounts add column if not exists "agent" text;

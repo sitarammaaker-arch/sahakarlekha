@@ -577,6 +577,7 @@ export interface DepositAccount {
   interestRate?: number;       // p.a. — used from the interest slice onward
   maturityDate?: string;       // FD/RD
   installmentAmount?: number;  // RD/Pigmy
+  agent?: string;              // Pigmy — the daily-collection agent
   status: DepositStatus;
   createdAt: string;
 }
