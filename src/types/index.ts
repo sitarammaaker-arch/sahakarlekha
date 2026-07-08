@@ -134,6 +134,9 @@ export type MemberType = 'member' | 'nominal';
 // ECR-16: member KYC verification lifecycle.
 export type KycStatus = 'pending' | 'verified' | 'rejected';
 
+// ECR-16: share-certificate lifecycle (issued → reissued on loss/damage → cancelled).
+export type ShareCertStatus = 'issued' | 'reissued' | 'cancelled';
+
 // ECR-16: a member may nominate MULTIPLE nominees, each with a share of benefits (%).
 export interface Nominee {
   id: string;
@@ -162,6 +165,9 @@ export interface Member {
   shareCertNo?: string;
   shareCount?: number;
   shareFaceValue?: number;
+  shareCertStatus?: ShareCertStatus;   // ECR-16: certificate lifecycle
+  shareCertIssuedAt?: string;          // ECR-16: ISO date of last issue/reissue
+  shareCertReason?: string;            // ECR-16: reason for reissue/cancel
   // KYC (ECR-16). aadhaar/pan are PII — displayed masked, redacted in the audit log.
   aadhaar?: string;
   pan?: string;

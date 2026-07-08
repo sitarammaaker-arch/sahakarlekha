@@ -21,15 +21,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import type { EntityLink } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog } from 'lucide-react';
+import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog, Award } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MemberType, CasteCategory } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { generateMemberPassbookPDF, generateMemberApplicationPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
-import type { Member, MemberStatus, Nominee, KycStatus } from '@/types';
+import type { Member, MemberStatus, Nominee, KycStatus, ShareCertStatus } from '@/types';
 import { validateNominees, nomineeShareTotal } from '@/lib/nomineeUtils';
 import { validateKyc } from '@/lib/kycUtils';
+import { validateCertificate } from '@/lib/shareCertUtils';
 
 // ECR-16: member lifecycle status → label + badge colour per state.
 const STATUS_META: Record<MemberStatus, { hi: string; en: string; cls: string }> = {
@@ -74,12 +75,11 @@ interface MemberFormProps {
 const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onSubmit, submitLabel, onCancel }) => {
   const hi = language === 'hi';
   const f = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
-  // ECR-16: multiple-nominee editor helpers
+  // ECR-16: multiple-nominee editor helpers (functional updates → no stale-closure lost writes)
   const nominees = form.nominees || [];
-  const setNominees = (next: Nominee[]) => setForm(prev => ({ ...prev, nominees: next }));
-  const addNominee = () => setNominees([...nominees, { id: crypto.randomUUID(), name: '', relation: '', phone: '', sharePercent: 0 }]);
-  const updateNominee = (i: number, patch: Partial<Nominee>) => setNominees(nominees.map((n, idx) => idx === i ? { ...n, ...patch } : n));
-  const removeNominee = (i: number) => setNominees(nominees.filter((_, idx) => idx !== i));
+  const addNominee = () => setForm(prev => ({ ...prev, nominees: [...(prev.nominees || []), { id: crypto.randomUUID(), name: '', relation: '', phone: '', sharePercent: 0 }] }));
+  const updateNominee = (i: number, patch: Partial<Nominee>) => setForm(prev => ({ ...prev, nominees: (prev.nominees || []).map((n, idx) => idx === i ? { ...n, ...patch } : n) }));
+  const removeNominee = (i: number) => setForm(prev => ({ ...prev, nominees: (prev.nominees || []).filter((_, idx) => idx !== i) }));
   const nomTotal = nomineeShareTotal(nominees);
   return (
   <form onSubmit={onSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
@@ -338,6 +338,9 @@ const Members: React.FC = () => {
   const [statusMember, setStatusMember] = useState<Member | null>(null);
   const [statusNew, setStatusNew] = useState<MemberStatus>('inactive');
   const [statusReason, setStatusReason] = useState('');
+  // ECR-16: share-certificate dialog
+  const [certMember, setCertMember] = useState<Member | null>(null);
+  const [certForm, setCertForm] = useState({ certNo: '', count: '', faceValue: '', status: 'issued' as ShareCertStatus, reason: '' });
   const [form, setForm] = useState(EMPTY_FORM);
 
   const fmt = (amount: number) =>
@@ -469,6 +472,33 @@ const Members: React.FC = () => {
     });
   };
 
+  // ECR-16: open / save share-certificate dialog
+  const openCert = (m: Member) => {
+    setCertMember(m);
+    setCertForm({
+      certNo: m.shareCertNo || '',
+      count: m.shareCount ? String(m.shareCount) : '',
+      faceValue: m.shareFaceValue ? String(m.shareFaceValue) : '',
+      status: m.shareCertStatus || 'issued',
+      reason: '',
+    });
+  };
+  const handleSaveCertificate = () => {
+    if (!certMember) return;
+    const v = validateCertificate({ status: certForm.status, certNo: certForm.certNo, count: Number(certForm.count), reason: certForm.reason });
+    if (!v.ok) { toast({ title: hi ? 'प्रमाणपत्र त्रुटि' : 'Certificate error', description: v.error, variant: 'destructive' }); return; }
+    updateMember(certMember.id, {
+      shareCertNo: certForm.certNo.trim() || undefined,
+      shareCount: certForm.count ? Number(certForm.count) : undefined,
+      shareFaceValue: certForm.faceValue ? Number(certForm.faceValue) : undefined,
+      shareCertStatus: certForm.status,
+      shareCertIssuedAt: new Date().toISOString().split('T')[0],
+      shareCertReason: certForm.reason.trim() || undefined,
+    });
+    toast({ title: hi ? 'शेयर प्रमाणपत्र अपडेट' : 'Share certificate updated', description: certMember.name });
+    setCertMember(null);
+  };
+
   const handleApprove = (member: Member) => {
     approveMember(member.id);
     toast({ title: hi ? 'सदस्य स्वीकृत' : 'Member Approved', description: hi ? `${member.name} अब सत्यापित सदस्य है` : `${member.name} is now a verified member` });
@@ -568,6 +598,13 @@ const Members: React.FC = () => {
                         title={hi ? 'स्थिति बदलें (त्यागपत्र/निष्कासन/मृत्यु)' : 'Change status (resign/expel/death)'}
                         onClick={() => { setStatusMember(member); setStatusNew(member.status === 'active' ? 'resigned' : 'active'); setStatusReason(''); }}>
                         <UserCog className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canEdit && !showApprovalActions && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                        title={hi ? 'शेयर प्रमाणपत्र (जारी/पुनः/रद्द)' : 'Share certificate (issue/reissue/cancel)'}
+                        onClick={() => openCert(member)}>
+                        <Award className="h-4 w-4" />
                       </Button>
                     )}
                     {canEdit && (
@@ -777,6 +814,56 @@ const Members: React.FC = () => {
               }}>
               {hi ? 'बदलें' : 'Update'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ECR-16: Share Certificate Dialog */}
+      <Dialog open={!!certMember} onOpenChange={(o) => { if (!o) setCertMember(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{hi ? 'शेयर प्रमाणपत्र' : 'Share Certificate'}</DialogTitle>
+          </DialogHeader>
+          {certMember && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">{certMember.name}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">{hi ? 'प्रमाणपत्र सं.' : 'Certificate No.'}</Label>
+                  <Input className="mt-1" value={certForm.certNo} onChange={e => setCertForm(p => ({ ...p, certNo: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">{hi ? 'स्थिति' : 'Status'}</Label>
+                  <Select value={certForm.status} onValueChange={v => setCertForm(p => ({ ...p, status: v as ShareCertStatus }))}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="issued">{hi ? 'जारी' : 'Issued'}</SelectItem>
+                      <SelectItem value="reissued">{hi ? 'पुनः जारी' : 'Reissued'}</SelectItem>
+                      <SelectItem value="cancelled">{hi ? 'रद्द' : 'Cancelled'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">{hi ? 'शेयर संख्या' : 'Share count'}</Label>
+                  <Input className="mt-1" type="number" min="0" value={certForm.count} onChange={e => setCertForm(p => ({ ...p, count: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">{hi ? 'अंकित मूल्य (₹)' : 'Face value (₹)'}</Label>
+                  <Input className="mt-1" type="number" min="0" value={certForm.faceValue} onChange={e => setCertForm(p => ({ ...p, faceValue: e.target.value }))} />
+                </div>
+              </div>
+              {(certForm.status === 'reissued' || certForm.status === 'cancelled') && (
+                <div>
+                  <Label className="text-xs">{hi ? 'कारण *' : 'Reason *'}</Label>
+                  <Textarea className="mt-1" rows={2} value={certForm.reason} onChange={e => setCertForm(p => ({ ...p, reason: e.target.value }))}
+                    placeholder={hi ? 'पुनः जारी / रद्द का कारण...' : 'Reason for reissue / cancel...'} />
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCertMember(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+            <Button onClick={handleSaveCertificate}>{hi ? 'सहेजें' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

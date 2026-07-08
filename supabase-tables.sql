@@ -2407,6 +2407,11 @@ alter table members add column if not exists "aadhaar" text;
 alter table members add column if not exists "pan" text;
 alter table members add column if not exists "kycStatus" text;
 
+-- ECR-16 (share certificate lifecycle): issued → reissued (loss/damage) → cancelled.
+alter table members add column if not exists "shareCertStatus" text;
+alter table members add column if not exists "shareCertIssuedAt" text;
+alter table members add column if not exists "shareCertReason" text;
+
 -- ── Consumer C4 — patronage rebate ───────────────────────────────────────────
 -- Year-end member rebate on purchases (draft → approved, resolution-gated). The
 -- distribution/payable accounts are created at runtime via addAccount (no table). RLS bundled.
