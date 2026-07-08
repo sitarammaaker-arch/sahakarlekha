@@ -988,6 +988,7 @@ export interface SocietySettings {
     totalPayments: number;
   };
   reserveFundPct?: number;      // 0-100, default 25 if undefined (Sec 65 Haryana / varies by state)
+  maxSharePremiumPercent?: number;  // ECR-16 (MS-11): cap on share-transfer premium as % of face value transferred. Undefined/0 = no premium allowed.
   maintenanceGstEnabled?: boolean; // Housing: charge GST on maintenance (admin decides per CA — ₹7,500/₹20L rule)
   maintenanceGstRate?: number;     // GST rate % on maintenance (default 18)
   gstin?: string;              // GSTIN (15 chars — state code + PAN + entity code + check digit)

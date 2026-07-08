@@ -106,7 +106,7 @@ interface DataContextType {
   deleteMember: (id: string) => void;
   refundShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
   purchaseShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
-  transferShareCapital: (fromMemberId: string, toMemberId: string, amount: number, date: string) => void;
+  transferShareCapital: (fromMemberId: string, toMemberId: string, amount: number, date: string, premium?: number, opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string }) => void;
   shareOperation: (memberId: string, type: ShareOpType, amount: number, opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string; date?: string; reason?: string }) => boolean;
   getMemberShareReconciliation: (memberId: string) => ShareCapitalReconciliation | null;
 
@@ -2090,7 +2090,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // bridged by the Suspense account (9999) so BOTH member sub-ledgers reflect the move
   // (each voucher carries a single memberId): the transferor gets Dr 1102 / Cr 9999, the
   // transferee gets Dr 9999 / Cr 1102. GL 1102 + 9999 both net to zero.
-  const transferShareCapital = useCallback((fromMemberId: string, toMemberId: string, amount: number, date: string) => {
+  const transferShareCapital = useCallback((fromMemberId: string, toMemberId: string, amount: number, date: string, premium = 0, opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string }) => {
     if (guardFYLocked()) return;
     if (fromMemberId === toMemberId) { toastRef.current({ title: 'Invalid transfer', description: 'Choose a different recipient.', variant: 'destructive' }); return; }
     const from = membersRef.current.find(m => m.id === fromMemberId);
@@ -2098,6 +2098,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!from || !to) return;
     const amt = Math.round((Math.max(0, Math.min(amount, from.shareCapital || 0))) * 100) / 100;
     if (!(amt > 0)) { toastRef.current({ title: 'Invalid amount', description: 'Amount must be > 0 and ≤ the sender\'s share capital.', variant: 'destructive' }); return; }
+    // ECR-16 (MS-11): enforce the share-transfer premium cap (% of face value) BEFORE posting.
+    const prem = Math.round((Math.max(0, premium || 0)) * 100) / 100;
+    if (prem > 0) {
+      const capPct = societyRef.current?.maxSharePremiumPercent ?? 0;
+      const cap = Math.round((amt * capPct / 100) * 100) / 100;
+      if (!(capPct > 0) || prem > cap) {
+        toastRef.current({
+          title: 'प्रीमियम सीमा से अधिक / Premium over cap',
+          description: capPct > 0
+            ? `प्रीमियम ₹${prem.toLocaleString('en-IN')} अधिकतम ₹${cap.toLocaleString('en-IN')} (${capPct}% of ₹${amt.toLocaleString('en-IN')}) से ज़्यादा है।`
+            : 'इस समिति में शेयर-ट्रांसफर प्रीमियम की अनुमति नहीं है (cap 0%)। पहले "Max transfer premium %" सेट करें।',
+          variant: 'destructive', duration: 10000,
+        });
+        return;
+      }
+    }
     const SUSPENSE = '9999';
     addVoucher({
       type: 'journal', date, debitAccountId: ACCOUNT_IDS.SHARE_CAP, creditAccountId: SUSPENSE, amount: amt,
@@ -2109,6 +2125,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       narration: `Shares transferred from ${from.name} to ${to.name} — ${date}`,
       createdBy: user?.name ?? 'System', memberId: toMemberId,
     });
+    // ECR-16 (MS-11): premium paid to the society → Dr Cash/Bank / Cr Reserve (capped above).
+    if (prem > 0) {
+      const payout = opts?.mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+      addVoucher({
+        type: 'receipt', date, debitAccountId: payout, creditAccountId: opts?.reserveAccountId || '1201', amount: prem,
+        narration: `Share transfer premium from ${to.name} (transfer from ${from.name}) — ${date}`,
+        createdBy: user?.name ?? 'System', memberId: toMemberId,
+      });
+    }
     const beforeFrom = from, beforeTo = to;
     const updFrom = { ...from, shareCapital: Math.round(((from.shareCapital || 0) - amt) * 100) / 100 };
     const updTo = { ...to, shareCapital: Math.round(((to.shareCapital || 0) + amt) * 100) / 100 };
@@ -2122,10 +2147,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) { console.error('Share transfer (from) sync:', error.message); rollback(); return; }
       supabase.from('members').upsert(withSoc(updTo)).then(({ error: e2 }) => {
         if (e2) { console.error('Share transfer (to) sync:', e2.message); rollback(); }
-        else toastRef.current({ title: '✅ शेयर स्थानांतरित', description: `₹${amt.toLocaleString('en-IN')} · ${from.name} → ${to.name}` });
+        else toastRef.current({ title: '✅ शेयर स्थानांतरित', description: `₹${amt.toLocaleString('en-IN')} · ${from.name} → ${to.name}${prem > 0 ? ` (+ प्रीमियम ₹${prem.toLocaleString('en-IN')})` : ''}` });
       });
     });
-  }, [addVoucher, user]);
+  }, [accounts, addVoucher, user]);
 
   // ── Housing Flats/Units register (master data; Member-pattern persistence + RULE-1 rollback) ──
   // ── Labour Work Orders register (master data; Member-pattern persistence + RULE-1 rollback) ──

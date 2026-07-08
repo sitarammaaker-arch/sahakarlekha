@@ -20,10 +20,11 @@ import type { ShareOpType } from '@/lib/shareOps';
 
 const ShareRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { members, updateMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, society, vouchers } = useData();
+  const { members, updateMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, society, updateSociety, vouchers } = useData();
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
+  const [premiumCapInput, setPremiumCapInput] = useState(String(society.maxSharePremiumPercent ?? ''));   // ECR-16 MS-11
   const [editMember, setEditMember] = useState<Member | null>(null);
   const [form, setForm] = useState({ shareCertNo: '', shareCount: '', shareFaceValue: '', nomineeName: '', nomineeRelation: '', nomineePhone: '' });
 
@@ -170,6 +171,17 @@ const ShareRegister: React.FC = () => {
         />
       </div>
 
+      {/* ECR-16 (MS-11): share-transfer premium cap policy */}
+      <div className="flex items-center gap-2 flex-wrap rounded-md border bg-muted/30 px-3 py-2">
+        <Label className="text-xs whitespace-nowrap">{hi ? 'अधिकतम ट्रांसफर प्रीमियम %' : 'Max transfer premium %'}</Label>
+        <Input type="number" min="0" max="100" value={premiumCapInput} onChange={e => setPremiumCapInput(e.target.value)} className="h-8 w-24" placeholder="0" />
+        <Button size="sm" variant="outline" className="h-8"
+          onClick={() => { updateSociety({ maxSharePremiumPercent: premiumCapInput === '' ? undefined : Number(premiumCapInput) }); toast({ title: hi ? 'प्रीमियम सीमा सहेजी' : 'Premium cap saved' }); }}>
+          {hi ? 'सहेजें' : 'Save'}
+        </Button>
+        <span className="text-[11px] text-muted-foreground">{hi ? '0 या खाली = प्रीमियम की अनुमति नहीं (अंकित मूल्य पर ट्रांसफर)।' : '0 or empty = no premium allowed (transfers at face value).'}</span>
+      </div>
+
       {/* Register Table */}
       <Card className="shadow-card">
         <CardHeader className="border-b text-center py-4">
@@ -232,7 +244,7 @@ const ShareRegister: React.FC = () => {
                       <div className="flex gap-1 items-center">
                         <ShareTxnButton member={m} hi={hi} kind="purchase" onSubmit={purchaseShareCapital} />
                         {m.shareCapital > 0 && <ShareTxnButton member={m} hi={hi} kind="refund" onSubmit={refundShareCapital} />}
-                        {m.shareCapital > 0 && <TransferShareButton member={m} members={approvedMembers} hi={hi} onTransfer={transferShareCapital} />}
+                        {m.shareCapital > 0 && <TransferShareButton member={m} members={approvedMembers} hi={hi} maxPremiumPct={society.maxSharePremiumPercent ?? 0} onTransfer={transferShareCapital} />}
                         <ShareOpButton member={m} hi={hi} onSubmit={shareOperation} />
                         <Button variant="ghost" size="icon" onClick={() => openEdit(m)}>
                           <Edit className="h-4 w-4" />
@@ -502,14 +514,20 @@ function ShareOpButton({ member, hi, onSubmit }: { member: Member; hi: boolean; 
   );
 }
 
-function TransferShareButton({ member, members, hi, onTransfer }: { member: Member; members: Member[]; hi: boolean; onTransfer: (fromId: string, toId: string, amount: number, date: string) => void }) {
+function TransferShareButton({ member, members, hi, maxPremiumPct, onTransfer }: { member: Member; members: Member[]; hi: boolean; maxPremiumPct: number; onTransfer: (fromId: string, toId: string, amount: number, date: string, premium?: number, opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string }) => void }) {
   const [open, setOpen] = useState(false);
   const [toId, setToId] = useState('');
   const [amt, setAmt] = useState('');
+  const [premium, setPremium] = useState('');
+  const [mode, setMode] = useState<'cash' | 'bank'>('cash');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const val = Number(amt) || 0;
+  const prem = Number(premium) || 0;
   const cap = member.shareCapital || 0;
+  const premiumCap = Math.round((val * (maxPremiumPct || 0) / 100) * 100) / 100;   // ECR-16 MS-11
+  const overPremium = prem > premiumCap;
   const recipients = members.filter(m => m.id !== member.id);
+  const fmtC = (n: number) => n.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' });
 
   return (
     <>
@@ -518,7 +536,7 @@ function TransferShareButton({ member, members, hi, onTransfer }: { member: Memb
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>{hi ? 'शेयर स्थानांतरण' : 'Transfer Shares'} — {member.name}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">{hi ? 'उपलब्ध शेयर पूँजी:' : 'Available share capital:'} <strong>{cap.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' })}</strong></p>
+            <p className="text-sm text-muted-foreground">{hi ? 'उपलब्ध शेयर पूँजी:' : 'Available share capital:'} <strong>{fmtC(cap)}</strong></p>
             <div>
               <Label>{hi ? 'किसे स्थानांतरित करें' : 'Transfer to'}</Label>
               <select value={toId} onChange={e => setToId(e.target.value)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
@@ -527,17 +545,37 @@ function TransferShareButton({ member, members, hi, onTransfer }: { member: Memb
               </select>
             </div>
             <div>
-              <Label>{hi ? 'राशि' : 'Amount'}</Label>
+              <Label>{hi ? 'राशि (अंकित मूल्य)' : 'Amount (face value)'}</Label>
               <Input type="number" value={amt} onChange={e => setAmt(e.target.value)} max={cap} />
             </div>
+            {maxPremiumPct > 0 ? (
+              <>
+                <div>
+                  <Label>{hi ? `प्रीमियम (अधिकतम ${maxPremiumPct}% = ${fmtC(premiumCap)})` : `Premium (max ${maxPremiumPct}% = ${fmtC(premiumCap)})`}</Label>
+                  <Input type="number" value={premium} onChange={e => setPremium(e.target.value)} max={premiumCap} placeholder="0" />
+                  {overPremium && <p className="text-[11px] text-destructive mt-1">{hi ? 'प्रीमियम सीमा से अधिक' : 'Premium exceeds cap'}</p>}
+                </div>
+                {prem > 0 && (
+                  <div>
+                    <Label>{hi ? 'प्रीमियम विधि' : 'Premium mode'}</Label>
+                    <select value={mode} onChange={e => setMode(e.target.value as 'cash' | 'bank')} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+                      <option value="cash">{hi ? 'नकद' : 'Cash'}</option>
+                      <option value="bank">{hi ? 'बैंक' : 'Bank'}</option>
+                    </select>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">{hi ? 'इस समिति में ट्रांसफर प्रीमियम की अनुमति नहीं (ऊपर "Max transfer premium %" सेट करें)।' : 'Transfer premium not allowed (set "Max transfer premium %" above).'}</p>
+            )}
             <div>
               <Label>{hi ? 'तिथि' : 'Date'}</Label>
               <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
             </div>
-            <p className="text-[11px] text-muted-foreground">{hi ? 'शेयर पूँजी सदस्यों के बीच स्थानांतरित होगी (कुल अपरिवर्तित); दोनों की बही में दिखेगा।' : 'Moves share capital between members (total unchanged); shows in both member ledgers.'}</p>
+            <p className="text-[11px] text-muted-foreground">{hi ? 'अंकित मूल्य सदस्यों के बीच स्थानांतरित; प्रीमियम समिति के संचय में (Dr नकद-बैंक / Cr संचय)।' : 'Face value moves between members; premium goes to the society reserve (Dr Cash-Bank / Cr Reserve).'}</p>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
-              <Button disabled={!toId || !(val > 0) || val > cap} onClick={() => { onTransfer(member.id, toId, val, date); setOpen(false); setAmt(''); setToId(''); }}>
+              <Button disabled={!toId || !(val > 0) || val > cap || overPremium} onClick={() => { onTransfer(member.id, toId, val, date, prem, { mode }); setOpen(false); setAmt(''); setPremium(''); setToId(''); }}>
                 {hi ? 'स्थानांतरित करें' : 'Transfer'}
               </Button>
             </div>

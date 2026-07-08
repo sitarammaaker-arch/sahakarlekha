@@ -827,6 +827,10 @@ alter table society_settings add column if not exists signatories jsonb default 
 -- society.approvalRequired ?? false, so it degrades gracefully before this runs.
 alter table society_settings add column if not exists "approvalRequired" boolean default false;
 
+-- ECR-16 (MS-11): cap on share-transfer premium as % of face value transferred.
+-- NULL/0 ⇒ no premium allowed (statutory default — transfers at face value).
+alter table society_settings add column if not exists "maxSharePremiumPercent" numeric;
+
 -- ECR-07 (P1 #7): period lock / back-dating prevention. periodLockDate is an ISO
 -- date; vouchers dated ON or BEFORE it are in a locked period and cannot be added
 -- or edited. NULL/empty ⇒ no period lock (default) — behaviour unchanged.
