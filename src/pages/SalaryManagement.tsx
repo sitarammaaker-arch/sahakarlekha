@@ -3,6 +3,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { computeStatutory } from '@/lib/payrollStatutory';
+import { suggestMonthlyTds, type TaxRegime } from '@/lib/tdsProjection';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -205,6 +206,7 @@ const SalaryManagement: React.FC = () => {
   const [processingMonth, setProcessingMonth] = useState(currentMonth());
   const [processRows, setProcessRows] = useState<ProcessRow[]>([]);
   const [rowsLoaded, setRowsLoaded] = useState(false);
+  const [taxRegime, setTaxRegime] = useState<TaxRegime>('new');   // ECR-14: TDS-192 projection regime
 
   // ── Tab 3 – Salary History state ────────────────────────────────────────
   const [historyMonth, setHistoryMonth] = useState('');
@@ -327,12 +329,18 @@ const SalaryManagement: React.FC = () => {
         allowances: 0,
         deductions: 0,
         pt: 0,
-        tds: 0,
+        tds: suggestMonthlyTds(emp.basicSalary, taxRegime),   // ECR-14: auto TDS-192 projection (editable)
         paymentMode: 'bank' as PaymentMode,
         processed: salaryRecords.some(r => r.employeeId === emp.id && r.month === processingMonth),
       }))
     );
     setRowsLoaded(true);
+  };
+
+  // Re-project monthly TDS for unprocessed rows (basic + allowances × 12) when the regime changes.
+  const reprojectTds = (regime: TaxRegime) => {
+    setTaxRegime(regime);
+    setProcessRows(rows => rows.map(r => r.processed ? r : { ...r, tds: suggestMonthlyTds(r.employee.basicSalary + r.allowances, regime) }));
   };
 
   const updateRow = (empId: string, field: keyof Pick<ProcessRow, 'allowances' | 'deductions' | 'pt' | 'tds' | 'paymentMode'>, value: number | PaymentMode) => {
@@ -614,11 +622,22 @@ const SalaryManagement: React.FC = () => {
                     className="w-44"
                   />
                 </div>
+                <div className="space-y-1">
+                  <Label>{hi ? 'TDS व्यवस्था' : 'TDS Regime'}</Label>
+                  <Select value={taxRegime} onValueChange={v => reprojectTds(v as TaxRegime)}>
+                    <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new">{hi ? 'नई व्यवस्था' : 'New regime'}</SelectItem>
+                      <SelectItem value="old">{hi ? 'पुरानी व्यवस्था' : 'Old regime'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Button onClick={loadEmployees} className="gap-2">
                   <Users className="h-4 w-4" />
                   {hi ? 'कर्मचारी लोड करें' : 'Load Employees'}
                 </Button>
               </div>
+              <p className="text-[11px] text-muted-foreground mt-2">{hi ? 'TDS स्वतः projected (वार्षिक अनुमान से मासिक) — हर पंक्ति में बदल सकते हैं।' : 'TDS is auto-projected (annual estimate → monthly) — editable per row.'}</p>
               {rowsLoaded && alreadyProcessedForMonth && (
                 <div className="mt-3 flex items-center gap-2 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md px-3 py-2 text-sm">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
