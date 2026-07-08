@@ -28,6 +28,7 @@ import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherI
 import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { sumActiveMemberShareCapital, reconcileShareCapital, type ShareCapitalReconciliation } from '@/lib/shareReconciliation';
 import { can as rbacCan, type Permission } from '@/lib/rbac';
+import { splitVoucherExtras, extrasFailureToast } from '@/lib/voucherPersistence';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLines } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
@@ -1017,39 +1018,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           handleBaseFailure(verifyErr?.message || 'Verification failed — row not found after upsert');
           return;
         }
-      // Step 2: best-effort patch of extras (lines, refType, etc.)
-      const extras: Record<string, unknown> = {};
-      if (lines !== undefined) extras.lines = lines;
-      if (refType !== undefined) extras.refType = refType;
-      if (refId !== undefined) extras.refId = refId;
-      if (isCleared !== undefined) extras.isCleared = isCleared;
-      if (clearedDate !== undefined) extras.clearedDate = clearedDate;
-      if (groupId !== undefined) extras.groupId = groupId;
-      if (approvalStatus !== undefined) extras.approvalStatus = approvalStatus;
-      if (approvalRemarks !== undefined) extras.approvalRemarks = approvalRemarks;
-      if (approvedBy !== undefined) extras.approvedBy = approvedBy;
-      if (approvedAt !== undefined) extras.approvedAt = approvedAt;
-      if (editHistory !== undefined) extras.editHistory = editHistory;
-      if (billAllocations !== undefined) extras.billAllocations = billAllocations;
-      if (workOrderId !== undefined) extras.workOrderId = workOrderId;
-      if (costCentreId !== undefined) extras.costCentreId = costCentreId;
+      // Step 2: best-effort patch of overlay columns. ECR-04: critical control/audit
+      // overlays (approvalStatus/editHistory/…) must NOT be lost silently. Split the
+      // buckets, retry once (clears the common PostgREST schema-cache lag), and on a
+      // terminal failure raise a LOUD toast when critical data didn't reach the cloud.
+      const { critical, optional, hasCritical } = splitVoucherExtras(v as unknown as Record<string, unknown>);
+      const extras = { ...optional, ...critical };
       if (Object.keys(extras).length === 0) {
         if (!opts.isUpdate) syncEntries(v);
         return;
       }
-      supabase.from('vouchers').update(extras).eq('id', v.id).then(({ error: e2 }) => {
-        if (e2) {
-          console.warn('Voucher extras patch warning (run latest supabase-tables.sql migration):', e2.message);
-          toastRef.current({
-            title: '⚠️ Voucher saved partially',
-            description: `Base voucher saved to cloud, but extras (lines/refs/approval) failed: ${e2.message}. Run latest supabase-tables.sql migration.`,
-            variant: 'default',
-            duration: 8000,
-          });
-        }
-        // Sync voucher_entries regardless — they use base columns we just confirmed
-        if (!opts.isUpdate) syncEntries(v);
-      });
+      const EXTRAS_MAX_RETRIES = 1;
+      const patchExtras = (tries: number) => {
+        supabase.from('vouchers').update(extras).eq('id', v.id).then(({ error: e2 }) => {
+          if (e2) {
+            if (tries < EXTRAS_MAX_RETRIES) { setTimeout(() => patchExtras(tries + 1), 1500); return; }
+            console.warn('Voucher extras patch failed (run latest supabase-tables.sql migration):', e2.message);
+            toastRef.current(extrasFailureToast(hasCritical, e2.message));
+          }
+          // Sync voucher_entries once, at the terminal outcome — they use confirmed base columns.
+          if (!opts.isUpdate) syncEntries(v);
+        });
+      };
+      patchExtras(0);
       }); // close verify .then
     }, (rejection: unknown) => {
       // Promise rejection (network error, fetch abort) — supabase-js usually resolves
