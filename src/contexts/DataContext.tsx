@@ -257,6 +257,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     return false;
   }, []);
+  // ECR-07 (P1 #7): period lock / back-dating prevention. A voucher dated ON or BEFORE
+  // society.periodLockDate is in a closed period. Pure predicate (mirrored in the test).
+  const isPeriodLocked = (entityDate?: string): boolean => {
+    const lock = societyRef.current?.periodLockDate;
+    return !!lock && !!entityDate && entityDate <= lock;
+  };
+  // Returns true when BLOCKED (mirrors guardFYLocked). Checks any of the supplied dates
+  // (add → new date; edit → existing AND incoming date) so you can neither edit within
+  // nor back-date into a locked period.
+  const guardPeriodLock = useCallback((...dates: (string | undefined)[]): boolean => {
+    const lock = societyRef.current?.periodLockDate;
+    if (lock && dates.some(d => isPeriodLocked(d))) {
+      toastRef.current({
+        title: '🔒 अवधि लॉक / Period Locked',
+        description: `इस तारीख तक की अवधि लॉक है (${lock}) — इस अवधि में entry add/edit नहीं हो सकती। (Period up to ${lock} is locked; back-dated entries are blocked.)`,
+        variant: 'destructive',
+        duration: 9000,
+      });
+      return true;
+    }
+    return false;
+  }, []);
   // SL-06: block an action the current user's role is not granted. Returns true when BLOCKED
   // (mirrors guardFYLocked's convention). Hindi-first toast. Detection is app-layer only.
   const guardPermission = useCallback((permission: Permission, actionHi: string): boolean => {
@@ -1063,6 +1085,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Return a dummy voucher object to satisfy the return type — caller must handle gracefully
       return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     }
+    // ECR-07: block back-dating a new voucher into a locked period.
+    if (guardPeriodLock(data.date)) {
+      return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    }
 
     // P2-3: Warn if voucher date is outside the active FY range
     const fyEnd = `20${society.financialYear.split('-')[1]}-03-31`;
@@ -1274,6 +1300,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
+    // ECR-07: can neither edit a voucher within a locked period nor move one into it.
+    if (guardPeriodLock(current.date, data.date)) return;
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
     // Capture edit audit snapshot — only track the fields that actually changed
     const changedFields = (Object.keys(data) as (keyof typeof data)[]).filter(

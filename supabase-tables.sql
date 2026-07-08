@@ -821,6 +821,12 @@ alter table society_settings add column if not exists signatories jsonb default 
 -- society.approvalRequired ?? false, so it degrades gracefully before this runs.
 alter table society_settings add column if not exists "approvalRequired" boolean default false;
 
+-- ECR-07 (P1 #7): period lock / back-dating prevention. periodLockDate is an ISO
+-- date; vouchers dated ON or BEFORE it are in a locked period and cannot be added
+-- or edited. NULL/empty ⇒ no period lock (default) — behaviour unchanged.
+alter table society_settings add column if not exists "periodLockDate" text;
+alter table society_settings add column if not exists "periodLockBy" text;
+
 -- ── P0 #2: Soft-delete parent records ───────────────────────────────────────
 -- Members / purchases / assets / audit-objections are now ARCHIVED (isDeleted=true)
 -- instead of hard-deleted, so statutory registers persist and deletes are auditable

@@ -31,6 +31,19 @@ const SocietySetup: React.FC = () => {
   const { toast } = useToast();
   const { society, updateSociety, accounts, vouchers, updateAccount, addAccount, deleteAccount, resetAccounts, getAccountBalance, getTrialBalance, getProfitLoss, getReceiptsPayments } = useData();
 
+  // ECR-07: period-lock date input (back-dating prevention)
+  const [periodLockInput, setPeriodLockInput] = useState(society.periodLockDate || '');
+  const handleSetPeriodLock = () => {
+    if (!periodLockInput) return;
+    updateSociety({ periodLockDate: periodLockInput, periodLockBy: 'Admin' });
+    toast({ title: language === 'hi' ? 'अवधि लॉक की गई' : 'Period Locked', description: language === 'hi' ? `${periodLockInput} तक की सभी एंट्रियां अब लॉक हैं।` : `All entries up to ${periodLockInput} are now locked.` });
+  };
+  const handleClearPeriodLock = () => {
+    updateSociety({ periodLockDate: undefined, periodLockBy: undefined });
+    setPeriodLockInput('');
+    toast({ title: language === 'hi' ? 'अवधि लॉक हटाई गई' : 'Period Lock Cleared', description: language === 'hi' ? 'अब पिछली अवधि में भी एंट्री हो सकती है।' : 'Back-dated entries are allowed again.' });
+  };
+
   // Basic info form state
   const [form, setForm] = useState({
     name: society.name,
@@ -695,6 +708,45 @@ const SocietySetup: React.FC = () => {
                   >
                     {society.fyLocked ? <><Unlock className="h-4 w-4" />{language === 'hi' ? 'अनलॉक करें' : 'Unlock FY'}</> : <><Lock className="h-4 w-4" />{language === 'hi' ? 'FY लॉक करें' : 'Lock FY'}</>}
                   </Button>
+                </div>
+              </div>
+
+              {/* ECR-07: Period Lock (back-dating prevention) */}
+              <div className={`mt-6 p-4 rounded-lg border-2 ${society.periodLockDate ? 'border-destructive/60 bg-destructive/5' : 'border-muted bg-muted/30'}`}>
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="min-w-[220px]">
+                    <div className="flex items-center gap-2 font-semibold">
+                      {society.periodLockDate ? <Lock className="h-4 w-4 text-destructive" /> : <Unlock className="h-4 w-4 text-muted-foreground" />}
+                      <span className={society.periodLockDate ? 'text-destructive' : 'text-muted-foreground'}>
+                        {language === 'hi' ? 'अवधि लॉक (बैक-डेटिंग रोक)' : 'Period Lock (back-dating)'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {society.periodLockDate
+                        ? (language === 'hi'
+                          ? `${society.periodLockDate} तक की अवधि लॉक है — उस तारीख या उससे पहले की वाउचर add/edit नहीं हो सकती।`
+                          : `Period up to ${society.periodLockDate} is locked — vouchers dated on/before it cannot be added or edited.`)
+                        : (language === 'hi'
+                          ? 'किसी माह/अवधि के audit के बाद उस तारीख तक lock करें ताकि उसमें back-dated entry न हो सके।'
+                          : 'Lock everything up to a date (e.g. after a month is audited) so no back-dated entries can slip in.')}
+                    </p>
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <Input
+                      type="date"
+                      value={periodLockInput}
+                      onChange={e => setPeriodLockInput(e.target.value)}
+                      className="w-40 h-9"
+                    />
+                    <Button variant="destructive" size="sm" className="gap-2" onClick={handleSetPeriodLock} disabled={!periodLockInput}>
+                      <Lock className="h-4 w-4" />{language === 'hi' ? 'लॉक करें' : 'Lock'}
+                    </Button>
+                    {society.periodLockDate && (
+                      <Button variant="outline" size="sm" className="gap-2" onClick={handleClearPeriodLock}>
+                        <Unlock className="h-4 w-4" />{language === 'hi' ? 'हटाएं' : 'Clear'}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
 
