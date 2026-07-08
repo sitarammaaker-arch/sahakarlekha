@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, ReactNode, use
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import type {
-  Voucher, VoucherEditSnapshot, VoucherLine, VoucherType, Member, LedgerAccount, SocietySettings, BillAllocation,
+  Voucher, VoucherEditSnapshot, VoucherLine, VoucherType, Member, MemberStatus, LedgerAccount, SocietySettings, BillAllocation,
   AccountBalance, CashBookEntry, BankBookEntry, MemberLedgerEntry, ReceiptsPaymentsData,
   Loan, Asset, AuditObjection, Recoverable, KachiAaratEntry, P7Entry,
   StockItem, StockMovement,
@@ -101,6 +101,7 @@ interface DataContextType {
 
   addMember: (data: Omit<Member, 'id'>) => Member;
   updateMember: (id: string, data: Partial<Member>) => void;
+  changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string) => boolean;
   deleteMember: (id: string) => void;
   refundShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
   purchaseShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
@@ -225,6 +226,13 @@ const reverseEntryLines = (lines: VoucherLine[]): VoucherLine[] =>
 // reversed, or is posted-under-control (opt-in maker-checker regime + approved). Pure.
 const isEditLocked = (v: Pick<Voucher, 'reversedBy' | 'approvalStatus'>, approvalRequired: boolean): boolean =>
   !!v.reversedBy || (!!approvalRequired && v.approvalStatus === 'approved');
+
+// ── ECR-16 (member lifecycle) pure helpers ────────────────────────────────────
+const MEMBER_STATUSES: MemberStatus[] = ['active', 'inactive', 'resigned', 'expelled', 'deceased'];
+// Valid lifecycle transition? No self-transition; 'deceased' is terminal (shares pass to
+// a nominee via a separate flow). Every other move between distinct states is allowed.
+const canTransitionMember = (from: MemberStatus, to: MemberStatus): boolean =>
+  from !== to && from !== 'deceased' && MEMBER_STATUSES.includes(to);
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
@@ -1901,6 +1909,45 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (data.admissionFee !== undefined && data.admissionFee !== oldMember.admissionFee) {
       resyncMemberVoucher(ACCOUNT_IDS.ADM_FEE, data.admissionFee, 'Admission Fee');
     }
+  }, []);
+
+  // ECR-16 (member lifecycle): record a lifecycle transition (resign/expel/death/reactivate)
+  // with reason + date. `status` (base column) is persisted reliably; the reason/date
+  // metadata rides a targeted best-effort .update() so the change is safe pre-migration.
+  const changeMemberStatus = useCallback((id: string, newStatus: MemberStatus, reason: string): boolean => {
+    if (guardFYLocked()) return false;
+    const current = membersRef.current.find(m => m.id === id);
+    if (!current) return false;
+    if (!canTransitionMember(current.status, newStatus)) {
+      toastRef.current({
+        title: 'बदलाव मान्य नहीं / Invalid change',
+        description: current.status === 'deceased'
+          ? 'मृत सदस्य की स्थिति नहीं बदली जा सकती। (A deceased member cannot be reactivated.)'
+          : 'यह बदलाव मान्य नहीं (वही स्थिति पहले से है)।',
+        variant: 'destructive', duration: 8000,
+      });
+      return false;
+    }
+    const changedAt = new Date().toISOString().split('T')[0];
+    const updated: Member = { ...current, status: newStatus, statusReason: reason, statusChangedAt: changedAt };
+    membersRef.current = membersRef.current.map(m => m.id === id ? updated : m);
+    setMembersState(prev => prev.map(m => m.id === id ? updated : m));
+    // Persist status (base column) reliably — roll back on failure (RULE 1).
+    supabase.from('members').update({ status: newStatus }).eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error (member status):', error.message);
+        membersRef.current = membersRef.current.map(m => m.id === id ? current : m);
+        setMembersState(prev => prev.map(m => m.id === id ? current : m));
+        toastRef.current({ title: 'स्थिति सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    // Metadata (late-added columns) — best-effort; base status above is already safe.
+    supabase.from('members').update({ statusReason: reason, statusChangedAt: changedAt }).eq('id', id).then(({ error }) => {
+      if (error) console.warn('Member status metadata not persisted — run latest supabase-tables.sql migration:', error.message);
+    });
+    emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { status: current.status }, after: { status: newStatus }, reason });
+    toastRef.current({ title: '✅ सदस्य स्थिति अपडेट', description: `${current.name}: ${current.status} → ${newStatus}`, variant: 'default', duration: 6000 });
+    return true;
   }, []);
 
   const deleteMember = useCallback((id: string) => {
@@ -5243,7 +5290,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
       recordFarmerPayment,
       addVoucher, updateVoucher, cancelVoucher, reverseVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
-      addMember, updateMember, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, approveMember, rejectMember,
+      addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, approveMember, rejectMember,
       workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
       musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,

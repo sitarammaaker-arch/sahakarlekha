@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -21,13 +21,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import type { EntityLink } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList } from 'lucide-react';
+import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MemberType, CasteCategory } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { generateMemberPassbookPDF, generateMemberApplicationPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
 import type { Member, MemberStatus } from '@/types';
+
+// ECR-16: member lifecycle status → label + badge colour per state.
+const STATUS_META: Record<MemberStatus, { hi: string; en: string; cls: string }> = {
+  active:   { hi: 'सक्रिय',    en: 'Active',   cls: 'bg-success text-white' },
+  inactive: { hi: 'निष्क्रिय', en: 'Inactive', cls: 'bg-gray-200 text-gray-700' },
+  resigned: { hi: 'त्यागपत्र', en: 'Resigned', cls: 'bg-amber-100 text-amber-800 border-amber-300' },
+  expelled: { hi: 'निष्कासित', en: 'Expelled', cls: 'bg-red-100 text-red-800 border-red-300' },
+  deceased: { hi: 'मृत',       en: 'Deceased', cls: 'bg-slate-300 text-slate-800' },
+};
 
 const CASTE_OPTIONS: { value: CasteCategory; label: string; labelHi: string }[] = [
   { value: 'General', label: 'General', labelHi: 'सामान्य' },
@@ -231,7 +240,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
 const Members: React.FC = () => {
   const { t, language } = useLanguage();
   const { hasPermission } = useAuth();
-  const { members, addMember, updateMember, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks } = useData();
+  const { members, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks } = useData();
   const canEdit = hasPermission(['admin', 'accountant']);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -246,6 +255,10 @@ const Members: React.FC = () => {
   const [viewMember, setViewMember] = useState<Member | null>(null);
   const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
   const [ledgerMember, setLedgerMember] = useState<Member | null>(null);
+  // ECR-16: lifecycle status-change dialog
+  const [statusMember, setStatusMember] = useState<Member | null>(null);
+  const [statusNew, setStatusNew] = useState<MemberStatus>('inactive');
+  const [statusReason, setStatusReason] = useState('');
   const [form, setForm] = useState(EMPTY_FORM);
 
   const fmt = (amount: number) =>
@@ -415,8 +428,8 @@ const Members: React.FC = () => {
                 <TableCell className="text-right">{fmt(member.admissionFee || 0)}</TableCell>
                 {!showApprovalActions && (
                   <TableCell className="text-center">
-                    <Badge variant={member.status === 'active' ? 'default' : 'secondary'} className={member.status === 'active' ? 'bg-success' : ''}>
-                      {member.status === 'active' ? (hi ? 'सक्रिय' : 'Active') : (hi ? 'निष्क्रिय' : 'Inactive')}
+                    <Badge variant="outline" className={STATUS_META[member.status]?.cls}>
+                      {hi ? STATUS_META[member.status]?.hi : STATUS_META[member.status]?.en}
                     </Badge>
                   </TableCell>
                 )}
@@ -446,6 +459,13 @@ const Members: React.FC = () => {
                     {canEdit && (
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(member)}>
                         <Edit className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canEdit && !showApprovalActions && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                        title={hi ? 'स्थिति बदलें (त्यागपत्र/निष्कासन/मृत्यु)' : 'Change status (resign/expel/death)'}
+                        onClick={() => { setStatusMember(member); setStatusNew(member.status === 'active' ? 'resigned' : 'active'); setStatusReason(''); }}>
+                        <UserCog className="h-4 w-4" />
                       </Button>
                     )}
                     {canEdit && (
@@ -611,6 +631,51 @@ const Members: React.FC = () => {
             <DialogTitle>{hi ? 'सदस्य संपादित करें' : 'Edit Member'}</DialogTitle>
           </DialogHeader>
           <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleEdit} submitLabel={hi ? 'अपडेट करें' : 'Update'} onCancel={() => setEditMember(null)} />
+        </DialogContent>
+      </Dialog>
+
+      {/* ECR-16: Lifecycle status-change Dialog */}
+      <Dialog open={!!statusMember} onOpenChange={(o) => { if (!o) setStatusMember(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{hi ? 'सदस्य स्थिति बदलें' : 'Change Member Status'}</DialogTitle>
+          </DialogHeader>
+          {statusMember && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {statusMember.name} — {hi ? 'वर्तमान' : 'current'}:{' '}
+                <strong>{hi ? STATUS_META[statusMember.status]?.hi : STATUS_META[statusMember.status]?.en}</strong>
+              </p>
+              <div>
+                <Label className="text-sm">{hi ? 'नई स्थिति' : 'New status'}</Label>
+                <Select value={statusNew} onValueChange={(v) => setStatusNew(v as MemberStatus)}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(STATUS_META) as MemberStatus[]).map(s => (
+                      <SelectItem key={s} value={s} disabled={s === statusMember.status}>
+                        {hi ? STATUS_META[s].hi : STATUS_META[s].en}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-sm">{hi ? 'कारण *' : 'Reason *'}</Label>
+                <Textarea className="mt-1" rows={2} value={statusReason} onChange={e => setStatusReason(e.target.value)}
+                  placeholder={hi ? 'कारण लिखें (त्यागपत्र/निष्कासन/मृत्यु आदि)...' : 'Enter reason...'} />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStatusMember(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+            <Button
+              disabled={!statusReason.trim() || !statusMember || statusNew === statusMember.status}
+              onClick={() => {
+                if (statusMember && changeMemberStatus(statusMember.id, statusNew, statusReason.trim())) setStatusMember(null);
+              }}>
+              {hi ? 'बदलें' : 'Update'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

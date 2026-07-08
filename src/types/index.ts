@@ -9,7 +9,10 @@ export interface VoucherLine {
 }
 export type UserRole = 'admin' | 'accountant' | 'viewer';
 export type AccountType = 'asset' | 'liability' | 'income' | 'expense' | 'equity';
-export type MemberStatus = 'active' | 'inactive';
+// ECR-16: member lifecycle. 'active'/'inactive' kept for backward-compat; resigned/
+// expelled/deceased are the exit states (all !== 'active' ⇒ auto-excluded from dividend
+// & active counts). Deceased is terminal (shares pass to nominee via a separate flow).
+export type MemberStatus = 'active' | 'inactive' | 'resigned' | 'expelled' | 'deceased';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type CasteCategory = 'General' | 'Backward Class' | 'Schedule Caste' | 'Schedule Tribe';
 
@@ -140,6 +143,8 @@ export interface Member {
   memberType: MemberType;
   joinDate: string;
   status: MemberStatus;
+  statusReason?: string;      // ECR-16: why the last lifecycle change (resigned/expelled/deceased/reactivated)
+  statusChangedAt?: string;   // ECR-16: ISO date of the last lifecycle change
   creditLimit?: number;   // Consumer C3 — max member-store credit outstanding (0/undefined = no cap; POS warns, never blocks)
   // Share Register fields
   shareCertNo?: string;

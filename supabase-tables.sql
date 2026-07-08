@@ -2391,6 +2391,13 @@ alter table sales add column if not exists "memberId" text;
 -- vouchers (refType 'consumer.member.recovery'); per-member outstanding is derived.
 alter table members add column if not exists "creditLimit" numeric;
 
+-- ECR-16 (member lifecycle): reason + date for the last lifecycle change (resigned/
+-- expelled/deceased/reactivated). The `status` column is text, so the widened enum
+-- ('resigned'|'expelled'|'deceased') needs no column change. Written via targeted
+-- best-effort .update(), so the base member upsert stays safe before this runs.
+alter table members add column if not exists "statusReason" text;
+alter table members add column if not exists "statusChangedAt" text;
+
 -- ── Consumer C4 — patronage rebate ───────────────────────────────────────────
 -- Year-end member rebate on purchases (draft → approved, resolution-gated). The
 -- distribution/payable accounts are created at runtime via addAccount (no table). RLS bundled.
