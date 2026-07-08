@@ -24,7 +24,8 @@
     "test:consumer": "node scripts/test-consumer.mjs",
     "test:rbac": "node scripts/test-rbac.mjs",
     "test:approval": "node scripts/test-approval-gating.mjs",
-    "test:soft-delete": "node scripts/test-soft-delete.mjs"
+    "test:soft-delete": "node scripts/test-soft-delete.mjs",
+    "test:audit": "node scripts/test-audit-log.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

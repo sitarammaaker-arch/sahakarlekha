@@ -832,6 +832,38 @@ alter table purchases        add column if not exists "isDeleted" boolean defaul
 alter table assets           add column if not exists "isDeleted" boolean default false;
 alter table audit_objections add column if not exists "isDeleted" boolean default false;
 
+-- ── P0 #3: Append-only (WORM) audit log ─────────────────────────────────────
+-- One immutable trail of who/what/when/before/after/reason across all mutations.
+-- WORM = INSERT + SELECT policies only; NO update/delete policy ⇒ rows can never be
+-- changed or removed (append-only, non-repudiable). Client writes fire-and-forget, so
+-- until this runs the app simply logs a console warning — no user-facing effect.
+create table if not exists audit_log (
+  id uuid primary key default gen_random_uuid(),
+  society_id text not null default 'SOC001',
+  actor_name text,
+  actor_email text,
+  actor_role text,
+  entity_type text not null,
+  entity_id text,
+  action text not null,
+  before jsonb,
+  after jsonb,
+  reason text,
+  source text default 'app',
+  created_at timestamptz not null default now()
+);
+create index if not exists audit_log_scope_idx on audit_log (society_id, entity_type, created_at desc);
+alter table audit_log enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='audit_log' and policyname='audit_insert') then
+    create policy "audit_insert" on audit_log for insert with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='audit_log' and policyname='audit_select') then
+    create policy "audit_select" on audit_log for select using (true);
+  end if;
+  -- Intentionally NO update/delete policy ⇒ audit_log is WORM (append-only).
+end $$;
+
 -- ── STEP 17c: Asset Register — ICAI AS-6 compliance fields ──────────────────
 alter table assets add column if not exists "depreciationMethod" text default 'SLM';
 alter table assets add column if not exists "depreciationPostedFY" jsonb default '[]';

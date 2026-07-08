@@ -25,6 +25,7 @@ import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { resolveCapabilities } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
+import { logAudit, type AuditInput } from '@/lib/auditLog';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLines } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
@@ -224,6 +225,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Helper: adds society_id to any Supabase record
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const withSoc = (d: Record<string, any>) => ({ ...d, society_id: societyIdRef.current });
+  // P0 #3: append-only audit. Actor is read from a ref so it is never stale inside the
+  // delete/approve useCallbacks; emitAudit is fire-and-forget and never blocks the write.
+  const userRef = useRef(user);
+  useEffect(() => { userRef.current = user; }, [user]);
+  const emitAudit = (input: AuditInput) => logAudit(input, {
+    societyId: societyIdRef.current,
+    actor: { name: userRef.current?.name, email: userRef.current?.email, role: userRef.current?.role },
+  });
 
   const [vouchers, setVouchersState] = useState<Voucher[]>([]);
   const vouchersRef = useRef<Voucher[]>(vouchers);
@@ -1422,6 +1431,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const cancelledVoucher = { ...current, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy, deletedReason: reason };
+    emitAudit({ entityType: 'voucher', entityId: id, action: 'cancel', reason });
     setVouchersState(prev => {
       const updated = prev.map(v => v.id === id ? cancelledVoucher : v);
       return updated;
@@ -1469,6 +1479,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { deletedAt: _da, deletedBy: _db, deletedReason: _dr, ...rest } = current as Voucher & { deletedAt?: string; deletedBy?: string; deletedReason?: string };
     const restoredVoucher = { ...rest, isDeleted: false };
+    emitAudit({ entityType: 'voucher', entityId: id, action: 'restore' });
     setVouchersState(prev => {
       const updated = prev.map(v => v.id === id ? restoredVoucher : v);
       return updated;
@@ -1519,6 +1530,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!current) return;
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
     const updated = { ...current, approvalStatus: 'approved' as const, approvedBy, approvedAt: new Date().toISOString() };
+    emitAudit({ entityType: 'voucher', entityId: id, action: 'approve', before: { approvalStatus: current.approvalStatus ?? null }, after: { approvalStatus: 'approved' } });
     setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); return u; });
     supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => {
       if (error) {
@@ -1536,6 +1548,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!current) return;
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
     const updated = { ...current, approvalStatus: 'rejected' as const, approvalRemarks: reason, approvedBy: rejectedBy, approvedAt: new Date().toISOString() };
+    emitAudit({ entityType: 'voucher', entityId: id, action: 'reject', before: { approvalStatus: current.approvalStatus ?? null }, after: { approvalStatus: 'rejected' }, reason });
     setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); return u; });
     supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => {
       if (error) {
@@ -1588,6 +1601,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Soft-delete (P0 #2): retain the audit-objection row (isDeleted=true) — statutory
     // register must persist. Load filters isDeleted out on refresh.
     supabase.from('audit_objections').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    emitAudit({ entityType: 'auditObjection', entityId: id, action: 'delete', reason: 'Audit objection deleted' });
     console.info(`[AUDIT-DELETE] AuditObjection id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
@@ -1800,6 +1814,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setVouchersState(prev => prev.map(cancel));
       linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) console.error('Member voucher cancel sync:', error.message); else deleteEntries(vid); }));
     }
+    emitAudit({ entityType: 'member', entityId: id, action: 'delete', reason: 'Member deleted' });
     console.info(`[AUDIT-DELETE] Member id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
@@ -3207,6 +3222,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) console.error('Asset depreciation voucher cancel sync:', error.message); else deleteEntries(vid); }));
       }
     }
+    emitAudit({ entityType: 'asset', entityId: id, action: 'delete', reason: 'Asset deleted' });
     console.info(`[AUDIT-DELETE] Asset id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
@@ -4257,6 +4273,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Soft-delete (P0 #2): retain the purchase row (isDeleted=true); linked vouchers, tax
     // vouchers, stock and movements are still cascaded above. Load filters isDeleted out.
     supabase.from('purchases').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    emitAudit({ entityType: 'purchase', entityId: id, action: 'delete', reason: 'Purchase deleted' });
     console.info(`[AUDIT-DELETE] Purchase id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
