@@ -26,6 +26,7 @@ import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { resolveCapabilities } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
 import { logAudit, type AuditInput } from '@/lib/auditLog';
+import { sumActiveMemberShareCapital, reconcileShareCapital, type ShareCapitalReconciliation } from '@/lib/shareReconciliation';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLines } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
@@ -179,6 +180,7 @@ interface DataContextType {
   kccLoans: KccLoan[];
 
   getAccountBalance: (accountId: string) => number;
+  getShareCapitalReconciliation: () => ShareCapitalReconciliation;
   getCashBookEntries: (fromDate?: string, toDate?: string) => CashBookEntry[];
   getBankBookEntries: (fromDate?: string, toDate?: string, bankAccountId?: string) => BankBookEntry[];
   getTrialBalance: (asOnDate?: string) => AccountBalance[];
@@ -2895,6 +2897,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return balance;
   }, [accounts, activeVouchers]);
 
+  // P0 #4 / ECR-05 (MS-03): detect drift between the member scalar (subsidiary) and the
+  // Share-Capital ledger account (control). getAccountBalance returns a signed (Dr−Cr)
+  // balance, so negate for the equity credit magnitude. Detection only — nothing is mutated.
+  const getShareCapitalReconciliation = useCallback((): ShareCapitalReconciliation => {
+    const controlBalance = -getAccountBalance(ACCOUNT_IDS.SHARE_CAP);
+    return reconcileShareCapital(sumActiveMemberShareCapital(members), controlBalance);
+  }, [members, getAccountBalance]);
+
   const getCashBookEntries = useCallback((fromDate?: string, toDate?: string): CashBookEntry[] => {
     const cashAccount = accounts.find(a => a.id === ACCOUNT_IDS.CASH);
     if (!cashAccount) return [];
@@ -5144,7 +5154,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addSalaryRecord, updateSalaryRecord, deleteSalaryRecord,
       addSupplier, updateSupplier, deleteSupplier,
       addCustomer, updateCustomer, deleteCustomer,
-      getAccountBalance, getCashBookEntries, getBankBookEntries,
+      getAccountBalance, getShareCapitalReconciliation, getCashBookEntries, getBankBookEntries,
       getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments, postClosingStock,
       getEntityLinks,
       isLoading,
