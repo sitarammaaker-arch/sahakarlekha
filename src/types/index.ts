@@ -562,7 +562,7 @@ export interface Loan {
 
 // ── Deposits (Core for Credit/PACS) — SB / FD / RD / Pigmy ─────────────────────
 export type DepositType = 'SB' | 'FD' | 'RD' | 'PIGMY';
-export type DepositTxnType = 'open' | 'deposit' | 'withdraw' | 'interest';
+export type DepositTxnType = 'open' | 'deposit' | 'withdraw' | 'interest' | 'closure';
 export type DepositStatus = 'active' | 'closed' | 'matured';
 
 // A member deposit account (a liability the society owes the member). The FD/RD/Pigmy

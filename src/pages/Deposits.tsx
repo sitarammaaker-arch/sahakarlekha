@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, History, Search, Percent } from 'lucide-react';
+import { PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, History, Search, Percent, Lock } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
 import { sbInterest } from '@/lib/depositInterest';
 import { useToast } from '@/hooks/use-toast';
@@ -35,7 +35,7 @@ const today = () => new Date().toISOString().split('T')[0];
 const Deposits: React.FC = () => {
   const { language } = useLanguage();
   const { hasPermission } = useAuth();
-  const { members, depositAccounts, addDepositAccount, postDepositTransaction, postDepositInterest, getDepositTransactions } = useData();
+  const { members, depositAccounts, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
   const canEdit = hasPermission(['admin', 'accountant']);
@@ -96,6 +96,14 @@ const Deposits: React.FC = () => {
     if (!intAcct) return;
     if (postDepositInterest(intAcct.id, Number(intAmt) || 0, intDate)) setIntAcct(null);
   };
+
+  // ── Mature / close dialog ──────────────────────────────────────────────────
+  const [closeAcct, setCloseAcct] = useState<DepositAccount | null>(null);
+  const [closeMode, setCloseMode] = useState<'cash' | 'bank'>('cash');
+  const [closeDate, setCloseDate] = useState(today());
+  const openClose = (a: DepositAccount) => { setCloseAcct(a); setCloseMode('cash'); setCloseDate(today()); };
+  const submitClose = () => { if (closeAcct && closeDepositAccount(closeAcct.id, closeMode, closeDate)) setCloseAcct(null); };
+  const isTerm = (a: DepositAccount) => a.depositType === 'FD' || a.depositType === 'RD';
 
   // ── Transaction history dialog ─────────────────────────────────────────────
   const [historyAcct, setHistoryAcct] = useState<DepositAccount | null>(null);
@@ -162,6 +170,7 @@ const Deposits: React.FC = () => {
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50" title={hi ? 'जमा' : 'Deposit'} onClick={() => openTxn(d, 'deposit')}><ArrowDownCircle className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600 hover:bg-amber-50" title={hi ? 'निकासी' : 'Withdraw'} onClick={() => openTxn(d, 'withdraw')}><ArrowUpCircle className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 hover:bg-indigo-50" title={hi ? 'ब्याज जमा करें' : 'Credit interest'} onClick={() => openInterest(d)}><Percent className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-600 hover:bg-slate-100" title={isTerm(d) ? (hi ? 'परिपक्व करें' : 'Mature') : (hi ? 'खाता बंद करें' : 'Close account')} onClick={() => openClose(d)}><Lock className="h-4 w-4" /></Button>
                           </>
                         )}
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50" title={hi ? 'लेनदेन' : 'Transactions'} onClick={() => setHistoryAcct(d)}><History className="h-4 w-4" /></Button>
@@ -288,6 +297,36 @@ const Deposits: React.FC = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIntAcct(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
             <Button disabled={!(Number(intAmt) > 0)} onClick={submitInterest}>{hi ? 'जमा करें' : 'Credit'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mature / close dialog */}
+      <Dialog open={!!closeAcct} onOpenChange={o => { if (!o) setCloseAcct(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle>{closeAcct && isTerm(closeAcct) ? (hi ? 'जमा परिपक्व करें' : 'Mature Deposit') : (hi ? 'खाता बंद करें' : 'Close Account')} — {closeAcct?.accountNo}</DialogTitle></DialogHeader>
+          {closeAcct && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">{hi ? 'भुगतान राशि (शेष):' : 'Payout (balance):'} <strong>{fmt(closeAcct.balance)}</strong></p>
+              {closeAcct.balance > 0 && (
+                <div>
+                  <Label className="text-xs">{hi ? 'भुगतान विधि' : 'Payout mode'}</Label>
+                  <Select value={closeMode} onValueChange={v => setCloseMode(v as 'cash' | 'bank')}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="cash">{hi ? 'नकद' : 'Cash'}</SelectItem><SelectItem value="bank">{hi ? 'बैंक' : 'Bank'}</SelectItem></SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div>
+                <Label className="text-xs">{hi ? 'तिथि' : 'Date'}</Label>
+                <Input type="date" className="mt-1" value={closeDate} onChange={e => setCloseDate(e.target.value)} />
+              </div>
+              <p className="text-[11px] text-muted-foreground">{closeAcct.balance > 0 ? (hi ? 'Dr जमा / Cr नकद-बैंक — पूरा शेष भुगतान होगा, खाता ' : 'Dr deposit / Cr Cash-Bank — full balance paid out, account ') : (hi ? 'खाता ' : 'Account ')}{isTerm(closeAcct) ? (hi ? 'परिपक्व' : 'matured') : (hi ? 'बंद' : 'closed')}.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCloseAcct(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+            <Button onClick={submitClose}>{closeAcct && isTerm(closeAcct) ? (hi ? 'परिपक्व करें' : 'Mature') : (hi ? 'बंद करें' : 'Close')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -74,6 +74,7 @@ interface DataContextType {
   addDepositAccount: (data: Omit<DepositAccount, 'id' | 'accountNo' | 'balance' | 'status' | 'createdAt'> & { openingAmount?: number; mode?: 'cash' | 'bank' }) => DepositAccount | null;
   postDepositTransaction: (accountId: string, txnType: 'deposit' | 'withdraw', amount: number, mode: 'cash' | 'bank', date: string) => boolean;
   postDepositInterest: (accountId: string, amount: number, date: string) => boolean;
+  closeDepositAccount: (accountId: string, mode: 'cash' | 'bank', date: string) => boolean;
   getDepositTransactions: (accountId: string) => DepositTransaction[];
   assets: Asset[];
 
@@ -2317,6 +2318,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     toastRef.current({ title: '✅ ब्याज जमा', description: `${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · शेष ₹${newBal.toLocaleString('en-IN')}` });
     return true;
   }, [addVoucher]);
+
+  // Mature / close a deposit account: pay out the full balance (Dr liability / Cr Cash-Bank)
+  // and mark it matured (FD/RD) or closed (SB/Pigmy). A zero-balance account just closes.
+  const closeDepositAccount = useCallback((accountId: string, mode: 'cash' | 'bank', date: string): boolean => {
+    if (guardFYLocked()) return false;
+    const acct = depositAccountsRef.current.find(d => d.id === accountId);
+    if (!acct) return false;
+    if (acct.status !== 'active') { toastRef.current({ title: 'खाता पहले से बंद', description: 'Account is not active.', variant: 'destructive' }); return false; }
+    const before = acct;
+    let newBal = acct.balance;
+    if (acct.balance > 0) {
+      const b = postDepositLeg(acct, 'closure', acct.balance, mode, date);
+      if (b === null) return false; // payout voucher blocked (FY/period lock)
+      newBal = b;
+    }
+    const newStatus: DepositAccount['status'] = (acct.depositType === 'FD' || acct.depositType === 'RD') ? 'matured' : 'closed';
+    const updated = { ...acct, balance: newBal, status: newStatus };
+    depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? updated : d);
+    setDepositAccountsState(prev => prev.map(d => d.id === accountId ? updated : d));
+    supabase.from('deposit_accounts').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Deposit close sync:', error.message);
+        depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
+        setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
+        toastRef.current({ title: 'बंद करना सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { status: before.status, balance: before.balance }, after: { status: newStatus, balance: newBal } });
+    toastRef.current({ title: newStatus === 'matured' ? '✅ जमा परिपक्व' : '✅ जमा खाता बंद', description: `${acct.accountNo}${acct.balance > 0 ? ` · भुगतान ₹${acct.balance.toLocaleString('en-IN')}` : ''}` });
+    return true;
+  }, [accounts, addVoucher]);
 
   const getDepositTransactions = useCallback((accountId: string): DepositTransaction[] =>
     depositTransactions.filter(t => t.depositAccountId === accountId)
@@ -5530,7 +5562,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   return (
     <DataContext.Provider value={{
       vouchers, members, accounts, society, loans, assets, auditObjections,
-      depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, getDepositTransactions,
+      depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,
       stockItems, stockMovements, sales, purchases, employees, salaryRecords,
       suppliers, customers, kccLoans, societyCapabilities, setCapabilityHidden,
       procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,

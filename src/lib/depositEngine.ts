@@ -26,15 +26,15 @@ export interface DepositPosting {
  *   withdraw       → Dr Deposit-liability / Cr Cash-Bank (−)
  */
 export function depositPosting(txnType: DepositTxnType, acc: { liability: string; cashBank: string }): DepositPosting {
-  if (txnType === 'withdraw') {
+  if (txnType === 'withdraw' || txnType === 'closure') {
     return { debitAccountId: acc.liability, creditAccountId: acc.cashBank, sign: -1 };
   }
   return { debitAccountId: acc.cashBank, creditAccountId: acc.liability, sign: 1 };
 }
 
-/** New balance after applying a transaction. */
+/** New balance after applying a transaction (withdraw & closure pay out; others credit). */
 export function applyDepositTxn(balance: number, txnType: DepositTxnType, amount: number): number {
-  const sign = txnType === 'withdraw' ? -1 : 1;
+  const sign = (txnType === 'withdraw' || txnType === 'closure') ? -1 : 1;
   return Math.round((balance + sign * amount) * 100) / 100;
 }
 
