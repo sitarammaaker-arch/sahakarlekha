@@ -78,5 +78,12 @@ ok(filedTds && filedTds.status === 'filed', 'filed TDS shows status filed (not o
 ok(find(withFiled, i => i.id === 'gstr3b-2024-04').status !== 'filed', 'other items unaffected by filing');
 ok(withFiled.filter(i => i.status === 'overdue').length < full.filter(i => i.status === 'overdue').length, 'filing reduces overdue count');
 
+// 10. complianceNotifications = overdue + due-soon only (filed/upcoming excluded).
+const complianceNotifications = (items) => items.filter(i => i.status === 'overdue' || i.status === 'due-soon');
+const alerts = complianceNotifications(full);
+ok(alerts.length > 0 && alerts.every(a => a.status === 'overdue' || a.status === 'due-soon'), 'notifications are overdue/due-soon only');
+ok(complianceNotifications(withFiled).length < alerts.length, 'filing reduces notifications');
+ok(complianceNotifications(full).every(a => a.status !== 'upcoming' && a.status !== 'filed'), 'upcoming/filed excluded from notifications');
+
 console.log(`\nCompliance calendar (pure): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

@@ -102,3 +102,8 @@ export function buildComplianceCalendar(asOf: string, app: ComplianceApplicabili
     .filter(it => it.daysLeft >= -winBack && it.daysLeft <= winFwd)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.category.localeCompare(b.category));
 }
+
+/** Items that need attention now — overdue + due-soon (filed items are already excluded). */
+export function complianceNotifications(items: ComplianceItem[]): ComplianceItem[] {
+  return items.filter(i => i.status === 'overdue' || i.status === 'due-soon');
+}
