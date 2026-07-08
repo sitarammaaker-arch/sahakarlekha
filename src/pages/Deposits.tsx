@@ -17,9 +17,10 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, History, Search, Percent, Lock } from 'lucide-react';
+import { PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, History, Search, Percent, Lock, ListChecks } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
 import { sbInterest } from '@/lib/depositInterest';
+import { buildRdSchedule, missedCount } from '@/lib/rdSchedule';
 import { useToast } from '@/hooks/use-toast';
 import type { DepositType, DepositAccount } from '@/types';
 
@@ -54,15 +55,18 @@ const Deposits: React.FC = () => {
 
   // ── Open account dialog ────────────────────────────────────────────────────
   const [openNew, setOpenNew] = useState(false);
-  const [form, setForm] = useState({ memberId: '', depositType: 'SB' as DepositType, openDate: today(), interestRate: '', openingAmount: '', mode: 'cash' as 'cash' | 'bank' });
+  const emptyForm = { memberId: '', depositType: 'SB' as DepositType, openDate: today(), interestRate: '', openingAmount: '', installmentAmount: '', maturityDate: '', mode: 'cash' as 'cash' | 'bank' };
+  const [form, setForm] = useState(emptyForm);
   const submitNew = () => {
     if (!form.memberId) { toast({ title: hi ? 'सदस्य चुनें' : 'Select a member', variant: 'destructive' }); return; }
     const created = addDepositAccount({
       memberId: form.memberId, depositType: form.depositType, openDate: form.openDate,
       interestRate: form.interestRate ? Number(form.interestRate) : undefined,
+      installmentAmount: form.installmentAmount ? Number(form.installmentAmount) : undefined,
+      maturityDate: form.maturityDate || undefined,
       openingAmount: form.openingAmount ? Number(form.openingAmount) : 0, mode: form.mode,
     });
-    if (created) { setOpenNew(false); setForm({ memberId: '', depositType: 'SB', openDate: today(), interestRate: '', openingAmount: '', mode: 'cash' }); }
+    if (created) { setOpenNew(false); setForm(emptyForm); }
   };
 
   // ── Deposit / Withdraw dialog ──────────────────────────────────────────────
@@ -104,6 +108,18 @@ const Deposits: React.FC = () => {
   const openClose = (a: DepositAccount) => { setCloseAcct(a); setCloseMode('cash'); setCloseDate(today()); };
   const submitClose = () => { if (closeAcct && closeDepositAccount(closeAcct.id, closeMode, closeDate)) setCloseAcct(null); };
   const isTerm = (a: DepositAccount) => a.depositType === 'FD' || a.depositType === 'RD';
+
+  // ── RD schedule dialog ─────────────────────────────────────────────────────
+  const [scheduleAcct, setScheduleAcct] = useState<DepositAccount | null>(null);
+  const schedule = scheduleAcct
+    ? buildRdSchedule({
+        openDate: scheduleAcct.openDate, installmentAmount: scheduleAcct.installmentAmount || 0,
+        maturityDate: scheduleAcct.maturityDate,
+        totalPaid: getDepositTransactions(scheduleAcct.id).filter(t => t.txnType === 'open' || t.txnType === 'deposit').reduce((s, t) => s + t.amount, 0),
+        asOf: today(),
+      })
+    : [];
+  const scheduleMissed = missedCount(schedule);
 
   // ── Transaction history dialog ─────────────────────────────────────────────
   const [historyAcct, setHistoryAcct] = useState<DepositAccount | null>(null);
@@ -173,6 +189,9 @@ const Deposits: React.FC = () => {
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-600 hover:bg-slate-100" title={isTerm(d) ? (hi ? 'परिपक्व करें' : 'Mature') : (hi ? 'खाता बंद करें' : 'Close account')} onClick={() => openClose(d)}><Lock className="h-4 w-4" /></Button>
                           </>
                         )}
+                        {d.depositType === 'RD' && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-purple-600 hover:bg-purple-50" title={hi ? 'किस्त अनुसूची' : 'Installment schedule'} onClick={() => setScheduleAcct(d)}><ListChecks className="h-4 w-4" /></Button>
+                        )}
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50" title={hi ? 'लेनदेन' : 'Transactions'} onClick={() => setHistoryAcct(d)}><History className="h-4 w-4" /></Button>
                       </div>
                     </TableCell>
@@ -215,9 +234,21 @@ const Deposits: React.FC = () => {
                 <Input type="number" className="mt-1" value={form.interestRate} onChange={e => setForm(f => ({ ...f, interestRate: e.target.value }))} placeholder="0" />
               </div>
               <div>
-                <Label className="text-xs">{hi ? 'शुरुआती जमा' : 'Opening amount'}</Label>
+                <Label className="text-xs">{form.depositType === 'RD' ? (hi ? 'पहली किस्त' : 'First installment') : (hi ? 'शुरुआती जमा' : 'Opening amount')}</Label>
                 <Input type="number" className="mt-1" value={form.openingAmount} onChange={e => setForm(f => ({ ...f, openingAmount: e.target.value }))} placeholder="0" />
               </div>
+              {(form.depositType === 'FD' || form.depositType === 'RD') && (
+                <div>
+                  <Label className="text-xs">{hi ? 'परिपक्वता तिथि' : 'Maturity date'}</Label>
+                  <Input type="date" className="mt-1" value={form.maturityDate} onChange={e => setForm(f => ({ ...f, maturityDate: e.target.value }))} />
+                </div>
+              )}
+              {form.depositType === 'RD' && (
+                <div>
+                  <Label className="text-xs">{hi ? 'मासिक किस्त' : 'Monthly installment'}</Label>
+                  <Input type="number" className="mt-1" value={form.installmentAmount} onChange={e => setForm(f => ({ ...f, installmentAmount: e.target.value }))} placeholder="0" />
+                </div>
+              )}
             </div>
             {Number(form.openingAmount) > 0 && (
               <div>
@@ -328,6 +359,44 @@ const Deposits: React.FC = () => {
             <Button variant="outline" onClick={() => setCloseAcct(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
             <Button onClick={submitClose}>{closeAcct && isTerm(closeAcct) ? (hi ? 'परिपक्व करें' : 'Mature') : (hi ? 'बंद करें' : 'Close')}</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* RD installment schedule dialog */}
+      <Dialog open={!!scheduleAcct} onOpenChange={o => { if (!o) setScheduleAcct(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>{hi ? 'किस्त अनुसूची' : 'Installment Schedule'} — {scheduleAcct?.accountNo}</DialogTitle></DialogHeader>
+          {scheduleMissed > 0 && (
+            <p className="text-sm text-destructive font-medium">{scheduleMissed} {hi ? 'किस्त छूटी' : 'installment(s) missed'}</p>
+          )}
+          <div className="max-h-[60vh] overflow-y-auto">
+            {schedule.length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">{hi ? 'अनुसूची नहीं — परिपक्वता तिथि व मासिक किस्त सेट करें।' : 'No schedule — set maturity date & monthly installment.'}</p>
+            ) : (
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>#</TableHead>
+                  <TableHead>{hi ? 'देय तिथि' : 'Due date'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'राशि' : 'Amount'}</TableHead>
+                  <TableHead>{hi ? 'स्थिति' : 'Status'}</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {schedule.map(s => (
+                    <TableRow key={s.installmentNo}>
+                      <TableCell>{s.installmentNo}</TableCell>
+                      <TableCell className="text-sm">{fmtDate(s.dueDate)}</TableCell>
+                      <TableCell className="text-right">{fmt(s.amount)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={s.status === 'paid' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : s.status === 'missed' ? 'bg-red-100 text-red-800 border-red-300' : 'bg-amber-100 text-amber-800 border-amber-300'}>
+                          {s.status === 'paid' ? (hi ? 'भुगतान' : 'Paid') : s.status === 'missed' ? (hi ? 'छूटी' : 'Missed') : (hi ? 'देय' : 'Due')}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
