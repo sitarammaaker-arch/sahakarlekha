@@ -6,6 +6,7 @@ import { computeStatutory } from '@/lib/payrollStatutory';
 import { suggestMonthlyTds, type TaxRegime } from '@/lib/tdsProjection';
 import { professionalTaxForState } from '@/lib/professionalTax';
 import { build24Q, type Quarter } from '@/lib/form24Q';
+import { daysInMonth, prorate } from '@/lib/attendance';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,8 +67,9 @@ interface ProcessRow {
   employee: Employee;
   allowances: number;
   deductions: number;
-  pt: number;    // ECR-14: professional tax
-  tds: number;   // ECR-14: TDS u/s 192
+  pt: number;        // ECR-14: professional tax
+  tds: number;       // ECR-14: TDS u/s 192
+  paidDays: number;  // ECR-14: attendance (paid days this month)
   paymentMode: PaymentMode;
   processed: boolean;
 }
@@ -355,6 +357,7 @@ const SalaryManagement: React.FC = () => {
         deductions: 0,
         pt: professionalTaxForState(emp.basicSalary, society.state),   // ECR-14: auto PT by state (editable)
         tds: suggestMonthlyTds(emp.basicSalary, taxRegime),   // ECR-14: auto TDS-192 projection (editable)
+        paidDays: daysInMonth(processingMonth),   // ECR-14: full month by default
         paymentMode: 'bank' as PaymentMode,
         processed: salaryRecords.some(r => r.employeeId === emp.id && r.month === processingMonth),
       }))
@@ -368,29 +371,34 @@ const SalaryManagement: React.FC = () => {
     setProcessRows(rows => rows.map(r => r.processed ? r : { ...r, tds: suggestMonthlyTds(r.employee.basicSalary + r.allowances, regime) }));
   };
 
-  const updateRow = (empId: string, field: keyof Pick<ProcessRow, 'allowances' | 'deductions' | 'pt' | 'tds' | 'paymentMode'>, value: number | PaymentMode) => {
+  const updateRow = (empId: string, field: keyof Pick<ProcessRow, 'allowances' | 'deductions' | 'pt' | 'tds' | 'paidDays' | 'paymentMode'>, value: number | PaymentMode) => {
     setProcessRows(rows =>
       rows.map(r => (r.employee.id === empId ? { ...r, [field]: value } : r))
     );
   };
 
-  // ECR-14: statutory computation for a process row (PF/ESI from employee applicability; PT/TDS entered).
-  const rowStatutory = (row: ProcessRow) => computeStatutory({
-    basic: row.employee.basicSalary,
-    allowances: row.allowances,
-    pfApplicable: row.employee.pfApplicable ?? true,
-    esiApplicable: row.employee.esiApplicable ?? true,
-    pt: row.pt,
-    tds: row.tds,
-  });
+  // ECR-14: statutory computation for a process row. Earnings are pro-rated by attendance
+  // (paid days / days-in-month) first, so PF/ESI compute on the actually-earned wage.
+  const rowStatutory = (row: ProcessRow) => {
+    const monthDays = daysInMonth(processingMonth);
+    return computeStatutory({
+      basic: prorate(row.employee.basicSalary, row.paidDays, monthDays),
+      allowances: prorate(row.allowances, row.paidDays, monthDays),
+      pfApplicable: row.employee.pfApplicable ?? true,
+      esiApplicable: row.employee.esiApplicable ?? true,
+      pt: row.pt,
+      tds: row.tds,
+    });
+  };
 
   const salaryRecordFromRow = (row: ProcessRow) => {
     const s = rowStatutory(row);
+    const monthDays = daysInMonth(processingMonth);
     return {
       employeeId: row.employee.id,
       month: processingMonth,
-      basicSalary: row.employee.basicSalary,
-      allowances: row.allowances,
+      basicSalary: prorate(row.employee.basicSalary, row.paidDays, monthDays),   // earned (attendance-prorated)
+      allowances: prorate(row.allowances, row.paidDays, monthDays),
       deductions: s.totalEmployeeDeductions,
       netSalary: s.netSalary,
       pfEmployee: s.pfEmployee, pfEmployer: s.pfEmployer,
@@ -695,6 +703,7 @@ const SalaryManagement: React.FC = () => {
                         <TableRow className="bg-muted/50">
                           <TableHead className="font-semibold">{hi ? 'कर्मचारी' : 'Employee'}</TableHead>
                           <TableHead className="font-semibold text-right">{hi ? 'मूल वेतन' : 'Basic'}</TableHead>
+                          <TableHead className="font-semibold text-right">{hi ? 'उपस्थिति (दिन)' : 'Days'}</TableHead>
                           <TableHead className="font-semibold text-right">{hi ? 'भत्ते' : 'Allowances'}</TableHead>
                           <TableHead className="font-semibold text-right">{hi ? 'व्यावसायिक कर' : 'PT'}</TableHead>
                           <TableHead className="font-semibold text-right">{hi ? 'TDS' : 'TDS'}</TableHead>
@@ -721,6 +730,17 @@ const SalaryManagement: React.FC = () => {
                               </TableCell>
                               <TableCell className="text-right font-semibold text-sm">
                                 {fmt(row.employee.basicSalary)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Input
+                                    type="number" min="0" max={daysInMonth(processingMonth)}
+                                    value={row.paidDays}
+                                    onChange={e => updateRow(row.employee.id, 'paidDays', Number(e.target.value) || 0)}
+                                    className="w-16 text-right h-8" disabled={row.processed}
+                                  />
+                                  <span className="text-[10px] text-muted-foreground">/{daysInMonth(processingMonth)}</span>
+                                </div>
                               </TableCell>
                               <TableCell className="text-right">
                                 <Input
