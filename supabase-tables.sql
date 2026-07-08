@@ -2402,6 +2402,11 @@ alter table members add column if not exists "statusChangedAt" text;
 -- benefit share (%). Rides the whole-member upsert like other member columns.
 alter table members add column if not exists "nominees" jsonb default '[]';
 
+-- ECR-16 (member KYC): Aadhaar / PAN (PII — displayed masked) + verification status.
+alter table members add column if not exists "aadhaar" text;
+alter table members add column if not exists "pan" text;
+alter table members add column if not exists "kycStatus" text;
+
 -- ── Consumer C4 — patronage rebate ───────────────────────────────────────────
 -- Year-end member rebate on purchases (draft → approved, resolution-gated). The
 -- distribution/payable accounts are created at runtime via addAccount (no table). RLS bundled.

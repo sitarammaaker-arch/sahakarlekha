@@ -131,6 +131,9 @@ export interface MemberLedgerEntry {
 
 export type MemberType = 'member' | 'nominal';
 
+// ECR-16: member KYC verification lifecycle.
+export type KycStatus = 'pending' | 'verified' | 'rejected';
+
 // ECR-16: a member may nominate MULTIPLE nominees, each with a share of benefits (%).
 export interface Nominee {
   id: string;
@@ -159,6 +162,10 @@ export interface Member {
   shareCertNo?: string;
   shareCount?: number;
   shareFaceValue?: number;
+  // KYC (ECR-16). aadhaar/pan are PII — displayed masked, redacted in the audit log.
+  aadhaar?: string;
+  pan?: string;
+  kycStatus?: KycStatus;   // undefined = not started
   // Nominee fields (legacy single nominee — kept for backward-compat)
   nominees?: Nominee[];   // ECR-16: multiple nominees with share %
   nomineeName?: string;

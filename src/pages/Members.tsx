@@ -27,8 +27,9 @@ import type { MemberType, CasteCategory } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { generateMemberPassbookPDF, generateMemberApplicationPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
-import type { Member, MemberStatus, Nominee } from '@/types';
+import type { Member, MemberStatus, Nominee, KycStatus } from '@/types';
 import { validateNominees, nomineeShareTotal } from '@/lib/nomineeUtils';
+import { validateKyc } from '@/lib/kycUtils';
 
 // ECR-16: member lifecycle status → label + badge colour per state.
 const STATUS_META: Record<MemberStatus, { hi: string; en: string; cls: string }> = {
@@ -57,6 +58,7 @@ const EMPTY_FORM = {
   nomineeAge: '', nomineeOccupation: '', nomineeAddress: '', nomineeShares: '',
   shareCount: '', shareFaceValue: '',
   nominees: [] as Nominee[],   // ECR-16: multiple nominees
+  aadhaar: '', pan: '', kycStatus: '' as KycStatus | '',   // ECR-16: KYC
 };
 
 interface MemberFormProps {
@@ -239,6 +241,33 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
       <Input value={form.nomineeAddress} onChange={e => f('nomineeAddress', e.target.value)} />
     </div>
 
+    {/* ECR-16: KYC (Aadhaar / PAN) */}
+    <div className="pt-2 border-t">
+      <p className="text-xs font-semibold text-muted-foreground">{hi ? 'KYC (आधार / पैन)' : 'KYC (Aadhaar / PAN)'}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
+        <div className="space-y-1">
+          <Label className="text-xs">{hi ? 'आधार नंबर' : 'Aadhaar No.'}</Label>
+          <Input value={form.aadhaar} onChange={e => f('aadhaar', e.target.value)} placeholder={hi ? '12 अंक' : '12 digits'} maxLength={14} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">PAN</Label>
+          <Input value={form.pan} onChange={e => f('pan', e.target.value.toUpperCase())} placeholder="ABCDE1234F" maxLength={10} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">{hi ? 'KYC स्थिति' : 'KYC Status'}</Label>
+          <Select value={form.kycStatus || 'none'} onValueChange={v => setForm(prev => ({ ...prev, kycStatus: (v === 'none' ? '' : v) as KycStatus | '' }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{hi ? '— शुरू नहीं —' : '— Not started —'}</SelectItem>
+              <SelectItem value="pending">{hi ? 'लंबित' : 'Pending'}</SelectItem>
+              <SelectItem value="verified">{hi ? 'सत्यापित' : 'Verified'}</SelectItem>
+              <SelectItem value="rejected">{hi ? 'अस्वीकृत' : 'Rejected'}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </div>
+
     {/* ECR-16: Multiple nominees with benefit share % */}
     <div className="pt-2 border-t">
       <div className="flex items-center justify-between">
@@ -362,6 +391,8 @@ const Members: React.FC = () => {
     }
     const nv = validateNominees(cleanNominees);
     if (!nv.ok) { toast({ title: hi ? 'नामांकित त्रुटि' : 'Nominee error', description: nv.error, variant: 'destructive' }); return; }
+    const kv = validateKyc(form.aadhaar, form.pan);
+    if (!kv.ok) { toast({ title: 'KYC', description: kv.error, variant: 'destructive' }); return; }
     Object.assign(form, { memberId });
     addMember({
       ...form, memberId,
@@ -377,6 +408,8 @@ const Members: React.FC = () => {
       nomineeOccupation: form.nomineeOccupation || undefined, nomineeAddress: form.nomineeAddress || undefined,
       nomineeShares: form.nomineeShares ? Number(form.nomineeShares) : undefined,
       nominees: cleanNominees,
+      aadhaar: form.aadhaar.replace(/\s/g, '') || undefined, pan: form.pan.toUpperCase().trim() || undefined,
+      kycStatus: form.kycStatus || undefined,
       shareCount: form.shareCount ? Number(form.shareCount) : undefined,
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
     });
@@ -392,6 +425,8 @@ const Members: React.FC = () => {
     const cleanNominees = form.nominees.filter(n => n.name?.trim());
     const nv = validateNominees(cleanNominees);
     if (!nv.ok) { toast({ title: hi ? 'नामांकित त्रुटि' : 'Nominee error', description: nv.error, variant: 'destructive' }); return; }
+    const kv = validateKyc(form.aadhaar, form.pan);
+    if (!kv.ok) { toast({ title: 'KYC', description: kv.error, variant: 'destructive' }); return; }
     updateMember(editMember.id, {
       ...form,
       shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0,
@@ -406,6 +441,8 @@ const Members: React.FC = () => {
       nomineeOccupation: form.nomineeOccupation || undefined, nomineeAddress: form.nomineeAddress || undefined,
       nomineeShares: form.nomineeShares ? Number(form.nomineeShares) : undefined,
       nominees: cleanNominees,
+      aadhaar: form.aadhaar.replace(/\s/g, '') || undefined, pan: form.pan.toUpperCase().trim() || undefined,
+      kycStatus: form.kycStatus || undefined,
       shareCount: form.shareCount ? Number(form.shareCount) : undefined,
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
     });
@@ -428,6 +465,7 @@ const Members: React.FC = () => {
       nomineeAddress: m.nomineeAddress || '', nomineeShares: m.nomineeShares ? String(m.nomineeShares) : '',
       shareCount: m.shareCount ? String(m.shareCount) : '', shareFaceValue: m.shareFaceValue ? String(m.shareFaceValue) : '',
       nominees: m.nominees || [],
+      aadhaar: m.aadhaar || '', pan: m.pan || '', kycStatus: m.kycStatus || '',
     });
   };
 
