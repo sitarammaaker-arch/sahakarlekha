@@ -113,6 +113,7 @@ export interface AuditObjection {
   status: ObjectionStatus;
   remarks: string;
   createdAt: string;
+  isDeleted?: boolean;   // P0 #2 soft-delete: archived objection (retained in DB, hidden from app)
 }
 
 export interface MemberLedgerEntry {
@@ -164,6 +165,7 @@ export interface Member {
   nomineeAddress?: string;
   nomineeShares?: number;
   nomineeFatherName?: string;
+  isDeleted?: boolean;             // P0 #2 soft-delete: archived member (retained in DB, hidden from app)
 }
 
 // Housing cooperative — a building / wing / tower master (for multi-tower societies).
@@ -724,6 +726,7 @@ export interface Asset {
   capacityMT?: number;              // capacity in metric tonnes (for godowns)
   condition?: AssetCondition;       // Serviceable / Unserviceable
   marketValue?: number;             // Market Value as on reporting date (₹)
+  isDeleted?: boolean;              // P0 #2 soft-delete: archived asset (retained in DB, hidden from app)
 }
 
 export type AccountSubtype =
@@ -1396,6 +1399,7 @@ export interface Purchase {
   narration: string;
   createdAt: string;
   createdBy: string;
+  isDeleted?: boolean;      // P0 #2 soft-delete: archived purchase (retained in DB, hidden from app)
 }
 
 // ── Supplier ──────────────────────────────────────────────────────────────────

@@ -377,7 +377,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Load vouchers — safe first, auto-migration separate
         if (vData && vData.length > 0) { setVouchersState(vData); storage.setVouchers(vData); }
         else if (!vErr) setVouchersState([]);
-        if (mData && mData.length > 0) { setMembersState(mData); storage.setMembers(mData); }
+        // P0 #2: exclude soft-deleted rows so archived members never repopulate the array.
+        const activeMembers = (mData || []).filter(m => !m.isDeleted);
+        if (activeMembers.length > 0) { setMembersState(activeMembers); storage.setMembers(activeMembers); }
         else setMembersState([]);
 
         // Load accounts from Supabase; fall back to CMS template if none exist
@@ -421,8 +423,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.warn('Auto member voucher migration error (non-fatal):', migErr);
         }
         setLoansState(lData || []);
-        setAssetsState(asData || []);
-        setAuditObjectionsState(aoData || []);
+        setAssetsState((asData || []).filter(a => !a.isDeleted));          // P0 #2: exclude archived
+        setAuditObjectionsState((aoData || []).filter(o => !o.isDeleted)); // P0 #2: exclude archived
         setStockItemsState(siData || []);
         setStockMovementsState(smData || []);
 
@@ -770,7 +772,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const finalPurchases = ((puData || []) as Purchase[]).map(p => patchedPurchaseIds.has(p.id)
               ? patchedPurchases.find(pp => pp.id === p.id)! : p);
             setSalesState(finalSales);
-            setPurchasesState(finalPurchases);
+            setPurchasesState(finalPurchases.filter(p => !p.isDeleted)); // P0 #2: exclude archived
 
             // Persist NEW repair vouchers
             for (const v of newRepairVouchers) {
@@ -807,7 +809,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
           } else {
             setSalesState(slData || []);
-            setPurchasesState(puData || []);
+            setPurchasesState((puData || []).filter(p => !p.isDeleted)); // P0 #2: exclude archived
           }
         } catch (repairErr) {
           console.warn('Sale/Purchase voucher auto-repair non-fatal error:', repairErr);
@@ -1583,7 +1585,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deleteAuditObjection = useCallback((id: string) => {
     if (guardFYLocked()) return;
     setAuditObjectionsState(prev => { const updated = prev.filter(o => o.id !== id); return updated; });
-    supabase.from('audit_objections').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // Soft-delete (P0 #2): retain the audit-objection row (isDeleted=true) — statutory
+    // register must persist. Load filters isDeleted out on refresh.
+    supabase.from('audit_objections').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     console.info(`[AUDIT-DELETE] AuditObjection id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
@@ -1783,7 +1787,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = prev.filter(m => m.id !== id);
       return updated;
     });
-    supabase.from('members').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // Soft-delete (P0 #2): retain the row (isDeleted=true) for statutory retention & audit.
+    // The in-memory removal above hides it from the app; load filters isDeleted out on refresh.
+    supabase.from('members').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     // RULE 3: soft-cancel the member's auto-generated vouchers (share capital /
     // admission fee) so no ghost Share Capital lingers in the Trial Balance.
     const now = new Date().toISOString();
@@ -3186,7 +3192,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     const asset = assetsRef.current.find(a => a.id === id);
     setAssetsState(prev => { const updated = prev.filter(a => a.id !== id); return updated; });
-    supabase.from('assets').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // Soft-delete (P0 #2): retain the asset row (isDeleted=true); dependent depreciation
+    // vouchers are still soft-cancelled below. Load filters isDeleted out on refresh.
+    supabase.from('assets').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     // RULE 3: soft-cancel any depreciation journal(s) auto-posted for this asset (matched by its
     // unique assetNo in the narration) so no orphan depreciation expense / accumulated-dep lingers.
     if (asset?.assetNo) {
@@ -4246,7 +4254,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = prev.filter(p => p.id !== id);
       return updated;
     });
-    supabase.from('purchases').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // Soft-delete (P0 #2): retain the purchase row (isDeleted=true); linked vouchers, tax
+    // vouchers, stock and movements are still cascaded above. Load filters isDeleted out.
+    supabase.from('purchases').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     console.info(`[AUDIT-DELETE] Purchase id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 

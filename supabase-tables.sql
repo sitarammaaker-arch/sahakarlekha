@@ -821,6 +821,17 @@ alter table society_settings add column if not exists signatories jsonb default 
 -- society.approvalRequired ?? false, so it degrades gracefully before this runs.
 alter table society_settings add column if not exists "approvalRequired" boolean default false;
 
+-- ── P0 #2: Soft-delete parent records ───────────────────────────────────────
+-- Members / purchases / assets / audit-objections are now ARCHIVED (isDeleted=true)
+-- instead of hard-deleted, so statutory registers persist and deletes are auditable
+-- & restorable. The app removes them from in-memory state on delete and filters
+-- isDeleted out on load, so archived rows never surface. REQUIRED for the soft-delete
+-- to persist — until this runs, a delete's update() will error (surfaced as a toast).
+alter table members          add column if not exists "isDeleted" boolean default false;
+alter table purchases        add column if not exists "isDeleted" boolean default false;
+alter table assets           add column if not exists "isDeleted" boolean default false;
+alter table audit_objections add column if not exists "isDeleted" boolean default false;
+
 -- ── STEP 17c: Asset Register — ICAI AS-6 compliance fields ──────────────────
 alter table assets add column if not exists "depreciationMethod" text default 'SLM';
 alter table assets add column if not exists "depreciationPostedFY" jsonb default '[]';
