@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { computeStatutory } from '@/lib/payrollStatutory';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,6 +62,8 @@ interface ProcessRow {
   employee: Employee;
   allowances: number;
   deductions: number;
+  pt: number;    // ECR-14: professional tax
+  tds: number;   // ECR-14: TDS u/s 192
   paymentMode: PaymentMode;
   processed: boolean;
 }
@@ -323,6 +326,8 @@ const SalaryManagement: React.FC = () => {
         employee: emp,
         allowances: 0,
         deductions: 0,
+        pt: 0,
+        tds: 0,
         paymentMode: 'bank' as PaymentMode,
         processed: salaryRecords.some(r => r.employeeId === emp.id && r.month === processingMonth),
       }))
@@ -330,24 +335,41 @@ const SalaryManagement: React.FC = () => {
     setRowsLoaded(true);
   };
 
-  const updateRow = (empId: string, field: keyof Pick<ProcessRow, 'allowances' | 'deductions' | 'paymentMode'>, value: number | PaymentMode) => {
+  const updateRow = (empId: string, field: keyof Pick<ProcessRow, 'allowances' | 'deductions' | 'pt' | 'tds' | 'paymentMode'>, value: number | PaymentMode) => {
     setProcessRows(rows =>
       rows.map(r => (r.employee.id === empId ? { ...r, [field]: value } : r))
     );
   };
 
-  const processRow = (row: ProcessRow) => {
-    const netSalary = row.employee.basicSalary + row.allowances - row.deductions;
-    addSalaryRecord({
+  // ECR-14: statutory computation for a process row (PF/ESI from employee applicability; PT/TDS entered).
+  const rowStatutory = (row: ProcessRow) => computeStatutory({
+    basic: row.employee.basicSalary,
+    allowances: row.allowances,
+    pfApplicable: row.employee.pfApplicable ?? true,
+    esiApplicable: row.employee.esiApplicable ?? true,
+    pt: row.pt,
+    tds: row.tds,
+  });
+
+  const salaryRecordFromRow = (row: ProcessRow) => {
+    const s = rowStatutory(row);
+    return {
       employeeId: row.employee.id,
       month: processingMonth,
       basicSalary: row.employee.basicSalary,
       allowances: row.allowances,
-      deductions: row.deductions,
-      netSalary,
+      deductions: s.totalEmployeeDeductions,
+      netSalary: s.netSalary,
+      pfEmployee: s.pfEmployee, pfEmployer: s.pfEmployer,
+      esiEmployee: s.esiEmployee, esiEmployer: s.esiEmployer,
+      pt: s.pt, tds: s.tds,
       paymentMode: row.paymentMode,
       isPaid: false,
-    });
+    };
+  };
+
+  const processRow = (row: ProcessRow) => {
+    addSalaryRecord(salaryRecordFromRow(row));
     setProcessRows(rows => rows.map(r => (r.employee.id === row.employee.id ? { ...r, processed: true } : r)));
     toast({ title: hi ? 'वेतन प्रोसेस किया गया' : `Salary processed for ${row.employee.name}` });
   };
@@ -358,19 +380,7 @@ const SalaryManagement: React.FC = () => {
       toast({ title: hi ? 'सभी वेतन पहले से प्रोसेस हो चुके हैं' : 'All salaries already processed', variant: 'destructive' });
       return;
     }
-    pending.forEach(row => {
-      const netSalary = row.employee.basicSalary + row.allowances - row.deductions;
-      addSalaryRecord({
-        employeeId: row.employee.id,
-        month: processingMonth,
-        basicSalary: row.employee.basicSalary,
-        allowances: row.allowances,
-        deductions: row.deductions,
-        netSalary,
-        paymentMode: row.paymentMode,
-        isPaid: false,
-      });
-    });
+    pending.forEach(row => { addSalaryRecord(salaryRecordFromRow(row)); });
     setProcessRows(rows => rows.map(r => ({ ...r, processed: true })));
     toast({ title: hi ? `${pending.length} कर्मचारियों का वेतन प्रोसेस किया गया` : `${pending.length} salaries processed` });
   };
@@ -642,7 +652,9 @@ const SalaryManagement: React.FC = () => {
                           <TableHead className="font-semibold">{hi ? 'कर्मचारी' : 'Employee'}</TableHead>
                           <TableHead className="font-semibold text-right">{hi ? 'मूल वेतन' : 'Basic'}</TableHead>
                           <TableHead className="font-semibold text-right">{hi ? 'भत्ते' : 'Allowances'}</TableHead>
-                          <TableHead className="font-semibold text-right">{hi ? 'कटौती' : 'Deductions'}</TableHead>
+                          <TableHead className="font-semibold text-right">{hi ? 'व्यावसायिक कर' : 'PT'}</TableHead>
+                          <TableHead className="font-semibold text-right">{hi ? 'TDS' : 'TDS'}</TableHead>
+                          <TableHead className="font-semibold text-right">{hi ? 'कटौती (PF/ESI+PT+TDS)' : 'Deductions (PF/ESI+PT+TDS)'}</TableHead>
                           <TableHead className="font-semibold text-right">{hi ? 'शुद्ध वेतन' : 'Net Salary'}</TableHead>
                           <TableHead className="font-semibold">{hi ? 'भुगतान विधि' : 'Payment Mode'}</TableHead>
                           <TableHead className="font-semibold text-center">{hi ? 'क्रिया' : 'Action'}</TableHead>
@@ -650,7 +662,8 @@ const SalaryManagement: React.FC = () => {
                       </TableHeader>
                       <TableBody>
                         {processRows.map(row => {
-                          const net = row.employee.basicSalary + row.allowances - row.deductions;
+                          const s = rowStatutory(row);
+                          const net = s.netSalary;
                           return (
                             <TableRow
                               key={row.employee.id}
@@ -680,16 +693,23 @@ const SalaryManagement: React.FC = () => {
                               </TableCell>
                               <TableCell className="text-right">
                                 <Input
-                                  type="number"
-                                  min="0"
-                                  value={row.deductions || ''}
-                                  onChange={e =>
-                                    updateRow(row.employee.id, 'deductions', Number(e.target.value) || 0)
-                                  }
-                                  className="w-24 text-right h-8"
-                                  disabled={row.processed}
-                                  placeholder="0"
+                                  type="number" min="0" value={row.pt || ''}
+                                  onChange={e => updateRow(row.employee.id, 'pt', Number(e.target.value) || 0)}
+                                  className="w-20 text-right h-8" disabled={row.processed} placeholder="0"
                                 />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Input
+                                  type="number" min="0" value={row.tds || ''}
+                                  onChange={e => updateRow(row.employee.id, 'tds', Number(e.target.value) || 0)}
+                                  className="w-20 text-right h-8" disabled={row.processed} placeholder="0"
+                                />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="font-medium text-sm">{fmt(s.totalEmployeeDeductions)}</div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  PF {fmt(s.pfEmployee)}{s.esiEligible ? ` · ESI ${fmt(s.esiEmployee)}` : ''}
+                                </div>
                               </TableCell>
                               <TableCell className="text-right font-bold text-primary">
                                 {fmt(net)}

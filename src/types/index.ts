@@ -1656,6 +1656,12 @@ export interface Employee {
   isOutsourced?: boolean;              // true = outsourced, false = society own employee
   hafedSalaryPaid?: number;            // Amount of salary paid by HAFED (₹)
   hafedSalaryPercent?: number;         // % of salary paid by HAFED (0-100)
+
+  // ── ECR-14: statutory applicability ──
+  pfApplicable?: boolean;              // deduct EPF (default true when undefined)
+  esiApplicable?: boolean;             // deduct ESI if gross ≤ threshold (default true)
+  uan?: string;                        // EPF Universal Account Number
+  esiNo?: string;                      // ESIC insurance number
 }
 
 export interface SalaryRecord {
@@ -1665,8 +1671,15 @@ export interface SalaryRecord {
   month: string;
   basicSalary: number;
   allowances: number;
-  deductions: number;
+  deductions: number;         // total employee deductions (kept = pf+esi+pt+tds when statutory used)
   netSalary: number;
+  // ECR-14: statutory breakdown (0 when not applicable). deductions still holds the total.
+  pfEmployee?: number;
+  pfEmployer?: number;
+  esiEmployee?: number;
+  esiEmployer?: number;
+  pt?: number;                // professional tax
+  tds?: number;               // TDS u/s 192
   paymentMode: PaymentMode;
   voucherId?: string;         // payment voucher (Dr Salary Payable / Cr Bank), set when paid
   accrualVoucherId?: string;  // accrual voucher (Dr Salary Expense / Cr Salary Payable), set at processing

@@ -2721,3 +2721,17 @@ end $$;
 
 -- Deposits — Pigmy daily-collection agent (slice 5)
 alter table deposit_accounts add column if not exists "agent" text;
+
+-- ══ Payroll statutory engine (ECR-14) — PF / ESI / PT / TDS ═══════════════════
+-- Salary slips carry the statutory breakdown (deductions still holds the total);
+-- employees carry PF/ESI applicability + UAN / ESI numbers.
+alter table salary_records add column if not exists "pfEmployee" numeric;
+alter table salary_records add column if not exists "pfEmployer" numeric;
+alter table salary_records add column if not exists "esiEmployee" numeric;
+alter table salary_records add column if not exists "esiEmployer" numeric;
+alter table salary_records add column if not exists "pt" numeric;
+alter table salary_records add column if not exists "tds" numeric;
+alter table employees add column if not exists "pfApplicable" boolean;
+alter table employees add column if not exists "esiApplicable" boolean;
+alter table employees add column if not exists "uan" text;
+alter table employees add column if not exists "esiNo" text;

@@ -4942,13 +4942,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ? new Date(Number(base.month.slice(0, 4)), Number(base.month.slice(5, 7)), 0).toISOString().split('T')[0]
         : base.createdAt.split('T')[0];
       const lid = () => crypto.randomUUID();
+      const r2 = (n: number) => Math.round(n * 100) / 100;
+      // ECR-14: when a statutory breakdown is present, book gross + employer contributions
+      // to Salary Expense and split the employee dues + employer contributions to their
+      // payable heads (EPF 2203 / ESI 2204 / PT 2207 / TDS 2202). Otherwise keep the legacy
+      // net-basis accrual so old salary flows are unchanged.
+      const pfEmp = base.pfEmployee || 0, pfEr = base.pfEmployer || 0;
+      const esiEmp = base.esiEmployee || 0, esiEr = base.esiEmployer || 0;
+      const ptAmt = base.pt || 0, tdsAmt = base.tds || 0;
+      const hasStatutory = (pfEmp + pfEr + esiEmp + esiEr + ptAmt + tdsAmt) > 0;
       try {
-        const av = addVoucher({
-          type: 'journal', date: accrualDate, debitAccountId: '5201', creditAccountId: payableAcc, amount: base.netSalary,
-          lines: [{ id: lid(), accountId: '5201', type: 'Dr', amount: base.netSalary }, { id: lid(), accountId: payableAcc, type: 'Cr', amount: base.netSalary }],
-          narration: `Salary accrual: ${emp?.name || ''} - ${base.month} (${slipNo})`,
-          createdBy: 'System',
-        });
+        let av;
+        if (hasStatutory) {
+          const gross = r2((base.basicSalary || 0) + (base.allowances || 0));
+          const drTotal = r2(gross + pfEr + esiEr);   // employer contributions add to expense
+          const lines = [
+            { id: lid(), accountId: '5201', type: 'Dr' as const, amount: drTotal },
+            { id: lid(), accountId: payableAcc, type: 'Cr' as const, amount: base.netSalary },
+          ];
+          if (pfEmp + pfEr > 0) lines.push({ id: lid(), accountId: '2203', type: 'Cr' as const, amount: r2(pfEmp + pfEr) });
+          if (esiEmp + esiEr > 0) lines.push({ id: lid(), accountId: '2204', type: 'Cr' as const, amount: r2(esiEmp + esiEr) });
+          if (ptAmt > 0) lines.push({ id: lid(), accountId: '2207', type: 'Cr' as const, amount: r2(ptAmt) });
+          if (tdsAmt > 0) lines.push({ id: lid(), accountId: '2202', type: 'Cr' as const, amount: r2(tdsAmt) });
+          av = addVoucher({
+            type: 'journal', date: accrualDate, debitAccountId: '5201', creditAccountId: payableAcc, amount: drTotal, lines,
+            narration: `Salary accrual (statutory): ${emp?.name || ''} - ${base.month} (${slipNo})`,
+            createdBy: 'System',
+          });
+        } else {
+          av = addVoucher({
+            type: 'journal', date: accrualDate, debitAccountId: '5201', creditAccountId: payableAcc, amount: base.netSalary,
+            lines: [{ id: lid(), accountId: '5201', type: 'Dr', amount: base.netSalary }, { id: lid(), accountId: payableAcc, type: 'Cr', amount: base.netSalary }],
+            narration: `Salary accrual: ${emp?.name || ''} - ${base.month} (${slipNo})`,
+            createdBy: 'System',
+          });
+        }
         accrualVoucherId = av?.id || undefined;
       } catch { /* accrual best-effort; record still saves */ }
     }
