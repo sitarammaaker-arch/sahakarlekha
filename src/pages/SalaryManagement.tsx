@@ -4,6 +4,7 @@ import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { computeStatutory } from '@/lib/payrollStatutory';
 import { suggestMonthlyTds, type TaxRegime } from '@/lib/tdsProjection';
+import { professionalTaxForState } from '@/lib/professionalTax';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -328,7 +329,7 @@ const SalaryManagement: React.FC = () => {
         employee: emp,
         allowances: 0,
         deductions: 0,
-        pt: 0,
+        pt: professionalTaxForState(emp.basicSalary, society.state),   // ECR-14: auto PT by state (editable)
         tds: suggestMonthlyTds(emp.basicSalary, taxRegime),   // ECR-14: auto TDS-192 projection (editable)
         paymentMode: 'bank' as PaymentMode,
         processed: salaryRecords.some(r => r.employeeId === emp.id && r.month === processingMonth),
