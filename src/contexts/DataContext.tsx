@@ -34,7 +34,8 @@ import { shareOpPosting, validateShareOp, applyShareOp, type ShareOpType } from 
 import { depositLiabilityAccount, depositPosting, applyDepositTxn, validateDepositTxn } from '@/lib/depositEngine';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLines } from '@/lib/procurement';
-import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
+import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, nextFY } from '@/lib/depreciation';
+import { assetDisposalPosting, ASSET_ACCOUNTS } from '@/lib/assetDisposal';
 
 interface DataContextType {
   vouchers: Voucher[];
@@ -149,6 +150,7 @@ interface DataContextType {
 
   addAsset: (data: Omit<Asset, 'id' | 'assetNo'>) => Asset;
   updateAsset: (id: string, data: Partial<Asset>) => void;
+  disposeAsset: (id: string, opts: { saleProceeds: number; mode: 'cash' | 'bank'; date: string }) => boolean;
   deleteAsset: (id: string) => void;
   postDepreciation: (fy?: string) => { posted: number; skipped: number };
 
@@ -3685,6 +3687,48 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, []);
 
+  // ECR-15: dispose (sell/scrap) an asset. Computes accumulated depreciation to the disposal
+  // FY, posts the standard disposal journal (Dr Cash/Bank + Dr Accum-Dep + optional Dr Loss;
+  // Cr Fixed-Asset cost + optional Cr Profit), and marks the asset disposed. RULE 1 rollback.
+  const disposeAsset = useCallback((id: string, opts: { saleProceeds: number; mode: 'cash' | 'bank'; date: string }): boolean => {
+    if (guardFYLocked()) return false;
+    const asset = assetsRef.current.find(a => a.id === id);
+    if (!asset) return false;
+    if (asset.status === 'disposed') { toastRef.current({ title: 'पहले से disposed', description: 'This asset is already disposed.', variant: 'destructive' }); return false; }
+    // Accumulated depreciation from purchase FY through the disposal FY (capped at cost − residual).
+    const disposalFY = fyOfDate(new Date(opts.date));
+    let accum = 0, cursor = fyOfDate(new Date(asset.purchaseDate)), guard = 0;
+    while (cursor <= disposalFY && guard++ < 200) { accum += calcDepForFY(asset, cursor, accum); cursor = nextFY(cursor); }
+    accum = Math.min(accum, asset.cost - (asset.residualValue || 0));
+    const cashBank = opts.mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const posting = assetDisposalPosting({ category: asset.category, cost: asset.cost, accumDep: accum, saleProceeds: opts.saleProceeds, cashBankAccount: cashBank });
+    const firstDr = posting.lines.find(l => l.type === 'Dr');
+    const firstCr = posting.lines.find(l => l.type === 'Cr');
+    const voucher = addVoucher({
+      type: opts.saleProceeds > 0 ? 'receipt' : 'journal', date: opts.date,
+      debitAccountId: firstDr?.accountId || cashBank, creditAccountId: firstCr?.accountId || ASSET_ACCOUNTS[asset.category], amount: posting.drTotal,
+      lines: posting.lines.map(l => ({ id: crypto.randomUUID(), accountId: l.accountId, type: l.type, amount: l.amount })),
+      narration: `Asset disposal: ${asset.assetNo} ${asset.name} — WDV ₹${posting.wdv.toLocaleString('en-IN')}, ${posting.gainLoss >= 0 ? 'profit' : 'loss'} ₹${Math.abs(posting.gainLoss).toLocaleString('en-IN')}`,
+      createdBy: userRef.current?.name ?? 'System',
+    });
+    if (!voucher?.id) return false;
+    const before = asset;
+    const updated: Asset = { ...asset, status: 'disposed', disposalDate: opts.date, saleProceeds: opts.saleProceeds };
+    assetsRef.current = assetsRef.current.map(a => a.id === id ? updated : a);
+    setAssetsState(prev => prev.map(a => a.id === id ? updated : a));
+    supabase.from('assets').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Asset dispose sync:', error.message);
+        assetsRef.current = assetsRef.current.map(a => a.id === id ? before : a);
+        setAssetsState(prev => prev.map(a => a.id === id ? before : a));   // RULE 1: roll back
+        toastRef.current({ title: 'Disposal सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    emitAudit({ entityType: 'asset', entityId: id, action: 'update', before: { status: 'active' }, after: { status: 'disposed', saleProceeds: opts.saleProceeds, gainLoss: posting.gainLoss } });
+    toastRef.current({ title: posting.gainLoss >= 0 ? '✅ Asset disposed (लाभ)' : '✅ Asset disposed (हानि)', description: `${asset.assetNo} · WDV ₹${posting.wdv.toLocaleString('en-IN')} · ${posting.gainLoss >= 0 ? 'लाभ' : 'हानि'} ₹${Math.abs(posting.gainLoss).toLocaleString('en-IN')}` });
+    return true;
+  }, [accounts, addVoucher]);
+
   const deleteAsset = useCallback((id: string) => {
     if (guardFYLocked()) return;
     const asset = assetsRef.current.find(a => a.id === id);
@@ -5644,7 +5688,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
       addLoan, updateLoan, deleteLoan,
-      addAsset, updateAsset, deleteAsset, postDepreciation,
+      addAsset, updateAsset, disposeAsset, deleteAsset, postDepreciation,
       addAuditObjection, updateAuditObjection, deleteAuditObjection,
       recoverables, addRecoverable, updateRecoverable, deleteRecoverable,
       kachiAaratEntries, addKachiAaratEntry, updateKachiAaratEntry, deleteKachiAaratEntry,
