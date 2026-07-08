@@ -90,6 +90,7 @@ const SocietySetup = lazyWithRetry(() => import("./pages/SocietySetup"));
 const ShareRegister = lazyWithRetry(() => import("./pages/ShareRegister"));
 const LoanRegister = lazyWithRetry(() => import("./pages/LoanRegister"));
 const Deposits = lazyWithRetry(() => import("./pages/Deposits"));
+const ComplianceCalendar = lazyWithRetry(() => import("./pages/ComplianceCalendar"));
 const MilkCollection = lazyWithRetry(() => import("./pages/MilkCollection"));
 const AssetRegister = lazyWithRetry(() => import("./pages/AssetRegister"));
 const DepreciationSchedule = lazyWithRetry(() => import("./pages/DepreciationSchedule"));
@@ -308,6 +309,7 @@ const AppRoutes = () => {
       <Route path="/share-register" element={<ProtectedRoute><ShareRegister /></ProtectedRoute>} />
       <Route path="/loan-register" element={<ProtectedRoute><LoanRegister /></ProtectedRoute>} />
       <Route path="/deposits" element={<ProtectedRoute><Deposits /></ProtectedRoute>} />
+      <Route path="/compliance-calendar" element={<ProtectedRoute><ComplianceCalendar /></ProtectedRoute>} />
       <Route path="/milk-collection" element={<ProtectedRoute><MilkCollection /></ProtectedRoute>} />
       <Route path="/asset-register" element={<ProtectedRoute><AssetRegister /></ProtectedRoute>} />
       <Route path="/depreciation-schedule" element={<ProtectedRoute><DepreciationSchedule /></ProtectedRoute>} />

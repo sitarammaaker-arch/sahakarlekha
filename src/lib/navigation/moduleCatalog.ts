@@ -118,6 +118,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   // ── reports (was reportNavItems) ──
   { id: 'trialBalance',       titleKey: 'trialBalance',       icon: Scale,           route: '/trial-balance',        domain: 'reports', requiredCapabilities: U, order: 0 },
   { id: 'receiptsPayments',   titleKey: 'receiptsPayments',   icon: ArrowLeftRight,  route: '/receipts-payments',    domain: 'reports', requiredCapabilities: U, order: 1 },
+  { id: 'complianceCalendar', titleKey: 'complianceCalendar', icon: CalendarDays,    route: '/compliance-calendar',  domain: 'reports', requiredCapabilities: U, order: 1.5 },
   { id: 'tradingAccount',     titleKey: 'tradingAccount',     icon: ShoppingCart,    route: '/trading-account',      domain: 'reports', requiredCapabilities: ['inventory_sales'], order: 2 },
   { id: 'profitLoss',         titleKey: 'profitLoss',         icon: TrendingUp,      route: '/profit-loss',          domain: 'reports', requiredCapabilities: U, order: 3 },
   { id: 'balanceSheet',       titleKey: 'balanceSheet',       icon: FileSpreadsheet, route: '/balance-sheet',        domain: 'reports', requiredCapabilities: U, order: 4 },
