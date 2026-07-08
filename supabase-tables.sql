@@ -2398,6 +2398,10 @@ alter table members add column if not exists "creditLimit" numeric;
 alter table members add column if not exists "statusReason" text;
 alter table members add column if not exists "statusChangedAt" text;
 
+-- ECR-16 (multiple nominees): a member may nominate several nominees, each with a
+-- benefit share (%). Rides the whole-member upsert like other member columns.
+alter table members add column if not exists "nominees" jsonb default '[]';
+
 -- ── Consumer C4 — patronage rebate ───────────────────────────────────────────
 -- Year-end member rebate on purchases (draft → approved, resolution-gated). The
 -- distribution/payable accounts are created at runtime via addAccount (no table). RLS bundled.

@@ -27,7 +27,8 @@ import type { MemberType, CasteCategory } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { generateMemberPassbookPDF, generateMemberApplicationPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
-import type { Member, MemberStatus } from '@/types';
+import type { Member, MemberStatus, Nominee } from '@/types';
+import { validateNominees, nomineeShareTotal } from '@/lib/nomineeUtils';
 
 // ECR-16: member lifecycle status → label + badge colour per state.
 const STATUS_META: Record<MemberStatus, { hi: string; en: string; cls: string }> = {
@@ -55,6 +56,7 @@ const EMPTY_FORM = {
   nomineeName: '', nomineeFatherName: '', nomineeRelation: '', nomineePhone: '',
   nomineeAge: '', nomineeOccupation: '', nomineeAddress: '', nomineeShares: '',
   shareCount: '', shareFaceValue: '',
+  nominees: [] as Nominee[],   // ECR-16: multiple nominees
 };
 
 interface MemberFormProps {
@@ -70,6 +72,13 @@ interface MemberFormProps {
 const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onSubmit, submitLabel, onCancel }) => {
   const hi = language === 'hi';
   const f = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
+  // ECR-16: multiple-nominee editor helpers
+  const nominees = form.nominees || [];
+  const setNominees = (next: Nominee[]) => setForm(prev => ({ ...prev, nominees: next }));
+  const addNominee = () => setNominees([...nominees, { id: crypto.randomUUID(), name: '', relation: '', phone: '', sharePercent: 0 }]);
+  const updateNominee = (i: number, patch: Partial<Nominee>) => setNominees(nominees.map((n, idx) => idx === i ? { ...n, ...patch } : n));
+  const removeNominee = (i: number) => setNominees(nominees.filter((_, idx) => idx !== i));
+  const nomTotal = nomineeShareTotal(nominees);
   return (
   <form onSubmit={onSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
     {/* Basic */}
@@ -229,6 +238,47 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
       <Label className="text-xs">{hi ? 'नामांकित का पता' : 'Nominee Address'}</Label>
       <Input value={form.nomineeAddress} onChange={e => f('nomineeAddress', e.target.value)} />
     </div>
+
+    {/* ECR-16: Multiple nominees with benefit share % */}
+    <div className="pt-2 border-t">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-muted-foreground">{hi ? 'नामांकित सूची (एक से ज़्यादा · हिस्सा %)' : 'Nominees (multiple · share %)'}</p>
+        <Button type="button" variant="outline" size="sm" className="h-7 gap-1" onClick={addNominee}>
+          <Plus className="h-3.5 w-3.5" />{hi ? 'नामांकित जोड़ें' : 'Add nominee'}
+        </Button>
+      </div>
+      {nominees.map((n, i) => (
+        <div key={n.id} className="grid grid-cols-12 gap-2 mt-2 items-end">
+          <div className="col-span-4 space-y-1">
+            <Label className="text-[10px]">{hi ? 'नाम' : 'Name'}</Label>
+            <Input className="h-8" value={n.name} onChange={e => updateNominee(i, { name: e.target.value })} />
+          </div>
+          <div className="col-span-3 space-y-1">
+            <Label className="text-[10px]">{hi ? 'सम्बन्ध' : 'Relation'}</Label>
+            <Input className="h-8" value={n.relation} onChange={e => updateNominee(i, { relation: e.target.value })} />
+          </div>
+          <div className="col-span-2 space-y-1">
+            <Label className="text-[10px]">{hi ? 'फ़ोन' : 'Phone'}</Label>
+            <Input className="h-8" value={n.phone || ''} onChange={e => updateNominee(i, { phone: e.target.value })} />
+          </div>
+          <div className="col-span-2 space-y-1">
+            <Label className="text-[10px]">{hi ? 'हिस्सा %' : 'Share %'}</Label>
+            <Input className="h-8" type="number" min="0" max="100" value={n.sharePercent || ''} onChange={e => updateNominee(i, { sharePercent: Number(e.target.value) || 0 })} />
+          </div>
+          <div className="col-span-1">
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeNominee(i)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      ))}
+      {nominees.length > 0 && (
+        <p className={`text-xs mt-1 ${nomTotal > 100 ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+          {hi ? 'कुल हिस्सा' : 'Total share'}: {nomTotal}%{nomTotal > 100 ? (hi ? ' — 100% से ज़्यादा!' : ' — exceeds 100%!') : ''}
+        </p>
+      )}
+    </div>
+
     <div className="flex gap-2 justify-end pt-2">
       <Button variant="outline" type="button" onClick={onCancel}>{t('cancel')}</Button>
       <Button type="submit">{submitLabel}</Button>
@@ -304,6 +354,14 @@ const Members: React.FC = () => {
       toast({ title: hi ? 'यह सदस्य ID पहले से मौजूद है' : 'Member ID already exists', variant: 'destructive' });
       return;
     }
+    // ECR-16: nomination is mandatory — at least one nominee (legacy single OR the list).
+    const cleanNominees = form.nominees.filter(n => n.name?.trim());
+    if (cleanNominees.length === 0 && !form.nomineeName.trim()) {
+      toast({ title: hi ? 'नामांकित ज़रूरी है' : 'Nominee required', description: hi ? 'कम से कम एक नामांकित जोड़ें।' : 'Add at least one nominee.', variant: 'destructive' });
+      return;
+    }
+    const nv = validateNominees(cleanNominees);
+    if (!nv.ok) { toast({ title: hi ? 'नामांकित त्रुटि' : 'Nominee error', description: nv.error, variant: 'destructive' }); return; }
     Object.assign(form, { memberId });
     addMember({
       ...form, memberId,
@@ -318,6 +376,7 @@ const Members: React.FC = () => {
       nomineeAge: form.nomineeAge ? Number(form.nomineeAge) : undefined,
       nomineeOccupation: form.nomineeOccupation || undefined, nomineeAddress: form.nomineeAddress || undefined,
       nomineeShares: form.nomineeShares ? Number(form.nomineeShares) : undefined,
+      nominees: cleanNominees,
       shareCount: form.shareCount ? Number(form.shareCount) : undefined,
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
     });
@@ -330,6 +389,9 @@ const Members: React.FC = () => {
   const handleEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editMember) return;
+    const cleanNominees = form.nominees.filter(n => n.name?.trim());
+    const nv = validateNominees(cleanNominees);
+    if (!nv.ok) { toast({ title: hi ? 'नामांकित त्रुटि' : 'Nominee error', description: nv.error, variant: 'destructive' }); return; }
     updateMember(editMember.id, {
       ...form,
       shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0,
@@ -343,6 +405,7 @@ const Members: React.FC = () => {
       nomineeAge: form.nomineeAge ? Number(form.nomineeAge) : undefined,
       nomineeOccupation: form.nomineeOccupation || undefined, nomineeAddress: form.nomineeAddress || undefined,
       nomineeShares: form.nomineeShares ? Number(form.nomineeShares) : undefined,
+      nominees: cleanNominees,
       shareCount: form.shareCount ? Number(form.shareCount) : undefined,
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
     });
@@ -364,6 +427,7 @@ const Members: React.FC = () => {
       nomineeAge: m.nomineeAge ? String(m.nomineeAge) : '', nomineeOccupation: m.nomineeOccupation || '',
       nomineeAddress: m.nomineeAddress || '', nomineeShares: m.nomineeShares ? String(m.nomineeShares) : '',
       shareCount: m.shareCount ? String(m.shareCount) : '', shareFaceValue: m.shareFaceValue ? String(m.shareFaceValue) : '',
+      nominees: m.nominees || [],
     });
   };
 

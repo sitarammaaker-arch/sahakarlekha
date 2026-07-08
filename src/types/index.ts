@@ -131,6 +131,15 @@ export interface MemberLedgerEntry {
 
 export type MemberType = 'member' | 'nominal';
 
+// ECR-16: a member may nominate MULTIPLE nominees, each with a share of benefits (%).
+export interface Nominee {
+  id: string;
+  name: string;
+  relation: string;
+  phone?: string;
+  sharePercent: number;   // share of benefits (%); across nominees must not exceed 100
+}
+
 export interface Member {
   id: string;
   memberId: string;
@@ -150,7 +159,8 @@ export interface Member {
   shareCertNo?: string;
   shareCount?: number;
   shareFaceValue?: number;
-  // Nominee fields
+  // Nominee fields (legacy single nominee — kept for backward-compat)
+  nominees?: Nominee[];   // ECR-16: multiple nominees with share %
   nomineeName?: string;
   nomineeRelation?: string;
   nomineePhone?: string;
