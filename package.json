@@ -22,7 +22,8 @@
     "test:dairy": "node scripts/test-dairy.mjs",
     "test:marketing": "node scripts/test-marketing.mjs",
     "test:consumer": "node scripts/test-consumer.mjs",
-    "test:rbac": "node scripts/test-rbac.mjs"
+    "test:rbac": "node scripts/test-rbac.mjs",
+    "test:approval": "node scripts/test-approval-gating.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

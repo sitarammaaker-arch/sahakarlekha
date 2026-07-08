@@ -965,6 +965,7 @@ export interface SocietySettings {
   fyLocked?: boolean;          // true = FY is audit-locked; no new vouchers or edits allowed
   fyLockedAt?: string;         // ISO date when lock was applied
   fyLockedBy?: string;         // Name of user who locked the FY
+  approvalRequired?: boolean;  // opt-in maker-checker: when true, PENDING vouchers are held out of the ledger/reports until approved (REJECTED are always excluded). Default (undefined/false) = no gating — behaviour unchanged.
   // Board & Signing Authority
   boardType?: BoardType;       // 'bod' (elected) or 'boa' (appointed by Registrar)
   boardMembers?: BoardMember[];

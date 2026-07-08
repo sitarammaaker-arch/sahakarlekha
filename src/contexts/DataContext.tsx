@@ -2849,8 +2849,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return voucher;
   }, [user, accounts, addVoucher, procurementSettlements]);
 
-  // Only active (non-deleted) vouchers for all financial calculations
-  const activeVouchers = vouchers.filter(v => !v.isDeleted);
+  // Only active vouchers for all financial calculations. A voucher counts iff:
+  //  • not soft-deleted, AND
+  //  • not REJECTED — rejected vouchers must never affect reports (the SQL side already
+  //    drops them via deleteEntries; this closes the client-vs-SQL divergence so both agree), AND
+  //  • not a held PENDING voucher when the society has opted into approval-gating
+  //    (society.approvalRequired = maker-checker). Approved / unmarked (undefined) vouchers
+  //    always count, so behaviour is unchanged for every society that has NOT opted in.
+  const activeVouchers = vouchers.filter(v =>
+    !v.isDeleted &&
+    v.approvalStatus !== 'rejected' &&
+    !(society.approvalRequired && v.approvalStatus === 'pending')
+  );
 
   const getAccountBalance = useCallback((accountId: string): number => {
     const account = accounts.find(a => a.id === accountId);

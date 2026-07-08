@@ -814,6 +814,13 @@ alter table society_settings add column if not exists "boardType" text default '
 alter table society_settings add column if not exists "boardMembers" jsonb default '[]';
 alter table society_settings add column if not exists signatories jsonb default '{}';
 
+-- ── Approval-gating (maker-checker) opt-in ──────────────────────────────────
+-- When true, PENDING vouchers are held out of the ledger/reports until approved.
+-- REJECTED vouchers are always excluded (client-report fix) regardless of this flag.
+-- Default false ⇒ no behaviour change for existing societies. Client reads
+-- society.approvalRequired ?? false, so it degrades gracefully before this runs.
+alter table society_settings add column if not exists "approvalRequired" boolean default false;
+
 -- ── STEP 17c: Asset Register — ICAI AS-6 compliance fields ──────────────────
 alter table assets add column if not exists "depreciationMethod" text default 'SLM';
 alter table assets add column if not exists "depreciationPostedFY" jsonb default '[]';
