@@ -27,6 +27,7 @@ import { resolveCapabilities } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
 import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { sumActiveMemberShareCapital, reconcileShareCapital, type ShareCapitalReconciliation } from '@/lib/shareReconciliation';
+import { can as rbacCan, type Permission } from '@/lib/rbac';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLines } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
@@ -254,6 +255,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return true;
     }
     return false;
+  }, []);
+  // SL-06: block an action the current user's role is not granted. Returns true when BLOCKED
+  // (mirrors guardFYLocked's convention). Hindi-first toast. Detection is app-layer only.
+  const guardPermission = useCallback((permission: Permission, actionHi: string): boolean => {
+    const role = userRef.current?.role;
+    if (role && rbacCan(role, permission)) return false; // allowed
+    toastRef.current({ title: 'अनुमति नहीं', description: `आपकी भूमिका को ${actionHi} की अनुमति नहीं है। (Your role cannot ${permission}.)`, variant: 'destructive', duration: 8000 });
+    return true; // blocked
   }, []);
   const [loans, setLoansState] = useState<Loan[]>([]);
   const [societyCapabilities, setSocietyCapabilitiesState] = useState<SocietyCapabilityRow[]>([]);
@@ -1528,6 +1537,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const approveVoucher = useCallback((id: string, approvedBy: string) => {
     if (guardFYLocked()) return;
+    if (guardPermission('approve', 'वाउचर अप्रूव करने')) return; // SL-06: segregation of duties
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
@@ -1546,6 +1556,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const rejectVoucher = useCallback((id: string, rejectedBy: string, reason: string) => {
     if (guardFYLocked()) return;
+    if (guardPermission('reject', 'वाउचर रिजेक्ट करने')) return; // SL-06: segregation of duties
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }

@@ -68,5 +68,18 @@ ok(can('viewer', 'read') && !can('viewer', 'create') && !can('viewer', 'update')
 ok(can('auditor', 'read') && !can('auditor', 'update'), 'legacy auditor is read-only (≡ audit access)');
 ok(mapLegacyRole('secretary') === 'secretary', 'a new role maps to itself (identity)');
 
+// 5. SL-06 wiring — approval authority as AuthContext.can() / DataContext guardPermission
+//    resolve it for the four LIVE legacy roles. Only admin may approve/reject → real
+//    segregation of duties on the voucher approval queue (the P0 #1 maker-checker control).
+for (const perm of ['approve', 'reject']) {
+  ok(can('admin', perm), `legacy admin can ${perm} (maker-checker approver)`);
+  ok(!can('accountant', perm), `legacy accountant cannot ${perm} (maker, not checker)`);
+  ok(!can('viewer', perm), `legacy viewer cannot ${perm}`);
+  ok(!can('auditor', perm), `legacy auditor cannot ${perm} (independence)`);
+}
+// New roles that SHOULD be able to approve once adopted (governance/segregation).
+ok(can('manager', 'approve') && can('boardMember', 'approve') && can('chairman', 'approve'), 'manager/board/chairman can approve');
+ok(!can('cashier', 'approve') && !can('dataEntry', 'approve') && !can('salesOperator', 'approve'), 'operational roles cannot approve');
+
 console.log(`\nRBAC model: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
