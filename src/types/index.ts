@@ -1662,6 +1662,7 @@ export interface Employee {
   esiApplicable?: boolean;             // deduct ESI if gross ≤ threshold (default true)
   uan?: string;                        // EPF Universal Account Number
   esiNo?: string;                      // ESIC insurance number
+  pan?: string;                        // deductee PAN (for Form 24Q)
 }
 
 export interface SalaryRecord {

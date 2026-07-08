@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { computeStatutory } from '@/lib/payrollStatutory';
 import { suggestMonthlyTds, type TaxRegime } from '@/lib/tdsProjection';
 import { professionalTaxForState } from '@/lib/professionalTax';
+import { build24Q, type Quarter } from '@/lib/form24Q';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,6 +56,7 @@ const EMPTY_EMP_FORM = {
   basicSalary: '',
   phone: '',
   bankAccount: '',
+  pan: '',
   status: 'active' as 'active' | 'inactive',
 };
 
@@ -148,6 +150,15 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ empForm, setEmpForm, hi, on
         />
       </div>
       <div className="space-y-1 col-span-2">
+        <Label>{hi ? 'PAN (Form 24Q हेतु)' : 'PAN (for Form 24Q)'}</Label>
+        <Input
+          value={empForm.pan}
+          onChange={e => setEmpForm(f => ({ ...f, pan: e.target.value.toUpperCase() }))}
+          placeholder="ABCDE1234F"
+          maxLength={10}
+        />
+      </div>
+      <div className="space-y-1 col-span-2">
         <Label>{hi ? 'स्थिति' : 'Status'}</Label>
         <Select value={empForm.status} onValueChange={v => setEmpForm(f => ({ ...f, status: v as 'active' | 'inactive' }))}>
           <SelectTrigger>
@@ -210,6 +221,16 @@ const SalaryManagement: React.FC = () => {
   const [taxRegime, setTaxRegime] = useState<TaxRegime>('new');   // ECR-14: TDS-192 projection regime
 
   // ── Tab 3 – Salary History state ────────────────────────────────────────
+  // ECR-14: Form 24Q dialog
+  const [q24Open, setQ24Open] = useState(false);
+  const [q24Quarter, setQ24Quarter] = useState<Quarter>('Q1');
+  const form24Q = useMemo(() => build24Q(salaryRecords, employees, society.financialYear, q24Quarter), [salaryRecords, employees, society.financialYear, q24Quarter]);
+  const export24Q = () => {
+    const headers = ['Emp No', 'Name', 'PAN', 'Gross Salary', 'TDS'];
+    const rows = form24Q.rows.map(r => [r.empNo, r.name, r.pan, r.grossSalary, r.tds]);
+    downloadCSV(headers, rows, `form24Q_${society.financialYear}_${q24Quarter}.csv`);
+  };
+
   const [historyMonth, setHistoryMonth] = useState('');
   const [historyEmpFilter, setHistoryEmpFilter] = useState('all');
   const [historyPaidFilter, setHistoryPaidFilter] = useState('all');
@@ -274,6 +295,7 @@ const SalaryManagement: React.FC = () => {
       basicSalary: Number(empForm.basicSalary),
       phone: empForm.phone,
       bankAccount: empForm.bankAccount || undefined,
+      pan: empForm.pan.toUpperCase().trim() || undefined,
       status: empForm.status,
     });
     toast({ title: hi ? 'कर्मचारी जोड़ा गया' : 'Employee added' });
@@ -296,6 +318,7 @@ const SalaryManagement: React.FC = () => {
       basicSalary: Number(empForm.basicSalary),
       phone: empForm.phone,
       bankAccount: empForm.bankAccount || undefined,
+      pan: empForm.pan.toUpperCase().trim() || undefined,
       status: empForm.status,
     });
     toast({ title: hi ? 'कर्मचारी अपडेट किया गया' : 'Employee updated' });
@@ -312,6 +335,7 @@ const SalaryManagement: React.FC = () => {
       basicSalary: String(emp.basicSalary),
       phone: emp.phone,
       bankAccount: emp.bankAccount || '',
+      pan: emp.pan || '',
       status: emp.status,
     });
   };
@@ -805,6 +829,10 @@ const SalaryManagement: React.FC = () => {
                 <FileSpreadsheet className="h-4 w-4" />
                 Excel
               </Button>
+              <Button size="sm" variant="outline" onClick={() => setQ24Open(true)} className="gap-1">
+                <FileSpreadsheet className="h-4 w-4" />
+                {hi ? 'फॉर्म 24Q' : 'Form 24Q'}
+              </Button>
             </div>
           </div>
           {/* Filters */}
@@ -1126,6 +1154,59 @@ const SalaryManagement: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ECR-14: Form 24Q — quarterly salary TDS return */}
+      <Dialog open={q24Open} onOpenChange={setQ24Open}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{hi ? 'फॉर्म 24Q — त्रैमासिक वेतन TDS' : 'Form 24Q — Quarterly Salary TDS'} ({society.financialYear})</DialogTitle>
+            <DialogDescription>{hi ? 'चुनी हुई तिमाही में हर कर्मचारी का वेतन व TDS सारांश।' : 'Per-employee salary + TDS summary for the selected quarter.'}</DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Select value={q24Quarter} onValueChange={v => setQ24Quarter(v as Quarter)}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Q1">Q1 (Apr–Jun)</SelectItem>
+                <SelectItem value="Q2">Q2 (Jul–Sep)</SelectItem>
+                <SelectItem value="Q3">Q3 (Oct–Dec)</SelectItem>
+                <SelectItem value="Q4">Q4 (Jan–Mar)</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" className="gap-1" onClick={export24Q} disabled={form24Q.rows.length === 0}>
+              <Download className="h-4 w-4" />CSV
+            </Button>
+            <span className="text-sm text-muted-foreground ml-auto">
+              {form24Q.totals.deductees} {hi ? 'कर्मचारी' : 'deductees'} · TDS <strong>{fmt(form24Q.totals.tds)}</strong>
+            </span>
+          </div>
+          <div className="max-h-[55vh] overflow-y-auto mt-2">
+            {form24Q.rows.length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">{hi ? 'इस तिमाही में कोई वेतन रिकॉर्ड नहीं।' : 'No salary records in this quarter.'}</p>
+            ) : (
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>{hi ? 'कर्म. नं.' : 'Emp No.'}</TableHead>
+                  <TableHead>{hi ? 'नाम' : 'Name'}</TableHead>
+                  <TableHead>PAN</TableHead>
+                  <TableHead className="text-right">{hi ? 'सकल वेतन' : 'Gross Salary'}</TableHead>
+                  <TableHead className="text-right">TDS</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {form24Q.rows.map(r => (
+                    <TableRow key={r.empNo + r.name}>
+                      <TableCell className="font-mono text-xs">{r.empNo}</TableCell>
+                      <TableCell className="text-sm">{r.name}</TableCell>
+                      <TableCell className="font-mono text-xs">{r.pan || <span className="text-destructive">{hi ? 'PAN नहीं' : 'no PAN'}</span>}</TableCell>
+                      <TableCell className="text-right">{fmt(r.grossSalary)}</TableCell>
+                      <TableCell className="text-right font-medium">{fmt(r.tds)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

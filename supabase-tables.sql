@@ -2735,3 +2735,6 @@ alter table employees add column if not exists "pfApplicable" boolean;
 alter table employees add column if not exists "esiApplicable" boolean;
 alter table employees add column if not exists "uan" text;
 alter table employees add column if not exists "esiNo" text;
+
+-- Payroll — employee PAN for Form 24Q (ECR-14 slice 4)
+alter table employees add column if not exists "pan" text;
