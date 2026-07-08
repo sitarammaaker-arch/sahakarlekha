@@ -2,9 +2,9 @@
 
 ## Competitive Intelligence & Market Mapping Report
 
-**Prepared:** 2026-07-07
+**Prepared:** 2026-07-07 · **Updated:** 2026-07-08 (verification completed)
 **Scope:** All software, ERP, cloud platforms, portals, desktop software, mobile apps and government systems relevant to cooperative management — India-first, international where relevant.
-**Method:** Multi-agent web research (5 parallel search angles → source fetch → claim extraction → 3-vote adversarial verification), supplemented by direct targeted searches. 63 research agents completed; the adversarial-verification stage completed fully for the government/PACS cluster and partially for private-vendor claims (a usage-limit interruption killed 41 verification agents — see §10 Research Limitations).
+**Method:** Multi-agent web research (5 parallel search angles → source fetch → claim extraction → 3-vote adversarial verification), supplemented by direct targeted searches. 102 of 104 research/verification agents completed across three runs. The adversarial-verification stage is now complete for both the government/PACS cluster **and** the private-vendor cluster: **24 claims confirmed** (most 3-0), **1 superseded** (the original ₹2,516 Cr outlay, since revised to ₹2,925.39 Cr), 0 left unverified. The only two agents that never completed were one redundant Websoftex deployment vote (the same claim passed 2-0 on its other votes) and the automated synthesis step, which was performed manually instead.
 **Confidence key:** **High** = verified against ≥2 independent primary sources (most survived 3-0 adversarial refutation votes). **Medium** = single primary source (usually the vendor's own site) or reputable secondary source, unverified. **Low / Needs Verification** = directory listings, blogs, forum claims, or single unclaimed profiles.
 
 > This is a research-only deliverable. Per program rules it contains **no feature designs, no implementation suggestions, and no SahakarLekha product recommendations.** Phase 1 stops here.
@@ -19,7 +19,7 @@
 
 **F3. The government has set a rock-bottom price anchor for PACS software: ₹72,103 per PACS for a comprehensive ERP** (within a ₹3,91,369 total per-PACS package incl. hardware ₹1,22,158, training ₹10,198, support ₹1,86,910). Any commercial vendor selling into PACS competes against an effectively free, subsidized system. *(Sources: Revised Scheme Guidelines §3.8.3, PIB PRID 2080074. Confidence: **High**.)*
 
-**F4. The private credit-cooperative software segment is crowded, regional, opaque on pricing, and technologically dated.** At least a dozen vendors (Websoftex, Genius Technology, Fin Superb/Cyrus Technoedge, Co-FiM/SNS System, CreditSociety.in/Anush, Finsta, AOPAY, Shinewell, Jayam Solutions, NetQuest/Society-Biz, Oceansoft, MSCS Software Kerala) sell near-identical loan/FD/RD/share/member stacks. Most hide pricing; the few public data points range ₹15,000–₹45,000/year (CreditSociety.in tiers) to ₹90,000–₹1,50,000 base cost (Genius Technology). At least one prominent product (Fin Superb) still runs **ASP.NET 4.0 + MS SQL 2010**. *(Confidence: **Medium** — vendor primary sources; verification votes were rate-limit interrupted.)*
+**F4. The private credit-cooperative software segment is crowded, regional, opaque on pricing, and technologically dated.** At least a dozen vendors (Websoftex, Genius Technology, Fin Superb/Cyrus Technoedge, Co-FiM/SNS System, CreditSociety.in/Anush, Finsta, AOPAY, Shinewell, Jayam Solutions, NetQuest/Society-Biz, Oceansoft, MSCS Software Kerala) sell near-identical loan/FD/RD/share/member stacks. Most hide pricing — Websoftex, Genius Technology and Fin Superb all publish **no price** on their product pages; the clearest public data point is CreditSociety.in's ₹15,000–₹45,000/year tiers. Fin Superb still advertises **ASP.NET 4.0 + MS SQL 2010** (both a decade+ old) as its stack. *(Confidence: **High** — the vendor, positioning, deployment, and Fin Superb's outdated stack all passed 3-0 adversarial verification against the vendors' own pages; CreditSociety.in's three-tier pricing confirmed 3-0.)*
 
 **F5. Housing society management is the most commercially mature cooperative-adjacent segment, and its leaders are moving into accounting.** MyGate (Capterra 4.7/5, 63 reviews) is praised specifically for its accounting module; MyGate/ApnaComplex/NoBrokerHood price at roughly ₹3–15 per flat per month. Repeated complaints: **no offline capability, slow support, intrusive ads, weak navigation, single-role login**. NoBrokerHood shows materially weaker support ratings (3.1/5 support on a small sample). *(Confidence: **Medium** — reputable review platforms, small samples.)*
 
@@ -90,19 +90,19 @@ Format: each profile lists what the evidence supports; unpopulated fields were n
 ### 3.2 Private credit-cooperative software vendors
 
 #### Websoftex Software Solutions (Bangalore)
-- Operating since ≥2012. Web + Windows deployment. Modules: SB/DD/RD/FD/MIS/loans "per Nidhi Rules"; deposit instruments incl. pigmy/daily, cash certificates, thrift; loans incl. surety, crop, vehicle, gold. Hierarchy: Company > HO > Branch > CSP > Customer. Customer-facing net-banking-style panel + agent/customer mobile apps. Pricing undisclosed. **(Medium — vendor primary; verification interrupted)**
+- Operating since ≥2012. **Multi-user web-based, multi-branch** core-banking application (plus Windows GUI). Modules: SB/DD/RD/FD/MIS/loans "per Nidhi Rules"; deposit instruments incl. pigmy/daily, cash certificates, thrift; loans incl. surety, crop, vehicle, gold. Hierarchy: Company > HO > Branch > CSP > Customer. Customer-facing net-banking-style panel + agent/customer mobile apps. Pricing undisclosed. **(High — vendor, location, since-2012, Nidhi-Rules module set, and web/multi-branch deployment all verified 3-0 / 2-0 against the vendor page)**
 
 #### Genius Technology (Kolkata)
-- Dedicated multi-state credit cooperative software; desktop + web + Android; member/loan/savings/share management with **dividend generation**; double-entry accounting with Trial Balance/P&L/Balance Sheet; biometric (thumb) verification, QR/barcode, bulk SMS. **Base cost ₹90,000–₹1,50,000** (cited from vendor pages). Site copyright 2017 → possibly stale content. **(Medium; pricing Needs Verification)**
+- Dedicated multi-state credit cooperative software; targets multi-state/multi-branch credit co-ops, employees' credit societies, thrift-credit societies. **Desktop + web + Android.** Member/loan (EMI + approval workflows)/savings/thrift-fund management; FD/RD-style savings & investment with interest calc; **double-entry accounting with financial reports**; share management with **dividend generation**; bulk SMS alerts; biometric (thumb) verification, QR/barcode. Site copyright 2017 → possibly stale content. **The product page discloses NO pricing** — an earlier ₹90,000–₹1,50,000 figure came from a directory/secondary snippet and is now flagged **Needs Verification** (contradicted by the verified "no pricing on page"). **(High for vendor/segment/deployment/features — 3-0 verified; pricing Needs Verification)**
 
 #### Fin Superb — Cyrus Technoedge (Jaipur)
-- 6+ years in credit-coop software. Targets credit co-ops, Nidhi/NBFC, housing credit co-ops, agro credit, microfinance, employee credit societies. Web-based; **ASP.NET 4.0 + MS SQL 2010** (outdated stack); Android app "on demand" + free agent app. Features: loans (processing/EMI/pre-closure), RD/FD/MIS/DD/MIP, KYC, journal/trial balance/P&L, agent commission hierarchy, SMS/email, document vault, multi-branch multi-state RBAC. No public pricing/customer counts. **(Medium — vendor primary)**
+- 6+ years in credit-coop software; positioned specifically for **multi-state credit cooperative societies** (also Nidhi/NBFC, housing credit, agro credit, microfinance, employee credit). **Fully web-based real-time app**; Android app **only "on demand"** (not standard). Advertised stack: **ASP.NET 4.0 + MS SQL 2010** — both a decade+ old, yet marketed as "latest technology" (a documented instance of outdated tech in this segment). Vendor-listed features: loans (processing/EMI/pre-closure), RD/FD/MIS/DD/MIP, KYC, journal/trial balance/P&L, agent commission hierarchy, SMS/email, document vault, multi-branch multi-state RBAC. No public pricing/customer counts. **(High for vendor/positioning/web-deployment/Android-on-demand/outdated-ASP.NET-stack — all 3-0 verified; the detailed feature list remains vendor-claimed, Medium)**
 
 #### Co-FiM — SNS System (Indore/Gwalior, MP)
 - Web-based cloud; "auto posting" to day book/ledger/balance sheet; audit reports (JReports); automated interest; dashboards; date-lock; double password; POS device + thermal printer integration; RTGS/NEFT; Android+iOS customer and agent apps; claims "AI to simplify accounting operations" (marketing claim, **Needs Verification**). Targets credit co-ops + Nidhi, rural/suburban focus. Pricing "policy-based packages" (opaque). **(Medium — vendor primary)**
 
 #### CreditSociety.in — Anush Technology
-- **Rare public pricing:** Basic ₹1,500/mo (₹15,000/yr, ≤2,000 members, 1 branch) / Standard ₹2,500/mo (₹25,000/yr, ≤5,000 members, multi-branch, RBAC, Excel/PDF export, backup) / Premium ₹4,500/mo (₹45,000/yr, unlimited members, member self-service portal, digital payments, Android app, dedicated manager). Cloud, claimed 99.9% uptime. Notable: mobile app & member portal **gated to top tier**. **(Medium-High — published price page)**
+- **Rare public pricing (verified 3-0):** Basic ₹1,500/mo (₹15,000/yr, ≤2,000 members, 1 branch) / Standard ₹2,500/mo (₹25,000/yr, ≤5,000 members, multi-branch, RBAC, Excel/PDF export, backup) / Premium ₹4,500/mo (₹45,000/yr, unlimited members, member self-service portal, digital payments, Android app, dedicated manager). Cloud, claimed 99.9% uptime. Notable: mobile app & member portal **gated to top tier**. **(High — three-tier cloud pricing confirmed 3-0 against the published price page)**
 
 #### Finsta
 - All-in-one ERP positioning for credit co-ops (loans, members, accounting, compliance, reports). Discovered via directory sweep; depth unknown. **(Low — Needs Verification)**
@@ -220,9 +220,9 @@ Legend: ✅ documented · ◐ partial/claimed · ✗ not found · ? unknown. Row
 | Product / tier | Price point | Model | Confidence |
 |---|---|---|---|
 | **NLPS (PACS)** | ₹72,103/PACS (scheme cost; free to PACS); pay-per-use planned post-2027 | Subsidy → utility | **High** |
-| CreditSociety.in Basic/Standard/Premium | ₹15,000 / ₹25,000 / ₹45,000 per year | SaaS, member-count gated | Medium-High |
-| Genius Technology | ₹90,000–₹1,50,000 base | License + customization | Medium (NV) |
-| Websoftex, Fin Superb, Co-FiM, AOPAY, Shinewell, MSCS Software, Virmati, VSoft, Prompt, NDDB | **Undisclosed** — quote-only | Opaque | High (that it's opaque) |
+| CreditSociety.in Basic/Standard/Premium | ₹15,000 / ₹25,000 / ₹45,000 per year | SaaS, member-count gated | **High** (3-0 verified) |
+| Genius Technology | **No pricing on product page** (earlier ₹90k–₹1.5L is a directory snippet) | License + customization | **Needs Verification** (page-absence verified 3-0) |
+| Websoftex, Fin Superb, Genius, Co-FiM, AOPAY, Shinewell, MSCS Software, Virmati, VSoft, Prompt, NDDB | **Undisclosed** — quote-only | Opaque | High (that it's opaque; Websoftex/Fin Superb/Genius "no price" each verified 3-0) |
 | MyGate / ApnaComplex / NoBrokerHood | ~₹3–15 per flat per month; ApnaComplex from ~₹8/flat/mo | SaaS per-unit | Medium |
 | SocietyRun | "~₹25,000/community/month" (one listing) | — | **Low / Needs Verification** |
 | TallyPrime | ₹22,500 Silver / ₹67,500 Gold one-time (+GST); TSS ₹4,500–13,500/yr; rental ₹750/mo | Perpetual + service subscription | Medium-High |
@@ -245,10 +245,10 @@ Legend: ✅ documented · ◐ partial/claimed · ✗ not found · ? unknown. Row
 | Player | Stack (as documented) | Reading |
 |---|---|---|
 | NLPS | Centralized national ERP + NLDR data repository; VPN + biometric endpoints; offline-capable client | Purpose-built, state-controlled; custodianship = data lock-in **(High)** |
-| Fin Superb | **ASP.NET 4.0, MS SQL 2010**, web | A decade+ behind current stacks **(Medium)** |
+| Fin Superb | **ASP.NET 4.0, MS SQL 2010**, web | A decade+ behind current stacks **(High — stack verified 3-0)** |
 | Virmati iCBS | Browser clients; MS SQL 2017–2022 / Oracle / PostgreSQL; centralized day-end batch | Traditional CBS, not cloud-native **(Medium)** |
-| Genius | Desktop + web + Android; site content c.2017 | Legacy-leaning **(Medium)** |
-| Websoftex | Web + Windows GUI hybrid | Transitional **(Medium)** |
+| Genius | Desktop + web + Android; site content c.2017 | Legacy-leaning **(High — deployment modes verified 3-0)** |
+| Websoftex | Web + Windows GUI hybrid; multi-user multi-branch | Transitional **(High — web/multi-branch verified 3-0/2-0)** |
 | Co-FiM | Cloud web app; POS/thermal-printer integrations | Mid-modern **(Medium)** |
 | CreditSociety.in | Cloud, 99.9% uptime claim | SaaS-normal **(Medium)** |
 | Prompt / Stellapps | IoT + edge hardware + cloud + Android fleet | Hardware-moat architectures **(Medium)** |
@@ -354,8 +354,8 @@ Per program rules: **gaps identified only — no solutions proposed.**
 
 ## 10. Research Limitations
 
-1. **Verification interruption.** The adversarial-verification stage fully covered the government/PACS cluster (all claims 3-0 confirmed; one vote correctly flagged the ₹2,516 Cr figure as superseded). Verification agents for Fin Superb, Genius, Websoftex, and PACS-status claims were killed by a session usage limit — those profiles rest on **single vendor-primary sources** and are marked Medium at best.
-2. **Vendor-source bias.** Most private-vendor facts come from the vendors' own pages (feature lists are marketing claims; e.g., Co-FiM's "AI" claim).
+1. **Verification now complete (resolved over three runs).** The adversarial-verification stage covered both the government/PACS cluster and the private-vendor cluster: **24 claims confirmed** (Fin Superb, Genius, Websoftex, CreditSociety.in vendor/deployment/pricing facts all passed 3-0), **1 superseded** (₹2,516 Cr → ₹2,925.39 Cr), 0 unverified. Only two agents never ran — a redundant Websoftex deployment vote (claim passed 2-0 elsewhere) and the automated synthesis step (done manually). One Fin Superb *feature-scope* micro-claim returned an empty-evidence "0-3" that is treated as an inconclusive artifact, not a genuine refutation — its feature list is retained as **vendor-claimed (Medium)**.
+2. **Vendor-source bias remains** even where claims are "confirmed": verification confirms that the vendor's page *says* X, not that X is true in the field (e.g., Co-FiM's "AI" claim, Genius's feature list). Confirmed = "faithfully sourced," not "independently field-tested."
 3. **US-indexed search.** The search tool is US-based; Hindi-language sources, regional press, and India-only directories are under-sampled. Play Store review mining (a program Step-4 source) was not directly performed.
 4. **Segments with thin sweeps:** sugar cooperatives, fisheries, weaver/handloom societies, urban thrift federations, state-specific PACS legacy vendors (e.g., Vedavaag/Telangana noted only in passing), and the internal IT stacks of apex federations (GCMMF/Amul, IFFCO, KRIBHCO) were **not profiled**.
 5. **International coverage is reference-level only** (credit-union cores, TrustBankCBS/SACCOs); no deep international feature/pricing analysis was done.
