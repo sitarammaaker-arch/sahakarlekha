@@ -16,11 +16,14 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Building2, Plus, Edit2, Trash2, Home } from 'lucide-react';
+import { Building2, Plus, Edit2, Trash2, Home, ArrowLeftRight } from 'lucide-react';
 import type { Branch } from '@/types';
+import { INTER_BRANCH_CONTROL_ID } from '@/lib/interBranch';
+
+const today = () => new Date().toISOString().split('T')[0];
 
 const Branches: React.FC = () => {
-  const { branches, addBranch, updateBranch, deleteBranch } = useData();
+  const { branches, addBranch, updateBranch, deleteBranch, transferBetweenBranches, getAccountBalance } = useData();
   const { user } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
@@ -30,7 +33,21 @@ const Branches: React.FC = () => {
   const [editing, setEditing] = useState<Branch | null>(null);
   const [form, setForm] = useState({ name: '', code: '', address: '', isHeadOffice: false });
 
+  // Inter-branch transfer (Phase 2)
+  const [xferOpen, setXferOpen] = useState(false);
+  const [xfer, setXfer] = useState({ from: '', to: '', amount: '', mode: 'cash' as 'cash' | 'bank', date: today() });
+  const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+  const controlBalance = getAccountBalance(INTER_BRANCH_CONTROL_ID);
+
   const isAdmin = user?.role === 'admin';
+
+  const openXfer = () => { setXfer({ from: branches.find(b => b.isHeadOffice)?.id || branches[0]?.id || '', to: '', amount: '', mode: 'cash', date: today() }); setXferOpen(true); };
+  const doTransfer = () => {
+    const amt = parseFloat(xfer.amount);
+    if (!xfer.from || !xfer.to || xfer.from === xfer.to || !(amt > 0)) { toast({ title: hi ? 'From/To अलग शाखा व राशि > 0 दें' : 'Pick two different branches and an amount > 0', variant: 'destructive' }); return; }
+    transferBetweenBranches({ fromBranchId: xfer.from, toBranchId: xfer.to, amount: amt, mode: xfer.mode, date: xfer.date });
+    setXferOpen(false);
+  };
 
   const openNew = () => { setEditing(null); setForm({ name: '', code: '', address: '', isHeadOffice: branches.length === 0 }); setOpen(true); };
   const openEdit = (b: Branch) => { setEditing(b); setForm({ name: b.name, code: b.code || '', address: b.address || '', isHeadOffice: !!b.isHeadOffice }); setOpen(true); };
@@ -60,8 +77,19 @@ const Branches: React.FC = () => {
             <p className="text-sm text-muted-foreground">{hi ? 'बहु-शाखा — voucher व reports शाखा-वार' : 'Multi-branch — vouchers & reports by branch'}</p>
           </div>
         </div>
-        {isAdmin && <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" />{hi ? 'नई शाखा' : 'New Branch'}</Button>}
+        <div className="flex gap-2">
+          {isAdmin && branches.length >= 2 && <Button variant="outline" onClick={openXfer} className="gap-2"><ArrowLeftRight className="h-4 w-4" />{hi ? 'अंतर-शाखा ट्रांसफर' : 'Inter-branch transfer'}</Button>}
+          {isAdmin && <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" />{hi ? 'नई शाखा' : 'New Branch'}</Button>}
+        </div>
       </div>
+
+      {branches.length >= 2 && Math.abs(controlBalance) > 0.5 && (
+        <Card><CardContent className="pt-4">
+          <p className="text-xs text-muted-foreground">{hi ? 'अंतर-शाखा नियंत्रण खाता (चुनी शाखा दृश्य में)' : 'Inter-Branch Control A/c (in the active-branch view)'}</p>
+          <p className="text-xl font-bold">{fmt(Math.abs(controlBalance))} <span className="text-sm font-normal">{controlBalance >= 0 ? 'Dr' : 'Cr'}</span></p>
+          <p className="text-[11px] text-muted-foreground">{hi ? '"सभी शाखाएँ" पर यह ₹0 होना चाहिए (net-zero) — शाखा-वार दृश्य में उस शाखा की inter-branch स्थिति दिखती है।' : 'Under "All branches" this should be ₹0 (net-zero); a single-branch view shows that branch’s inter-branch position.'}</p>
+        </CardContent></Card>
+      )}
 
       {branches.length === 0 && (
         <Card><CardContent className="pt-6 text-center text-muted-foreground">
@@ -117,6 +145,41 @@ const Branches: React.FC = () => {
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
               <Button onClick={save}>{hi ? 'सहेजें' : 'Save'}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Inter-branch transfer dialog */}
+      <Dialog open={xferOpen} onOpenChange={setXferOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>{hi ? 'अंतर-शाखा ट्रांसफर' : 'Inter-branch transfer'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>{hi ? 'से (शाखा)' : 'From (branch)'}</Label>
+                <select value={xfer.from} onChange={e => setXfer(p => ({ ...p, from: e.target.value }))} className="w-full h-9 rounded-md border bg-background px-2 text-sm">
+                  <option value="">—</option>{branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+              <div><Label>{hi ? 'को (शाखा)' : 'To (branch)'}</Label>
+                <select value={xfer.to} onChange={e => setXfer(p => ({ ...p, to: e.target.value }))} className="w-full h-9 rounded-md border bg-background px-2 text-sm">
+                  <option value="">—</option>{branches.filter(b => b.id !== xfer.from).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-1"><Label>{hi ? 'राशि' : 'Amount'}</Label><Input type="number" min={0} value={xfer.amount} onChange={e => setXfer(p => ({ ...p, amount: e.target.value }))} /></div>
+              <div className="col-span-1"><Label>{hi ? 'माध्यम' : 'Mode'}</Label>
+                <select value={xfer.mode} onChange={e => setXfer(p => ({ ...p, mode: e.target.value as 'cash' | 'bank' }))} className="w-full h-9 rounded-md border bg-background px-2 text-sm">
+                  <option value="cash">{hi ? 'नकद' : 'Cash'}</option><option value="bank">{hi ? 'बैंक' : 'Bank'}</option>
+                </select>
+              </div>
+              <div className="col-span-1"><Label>{hi ? 'तारीख' : 'Date'}</Label><Input type="date" value={xfer.date} onChange={e => setXfer(p => ({ ...p, date: e.target.value }))} /></div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">{hi ? 'दो balanced vouchers बनेंगे (Inter-Branch Control A/c से) — consolidated पर net-zero।' : 'Posts two balanced vouchers via the Inter-Branch Control A/c — net-zero consolidated.'}</p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setXferOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+              <Button onClick={doTransfer}>{hi ? 'ट्रांसफर करें' : 'Transfer'}</Button>
             </div>
           </div>
         </DialogContent>

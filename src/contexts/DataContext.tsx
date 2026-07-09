@@ -18,6 +18,7 @@ import type {
   Branch,
 } from '@/types';
 import { matchesBranch, branchToStamp, ALL_BRANCHES } from '@/lib/branchScope';
+import { buildInterBranchTransfer, INTER_BRANCH_CONTROL_ID } from '@/lib/interBranch';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
@@ -49,6 +50,7 @@ interface DataContextType {
   addBranch: (data: Omit<Branch, 'id' | 'createdAt'>) => Branch;
   updateBranch: (id: string, data: Partial<Branch>) => void;
   deleteBranch: (id: string) => void;
+  transferBetweenBranches: (input: { fromBranchId: string; toBranchId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; narration?: string }) => void;
   members: Member[];
   accounts: LedgerAccount[];
   society: SocietySettings;
@@ -1304,6 +1306,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return newVoucher;
   }, [society.financialYear, society.fyLocked, society.fyLockedBy, society.financialYearStart]);
+
+  // ── ECR-17 Phase 2: inter-branch transfer ──────────────────────────────────
+  // Moves cash/bank between two branches via the Inter-Branch Control A/c (created
+  // on-demand). Posts TWO branch-stamped, self-balancing vouchers; consolidated the
+  // control account and the cash-bank net to zero.
+  const transferBetweenBranches = useCallback((input: { fromBranchId: string; toBranchId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; narration?: string }) => {
+    if (guardFYLocked()) return;
+    const amt = Math.round(Math.max(0, input.amount || 0) * 100) / 100;
+    if (amt <= 0 || input.fromBranchId === input.toBranchId) {
+      toastRef.current({ title: 'अमान्य ट्रांसफर', description: 'From/To शाखा अलग हों और राशि > 0 हो।', variant: 'destructive' });
+      return;
+    }
+    // Ensure the Inter-Branch Control account exists (fixed id, on-demand).
+    if (!accounts.find(a => a.id === INTER_BRANCH_CONTROL_ID)) {
+      const control: LedgerAccount = { id: INTER_BRANCH_CONTROL_ID, name: 'Inter-Branch Control A/c', nameHi: 'अंतर-शाखा नियंत्रण खाता', type: 'liability', subtype: 'current_liability', openingBalance: 0, openingBalanceType: 'credit', parentId: '2100', isGroup: false };
+      setAccountsState(prev => [...prev, control]);
+      supabase.from('accounts').upsert(withSoc(control)).then(({ error }) => { if (error) console.warn('Control account save:', error.message); });
+    }
+    const acct = input.mode === 'bank' ? (input.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const t = buildInterBranchTransfer({ fromBranchId: input.fromBranchId, toBranchId: input.toBranchId, amount: amt, fromAccountId: acct, toAccountId: acct });
+    const lid = () => crypto.randomUUID();
+    const nameOf = (id: string) => branches.find(b => b.id === id)?.name || 'branch';
+    addVoucher({ type: 'journal', date: input.date, branchId: input.fromBranchId, debitAccountId: INTER_BRANCH_CONTROL_ID, creditAccountId: acct, amount: amt, lines: t.from.lines.map(l => ({ id: lid(), ...l })), narration: input.narration || `Inter-branch transfer to ${nameOf(input.toBranchId)}`, createdBy: userRef.current?.name ?? 'System' });
+    addVoucher({ type: 'journal', date: input.date, branchId: input.toBranchId, debitAccountId: acct, creditAccountId: INTER_BRANCH_CONTROL_ID, amount: amt, lines: t.to.lines.map(l => ({ id: lid(), ...l })), narration: input.narration || `Inter-branch transfer from ${nameOf(input.fromBranchId)}`, createdBy: userRef.current?.name ?? 'System' });
+    toastRef.current({ title: 'अंतर-शाखा ट्रांसफर दर्ज', description: `${nameOf(input.fromBranchId)} → ${nameOf(input.toBranchId)}: ₹${amt.toLocaleString('en-IN')}` });
+  }, [accounts, branches, addVoucher]);
 
   // ── Bill-wise receipt (Tally "Against Reference"): a customer payment applied to
   //    one or more open credit bills. Builds a Dr Cash/Bank, Cr Customer receipt
@@ -5771,7 +5799,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   return (
     <DataContext.Provider value={{
-      branches, activeBranchId, setActiveBranch, addBranch, updateBranch, deleteBranch,
+      branches, activeBranchId, setActiveBranch, addBranch, updateBranch, deleteBranch, transferBetweenBranches,
       vouchers, members, accounts, society, loans, assets, auditObjections,
       depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,
       markComplianceFiled, unmarkComplianceFiled, getComplianceFiledIds,
