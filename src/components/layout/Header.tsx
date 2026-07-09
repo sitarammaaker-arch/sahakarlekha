@@ -29,7 +29,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuToggle }) => {
   const { language, setLanguage, t } = useLanguage();
   const { user, logout } = useAuth();
-  const { society, loans, auditObjections, vouchers, employees, getComplianceFiledIds, branches, activeBranchId, setActiveBranch, godowns, activeGodownId, setActiveGodown } = useData();
+  const { society, loans, auditObjections, vouchers, employees, getComplianceFiledIds, branches, activeBranchId, setActiveBranch, godowns, activeGodownId, setActiveGodown, isBranchRestricted } = useData();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const ctxHelp = helpForRoute(pathname); // matching how-to for the current screen, if any
@@ -118,8 +118,19 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
             </Button>
             {/* Search icon hidden on mobile — use sidebar nav or Ctrl+K on desktop */}
 
-            {/* ECR-17: Active branch selector (only when branches exist) */}
-            {branches.length > 0 && (
+            {/* ECR-17 Phase 4b: a branch-restricted user sees a locked branch chip (no switching) */}
+            {branches.length > 0 && isBranchRestricted && (
+              <Button variant="outline" size="sm" className="gap-2 cursor-default opacity-90" disabled
+                title={language === 'hi' ? 'आपकी शाखा तक सीमित' : 'Restricted to your branch'}>
+                <Lock className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline max-w-[120px] truncate">
+                  {branches.find(b => b.id === activeBranchId)?.name || (language === 'hi' ? 'शाखा' : 'Branch')}
+                </span>
+              </Button>
+            )}
+
+            {/* ECR-17: Active branch selector (only when branches exist, unrestricted user) */}
+            {branches.length > 0 && !isBranchRestricted && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-2" title={language === 'hi' ? 'सक्रिय शाखा' : 'Active branch'}>

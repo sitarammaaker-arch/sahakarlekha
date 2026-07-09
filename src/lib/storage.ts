@@ -992,9 +992,9 @@ export const getNextObjectionNo = (auditYear: string): string => {
 };
 
 export const getAuthSession = () =>
-  get<{ email: string; name: string; role: string; societyId: string } | null>(KEYS.auth, null);
+  get<{ email: string; name: string; role: string; societyId: string; branchId?: string } | null>(KEYS.auth, null);
 
-export const setAuthSession = (session: { email: string; name: string; role: string; societyId: string } | null): void => {
+export const setAuthSession = (session: { email: string; name: string; role: string; societyId: string; branchId?: string } | null): void => {
   if (session) set(KEYS.auth, session);
   else localStorage.removeItem(KEYS.auth);
 };

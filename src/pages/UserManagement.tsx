@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useData } from '@/contexts/DataContext';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ interface AppUser {
   society_id?: string;
   createdAt: string;
   mfaEnabled?: boolean;
+  branchId?: string;   // ECR-17 Phase 4b: home branch — set → user is restricted to this branch
 }
 
 function getCachedUsers(): AppUser[] {
@@ -55,12 +57,13 @@ const roleLabel: Record<string, { hi: string; en: string }> = {
 };
 
 const empty: Omit<AppUser, 'id' | 'createdAt' | 'society_id'> = {
-  name: '', email: '', password: '', role: 'viewer', isActive: true,
+  name: '', email: '', password: '', role: 'viewer', isActive: true, branchId: '',
 };
 
 export default function UserManagement() {
   const { user: currentUser, adminResetMfa } = useAuth();
   const { language } = useLanguage();
+  const { branches } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -80,7 +83,7 @@ export default function UserManagement() {
       const societyId = currentUser?.societyId;
       const { data, error } = await supabase
         .from('society_users')
-        .select('id, name, email, role, is_active, society_id, created_at, password, mfa_enabled')
+        .select('id, name, email, role, is_active, society_id, created_at, password, mfa_enabled, branch_id')
         .eq('society_id', societyId)
         .order('created_at', { ascending: true });
 
@@ -95,6 +98,7 @@ export default function UserManagement() {
           society_id: u.society_id,
           createdAt: u.created_at,
           mfaEnabled: !!u.mfa_enabled,
+          branchId: (u as { branch_id?: string }).branch_id || '',
         }));
         setUsers(mapped);
         cacheUsers(mapped);
@@ -144,6 +148,7 @@ export default function UserManagement() {
           email: form.email,
           role: form.role,
           is_active: form.isActive,
+          branch_id: form.branchId || null,   // ECR-17 Phase 4b: '' = society-wide (unrestricted)
         };
         if (form.password) updateData.password = form.password;
 
@@ -156,7 +161,7 @@ export default function UserManagement() {
 
         const updated = users.map(u =>
           u.id === editing.id
-            ? { ...u, name: form.name, email: form.email, role: form.role, isActive: form.isActive, ...(form.password ? { password: form.password } : {}) }
+            ? { ...u, name: form.name, email: form.email, role: form.role, isActive: form.isActive, branchId: form.branchId || '', ...(form.password ? { password: form.password } : {}) }
             : u
         );
         setUsers(updated);
@@ -178,6 +183,13 @@ export default function UserManagement() {
 
         if (error) throw error;
 
+        // ECR-17 Phase 4b: the add RPC has no branch param — patch branch_id on the
+        // new row afterwards (best-effort; the user is still created without it).
+        if (form.branchId && newSuId) {
+          const { error: brErr } = await supabase.from('society_users').update({ branch_id: form.branchId }).eq('id', newSuId as string);
+          if (brErr) console.warn('User branch assign:', brErr.message);
+        }
+
         const newUser: AppUser = {
           id: (newSuId as string) || form.email,
           name: form.name,
@@ -187,6 +199,7 @@ export default function UserManagement() {
           isActive: form.isActive,
           society_id: societyId,
           createdAt: new Date().toISOString(),
+          branchId: form.branchId || '',
         };
         const updated = [...users, newUser];
         setUsers(updated);
@@ -245,7 +258,7 @@ export default function UserManagement() {
 
   const openEdit = (u: AppUser) => {
     setEditing(u);
-    setForm({ name: u.name, email: u.email, password: '', role: u.role, isActive: u.isActive });
+    setForm({ name: u.name, email: u.email, password: '', role: u.role, isActive: u.isActive, branchId: u.branchId || '' });
     setErrors({});
     setSaveError('');
     setShowPassword(false);
@@ -427,6 +440,23 @@ export default function UserManagement() {
                 </SelectContent>
               </Select>
             </div>
+            {/* ECR-17 Phase 4b: branch restriction — pick a branch to lock this user to it,
+                or "All branches" for society-wide (admin / consolidated) access. */}
+            {branches.length > 0 && (
+              <div>
+                <Label>{hi ? 'शाखा तक सीमित' : 'Branch restriction'}</Label>
+                <Select value={form.branchId || '__all__'} onValueChange={v => setForm(p => ({ ...p, branchId: v === '__all__' ? '' : v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">{hi ? 'सभी शाखाएँ (कोई पाबंदी नहीं)' : 'All branches (no restriction)'}</SelectItem>
+                    {branches.map(b => (
+                      <SelectItem key={b.id} value={b.id}>{b.name}{b.isHeadOffice ? (hi ? ' (हेड ऑफ़िस)' : ' (HO)') : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">{hi ? 'किसी शाखा को चुनने पर यह उपयोगकर्ता केवल उसी शाखा का डेटा देख/दर्ज कर पाएगा।' : 'If a branch is set, this user only sees and enters that branch’s data.'}</p>
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <Switch checked={form.isActive} onCheckedChange={v => setForm(p => ({ ...p, isActive: v }))} />
               <Label>{hi ? 'सक्रिय' : 'Active'}</Label>

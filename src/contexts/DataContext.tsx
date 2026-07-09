@@ -18,7 +18,7 @@ import type {
   Branch,
   Godown,
 } from '@/types';
-import { matchesBranch, branchToStamp, ALL_BRANCHES } from '@/lib/branchScope';
+import { matchesBranch, branchToStamp, resolveActiveBranch, ALL_BRANCHES } from '@/lib/branchScope';
 import { buildInterBranchTransfer, INTER_BRANCH_CONTROL_ID } from '@/lib/interBranch';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
@@ -53,6 +53,7 @@ interface DataContextType {
   deleteBranch: (id: string) => void;
   transferBetweenBranches: (input: { fromBranchId: string; toBranchId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; narration?: string }) => void;
   matchesActiveBranch: (branchId?: string) => boolean;   // ECR-17 Phase 4: does an entity's branch fall under the active branch? ('all' → always true)
+  isBranchRestricted: boolean;                           // ECR-17 Phase 4b: current user is locked to a single branch (selector disabled)
   // ECR-17 Phase 3 — godown-wise stock
   godowns: Godown[];
   activeGodownId: string;                       // '' = none (movements unassigned)
@@ -312,7 +313,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const headOfficeIdRef = useRef<string | undefined>(headOfficeBranchId);
   useEffect(() => { headOfficeIdRef.current = headOfficeBranchId; }, [headOfficeBranchId]);
   const cacheBranches = (b: Branch[]) => { try { localStorage.setItem('sahayata_branches', JSON.stringify(b)); } catch { /* quota */ } };
-  const setActiveBranch = useCallback((id: string) => { setActiveBranchState(id); try { localStorage.setItem('sahayata_active_branch', id); } catch { /* quota */ } }, []);
+  // ── ECR-17 Phase 4b: RBAC branch-restriction ───────────────────────────────
+  // A user with a home branch (user.branchId) is restricted to it: the active
+  // branch is forced to that branch and cannot be switched away. Unset → society-wide.
+  const restrictedBranchId = user?.branchId;
+  const isBranchRestricted = !!restrictedBranchId;
+  const restrictedBranchIdRef = useRef<string | undefined>(restrictedBranchId);
+  useEffect(() => { restrictedBranchIdRef.current = restrictedBranchId; }, [restrictedBranchId]);
+  // A restricted user can never leave their branch — collapse any switch to it.
+  const setActiveBranch = useCallback((id: string) => {
+    const target = resolveActiveBranch(restrictedBranchIdRef.current, id);
+    setActiveBranchState(target);
+    try { localStorage.setItem('sahayata_active_branch', target); } catch { /* quota */ }
+  }, []);
+  // Clamp on login / role change (also fixes a stale localStorage value from a prior session).
+  useEffect(() => {
+    if (restrictedBranchId && activeBranchId !== restrictedBranchId) {
+      setActiveBranchState(restrictedBranchId);
+      try { localStorage.setItem('sahayata_active_branch', restrictedBranchId); } catch { /* quota */ }
+    }
+  }, [restrictedBranchId, activeBranchId]);
 
   // Load branches for the society (best-effort; localStorage is the offline fallback).
   useEffect(() => {
@@ -5863,7 +5883,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   return (
     <DataContext.Provider value={{
-      branches, activeBranchId, setActiveBranch, addBranch, updateBranch, deleteBranch, transferBetweenBranches, matchesActiveBranch,
+      branches, activeBranchId, setActiveBranch, addBranch, updateBranch, deleteBranch, transferBetweenBranches, matchesActiveBranch, isBranchRestricted,
       godowns, activeGodownId, setActiveGodown, addGodown, updateGodown, deleteGodown,
       vouchers, members, accounts, society, loans, assets, auditObjections,
       depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,

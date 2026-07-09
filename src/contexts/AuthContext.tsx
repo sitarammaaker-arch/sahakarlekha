@@ -16,6 +16,9 @@ interface User {
   societyId: string;
   /** ECR-12: whether this account has enrolled an authenticator app (TOTP 2FA). */
   mfaEnabled?: boolean;
+  /** ECR-17 Phase 4b: home branch. Set → the user is branch-restricted (sees/enters
+   *  only this branch). Unset → society-wide (admin / consolidated). */
+  branchId?: string;
 }
 
 /** Result of an MFA enrol/disable attempt so the UI can show the right message. */
@@ -78,7 +81,7 @@ const demoUsers: { email: string; password: string; user: User }[] = [
   },
 ];
 
-function buildUser(data: { id: string; name: string; email: string; role: string; society_id: string; mfa_enabled?: boolean }): User {
+function buildUser(data: { id: string; name: string; email: string; role: string; society_id: string; mfa_enabled?: boolean; branch_id?: string | null }): User {
   return {
     id: data.id,
     name: data.name,
@@ -86,6 +89,7 @@ function buildUser(data: { id: string; name: string; email: string; role: string
     role: data.role as UserRole,
     societyId: data.society_id,
     mfaEnabled: !!data.mfa_enabled,
+    branchId: data.branch_id || undefined,   // ECR-17 Phase 4b: home branch (branch-restricted user)
   };
 }
 
@@ -107,6 +111,7 @@ function restoreSession(): User | null {
       email: session.email,
       role: session.role as UserRole,
       societyId: session.societyId,
+      branchId: session.branchId || undefined,   // ECR-17 Phase 4b
     };
   }
 
@@ -157,7 +162,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
           const { data } = await supabase
             .from('society_users')
-            .select('id, name, email, role, society_id, is_active, mfa_enabled')
+            .select('id, name, email, role, society_id, is_active, mfa_enabled, branch_id')
             .eq('email', session.user.email)
             .eq('is_active', true)
             .maybeSingle();
@@ -165,7 +170,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (data) {
             const u = buildUser(data);
             setUser(u);
-            setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId });
+            setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
             checkSuperAdmin(u.email).then(setIsSuperAdmin);
           }
         } catch {
@@ -199,7 +204,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ECR-12 — commit a resolved user to the session (shared by both login steps).
   const completeLogin = useCallback((u: User) => {
     setUser(u);
-    setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId });
+    setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
     checkSuperAdmin(u.email).then(setIsSuperAdmin);
   }, []);
 
@@ -284,7 +289,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!authError && authData.user) {
         const { data: userData } = await supabase
           .from('society_users')
-          .select('id, name, email, role, society_id, is_active, mfa_enabled')
+          .select('id, name, email, role, society_id, is_active, mfa_enabled, branch_id')
           .eq('email', email)
           .eq('is_active', true)
           .maybeSingle();
@@ -305,7 +310,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           };
           setUser(u);
           setIsSuperAdmin(true);
-          setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId });
+          setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
           return { status: 'ok' };
         }
       }
@@ -330,7 +335,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
         setUser(u);
         setIsSuperAdmin(true);
-        setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId });
+        setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
         return { status: 'ok' };
       }
     } catch {

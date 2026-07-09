@@ -13,6 +13,9 @@ function filterByBranch(records, activeBranchId, headOfficeId) {
 function branchToStamp(activeBranchId, headOfficeId) {
   return activeBranchId && activeBranchId !== ALL_BRANCHES ? activeBranchId : headOfficeId;
 }
+function resolveActiveBranch(restrictedBranchId, requestedId) {   // ECR-17 Phase 4b
+  return restrictedBranchId || requestedId;
+}
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -44,6 +47,14 @@ ok(branchToStamp('', HO) === HO, 'stamp head office when no active branch');
 // 5. No head office known → unbranched only matches "all".
 ok(!matchesBranch(undefined, B2, undefined), 'no HO + unbranched + specific branch → excluded');
 ok(matchesBranch('b2', B2, undefined), 'branched record still matches its branch without HO');
+
+// 6. ECR-17 Phase 4b — a branch-restricted user can never leave their branch.
+ok(resolveActiveBranch('b2', ALL_BRANCHES) === 'b2', 'restricted user: request "all" collapses to home branch');
+ok(resolveActiveBranch('b2', HO) === 'b2', 'restricted user: request another branch collapses to home branch');
+ok(resolveActiveBranch('b2', 'b2') === 'b2', 'restricted user: request own branch stays');
+ok(resolveActiveBranch(undefined, 'b2') === 'b2', 'unrestricted user: request honoured');
+ok(resolveActiveBranch(undefined, ALL_BRANCHES) === ALL_BRANCHES, 'unrestricted user: "all" honoured');
+ok(resolveActiveBranch('', HO) === HO, 'empty restriction = unrestricted → request honoured');
 
 console.log(`\nBranch scope (pure): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
