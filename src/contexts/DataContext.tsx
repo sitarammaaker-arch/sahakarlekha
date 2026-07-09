@@ -16,6 +16,7 @@ import type {
   WorkOrder,
   MusterEntry,
   Branch,
+  Godown,
 } from '@/types';
 import { matchesBranch, branchToStamp, ALL_BRANCHES } from '@/lib/branchScope';
 import { buildInterBranchTransfer, INTER_BRANCH_CONTROL_ID } from '@/lib/interBranch';
@@ -51,6 +52,13 @@ interface DataContextType {
   updateBranch: (id: string, data: Partial<Branch>) => void;
   deleteBranch: (id: string) => void;
   transferBetweenBranches: (input: { fromBranchId: string; toBranchId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; narration?: string }) => void;
+  // ECR-17 Phase 3 — godown-wise stock
+  godowns: Godown[];
+  activeGodownId: string;                       // '' = none (movements unassigned)
+  setActiveGodown: (id: string) => void;
+  addGodown: (data: Omit<Godown, 'id' | 'createdAt'>) => Godown;
+  updateGodown: (id: string, data: Partial<Godown>) => void;
+  deleteGodown: (id: string) => void;
   members: Member[];
   accounts: LedgerAccount[];
   society: SocietySettings;
@@ -338,6 +346,42 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (activeBranchIdRef.current === id) setActiveBranch(ALL_BRANCHES);
     supabase.from('branches').delete().eq('id', id).then(({ error }) => { if (error) console.warn('Branch delete:', error.message); });
   }, [setActiveBranch]);
+
+  // ── ECR-17 Phase 3: godowns ────────────────────────────────────────────────
+  const [godowns, setGodownsState] = useState<Godown[]>(() => { try { return JSON.parse(localStorage.getItem('sahayata_godowns') || '[]'); } catch { return []; } });
+  const [activeGodownId, setActiveGodownState] = useState<string>(() => localStorage.getItem('sahayata_active_godown') || '');
+  const activeGodownIdRef = useRef(activeGodownId);
+  useEffect(() => { activeGodownIdRef.current = activeGodownId; }, [activeGodownId]);
+  const cacheGodowns = (g: Godown[]) => { try { localStorage.setItem('sahayata_godowns', JSON.stringify(g)); } catch { /* quota */ } };
+  const setActiveGodown = useCallback((id: string) => { setActiveGodownState(id); try { localStorage.setItem('sahayata_active_godown', id); } catch { /* quota */ } }, []);
+  useEffect(() => {
+    supabase.from('godowns').select('*').eq('society_id', societyIdRef.current)
+      .then(({ data }) => { if (data && data.length) { const gs = data as Godown[]; setGodownsState(gs); cacheGodowns(gs); } });
+  }, [user?.societyId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const addGodown = useCallback((data: Omit<Godown, 'id' | 'createdAt'>): Godown => {
+    const g: Godown = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString(), isActive: data.isActive ?? true };
+    setGodownsState(prev => { const next = [...prev, g]; cacheGodowns(next); return next; });
+    supabase.from('godowns').upsert(withSoc({ ...g })).then(({ error }) => { if (error) console.warn('Godown save:', error.message); });
+    return g;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const updateGodown = useCallback((id: string, data: Partial<Godown>) => {
+    setGodownsState(prev => { const next = prev.map(g => g.id === id ? { ...g, ...data } : g); cacheGodowns(next); return next; });
+    supabase.from('godowns').update(data).eq('id', id).then(({ error }) => { if (error) console.warn('Godown update:', error.message); });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const deleteGodown = useCallback((id: string) => {
+    setGodownsState(prev => { const next = prev.filter(g => g.id !== id); cacheGodowns(next); return next; });
+    if (activeGodownIdRef.current === id) setActiveGodown('');
+    supabase.from('godowns').delete().eq('id', id).then(({ error }) => { if (error) console.warn('Godown delete:', error.message); });
+  }, [setActiveGodown]);
+  // Persist a stock movement safely (ECR-17 Phase 3): base upsert WITHOUT godownId
+  // (never fails pre-migration), then a best-effort step-2 patch of godownId.
+  const persistMovement = (mv: StockMovement) => {
+    const { godownId, ...base } = mv;
+    supabase.from('stock_movements').upsert(withSoc(base)).then(({ error }) => {
+      if (error) { console.error('DB sync error (movement):', error.message); return; }
+      if (godownId) supabase.from('stock_movements').update({ godownId }).eq('id', mv.id).then(({ error: gErr }) => { if (gErr) console.warn('Movement godown patch:', gErr.message); });
+    });
+  };
   const [members, setMembersState] = useState<Member[]>([]);
   const membersRef = useRef<Member[]>(members);
   useEffect(() => { membersRef.current = members; }, [members]);
@@ -4404,16 +4448,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addStockMovement = useCallback((data: Omit<StockMovement, 'id' | 'createdAt'>) => {
     if (guardFYLocked()) return;
-    const movement: StockMovement = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    const movement: StockMovement = { ...data, godownId: data.godownId ?? (activeGodownIdRef.current || undefined), id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     stockMovementsRef.current = [...stockMovementsRef.current, movement];
     setStockMovementsState(prev => [...prev, movement]);
-    supabase.from('stock_movements').upsert(withSoc(movement)).then(({ error }) => {
+    // ECR-17 P3: base upsert without godownId (never fails pre-migration) + rollback; then step-2 patch.
+    const { godownId: _mvGod, ...mvBase } = movement;
+    supabase.from('stock_movements').upsert(withSoc(mvBase)).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message);
         stockMovementsRef.current = stockMovementsRef.current.filter(m => m.id !== movement.id);
         setStockMovementsState(prev => prev.filter(m => m.id !== movement.id));   // RULE 1: roll back
         toastRef.current({ title: 'स्टॉक मूवमेंट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        return;
       }
+      if (_mvGod) supabase.from('stock_movements').update({ godownId: _mvGod }).eq('id', movement.id).then(({ error: gErr }) => { if (gErr) console.warn('Movement godown patch:', gErr.message); });
     });
 
     // Recompute currentStock from openingStock + ALL movements (authoritative — prevents drift
@@ -4518,9 +4566,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
         return updated;
       });
-      const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'sale', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: saleNo, narration: `Sale to ${data.customerName}`, createdAt: new Date().toISOString() };
+      const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'sale', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: saleNo, narration: `Sale to ${data.customerName}`, godownId: activeGodownIdRef.current || undefined, createdAt: new Date().toISOString() };
       setStockMovementsState(prev => [...prev, mv]);
-      supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+      persistMovement(mv);
     });
 
     // receivableAccountId is routing-only (chose the credit debtor above) — never store it on
@@ -4720,9 +4768,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // 4️⃣ Add fresh stock_movement rows for the edited sale
     data.items.forEach(item => {
-      const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'sale', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: original.saleNo, narration: `Sale to ${data.customerName} (edited)`, createdAt: now };
+      const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'sale', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: original.saleNo, narration: `Sale to ${data.customerName} (edited)`, godownId: activeGodownIdRef.current || undefined, createdAt: now };
       setStockMovementsState(prev => [...prev, mv]);
-      supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.error('Movement upsert sync:', error.message); });
+      persistMovement(mv);
     });
 
     // 5️⃣ Update the sale record in place (same id + saleNo)
@@ -4844,9 +4892,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
         return updated;
       });
-      const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'purchase', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: purchaseNo, narration: `Purchase from ${data.supplierName}`, createdAt: new Date().toISOString() };
+      const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'purchase', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: purchaseNo, narration: `Purchase from ${data.supplierName}`, godownId: activeGodownIdRef.current || undefined, createdAt: new Date().toISOString() };
       setStockMovementsState(prev => [...prev, mv]);
-      supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+      persistMovement(mv);
     });
 
     const purchase: Purchase = { ...data, id: purchaseId, purchaseNo, voucherId: newVoucher.id, taxVoucherIds: undefined, createdAt: new Date().toISOString() };
@@ -5056,9 +5104,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     //    (stock currentStock was already updated above via net-delta;
     //     old movement rows were deleted in step 1b)
     data.items.forEach(item => {
-      const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'purchase', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: original.purchaseNo, narration: `Purchase from ${data.supplierName} (edited)`, createdAt: now };
+      const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'purchase', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: original.purchaseNo, narration: `Purchase from ${data.supplierName} (edited)`, godownId: activeGodownIdRef.current || undefined, createdAt: now };
       setStockMovementsState(prev => [...prev, mv]);
-      supabase.from('stock_movements').upsert(withSoc(mv)).then(({ error }) => { if (error) console.error('Movement upsert sync:', error.message); });
+      persistMovement(mv);
     });
 
     // 5️⃣ Update the purchase record in place (same id + purchaseNo)
@@ -5800,6 +5848,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   return (
     <DataContext.Provider value={{
       branches, activeBranchId, setActiveBranch, addBranch, updateBranch, deleteBranch, transferBetweenBranches,
+      godowns, activeGodownId, setActiveGodown, addGodown, updateGodown, deleteGodown,
       vouchers, members, accounts, society, loans, assets, auditObjections,
       depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,
       markComplianceFiled, unmarkComplianceFiled, getComplianceFiledIds,
