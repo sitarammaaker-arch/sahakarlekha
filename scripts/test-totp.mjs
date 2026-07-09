@@ -116,5 +116,15 @@ const s2 = base32Encode(webcrypto.getRandomValues(new Uint8Array(20)));
 ok(s1.length === 32 && /^[A-Z2-7]+$/.test(s1), '160-bit secret → 32 base32 chars');
 ok(s1 !== s2, 'two generated secrets differ');
 
+// 7. Login-enforcement building block (ECR-12 slice 2): a code minted from a
+//    secret verifies against that secret, and a code from a different secret does not.
+const loginSecret = base32Encode(webcrypto.getRandomValues(new Uint8Array(20)));
+const at = 1700000000 * 1000;
+const liveCode = await totp(loginSecret, at);
+ok(await verifyTotp(loginSecret, liveCode, at), 'login: a code minted from the secret verifies');
+const otherSecret = base32Encode(webcrypto.getRandomValues(new Uint8Array(20)));
+const foreignCode = await totp(otherSecret, at);
+ok(!(await verifyTotp(loginSecret, foreignCode, at)) || foreignCode === liveCode, 'login: a code from a different secret is rejected');
+
 console.log(`\nTOTP (pure): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
