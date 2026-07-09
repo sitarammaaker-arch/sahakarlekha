@@ -473,6 +473,8 @@ alter table purchases add column if not exists "igstAmount" numeric default 0;
 alter table purchases add column if not exists "tdsAmount" numeric default 0;
 alter table purchases add column if not exists "taxAmount" numeric default 0;
 alter table purchases add column if not exists "grandTotal" numeric default 0;
+-- ECR-22: Reverse Charge Mechanism flag (recipient self-assesses GST on this inward supply).
+alter table purchases add column if not exists "rcmApplicable" boolean default false;
 alter table purchases add column if not exists "supplierId" text;
 alter table purchases add column if not exists "taxVoucherIds" jsonb default '[]';
 

@@ -18,6 +18,7 @@ import { downloadCSV } from '@/lib/exportUtils';
 import { computeGSTR9, type GstRecord } from '@/lib/gstr9';
 import { validateGstBatch, validateGSTIN, type GstCheckRecord } from '@/lib/gstTdsValidation';
 import { buildGstr9Export } from '@/lib/gstExport';
+import { computeRCM, type RcmPurchase } from '@/lib/rcm';
 import { AlertTriangle, CheckCircle2, FileJson } from 'lucide-react';
 
 const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -44,6 +45,9 @@ const GSTR9: React.FC = () => {
     purchaseReturns: purchaseReturns as unknown as GstRecord[],
     from, to,
   }), [sales, purchases, salesReturns, purchaseReturns, from, to]);
+
+  // ECR-22 slice B: reverse-charge liability from RCM-flagged purchases.
+  const rcm = useMemo(() => computeRCM(purchases as unknown as RcmPurchase[], from, to), [purchases, from, to]);
 
   // ECR-22 slice C: read-only data checks over the period's GST records.
   const issues = useMemo(() => {
@@ -174,6 +178,24 @@ const GSTR9: React.FC = () => {
           <p className="text-[11px] text-muted-foreground mt-1">C {fmt(g.creditCarryForward.cgst)} · S {fmt(g.creditCarryForward.sgst)} · I {fmt(g.creditCarryForward.igst)}</p>
         </CardContent></Card>
       </div>
+
+      {/* ECR-22 B — Reverse Charge (RCM) */}
+      {rcm.count > 0 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">{hi ? 'रिवर्स चार्ज (RCM) — स्व-निर्धारित' : 'Reverse Charge (RCM) — self-assessed'}</CardTitle></CardHeader>
+          <CardContent className="space-y-1">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+              <span className="text-muted-foreground">{hi ? 'RCM खरीद' : 'RCM purchases'}: <b className="text-foreground">{rcm.count}</b></span>
+              <span className="text-muted-foreground">{hi ? 'कर योग्य' : 'Taxable'}: <b className="text-foreground">{fmt(rcm.taxableValue)}</b></span>
+              <span className="text-muted-foreground">CGST: <b className="text-foreground">{fmt(rcm.cgst)}</b></span>
+              <span className="text-muted-foreground">SGST: <b className="text-foreground">{fmt(rcm.sgst)}</b></span>
+              <span className="text-muted-foreground">IGST: <b className="text-foreground">{fmt(rcm.igst)}</b></span>
+            </div>
+            <p className="text-lg font-bold">{hi ? 'RCM कर देय (नकद)' : 'RCM tax payable (cash)'}: {fmt(rcm.total)}</p>
+            <p className="text-[11px] text-muted-foreground">{hi ? 'यह राशि नकद में चुकानी होती है, और पात्र होने पर उतनी ही ITC के रूप में claim की जा सकती है।' : 'Paid in cash under reverse charge, and (if eligible) claimable as an equal amount of ITC.'}</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ECR-22 C — data checks */}
       <Card>
