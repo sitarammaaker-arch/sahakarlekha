@@ -32,10 +32,22 @@ export interface VoucherEditSnapshot {
 /** Who created a voucher: a user (manual) or the Financial Event Engine (system-owned). */
 export type VoucherOrigin = 'manual' | 'engine' | 'auto';
 
+// ── Branch (ECR-17 multi-branch) ─────────────────────────────────────────────
+export interface Branch {
+  id: string;
+  name: string;
+  code?: string;
+  isHeadOffice?: boolean;   // exactly one per society; unbranched legacy records map here
+  address?: string;
+  isActive?: boolean;
+  createdAt: string;
+}
+
 export interface Voucher {
   id: string;
   voucherNo: string;
   type: VoucherType;
+  branchId?: string;  // ECR-17: the branch this voucher belongs to (unset = Head Office)
   date: string;
   debitAccountId: string;
   creditAccountId: string;

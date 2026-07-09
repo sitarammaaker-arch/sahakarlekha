@@ -15,7 +15,9 @@ import type {
   EntityLink,
   WorkOrder,
   MusterEntry,
+  Branch,
 } from '@/types';
+import { matchesBranch, branchToStamp, ALL_BRANCHES } from '@/lib/branchScope';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
@@ -40,6 +42,13 @@ import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS } from '@
 
 interface DataContextType {
   vouchers: Voucher[];
+  // ECR-17 multi-branch (Phase 1)
+  branches: Branch[];
+  activeBranchId: string;                       // 'all' = consolidated
+  setActiveBranch: (id: string) => void;
+  addBranch: (data: Omit<Branch, 'id' | 'createdAt'>) => Branch;
+  updateBranch: (id: string, data: Partial<Branch>) => void;
+  deleteBranch: (id: string) => void;
   members: Member[];
   accounts: LedgerAccount[];
   society: SocietySettings;
@@ -282,6 +291,51 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [vouchers, setVouchersState] = useState<Voucher[]>([]);
   const vouchersRef = useRef<Voucher[]>(vouchers);
   useEffect(() => { vouchersRef.current = vouchers; }, [vouchers]);
+
+  // ── ECR-17 multi-branch (Phase 1) ──────────────────────────────────────────
+  const [branches, setBranchesState] = useState<Branch[]>(() => { try { return JSON.parse(localStorage.getItem('sahayata_branches') || '[]'); } catch { return []; } });
+  const [activeBranchId, setActiveBranchState] = useState<string>(() => localStorage.getItem('sahayata_active_branch') || ALL_BRANCHES);
+  const activeBranchIdRef = useRef(activeBranchId);
+  useEffect(() => { activeBranchIdRef.current = activeBranchId; }, [activeBranchId]);
+  const headOfficeBranchId = branches.find(b => b.isHeadOffice)?.id;
+  const headOfficeIdRef = useRef<string | undefined>(headOfficeBranchId);
+  useEffect(() => { headOfficeIdRef.current = headOfficeBranchId; }, [headOfficeBranchId]);
+  const cacheBranches = (b: Branch[]) => { try { localStorage.setItem('sahayata_branches', JSON.stringify(b)); } catch { /* quota */ } };
+  const setActiveBranch = useCallback((id: string) => { setActiveBranchState(id); try { localStorage.setItem('sahayata_active_branch', id); } catch { /* quota */ } }, []);
+
+  // Load branches for the society (best-effort; localStorage is the offline fallback).
+  useEffect(() => {
+    supabase.from('branches').select('*').eq('society_id', societyIdRef.current)
+      .then(({ data }) => { if (data && data.length) { const bs = data as Branch[]; setBranchesState(bs); cacheBranches(bs); } });
+  }, [user?.societyId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const addBranch = useCallback((data: Omit<Branch, 'id' | 'createdAt'>): Branch => {
+    const branch: Branch = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString(), isActive: data.isActive ?? true };
+    setBranchesState(prev => {
+      const demoted = branch.isHeadOffice ? prev.map(b => ({ ...b, isHeadOffice: false })) : prev; // only one Head Office
+      const next = [...demoted, branch];
+      cacheBranches(next);
+      return next;
+    });
+    supabase.from('branches').upsert(withSoc({ ...branch })).then(({ error }) => { if (error) console.warn('Branch save:', error.message); });
+    return branch;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const updateBranch = useCallback((id: string, data: Partial<Branch>) => {
+    setBranchesState(prev => {
+      let next = prev.map(b => b.id === id ? { ...b, ...data } : b);
+      if (data.isHeadOffice) next = next.map(b => b.id === id ? b : { ...b, isHeadOffice: false });
+      cacheBranches(next);
+      return next;
+    });
+    supabase.from('branches').update(data).eq('id', id).then(({ error }) => { if (error) console.warn('Branch update:', error.message); });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const deleteBranch = useCallback((id: string) => {
+    setBranchesState(prev => { const next = prev.filter(b => b.id !== id); cacheBranches(next); return next; });
+    if (activeBranchIdRef.current === id) setActiveBranch(ALL_BRANCHES);
+    supabase.from('branches').delete().eq('id', id).then(({ error }) => { if (error) console.warn('Branch delete:', error.message); });
+  }, [setActiveBranch]);
   const [members, setMembersState] = useState<Member[]>([]);
   const membersRef = useRef<Member[]>(members);
   useEffect(() => { membersRef.current = members; }, [members]);
@@ -1059,7 +1113,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Strip out everything that may live in late-added columns
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { lines, refType, refId, billAllocations, isCleared, clearedDate, editHistory, groupId,
-            approvalStatus, approvalRemarks, approvedBy, approvedAt, workOrderId, costCentreId, ...baseCols } = v;
+            approvalStatus, approvalRemarks, approvedBy, approvedAt, workOrderId, costCentreId, branchId, ...baseCols } = v;
 
     const handleBaseFailure = (msg: string) => {
       console.error(`Voucher ${opts.isUpdate ? 'update' : 'save'} failed (base):`, msg);
@@ -1229,6 +1283,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       creditAccountId,
       amount,
       approvalStatus: needsApproval ? 'pending' : data.approvalStatus,
+      // ECR-17: stamp the branch — explicit on data, else the active branch (or Head Office when viewing "all").
+      branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current),
       createdAt: new Date().toISOString(),
     };
     // Update ref immediately so the next addVoucher call in the same tick sees this voucher
@@ -3358,7 +3414,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const activeVouchers = vouchers.filter(v =>
     !v.isDeleted &&
     v.approvalStatus !== 'rejected' &&
-    !(society.approvalRequired && v.approvalStatus === 'pending')
+    !(society.approvalRequired && v.approvalStatus === 'pending') &&
+    // ECR-17: branch scope — 'all' (default) = consolidated (no filter). Legacy
+    // unbranched vouchers map to the Head Office. Additive — no regression on 'all'.
+    matchesBranch(v.branchId, activeBranchId, headOfficeBranchId)
   );
 
   const getAccountBalance = useCallback((accountId: string): number => {
@@ -5712,6 +5771,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   return (
     <DataContext.Provider value={{
+      branches, activeBranchId, setActiveBranch, addBranch, updateBranch, deleteBranch,
       vouchers, members, accounts, society, loans, assets, auditObjections,
       depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,
       markComplianceFiled, unmarkComplianceFiled, getComplianceFiledIds,

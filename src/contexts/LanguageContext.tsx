@@ -66,6 +66,7 @@ export const translations: Translations = {
   tdsForm16A: { hi: 'TDS Form 16A', en: 'TDS Form 16A' },
   tdsRegister: { hi: 'TDS रजिस्टर / 26Q', en: 'TDS Register / 26Q' },
   userManagement: { hi: 'उपयोगकर्ता प्रबंधन', en: 'User Management' },
+  branches: { hi: 'शाखाएँ', en: 'Branches' },
   features: { hi: 'सुविधाएँ', en: 'Features' },
   eWayBill: { hi: 'e-Way Bill', en: 'e-Way Bill' },
   hsnMaster: { hi: 'HSN/SAC मास्टर', en: 'HSN/SAC Master' },

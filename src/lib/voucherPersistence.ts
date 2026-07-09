@@ -22,7 +22,7 @@ export const CRITICAL_OVERLAY_KEYS = [
 /** Cosmetic / routing overlays — a failed patch keeps the existing mild warning. */
 export const OPTIONAL_OVERLAY_KEYS = [
   'lines', 'refType', 'refId', 'isCleared', 'clearedDate', 'groupId',
-  'billAllocations', 'workOrderId', 'costCentreId',
+  'billAllocations', 'workOrderId', 'costCentreId', 'branchId',
 ] as const;
 
 export interface VoucherExtrasSplit {
