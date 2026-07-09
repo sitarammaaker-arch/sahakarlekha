@@ -1,7 +1,6 @@
 import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun, ConsumerPrice, PatronageRun, PurchaseOrder, SalesReturn, PurchaseReturn, BankReconciliationRecord, TdsEntry, TdsChallan, TdsChallanLink } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement, Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
 import type { Transporter } from '@/lib/marketing/transport';
-import type { AuthSession } from '@/lib/authSession';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
 export interface VoucherTemplate {
@@ -992,9 +991,10 @@ export const getNextObjectionNo = (auditYear: string): string => {
   return `AUD/${auditYear}/${String(current).padStart(3, '0')}`;
 };
 
-export const getAuthSession = () => get<AuthSession | null>(KEYS.auth, null);
+export const getAuthSession = () =>
+  get<{ email: string; name: string; role: string; societyId: string; branchId?: string } | null>(KEYS.auth, null);
 
-export const setAuthSession = (session: AuthSession | null): void => {
+export const setAuthSession = (session: { email: string; name: string; role: string; societyId: string; branchId?: string } | null): void => {
   if (session) set(KEYS.auth, session);
   else localStorage.removeItem(KEYS.auth);
 };

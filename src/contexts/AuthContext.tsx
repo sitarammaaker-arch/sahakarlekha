@@ -3,16 +3,23 @@ import { getAuthSession, setAuthSession } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import { can as rbacCan, type Permission } from '@/lib/rbac';
 import { generateSecret, otpauthUri } from '@/lib/totp';
-import { toSession, sessionToUser, isPlatformSession, type AuthUser, type AuthRole } from '@/lib/authSession';
 
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes of inactivity
 
-export type UserRole = AuthRole;
+export type UserRole = 'admin' | 'accountant' | 'viewer' | 'auditor';
 
-// ECR-30: the User shape + its session serialization now live in @/lib/authSession so
-// login, restore, and persistence can no longer disagree on the fields (mfaEnabled/id
-// were previously dropped on refresh).
-type User = AuthUser;
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  societyId: string;
+  /** ECR-12: whether this account has enrolled an authenticator app (TOTP 2FA). */
+  mfaEnabled?: boolean;
+  /** ECR-17 Phase 4b: home branch. Set → the user is branch-restricted (sees/enters
+   *  only this branch). Unset → society-wide (admin / consolidated). */
+  branchId?: string;
+}
 
 /** Result of an MFA enrol/disable attempt so the UI can show the right message. */
 export type MfaResult = { ok: true } | { ok: false; reason: 'bad-code' | 'save-failed' };
@@ -96,8 +103,19 @@ function restoreSession(): User | null {
     if (found) return found.user;
   }
 
-  // Restore from stored session — one serializer (keeps id + mfaEnabled + branchId).
-  return sessionToUser(session);
+  // Restore from stored session
+  if (session.email && session.name && session.role && session.societyId) {
+    return {
+      id: session.email,
+      name: session.name,
+      email: session.email,
+      role: session.role as UserRole,
+      societyId: session.societyId,
+      branchId: session.branchId || undefined,   // ECR-17 Phase 4b
+    };
+  }
+
+  return null;
 }
 
 async function checkSuperAdmin(email: string): Promise<boolean> {
@@ -132,18 +150,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAuthSession(null);
   }, []);
 
-  // ECR-30 — the ONE place a resolved user is committed: set state, persist the full
-  // session (id + mfaEnabled + branchId via toSession), and settle super-admin. Every
-  // login path (JWT / platform-RPC / app_login / demo / MFA) funnels through here so the
-  // epilogue can no longer diverge. Pass { superAdmin } when the path already knows the
-  // answer (platform admin), else it is re-checked against the DB.
-  const commitSession = useCallback((u: User, opts?: { superAdmin?: boolean }) => {
-    setUser(u);
-    setAuthSession(toSession(u));
-    if (opts && typeof opts.superAdmin === 'boolean') setIsSuperAdmin(opts.superAdmin);
-    else checkSuperAdmin(u.email).then(setIsSuperAdmin);
-  }, []);
-
   const resetTimer = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(doLogout, SESSION_TIMEOUT_MS);
@@ -161,7 +167,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             .eq('is_active', true)
             .maybeSingle();
 
-          if (data) commitSession(buildUser(data));   // ECR-30: unified commit
+          if (data) {
+            const u = buildUser(data);
+            setUser(u);
+            setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
+            checkSuperAdmin(u.email).then(setIsSuperAdmin);
+          }
         } catch {
           // Supabase unreachable — keep localStorage session
         }
@@ -174,30 +185,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
     return () => subscription.unsubscribe();
-  }, [doLogout, commitSession]);
-
-  // ECR-30 (security) — re-validate super-admin on every load, not only for JWT sessions.
-  // Previously isSuperAdmin was trusted purely from the localStorage sentinel
-  // societyId==='PLATFORM', so an edited localStorage value could assert platform-admin UI
-  // access. A platform session is now re-checked against platform_admins; a DEFINITIVE
-  // negative revokes it. Network errors leave the current value untouched (no lockout).
-  useEffect(() => {
-    const session = getAuthSession();
-    if (!isPlatformSession(session)) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('platform_admins')
-          .select('email')
-          .eq('email', session!.email)
-          .eq('is_active', true)
-          .maybeSingle();
-        if (!cancelled && !error) setIsSuperAdmin(!!data);   // definitive answer wins; on error keep as-is
-      } catch { /* unreachable — fail safe, keep current */ }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  }, [doLogout]);
 
   useEffect(() => {
     if (!user) {
@@ -214,7 +202,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user, resetTimer]);
 
   // ECR-12 — commit a resolved user to the session (shared by both login steps).
-  const completeLogin = useCallback((u: User) => commitSession(u), [commitSession]);
+  const completeLogin = useCallback((u: User) => {
+    setUser(u);
+    setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
+    checkSuperAdmin(u.email).then(setIsSuperAdmin);
+  }, []);
 
   // ECR-12 — after a correct password on a society_users path, require a TOTP code
   // if the account has 2FA enrolled; otherwise finish the login immediately.
@@ -316,7 +308,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             role: 'admin',
             societyId: 'PLATFORM',
           };
-          commitSession(u, { superAdmin: true });   // ECR-30: unified commit
+          setUser(u);
+          setIsSuperAdmin(true);
+          setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
           return { status: 'ok' };
         }
       }
@@ -339,7 +333,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           role: 'admin',
           societyId: 'PLATFORM',
         };
-        commitSession(u, { superAdmin: true });   // ECR-30: unified commit
+        setUser(u);
+        setIsSuperAdmin(true);
+        setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
         return { status: 'ok' };
       }
     } catch {
@@ -368,7 +364,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       await new Promise(resolve => setTimeout(resolve, 400));
       const found = demoUsers.find(u => u.email === email && u.password === password);
       if (found) {
-        commitSession(found.user);   // ECR-30: unified commit (demo users are never platform admins)
+        setUser(found.user);
+        setAuthSession({
+          email: found.user.email,
+          name: found.user.name,
+          role: found.user.role,
+          societyId: found.user.societyId,
+        });
         return { status: 'ok' };
       }
     }
