@@ -57,8 +57,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Demo users as fallback when Supabase is unreachable
-const demoUsers: { email: string; password: string; user: User }[] = [
+// Demo users — DEV-ONLY local login fallback. Gated behind `import.meta.env.DEV`, which
+// Vite statically evaluates to `false` in a production build, so this array becomes dead
+// code and the plaintext credentials are tree-shaken OUT of the shipped bundle (ECR-30).
+// Login also requires localhost (see login() path 4), so production behaviour is unchanged.
+const demoUsers: { email: string; password: string; user: User }[] = import.meta.env.DEV ? [
   {
     email: 'admin@society.com',
     password: 'admin123',
@@ -79,7 +82,7 @@ const demoUsers: { email: string; password: string; user: User }[] = [
     password: 'audit123',
     user: { id: '4', name: 'CA रमेश शर्मा', email: 'auditor@society.com', role: 'auditor', societyId: 'SOC001' },
   },
-];
+] : [];
 
 function buildUser(data: { id: string; name: string; email: string; role: string; society_id: string; mfa_enabled?: boolean; branch_id?: string | null }): User {
   return {
