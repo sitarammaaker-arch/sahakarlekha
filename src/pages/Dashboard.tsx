@@ -23,7 +23,7 @@ const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b
 
 const Dashboard: React.FC = () => {
   const { t, language } = useLanguage();
-  const { accounts, getAccountBalance, members, vouchers, getProfitLoss, loans, society, getTrialBalance, getTradingAccount, auditObjections } = useData();
+  const { accounts, getAccountBalance, getShareCapitalReconciliation, members, vouchers, getProfitLoss, loans, society, getTrialBalance, getTradingAccount, auditObjections } = useData();
   const { housingFlats, maintenanceBills, complaints } = useHousingData();
   const { has } = useCapabilities();
 
@@ -136,11 +136,17 @@ const Dashboard: React.FC = () => {
       if (!divPosted)
         advisories.push({ severity: 'info', en: `Net profit of ₹${netProfit.toLocaleString('en-IN')} is available — consider distributing dividend to members`, hi: `₹${netProfit.toLocaleString('en-IN')} शुद्ध लाभ उपलब्ध — सदस्यों को डिविडेंड वितरण पर विचार करें` });
     }
+    // P0 #4 / ECR-05 (MS-03): share capital control (ledger) must equal Σ member scalars (subsidiary).
+    // Drift means dividend (member-scalar based) no longer matches the audited Balance Sheet.
+    const shareRecon = getShareCapitalReconciliation();
+    if (!shareRecon.reconciled)
+      advisories.push({ severity: 'critical', en: `Share capital mismatch: member records ₹${shareRecon.subsidiaryTotal.toLocaleString('en-IN')} vs ledger ₹${shareRecon.controlBalance.toLocaleString('en-IN')} (difference ₹${Math.abs(shareRecon.difference).toLocaleString('en-IN')}) — reconcile before distributing dividend`, hi: `शेयर कैपिटल बेमेल: सदस्य रिकॉर्ड ₹${shareRecon.subsidiaryTotal.toLocaleString('en-IN')} बनाम बही ₹${shareRecon.controlBalance.toLocaleString('en-IN')} (अंतर ₹${Math.abs(shareRecon.difference).toLocaleString('en-IN')}) — डिविडेंड वितरण से पूर्व मिलान करें` });
+
     if (advisories.length === 0)
       advisories.push({ severity: 'info', en: 'All compliance checks passed — cooperative is in good financial health', hi: 'सभी अनुपालन जांचें पास — सहकारी संस्था की वित्तीय स्थिति उत्तम है' });
 
-    return { reservePosted, bsTallied, stockOk, sec32Ok, fyLocked, netProfit, healthScore, advisories, physicalClosingStock, sec32Pct };
-  }, [vouchers, getTrialBalance, getTradingAccount, loans, society, netProfit, auditObjections]);
+    return { reservePosted, bsTallied, stockOk, sec32Ok, fyLocked, netProfit, healthScore, advisories, physicalClosingStock, sec32Pct, shareRecon };
+  }, [vouchers, getTrialBalance, getTradingAccount, loans, society, netProfit, auditObjections, getShareCapitalReconciliation]);
 
   const recentVouchers = [...vouchers.filter(v => !v.isDeleted)]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))

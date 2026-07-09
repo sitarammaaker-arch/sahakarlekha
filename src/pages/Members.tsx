@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -21,13 +21,25 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import type { EntityLink } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList } from 'lucide-react';
+import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog, Award } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MemberType, CasteCategory } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { generateMemberPassbookPDF, generateMemberApplicationPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
-import type { Member, MemberStatus } from '@/types';
+import type { Member, MemberStatus, Nominee, KycStatus, ShareCertStatus } from '@/types';
+import { validateNominees, nomineeShareTotal } from '@/lib/nomineeUtils';
+import { validateKyc } from '@/lib/kycUtils';
+import { validateCertificate } from '@/lib/shareCertUtils';
+
+// ECR-16: member lifecycle status → label + badge colour per state.
+const STATUS_META: Record<MemberStatus, { hi: string; en: string; cls: string }> = {
+  active:   { hi: 'सक्रिय',    en: 'Active',   cls: 'bg-success text-white' },
+  inactive: { hi: 'निष्क्रिय', en: 'Inactive', cls: 'bg-gray-200 text-gray-700' },
+  resigned: { hi: 'त्यागपत्र', en: 'Resigned', cls: 'bg-amber-100 text-amber-800 border-amber-300' },
+  expelled: { hi: 'निष्कासित', en: 'Expelled', cls: 'bg-red-100 text-red-800 border-red-300' },
+  deceased: { hi: 'मृत',       en: 'Deceased', cls: 'bg-slate-300 text-slate-800' },
+};
 
 const CASTE_OPTIONS: { value: CasteCategory; label: string; labelHi: string }[] = [
   { value: 'General', label: 'General', labelHi: 'सामान्य' },
@@ -46,6 +58,8 @@ const EMPTY_FORM = {
   nomineeName: '', nomineeFatherName: '', nomineeRelation: '', nomineePhone: '',
   nomineeAge: '', nomineeOccupation: '', nomineeAddress: '', nomineeShares: '',
   shareCount: '', shareFaceValue: '',
+  nominees: [] as Nominee[],   // ECR-16: multiple nominees
+  aadhaar: '', pan: '', kycStatus: '' as KycStatus | '',   // ECR-16: KYC
 };
 
 interface MemberFormProps {
@@ -61,6 +75,12 @@ interface MemberFormProps {
 const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onSubmit, submitLabel, onCancel }) => {
   const hi = language === 'hi';
   const f = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
+  // ECR-16: multiple-nominee editor helpers (functional updates → no stale-closure lost writes)
+  const nominees = form.nominees || [];
+  const addNominee = () => setForm(prev => ({ ...prev, nominees: [...(prev.nominees || []), { id: crypto.randomUUID(), name: '', relation: '', phone: '', sharePercent: 0 }] }));
+  const updateNominee = (i: number, patch: Partial<Nominee>) => setForm(prev => ({ ...prev, nominees: (prev.nominees || []).map((n, idx) => idx === i ? { ...n, ...patch } : n) }));
+  const removeNominee = (i: number) => setForm(prev => ({ ...prev, nominees: (prev.nominees || []).filter((_, idx) => idx !== i) }));
+  const nomTotal = nomineeShareTotal(nominees);
   return (
   <form onSubmit={onSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
     {/* Basic */}
@@ -220,6 +240,74 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
       <Label className="text-xs">{hi ? 'नामांकित का पता' : 'Nominee Address'}</Label>
       <Input value={form.nomineeAddress} onChange={e => f('nomineeAddress', e.target.value)} />
     </div>
+
+    {/* ECR-16: KYC (Aadhaar / PAN) */}
+    <div className="pt-2 border-t">
+      <p className="text-xs font-semibold text-muted-foreground">{hi ? 'KYC (आधार / पैन)' : 'KYC (Aadhaar / PAN)'}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
+        <div className="space-y-1">
+          <Label className="text-xs">{hi ? 'आधार नंबर' : 'Aadhaar No.'}</Label>
+          <Input value={form.aadhaar} onChange={e => f('aadhaar', e.target.value)} placeholder={hi ? '12 अंक' : '12 digits'} maxLength={14} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">PAN</Label>
+          <Input value={form.pan} onChange={e => f('pan', e.target.value.toUpperCase())} placeholder="ABCDE1234F" maxLength={10} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">{hi ? 'KYC स्थिति' : 'KYC Status'}</Label>
+          <Select value={form.kycStatus || 'none'} onValueChange={v => setForm(prev => ({ ...prev, kycStatus: (v === 'none' ? '' : v) as KycStatus | '' }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{hi ? '— शुरू नहीं —' : '— Not started —'}</SelectItem>
+              <SelectItem value="pending">{hi ? 'लंबित' : 'Pending'}</SelectItem>
+              <SelectItem value="verified">{hi ? 'सत्यापित' : 'Verified'}</SelectItem>
+              <SelectItem value="rejected">{hi ? 'अस्वीकृत' : 'Rejected'}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </div>
+
+    {/* ECR-16: Multiple nominees with benefit share % */}
+    <div className="pt-2 border-t">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-muted-foreground">{hi ? 'नामांकित सूची (एक से ज़्यादा · हिस्सा %)' : 'Nominees (multiple · share %)'}</p>
+        <Button type="button" variant="outline" size="sm" className="h-7 gap-1" onClick={addNominee}>
+          <Plus className="h-3.5 w-3.5" />{hi ? 'नामांकित जोड़ें' : 'Add nominee'}
+        </Button>
+      </div>
+      {nominees.map((n, i) => (
+        <div key={n.id} className="grid grid-cols-12 gap-2 mt-2 items-end">
+          <div className="col-span-4 space-y-1">
+            <Label className="text-[10px]">{hi ? 'नाम' : 'Name'}</Label>
+            <Input className="h-8" value={n.name} onChange={e => updateNominee(i, { name: e.target.value })} />
+          </div>
+          <div className="col-span-3 space-y-1">
+            <Label className="text-[10px]">{hi ? 'सम्बन्ध' : 'Relation'}</Label>
+            <Input className="h-8" value={n.relation} onChange={e => updateNominee(i, { relation: e.target.value })} />
+          </div>
+          <div className="col-span-2 space-y-1">
+            <Label className="text-[10px]">{hi ? 'फ़ोन' : 'Phone'}</Label>
+            <Input className="h-8" value={n.phone || ''} onChange={e => updateNominee(i, { phone: e.target.value })} />
+          </div>
+          <div className="col-span-2 space-y-1">
+            <Label className="text-[10px]">{hi ? 'हिस्सा %' : 'Share %'}</Label>
+            <Input className="h-8" type="number" min="0" max="100" value={n.sharePercent || ''} onChange={e => updateNominee(i, { sharePercent: Number(e.target.value) || 0 })} />
+          </div>
+          <div className="col-span-1">
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeNominee(i)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      ))}
+      {nominees.length > 0 && (
+        <p className={`text-xs mt-1 ${nomTotal > 100 ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+          {hi ? 'कुल हिस्सा' : 'Total share'}: {nomTotal}%{nomTotal > 100 ? (hi ? ' — 100% से ज़्यादा!' : ' — exceeds 100%!') : ''}
+        </p>
+      )}
+    </div>
+
     <div className="flex gap-2 justify-end pt-2">
       <Button variant="outline" type="button" onClick={onCancel}>{t('cancel')}</Button>
       <Button type="submit">{submitLabel}</Button>
@@ -231,7 +319,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
 const Members: React.FC = () => {
   const { t, language } = useLanguage();
   const { hasPermission } = useAuth();
-  const { members, addMember, updateMember, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks } = useData();
+  const { members, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks } = useData();
   const canEdit = hasPermission(['admin', 'accountant']);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -246,6 +334,13 @@ const Members: React.FC = () => {
   const [viewMember, setViewMember] = useState<Member | null>(null);
   const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
   const [ledgerMember, setLedgerMember] = useState<Member | null>(null);
+  // ECR-16: lifecycle status-change dialog
+  const [statusMember, setStatusMember] = useState<Member | null>(null);
+  const [statusNew, setStatusNew] = useState<MemberStatus>('inactive');
+  const [statusReason, setStatusReason] = useState('');
+  // ECR-16: share-certificate dialog
+  const [certMember, setCertMember] = useState<Member | null>(null);
+  const [certForm, setCertForm] = useState({ certNo: '', count: '', faceValue: '', status: 'issued' as ShareCertStatus, reason: '' });
   const [form, setForm] = useState(EMPTY_FORM);
 
   const fmt = (amount: number) =>
@@ -291,6 +386,16 @@ const Members: React.FC = () => {
       toast({ title: hi ? 'यह सदस्य ID पहले से मौजूद है' : 'Member ID already exists', variant: 'destructive' });
       return;
     }
+    // ECR-16: nomination is mandatory — at least one nominee (legacy single OR the list).
+    const cleanNominees = form.nominees.filter(n => n.name?.trim());
+    if (cleanNominees.length === 0 && !form.nomineeName.trim()) {
+      toast({ title: hi ? 'नामांकित ज़रूरी है' : 'Nominee required', description: hi ? 'कम से कम एक नामांकित जोड़ें।' : 'Add at least one nominee.', variant: 'destructive' });
+      return;
+    }
+    const nv = validateNominees(cleanNominees);
+    if (!nv.ok) { toast({ title: hi ? 'नामांकित त्रुटि' : 'Nominee error', description: nv.error, variant: 'destructive' }); return; }
+    const kv = validateKyc(form.aadhaar, form.pan);
+    if (!kv.ok) { toast({ title: 'KYC', description: kv.error, variant: 'destructive' }); return; }
     Object.assign(form, { memberId });
     addMember({
       ...form, memberId,
@@ -305,6 +410,9 @@ const Members: React.FC = () => {
       nomineeAge: form.nomineeAge ? Number(form.nomineeAge) : undefined,
       nomineeOccupation: form.nomineeOccupation || undefined, nomineeAddress: form.nomineeAddress || undefined,
       nomineeShares: form.nomineeShares ? Number(form.nomineeShares) : undefined,
+      nominees: cleanNominees,
+      aadhaar: form.aadhaar.replace(/\s/g, '') || undefined, pan: form.pan.toUpperCase().trim() || undefined,
+      kycStatus: form.kycStatus || undefined,
       shareCount: form.shareCount ? Number(form.shareCount) : undefined,
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
     });
@@ -317,6 +425,11 @@ const Members: React.FC = () => {
   const handleEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editMember) return;
+    const cleanNominees = form.nominees.filter(n => n.name?.trim());
+    const nv = validateNominees(cleanNominees);
+    if (!nv.ok) { toast({ title: hi ? 'नामांकित त्रुटि' : 'Nominee error', description: nv.error, variant: 'destructive' }); return; }
+    const kv = validateKyc(form.aadhaar, form.pan);
+    if (!kv.ok) { toast({ title: 'KYC', description: kv.error, variant: 'destructive' }); return; }
     updateMember(editMember.id, {
       ...form,
       shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0,
@@ -330,6 +443,9 @@ const Members: React.FC = () => {
       nomineeAge: form.nomineeAge ? Number(form.nomineeAge) : undefined,
       nomineeOccupation: form.nomineeOccupation || undefined, nomineeAddress: form.nomineeAddress || undefined,
       nomineeShares: form.nomineeShares ? Number(form.nomineeShares) : undefined,
+      nominees: cleanNominees,
+      aadhaar: form.aadhaar.replace(/\s/g, '') || undefined, pan: form.pan.toUpperCase().trim() || undefined,
+      kycStatus: form.kycStatus || undefined,
       shareCount: form.shareCount ? Number(form.shareCount) : undefined,
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
     });
@@ -351,7 +467,36 @@ const Members: React.FC = () => {
       nomineeAge: m.nomineeAge ? String(m.nomineeAge) : '', nomineeOccupation: m.nomineeOccupation || '',
       nomineeAddress: m.nomineeAddress || '', nomineeShares: m.nomineeShares ? String(m.nomineeShares) : '',
       shareCount: m.shareCount ? String(m.shareCount) : '', shareFaceValue: m.shareFaceValue ? String(m.shareFaceValue) : '',
+      nominees: m.nominees || [],
+      aadhaar: m.aadhaar || '', pan: m.pan || '', kycStatus: m.kycStatus || '',
     });
+  };
+
+  // ECR-16: open / save share-certificate dialog
+  const openCert = (m: Member) => {
+    setCertMember(m);
+    setCertForm({
+      certNo: m.shareCertNo || '',
+      count: m.shareCount ? String(m.shareCount) : '',
+      faceValue: m.shareFaceValue ? String(m.shareFaceValue) : '',
+      status: m.shareCertStatus || 'issued',
+      reason: '',
+    });
+  };
+  const handleSaveCertificate = () => {
+    if (!certMember) return;
+    const v = validateCertificate({ status: certForm.status, certNo: certForm.certNo, count: Number(certForm.count), reason: certForm.reason });
+    if (!v.ok) { toast({ title: hi ? 'प्रमाणपत्र त्रुटि' : 'Certificate error', description: v.error, variant: 'destructive' }); return; }
+    updateMember(certMember.id, {
+      shareCertNo: certForm.certNo.trim() || undefined,
+      shareCount: certForm.count ? Number(certForm.count) : undefined,
+      shareFaceValue: certForm.faceValue ? Number(certForm.faceValue) : undefined,
+      shareCertStatus: certForm.status,
+      shareCertIssuedAt: new Date().toISOString().split('T')[0],
+      shareCertReason: certForm.reason.trim() || undefined,
+    });
+    toast({ title: hi ? 'शेयर प्रमाणपत्र अपडेट' : 'Share certificate updated', description: certMember.name });
+    setCertMember(null);
   };
 
   const handleApprove = (member: Member) => {
@@ -415,8 +560,8 @@ const Members: React.FC = () => {
                 <TableCell className="text-right">{fmt(member.admissionFee || 0)}</TableCell>
                 {!showApprovalActions && (
                   <TableCell className="text-center">
-                    <Badge variant={member.status === 'active' ? 'default' : 'secondary'} className={member.status === 'active' ? 'bg-success' : ''}>
-                      {member.status === 'active' ? (hi ? 'सक्रिय' : 'Active') : (hi ? 'निष्क्रिय' : 'Inactive')}
+                    <Badge variant="outline" className={STATUS_META[member.status]?.cls}>
+                      {hi ? STATUS_META[member.status]?.hi : STATUS_META[member.status]?.en}
                     </Badge>
                   </TableCell>
                 )}
@@ -446,6 +591,20 @@ const Members: React.FC = () => {
                     {canEdit && (
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(member)}>
                         <Edit className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canEdit && !showApprovalActions && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                        title={hi ? 'स्थिति बदलें (त्यागपत्र/निष्कासन/मृत्यु)' : 'Change status (resign/expel/death)'}
+                        onClick={() => { setStatusMember(member); setStatusNew(member.status === 'active' ? 'resigned' : 'active'); setStatusReason(''); }}>
+                        <UserCog className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canEdit && !showApprovalActions && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                        title={hi ? 'शेयर प्रमाणपत्र (जारी/पुनः/रद्द)' : 'Share certificate (issue/reissue/cancel)'}
+                        onClick={() => openCert(member)}>
+                        <Award className="h-4 w-4" />
                       </Button>
                     )}
                     {canEdit && (
@@ -611,6 +770,101 @@ const Members: React.FC = () => {
             <DialogTitle>{hi ? 'सदस्य संपादित करें' : 'Edit Member'}</DialogTitle>
           </DialogHeader>
           <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleEdit} submitLabel={hi ? 'अपडेट करें' : 'Update'} onCancel={() => setEditMember(null)} />
+        </DialogContent>
+      </Dialog>
+
+      {/* ECR-16: Lifecycle status-change Dialog */}
+      <Dialog open={!!statusMember} onOpenChange={(o) => { if (!o) setStatusMember(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{hi ? 'सदस्य स्थिति बदलें' : 'Change Member Status'}</DialogTitle>
+          </DialogHeader>
+          {statusMember && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {statusMember.name} — {hi ? 'वर्तमान' : 'current'}:{' '}
+                <strong>{hi ? STATUS_META[statusMember.status]?.hi : STATUS_META[statusMember.status]?.en}</strong>
+              </p>
+              <div>
+                <Label className="text-sm">{hi ? 'नई स्थिति' : 'New status'}</Label>
+                <Select value={statusNew} onValueChange={(v) => setStatusNew(v as MemberStatus)}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(STATUS_META) as MemberStatus[]).map(s => (
+                      <SelectItem key={s} value={s} disabled={s === statusMember.status}>
+                        {hi ? STATUS_META[s].hi : STATUS_META[s].en}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-sm">{hi ? 'कारण *' : 'Reason *'}</Label>
+                <Textarea className="mt-1" rows={2} value={statusReason} onChange={e => setStatusReason(e.target.value)}
+                  placeholder={hi ? 'कारण लिखें (त्यागपत्र/निष्कासन/मृत्यु आदि)...' : 'Enter reason...'} />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStatusMember(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+            <Button
+              disabled={!statusReason.trim() || !statusMember || statusNew === statusMember.status}
+              onClick={() => {
+                if (statusMember && changeMemberStatus(statusMember.id, statusNew, statusReason.trim())) setStatusMember(null);
+              }}>
+              {hi ? 'बदलें' : 'Update'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ECR-16: Share Certificate Dialog */}
+      <Dialog open={!!certMember} onOpenChange={(o) => { if (!o) setCertMember(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{hi ? 'शेयर प्रमाणपत्र' : 'Share Certificate'}</DialogTitle>
+          </DialogHeader>
+          {certMember && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">{certMember.name}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">{hi ? 'प्रमाणपत्र सं.' : 'Certificate No.'}</Label>
+                  <Input className="mt-1" value={certForm.certNo} onChange={e => setCertForm(p => ({ ...p, certNo: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">{hi ? 'स्थिति' : 'Status'}</Label>
+                  <Select value={certForm.status} onValueChange={v => setCertForm(p => ({ ...p, status: v as ShareCertStatus }))}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="issued">{hi ? 'जारी' : 'Issued'}</SelectItem>
+                      <SelectItem value="reissued">{hi ? 'पुनः जारी' : 'Reissued'}</SelectItem>
+                      <SelectItem value="cancelled">{hi ? 'रद्द' : 'Cancelled'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">{hi ? 'शेयर संख्या' : 'Share count'}</Label>
+                  <Input className="mt-1" type="number" min="0" value={certForm.count} onChange={e => setCertForm(p => ({ ...p, count: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">{hi ? 'अंकित मूल्य (₹)' : 'Face value (₹)'}</Label>
+                  <Input className="mt-1" type="number" min="0" value={certForm.faceValue} onChange={e => setCertForm(p => ({ ...p, faceValue: e.target.value }))} />
+                </div>
+              </div>
+              {(certForm.status === 'reissued' || certForm.status === 'cancelled') && (
+                <div>
+                  <Label className="text-xs">{hi ? 'कारण *' : 'Reason *'}</Label>
+                  <Textarea className="mt-1" rows={2} value={certForm.reason} onChange={e => setCertForm(p => ({ ...p, reason: e.target.value }))}
+                    placeholder={hi ? 'पुनः जारी / रद्द का कारण...' : 'Reason for reissue / cancel...'} />
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCertMember(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+            <Button onClick={handleSaveCertificate}>{hi ? 'सहेजें' : 'Save'}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

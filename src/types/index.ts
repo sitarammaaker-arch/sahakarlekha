@@ -9,7 +9,10 @@ export interface VoucherLine {
 }
 export type UserRole = 'admin' | 'accountant' | 'viewer';
 export type AccountType = 'asset' | 'liability' | 'income' | 'expense' | 'equity';
-export type MemberStatus = 'active' | 'inactive';
+// ECR-16: member lifecycle. 'active'/'inactive' kept for backward-compat; resigned/
+// expelled/deceased are the exit states (all !== 'active' ⇒ auto-excluded from dividend
+// & active counts). Deceased is terminal (shares pass to nominee via a separate flow).
+export type MemberStatus = 'active' | 'inactive' | 'resigned' | 'expelled' | 'deceased';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type CasteCategory = 'General' | 'Backward Class' | 'Schedule Caste' | 'Schedule Tribe';
 
@@ -113,6 +116,7 @@ export interface AuditObjection {
   status: ObjectionStatus;
   remarks: string;
   createdAt: string;
+  isDeleted?: boolean;   // P0 #2 soft-delete: archived objection (retained in DB, hidden from app)
 }
 
 export interface MemberLedgerEntry {
@@ -127,6 +131,21 @@ export interface MemberLedgerEntry {
 
 export type MemberType = 'member' | 'nominal';
 
+// ECR-16: member KYC verification lifecycle.
+export type KycStatus = 'pending' | 'verified' | 'rejected';
+
+// ECR-16: share-certificate lifecycle (issued → reissued on loss/damage → cancelled).
+export type ShareCertStatus = 'issued' | 'reissued' | 'cancelled';
+
+// ECR-16: a member may nominate MULTIPLE nominees, each with a share of benefits (%).
+export interface Nominee {
+  id: string;
+  name: string;
+  relation: string;
+  phone?: string;
+  sharePercent: number;   // share of benefits (%); across nominees must not exceed 100
+}
+
 export interface Member {
   id: string;
   memberId: string;
@@ -139,12 +158,22 @@ export interface Member {
   memberType: MemberType;
   joinDate: string;
   status: MemberStatus;
+  statusReason?: string;      // ECR-16: why the last lifecycle change (resigned/expelled/deceased/reactivated)
+  statusChangedAt?: string;   // ECR-16: ISO date of the last lifecycle change
   creditLimit?: number;   // Consumer C3 — max member-store credit outstanding (0/undefined = no cap; POS warns, never blocks)
   // Share Register fields
   shareCertNo?: string;
   shareCount?: number;
   shareFaceValue?: number;
-  // Nominee fields
+  shareCertStatus?: ShareCertStatus;   // ECR-16: certificate lifecycle
+  shareCertIssuedAt?: string;          // ECR-16: ISO date of last issue/reissue
+  shareCertReason?: string;            // ECR-16: reason for reissue/cancel
+  // KYC (ECR-16). aadhaar/pan are PII — displayed masked, redacted in the audit log.
+  aadhaar?: string;
+  pan?: string;
+  kycStatus?: KycStatus;   // undefined = not started
+  // Nominee fields (legacy single nominee — kept for backward-compat)
+  nominees?: Nominee[];   // ECR-16: multiple nominees with share %
   nomineeName?: string;
   nomineeRelation?: string;
   nomineePhone?: string;
@@ -164,6 +193,7 @@ export interface Member {
   nomineeAddress?: string;
   nomineeShares?: number;
   nomineeFatherName?: string;
+  isDeleted?: boolean;             // P0 #2 soft-delete: archived member (retained in DB, hidden from app)
 }
 
 // Housing cooperative — a building / wing / tower master (for multi-tower societies).
@@ -530,6 +560,49 @@ export interface Loan {
   createdAt: string;
 }
 
+// ── Deposits (Core for Credit/PACS) — SB / FD / RD / Pigmy ─────────────────────
+export type DepositType = 'SB' | 'FD' | 'RD' | 'PIGMY';
+export type DepositTxnType = 'open' | 'deposit' | 'withdraw' | 'interest' | 'closure';
+export type DepositStatus = 'active' | 'closed' | 'matured';
+
+// A member deposit account (a liability the society owes the member). The FD/RD/Pigmy
+// fields are nullable so later product slices reuse this shape without a schema change.
+export interface DepositAccount {
+  id: string;
+  accountNo: string;
+  memberId: string;
+  depositType: DepositType;
+  openDate: string;
+  balance: number;
+  interestRate?: number;       // p.a. — used from the interest slice onward
+  maturityDate?: string;       // FD/RD
+  installmentAmount?: number;  // RD/Pigmy
+  agent?: string;              // Pigmy — the daily-collection agent
+  status: DepositStatus;
+  createdAt: string;
+}
+
+// ECR-13: a compliance calendar item marked as filed/done.
+export interface ComplianceFiling {
+  id: string;
+  itemId: string;      // the compliance item id (e.g. "tds-2024-04", "24q-q1-2024")
+  filedAt: string;     // ISO date
+  filedBy?: string;
+  note?: string;
+}
+
+export interface DepositTransaction {
+  id: string;
+  depositAccountId: string;
+  date: string;
+  txnType: DepositTxnType;
+  amount: number;
+  mode: 'cash' | 'bank';
+  voucherId?: string;
+  balanceAfter: number;
+  createdAt: string;
+}
+
 // ── Dairy / Milk society — daily collection register + member payout ──────────
 export type MilkShift = 'morning' | 'evening';
 export type MilkQualityDecision = 'accepted' | 'accepted_cut' | 'rejected';
@@ -715,6 +788,7 @@ export interface Asset {
   residualValue?: number;          // scrap value (₹) — depreciable amount = cost - residualValue
   disposalDate?: string;           // ISO date when disposed/sold
   saleProceeds?: number;           // amount received on disposal (₹)
+  acquisitionVoucherId?: string;   // ECR-15: capitalization voucher (Dr Fixed-Asset / Cr Cash-Bank) when purchased
   location: string;
   description: string;
   status: AssetStatus;
@@ -724,6 +798,7 @@ export interface Asset {
   capacityMT?: number;              // capacity in metric tonnes (for godowns)
   condition?: AssetCondition;       // Serviceable / Unserviceable
   marketValue?: number;             // Market Value as on reporting date (₹)
+  isDeleted?: boolean;              // P0 #2 soft-delete: archived asset (retained in DB, hidden from app)
 }
 
 export type AccountSubtype =
@@ -957,6 +1032,7 @@ export interface SocietySettings {
     totalPayments: number;
   };
   reserveFundPct?: number;      // 0-100, default 25 if undefined (Sec 65 Haryana / varies by state)
+  maxSharePremiumPercent?: number;  // ECR-16 (MS-11): cap on share-transfer premium as % of face value transferred. Undefined/0 = no premium allowed.
   maintenanceGstEnabled?: boolean; // Housing: charge GST on maintenance (admin decides per CA — ₹7,500/₹20L rule)
   maintenanceGstRate?: number;     // GST rate % on maintenance (default 18)
   gstin?: string;              // GSTIN (15 chars — state code + PAN + entity code + check digit)
@@ -965,6 +1041,10 @@ export interface SocietySettings {
   fyLocked?: boolean;          // true = FY is audit-locked; no new vouchers or edits allowed
   fyLockedAt?: string;         // ISO date when lock was applied
   fyLockedBy?: string;         // Name of user who locked the FY
+  periodLockDate?: string;     // ECR-07: ISO date (YYYY-MM-DD); vouchers dated ON/BEFORE this are in a locked period (back-dating prevention). Undefined/empty = no period lock.
+  periodLockBy?: string;       // Name of user who set the period lock
+  approvalRequired?: boolean;  // opt-in maker-checker: when true, PENDING vouchers are held out of the ledger/reports until approved (REJECTED are always excluded). Default (undefined/false) = no gating — behaviour unchanged.
+  approvalThresholdAmount?: number;  // ECR-11: manual vouchers with amount ≥ this need approval (matrix). Undefined/0 = no threshold rule.
   // Board & Signing Authority
   boardType?: BoardType;       // 'bod' (elected) or 'boa' (appointed by Registrar)
   boardMembers?: BoardMember[];
@@ -1395,6 +1475,7 @@ export interface Purchase {
   narration: string;
   createdAt: string;
   createdBy: string;
+  isDeleted?: boolean;      // P0 #2 soft-delete: archived purchase (retained in DB, hidden from app)
 }
 
 // ── Supplier ──────────────────────────────────────────────────────────────────
@@ -1586,6 +1667,13 @@ export interface Employee {
   isOutsourced?: boolean;              // true = outsourced, false = society own employee
   hafedSalaryPaid?: number;            // Amount of salary paid by HAFED (₹)
   hafedSalaryPercent?: number;         // % of salary paid by HAFED (0-100)
+
+  // ── ECR-14: statutory applicability ──
+  pfApplicable?: boolean;              // deduct EPF (default true when undefined)
+  esiApplicable?: boolean;             // deduct ESI if gross ≤ threshold (default true)
+  uan?: string;                        // EPF Universal Account Number
+  esiNo?: string;                      // ESIC insurance number
+  pan?: string;                        // deductee PAN (for Form 24Q)
 }
 
 export interface SalaryRecord {
@@ -1595,8 +1683,15 @@ export interface SalaryRecord {
   month: string;
   basicSalary: number;
   allowances: number;
-  deductions: number;
+  deductions: number;         // total employee deductions (kept = pf+esi+pt+tds when statutory used)
   netSalary: number;
+  // ECR-14: statutory breakdown (0 when not applicable). deductions still holds the total.
+  pfEmployee?: number;
+  pfEmployer?: number;
+  esiEmployee?: number;
+  esiEmployer?: number;
+  pt?: number;                // professional tax
+  tds?: number;               // TDS u/s 192
   paymentMode: PaymentMode;
   voucherId?: string;         // payment voucher (Dr Salary Payable / Cr Bank), set when paid
   accrualVoucherId?: string;  // accrual voucher (Dr Salary Expense / Cr Salary Payable), set at processing

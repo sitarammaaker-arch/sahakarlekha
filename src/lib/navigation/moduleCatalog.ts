@@ -35,6 +35,7 @@ const U: Capability[] = []; // universal shorthand
 export const MODULE_CATALOG: ModuleDefinition[] = [
   // ── core (was mainNavItems) ──
   { id: 'dashboard',          titleKey: 'dashboard',          icon: LayoutDashboard, route: '/dashboard',          domain: 'core', requiredCapabilities: U, order: 0 },
+  { id: 'myDashboard',        titleKey: 'myDashboard',        icon: LayoutDashboard, route: '/my-dashboard',       domain: 'core', requiredCapabilities: U, order: 0.5 },
   { id: 'cashBook',           titleKey: 'cashBook',           icon: Wallet,          route: '/cash-book',          domain: 'core', requiredCapabilities: U, order: 1 },
   { id: 'bankBook',           titleKey: 'bankBook',           icon: Building2,       route: '/bank-book',          domain: 'core', requiredCapabilities: U, order: 2 },
   { id: 'bankReconciliation', titleKey: 'bankReconciliation', icon: CheckCircle2,    route: '/bank-reconciliation', domain: 'core', requiredCapabilities: U, order: 3 },
@@ -118,6 +119,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   // ── reports (was reportNavItems) ──
   { id: 'trialBalance',       titleKey: 'trialBalance',       icon: Scale,           route: '/trial-balance',        domain: 'reports', requiredCapabilities: U, order: 0 },
   { id: 'receiptsPayments',   titleKey: 'receiptsPayments',   icon: ArrowLeftRight,  route: '/receipts-payments',    domain: 'reports', requiredCapabilities: U, order: 1 },
+  { id: 'complianceCalendar', titleKey: 'complianceCalendar', icon: CalendarDays,    route: '/compliance-calendar',  domain: 'reports', requiredCapabilities: U, order: 1.5 },
   { id: 'tradingAccount',     titleKey: 'tradingAccount',     icon: ShoppingCart,    route: '/trading-account',      domain: 'reports', requiredCapabilities: ['inventory_sales'], order: 2 },
   { id: 'profitLoss',         titleKey: 'profitLoss',         icon: TrendingUp,      route: '/profit-loss',          domain: 'reports', requiredCapabilities: U, order: 3 },
   { id: 'balanceSheet',       titleKey: 'balanceSheet',       icon: FileSpreadsheet, route: '/balance-sheet',        domain: 'reports', requiredCapabilities: U, order: 4 },
@@ -143,6 +145,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'shareRegister',        titleKey: 'shareRegister',        icon: BookMarked,   route: '/share-register',        domain: 'registers', requiredCapabilities: U, order: 0 },
   { id: 'loanRegister',         titleKey: 'loanRegister',         icon: Landmark,     route: '/loan-register',         domain: 'registers', requiredCapabilities: ['lending'], order: 1 },
   { id: 'loanInterest',         titleKey: 'loanInterest',         icon: Percent,      route: '/loan-interest',         domain: 'registers', requiredCapabilities: ['lending'], requiredRoles: ['admin', 'accountant'], order: 2 },
+  { id: 'deposits',             titleKey: 'deposits',             icon: PiggyBank,    route: '/deposits',              domain: 'registers', requiredCapabilities: ['lending'], order: 2.5 },
   { id: 'assetRegister',        titleKey: 'assetRegister',        icon: Package,      route: '/asset-register',        domain: 'registers', requiredCapabilities: U, order: 3 },
   { id: 'depreciationSchedule', titleKey: 'depreciationSchedule', icon: TrendingDown, route: '/depreciation-schedule', domain: 'registers', requiredCapabilities: U, order: 4 },
   { id: 'auditRegister',        titleKey: 'auditRegister',        icon: ShieldCheck,  route: '/audit-register',        domain: 'registers', requiredCapabilities: U, order: 5 },

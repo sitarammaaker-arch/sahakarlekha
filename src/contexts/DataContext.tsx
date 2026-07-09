@@ -2,9 +2,10 @@ import React, { createContext, useContext, useState, useCallback, ReactNode, use
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import type {
-  Voucher, VoucherEditSnapshot, VoucherLine, VoucherType, Member, LedgerAccount, SocietySettings, BillAllocation,
+  Voucher, VoucherEditSnapshot, VoucherLine, VoucherType, Member, MemberStatus, LedgerAccount, SocietySettings, BillAllocation,
   AccountBalance, CashBookEntry, BankBookEntry, MemberLedgerEntry, ReceiptsPaymentsData,
   Loan, Asset, AuditObjection, Recoverable, KachiAaratEntry, P7Entry,
+  DepositAccount, DepositTransaction, DepositType, DepositTxnType, ComplianceFiling,
   StockItem, StockMovement,
   Sale, Purchase,
   Employee, SalaryRecord, PaymentMode,
@@ -25,9 +26,16 @@ import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { resolveCapabilities } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
+import { logAudit, type AuditInput } from '@/lib/auditLog';
+import { sumActiveMemberShareCapital, reconcileShareCapital, type ShareCapitalReconciliation } from '@/lib/shareReconciliation';
+import { can as rbacCan, type Permission } from '@/lib/rbac';
+import { splitVoucherExtras, extrasFailureToast } from '@/lib/voucherPersistence';
+import { shareOpPosting, validateShareOp, applyShareOp, type ShareOpType } from '@/lib/shareOps';
+import { depositLiabilityAccount, depositPosting, applyDepositTxn, validateDepositTxn } from '@/lib/depositEngine';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLines } from '@/lib/procurement';
-import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore } from '@/lib/depreciation';
+import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, nextFY } from '@/lib/depreciation';
+import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS } from '@/lib/assetDisposal';
 
 interface DataContextType {
   vouchers: Voucher[];
@@ -62,11 +70,22 @@ interface DataContextType {
   approveFarmerSettlement: (data: { settlementId: string }) => FarmerSettlement;
   recordFarmerPayment: (data: { engineVoucherId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; paymentDate: string; reference?: string; remarks?: string }) => Voucher;
   loans: Loan[];
+  depositAccounts: DepositAccount[];
+  depositTransactions: DepositTransaction[];
+  addDepositAccount: (data: Omit<DepositAccount, 'id' | 'accountNo' | 'balance' | 'status' | 'createdAt'> & { openingAmount?: number; mode?: 'cash' | 'bank' }) => DepositAccount | null;
+  postDepositTransaction: (accountId: string, txnType: 'deposit' | 'withdraw', amount: number, mode: 'cash' | 'bank', date: string) => boolean;
+  postDepositInterest: (accountId: string, amount: number, date: string) => boolean;
+  closeDepositAccount: (accountId: string, mode: 'cash' | 'bank', date: string) => boolean;
+  getDepositTransactions: (accountId: string) => DepositTransaction[];
+  markComplianceFiled: (itemId: string, note?: string) => void;
+  unmarkComplianceFiled: (itemId: string) => void;
+  getComplianceFiledIds: () => string[];
   assets: Asset[];
 
   addVoucher: (data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }) => Voucher;
   updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => void;
   cancelVoucher: (id: string, reason: string, deletedBy: string) => boolean;
+  reverseVoucher: (id: string, reason: string) => Voucher | null;
   restoreVoucher: (id: string) => void;
   clearVoucher: (id: string, clearedDate?: string) => void;
   unclearVoucher: (id: string) => void;
@@ -96,10 +115,13 @@ interface DataContextType {
 
   addMember: (data: Omit<Member, 'id'>) => Member;
   updateMember: (id: string, data: Partial<Member>) => void;
+  changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string) => boolean;
   deleteMember: (id: string) => void;
   refundShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
   purchaseShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
-  transferShareCapital: (fromMemberId: string, toMemberId: string, amount: number, date: string) => void;
+  transferShareCapital: (fromMemberId: string, toMemberId: string, amount: number, date: string, premium?: number, opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string }) => void;
+  shareOperation: (memberId: string, type: ShareOpType, amount: number, opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string; date?: string; reason?: string }) => boolean;
+  getMemberShareReconciliation: (memberId: string) => ShareCapitalReconciliation | null;
 
 
   workOrders: WorkOrder[];
@@ -126,8 +148,9 @@ interface DataContextType {
   updateLoan: (id: string, data: Partial<Loan>) => void;
   deleteLoan: (id: string) => void;
 
-  addAsset: (data: Omit<Asset, 'id' | 'assetNo'>) => Asset;
+  addAsset: (data: Omit<Asset, 'id' | 'assetNo'>, opts?: { capitalize?: boolean; mode?: 'cash' | 'bank' }) => Asset;
   updateAsset: (id: string, data: Partial<Asset>) => void;
+  disposeAsset: (id: string, opts: { saleProceeds: number; mode: 'cash' | 'bank'; date: string }) => boolean;
   deleteAsset: (id: string) => void;
   postDepreciation: (fy?: string) => { posted: number; skipped: number };
 
@@ -178,6 +201,7 @@ interface DataContextType {
   kccLoans: KccLoan[];
 
   getAccountBalance: (accountId: string) => number;
+  getShareCapitalReconciliation: () => ShareCapitalReconciliation;
   getCashBookEntries: (fromDate?: string, toDate?: string) => CashBookEntry[];
   getBankBookEntries: (fromDate?: string, toDate?: string, bankAccountId?: string) => BankBookEntry[];
   getTrialBalance: (asOnDate?: string) => AccountBalance[];
@@ -211,6 +235,27 @@ interface DataContextType {
   isLoading: boolean;
 }
 
+// ── ECR-08 (P1 #8): reversal-not-edit pure helpers ────────────────────────────
+// Flip Dr↔Cr for each line (amount unchanged) to build a contra reversal. Pure.
+const reverseEntryLines = (lines: VoucherLine[]): VoucherLine[] =>
+  lines.map(l => ({ ...l, type: (l.type === 'Dr' ? 'Cr' : 'Dr') as 'Dr' | 'Cr' }));
+// In-place edit forbidden (correct via reversal instead) when the voucher is already
+// reversed, or is posted-under-control (opt-in maker-checker regime + approved). Pure.
+const isEditLocked = (v: Pick<Voucher, 'reversedBy' | 'approvalStatus'>, approvalRequired: boolean): boolean =>
+  !!v.reversedBy || (!!approvalRequired && v.approvalStatus === 'approved');
+
+// ECR-11: approval matrix — does a manual voucher of `amount` need approval? True when the
+// all-manual flag is on, OR the amount meets the configured threshold. Pure.
+const requiresApproval = (amount: number, opts: { approvalRequired?: boolean; threshold?: number }): boolean =>
+  !!opts.approvalRequired || (!!opts.threshold && opts.threshold > 0 && (amount || 0) >= opts.threshold);
+
+// ── ECR-16 (member lifecycle) pure helpers ────────────────────────────────────
+const MEMBER_STATUSES: MemberStatus[] = ['active', 'inactive', 'resigned', 'expelled', 'deceased'];
+// Valid lifecycle transition? No self-transition; 'deceased' is terminal (shares pass to
+// a nominee via a separate flow). Every other move between distinct states is allowed.
+const canTransitionMember = (from: MemberStatus, to: MemberStatus): boolean =>
+  from !== to && from !== 'deceased' && MEMBER_STATUSES.includes(to);
+
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -224,6 +269,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Helper: adds society_id to any Supabase record
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const withSoc = (d: Record<string, any>) => ({ ...d, society_id: societyIdRef.current });
+  // P0 #3: append-only audit. Actor is read from a ref so it is never stale inside the
+  // delete/approve useCallbacks; emitAudit is fire-and-forget and never blocks the write.
+  const userRef = useRef(user);
+  useEffect(() => { userRef.current = user; }, [user]);
+  const emitAudit = (input: AuditInput) => logAudit(input, {
+    societyId: societyIdRef.current,
+    actor: { name: userRef.current?.name, email: userRef.current?.email, role: userRef.current?.role },
+  });
 
   const [vouchers, setVouchersState] = useState<Voucher[]>([]);
   const vouchersRef = useRef<Voucher[]>(vouchers);
@@ -244,7 +297,40 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     return false;
   }, []);
+  // ECR-07 (P1 #7): period lock / back-dating prevention. A voucher dated ON or BEFORE
+  // society.periodLockDate is in a closed period. Pure predicate (mirrored in the test).
+  const isPeriodLocked = (entityDate?: string): boolean => {
+    const lock = societyRef.current?.periodLockDate;
+    return !!lock && !!entityDate && entityDate <= lock;
+  };
+  // Returns true when BLOCKED (mirrors guardFYLocked). Checks any of the supplied dates
+  // (add → new date; edit → existing AND incoming date) so you can neither edit within
+  // nor back-date into a locked period.
+  const guardPeriodLock = useCallback((...dates: (string | undefined)[]): boolean => {
+    const lock = societyRef.current?.periodLockDate;
+    if (lock && dates.some(d => isPeriodLocked(d))) {
+      toastRef.current({
+        title: '🔒 अवधि लॉक / Period Locked',
+        description: `इस तारीख तक की अवधि लॉक है (${lock}) — इस अवधि में entry add/edit नहीं हो सकती। (Period up to ${lock} is locked; back-dated entries are blocked.)`,
+        variant: 'destructive',
+        duration: 9000,
+      });
+      return true;
+    }
+    return false;
+  }, []);
+  // SL-06: block an action the current user's role is not granted. Returns true when BLOCKED
+  // (mirrors guardFYLocked's convention). Hindi-first toast. Detection is app-layer only.
+  const guardPermission = useCallback((permission: Permission, actionHi: string): boolean => {
+    const role = userRef.current?.role;
+    if (role && rbacCan(role, permission)) return false; // allowed
+    toastRef.current({ title: 'अनुमति नहीं', description: `आपकी भूमिका को ${actionHi} की अनुमति नहीं है। (Your role cannot ${permission}.)`, variant: 'destructive', duration: 8000 });
+    return true; // blocked
+  }, []);
   const [loans, setLoansState] = useState<Loan[]>([]);
+  const [depositAccounts, setDepositAccountsState] = useState<DepositAccount[]>([]);
+  const [depositTransactions, setDepositTransactionsState] = useState<DepositTransaction[]>([]);
+  const [complianceFilings, setComplianceFilingsState] = useState<ComplianceFiling[]>([]);
   const [societyCapabilities, setSocietyCapabilitiesState] = useState<SocietyCapabilityRow[]>([]);
   const [procurementFarmers, setProcurementFarmersState] = useState<Farmer[]>(() => storage.getProcurementFarmers());
   const [procurementLots, setProcurementLotsState] = useState<ProcurementLot[]>(() => storage.getProcurementLots());
@@ -264,6 +350,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
   const loansRef = useRef<Loan[]>(loans);
   useEffect(() => { loansRef.current = loans; }, [loans]);
+  const depositAccountsRef = useRef<DepositAccount[]>(depositAccounts);
+  useEffect(() => { depositAccountsRef.current = depositAccounts; }, [depositAccounts]);
+  const complianceFilingsRef = useRef<ComplianceFiling[]>(complianceFilings);
+  useEffect(() => { complianceFilingsRef.current = complianceFilings; }, [complianceFilings]);
   const [assets, setAssetsState] = useState<Asset[]>([]);
   const assetsRef = useRef<Asset[]>(assets);
   useEffect(() => { assetsRef.current = assets; }, [assets]);
@@ -312,6 +402,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Reset all state to empty before loading new society's data
     setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
+    setDepositAccountsState([]); setDepositTransactionsState([]); setComplianceFilingsState([]);
     setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
     setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]); setProcurementSettlementsState([]); setWorkOrdersState([]); setMusterEntriesState([]);
     setAssetsState([]); setAuditObjectionsState([]); setStockItemsState([]);
@@ -377,7 +468,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Load vouchers — safe first, auto-migration separate
         if (vData && vData.length > 0) { setVouchersState(vData); storage.setVouchers(vData); }
         else if (!vErr) setVouchersState([]);
-        if (mData && mData.length > 0) { setMembersState(mData); storage.setMembers(mData); }
+        // P0 #2: exclude soft-deleted rows so archived members never repopulate the array.
+        const activeMembers = (mData || []).filter(m => !m.isDeleted);
+        if (activeMembers.length > 0) { setMembersState(activeMembers); storage.setMembers(activeMembers); }
         else setMembersState([]);
 
         // Load accounts from Supabase; fall back to CMS template if none exist
@@ -421,8 +514,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.warn('Auto member voucher migration error (non-fatal):', migErr);
         }
         setLoansState(lData || []);
-        setAssetsState(asData || []);
-        setAuditObjectionsState(aoData || []);
+        setAssetsState((asData || []).filter(a => !a.isDeleted));          // P0 #2: exclude archived
+        setAuditObjectionsState((aoData || []).filter(o => !o.isDeleted)); // P0 #2: exclude archived
         setStockItemsState(siData || []);
         setStockMovementsState(smData || []);
 
@@ -441,6 +534,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             })));
           },
           () => setSocietyCapabilitiesState([]),
+        );
+
+        // Deposits module — independent, error-tolerant load (a missing table pre-migration
+        // NEVER breaks the main data load).
+        supabase.from('deposit_accounts').select('*').eq('society_id', sid).then(
+          ({ data, error }) => { if (!error && data) setDepositAccountsState(data as DepositAccount[]); },
+          () => { /* table absent pre-migration — ignore */ },
+        );
+        supabase.from('deposit_transactions').select('*').eq('society_id', sid).then(
+          ({ data, error }) => { if (!error && data) setDepositTransactionsState(data as DepositTransaction[]); },
+          () => { /* table absent pre-migration — ignore */ },
+        );
+        supabase.from('compliance_filings').select('*').eq('society_id', sid).then(
+          ({ data, error }) => { if (!error && data) setComplianceFilingsState(data as ComplianceFiling[]); },
+          () => { /* table absent pre-migration — ignore */ },
         );
 
         // Procurement Phase 1.0 — error-tolerant load (Supabase → localStorage fallback). Independent
@@ -770,7 +878,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const finalPurchases = ((puData || []) as Purchase[]).map(p => patchedPurchaseIds.has(p.id)
               ? patchedPurchases.find(pp => pp.id === p.id)! : p);
             setSalesState(finalSales);
-            setPurchasesState(finalPurchases);
+            setPurchasesState(finalPurchases.filter(p => !p.isDeleted)); // P0 #2: exclude archived
 
             // Persist NEW repair vouchers
             for (const v of newRepairVouchers) {
@@ -807,7 +915,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
           } else {
             setSalesState(slData || []);
-            setPurchasesState(puData || []);
+            setPurchasesState((puData || []).filter(p => !p.isDeleted)); // P0 #2: exclude archived
           }
         } catch (repairErr) {
           console.warn('Sale/Purchase voucher auto-repair non-fatal error:', repairErr);
@@ -995,39 +1103,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           handleBaseFailure(verifyErr?.message || 'Verification failed — row not found after upsert');
           return;
         }
-      // Step 2: best-effort patch of extras (lines, refType, etc.)
-      const extras: Record<string, unknown> = {};
-      if (lines !== undefined) extras.lines = lines;
-      if (refType !== undefined) extras.refType = refType;
-      if (refId !== undefined) extras.refId = refId;
-      if (isCleared !== undefined) extras.isCleared = isCleared;
-      if (clearedDate !== undefined) extras.clearedDate = clearedDate;
-      if (groupId !== undefined) extras.groupId = groupId;
-      if (approvalStatus !== undefined) extras.approvalStatus = approvalStatus;
-      if (approvalRemarks !== undefined) extras.approvalRemarks = approvalRemarks;
-      if (approvedBy !== undefined) extras.approvedBy = approvedBy;
-      if (approvedAt !== undefined) extras.approvedAt = approvedAt;
-      if (editHistory !== undefined) extras.editHistory = editHistory;
-      if (billAllocations !== undefined) extras.billAllocations = billAllocations;
-      if (workOrderId !== undefined) extras.workOrderId = workOrderId;
-      if (costCentreId !== undefined) extras.costCentreId = costCentreId;
+      // Step 2: best-effort patch of overlay columns. ECR-04: critical control/audit
+      // overlays (approvalStatus/editHistory/…) must NOT be lost silently. Split the
+      // buckets, retry once (clears the common PostgREST schema-cache lag), and on a
+      // terminal failure raise a LOUD toast when critical data didn't reach the cloud.
+      const { critical, optional, hasCritical } = splitVoucherExtras(v as unknown as Record<string, unknown>);
+      const extras = { ...optional, ...critical };
       if (Object.keys(extras).length === 0) {
         if (!opts.isUpdate) syncEntries(v);
         return;
       }
-      supabase.from('vouchers').update(extras).eq('id', v.id).then(({ error: e2 }) => {
-        if (e2) {
-          console.warn('Voucher extras patch warning (run latest supabase-tables.sql migration):', e2.message);
-          toastRef.current({
-            title: '⚠️ Voucher saved partially',
-            description: `Base voucher saved to cloud, but extras (lines/refs/approval) failed: ${e2.message}. Run latest supabase-tables.sql migration.`,
-            variant: 'default',
-            duration: 8000,
-          });
-        }
-        // Sync voucher_entries regardless — they use base columns we just confirmed
-        if (!opts.isUpdate) syncEntries(v);
-      });
+      const EXTRAS_MAX_RETRIES = 1;
+      const patchExtras = (tries: number) => {
+        supabase.from('vouchers').update(extras).eq('id', v.id).then(({ error: e2 }) => {
+          if (e2) {
+            if (tries < EXTRAS_MAX_RETRIES) { setTimeout(() => patchExtras(tries + 1), 1500); return; }
+            console.warn('Voucher extras patch failed (run latest supabase-tables.sql migration):', e2.message);
+            toastRef.current(extrasFailureToast(hasCritical, e2.message));
+          }
+          // Sync voucher_entries once, at the terminal outcome — they use confirmed base columns.
+          if (!opts.isUpdate) syncEntries(v);
+        });
+      };
+      patchExtras(0);
       }); // close verify .then
     }, (rejection: unknown) => {
       // Promise rejection (network error, fetch abort) — supabase-js usually resolves
@@ -1048,6 +1146,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         variant: 'destructive',
       });
       // Return a dummy voucher object to satisfy the return type — caller must handle gracefully
+      return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    }
+    // ECR-07: block back-dating a new voucher into a locked period.
+    if (guardPeriodLock(data.date)) {
       return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     }
 
@@ -1112,6 +1214,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const amount = data.amount || drLines.reduce((s, l) => s + l.amount, 0);
 
     const voucherNo = data.voucherNo?.trim() || storage.getNextVoucherNo(data.type, society.financialYear, vouchersRef.current);
+    // ECR-11: hold MANUAL vouchers for approval when the matrix matches (all-manual flag OR
+    // amount ≥ threshold). Only origin==='manual' is subject to this — auto/engine vouchers
+    // are never held. If the caller already set a status, respect it.
+    const needsApproval = data.origin === 'manual' && data.approvalStatus === undefined &&
+      requiresApproval(amount, { approvalRequired: society.approvalRequired, threshold: society.approvalThresholdAmount });
     const newVoucher: Voucher = {
       ...data,
       id: lid(),
@@ -1120,6 +1227,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       debitAccountId,
       creditAccountId,
       amount,
+      approvalStatus: needsApproval ? 'pending' : data.approvalStatus,
       createdAt: new Date().toISOString(),
     };
     // Update ref immediately so the next addVoucher call in the same tick sees this voucher
@@ -1261,6 +1369,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
+    // ECR-07: can neither edit a voucher within a locked period nor move one into it.
+    if (guardPeriodLock(current.date, data.date)) return;
+    // ECR-08: a reversed voucher — or an approved one under maker-checker — is edit-locked;
+    // corrections must go through a reversal, not an in-place edit.
+    if (isEditLocked(current, !!societyRef.current?.approvalRequired)) {
+      toastRef.current({
+        title: '🔁 सीधे edit नहीं / Use reversal',
+        description: current.reversedBy
+          ? 'यह वाउचर पहले ही reverse हो चुका है — edit नहीं हो सकता।'
+          : 'Approved voucher सीधे edit नहीं होता — correction के लिए इसे reverse करें (Reversal voucher बनेगा)।',
+        variant: 'destructive', duration: 9000,
+      });
+      return;
+    }
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
     // Capture edit audit snapshot — only track the fields that actually changed
     const changedFields = (Object.keys(data) as (keyof typeof data)[]).filter(
@@ -1341,6 +1463,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return false;
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
+    // ECR-08: a reversed voucher must not also be cancelled — its reversal would then
+    // net against nothing (phantom entry). Correction already stands via the reversal.
+    if (current.reversedBy) {
+      toastRef.current({ title: 'रद्द नहीं होगा', description: 'यह वाउचर reverse हो चुका है — इसकी reversal entry ही correction है। इसे cancel न करें।', variant: 'destructive', duration: 9000 });
+      return false;
+    }
 
     // 🔒 Block deletion of vouchers ACTIVELY linked to a Purchase / Sale parent.
     // If the parent purchase/sale no longer points to THIS voucher (i.e., it's an
@@ -1420,6 +1548,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const cancelledVoucher = { ...current, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy, deletedReason: reason };
+    emitAudit({ entityType: 'voucher', entityId: id, action: 'cancel', reason });
     setVouchersState(prev => {
       const updated = prev.map(v => v.id === id ? cancelledVoucher : v);
       return updated;
@@ -1434,6 +1563,54 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return true;
   }, []);
+
+  // ECR-08 (P1 #8): correct a posted voucher by posting a LINKED contra reversal (Dr↔Cr
+  // swapped) instead of editing it in place. Both entries stay in the ledger (net zero),
+  // audit-visible — unlike a soft-delete. The reversal is dated today (must be in an open
+  // period). Reversal linkage (reversalOf / reversedBy) is persisted via targeted best-effort
+  // .update() so the base upserts stay safe before the migration runs.
+  const reverseVoucher = useCallback((id: string, reason: string): Voucher | null => {
+    if (guardFYLocked()) return null;
+    const current = vouchersRef.current.find(v => v.id === id);
+    if (!current) return null;
+    if (current.isDeleted) { toastRef.current({ title: 'रद्द वाउचर', description: 'रद्द किया हुआ वाउचर reverse नहीं होता।', variant: 'destructive' }); return null; }
+    if (current.reversedBy) { toastRef.current({ title: 'पहले से reversed', description: `यह वाउचर पहले ही reverse हो चुका है।`, variant: 'destructive' }); return null; }
+    if (current.reversalOf) { toastRef.current({ title: 'यह स्वयं reversal है', description: 'Reversal entry को दोबारा reverse नहीं किया जाता।', variant: 'destructive' }); return null; }
+    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return null; }
+    const revDate = new Date().toISOString().split('T')[0];
+    if (guardPeriodLock(revDate)) return null; // reversal must post into an open period
+
+    // Build the contra reversal: swap Dr/Cr (and flip each compound line). addVoucher runs
+    // its own FY/period-lock + balance checks and returns id:'' on failure.
+    const revLines = current.lines ? reverseEntryLines(current.lines).map(l => ({ ...l, id: crypto.randomUUID() })) : undefined;
+    const reversal = addVoucher({
+      type: current.type,
+      date: revDate,
+      debitAccountId: current.creditAccountId,
+      creditAccountId: current.debitAccountId,
+      amount: current.amount,
+      narration: `Reversal of ${current.voucherNo}${reason ? ' — ' + reason : ''}`,
+      memberId: current.memberId,
+      lines: revLines,
+    });
+    if (!reversal?.id) return null; // addVoucher blocked (FY-lock / unbalanced / etc.)
+
+    // Link both sides. reversalOf/reversedBy are late-added columns → targeted best-effort
+    // .update() (same approach as the delete columns), never part of a base upsert.
+    const linkedReversal = { ...reversal, reversalOf: current.id };
+    const linkedOriginal = { ...current, reversedBy: reversal.id };
+    vouchersRef.current = vouchersRef.current.map(v => v.id === reversal.id ? linkedReversal : v.id === id ? linkedOriginal : v);
+    setVouchersState(prev => prev.map(v => v.id === reversal.id ? linkedReversal : v.id === id ? linkedOriginal : v));
+    supabase.from('vouchers').update({ reversalOf: current.id }).eq('id', reversal.id).then(({ error }) => {
+      if (error) console.warn('Reversal link (reversalOf) not persisted — run latest migration:', error.message);
+    });
+    supabase.from('vouchers').update({ reversedBy: reversal.id }).eq('id', id).then(({ error }) => {
+      if (error) console.warn('Reversal link (reversedBy) not persisted — run latest migration:', error.message);
+    });
+    emitAudit({ entityType: 'voucher', entityId: id, action: 'reverse', before: { reversedBy: null }, after: { reversedBy: reversal.id }, reason });
+    toastRef.current({ title: '🔁 Reversal बन गया', description: `${current.voucherNo} के लिए reversal ${reversal.voucherNo} पोस्ट हो गया। दोनों entries ledger में दिखेंगी (net zero)।`, variant: 'default', duration: 8000 });
+    return reversal;
+  }, [addVoucher]);
 
   const restoreVoucher = useCallback((id: string) => {
     if (guardFYLocked()) return;
@@ -1467,6 +1644,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { deletedAt: _da, deletedBy: _db, deletedReason: _dr, ...rest } = current as Voucher & { deletedAt?: string; deletedBy?: string; deletedReason?: string };
     const restoredVoucher = { ...rest, isDeleted: false };
+    emitAudit({ entityType: 'voucher', entityId: id, action: 'restore' });
     setVouchersState(prev => {
       const updated = prev.map(v => v.id === id ? restoredVoucher : v);
       return updated;
@@ -1513,10 +1691,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const approveVoucher = useCallback((id: string, approvedBy: string) => {
     if (guardFYLocked()) return;
+    if (guardPermission('approve', 'वाउचर अप्रूव करने')) return; // SL-06: segregation of duties
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
     const updated = { ...current, approvalStatus: 'approved' as const, approvedBy, approvedAt: new Date().toISOString() };
+    emitAudit({ entityType: 'voucher', entityId: id, action: 'approve', before: { approvalStatus: current.approvalStatus ?? null }, after: { approvalStatus: 'approved' } });
     setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); return u; });
     supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => {
       if (error) {
@@ -1530,10 +1710,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const rejectVoucher = useCallback((id: string, rejectedBy: string, reason: string) => {
     if (guardFYLocked()) return;
+    if (guardPermission('reject', 'वाउचर रिजेक्ट करने')) return; // SL-06: segregation of duties
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
     const updated = { ...current, approvalStatus: 'rejected' as const, approvalRemarks: reason, approvedBy: rejectedBy, approvedAt: new Date().toISOString() };
+    emitAudit({ entityType: 'voucher', entityId: id, action: 'reject', before: { approvalStatus: current.approvalStatus ?? null }, after: { approvalStatus: 'rejected' }, reason });
     setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); return u; });
     supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => {
       if (error) {
@@ -1583,7 +1765,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deleteAuditObjection = useCallback((id: string) => {
     if (guardFYLocked()) return;
     setAuditObjectionsState(prev => { const updated = prev.filter(o => o.id !== id); return updated; });
-    supabase.from('audit_objections').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // Soft-delete (P0 #2): retain the audit-objection row (isDeleted=true) — statutory
+    // register must persist. Load filters isDeleted out on refresh.
+    supabase.from('audit_objections').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    emitAudit({ entityType: 'auditObjection', entityId: id, action: 'delete', reason: 'Audit objection deleted' });
     console.info(`[AUDIT-DELETE] AuditObjection id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
@@ -1777,13 +1962,54 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
+  // ECR-16 (member lifecycle): record a lifecycle transition (resign/expel/death/reactivate)
+  // with reason + date. `status` (base column) is persisted reliably; the reason/date
+  // metadata rides a targeted best-effort .update() so the change is safe pre-migration.
+  const changeMemberStatus = useCallback((id: string, newStatus: MemberStatus, reason: string): boolean => {
+    if (guardFYLocked()) return false;
+    const current = membersRef.current.find(m => m.id === id);
+    if (!current) return false;
+    if (!canTransitionMember(current.status, newStatus)) {
+      toastRef.current({
+        title: 'बदलाव मान्य नहीं / Invalid change',
+        description: current.status === 'deceased'
+          ? 'मृत सदस्य की स्थिति नहीं बदली जा सकती। (A deceased member cannot be reactivated.)'
+          : 'यह बदलाव मान्य नहीं (वही स्थिति पहले से है)।',
+        variant: 'destructive', duration: 8000,
+      });
+      return false;
+    }
+    const changedAt = new Date().toISOString().split('T')[0];
+    const updated: Member = { ...current, status: newStatus, statusReason: reason, statusChangedAt: changedAt };
+    membersRef.current = membersRef.current.map(m => m.id === id ? updated : m);
+    setMembersState(prev => prev.map(m => m.id === id ? updated : m));
+    // Persist status (base column) reliably — roll back on failure (RULE 1).
+    supabase.from('members').update({ status: newStatus }).eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error (member status):', error.message);
+        membersRef.current = membersRef.current.map(m => m.id === id ? current : m);
+        setMembersState(prev => prev.map(m => m.id === id ? current : m));
+        toastRef.current({ title: 'स्थिति सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    // Metadata (late-added columns) — best-effort; base status above is already safe.
+    supabase.from('members').update({ statusReason: reason, statusChangedAt: changedAt }).eq('id', id).then(({ error }) => {
+      if (error) console.warn('Member status metadata not persisted — run latest supabase-tables.sql migration:', error.message);
+    });
+    emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { status: current.status }, after: { status: newStatus }, reason });
+    toastRef.current({ title: '✅ सदस्य स्थिति अपडेट', description: `${current.name}: ${current.status} → ${newStatus}`, variant: 'default', duration: 6000 });
+    return true;
+  }, []);
+
   const deleteMember = useCallback((id: string) => {
     if (guardFYLocked()) return;
     setMembersState(prev => {
       const updated = prev.filter(m => m.id !== id);
       return updated;
     });
-    supabase.from('members').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // Soft-delete (P0 #2): retain the row (isDeleted=true) for statutory retention & audit.
+    // The in-memory removal above hides it from the app; load filters isDeleted out on refresh.
+    supabase.from('members').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     // RULE 3: soft-cancel the member's auto-generated vouchers (share capital /
     // admission fee) so no ghost Share Capital lingers in the Trial Balance.
     const now = new Date().toISOString();
@@ -1794,6 +2020,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setVouchersState(prev => prev.map(cancel));
       linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) console.error('Member voucher cancel sync:', error.message); else deleteEntries(vid); }));
     }
+    emitAudit({ entityType: 'member', entityId: id, action: 'delete', reason: 'Member deleted' });
     console.info(`[AUDIT-DELETE] Member id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
@@ -1830,6 +2057,48 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
   }, [accounts, addVoucher, user]);
+
+  // ECR-16 / MS-02: statutory share operations — bonus / forfeit / redeem / surrender.
+  // Posts the SHARE_CAP voucher and moves member.shareCapital by the same amount so the
+  // per-member ledger (getMemberLedger) and the scalar stay in lock-step. Mirrors the
+  // refundShareCapital pattern (post voucher → adjust scalar → RULE 1 rollback on failure).
+  const shareOperation = useCallback((memberId: string, type: ShareOpType, amount: number,
+    opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string; date?: string; reason?: string }): boolean => {
+    if (guardFYLocked()) return false;
+    const member = membersRef.current.find(m => m.id === memberId);
+    if (!member) return false;
+    const amt = Math.round(amount * 100) / 100;
+    const v = validateShareOp(type, amt, member.shareCapital || 0);
+    if (!v.ok) { toastRef.current({ title: 'अमान्य शेयर संचालन', description: v.error, variant: 'destructive', duration: 9000 }); return false; }
+    const date = opts?.date || new Date().toISOString().split('T')[0];
+    if (guardPeriodLock(date)) return false;
+    const payout = opts?.mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const reserve = opts?.reserveAccountId || '1201';
+    const posting = shareOpPosting(type, { shareCap: ACCOUNT_IDS.SHARE_CAP, payout, reserve });
+    const LABELS: Record<ShareOpType, string> = { bonus: 'Bonus shares issued to', forfeit: 'Shares forfeited from', redeem: 'Shares redeemed for', surrender: 'Shares surrendered by' };
+    const voucher = addVoucher({
+      type: posting.usesCash ? 'payment' : 'journal', date,
+      debitAccountId: posting.debitAccountId, creditAccountId: posting.creditAccountId, amount: amt,
+      narration: `${LABELS[type]} ${member.name}${opts?.reason ? ' — ' + opts.reason : ''}`,
+      createdBy: userRef.current?.name ?? 'System', memberId,
+    });
+    if (!voucher?.id) return false; // addVoucher blocked (FY-lock / period-lock / unbalanced)
+    const before = member;
+    const updated = { ...member, shareCapital: applyShareOp(type, member.shareCapital || 0, amt) };
+    membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
+    setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
+    supabase.from('members').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Share operation member sync:', error.message);
+        membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
+        setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
+        toastRef.current({ title: 'शेयर संचालन सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital }, after: { shareCapital: updated.shareCapital }, reason: `share:${type}${opts?.reason ? ' — ' + opts.reason : ''}` });
+    toastRef.current({ title: '✅ शेयर संचालन दर्ज', description: `${LABELS[type]} ${member.name} · ₹${amt.toLocaleString('en-IN')}`, variant: 'default' });
+    return true;
+  }, [accounts, addVoucher]);
 
   // Additional share purchase — a member buys MORE shares over time. Inverse of the
   // refund: posts a SEPARATE dated voucher Dr Cash-Bank / Cr Share Capital 1102
@@ -1869,7 +2138,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // bridged by the Suspense account (9999) so BOTH member sub-ledgers reflect the move
   // (each voucher carries a single memberId): the transferor gets Dr 1102 / Cr 9999, the
   // transferee gets Dr 9999 / Cr 1102. GL 1102 + 9999 both net to zero.
-  const transferShareCapital = useCallback((fromMemberId: string, toMemberId: string, amount: number, date: string) => {
+  const transferShareCapital = useCallback((fromMemberId: string, toMemberId: string, amount: number, date: string, premium = 0, opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string }) => {
     if (guardFYLocked()) return;
     if (fromMemberId === toMemberId) { toastRef.current({ title: 'Invalid transfer', description: 'Choose a different recipient.', variant: 'destructive' }); return; }
     const from = membersRef.current.find(m => m.id === fromMemberId);
@@ -1877,6 +2146,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!from || !to) return;
     const amt = Math.round((Math.max(0, Math.min(amount, from.shareCapital || 0))) * 100) / 100;
     if (!(amt > 0)) { toastRef.current({ title: 'Invalid amount', description: 'Amount must be > 0 and ≤ the sender\'s share capital.', variant: 'destructive' }); return; }
+    // ECR-16 (MS-11): enforce the share-transfer premium cap (% of face value) BEFORE posting.
+    const prem = Math.round((Math.max(0, premium || 0)) * 100) / 100;
+    if (prem > 0) {
+      const capPct = societyRef.current?.maxSharePremiumPercent ?? 0;
+      const cap = Math.round((amt * capPct / 100) * 100) / 100;
+      if (!(capPct > 0) || prem > cap) {
+        toastRef.current({
+          title: 'प्रीमियम सीमा से अधिक / Premium over cap',
+          description: capPct > 0
+            ? `प्रीमियम ₹${prem.toLocaleString('en-IN')} अधिकतम ₹${cap.toLocaleString('en-IN')} (${capPct}% of ₹${amt.toLocaleString('en-IN')}) से ज़्यादा है।`
+            : 'इस समिति में शेयर-ट्रांसफर प्रीमियम की अनुमति नहीं है (cap 0%)। पहले "Max transfer premium %" सेट करें।',
+          variant: 'destructive', duration: 10000,
+        });
+        return;
+      }
+    }
     const SUSPENSE = '9999';
     addVoucher({
       type: 'journal', date, debitAccountId: ACCOUNT_IDS.SHARE_CAP, creditAccountId: SUSPENSE, amount: amt,
@@ -1888,6 +2173,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       narration: `Shares transferred from ${from.name} to ${to.name} — ${date}`,
       createdBy: user?.name ?? 'System', memberId: toMemberId,
     });
+    // ECR-16 (MS-11): premium paid to the society → Dr Cash/Bank / Cr Reserve (capped above).
+    if (prem > 0) {
+      const payout = opts?.mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+      addVoucher({
+        type: 'receipt', date, debitAccountId: payout, creditAccountId: opts?.reserveAccountId || '1201', amount: prem,
+        narration: `Share transfer premium from ${to.name} (transfer from ${from.name}) — ${date}`,
+        createdBy: user?.name ?? 'System', memberId: toMemberId,
+      });
+    }
     const beforeFrom = from, beforeTo = to;
     const updFrom = { ...from, shareCapital: Math.round(((from.shareCapital || 0) - amt) * 100) / 100 };
     const updTo = { ...to, shareCapital: Math.round(((to.shareCapital || 0) + amt) * 100) / 100 };
@@ -1901,10 +2195,214 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) { console.error('Share transfer (from) sync:', error.message); rollback(); return; }
       supabase.from('members').upsert(withSoc(updTo)).then(({ error: e2 }) => {
         if (e2) { console.error('Share transfer (to) sync:', e2.message); rollback(); }
-        else toastRef.current({ title: '✅ शेयर स्थानांतरित', description: `₹${amt.toLocaleString('en-IN')} · ${from.name} → ${to.name}` });
+        else toastRef.current({ title: '✅ शेयर स्थानांतरित', description: `₹${amt.toLocaleString('en-IN')} · ${from.name} → ${to.name}${prem > 0 ? ` (+ प्रीमियम ₹${prem.toLocaleString('en-IN')})` : ''}` });
       });
     });
-  }, [addVoucher, user]);
+  }, [accounts, addVoucher, user]);
+
+  // ══ Deposits module (Core for Credit/PACS) — SB / FD / RD / Pigmy ═══════════
+  // A member deposit is a LIABILITY (society owes the member). Slice 1 wires SB
+  // open/deposit/withdraw: each cash movement posts a voucher (Dr/Cr the 2107/2108
+  // liability) and updates the account balance + the deposit sub-ledger.
+  const nextDepositAccountNo = (type: DepositType): string => {
+    const yy = (societyRef.current?.financialYear || '').split('-')[0] || new Date().toISOString().slice(0, 4);
+    const n = depositAccountsRef.current.filter(d => d.depositType === type).length + 1;
+    return `${type}/${yy}/${String(n).padStart(4, '0')}`;
+  };
+
+  // Post the cash voucher + sub-ledger transaction for a deposit movement. Returns the
+  // new balance, or null if the voucher was blocked (FY/period lock / unbalanced).
+  const postDepositLeg = (acct: DepositAccount, txnType: DepositTxnType, amount: number, mode: 'cash' | 'bank', date: string): number | null => {
+    const liability = depositLiabilityAccount(acct.depositType);
+    const cashBank = mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const posting = depositPosting(txnType, { liability, cashBank });
+    const member = membersRef.current.find(m => m.id === acct.memberId);
+    const voucher = addVoucher({
+      type: txnType === 'withdraw' ? 'payment' : 'receipt', date,
+      debitAccountId: posting.debitAccountId, creditAccountId: posting.creditAccountId, amount,
+      narration: `${acct.depositType} ${txnType} — ${acct.accountNo}${member ? ' · ' + member.name : ''}`,
+      createdBy: userRef.current?.name ?? 'System', memberId: acct.memberId,
+    });
+    if (!voucher?.id) return null;
+    const balanceAfter = applyDepositTxn(acct.balance, txnType, amount);
+    const txn: DepositTransaction = {
+      id: crypto.randomUUID(), depositAccountId: acct.id, date, txnType, amount, mode,
+      voucherId: voucher.id, balanceAfter, createdAt: new Date().toISOString(),
+    };
+    setDepositTransactionsState(prev => [...prev, txn]);
+    supabase.from('deposit_transactions').upsert(withSoc(txn)).then(({ error }) => {
+      if (error) console.warn('Deposit txn sync failed (run latest migration):', error.message);
+    });
+    return balanceAfter;
+  };
+
+  const addDepositAccount = useCallback((data: Omit<DepositAccount, 'id' | 'accountNo' | 'balance' | 'status' | 'createdAt'> & { openingAmount?: number; mode?: 'cash' | 'bank' }): DepositAccount | null => {
+    if (guardFYLocked()) return null;
+    const { openingAmount = 0, mode = 'cash', ...rest } = data;
+    const acct: DepositAccount = {
+      ...rest, id: crypto.randomUUID(), accountNo: nextDepositAccountNo(data.depositType),
+      balance: 0, status: 'active', createdAt: new Date().toISOString(),
+    };
+    depositAccountsRef.current = [...depositAccountsRef.current, acct];
+    setDepositAccountsState(prev => [...prev, acct]);
+    const persist = (a: DepositAccount) => supabase.from('deposit_accounts').upsert(withSoc(a)).then(({ error }) => {
+      if (error) {
+        console.error('Deposit account sync:', error.message);
+        depositAccountsRef.current = depositAccountsRef.current.filter(d => d.id !== a.id);
+        setDepositAccountsState(prev => prev.filter(d => d.id !== a.id));   // RULE 1: roll back
+        toastRef.current({ title: 'जमा खाता सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    // Opening deposit (if any) posts a voucher + first transaction, then re-persist with the balance.
+    const opening = Math.round(Math.max(0, openingAmount) * 100) / 100;
+    if (opening > 0) {
+      const newBal = postDepositLeg(acct, 'open', opening, mode, acct.openDate);
+      if (newBal !== null) {
+        const withBal = { ...acct, balance: newBal };
+        depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === acct.id ? withBal : d);
+        setDepositAccountsState(prev => prev.map(d => d.id === acct.id ? withBal : d));
+        persist(withBal);
+        emitAudit({ entityType: 'deposit', entityId: acct.id, action: 'create', after: { accountNo: acct.accountNo, type: acct.depositType, opening } });
+        toastRef.current({ title: '✅ जमा खाता खुला', description: `${acct.accountNo} · ₹${opening.toLocaleString('en-IN')}` });
+        return withBal;
+      }
+    }
+    persist(acct);
+    emitAudit({ entityType: 'deposit', entityId: acct.id, action: 'create', after: { accountNo: acct.accountNo, type: acct.depositType } });
+    toastRef.current({ title: '✅ जमा खाता खुला', description: acct.accountNo });
+    return acct;
+  }, [accounts, addVoucher]);
+
+  const postDepositTransaction = useCallback((accountId: string, txnType: 'deposit' | 'withdraw', amount: number, mode: 'cash' | 'bank', date: string): boolean => {
+    if (guardFYLocked()) return false;
+    const acct = depositAccountsRef.current.find(d => d.id === accountId);
+    if (!acct) return false;
+    if (acct.status !== 'active') { toastRef.current({ title: 'खाता सक्रिय नहीं', description: 'Only active deposit accounts can transact.', variant: 'destructive' }); return false; }
+    const amt = Math.round(amount * 100) / 100;
+    const v = validateDepositTxn(txnType, amt, acct.balance);
+    if (!v.ok) { toastRef.current({ title: 'अमान्य लेनदेन', description: v.error, variant: 'destructive', duration: 9000 }); return false; }
+    const before = acct;
+    const newBal = postDepositLeg(acct, txnType, amt, mode, date);
+    if (newBal === null) return false; // voucher blocked
+    const updated = { ...acct, balance: newBal };
+    depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? updated : d);
+    setDepositAccountsState(prev => prev.map(d => d.id === accountId ? updated : d));
+    supabase.from('deposit_accounts').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Deposit txn balance sync:', error.message);
+        depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
+        setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
+        toastRef.current({ title: 'लेनदेन सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { balance: before.balance }, after: { balance: newBal, txn: txnType, amount: amt } });
+    toastRef.current({ title: txnType === 'deposit' ? '✅ जमा' : '✅ निकासी', description: `${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · शेष ₹${newBal.toLocaleString('en-IN')}` });
+    return true;
+  }, [accounts, addVoucher]);
+
+  // Credit interest to a deposit account: Dr Interest-on-Deposits expense (5604 Interest on
+  // Borrowings — member deposits are borrowings from members) / Cr the deposit liability.
+  // Not a cash movement — it increases the member's balance.
+  const postDepositInterest = useCallback((accountId: string, amount: number, date: string): boolean => {
+    if (guardFYLocked()) return false;
+    const acct = depositAccountsRef.current.find(d => d.id === accountId);
+    if (!acct) return false;
+    if (acct.status !== 'active') { toastRef.current({ title: 'खाता सक्रिय नहीं', description: 'Only active deposit accounts can accrue interest.', variant: 'destructive' }); return false; }
+    const amt = Math.round(amount * 100) / 100;
+    if (!(amt > 0)) { toastRef.current({ title: 'अमान्य राशि', description: 'Interest must be greater than 0.', variant: 'destructive' }); return false; }
+    const liability = depositLiabilityAccount(acct.depositType);
+    const member = membersRef.current.find(m => m.id === acct.memberId);
+    const voucher = addVoucher({
+      type: 'journal', date, debitAccountId: '5604', creditAccountId: liability, amount: amt,
+      narration: `Interest on ${acct.depositType} deposit ${acct.accountNo}${member ? ' · ' + member.name : ''}`,
+      createdBy: userRef.current?.name ?? 'System', memberId: acct.memberId,
+    });
+    if (!voucher?.id) return false;
+    const before = acct;
+    const newBal = applyDepositTxn(acct.balance, 'interest', amt);
+    const updated = { ...acct, balance: newBal };
+    depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? updated : d);
+    setDepositAccountsState(prev => prev.map(d => d.id === accountId ? updated : d));
+    supabase.from('deposit_accounts').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Deposit interest balance sync:', error.message);
+        depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
+        setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
+        toastRef.current({ title: 'ब्याज सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    const txn: DepositTransaction = {
+      id: crypto.randomUUID(), depositAccountId: accountId, date, txnType: 'interest', amount: amt, mode: 'cash',
+      voucherId: voucher.id, balanceAfter: newBal, createdAt: new Date().toISOString(),
+    };
+    setDepositTransactionsState(prev => [...prev, txn]);
+    supabase.from('deposit_transactions').upsert(withSoc(txn)).then(({ error }) => { if (error) console.warn('Deposit interest txn sync:', error.message); });
+    emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { balance: before.balance }, after: { balance: newBal, interest: amt } });
+    toastRef.current({ title: '✅ ब्याज जमा', description: `${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · शेष ₹${newBal.toLocaleString('en-IN')}` });
+    return true;
+  }, [addVoucher]);
+
+  // Mature / close a deposit account: pay out the full balance (Dr liability / Cr Cash-Bank)
+  // and mark it matured (FD/RD) or closed (SB/Pigmy). A zero-balance account just closes.
+  const closeDepositAccount = useCallback((accountId: string, mode: 'cash' | 'bank', date: string): boolean => {
+    if (guardFYLocked()) return false;
+    const acct = depositAccountsRef.current.find(d => d.id === accountId);
+    if (!acct) return false;
+    if (acct.status !== 'active') { toastRef.current({ title: 'खाता पहले से बंद', description: 'Account is not active.', variant: 'destructive' }); return false; }
+    const before = acct;
+    let newBal = acct.balance;
+    if (acct.balance > 0) {
+      const b = postDepositLeg(acct, 'closure', acct.balance, mode, date);
+      if (b === null) return false; // payout voucher blocked (FY/period lock)
+      newBal = b;
+    }
+    const newStatus: DepositAccount['status'] = (acct.depositType === 'FD' || acct.depositType === 'RD') ? 'matured' : 'closed';
+    const updated = { ...acct, balance: newBal, status: newStatus };
+    depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? updated : d);
+    setDepositAccountsState(prev => prev.map(d => d.id === accountId ? updated : d));
+    supabase.from('deposit_accounts').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Deposit close sync:', error.message);
+        depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
+        setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
+        toastRef.current({ title: 'बंद करना सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { status: before.status, balance: before.balance }, after: { status: newStatus, balance: newBal } });
+    toastRef.current({ title: newStatus === 'matured' ? '✅ जमा परिपक्व' : '✅ जमा खाता बंद', description: `${acct.accountNo}${acct.balance > 0 ? ` · भुगतान ₹${acct.balance.toLocaleString('en-IN')}` : ''}` });
+    return true;
+  }, [accounts, addVoucher]);
+
+  const getDepositTransactions = useCallback((accountId: string): DepositTransaction[] =>
+    depositTransactions.filter(t => t.depositAccountId === accountId)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt)),
+    [depositTransactions]);
+
+  // ECR-13: mark a compliance calendar item as filed (idempotent) / unmark it.
+  const markComplianceFiled = useCallback((itemId: string, note?: string): void => {
+    if (complianceFilingsRef.current.some(f => f.itemId === itemId)) return;
+    const filing: ComplianceFiling = { id: crypto.randomUUID(), itemId, filedAt: new Date().toISOString().split('T')[0], filedBy: userRef.current?.name, note };
+    complianceFilingsRef.current = [...complianceFilingsRef.current, filing];
+    setComplianceFilingsState(prev => [...prev, filing]);
+    supabase.from('compliance_filings').upsert(withSoc(filing)).then(({ error }) => {
+      if (error) {
+        console.error('Compliance filing sync:', error.message);
+        complianceFilingsRef.current = complianceFilingsRef.current.filter(f => f.id !== filing.id);
+        setComplianceFilingsState(prev => prev.filter(f => f.id !== filing.id));   // RULE 1: roll back
+        toastRef.current({ title: 'सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 10000 });
+      }
+    });
+    emitAudit({ entityType: 'compliance', entityId: itemId, action: 'update', after: { filed: true } });
+  }, []);
+  const unmarkComplianceFiled = useCallback((itemId: string): void => {
+    const filing = complianceFilingsRef.current.find(f => f.itemId === itemId);
+    if (!filing) return;
+    complianceFilingsRef.current = complianceFilingsRef.current.filter(f => f.itemId !== itemId);
+    setComplianceFilingsState(prev => prev.filter(f => f.itemId !== itemId));
+    supabase.from('compliance_filings').delete().eq('id', filing.id).then(({ error }) => { if (error) console.warn('Compliance filing delete:', error.message); });
+    emitAudit({ entityType: 'compliance', entityId: itemId, action: 'update', after: { filed: false } });
+  }, []);
+  const getComplianceFiledIds = useCallback((): string[] => complianceFilings.map(f => f.itemId), [complianceFilings]);
 
   // ── Housing Flats/Units register (master data; Member-pattern persistence + RULE-1 rollback) ──
   // ── Labour Work Orders register (master data; Member-pattern persistence + RULE-1 rollback) ──
@@ -2849,8 +3347,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return voucher;
   }, [user, accounts, addVoucher, procurementSettlements]);
 
-  // Only active (non-deleted) vouchers for all financial calculations
-  const activeVouchers = vouchers.filter(v => !v.isDeleted);
+  // Only active vouchers for all financial calculations. A voucher counts iff:
+  //  • not soft-deleted, AND
+  //  • not REJECTED — rejected vouchers must never affect reports (the SQL side already
+  //    drops them via deleteEntries; this closes the client-vs-SQL divergence so both agree), AND
+  //  • not a held PENDING voucher when the society has opted into approval-gating
+  //    (society.approvalRequired = maker-checker). Approved / unmarked (undefined) vouchers
+  //    always count, so behaviour is unchanged for every society that has NOT opted in.
+  const activeVouchers = vouchers.filter(v =>
+    !v.isDeleted &&
+    v.approvalStatus !== 'rejected' &&
+    !(society.approvalRequired && v.approvalStatus === 'pending')
+  );
 
   const getAccountBalance = useCallback((accountId: string): number => {
     const account = accounts.find(a => a.id === accountId);
@@ -2863,6 +3371,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return balance;
   }, [accounts, activeVouchers]);
+
+  // P0 #4 / ECR-05 (MS-03): detect drift between the member scalar (subsidiary) and the
+  // Share-Capital ledger account (control). getAccountBalance returns a signed (Dr−Cr)
+  // balance, so negate for the equity credit magnitude. Detection only — nothing is mutated.
+  const getShareCapitalReconciliation = useCallback((): ShareCapitalReconciliation => {
+    const controlBalance = -getAccountBalance(ACCOUNT_IDS.SHARE_CAP);
+    return reconcileShareCapital(sumActiveMemberShareCapital(members), controlBalance);
+  }, [members, getAccountBalance]);
 
   const getCashBookEntries = useCallback((fromDate?: string, toDate?: string): CashBookEntry[] => {
     const cashAccount = accounts.find(a => a.id === ACCOUNT_IDS.CASH);
@@ -3052,6 +3568,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return result;
   }, [members, activeVouchers]);
 
+  // ECR-16 / MS-03: per-member share reconciliation — the voucher-derived ledger balance
+  // vs the member.shareCapital scalar (extends the global P0 #4 reconciliation to each member).
+  const getMemberShareReconciliation = useCallback((memberId: string): ShareCapitalReconciliation | null => {
+    const member = members.find(m => m.id === memberId);
+    if (!member) return null;
+    const entries = getMemberLedger(memberId);
+    const ledgerBalance = entries.length ? entries[entries.length - 1].balance : (member.shareCapital || 0);
+    return reconcileShareCapital(member.shareCapital || 0, ledgerBalance);
+  }, [members, getMemberLedger]);
+
   const addLoan = useCallback((data: Omit<Loan, 'id' | 'loanNo' | 'createdAt'>): Loan => {
     if (guardFYLocked()) return { ...data, id: '' } as unknown as Loan;
     const fy = society.financialYear;
@@ -3137,13 +3663,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.info(`[AUDIT-DELETE] Loan id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
-  const addAsset = useCallback((data: Omit<Asset, 'id' | 'assetNo'>): Asset => {
+  const addAsset = useCallback((data: Omit<Asset, 'id' | 'assetNo'>, opts?: { capitalize?: boolean; mode?: 'cash' | 'bank' }): Asset => {
     if (guardFYLocked()) return { ...data, id: '' } as unknown as Asset;
     const maxNum = assetsRef.current.reduce((max, a) => {
       const m = a.assetNo?.match(/AST\/(\d+)/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
     }, 0);
     const assetNo = `AST/${String(maxNum + 1).padStart(4, '0')}`;
-    const newAsset: Asset = { ...data, id: crypto.randomUUID(), assetNo };
+    let newAsset: Asset = { ...data, id: crypto.randomUUID(), assetNo };
+    // ECR-15: capitalize a NEW purchase — Dr Fixed-Asset / Cr Cash-Bank. Off by default so
+    // opening/historical assets stay register-only (no voucher, no double-count).
+    if (opts?.capitalize && (data.cost || 0) > 0) {
+      const cashBank = opts.mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+      const posting = assetAcquisitionPosting(data.category, data.cost, cashBank);
+      const v = addVoucher({
+        type: 'payment', date: data.purchaseDate || new Date().toISOString().split('T')[0],
+        debitAccountId: posting.assetAccount, creditAccountId: cashBank, amount: posting.amount,
+        lines: posting.lines.map(l => ({ id: crypto.randomUUID(), accountId: l.accountId, type: l.type, amount: l.amount })),
+        narration: `Asset acquisition: ${assetNo} ${data.name} — capitalized ₹${posting.amount.toLocaleString('en-IN')}`,
+        createdBy: userRef.current?.name ?? 'System',
+      });
+      if (v?.id) newAsset = { ...newAsset, acquisitionVoucherId: v.id };
+    }
     assetsRef.current = [...assetsRef.current, newAsset];
     setAssetsState(prev => { const updated = [...prev, newAsset]; return updated; });
     supabase.from('assets').upsert(withSoc(newAsset)).then(({ error }) => {
@@ -3155,7 +3695,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
     return newAsset;
-  }, []);
+  }, [accounts, addVoucher]);
 
   const updateAsset = useCallback((id: string, data: Partial<Asset>) => {
     if (guardFYLocked()) return;
@@ -3172,11 +3712,55 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, []);
 
+  // ECR-15: dispose (sell/scrap) an asset. Computes accumulated depreciation to the disposal
+  // FY, posts the standard disposal journal (Dr Cash/Bank + Dr Accum-Dep + optional Dr Loss;
+  // Cr Fixed-Asset cost + optional Cr Profit), and marks the asset disposed. RULE 1 rollback.
+  const disposeAsset = useCallback((id: string, opts: { saleProceeds: number; mode: 'cash' | 'bank'; date: string }): boolean => {
+    if (guardFYLocked()) return false;
+    const asset = assetsRef.current.find(a => a.id === id);
+    if (!asset) return false;
+    if (asset.status === 'disposed') { toastRef.current({ title: 'पहले से disposed', description: 'This asset is already disposed.', variant: 'destructive' }); return false; }
+    // Accumulated depreciation from purchase FY through the disposal FY (capped at cost − residual).
+    const disposalFY = fyOfDate(new Date(opts.date));
+    let accum = 0, cursor = fyOfDate(new Date(asset.purchaseDate)), guard = 0;
+    while (cursor <= disposalFY && guard++ < 200) { accum += calcDepForFY(asset, cursor, accum); cursor = nextFY(cursor); }
+    accum = Math.min(accum, asset.cost - (asset.residualValue || 0));
+    const cashBank = opts.mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const posting = assetDisposalPosting({ category: asset.category, cost: asset.cost, accumDep: accum, saleProceeds: opts.saleProceeds, cashBankAccount: cashBank });
+    const firstDr = posting.lines.find(l => l.type === 'Dr');
+    const firstCr = posting.lines.find(l => l.type === 'Cr');
+    const voucher = addVoucher({
+      type: opts.saleProceeds > 0 ? 'receipt' : 'journal', date: opts.date,
+      debitAccountId: firstDr?.accountId || cashBank, creditAccountId: firstCr?.accountId || ASSET_ACCOUNTS[asset.category], amount: posting.drTotal,
+      lines: posting.lines.map(l => ({ id: crypto.randomUUID(), accountId: l.accountId, type: l.type, amount: l.amount })),
+      narration: `Asset disposal: ${asset.assetNo} ${asset.name} — WDV ₹${posting.wdv.toLocaleString('en-IN')}, ${posting.gainLoss >= 0 ? 'profit' : 'loss'} ₹${Math.abs(posting.gainLoss).toLocaleString('en-IN')}`,
+      createdBy: userRef.current?.name ?? 'System',
+    });
+    if (!voucher?.id) return false;
+    const before = asset;
+    const updated: Asset = { ...asset, status: 'disposed', disposalDate: opts.date, saleProceeds: opts.saleProceeds };
+    assetsRef.current = assetsRef.current.map(a => a.id === id ? updated : a);
+    setAssetsState(prev => prev.map(a => a.id === id ? updated : a));
+    supabase.from('assets').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        console.error('Asset dispose sync:', error.message);
+        assetsRef.current = assetsRef.current.map(a => a.id === id ? before : a);
+        setAssetsState(prev => prev.map(a => a.id === id ? before : a));   // RULE 1: roll back
+        toastRef.current({ title: 'Disposal सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    emitAudit({ entityType: 'asset', entityId: id, action: 'update', before: { status: 'active' }, after: { status: 'disposed', saleProceeds: opts.saleProceeds, gainLoss: posting.gainLoss } });
+    toastRef.current({ title: posting.gainLoss >= 0 ? '✅ Asset disposed (लाभ)' : '✅ Asset disposed (हानि)', description: `${asset.assetNo} · WDV ₹${posting.wdv.toLocaleString('en-IN')} · ${posting.gainLoss >= 0 ? 'लाभ' : 'हानि'} ₹${Math.abs(posting.gainLoss).toLocaleString('en-IN')}` });
+    return true;
+  }, [accounts, addVoucher]);
+
   const deleteAsset = useCallback((id: string) => {
     if (guardFYLocked()) return;
     const asset = assetsRef.current.find(a => a.id === id);
     setAssetsState(prev => { const updated = prev.filter(a => a.id !== id); return updated; });
-    supabase.from('assets').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // Soft-delete (P0 #2): retain the asset row (isDeleted=true); dependent depreciation
+    // vouchers are still soft-cancelled below. Load filters isDeleted out on refresh.
+    supabase.from('assets').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     // RULE 3: soft-cancel any depreciation journal(s) auto-posted for this asset (matched by its
     // unique assetNo in the narration) so no orphan depreciation expense / accumulated-dep lingers.
     if (asset?.assetNo) {
@@ -3189,6 +3773,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) console.error('Asset depreciation voucher cancel sync:', error.message); else deleteEntries(vid); }));
       }
     }
+    emitAudit({ entityType: 'asset', entityId: id, action: 'delete', reason: 'Asset deleted' });
     console.info(`[AUDIT-DELETE] Asset id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
@@ -4236,7 +4821,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = prev.filter(p => p.id !== id);
       return updated;
     });
-    supabase.from('purchases').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // Soft-delete (P0 #2): retain the purchase row (isDeleted=true); linked vouchers, tax
+    // vouchers, stock and movements are still cascaded above. Load filters isDeleted out.
+    supabase.from('purchases').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    emitAudit({ entityType: 'purchase', entityId: id, action: 'delete', reason: 'Purchase deleted' });
     console.info(`[AUDIT-DELETE] Purchase id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
@@ -4459,13 +5047,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ? new Date(Number(base.month.slice(0, 4)), Number(base.month.slice(5, 7)), 0).toISOString().split('T')[0]
         : base.createdAt.split('T')[0];
       const lid = () => crypto.randomUUID();
+      const r2 = (n: number) => Math.round(n * 100) / 100;
+      // ECR-14: when a statutory breakdown is present, book gross + employer contributions
+      // to Salary Expense and split the employee dues + employer contributions to their
+      // payable heads (EPF 2203 / ESI 2204 / PT 2207 / TDS 2202). Otherwise keep the legacy
+      // net-basis accrual so old salary flows are unchanged.
+      const pfEmp = base.pfEmployee || 0, pfEr = base.pfEmployer || 0;
+      const esiEmp = base.esiEmployee || 0, esiEr = base.esiEmployer || 0;
+      const ptAmt = base.pt || 0, tdsAmt = base.tds || 0;
+      const hasStatutory = (pfEmp + pfEr + esiEmp + esiEr + ptAmt + tdsAmt) > 0;
       try {
-        const av = addVoucher({
-          type: 'journal', date: accrualDate, debitAccountId: '5201', creditAccountId: payableAcc, amount: base.netSalary,
-          lines: [{ id: lid(), accountId: '5201', type: 'Dr', amount: base.netSalary }, { id: lid(), accountId: payableAcc, type: 'Cr', amount: base.netSalary }],
-          narration: `Salary accrual: ${emp?.name || ''} - ${base.month} (${slipNo})`,
-          createdBy: 'System',
-        });
+        let av;
+        if (hasStatutory) {
+          const gross = r2((base.basicSalary || 0) + (base.allowances || 0));
+          const drTotal = r2(gross + pfEr + esiEr);   // employer contributions add to expense
+          const lines = [
+            { id: lid(), accountId: '5201', type: 'Dr' as const, amount: drTotal },
+            { id: lid(), accountId: payableAcc, type: 'Cr' as const, amount: base.netSalary },
+          ];
+          if (pfEmp + pfEr > 0) lines.push({ id: lid(), accountId: '2203', type: 'Cr' as const, amount: r2(pfEmp + pfEr) });
+          if (esiEmp + esiEr > 0) lines.push({ id: lid(), accountId: '2204', type: 'Cr' as const, amount: r2(esiEmp + esiEr) });
+          if (ptAmt > 0) lines.push({ id: lid(), accountId: '2207', type: 'Cr' as const, amount: r2(ptAmt) });
+          if (tdsAmt > 0) lines.push({ id: lid(), accountId: '2202', type: 'Cr' as const, amount: r2(tdsAmt) });
+          av = addVoucher({
+            type: 'journal', date: accrualDate, debitAccountId: '5201', creditAccountId: payableAcc, amount: drTotal, lines,
+            narration: `Salary accrual (statutory): ${emp?.name || ''} - ${base.month} (${slipNo})`,
+            createdBy: 'System',
+          });
+        } else {
+          av = addVoucher({
+            type: 'journal', date: accrualDate, debitAccountId: '5201', creditAccountId: payableAcc, amount: base.netSalary,
+            lines: [{ id: lid(), accountId: '5201', type: 'Dr', amount: base.netSalary }, { id: lid(), accountId: payableAcc, type: 'Cr', amount: base.netSalary }],
+            narration: `Salary accrual: ${emp?.name || ''} - ${base.month} (${slipNo})`,
+            createdBy: 'System',
+          });
+        }
         accrualVoucherId = av?.id || undefined;
       } catch { /* accrual best-effort; record still saves */ }
     }
@@ -5079,6 +5695,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   return (
     <DataContext.Provider value={{
       vouchers, members, accounts, society, loans, assets, auditObjections,
+      depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,
+      markComplianceFiled, unmarkComplianceFiled, getComplianceFiledIds,
       stockItems, stockMovements, sales, purchases, employees, salaryRecords,
       suppliers, customers, kccLoans, societyCapabilities, setCapabilityHidden,
       procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
@@ -5089,13 +5707,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
       procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
       recordFarmerPayment,
-      addVoucher, updateVoucher, cancelVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
-      addMember, updateMember, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, approveMember, rejectMember,
+      addVoucher, updateVoucher, cancelVoucher, reverseVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
+      addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
       workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
       musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
       addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
       addLoan, updateLoan, deleteLoan,
-      addAsset, updateAsset, deleteAsset, postDepreciation,
+      addAsset, updateAsset, disposeAsset, deleteAsset, postDepreciation,
       addAuditObjection, updateAuditObjection, deleteAuditObjection,
       recoverables, addRecoverable, updateRecoverable, deleteRecoverable,
       kachiAaratEntries, addKachiAaratEntry, updateKachiAaratEntry, deleteKachiAaratEntry,
@@ -5107,7 +5725,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addSalaryRecord, updateSalaryRecord, deleteSalaryRecord,
       addSupplier, updateSupplier, deleteSupplier,
       addCustomer, updateCustomer, deleteCustomer,
-      getAccountBalance, getCashBookEntries, getBankBookEntries,
+      getAccountBalance, getShareCapitalReconciliation, getCashBookEntries, getBankBookEntries,
       getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments, postClosingStock,
       getEntityLinks,
       isLoading,

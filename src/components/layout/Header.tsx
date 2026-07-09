@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,7 +14,8 @@ import {
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Languages, Bell, User, Settings, HelpCircle, Menu, LogOut, Search, Landmark, ShieldAlert, XCircle, Lock } from 'lucide-react';
+import { Languages, Bell, User, Settings, HelpCircle, Menu, LogOut, Search, Landmark, ShieldAlert, XCircle, Lock, CalendarClock } from 'lucide-react';
+import { buildComplianceCalendar, complianceNotifications } from '@/lib/complianceCalendar';
 import { cn } from '@/lib/utils';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { helpForRoute } from '@/content/help';
@@ -27,7 +28,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuToggle }) => {
   const { language, setLanguage, t } = useLanguage();
   const { user, logout } = useAuth();
-  const { society, loans, auditObjections, vouchers } = useData();
+  const { society, loans, auditObjections, vouchers, employees, getComplianceFiledIds } = useData();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const ctxHelp = helpForRoute(pathname); // matching how-to for the current screen, if any
@@ -37,7 +38,17 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
   const overdueLoans = loans.filter(l => l.status === 'overdue');
   const pendingObjections = auditObjections.filter(o => o.status === 'pending');
   const cancelledVouchers = vouchers.filter(v => v.isDeleted);
-  const totalNotifications = overdueLoans.length + pendingObjections.length + (cancelledVouchers.length > 0 ? 1 : 0);
+  // ECR-13: statutory deadlines needing attention (overdue + due-soon, unfiled).
+  const complianceAlerts = useMemo(() => {
+    const asOf = new Date().toISOString().split('T')[0];
+    const items = buildComplianceCalendar(asOf, {
+      hasEmployees: (employees || []).some(e => e.status === 'active'),
+      tan: !!society.tan?.trim(),
+      gstin: !!society.gstin?.trim(),
+    }, { filedIds: getComplianceFiledIds() });
+    return complianceNotifications(items);
+  }, [society.tan, society.gstin, employees, getComplianceFiledIds]);
+  const totalNotifications = overdueLoans.length + pendingObjections.length + (cancelledVouchers.length > 0 ? 1 : 0) + (complianceAlerts.length > 0 ? 1 : 0);
 
   // Ctrl+K / Cmd+K shortcut disabled — search box still opens on click.
 
@@ -182,6 +193,20 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
                     </div>
                     <p className="text-xs text-muted-foreground pl-6">
                       {language === 'hi' ? 'वाउचर सूची में देखें' : 'View in Vouchers list'}
+                    </p>
+                  </DropdownMenuItem>
+                )}
+
+                {complianceAlerts.length > 0 && (
+                  <DropdownMenuItem onClick={() => navigate('/compliance-calendar')} className="flex-col items-start gap-1 py-3">
+                    <div className="flex items-center gap-2 text-orange-600 font-medium">
+                      <CalendarClock className="h-4 w-4 shrink-0" />
+                      {language === 'hi'
+                        ? `${complianceAlerts.length} सांविधिक देय तिथियाँ`
+                        : `${complianceAlerts.length} statutory deadline${complianceAlerts.length > 1 ? 's' : ''} due`}
+                    </div>
+                    <p className="text-xs text-muted-foreground pl-6">
+                      {complianceAlerts.slice(0, 3).map(a => a.title).join(', ')}{complianceAlerts.length > 3 ? '…' : ''} — {language === 'hi' ? 'अनुपालन कैलेंडर' : 'Compliance Calendar'}
                     </p>
                   </DropdownMenuItem>
                 )}

@@ -16,6 +16,7 @@ import {
 import { Shield, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { appropriationWaterfall } from '@/lib/appropriation';
 import { useToast } from '@/hooks/use-toast';
 
 const fmt = (amount: number) =>
@@ -94,6 +95,10 @@ const ReserveFund: React.FC = () => {
 
   const pendingFunds = fundAccounts.filter(f => !postedMap[f.id] && inputAmount(f.id) > 0);
   const canPost = netProfit > 0 && pendingFunds.length > 0;
+
+  // ECR-10: suggested statutory appropriation waterfall (reserve ≥25% → education → residual).
+  const plan = useMemo(() => appropriationWaterfall(netProfit, { reservePct: society.reserveFundPct }), [netProfit, society.reserveFundPct]);
+  const applySuggested = () => plan.steps.forEach(s => setInput(s.accountId, { mode: 'pct', value: String(s.pct) }));
   const postedVouchers = fundAccounts.map(f => postedMap[f.id]).filter(Boolean) as (typeof vouchers)[number][];
 
   // ── Current ledger balance of any account ────────────────────────────────────
@@ -172,6 +177,37 @@ const ReserveFund: React.FC = () => {
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {hi ? 'नेट सरप्लस शून्य या ऋणात्मक है — आवंटन आवश्यक नहीं।' : 'Net surplus is zero or negative — no appropriation needed.'}
         </div>
+      )}
+
+      {/* ECR-10: Suggested statutory appropriation waterfall */}
+      {netProfit > 0 && plan.steps.length > 0 && (
+        <Card className="border-primary/30">
+          <CardHeader className="py-3">
+            <CardTitle className="text-base">{hi ? 'सुझाई गई सांविधिक आवंटन (क्रमानुसार)' : 'Suggested statutory appropriation (in order)'}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {plan.reserveBelowStatutory && (
+              <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-xs">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {hi ? `वैधानिक संचय ${society.reserveFundPct ?? 25}% है — न्यूनतम 25% होना चाहिए।` : `Statutory reserve is ${society.reserveFundPct ?? 25}% — minimum 25% required.`}
+              </div>
+            )}
+            {plan.steps.map(s => (
+              <div key={s.accountId} className="flex items-center justify-between">
+                <span className="text-gray-700">{s.order}. {hi ? s.labelHi : s.label} <span className="text-muted-foreground">({s.pct}%)</span></span>
+                <span className="font-medium">{fmt(s.amount)}</span>
+              </div>
+            ))}
+            <div className="border-t pt-2 flex justify-between font-semibold">
+              <span>{hi ? 'शेष (डिविडेंड/अग्रेनीत हेतु)' : 'Residual (dividend / carry-forward)'}</span>
+              <span className={plan.residual >= 0 ? 'text-green-700' : 'text-red-600'}>{fmt(plan.residual)}</span>
+            </div>
+            <Button size="sm" variant="outline" className="w-full mt-1" onClick={applySuggested}>
+              {hi ? 'सुझाव लागू करें (नीचे इनपुट भर जाएंगे)' : 'Apply suggested (fills the inputs below)'}
+            </Button>
+            <p className="text-[11px] text-muted-foreground">{hi ? 'लागू करने के बाद नीचे समीक्षा करें, फिर पोस्ट करें।' : 'Review below after applying, then post.'}</p>
+          </CardContent>
+        </Card>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

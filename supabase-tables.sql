@@ -500,6 +500,12 @@ alter table vouchers add column if not exists "approvalRemarks" text;
 alter table vouchers add column if not exists "approvedBy" text;
 alter table vouchers add column if not exists "approvedAt" text;
 
+-- ECR-08 (P1 #8): reversal-not-edit. reversalOf = the original this voucher reverses;
+-- reversedBy = the reversal voucher id set on the original. Written via targeted best-effort
+-- .update() (like the delete columns), so base upserts stay safe before this runs.
+alter table vouchers add column if not exists "reversalOf" text;
+alter table vouchers add column if not exists "reversedBy" text;
+
 -- Salary Records: allowances breakdown
 alter table salary_records add column if not exists "hraAllowance" numeric default 0;
 alter table salary_records add column if not exists "taAllowance" numeric default 0;
@@ -813,6 +819,69 @@ alter table society_settings add column if not exists created_at timestamptz def
 alter table society_settings add column if not exists "boardType" text default 'bod';
 alter table society_settings add column if not exists "boardMembers" jsonb default '[]';
 alter table society_settings add column if not exists signatories jsonb default '{}';
+
+-- ── Approval-gating (maker-checker) opt-in ──────────────────────────────────
+-- When true, PENDING vouchers are held out of the ledger/reports until approved.
+-- REJECTED vouchers are always excluded (client-report fix) regardless of this flag.
+-- Default false ⇒ no behaviour change for existing societies. Client reads
+-- society.approvalRequired ?? false, so it degrades gracefully before this runs.
+alter table society_settings add column if not exists "approvalRequired" boolean default false;
+
+-- ECR-11: approval matrix — manual vouchers with amount ≥ this need approval. NULL/0 = off.
+alter table society_settings add column if not exists "approvalThresholdAmount" numeric;
+
+-- ECR-16 (MS-11): cap on share-transfer premium as % of face value transferred.
+-- NULL/0 ⇒ no premium allowed (statutory default — transfers at face value).
+alter table society_settings add column if not exists "maxSharePremiumPercent" numeric;
+
+-- ECR-07 (P1 #7): period lock / back-dating prevention. periodLockDate is an ISO
+-- date; vouchers dated ON or BEFORE it are in a locked period and cannot be added
+-- or edited. NULL/empty ⇒ no period lock (default) — behaviour unchanged.
+alter table society_settings add column if not exists "periodLockDate" text;
+alter table society_settings add column if not exists "periodLockBy" text;
+
+-- ── P0 #2: Soft-delete parent records ───────────────────────────────────────
+-- Members / purchases / assets / audit-objections are now ARCHIVED (isDeleted=true)
+-- instead of hard-deleted, so statutory registers persist and deletes are auditable
+-- & restorable. The app removes them from in-memory state on delete and filters
+-- isDeleted out on load, so archived rows never surface. REQUIRED for the soft-delete
+-- to persist — until this runs, a delete's update() will error (surfaced as a toast).
+alter table members          add column if not exists "isDeleted" boolean default false;
+alter table purchases        add column if not exists "isDeleted" boolean default false;
+alter table assets           add column if not exists "isDeleted" boolean default false;
+alter table audit_objections add column if not exists "isDeleted" boolean default false;
+
+-- ── P0 #3: Append-only (WORM) audit log ─────────────────────────────────────
+-- One immutable trail of who/what/when/before/after/reason across all mutations.
+-- WORM = INSERT + SELECT policies only; NO update/delete policy ⇒ rows can never be
+-- changed or removed (append-only, non-repudiable). Client writes fire-and-forget, so
+-- until this runs the app simply logs a console warning — no user-facing effect.
+create table if not exists audit_log (
+  id uuid primary key default gen_random_uuid(),
+  society_id text not null default 'SOC001',
+  actor_name text,
+  actor_email text,
+  actor_role text,
+  entity_type text not null,
+  entity_id text,
+  action text not null,
+  before jsonb,
+  after jsonb,
+  reason text,
+  source text default 'app',
+  created_at timestamptz not null default now()
+);
+create index if not exists audit_log_scope_idx on audit_log (society_id, entity_type, created_at desc);
+alter table audit_log enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='audit_log' and policyname='audit_insert') then
+    create policy "audit_insert" on audit_log for insert with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='audit_log' and policyname='audit_select') then
+    create policy "audit_select" on audit_log for select using (true);
+  end if;
+  -- Intentionally NO update/delete policy ⇒ audit_log is WORM (append-only).
+end $$;
 
 -- ── STEP 17c: Asset Register — ICAI AS-6 compliance fields ──────────────────
 alter table assets add column if not exists "depreciationMethod" text default 'SLM';
@@ -2329,6 +2398,27 @@ alter table sales add column if not exists "memberId" text;
 -- vouchers (refType 'consumer.member.recovery'); per-member outstanding is derived.
 alter table members add column if not exists "creditLimit" numeric;
 
+-- ECR-16 (member lifecycle): reason + date for the last lifecycle change (resigned/
+-- expelled/deceased/reactivated). The `status` column is text, so the widened enum
+-- ('resigned'|'expelled'|'deceased') needs no column change. Written via targeted
+-- best-effort .update(), so the base member upsert stays safe before this runs.
+alter table members add column if not exists "statusReason" text;
+alter table members add column if not exists "statusChangedAt" text;
+
+-- ECR-16 (multiple nominees): a member may nominate several nominees, each with a
+-- benefit share (%). Rides the whole-member upsert like other member columns.
+alter table members add column if not exists "nominees" jsonb default '[]';
+
+-- ECR-16 (member KYC): Aadhaar / PAN (PII — displayed masked) + verification status.
+alter table members add column if not exists "aadhaar" text;
+alter table members add column if not exists "pan" text;
+alter table members add column if not exists "kycStatus" text;
+
+-- ECR-16 (share certificate lifecycle): issued → reissued (loss/damage) → cancelled.
+alter table members add column if not exists "shareCertStatus" text;
+alter table members add column if not exists "shareCertIssuedAt" text;
+alter table members add column if not exists "shareCertReason" text;
+
 -- ── Consumer C4 — patronage rebate ───────────────────────────────────────────
 -- Year-end member rebate on purchases (draft → approved, resolution-gated). The
 -- distribution/payable accounts are created at runtime via addAccount (no table). RLS bundled.
@@ -2589,3 +2679,87 @@ alter table eway_bills add column if not exists "transDocDate" text;
 -- On processing, salary posts Dr Salary Expense 5201 / Cr Salary Payable 2103; payment
 -- later clears the liability. This column tracks the accrual voucher for update/delete.
 alter table salary_records add column if not exists "accrualVoucherId" text;
+
+-- ══ Deposits module (Core for Credit/PACS) — SB / FD / RD / Pigmy ═════════════
+-- A member deposit is a LIABILITY (society owes the member). Balances sit in COA
+-- 2107 (Savings/Member Deposits) / 2108 (Fixed Deposits). Each cash movement also
+-- posts a voucher; these tables are the deposit sub-ledger. RLS = app-layer (society_id).
+create table if not exists deposit_accounts (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "accountNo" text,
+  "memberId" text,
+  "depositType" text,
+  "openDate" text,
+  balance numeric default 0,
+  "interestRate" numeric,
+  "maturityDate" text,
+  "installmentAmount" numeric,
+  status text default 'active',
+  "createdAt" timestamp default now()
+);
+create table if not exists deposit_transactions (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "depositAccountId" text,
+  date text,
+  "txnType" text,
+  amount numeric,
+  mode text,
+  "voucherId" text,
+  "balanceAfter" numeric,
+  "createdAt" timestamp default now()
+);
+create index if not exists deposit_txn_acct_idx on deposit_transactions (society_id, "depositAccountId", date);
+alter table deposit_accounts enable row level security;
+alter table deposit_transactions enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='deposit_accounts' and policyname='allow_all') then
+    create policy "allow_all" on deposit_accounts for all using (true) with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='deposit_transactions' and policyname='allow_all') then
+    create policy "allow_all" on deposit_transactions for all using (true) with check (true);
+  end if;
+end $$;
+
+-- Deposits — Pigmy daily-collection agent (slice 5)
+alter table deposit_accounts add column if not exists "agent" text;
+
+-- ══ Payroll statutory engine (ECR-14) — PF / ESI / PT / TDS ═══════════════════
+-- Salary slips carry the statutory breakdown (deductions still holds the total);
+-- employees carry PF/ESI applicability + UAN / ESI numbers.
+alter table salary_records add column if not exists "pfEmployee" numeric;
+alter table salary_records add column if not exists "pfEmployer" numeric;
+alter table salary_records add column if not exists "esiEmployee" numeric;
+alter table salary_records add column if not exists "esiEmployer" numeric;
+alter table salary_records add column if not exists "pt" numeric;
+alter table salary_records add column if not exists "tds" numeric;
+alter table employees add column if not exists "pfApplicable" boolean;
+alter table employees add column if not exists "esiApplicable" boolean;
+alter table employees add column if not exists "uan" text;
+alter table employees add column if not exists "esiNo" text;
+
+-- Payroll — employee PAN for Form 24Q (ECR-14 slice 4)
+alter table employees add column if not exists "pan" text;
+
+-- ══ Compliance calendar — filed tracking (ECR-13 slice 2) ═════════════════════
+-- Marks a statutory calendar item (e.g. "tds-2024-04") as filed so it stops
+-- showing as overdue/due. RLS = app-layer (society_id).
+create table if not exists compliance_filings (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "itemId" text,
+  "filedAt" text,
+  "filedBy" text,
+  note text
+);
+create index if not exists compliance_filings_scope_idx on compliance_filings (society_id, "itemId");
+alter table compliance_filings enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='compliance_filings' and policyname='allow_all') then
+    create policy "allow_all" on compliance_filings for all using (true) with check (true);
+  end if;
+end $$;
+
+-- ECR-15 (asset acquisition auto-posting): links the capitalization voucher (Dr Fixed-Asset / Cr Cash-Bank).
+alter table assets add column if not exists "acquisitionVoucherId" text;

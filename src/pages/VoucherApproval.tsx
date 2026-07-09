@@ -37,11 +37,15 @@ const VOUCHER_TYPE_LABELS: Record<string, { hi: string; en: string }> = {
 
 const VoucherApproval: React.FC = () => {
   const { language } = useLanguage();
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const { vouchers, accounts, approveVoucher, rejectVoucher } = useData();
   const { toast } = useToast();
 
   const hi = language === 'hi';
+
+  // SL-06 (segregation of duties): only roles granted approve/reject may action vouchers.
+  const canApprove = can('approve');
+  const canReject = can('reject');
 
   // ── Filter tabs ───────────────────────────────────────────────────────────
   const [tab, setTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
@@ -130,6 +134,15 @@ const VoucherApproval: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* SL-06: read-only notice when the role lacks approval authority */}
+      {!canApprove && !canReject && (
+        <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+          {hi
+            ? 'आपकी भूमिका केवल देख सकती है — वाउचर स्वीकृत/अस्वीकृत करने की अनुमति नहीं है।'
+            : 'Your role can view only — approving or rejecting vouchers is not permitted.'}
+        </div>
+      )}
 
       {/* Tab strip */}
       <div className="flex gap-2 flex-wrap">
@@ -222,27 +235,27 @@ const VoucherApproval: React.FC = () => {
                         >
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
-                        {tab === 'pending' && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-9 w-9 text-green-600 hover:bg-green-50"
-                              onClick={() => handleApprove(v.id)}
-                              title={hi ? 'स्वीकृत करें' : 'Approve'}
-                            >
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-9 w-9 text-red-500 hover:bg-red-50"
-                              onClick={() => { setRejectId(v.id); setRejectReason(''); }}
-                              title={hi ? 'अस्वीकृत करें' : 'Reject'}
-                            >
-                              <XCircle className="h-3.5 w-3.5" />
-                            </Button>
-                          </>
+                        {tab === 'pending' && canApprove && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 text-green-600 hover:bg-green-50"
+                            onClick={() => handleApprove(v.id)}
+                            title={hi ? 'स्वीकृत करें' : 'Approve'}
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {tab === 'pending' && canReject && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 text-red-500 hover:bg-red-50"
+                            onClick={() => { setRejectId(v.id); setRejectReason(''); }}
+                            title={hi ? 'अस्वीकृत करें' : 'Reject'}
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -287,25 +300,29 @@ const VoucherApproval: React.FC = () => {
               </div>
             </div>
           )}
-          {detailVoucher?.approvalStatus === 'pending' && (
+          {detailVoucher?.approvalStatus === 'pending' && (canApprove || canReject) && (
             <DialogFooter className="gap-2 mt-2">
-              <Button
-                size="sm"
-                className="bg-green-700 hover:bg-green-800 gap-1.5"
-                onClick={() => { handleApprove(detailVoucher.id); setDetailId(null); }}
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                {hi ? 'स्वीकृत' : 'Approve'}
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                className="gap-1.5"
-                onClick={() => { setRejectId(detailVoucher.id); setDetailId(null); setRejectReason(''); }}
-              >
-                <XCircle className="h-3.5 w-3.5" />
-                {hi ? 'अस्वीकृत' : 'Reject'}
-              </Button>
+              {canApprove && (
+                <Button
+                  size="sm"
+                  className="bg-green-700 hover:bg-green-800 gap-1.5"
+                  onClick={() => { handleApprove(detailVoucher.id); setDetailId(null); }}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {hi ? 'स्वीकृत' : 'Approve'}
+                </Button>
+              )}
+              {canReject && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="gap-1.5"
+                  onClick={() => { setRejectId(detailVoucher.id); setDetailId(null); setRejectReason(''); }}
+                >
+                  <XCircle className="h-3.5 w-3.5" />
+                  {hi ? 'अस्वीकृत' : 'Reject'}
+                </Button>
+              )}
             </DialogFooter>
           )}
         </DialogContent>

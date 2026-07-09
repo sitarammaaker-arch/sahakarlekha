@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback } from 'react';
 import { getAuthSession, setAuthSession } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
+import { can as rbacCan, type Permission } from '@/lib/rbac';
 
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes of inactivity
 
@@ -21,6 +22,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   hasPermission: (requiredRole: UserRole | UserRole[]) => boolean;
+  /** RBAC gate (SL-06): whether the current user's role is granted `permission`. */
+  can: (permission: Permission) => boolean;
   sendPasswordReset: (email: string) => Promise<{ success: boolean; isEmailSent: boolean }>;
 }
 
@@ -344,8 +347,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return roles.includes(effectiveRole as UserRole) || roles.includes(user.role);
   };
 
+  // SL-06: adopt the rbac permission model. Maps the current (legacy) role through
+  // rbac.mapLegacyRole → PERMISSION_MATRIX. Additive — hasPermission is left untouched.
+  const can = (permission: Permission): boolean => {
+    if (!user) return false;
+    return rbacCan(user.role, permission);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isSuperAdmin, login, logout, hasPermission, sendPasswordReset }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isSuperAdmin, login, logout, hasPermission, can, sendPasswordReset }}>
       {children}
     </AuthContext.Provider>
   );

@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Download, Search, Edit, Trash2, Package, RefreshCw, CheckCircle } from 'lucide-react';
+import { Plus, Download, Search, Edit, Trash2, Package, RefreshCw, CheckCircle, Banknote } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { generateAssetRegisterPDF } from '@/lib/pdf';
@@ -33,6 +33,8 @@ const EMPTY_FORM = {
   status: 'active' as AssetStatus,
   disposalDate: '',
   saleProceeds: '',
+  capitalize: false,                       // ECR-15: post acquisition voucher (new purchase)
+  capitalizeMode: 'cash' as 'cash' | 'bank',
 };
 
 interface AssetFormProps {
@@ -41,9 +43,10 @@ interface AssetFormProps {
   hi: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
+  showCapitalize?: boolean;
 }
 
-const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCancel }) => (
+const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCancel, showCapitalize }) => (
   <form onSubmit={onSubmit} className="space-y-4">
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="space-y-1 col-span-2">
@@ -121,6 +124,25 @@ const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCa
       </div>
     </div>
 
+    {showCapitalize && (
+      <div className="rounded-md border p-3 bg-muted/30 space-y-2">
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" checked={form.capitalize} onChange={e => setForm(f => ({ ...f, capitalize: e.target.checked }))} className="h-4 w-4" />
+          <span>{hi ? 'यह नई खरीद है — बही में capitalize करें (Dr संपत्ति / Cr नकद-बैंक)' : 'New purchase — capitalize to the ledger (Dr Asset / Cr Cash-Bank)'}</span>
+        </label>
+        {form.capitalize && (
+          <div className="flex items-center gap-2 pl-6">
+            <span className="text-xs text-muted-foreground">{hi ? 'भुगतान विधि' : 'Paid via'}:</span>
+            <select value={form.capitalizeMode} onChange={e => setForm(f => ({ ...f, capitalizeMode: e.target.value as 'cash' | 'bank' }))} className="h-8 rounded-md border border-input bg-background px-2 text-sm">
+              <option value="cash">{hi ? 'नकद' : 'Cash'}</option>
+              <option value="bank">{hi ? 'बैंक' : 'Bank'}</option>
+            </select>
+          </div>
+        )}
+        <p className="text-[11px] text-muted-foreground">{hi ? 'पुरानी/opening संपत्ति के लिए unchecked रखें (सिर्फ़ रजिस्टर, कोई वाउचर नहीं)।' : 'Leave unchecked for opening/historical assets (register only, no voucher).'}</p>
+      </div>
+    )}
+
     <div className="flex justify-end gap-2 pt-2">
       <Button type="button" variant="outline" onClick={onCancel}>{hi ? 'रद्द' : 'Cancel'}</Button>
       <Button type="submit">{hi ? 'सहेजें' : 'Save'}</Button>
@@ -130,7 +152,7 @@ const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCa
 
 const AssetRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { assets, addAsset, updateAsset, deleteAsset, postDepreciation, addVoucher, accounts, vouchers, society } = useData();
+  const { assets, addAsset, updateAsset, disposeAsset, deleteAsset, postDepreciation, addVoucher, accounts, vouchers, society } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -139,6 +161,11 @@ const AssetRegister: React.FC = () => {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editAsset, setEditAsset] = useState<Asset | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  // ECR-15: dispose dialog
+  const [disposeTarget, setDisposeTarget] = useState<Asset | null>(null);
+  const [disposeProceeds, setDisposeProceeds] = useState('');
+  const [disposeMode, setDisposeMode] = useState<'cash' | 'bank'>('cash');
+  const [disposeDate, setDisposeDate] = useState(new Date().toISOString().split('T')[0]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [isPosting, setIsPosting] = useState(false);
 
@@ -235,7 +262,7 @@ const AssetRegister: React.FC = () => {
       location: form.location,
       description: form.description,
       status: form.status,
-    });
+    }, { capitalize: form.capitalize, mode: form.capitalizeMode });
     toast({ title: hi ? 'संपत्ति जोड़ी गई' : 'Asset added' });
     setForm(EMPTY_FORM);
     setIsAddOpen(false);
@@ -298,7 +325,7 @@ const AssetRegister: React.FC = () => {
           narration: `Asset Disposal: ${editAsset.name} (${editAsset.assetNo}) — ${profitLoss >= 0 ? 'Profit' : 'Loss'} Rs. ${Math.abs(profitLoss).toFixed(2)}`,
           lines,
           createdBy: 'System',
-        } as any);
+        });
 
         toast({
           title: hi ? 'निपटान जर्नल पोस्ट किया गया' : 'Disposal journal posted',
@@ -479,6 +506,12 @@ const AssetRegister: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
+                          {a.status === 'active' && (
+                            <Button variant="ghost" size="icon" className="text-emerald-700 hover:bg-emerald-50" title={hi ? 'निपटान (बिक्री/scrap)' : 'Dispose (sell/scrap)'}
+                              onClick={() => { setDisposeTarget(a); setDisposeProceeds(''); setDisposeMode('cash'); setDisposeDate(new Date().toISOString().split('T')[0]); }}>
+                              <Banknote className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" onClick={() => openEdit(a)}><Edit className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setDeleteId(a.id)}><Trash2 className="h-4 w-4" /></Button>
                         </div>
@@ -509,7 +542,7 @@ const AssetRegister: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'नई संपत्ति जोड़ें' : 'Add New Asset'}</DialogTitle>
           </DialogHeader>
-          <AssetForm form={form} setForm={setForm} hi={hi} onSubmit={handleAdd} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
+          <AssetForm form={form} setForm={setForm} hi={hi} onSubmit={handleAdd} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} showCapitalize />
         </DialogContent>
       </Dialog>
 
@@ -538,6 +571,55 @@ const AssetRegister: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ECR-15: Dispose (sell/scrap) dialog */}
+      <Dialog open={!!disposeTarget} onOpenChange={o => { if (!o) setDisposeTarget(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle>{hi ? 'संपत्ति निपटान' : 'Dispose Asset'} — {disposeTarget?.assetNo}</DialogTitle></DialogHeader>
+          {disposeTarget && (() => {
+            const accumDep = calcAccumDep(disposeTarget);
+            const wdv = Math.max(0, disposeTarget.cost - accumDep);
+            const proceeds = Number(disposeProceeds) || 0;
+            const gainLoss = proceeds - wdv;
+            return (
+              <div className="space-y-3">
+                <div className="text-sm space-y-1 rounded-md bg-muted/40 p-2">
+                  <div className="flex justify-between"><span className="text-muted-foreground">{hi ? 'लागत' : 'Cost'}</span><span>{fmt(disposeTarget.cost)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">{hi ? 'संचित ह्रास' : 'Accum. dep.'}</span><span>{fmt(accumDep)}</span></div>
+                  <div className="flex justify-between font-medium"><span>{hi ? 'बही मूल्य (WDV)' : 'Book value (WDV)'}</span><span>{fmt(wdv)}</span></div>
+                </div>
+                <div>
+                  <Label className="text-xs">{hi ? 'बिक्री राशि (scrap के लिए 0)' : 'Sale proceeds (0 for scrap)'}</Label>
+                  <Input type="number" min="0" className="mt-1" value={disposeProceeds} onChange={e => setDisposeProceeds(e.target.value)} placeholder="0" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">{hi ? 'विधि' : 'Mode'}</Label>
+                    <Select value={disposeMode} onValueChange={v => setDisposeMode(v as 'cash' | 'bank')}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="cash">{hi ? 'नकद' : 'Cash'}</SelectItem><SelectItem value="bank">{hi ? 'बैंक' : 'Bank'}</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">{hi ? 'तिथि' : 'Date'}</Label>
+                    <Input type="date" className="mt-1" value={disposeDate} onChange={e => setDisposeDate(e.target.value)} />
+                  </div>
+                </div>
+                <div className={`text-sm font-medium ${gainLoss >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+                  {gainLoss >= 0 ? (hi ? 'अनुमानित लाभ' : 'Estimated profit') : (hi ? 'अनुमानित हानि' : 'Estimated loss')}: {fmt(Math.abs(gainLoss))}
+                </div>
+                <p className="text-[11px] text-muted-foreground">{hi ? 'Dr नकद-बैंक + Dr संचित ह्रास; Cr संपत्ति; लाभ/हानि P&L में।' : 'Dr Cash-Bank + Dr Accum-Dep; Cr Asset; gain/loss to P&L.'}</p>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setDisposeTarget(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+                  <Button onClick={() => { if (disposeAsset(disposeTarget.id, { saleProceeds: proceeds, mode: disposeMode, date: disposeDate })) setDisposeTarget(null); }}>
+                    {hi ? 'निपटान करें' : 'Dispose'}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

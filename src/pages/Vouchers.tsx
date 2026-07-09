@@ -43,7 +43,7 @@ const Vouchers: React.FC = () => {
   const { t, language } = useLanguage();
   const { user, hasPermission } = useAuth();
   const canEdit = hasPermission(['admin', 'accountant']);
-  const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, restoreVoucher, getTrialBalance } = useData();
+  const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, reverseVoucher, restoreVoucher, getTrialBalance } = useData();
   const [submitForApproval, setSubmitForApproval] = useState(false);
   const { toast } = useToast();
 
@@ -96,6 +96,9 @@ const Vouchers: React.FC = () => {
   const [voucherNoInput, setVoucherNoInput] = useState('');
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  // ECR-08: reversal reason dialog
+  const [reverseId, setReverseId] = useState<string | null>(null);
+  const [reverseReason, setReverseReason] = useState('');
   const [showCancelled, setShowCancelled] = useState(false);
   const [savedVoucherNo, setSavedVoucherNo] = useState<string | null>(null);
 
@@ -285,6 +288,7 @@ const Vouchers: React.FC = () => {
       createdBy: user?.name || 'System',
       voucherNo: customNo || undefined,
       approvalStatus: submitForApproval ? 'pending' : undefined,
+      origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
     });
     setSavedVoucherNo(v.voucherNo);
     toast({ title: language === 'hi' ? 'वाउचर सहेजा गया' : 'Voucher saved', description: v.voucherNo });
@@ -316,6 +320,7 @@ const Vouchers: React.FC = () => {
         createdBy: user?.name || 'System',
         voucherNo: customNo || undefined,
         approvalStatus: submitForApproval ? 'pending' : undefined,
+      origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
       });
       setSavedVoucherNo(v.voucherNo);
       toast({ title: language === 'hi' ? 'कोंट्रा वाउचर सहेजा गया' : 'Contra Voucher saved', description: v.voucherNo });
@@ -348,6 +353,7 @@ const Vouchers: React.FC = () => {
       createdBy: user?.name || 'System',
       voucherNo: customNo || undefined,
       approvalStatus: submitForApproval ? 'pending' : undefined,
+      origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
     });
     setSavedVoucherNo(v.voucherNo);
     toast({ title: language === 'hi' ? 'वाउचर सहेजा गया' : 'Voucher saved', description: `${v.voucherNo}` });
@@ -1044,11 +1050,15 @@ const Vouchers: React.FC = () => {
                       const debitAcc = accounts.find(a => a.id === drLines[0]?.accountId);
                       const creditAcc = accounts.find(a => a.id === crLines[0]?.accountId);
                       const cancelled = !!v.isDeleted;
+                      // ECR-08: reversed / reversal entries are edit-locked; correct via reversal.
+                      const editLocked = !!v.reversedBy || (!!society.approvalRequired && v.approvalStatus === 'approved');
                       return (
                         <TableRow key={v.id} className={cn('hover:bg-muted/30', cancelled && 'opacity-50 bg-red-50/30 dark:bg-red-900/10')}>
                           <TableCell>
                             <Badge variant="outline" className={cn('font-mono text-xs', cancelled && 'line-through opacity-60')}>{v.voucherNo}</Badge>
                             {cancelled && <Badge variant="destructive" className="ml-1 text-xs py-0">{language === 'hi' ? 'रद्द' : 'Cancelled'}</Badge>}
+                            {v.reversedBy && <Badge className="ml-1 text-xs py-0 bg-amber-100 text-amber-800 border-amber-300">{language === 'hi' ? 'उलटा गया' : 'Reversed'}</Badge>}
+                            {v.reversalOf && <Badge className="ml-1 text-xs py-0 bg-blue-100 text-blue-800 border-blue-300">{language === 'hi' ? 'रिवर्सल' : 'Reversal'}</Badge>}
                           </TableCell>
                           <TableCell className={cn('font-medium', cancelled && 'line-through')}>
                             {fmtDate(v.date)}
@@ -1077,11 +1087,18 @@ const Vouchers: React.FC = () => {
                                 onClick={() => handlePrintVoucher(v.id)}>
                                 <Printer className="h-4 w-4" />
                               </Button>
-                              {canEdit && !cancelled && (
+                              {canEdit && !cancelled && !editLocked && (
                                 <Button variant="ghost" size="icon" className="h-9 w-9 text-primary hover:bg-primary/10"
                                   title={language === 'hi' ? 'संपादित करें' : 'Edit'}
                                   onClick={() => openEdit(v)}>
                                   <Pencil className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {canEdit && !cancelled && !v.reversedBy && !v.reversalOf && (
+                                <Button variant="ghost" size="icon" className="h-9 w-9 text-amber-600 hover:bg-amber-50"
+                                  title={language === 'hi' ? 'रिवर्स करें (Reversal voucher बनेगा)' : 'Reverse (posts a reversal voucher)'}
+                                  onClick={() => { setReverseId(v.id); setReverseReason(''); }}>
+                                  <ArrowLeftRight className="h-4 w-4" />
                                 </Button>
                               )}
                               {canEdit && (cancelled ? (
@@ -1256,6 +1273,45 @@ const Vouchers: React.FC = () => {
               disabled={!cancelReason.trim() || cancelLinkedActive}
             >
               {language === 'hi' ? 'रद्द करें' : 'Cancel Voucher'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ECR-08: Reverse voucher (posts a linked contra reversal) */}
+      <AlertDialog open={!!reverseId} onOpenChange={open => !open && setReverseId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{language === 'hi' ? 'वाउचर रिवर्स करें?' : 'Reverse Voucher?'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {language === 'hi'
+                ? 'इस वाउचर को edit करने के बजाय एक Reversal voucher (उल्टी Dr/Cr entry) पोस्ट होगा। मूल और reversal दोनों ledger में रहेंगे (net zero) — audit के लिए दोनों दिखेंगे।'
+                : 'Instead of editing, a Reversal voucher (contra Dr/Cr entry) will be posted. Both the original and the reversal stay in the ledger (net zero) — audit-visible.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="px-4 pb-2">
+            <Label className="text-sm font-medium">{language === 'hi' ? 'रिवर्स करने का कारण *' : 'Reversal Reason *'}</Label>
+            <Textarea
+              className="mt-1"
+              rows={2}
+              placeholder={language === 'hi' ? 'कारण लिखें...' : 'Enter reason...'}
+              value={reverseReason}
+              onChange={e => setReverseReason(e.target.value)}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setReverseId(null)}>{language === 'hi' ? 'वापस' : 'Back'}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 text-white hover:bg-amber-700"
+              onClick={() => {
+                if (reverseId && reverseReason.trim()) {
+                  reverseVoucher(reverseId, reverseReason.trim());
+                  setReverseId(null);
+                }
+              }}
+              disabled={!reverseReason.trim()}
+            >
+              {language === 'hi' ? 'रिवर्स करें' : 'Reverse'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

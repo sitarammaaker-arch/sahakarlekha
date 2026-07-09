@@ -2,6 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { computeStatutory } from '@/lib/payrollStatutory';
+import { suggestMonthlyTds, type TaxRegime } from '@/lib/tdsProjection';
+import { professionalTaxForState } from '@/lib/professionalTax';
+import { build24Q, type Quarter } from '@/lib/form24Q';
+import { daysInMonth, prorate } from '@/lib/attendance';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,6 +57,7 @@ const EMPTY_EMP_FORM = {
   basicSalary: '',
   phone: '',
   bankAccount: '',
+  pan: '',
   status: 'active' as 'active' | 'inactive',
 };
 
@@ -61,6 +67,9 @@ interface ProcessRow {
   employee: Employee;
   allowances: number;
   deductions: number;
+  pt: number;        // ECR-14: professional tax
+  tds: number;       // ECR-14: TDS u/s 192
+  paidDays: number;  // ECR-14: attendance (paid days this month)
   paymentMode: PaymentMode;
   processed: boolean;
 }
@@ -143,6 +152,15 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ empForm, setEmpForm, hi, on
         />
       </div>
       <div className="space-y-1 col-span-2">
+        <Label>{hi ? 'PAN (Form 24Q हेतु)' : 'PAN (for Form 24Q)'}</Label>
+        <Input
+          value={empForm.pan}
+          onChange={e => setEmpForm(f => ({ ...f, pan: e.target.value.toUpperCase() }))}
+          placeholder="ABCDE1234F"
+          maxLength={10}
+        />
+      </div>
+      <div className="space-y-1 col-span-2">
         <Label>{hi ? 'स्थिति' : 'Status'}</Label>
         <Select value={empForm.status} onValueChange={v => setEmpForm(f => ({ ...f, status: v as 'active' | 'inactive' }))}>
           <SelectTrigger>
@@ -202,8 +220,19 @@ const SalaryManagement: React.FC = () => {
   const [processingMonth, setProcessingMonth] = useState(currentMonth());
   const [processRows, setProcessRows] = useState<ProcessRow[]>([]);
   const [rowsLoaded, setRowsLoaded] = useState(false);
+  const [taxRegime, setTaxRegime] = useState<TaxRegime>('new');   // ECR-14: TDS-192 projection regime
 
   // ── Tab 3 – Salary History state ────────────────────────────────────────
+  // ECR-14: Form 24Q dialog
+  const [q24Open, setQ24Open] = useState(false);
+  const [q24Quarter, setQ24Quarter] = useState<Quarter>('Q1');
+  const form24Q = useMemo(() => build24Q(salaryRecords, employees, society.financialYear, q24Quarter), [salaryRecords, employees, society.financialYear, q24Quarter]);
+  const export24Q = () => {
+    const headers = ['Emp No', 'Name', 'PAN', 'Gross Salary', 'TDS'];
+    const rows = form24Q.rows.map(r => [r.empNo, r.name, r.pan, r.grossSalary, r.tds]);
+    downloadCSV(headers, rows, `form24Q_${society.financialYear}_${q24Quarter}.csv`);
+  };
+
   const [historyMonth, setHistoryMonth] = useState('');
   const [historyEmpFilter, setHistoryEmpFilter] = useState('all');
   const [historyPaidFilter, setHistoryPaidFilter] = useState('all');
@@ -268,6 +297,7 @@ const SalaryManagement: React.FC = () => {
       basicSalary: Number(empForm.basicSalary),
       phone: empForm.phone,
       bankAccount: empForm.bankAccount || undefined,
+      pan: empForm.pan.toUpperCase().trim() || undefined,
       status: empForm.status,
     });
     toast({ title: hi ? 'कर्मचारी जोड़ा गया' : 'Employee added' });
@@ -290,6 +320,7 @@ const SalaryManagement: React.FC = () => {
       basicSalary: Number(empForm.basicSalary),
       phone: empForm.phone,
       bankAccount: empForm.bankAccount || undefined,
+      pan: empForm.pan.toUpperCase().trim() || undefined,
       status: empForm.status,
     });
     toast({ title: hi ? 'कर्मचारी अपडेट किया गया' : 'Employee updated' });
@@ -306,6 +337,7 @@ const SalaryManagement: React.FC = () => {
       basicSalary: String(emp.basicSalary),
       phone: emp.phone,
       bankAccount: emp.bankAccount || '',
+      pan: emp.pan || '',
       status: emp.status,
     });
   };
@@ -323,6 +355,9 @@ const SalaryManagement: React.FC = () => {
         employee: emp,
         allowances: 0,
         deductions: 0,
+        pt: professionalTaxForState(emp.basicSalary, society.state),   // ECR-14: auto PT by state (editable)
+        tds: suggestMonthlyTds(emp.basicSalary, taxRegime),   // ECR-14: auto TDS-192 projection (editable)
+        paidDays: daysInMonth(processingMonth),   // ECR-14: full month by default
         paymentMode: 'bank' as PaymentMode,
         processed: salaryRecords.some(r => r.employeeId === emp.id && r.month === processingMonth),
       }))
@@ -330,24 +365,52 @@ const SalaryManagement: React.FC = () => {
     setRowsLoaded(true);
   };
 
-  const updateRow = (empId: string, field: keyof Pick<ProcessRow, 'allowances' | 'deductions' | 'paymentMode'>, value: number | PaymentMode) => {
+  // Re-project monthly TDS for unprocessed rows (basic + allowances × 12) when the regime changes.
+  const reprojectTds = (regime: TaxRegime) => {
+    setTaxRegime(regime);
+    setProcessRows(rows => rows.map(r => r.processed ? r : { ...r, tds: suggestMonthlyTds(r.employee.basicSalary + r.allowances, regime) }));
+  };
+
+  const updateRow = (empId: string, field: keyof Pick<ProcessRow, 'allowances' | 'deductions' | 'pt' | 'tds' | 'paidDays' | 'paymentMode'>, value: number | PaymentMode) => {
     setProcessRows(rows =>
       rows.map(r => (r.employee.id === empId ? { ...r, [field]: value } : r))
     );
   };
 
-  const processRow = (row: ProcessRow) => {
-    const netSalary = row.employee.basicSalary + row.allowances - row.deductions;
-    addSalaryRecord({
+  // ECR-14: statutory computation for a process row. Earnings are pro-rated by attendance
+  // (paid days / days-in-month) first, so PF/ESI compute on the actually-earned wage.
+  const rowStatutory = (row: ProcessRow) => {
+    const monthDays = daysInMonth(processingMonth);
+    return computeStatutory({
+      basic: prorate(row.employee.basicSalary, row.paidDays, monthDays),
+      allowances: prorate(row.allowances, row.paidDays, monthDays),
+      pfApplicable: row.employee.pfApplicable ?? true,
+      esiApplicable: row.employee.esiApplicable ?? true,
+      pt: row.pt,
+      tds: row.tds,
+    });
+  };
+
+  const salaryRecordFromRow = (row: ProcessRow) => {
+    const s = rowStatutory(row);
+    const monthDays = daysInMonth(processingMonth);
+    return {
       employeeId: row.employee.id,
       month: processingMonth,
-      basicSalary: row.employee.basicSalary,
-      allowances: row.allowances,
-      deductions: row.deductions,
-      netSalary,
+      basicSalary: prorate(row.employee.basicSalary, row.paidDays, monthDays),   // earned (attendance-prorated)
+      allowances: prorate(row.allowances, row.paidDays, monthDays),
+      deductions: s.totalEmployeeDeductions,
+      netSalary: s.netSalary,
+      pfEmployee: s.pfEmployee, pfEmployer: s.pfEmployer,
+      esiEmployee: s.esiEmployee, esiEmployer: s.esiEmployer,
+      pt: s.pt, tds: s.tds,
       paymentMode: row.paymentMode,
       isPaid: false,
-    });
+    };
+  };
+
+  const processRow = (row: ProcessRow) => {
+    addSalaryRecord(salaryRecordFromRow(row));
     setProcessRows(rows => rows.map(r => (r.employee.id === row.employee.id ? { ...r, processed: true } : r)));
     toast({ title: hi ? 'वेतन प्रोसेस किया गया' : `Salary processed for ${row.employee.name}` });
   };
@@ -358,19 +421,7 @@ const SalaryManagement: React.FC = () => {
       toast({ title: hi ? 'सभी वेतन पहले से प्रोसेस हो चुके हैं' : 'All salaries already processed', variant: 'destructive' });
       return;
     }
-    pending.forEach(row => {
-      const netSalary = row.employee.basicSalary + row.allowances - row.deductions;
-      addSalaryRecord({
-        employeeId: row.employee.id,
-        month: processingMonth,
-        basicSalary: row.employee.basicSalary,
-        allowances: row.allowances,
-        deductions: row.deductions,
-        netSalary,
-        paymentMode: row.paymentMode,
-        isPaid: false,
-      });
-    });
+    pending.forEach(row => { addSalaryRecord(salaryRecordFromRow(row)); });
     setProcessRows(rows => rows.map(r => ({ ...r, processed: true })));
     toast({ title: hi ? `${pending.length} कर्मचारियों का वेतन प्रोसेस किया गया` : `${pending.length} salaries processed` });
   };
@@ -604,11 +655,22 @@ const SalaryManagement: React.FC = () => {
                     className="w-44"
                   />
                 </div>
+                <div className="space-y-1">
+                  <Label>{hi ? 'TDS व्यवस्था' : 'TDS Regime'}</Label>
+                  <Select value={taxRegime} onValueChange={v => reprojectTds(v as TaxRegime)}>
+                    <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new">{hi ? 'नई व्यवस्था' : 'New regime'}</SelectItem>
+                      <SelectItem value="old">{hi ? 'पुरानी व्यवस्था' : 'Old regime'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Button onClick={loadEmployees} className="gap-2">
                   <Users className="h-4 w-4" />
                   {hi ? 'कर्मचारी लोड करें' : 'Load Employees'}
                 </Button>
               </div>
+              <p className="text-[11px] text-muted-foreground mt-2">{hi ? 'TDS स्वतः projected (वार्षिक अनुमान से मासिक) — हर पंक्ति में बदल सकते हैं।' : 'TDS is auto-projected (annual estimate → monthly) — editable per row.'}</p>
               {rowsLoaded && alreadyProcessedForMonth && (
                 <div className="mt-3 flex items-center gap-2 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md px-3 py-2 text-sm">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -641,8 +703,11 @@ const SalaryManagement: React.FC = () => {
                         <TableRow className="bg-muted/50">
                           <TableHead className="font-semibold">{hi ? 'कर्मचारी' : 'Employee'}</TableHead>
                           <TableHead className="font-semibold text-right">{hi ? 'मूल वेतन' : 'Basic'}</TableHead>
+                          <TableHead className="font-semibold text-right">{hi ? 'उपस्थिति (दिन)' : 'Days'}</TableHead>
                           <TableHead className="font-semibold text-right">{hi ? 'भत्ते' : 'Allowances'}</TableHead>
-                          <TableHead className="font-semibold text-right">{hi ? 'कटौती' : 'Deductions'}</TableHead>
+                          <TableHead className="font-semibold text-right">{hi ? 'व्यावसायिक कर' : 'PT'}</TableHead>
+                          <TableHead className="font-semibold text-right">{hi ? 'TDS' : 'TDS'}</TableHead>
+                          <TableHead className="font-semibold text-right">{hi ? 'कटौती (PF/ESI+PT+TDS)' : 'Deductions (PF/ESI+PT+TDS)'}</TableHead>
                           <TableHead className="font-semibold text-right">{hi ? 'शुद्ध वेतन' : 'Net Salary'}</TableHead>
                           <TableHead className="font-semibold">{hi ? 'भुगतान विधि' : 'Payment Mode'}</TableHead>
                           <TableHead className="font-semibold text-center">{hi ? 'क्रिया' : 'Action'}</TableHead>
@@ -650,7 +715,8 @@ const SalaryManagement: React.FC = () => {
                       </TableHeader>
                       <TableBody>
                         {processRows.map(row => {
-                          const net = row.employee.basicSalary + row.allowances - row.deductions;
+                          const s = rowStatutory(row);
+                          const net = s.netSalary;
                           return (
                             <TableRow
                               key={row.employee.id}
@@ -664,6 +730,17 @@ const SalaryManagement: React.FC = () => {
                               </TableCell>
                               <TableCell className="text-right font-semibold text-sm">
                                 {fmt(row.employee.basicSalary)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Input
+                                    type="number" min="0" max={daysInMonth(processingMonth)}
+                                    value={row.paidDays}
+                                    onChange={e => updateRow(row.employee.id, 'paidDays', Number(e.target.value) || 0)}
+                                    className="w-16 text-right h-8" disabled={row.processed}
+                                  />
+                                  <span className="text-[10px] text-muted-foreground">/{daysInMonth(processingMonth)}</span>
+                                </div>
                               </TableCell>
                               <TableCell className="text-right">
                                 <Input
@@ -680,16 +757,23 @@ const SalaryManagement: React.FC = () => {
                               </TableCell>
                               <TableCell className="text-right">
                                 <Input
-                                  type="number"
-                                  min="0"
-                                  value={row.deductions || ''}
-                                  onChange={e =>
-                                    updateRow(row.employee.id, 'deductions', Number(e.target.value) || 0)
-                                  }
-                                  className="w-24 text-right h-8"
-                                  disabled={row.processed}
-                                  placeholder="0"
+                                  type="number" min="0" value={row.pt || ''}
+                                  onChange={e => updateRow(row.employee.id, 'pt', Number(e.target.value) || 0)}
+                                  className="w-20 text-right h-8" disabled={row.processed} placeholder="0"
                                 />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Input
+                                  type="number" min="0" value={row.tds || ''}
+                                  onChange={e => updateRow(row.employee.id, 'tds', Number(e.target.value) || 0)}
+                                  className="w-20 text-right h-8" disabled={row.processed} placeholder="0"
+                                />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="font-medium text-sm">{fmt(s.totalEmployeeDeductions)}</div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  PF {fmt(s.pfEmployee)}{s.esiEligible ? ` · ESI ${fmt(s.esiEmployee)}` : ''}
+                                </div>
                               </TableCell>
                               <TableCell className="text-right font-bold text-primary">
                                 {fmt(net)}
@@ -764,6 +848,10 @@ const SalaryManagement: React.FC = () => {
               <Button size="sm" variant="outline" onClick={handleSalaryExcel} className="gap-1">
                 <FileSpreadsheet className="h-4 w-4" />
                 Excel
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setQ24Open(true)} className="gap-1">
+                <FileSpreadsheet className="h-4 w-4" />
+                {hi ? 'फॉर्म 24Q' : 'Form 24Q'}
               </Button>
             </div>
           </div>
@@ -1086,6 +1174,59 @@ const SalaryManagement: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ECR-14: Form 24Q — quarterly salary TDS return */}
+      <Dialog open={q24Open} onOpenChange={setQ24Open}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{hi ? 'फॉर्म 24Q — त्रैमासिक वेतन TDS' : 'Form 24Q — Quarterly Salary TDS'} ({society.financialYear})</DialogTitle>
+            <DialogDescription>{hi ? 'चुनी हुई तिमाही में हर कर्मचारी का वेतन व TDS सारांश।' : 'Per-employee salary + TDS summary for the selected quarter.'}</DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Select value={q24Quarter} onValueChange={v => setQ24Quarter(v as Quarter)}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Q1">Q1 (Apr–Jun)</SelectItem>
+                <SelectItem value="Q2">Q2 (Jul–Sep)</SelectItem>
+                <SelectItem value="Q3">Q3 (Oct–Dec)</SelectItem>
+                <SelectItem value="Q4">Q4 (Jan–Mar)</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" className="gap-1" onClick={export24Q} disabled={form24Q.rows.length === 0}>
+              <Download className="h-4 w-4" />CSV
+            </Button>
+            <span className="text-sm text-muted-foreground ml-auto">
+              {form24Q.totals.deductees} {hi ? 'कर्मचारी' : 'deductees'} · TDS <strong>{fmt(form24Q.totals.tds)}</strong>
+            </span>
+          </div>
+          <div className="max-h-[55vh] overflow-y-auto mt-2">
+            {form24Q.rows.length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">{hi ? 'इस तिमाही में कोई वेतन रिकॉर्ड नहीं।' : 'No salary records in this quarter.'}</p>
+            ) : (
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>{hi ? 'कर्म. नं.' : 'Emp No.'}</TableHead>
+                  <TableHead>{hi ? 'नाम' : 'Name'}</TableHead>
+                  <TableHead>PAN</TableHead>
+                  <TableHead className="text-right">{hi ? 'सकल वेतन' : 'Gross Salary'}</TableHead>
+                  <TableHead className="text-right">TDS</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {form24Q.rows.map(r => (
+                    <TableRow key={r.empNo + r.name}>
+                      <TableCell className="font-mono text-xs">{r.empNo}</TableCell>
+                      <TableCell className="text-sm">{r.name}</TableCell>
+                      <TableCell className="font-mono text-xs">{r.pan || <span className="text-destructive">{hi ? 'PAN नहीं' : 'no PAN'}</span>}</TableCell>
+                      <TableCell className="text-right">{fmt(r.grossSalary)}</TableCell>
+                      <TableCell className="text-right font-medium">{fmt(r.tds)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

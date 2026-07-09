@@ -12,6 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Save, ArrowRight, FileSpreadsheet, Download } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { carryForwardOpenings } from '@/lib/openingBalances';
+import { Lock } from 'lucide-react';
 
 interface ObEntry { accountId: string; amount: number; type: 'debit' | 'credit' }
 
@@ -122,6 +124,16 @@ export default function OpeningBalances() {
     toast({ title: hi ? 'पिछले वर्ष का शेष अगले वर्ष में लाया गया' : 'Previous year closing balances carried forward' });
   }, [balanceAccounts, vouchers, society, balances, hi, toast]);
 
+  // ECR-09: opening = prior-year AUDITED closing (from the immutable rollover snapshot).
+  const fyLocked = !!society.fyLocked;
+  const auditedOpenings = useMemo(() => carryForwardOpenings(society.previousYearBalances), [society.previousYearBalances]);
+  const handleCarryFromAudited = useCallback(() => {
+    const next: Record<string, ObEntry> = {};
+    auditedOpenings.forEach(e => { next[e.accountId] = { accountId: e.accountId, amount: e.amount, type: e.type }; });
+    setBalances(next);
+    toast({ title: hi ? `${society.previousFinancialYear || 'पिछले वर्ष'} के लेखा-परीक्षित शेष भरे गए` : `${society.previousFinancialYear || 'Prior year'} audited closing carried in` });
+  }, [auditedOpenings, society.previousFinancialYear, hi, toast]);
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -134,8 +146,13 @@ export default function OpeningBalances() {
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-1" onClick={handleExcel}><FileSpreadsheet className="h-4 w-4" /> Excel</Button>
           <Button variant="outline" size="sm" className="gap-1" onClick={handleCSV}><Download className="h-4 w-4" /> CSV</Button>
-          {user?.role === 'admin' && (
+          {user?.role === 'admin' && !fyLocked && (
             <>
+              {auditedOpenings.length > 0 && (
+                <Button variant="outline" onClick={handleCarryFromAudited} title={hi ? 'लेखा-परीक्षित समापन शेष से' : 'From audited closing'}>
+                  <ArrowRight className="h-4 w-4 mr-2" />{hi ? 'लेखा-परीक्षित शेष भरें' : 'From audited closing'}
+                </Button>
+              )}
               <Button variant="outline" onClick={handleCarryForward}>
                 <ArrowRight className="h-4 w-4 mr-2" />{hi ? 'Carry Forward' : 'Carry Forward (Auto)'}
               </Button>
@@ -146,6 +163,15 @@ export default function OpeningBalances() {
           )}
         </div>
       </div>
+
+      {fyLocked && (
+        <div className="flex items-center gap-2 p-3 bg-destructive/5 border border-destructive/30 rounded-lg text-destructive text-sm">
+          <Lock className="h-4 w-4 shrink-0" />
+          {hi
+            ? `वित्तीय वर्ष ${society.financialYear} लेखा-लॉक है — प्रारंभिक शेष अब बदले नहीं जा सकते (लेखा-परीक्षण के बाद locked)।`
+            : `FY ${society.financialYear} is audit-locked — opening balances can no longer be changed (locked post-audit).`}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card><CardContent className="pt-4">
@@ -215,7 +241,7 @@ export default function OpeningBalances() {
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
-                        {user?.role === 'admin' ? (
+                        {user?.role === 'admin' && !fyLocked ? (
                           <Input
                             type="number" min="0" step="0.01" className="w-36 text-right h-7 text-sm"
                             value={amt} placeholder="0.00"
@@ -233,7 +259,7 @@ export default function OpeningBalances() {
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        {user?.role === 'admin' ? (
+                        {user?.role === 'admin' && !fyLocked ? (
                           <Select
                             value={type}
                             onValueChange={v => setBalances(p => ({

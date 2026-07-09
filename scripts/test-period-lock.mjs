@@ -1,0 +1,40 @@
+// Period-lock / back-dating prevention (P1 #7 / ECR-07) — asserts the pure predicate
+// isPeriodLocked(entityDate, periodLockDate), mirrored from src/contexts/DataContext.tsx
+// the same way scripts/test-nav.mjs mirrors navVisibility. Run: node scripts/test-period-lock.mjs
+
+// ── Mirror of the pure predicate in DataContext.isPeriodLocked ────────────────
+// A voucher dated ON or BEFORE the lock date is in a closed period. ISO YYYY-MM-DD
+// strings compare lexicographically, which is chronological for this format.
+const isPeriodLocked = (entityDate, lock) => !!lock && !!entityDate && entityDate <= lock;
+
+let pass = 0, fail = 0;
+const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
+
+const LOCK = '2025-05-31';
+
+// 1. Dates on/before the lock are blocked.
+ok(isPeriodLocked('2025-05-31', LOCK) === true, 'exactly the lock date is locked (inclusive)');
+ok(isPeriodLocked('2025-05-01', LOCK) === true, 'date before lock is locked');
+ok(isPeriodLocked('2024-12-31', LOCK) === true, 'prior-year date is locked');
+
+// 2. Dates after the lock stay open.
+ok(isPeriodLocked('2025-06-01', LOCK) === false, 'day after lock is open');
+ok(isPeriodLocked('2026-01-01', LOCK) === false, 'later date is open');
+
+// 3. No lock set → never blocked (backward-compatible default).
+ok(isPeriodLocked('2020-01-01', undefined) === false, 'undefined lock → open');
+ok(isPeriodLocked('2020-01-01', '') === false, 'empty lock → open');
+
+// 4. Missing entity date → not blocked (guard only acts on a real date).
+ok(isPeriodLocked(undefined, LOCK) === false, 'undefined date → not blocked');
+ok(isPeriodLocked('', LOCK) === false, 'empty date → not blocked');
+
+// 5. Guard semantics — edit checks BOTH existing and incoming dates (any locked ⇒ block).
+const editBlocked = (existing, incoming, lock) => [existing, incoming].some(d => isPeriodLocked(d, lock));
+ok(editBlocked('2025-05-10', '2025-07-01', LOCK) === true, 'editing a voucher already in the locked period is blocked');
+ok(editBlocked('2025-07-10', '2025-05-01', LOCK) === true, 'back-dating an open voucher into the locked period is blocked');
+ok(editBlocked('2025-07-10', '2025-08-01', LOCK) === false, 'editing wholly within the open period is allowed');
+ok(editBlocked('2025-07-10', undefined, LOCK) === false, 'edit with unchanged (open) date and no new date is allowed');
+
+console.log(`\nPeriod lock (pure): ${pass} passed, ${fail} failed`);
+process.exit(fail > 0 ? 1 : 0);
