@@ -14,7 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import {
-  Plus, Edit2, ShieldCheck, Users, Lock, FileSpreadsheet, Download,
+  Plus, Edit2, ShieldCheck, ShieldOff, Users, Lock, FileSpreadsheet, Download,
   RefreshCw, Eye, EyeOff,
 } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
@@ -32,6 +32,7 @@ interface AppUser {
   isActive: boolean;
   society_id?: string;
   createdAt: string;
+  mfaEnabled?: boolean;
 }
 
 function getCachedUsers(): AppUser[] {
@@ -58,7 +59,7 @@ const empty: Omit<AppUser, 'id' | 'createdAt' | 'society_id'> = {
 };
 
 export default function UserManagement() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, adminResetMfa } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -79,7 +80,7 @@ export default function UserManagement() {
       const societyId = currentUser?.societyId;
       const { data, error } = await supabase
         .from('society_users')
-        .select('id, name, email, role, is_active, society_id, created_at, password')
+        .select('id, name, email, role, is_active, society_id, created_at, password, mfa_enabled')
         .eq('society_id', societyId)
         .order('created_at', { ascending: true });
 
@@ -93,6 +94,7 @@ export default function UserManagement() {
           isActive: u.is_active,
           society_id: u.society_id,
           createdAt: u.created_at,
+          mfaEnabled: !!u.mfa_enabled,
         }));
         setUsers(mapped);
         cacheUsers(mapped);
@@ -216,6 +218,22 @@ export default function UserManagement() {
     cacheUsers(updated);
   };
 
+  // ECR-12 — admin resets a locked-out user's 2FA (lost device).
+  const handleResetMfa = async (u: AppUser) => {
+    if (!window.confirm(hi
+      ? `${u.name} का 2FA reset करें? वे बिना 2FA login करके दोबारा सेट कर पाएंगे.`
+      : `Reset 2FA for ${u.name}? They will be able to log in without 2FA and set it up again.`)) return;
+    const ok = await adminResetMfa(u.email);
+    if (ok) {
+      const updated = users.map(x => x.id === u.id ? { ...x, mfaEnabled: false } : x);
+      setUsers(updated);
+      cacheUsers(updated);
+      toast({ title: hi ? '2FA reset हो गया' : '2FA reset', description: u.email });
+    } else {
+      toast({ title: hi ? 'Reset नहीं हो पाया' : 'Reset failed', description: hi ? 'अनुमति नहीं या cloud तक नहीं पहुँच पाया.' : 'Not authorised or cloud unreachable.', variant: 'destructive' });
+    }
+  };
+
   const openNew = () => {
     setEditing(null);
     setForm(empty);
@@ -328,9 +346,21 @@ export default function UserManagement() {
                       {u.createdAt ? fmtDateTime(u.createdAt) : '—'}
                     </TableCell>
                     <TableCell>
-                      <Button size="sm" variant="ghost" onClick={() => openEdit(u)}>
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        {u.mfaEnabled && (
+                          <>
+                            <Badge variant="outline" className="gap-1 text-[10px]">
+                              <ShieldCheck className="h-3 w-3 text-green-600" /> 2FA
+                            </Badge>
+                            <Button size="sm" variant="ghost" title={hi ? '2FA reset करें' : 'Reset 2FA'} onClick={() => handleResetMfa(u)}>
+                              <ShieldOff className="h-4 w-4 text-amber-600" />
+                            </Button>
+                          </>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={() => openEdit(u)}>
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

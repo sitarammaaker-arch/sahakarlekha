@@ -44,6 +44,12 @@ interface AuthContextType {
   confirmMfa: (secret: string, code: string) => Promise<MfaResult>;
   /** ECR-12 — verify a code against the stored secret, then disable 2FA. */
   disableMfa: (code: string) => Promise<MfaResult>;
+  /** ECR-12 — admin clears another user's 2FA (lost device). Returns false if not authorised. */
+  adminResetMfa: (targetEmail: string) => Promise<boolean>;
+  /** ECR-12 — generate a fresh set of one-time recovery codes (needs a current TOTP). */
+  generateRecoveryCodes: (code: string) => Promise<string[] | null>;
+  /** ECR-12 — complete a pending login using a one-time recovery code. */
+  verifyRecoveryCode: (code: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -235,6 +241,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [completeLogin]);
 
   const cancelMfa = useCallback(() => { pendingMfaRef.current = null; }, []);
+
+  const adminResetMfa = useCallback(async (targetEmail: string): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      const { data, error } = await supabase.rpc('app_mfa_admin_reset', { p_admin_email: user.email, p_target_email: targetEmail });
+      return !error && data === true;
+    } catch {
+      return false;
+    }
+  }, [user]);
+
+  const generateRecoveryCodes = useCallback(async (code: string): Promise<string[] | null> => {
+    if (!user) return null;
+    try {
+      const { data, error } = await supabase.rpc('app_mfa_gen_recovery', { p_email: user.email, p_code: code });
+      if (error || !Array.isArray(data)) return null;
+      return data as string[];
+    } catch {
+      return null;
+    }
+  }, [user]);
+
+  const verifyRecoveryCode = useCallback(async (code: string): Promise<boolean> => {
+    const pending = pendingMfaRef.current;
+    if (!pending) return false;
+    try {
+      const { data, error } = await supabase.rpc('app_verify_recovery', { p_email: pending.user.email, p_code: code });
+      if (error || data !== true) return false;
+    } catch {
+      return false;
+    }
+    completeLogin(pending.user);
+    pendingMfaRef.current = null;
+    return true;
+  }, [completeLogin]);
 
   const login = async (email: string, password: string): Promise<LoginResult> => {
     // 1. Try Supabase Auth (signInWithPassword — JWT based)
@@ -452,7 +493,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user]);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isSuperAdmin, login, verifyMfaCode, cancelMfa, logout, hasPermission, can, sendPasswordReset, enrollMfa, confirmMfa, disableMfa }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isSuperAdmin, login, verifyMfaCode, cancelMfa, logout, hasPermission, can, sendPasswordReset, enrollMfa, confirmMfa, disableMfa, adminResetMfa, generateRecoveryCodes, verifyRecoveryCode }}>
       {children}
     </AuthContext.Provider>
   );

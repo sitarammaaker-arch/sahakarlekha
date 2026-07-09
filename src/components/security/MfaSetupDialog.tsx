@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import QRCode from 'qrcode';
 import { formatSecret } from '@/lib/totp';
-import { ShieldCheck, Copy, Check } from 'lucide-react';
+import { ShieldCheck, Copy, Check, KeyRound } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -20,13 +21,14 @@ interface Props {
  * this is safe and reversible.
  */
 export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
-  const { user, enrollMfa, confirmMfa, disableMfa } = useAuth();
+  const { user, enrollMfa, confirmMfa, disableMfa, generateRecoveryCodes } = useAuth();
   const { toast } = useToast();
   const [secret, setSecret] = useState('');
-  const [uri, setUri] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState('');
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
 
   const enrolled = !!user?.mfaEnabled;
 
@@ -35,9 +37,10 @@ export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
     if (open && !enrolled) {
       const { secret: s, uri: u } = enrollMfa();
       setSecret(s);
-      setUri(u);
+      // Render the otpauth URI as a scannable QR (falls back to manual key if it fails).
+      QRCode.toDataURL(u, { margin: 1, width: 200 }).then(setQrDataUrl).catch(() => setQrDataUrl(''));
     }
-    if (!open) { setCode(''); setCopied(false); }
+    if (!open) { setCode(''); setCopied(false); setRecoveryCodes(null); setQrDataUrl(''); }
   }, [open, enrolled, enrollMfa]);
 
   const copyKey = () => {
@@ -70,6 +73,24 @@ export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
     showResult(r, '2FA बंद', 'Two-factor authentication हटा दिया गया.');
   };
 
+  const handleGenRecovery = async () => {
+    setBusy(true);
+    const codes = await generateRecoveryCodes(code);
+    setBusy(false);
+    if (codes) {
+      setRecoveryCodes(codes);
+      setCode('');
+    } else {
+      toast({ title: 'नहीं बने', description: 'मौजूदा authenticator कोड सही डालें, फिर दोबारा कोशिश करें.', variant: 'destructive' });
+    }
+  };
+
+  const copyRecovery = () => {
+    navigator.clipboard?.writeText((recoveryCodes || []).join('\n')).then(() => {
+      toast({ title: 'Copy हो गया', description: 'Recovery codes clipboard में हैं — सुरक्षित जगह रखें.' });
+    }).catch(() => { /* clipboard unavailable — codes are visible on screen */ });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -87,7 +108,13 @@ export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
 
         {!enrolled && (
           <div className="space-y-2">
-            <Label>Secret key (app में manually जोड़ें)</Label>
+            {qrDataUrl && (
+              <div className="flex flex-col items-center gap-1">
+                <img src={qrDataUrl} alt="2FA QR code" width={180} height={180} className="rounded-md border bg-white p-1" />
+                <p className="text-xs text-muted-foreground">Authenticator app से यह QR scan करें</p>
+              </div>
+            )}
+            <Label>{qrDataUrl ? 'या manually key जोड़ें' : 'Secret key (app में manually जोड़ें)'}</Label>
             <div className="flex items-center gap-2">
               <code className="flex-1 rounded-md bg-muted px-3 py-2 text-sm font-mono tracking-wider break-all">
                 {formatSecret(secret)}
@@ -96,9 +123,6 @@ export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
                 {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
-            <p className="break-all text-xs text-muted-foreground">
-              या यह लिंक/QR-URI इस्तेमाल करें: <span className="font-mono">{uri}</span>
-            </p>
           </div>
         )}
 
@@ -128,6 +152,37 @@ export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
             </Button>
           )}
         </div>
+
+        {enrolled && (
+          <div className="space-y-2 border-t pt-3">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-1.5">
+                <KeyRound className="h-4 w-4 text-primary" /> Recovery codes
+              </Label>
+              <Button type="button" size="sm" variant="outline" onClick={handleGenRecovery} disabled={busy || code.length !== 6}>
+                {recoveryCodes ? 'फिर से बनाएं' : 'बनाएं'}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Phone/authenticator खो जाए तो इनमें से कोई एक कोड डालकर login कर सकते हैं. हर कोड सिर्फ़ एक बार चलता है. बनाने के लिए ऊपर मौजूदा 6-अंकों वाला कोड डालें.
+            </p>
+            {recoveryCodes && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2 rounded-md bg-muted p-3">
+                  {recoveryCodes.map((rc, i) => (
+                    <code key={i} className="text-sm font-mono tracking-wider">{rc.replace(/(.{5})(.{5})/, '$1-$2')}</code>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-amber-600">⚠️ अभी save कर लें — ये दोबारा नहीं दिखेंगे.</p>
+                  <Button type="button" size="sm" variant="ghost" className="gap-1" onClick={copyRecovery}>
+                    <Copy className="h-3.5 w-3.5" /> Copy
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
