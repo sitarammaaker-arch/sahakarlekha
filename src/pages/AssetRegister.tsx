@@ -33,6 +33,8 @@ const EMPTY_FORM = {
   status: 'active' as AssetStatus,
   disposalDate: '',
   saleProceeds: '',
+  capitalize: false,                       // ECR-15: post acquisition voucher (new purchase)
+  capitalizeMode: 'cash' as 'cash' | 'bank',
 };
 
 interface AssetFormProps {
@@ -41,9 +43,10 @@ interface AssetFormProps {
   hi: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
+  showCapitalize?: boolean;
 }
 
-const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCancel }) => (
+const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCancel, showCapitalize }) => (
   <form onSubmit={onSubmit} className="space-y-4">
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="space-y-1 col-span-2">
@@ -120,6 +123,25 @@ const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCa
         <Textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder={hi ? 'अतिरिक्त विवरण...' : 'Additional details...'} />
       </div>
     </div>
+
+    {showCapitalize && (
+      <div className="rounded-md border p-3 bg-muted/30 space-y-2">
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" checked={form.capitalize} onChange={e => setForm(f => ({ ...f, capitalize: e.target.checked }))} className="h-4 w-4" />
+          <span>{hi ? 'यह नई खरीद है — बही में capitalize करें (Dr संपत्ति / Cr नकद-बैंक)' : 'New purchase — capitalize to the ledger (Dr Asset / Cr Cash-Bank)'}</span>
+        </label>
+        {form.capitalize && (
+          <div className="flex items-center gap-2 pl-6">
+            <span className="text-xs text-muted-foreground">{hi ? 'भुगतान विधि' : 'Paid via'}:</span>
+            <select value={form.capitalizeMode} onChange={e => setForm(f => ({ ...f, capitalizeMode: e.target.value as 'cash' | 'bank' }))} className="h-8 rounded-md border border-input bg-background px-2 text-sm">
+              <option value="cash">{hi ? 'नकद' : 'Cash'}</option>
+              <option value="bank">{hi ? 'बैंक' : 'Bank'}</option>
+            </select>
+          </div>
+        )}
+        <p className="text-[11px] text-muted-foreground">{hi ? 'पुरानी/opening संपत्ति के लिए unchecked रखें (सिर्फ़ रजिस्टर, कोई वाउचर नहीं)।' : 'Leave unchecked for opening/historical assets (register only, no voucher).'}</p>
+      </div>
+    )}
 
     <div className="flex justify-end gap-2 pt-2">
       <Button type="button" variant="outline" onClick={onCancel}>{hi ? 'रद्द' : 'Cancel'}</Button>
@@ -240,7 +262,7 @@ const AssetRegister: React.FC = () => {
       location: form.location,
       description: form.description,
       status: form.status,
-    });
+    }, { capitalize: form.capitalize, mode: form.capitalizeMode });
     toast({ title: hi ? 'संपत्ति जोड़ी गई' : 'Asset added' });
     setForm(EMPTY_FORM);
     setIsAddOpen(false);
@@ -520,7 +542,7 @@ const AssetRegister: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'नई संपत्ति जोड़ें' : 'Add New Asset'}</DialogTitle>
           </DialogHeader>
-          <AssetForm form={form} setForm={setForm} hi={hi} onSubmit={handleAdd} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
+          <AssetForm form={form} setForm={setForm} hi={hi} onSubmit={handleAdd} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} showCapitalize />
         </DialogContent>
       </Dialog>
 

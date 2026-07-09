@@ -35,7 +35,7 @@ import { depositLiabilityAccount, depositPosting, applyDepositTxn, validateDepos
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLines } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, nextFY } from '@/lib/depreciation';
-import { assetDisposalPosting, ASSET_ACCOUNTS } from '@/lib/assetDisposal';
+import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS } from '@/lib/assetDisposal';
 
 interface DataContextType {
   vouchers: Voucher[];
@@ -148,7 +148,7 @@ interface DataContextType {
   updateLoan: (id: string, data: Partial<Loan>) => void;
   deleteLoan: (id: string) => void;
 
-  addAsset: (data: Omit<Asset, 'id' | 'assetNo'>) => Asset;
+  addAsset: (data: Omit<Asset, 'id' | 'assetNo'>, opts?: { capitalize?: boolean; mode?: 'cash' | 'bank' }) => Asset;
   updateAsset: (id: string, data: Partial<Asset>) => void;
   disposeAsset: (id: string, opts: { saleProceeds: number; mode: 'cash' | 'bank'; date: string }) => boolean;
   deleteAsset: (id: string) => void;
@@ -3663,13 +3663,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.info(`[AUDIT-DELETE] Loan id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
-  const addAsset = useCallback((data: Omit<Asset, 'id' | 'assetNo'>): Asset => {
+  const addAsset = useCallback((data: Omit<Asset, 'id' | 'assetNo'>, opts?: { capitalize?: boolean; mode?: 'cash' | 'bank' }): Asset => {
     if (guardFYLocked()) return { ...data, id: '' } as unknown as Asset;
     const maxNum = assetsRef.current.reduce((max, a) => {
       const m = a.assetNo?.match(/AST\/(\d+)/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
     }, 0);
     const assetNo = `AST/${String(maxNum + 1).padStart(4, '0')}`;
-    const newAsset: Asset = { ...data, id: crypto.randomUUID(), assetNo };
+    let newAsset: Asset = { ...data, id: crypto.randomUUID(), assetNo };
+    // ECR-15: capitalize a NEW purchase — Dr Fixed-Asset / Cr Cash-Bank. Off by default so
+    // opening/historical assets stay register-only (no voucher, no double-count).
+    if (opts?.capitalize && (data.cost || 0) > 0) {
+      const cashBank = opts.mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+      const posting = assetAcquisitionPosting(data.category, data.cost, cashBank);
+      const v = addVoucher({
+        type: 'payment', date: data.purchaseDate || new Date().toISOString().split('T')[0],
+        debitAccountId: posting.assetAccount, creditAccountId: cashBank, amount: posting.amount,
+        lines: posting.lines.map(l => ({ id: crypto.randomUUID(), accountId: l.accountId, type: l.type, amount: l.amount })),
+        narration: `Asset acquisition: ${assetNo} ${data.name} — capitalized ₹${posting.amount.toLocaleString('en-IN')}`,
+        createdBy: userRef.current?.name ?? 'System',
+      });
+      if (v?.id) newAsset = { ...newAsset, acquisitionVoucherId: v.id };
+    }
     assetsRef.current = [...assetsRef.current, newAsset];
     setAssetsState(prev => { const updated = [...prev, newAsset]; return updated; });
     supabase.from('assets').upsert(withSoc(newAsset)).then(({ error }) => {
@@ -3681,7 +3695,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
     return newAsset;
-  }, []);
+  }, [accounts, addVoucher]);
 
   const updateAsset = useCallback((id: string, data: Partial<Asset>) => {
     if (guardFYLocked()) return;

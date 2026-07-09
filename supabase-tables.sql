@@ -2760,3 +2760,6 @@ do $$ begin
     create policy "allow_all" on compliance_filings for all using (true) with check (true);
   end if;
 end $$;
+
+-- ECR-15 (asset acquisition auto-posting): links the capitalization voucher (Dr Fixed-Asset / Cr Cash-Bank).
+alter table assets add column if not exists "acquisitionVoucherId" text;

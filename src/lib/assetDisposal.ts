@@ -59,3 +59,17 @@ export function assetDisposalPosting(input: DisposalInput): DisposalPosting {
   const drTotal = r2(lines.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0));
   return { cost, accumDep, wdv, gainLoss, drTotal, lines };
 }
+
+/** Acquisition journal — capitalize a purchased asset: Dr Fixed-Asset (category) / Cr Cash-Bank. */
+export function assetAcquisitionPosting(category: AssetCategory, cost: number, cashBankAccount: string): { assetAccount: string; amount: number; lines: DisposalLine[] } {
+  const amount = r2(Math.max(0, cost || 0));
+  const assetAccount = ASSET_ACCOUNTS[category];
+  return {
+    assetAccount,
+    amount,
+    lines: [
+      { accountId: assetAccount, type: 'Dr', amount },
+      { accountId: cashBankAccount, type: 'Cr', amount },
+    ],
+  };
+}

@@ -788,6 +788,7 @@ export interface Asset {
   residualValue?: number;          // scrap value (₹) — depreciable amount = cost - residualValue
   disposalDate?: string;           // ISO date when disposed/sold
   saleProceeds?: number;           // amount received on disposal (₹)
+  acquisitionVoucherId?: string;   // ECR-15: capitalization voucher (Dr Fixed-Asset / Cr Cash-Bank) when purchased
   location: string;
   description: string;
   status: AssetStatus;

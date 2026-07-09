@@ -5,6 +5,14 @@ const r2 = (n) => Math.round(n * 100) / 100;
 const ASSET_ACCOUNTS = { Land: '3101', Building: '3102', Furniture: '3103', Vehicle: '3104', Equipment: '3105', Other: '3106', Computer: '3107' };
 const ACCUM_DEP_ACCOUNTS = { Building: '3108', Furniture: '3109', Vehicle: '3110', Equipment: '3111', Computer: '3112', Other: '3112' };
 const PROFIT_ON_SALE = '4410', LOSS_ON_SALE = '5406';
+function assetAcquisitionPosting(category, cost, cashBankAccount) {
+  const amount = r2(Math.max(0, cost || 0));
+  const assetAccount = ASSET_ACCOUNTS[category];
+  return { assetAccount, amount, lines: [
+    { accountId: assetAccount, type: 'Dr', amount },
+    { accountId: cashBankAccount, type: 'Cr', amount },
+  ] };
+}
 function assetDisposalPosting(input) {
   const cost = r2(Math.max(0, input.cost || 0));
   const accumDep = r2(Math.min(Math.max(0, input.accumDep || 0), cost));
@@ -61,6 +69,15 @@ ok(sum(land.lines, 'Dr') === sum(land.lines, 'Cr'), 'land balances');
 // 6. accumDep capped at cost (never negative WDV).
 const capped = assetDisposalPosting({ category: 'Furniture', cost: 10000, accumDep: 15000, saleProceeds: 2000, cashBankAccount: '3301' });
 ok(capped.accumDep === 10000 && capped.wdv === 0 && capped.gainLoss === 2000, 'accumDep capped at cost → WDV 0, all proceeds are profit');
+
+// 7. Acquisition (ECR-15 slice 2): Dr Fixed-Asset (category) / Cr Cash-Bank for cost.
+const acq = assetAcquisitionPosting('Vehicle', 100000, '3301');
+ok(acq.assetAccount === '3104' && acq.amount === 100000, 'vehicle → Dr 3104');
+ok(acq.lines.some(l => l.accountId === '3104' && l.type === 'Dr' && l.amount === 100000), 'Dr Vehicle 100000');
+ok(acq.lines.some(l => l.accountId === '3301' && l.type === 'Cr' && l.amount === 100000), 'Cr Cash 100000');
+ok(sum(acq.lines, 'Dr') === sum(acq.lines, 'Cr'), 'acquisition balances (Dr = Cr)');
+ok(assetAcquisitionPosting('Land', 500000, '3302').assetAccount === '3101', 'land → Dr 3101, Cr bank');
+ok(assetAcquisitionPosting('Computer', 0, '3301').amount === 0, 'zero cost → amount 0 (no capitalization)');
 
 console.log(`\nAsset disposal (pure): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
