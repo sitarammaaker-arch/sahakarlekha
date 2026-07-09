@@ -206,6 +206,7 @@ export interface Member {
   nomineeShares?: number;
   nomineeFatherName?: string;
   isDeleted?: boolean;             // P0 #2 soft-delete: archived member (retained in DB, hidden from app)
+  branchId?: string;               // ECR-17 Phase 4: branch this member is registered at (unset = head office)
 }
 
 // Housing cooperative — a building / wing / tower master (for multi-tower societies).
@@ -1286,6 +1287,7 @@ export interface Sale {
   narration: string;
   createdAt: string;
   createdBy: string;
+  branchId?: string;       // ECR-17 Phase 4: branch this sale belongs to (unset = head office)
 }
 
 // ── Consumer store — multi-tier pricing (C2) ─────────────────────────────────
@@ -1505,6 +1507,7 @@ export interface Purchase {
   createdBy: string;
   isDeleted?: boolean;      // P0 #2 soft-delete: archived purchase (retained in DB, hidden from app)
   rcmApplicable?: boolean;  // ECR-22: inward supply liable to GST under Reverse Charge (recipient pays) — self-assessed GST + matching ITC
+  branchId?: string;        // ECR-17 Phase 4: branch this purchase belongs to (unset = head office)
 }
 
 // ── Supplier ──────────────────────────────────────────────────────────────────

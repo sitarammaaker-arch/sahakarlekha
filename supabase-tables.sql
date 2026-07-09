@@ -3057,3 +3057,10 @@ end $$;
 
 -- Stock movements carry the godown (overlay — patched in step-2, base save never fails).
 alter table stock_movements add column if not exists "godownId" text;
+
+-- ── ECR-17 Phase 4: branch scope on sales / purchases / members ───────────────
+-- Overlay columns — stamped from the active branch and patched in step-2, so the
+-- base upsert never fails before this migration runs (RULE 1).
+alter table sales     add column if not exists "branchId" text;
+alter table purchases add column if not exists "branchId" text;
+alter table members   add column if not exists "branchId" text;
