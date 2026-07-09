@@ -33,6 +33,7 @@ export const translations: Translations = {
   loanRegister: { hi: 'ऋण रजिस्टर', en: 'Loan Register' },
   deposits: { hi: 'जमा (SB/FD/RD)', en: 'Deposits' },
   complianceCalendar: { hi: 'अनुपालन कैलेंडर', en: 'Compliance Calendar' },
+  statutoryReconciliation: { hi: 'सांविधिक मिलान (PF/ESI)', en: 'Statutory Reconciliation' },
   myDashboard: { hi: 'मेरा डैशबोर्ड', en: 'My Dashboard' },
   milkCollection: { hi: 'दूध संकलन', en: 'Milk Collection' },
   assetRegister: { hi: 'संपत्ति रजिस्टर', en: 'Asset Register' },

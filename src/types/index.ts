@@ -1043,6 +1043,9 @@ export interface SocietySettings {
   fyLockedBy?: string;         // Name of user who locked the FY
   periodLockDate?: string;     // ECR-07: ISO date (YYYY-MM-DD); vouchers dated ON/BEFORE this are in a locked period (back-dating prevention). Undefined/empty = no period lock.
   periodLockBy?: string;       // Name of user who set the period lock
+  fyUnlockRequestedBy?: string;  // ECR-07 dual-control: email of the admin who requested FY unlock (needs a different admin to approve)
+  fyUnlockRequestedAt?: string;  // ISO date of the unlock request
+  notificationChannels?: { email?: boolean; sms?: boolean; whatsapp?: boolean };  // ECR-13: which external alert channels the society has switched on (in-app is always on; actual sending needs a wired provider)
   approvalRequired?: boolean;  // opt-in maker-checker: when true, PENDING vouchers are held out of the ledger/reports until approved (REJECTED are always excluded). Default (undefined/false) = no gating — behaviour unchanged.
   approvalThresholdAmount?: number;  // ECR-11: manual vouchers with amount ≥ this need approval (matrix). Undefined/0 = no threshold rule.
   // Board & Signing Authority
