@@ -7,6 +7,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,8 @@ interface BSGroup {
 
 const BalanceSheet: React.FC = () => {
   const { t, language } = useLanguage();
+  const { can } = useAuth();
+  const canExport = can('export');   // ECR-19: read-only roles can view/print but not export data
   const { getTrialBalance, getProfitLoss, getTradingAccount, society, accounts, stockItems } = useData();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -410,8 +413,10 @@ const BalanceSheet: React.FC = () => {
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2" onClick={handlePDF}><Download className="h-4 w-4" />PDF</Button>
-          <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}><FileSpreadsheet className="h-4 w-4" />Excel</Button>
-          <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}><FileSpreadsheet className="h-4 w-4" />CSV</Button>
+          {canExport && <>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}><FileSpreadsheet className="h-4 w-4" />Excel</Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}><FileSpreadsheet className="h-4 w-4" />CSV</Button>
+          </>}
         </div>
       </div>
 
