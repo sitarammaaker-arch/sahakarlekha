@@ -128,6 +128,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'purchaseRegister',   titleKey: 'purchaseRegister',   icon: PackagePlus,     route: '/purchase-register',    domain: 'reports', requiredCapabilities: U, order: 7 },
   { id: 'billsOutstanding',   titleKey: 'billsOutstanding',   icon: Clock,           route: '/bills-outstanding',    domain: 'reports', requiredCapabilities: U, order: 8 },
   { id: 'gstSummary',         titleKey: 'gstSummary',         icon: Percent,         route: '/gst-summary',          domain: 'reports', requiredCapabilities: ['gst'], order: 9 },
+  { id: 'gstr9',              titleKey: 'gstr9',              icon: FileText,        route: '/gstr-9',               domain: 'reports', requiredCapabilities: ['gst'], order: 9.5 },
   { id: 'agingAnalysis',      titleKey: 'agingAnalysis',      icon: TrendingDown,    route: '/aging-analysis',       domain: 'reports', requiredCapabilities: U, order: 10 },
   { id: 'tdsForm16A',         titleKey: 'tdsForm16A',         icon: Receipt,         route: '/tds-form16a',          domain: 'reports', requiredCapabilities: ['tds'], order: 11 },
   { id: 'tdsRegister',        titleKey: 'tdsRegister',        icon: Receipt,         route: '/tds-register',         domain: 'reports', requiredCapabilities: ['tds'], order: 12 },

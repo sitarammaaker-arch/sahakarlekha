@@ -55,6 +55,7 @@ export const translations: Translations = {
   multiSocietyConsolidation: { hi: 'बहु-समिति समेकन', en: 'Multi-Society Consolidation' },
   universalImporter: { hi: 'डेटा Import (Universal)', en: 'Universal Importer' },
   gstSummary: { hi: 'GST सारांश', en: 'GST Summary' },
+  gstr9: { hi: 'GSTR-9 वार्षिक', en: 'GSTR-9 Annual' },
   agingAnalysis: { hi: 'AR/AP बकाया विश्लेषण', en: 'Aging Analysis' },
   saleRegister: { hi: 'बिक्री रजिस्टर', en: 'Sale Register' },
   purchaseRegister: { hi: 'खरीद रजिस्टर', en: 'Purchase Register' },
