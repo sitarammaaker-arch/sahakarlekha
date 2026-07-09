@@ -14,7 +14,7 @@ import {
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Languages, Bell, User, Settings, HelpCircle, Menu, LogOut, Search, Landmark, ShieldAlert, XCircle, Lock, CalendarClock, ShieldCheck } from 'lucide-react';
+import { Languages, Bell, User, Settings, HelpCircle, Menu, LogOut, Search, Landmark, ShieldAlert, XCircle, Lock, CalendarClock, ShieldCheck, Warehouse } from 'lucide-react';
 import { buildComplianceCalendar, complianceNotifications } from '@/lib/complianceCalendar';
 import { cn } from '@/lib/utils';
 import { GlobalSearch } from '@/components/GlobalSearch';
@@ -29,7 +29,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuToggle }) => {
   const { language, setLanguage, t } = useLanguage();
   const { user, logout } = useAuth();
-  const { society, loans, auditObjections, vouchers, employees, getComplianceFiledIds, branches, activeBranchId, setActiveBranch } = useData();
+  const { society, loans, auditObjections, vouchers, employees, getComplianceFiledIds, branches, activeBranchId, setActiveBranch, godowns, activeGodownId, setActiveGodown } = useData();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const ctxHelp = helpForRoute(pathname); // matching how-to for the current screen, if any
@@ -137,6 +137,31 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
                   {branches.map(b => (
                     <DropdownMenuItem key={b.id} onClick={() => setActiveBranch(b.id)}>
                       <span className={cn(activeBranchId === b.id && 'font-semibold')}>{b.name}{b.isHeadOffice ? (language === 'hi' ? ' (हेड ऑफ़िस)' : ' (HO)') : ''}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {/* ECR-17 P3: Active godown selector (stamps new stock movements) */}
+            {godowns.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2" title={language === 'hi' ? 'सक्रिय गोदाम' : 'Active godown'}>
+                    <Warehouse className="h-4 w-4" />
+                    <span className="hidden md:inline max-w-[110px] truncate">
+                      {activeGodownId ? (godowns.find(g => g.id === activeGodownId)?.name || (language === 'hi' ? 'गोदाम' : 'Godown')) : (language === 'hi' ? 'गोदाम नहीं' : 'No godown')}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
+                  <DropdownMenuItem onClick={() => setActiveGodown('')}>
+                    <span className={cn(!activeGodownId && 'font-semibold')}>{language === 'hi' ? 'कोई गोदाम नहीं' : 'No godown'}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {godowns.map(g => (
+                    <DropdownMenuItem key={g.id} onClick={() => setActiveGodown(g.id)}>
+                      <span className={cn(activeGodownId === g.id && 'font-semibold')}>{g.name}</span>
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>

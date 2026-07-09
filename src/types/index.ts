@@ -1229,6 +1229,19 @@ export interface StockMovement {
   narration: string;
   batchNo?: string;     // Consumer C8 — batch/lot the movement relates to (esp. expiry/damage write-offs)
   expiryDate?: string;  // Consumer C8 — expiry date of the written-off/received batch
+  godownId?: string;    // ECR-17 Phase 3: the godown this movement happened in (unset = default/unassigned)
+  createdAt: string;
+}
+
+// ── Godown (ECR-17 Phase 3 — godown-wise stock) ──────────────────────────────
+export interface Godown {
+  id: string;
+  name: string;
+  code?: string;
+  branchId?: string;    // the branch this godown belongs to
+  address?: string;
+  capacityMT?: number;
+  isActive?: boolean;
   createdAt: string;
 }
 

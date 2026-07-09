@@ -3035,3 +3035,25 @@ end $$;
 
 -- Voucher branch dimension (overlay column — patched in step-2, base save never fails).
 alter table vouchers add column if not exists "branchId" text;
+
+-- ── ECR-17 Phase 3: godown-wise stock ────────────────────────────────────────
+create table if not exists godowns (
+  id text primary key,
+  society_id text,
+  name text not null,
+  code text,
+  "branchId" text,
+  address text,
+  "capacityMT" numeric,
+  "isActive" boolean default true,
+  "createdAt" timestamptz default now()
+);
+alter table godowns enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='godowns' and policyname='allow_all_godowns') then
+    create policy "allow_all_godowns" on godowns for all using (true) with check (true);
+  end if;
+end $$;
+
+-- Stock movements carry the godown (overlay — patched in step-2, base save never fails).
+alter table stock_movements add column if not exists "godownId" text;
