@@ -44,3 +44,47 @@ export function buildComparativeMap(
 export function isEmptyPeriod(map: Record<string, number>): boolean {
   return !map || Object.values(map).every(v => !v || Math.abs(v) < 0.005);
 }
+
+export interface PLItem { name: string; nameHi: string; amount: number; }
+export interface PLResult {
+  incomeItems: PLItem[];
+  expenseItems: PLItem[];
+  totalIncome: number;
+  totalExpenses: number;
+  netProfit: number;
+}
+
+/**
+ * Period P&L = cumulative(end) − cumulative(start). Income/expense accounts are
+ * cumulative-from-inception, so subtracting the two "as-on" statements isolates
+ * the flows that occurred DURING the period (e.g. the prior FY). Used to COMPUTE
+ * the P&L / I&E prior-year column instead of relying on a manual snapshot.
+ */
+export function deltaProfitLoss(end: PLResult, start: PLResult): PLResult {
+  const sub = (a: PLItem[], b: PLItem[]): PLItem[] => {
+    const bMap = new Map(b.map(i => [i.name, i]));
+    const names = new Set([...a.map(i => i.name), ...b.map(i => i.name)]);
+    const out: PLItem[] = [];
+    for (const name of names) {
+      const ai = a.find(i => i.name === name);
+      const bi = bMap.get(name);
+      const amount = r2((ai?.amount || 0) - (bi?.amount || 0));
+      if (Math.abs(amount) < 0.005) continue;
+      out.push({ name, nameHi: ai?.nameHi || bi?.nameHi || name, amount });
+    }
+    return out;
+  };
+  const totalIncome = r2(end.totalIncome - start.totalIncome);
+  const totalExpenses = r2(end.totalExpenses - start.totalExpenses);
+  return {
+    incomeItems: sub(end.incomeItems, start.incomeItems),
+    expenseItems: sub(end.expenseItems, start.expenseItems),
+    totalIncome, totalExpenses,
+    netProfit: r2(totalIncome - totalExpenses),
+  };
+}
+
+/** Is a period P&L empty (no income/expense flows)? → fall back to a saved snapshot. */
+export function isEmptyPL(pl: PLResult | null | undefined): boolean {
+  return !pl || (Math.abs(pl.totalIncome) < 0.005 && Math.abs(pl.totalExpenses) < 0.005);
+}

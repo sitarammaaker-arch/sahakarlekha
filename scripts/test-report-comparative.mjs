@@ -63,5 +63,44 @@ const snapshot = { '1102': -40000 };
 ok((!isEmptyPeriod(priorComputed) ? priorComputed : snapshot) === priorComputed, 'non-empty computed prior is used');
 ok((!isEmptyPeriod({ '3301': 0, '1102': 0 }) ? { x: 1 } : snapshot) === snapshot, 'empty computed prior → snapshot fallback');
 
+// ── deltaProfitLoss: prior-FY P&L = cumulative(end) − cumulative(start) ──────
+function deltaProfitLoss(end, start) {
+  const sub = (a, b) => {
+    const bMap = new Map(b.map(i => [i.name, i]));
+    const names = new Set([...a.map(i => i.name), ...b.map(i => i.name)]);
+    const out = [];
+    for (const name of names) {
+      const ai = a.find(i => i.name === name);
+      const bi = bMap.get(name);
+      const amount = r2((ai?.amount || 0) - (bi?.amount || 0));
+      if (Math.abs(amount) < 0.005) continue;
+      out.push({ name, nameHi: ai?.nameHi || bi?.nameHi || name, amount });
+    }
+    return out;
+  };
+  const totalIncome = r2(end.totalIncome - start.totalIncome);
+  const totalExpenses = r2(end.totalExpenses - start.totalExpenses);
+  return { incomeItems: sub(end.incomeItems, start.incomeItems), expenseItems: sub(end.expenseItems, start.expenseItems), totalIncome, totalExpenses, netProfit: r2(totalIncome - totalExpenses) };
+}
+function isEmptyPL(pl) { return !pl || (Math.abs(pl.totalIncome) < 0.005 && Math.abs(pl.totalExpenses) < 0.005); }
+
+// 10. Prior-FY P&L isolated as the delta of two cumulative statements.
+const plEnd   = { incomeItems: [{ name: 'Sales', nameHi: 'बिक्री', amount: 100 }, { name: 'Interest', nameHi: 'ब्याज', amount: 20 }], expenseItems: [{ name: 'Rent', nameHi: 'किराया', amount: 30 }], totalIncome: 120, totalExpenses: 30, netProfit: 90 };
+const plStart = { incomeItems: [{ name: 'Sales', nameHi: 'बिक्री', amount: 40 }], expenseItems: [{ name: 'Rent', nameHi: 'किराया', amount: 10 }], totalIncome: 40, totalExpenses: 10, netProfit: 30 };
+const d = deltaProfitLoss(plEnd, plStart);
+ok(d.totalIncome === 80 && d.totalExpenses === 20 && d.netProfit === 60, 'period P&L = 120−40 income, 30−10 exp, netProfit 60');
+ok(d.incomeItems.find(i => i.name === 'Sales').amount === 60, 'Sales flow this period = 100 − 40 = 60');
+ok(d.incomeItems.find(i => i.name === 'Interest').amount === 20, 'a head only in end period keeps its full amount');
+ok(d.incomeItems.find(i => i.name === 'Interest').nameHi === 'ब्याज', 'nameHi preserved');
+
+// 11. A head that only existed in the earlier cumulative → negative (reversed/closed) is dropped if it nets to itself.
+const d2 = deltaProfitLoss({ incomeItems: [], expenseItems: [], totalIncome: 0, totalExpenses: 0, netProfit: 0 }, { incomeItems: [{ name: 'X', nameHi: 'X', amount: 50 }], expenseItems: [], totalIncome: 50, totalExpenses: 0, netProfit: 50 });
+ok(d2.incomeItems.find(i => i.name === 'X').amount === -50, 'head present only in start → −50 (net reduction)');
+ok(d2.totalIncome === -50, 'delta totals go negative correctly');
+
+// 12. isEmptyPL gating.
+ok(isEmptyPL({ incomeItems: [], expenseItems: [], totalIncome: 0, totalExpenses: 0, netProfit: 0 }) === true, 'empty P&L detected → snapshot fallback');
+ok(isEmptyPL(plEnd) === false, 'non-empty P&L detected');
+
 console.log(`\nReport comparative (pure): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { generateIncomeExpenditurePDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { deltaProfitLoss, isEmptyPL } from '@/lib/reportComparative';
 
 // Appropriation account IDs (must match ReserveFund.tsx)
 const ACC_NET_SURPLUS = '1208';   // Net Surplus / (Deficit)
@@ -32,10 +33,21 @@ const ProfitLoss: React.FC = () => {
   const isSurplus = netProfit >= 0;
   const grandTotal = isSurplus ? totalIncome : totalExpenses;
 
-  // P5-2: Previous year comparison
-  const pyIE = society.previousYearIE;
-  const hasPY = !!pyIE && !!society.previousFinancialYear;
-  const pyLabel = society.previousFinancialYear || '';
+  // ECR-19: prior-year I&E is now COMPUTED as a period-delta — the flows DURING the
+  // prior FY = cumulative(prior FY end) − cumulative(prior FY start). Falls back to
+  // the saved snapshot when the dataset has no prior-period figures (rolled-over
+  // society whose prior vouchers were cleared into openings).
+  const fyFirstYear = society.financialYear.split('-')[0];
+  const hasFY = /^\d{4}$/.test(fyFirstYear);
+  const computedPY = hasFY
+    ? deltaProfitLoss(getProfitLoss(`${fyFirstYear}-03-31`), getProfitLoss(`${Number(fyFirstYear) - 1}-03-31`))
+    : null;
+  const usingComputedPY = !isEmptyPL(computedPY);
+  const pyIE = usingComputedPY ? computedPY : society.previousYearIE;
+  const hasPY = !!pyIE && (usingComputedPY || !!society.previousFinancialYear);
+  const pyLabel = usingComputedPY
+    ? (hasFY ? `${Number(fyFirstYear) - 1}-${String(Number(fyFirstYear)).slice(-2)}` : '')
+    : (society.previousFinancialYear || '');
   const getPYIncome = (name: string) => pyIE?.incomeItems.find(i => i.name === name)?.amount ?? 0;
   const getPYExpense = (name: string) => pyIE?.expenseItems.find(i => i.name === name)?.amount ?? 0;
 
