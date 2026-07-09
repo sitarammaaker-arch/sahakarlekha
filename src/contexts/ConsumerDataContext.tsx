@@ -24,6 +24,13 @@ import { resolveMemberReceivableAccountId, resolvePatronageDistributionAccountId
 import { memberOutstanding, memberAgeing, type Ageing, type RecoveryRow } from '@/lib/consumer/credit';
 import { computePatronageLines, computeDividendLines, patronageTotal, patronageLegs } from '@/lib/consumer/patronage';
 import { poTotal, buildGrnInvoice } from '@/lib/consumer/purchaseOrder';
+import { threeWayMatch, hasBlockingVariance, blockingReasons, type MatchReason } from '@/lib/consumer/threeWayMatch';
+
+// ECR-21 Phase 3 — short Hindi labels for a variance-hold toast.
+const VARIANCE_LABEL: Record<MatchReason, string> = {
+  'short-delivery': 'कम डिलीवरी', 'over-delivery': 'ज़्यादा डिलीवरी', 'over-billed-qty': 'ज़्यादा बिल (मात्रा)',
+  'under-billed-qty': 'कम बिल (मात्रा)', 'price-variance': 'दर अंतर', 'unbilled': 'बिल नहीं', 'extra-invoice-line': 'अतिरिक्त बिल पंक्ति',
+};
 import { getBankAccountIds } from '@/lib/storage';
 import { isUniqueViolation, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import type { ConsumerPrice, ConsumerPriceTier, Voucher, PatronageRun, PurchaseOrder, PurchaseOrderItem, Purchase, SalesReturn, SalesReturnItem, SalesReturnRefund, PurchaseReturn, PurchaseReturnItem, PurchaseReturnRefund } from '@/types';
@@ -383,12 +390,21 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
 
   const commitPO = useCallback((next: PurchaseOrder, revertTo: PurchaseOrder | null, onFail?: () => void) => {
     setPOState(prev => { const u = prev.some(p => p.id === next.id) ? prev.map(p => p.id === next.id ? next : p) : [...prev, next]; storage.setConsumerPurchaseOrders(u); return u; });
-    supabase.from('consumer_purchase_orders').upsert(withSoc(next)).then(({ error }) => {
+    // ECR-21 Phase 3: variance-approval columns are late-added — keep them out of the
+    // base upsert (schema-cache safe) and patch them step-2, so RULE-1 rollback still
+    // works before the migration runs.
+    const { varianceStatus, varianceReason, varianceApprovedBy, ...base } = next;
+    supabase.from('consumer_purchase_orders').upsert(withSoc(base)).then(({ error }) => {
       if (error) {
         console.error('PO save error:', error.message);
         setPOState(prev => { const u = revertTo ? prev.map(p => p.id === next.id ? revertTo : p) : prev.filter(p => p.id !== next.id); storage.setConsumerPurchaseOrders(u); return u; });
         onFail?.();
         toastRef.current({ title: 'खरीद ऑर्डर सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. (Pehli baar: consumer_purchase_orders block chalayein.)`, variant: 'destructive', duration: 12000 });
+        return;
+      }
+      if (varianceStatus || varianceReason || varianceApprovedBy) {
+        supabase.from('consumer_purchase_orders').update({ varianceStatus, varianceReason, varianceApprovedBy }).eq('id', next.id)
+          .then(({ error: vErr }) => { if (vErr) console.warn('PO variance patch:', vErr.message); });
       }
     });
   }, [societyId]);
@@ -420,7 +436,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     return next;
   }, [purchaseOrders, guardFYLocked, commitPO, user]);
 
-  const receivePurchaseOrder = useCallback((id: string, data: { receivedQty?: Record<string, number>; billedRate?: Record<string, number>; gstPct?: number; interState?: boolean; paymentMode: 'cash' | 'bank' | 'credit'; bankAccountId?: string; date: string }): Purchase | null => {
+  const receivePurchaseOrder = useCallback((id: string, data: { receivedQty?: Record<string, number>; billedRate?: Record<string, number>; gstPct?: number; interState?: boolean; varianceApproved?: boolean; varianceReason?: string; paymentMode: 'cash' | 'bank' | 'credit'; bankAccountId?: string; date: string }): Purchase | null => {
     if (guardFYLocked()) return null;
     const cur = purchaseOrders.find(p => p.id === id);
     if (!cur || cur.status !== 'approved') { toastRef.current({ title: 'पहले ऑर्डर approve करें', variant: 'destructive' }); return null; }
@@ -429,6 +445,15 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     // + real GST split, so input credit posts and the 3-way match sees a genuine variance.
     const invoice = buildGrnInvoice(items, { billedRate: data.billedRate, gstPct: data.gstPct, interState: data.interState });
     if (invoice.items.length === 0) { toastRef.current({ title: 'कोई माल प्राप्त नहीं', description: 'कम-से-कम एक वस्तु की received मात्रा डालें।', variant: 'destructive' }); return null; }
+    // ECR-21 Phase 3: 3-way match gate. A payment-risk exception (e.g. billed rate beyond
+    // tolerance) HOLDS the receipt until the user explicitly approves the variance.
+    const match = threeWayMatch(items, invoice.items);
+    const blocked = hasBlockingVariance(match);
+    if (blocked && !data.varianceApproved) {
+      const reasons = blockingReasons(match).map(r => VARIANCE_LABEL[r]).join(', ');
+      toastRef.current({ title: 'अंतर मिला — approve ज़रूरी', description: `PO ${cur.poNo}: ${reasons}. यह अंतर approve करके ही माल प्राप्ति दर्ज होगी।`, variant: 'destructive', duration: 12000 });
+      return null;
+    }
     try {
       const purchase = addPurchase({
         date: data.date, supplierName: cur.supplierName, supplierPhone: cur.supplierPhone, supplierId: cur.supplierId,
@@ -439,9 +464,13 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         narration: `PO ${cur.poNo} — माल प्राप्ति (GRN)`, createdBy: user?.name ?? 'admin',
       });
       if (!purchase?.id) return null;
-      const next: PurchaseOrder = { ...cur, items, status: 'received', receivedAt: new Date().toISOString(), purchaseId: purchase.id, purchaseNo: purchase.purchaseNo };
+      const next: PurchaseOrder = {
+        ...cur, items, status: 'received', receivedAt: new Date().toISOString(), purchaseId: purchase.id, purchaseNo: purchase.purchaseNo,
+        // ECR-21 Phase 3: record the audit trail when a variance was force-approved.
+        ...(blocked ? { varianceStatus: 'approved' as const, varianceReason: data.varianceReason?.trim() || 'Variance approved at goods receipt', varianceApprovedBy: user?.name || 'admin' } : {}),
+      };
       commitPO(next, cur);
-      toastRef.current({ title: `✅ माल प्राप्त — ${purchase.purchaseNo}`, description: 'स्टॉक अपडेट + खरीद दर्ज' });
+      toastRef.current({ title: `✅ माल प्राप्त — ${purchase.purchaseNo}`, description: blocked ? 'अंतर approve सहित दर्ज' : 'स्टॉक अपडेट + खरीद दर्ज' });
       return purchase;
     } catch (err) {
       toastRef.current({ title: 'माल प्राप्ति दर्ज नहीं हुई', description: err instanceof Error ? err.message : undefined, variant: 'destructive', duration: 10000 });

@@ -1370,6 +1370,11 @@ export interface PurchaseOrder {
   notes?: string;
   isDeleted?: boolean;
   createdAt: string;
+  // ECR-21 Phase 3 — goods-receipt variance approval (set only when the receipt was
+  // posted despite a 3-way match exception, e.g. billed rate beyond tolerance).
+  varianceStatus?: 'approved';
+  varianceReason?: string;
+  varianceApprovedBy?: string;
 }
 
 // ── Consumer store — Sales Return / Returns Inward ───────────────────────────

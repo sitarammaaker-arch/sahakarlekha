@@ -143,5 +143,20 @@ r = threeWayMatch([po('A', 10, 100, 10), po('B', 5, 20, 5)], [inv('A', 10, 100),
 ok(r.summary.orderedTotal === 1100 && r.summary.receivedTotal === 1100 && r.summary.billedTotal === 1100, 'totals roll up (1100 each)');
 ok(r.summary.status === 'matched', 'clean multi-line → matched');
 
+// ECR-21 Phase 3 — blocking-variance gate.
+const hasBlockingVariance = (res) => res.summary.exceptions > 0;
+const blockingReasons = (res) => { const s = new Set(); for (const l of res.lines) if (l.status === 'exception') for (const rr of l.reasons) s.add(rr); return [...s]; };
+
+// 11. Clean / within-tolerance → NOT blocked; exception → blocked.
+ok(!hasBlockingVariance(threeWayMatch([po('A', 10, 100, 10)], [inv('A', 10, 100)])), 'perfect match: not blocked');
+ok(!hasBlockingVariance(threeWayMatch([po('A', 10, 100, 7)], [inv('A', 7, 100)])), 'short delivery correctly billed: not blocked');
+ok(hasBlockingVariance(threeWayMatch([po('A', 10, 100, 10)], [inv('A', 10, 110)])), 'price +10%: blocked');
+ok(hasBlockingVariance(threeWayMatch([po('A', 10, 100, 10)], [inv('A', 12, 100)])), 'over-billed qty: blocked');
+ok(hasBlockingVariance(threeWayMatch([po('A', 10, 100, 10)], [])), 'unbilled receipt: blocked');
+
+// 12. blockingReasons lists the distinct exception reasons.
+const br = blockingReasons(threeWayMatch([po('A', 10, 100, 10)], [inv('A', 10, 110)]));
+ok(br.includes('price-variance') && br.length === 1, 'blockingReasons = [price-variance]');
+
 console.log(`\n3-way match (pure): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

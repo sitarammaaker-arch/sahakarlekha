@@ -123,7 +123,16 @@ const ProcurementMatch: React.FC = () => {
                       <TableCell className="text-right">{fmt(s.receivedTotal)}</TableCell>
                       <TableCell className="text-right">{fmt(s.billedTotal)}</TableCell>
                       <TableCell className={cn('text-right font-medium', Math.abs(s.amountVarianceTotal) > 0.005 ? 'text-red-700' : 'text-muted-foreground')}>{s.amountVarianceTotal === 0 ? '—' : fmt(s.amountVarianceTotal)}</TableCell>
-                      <TableCell><Badge variant="outline" className={cn('text-[10px]', STATUS[s.status].cls)}>{hi ? STATUS[s.status].hi : STATUS[s.status].en}</Badge></TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5 items-start">
+                          <Badge variant="outline" className={cn('text-[10px]', STATUS[s.status].cls)}>{hi ? STATUS[s.status].hi : STATUS[s.status].en}</Badge>
+                          {po.varianceStatus === 'approved' && (
+                            <Badge variant="outline" className="text-[9px] border-blue-300 text-blue-700 bg-blue-50" title={po.varianceReason || (po.varianceApprovedBy ? `${po.varianceApprovedBy}` : '')}>
+                              {hi ? 'अंतर approve' : 'Variance approved'}{po.varianceApprovedBy ? ` · ${po.varianceApprovedBy}` : ''}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                     {isOpen && (
                       <TableRow>
