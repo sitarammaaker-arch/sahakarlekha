@@ -244,6 +244,11 @@ const reverseEntryLines = (lines: VoucherLine[]): VoucherLine[] =>
 const isEditLocked = (v: Pick<Voucher, 'reversedBy' | 'approvalStatus'>, approvalRequired: boolean): boolean =>
   !!v.reversedBy || (!!approvalRequired && v.approvalStatus === 'approved');
 
+// ECR-11: approval matrix — does a manual voucher of `amount` need approval? True when the
+// all-manual flag is on, OR the amount meets the configured threshold. Pure.
+const requiresApproval = (amount: number, opts: { approvalRequired?: boolean; threshold?: number }): boolean =>
+  !!opts.approvalRequired || (!!opts.threshold && opts.threshold > 0 && (amount || 0) >= opts.threshold);
+
 // ── ECR-16 (member lifecycle) pure helpers ────────────────────────────────────
 const MEMBER_STATUSES: MemberStatus[] = ['active', 'inactive', 'resigned', 'expelled', 'deceased'];
 // Valid lifecycle transition? No self-transition; 'deceased' is terminal (shares pass to
@@ -1209,6 +1214,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const amount = data.amount || drLines.reduce((s, l) => s + l.amount, 0);
 
     const voucherNo = data.voucherNo?.trim() || storage.getNextVoucherNo(data.type, society.financialYear, vouchersRef.current);
+    // ECR-11: hold MANUAL vouchers for approval when the matrix matches (all-manual flag OR
+    // amount ≥ threshold). Only origin==='manual' is subject to this — auto/engine vouchers
+    // are never held. If the caller already set a status, respect it.
+    const needsApproval = data.origin === 'manual' && data.approvalStatus === undefined &&
+      requiresApproval(amount, { approvalRequired: society.approvalRequired, threshold: society.approvalThresholdAmount });
     const newVoucher: Voucher = {
       ...data,
       id: lid(),
@@ -1217,6 +1227,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       debitAccountId,
       creditAccountId,
       amount,
+      approvalStatus: needsApproval ? 'pending' : data.approvalStatus,
       createdAt: new Date().toISOString(),
     };
     // Update ref immediately so the next addVoucher call in the same tick sees this voucher

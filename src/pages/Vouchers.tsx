@@ -288,6 +288,7 @@ const Vouchers: React.FC = () => {
       createdBy: user?.name || 'System',
       voucherNo: customNo || undefined,
       approvalStatus: submitForApproval ? 'pending' : undefined,
+      origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
     });
     setSavedVoucherNo(v.voucherNo);
     toast({ title: language === 'hi' ? 'वाउचर सहेजा गया' : 'Voucher saved', description: v.voucherNo });
@@ -319,6 +320,7 @@ const Vouchers: React.FC = () => {
         createdBy: user?.name || 'System',
         voucherNo: customNo || undefined,
         approvalStatus: submitForApproval ? 'pending' : undefined,
+      origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
       });
       setSavedVoucherNo(v.voucherNo);
       toast({ title: language === 'hi' ? 'कोंट्रा वाउचर सहेजा गया' : 'Contra Voucher saved', description: v.voucherNo });
@@ -351,6 +353,7 @@ const Vouchers: React.FC = () => {
       createdBy: user?.name || 'System',
       voucherNo: customNo || undefined,
       approvalStatus: submitForApproval ? 'pending' : undefined,
+      origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
     });
     setSavedVoucherNo(v.voucherNo);
     toast({ title: language === 'hi' ? 'वाउचर सहेजा गया' : 'Voucher saved', description: `${v.voucherNo}` });

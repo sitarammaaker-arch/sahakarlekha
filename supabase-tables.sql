@@ -827,6 +827,9 @@ alter table society_settings add column if not exists signatories jsonb default 
 -- society.approvalRequired ?? false, so it degrades gracefully before this runs.
 alter table society_settings add column if not exists "approvalRequired" boolean default false;
 
+-- ECR-11: approval matrix — manual vouchers with amount ≥ this need approval. NULL/0 = off.
+alter table society_settings add column if not exists "approvalThresholdAmount" numeric;
+
 -- ECR-16 (MS-11): cap on share-transfer premium as % of face value transferred.
 -- NULL/0 ⇒ no premium allowed (statutory default — transfers at face value).
 alter table society_settings add column if not exists "maxSharePremiumPercent" numeric;

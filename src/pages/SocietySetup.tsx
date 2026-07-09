@@ -44,6 +44,18 @@ const SocietySetup: React.FC = () => {
     toast({ title: language === 'hi' ? 'अवधि लॉक हटाई गई' : 'Period Lock Cleared', description: language === 'hi' ? 'अब पिछली अवधि में भी एंट्री हो सकती है।' : 'Back-dated entries are allowed again.' });
   };
 
+  // ECR-11: approval matrix config (threshold + all-manual toggle)
+  const [approvalThresholdInput, setApprovalThresholdInput] = useState(String(society.approvalThresholdAmount ?? ''));
+  const saveApprovalThreshold = () => {
+    updateSociety({ approvalThresholdAmount: approvalThresholdInput === '' ? undefined : Number(approvalThresholdInput) });
+    toast({ title: language === 'hi' ? 'अनुमोदन सीमा सहेजी' : 'Approval threshold saved' });
+  };
+  const toggleApprovalRequired = () => {
+    const next = !society.approvalRequired;
+    updateSociety({ approvalRequired: next });
+    toast({ title: next ? (language === 'hi' ? 'हर manual वाउचर अनुमोदन-आवश्यक' : 'All manual vouchers need approval') : (language === 'hi' ? 'सभी-manual अनुमोदन बंद' : 'All-manual approval off') });
+  };
+
   // Basic info form state
   const [form, setForm] = useState({
     name: society.name,
@@ -746,6 +758,37 @@ const SocietySetup: React.FC = () => {
                         <Unlock className="h-4 w-4" />{language === 'hi' ? 'हटाएं' : 'Clear'}
                       </Button>
                     )}
+                  </div>
+                </div>
+              </div>
+
+              {/* ECR-11: Approval rules (maker-checker matrix) */}
+              <div className="mt-6 p-4 rounded-lg border-2 border-primary/30 bg-primary/5">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="min-w-[220px]">
+                    <div className="flex items-center gap-2 font-semibold text-primary">
+                      <CheckCircle2 className="h-4 w-4" />
+                      {language === 'hi' ? 'अनुमोदन नियम (Maker-Checker)' : 'Approval Rules (Maker-Checker)'}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {language === 'hi'
+                        ? 'manual वाउचर तभी अनुमोदन हेतु रुकते हैं जब ये नियम लागू हों। ऑटो/सिस्टम वाउचर कभी नहीं रुकते।'
+                        : 'Manual vouchers are held for approval only when these rules match. Auto/system vouchers are never held.'}
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Button variant={society.approvalRequired ? 'default' : 'outline'} size="sm" onClick={toggleApprovalRequired}>
+                      {society.approvalRequired
+                        ? (language === 'hi' ? 'हर manual वाउचर: चालू' : 'Every manual voucher: ON')
+                        : (language === 'hi' ? 'हर manual वाउचर: बंद' : 'Every manual voucher: OFF')}
+                    </Button>
+                    <div className="flex items-end gap-2">
+                      <div>
+                        <Label className="text-xs">{language === 'hi' ? 'सीमा राशि ≥ (₹)' : 'Threshold ≥ (₹)'}</Label>
+                        <Input type="number" min="0" value={approvalThresholdInput} onChange={e => setApprovalThresholdInput(e.target.value)} className="w-32 h-9 mt-1" placeholder="0" />
+                      </div>
+                      <Button variant="outline" size="sm" className="h-9" onClick={saveApprovalThreshold}>{language === 'hi' ? 'सहेजें' : 'Save'}</Button>
+                    </div>
                   </div>
                 </div>
               </div>
