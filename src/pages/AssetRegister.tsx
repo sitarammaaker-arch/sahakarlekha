@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Download, Search, Edit, Trash2, Package, RefreshCw, CheckCircle, Banknote } from 'lucide-react';
+import { Plus, Download, Search, Edit, Trash2, Package, RefreshCw, CheckCircle, Banknote, AlertTriangle } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { generateAssetRegisterPDF } from '@/lib/pdf';
@@ -152,7 +152,7 @@ const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCa
 
 const AssetRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { assets, addAsset, updateAsset, disposeAsset, deleteAsset, postDepreciation, addVoucher, accounts, vouchers, society } = useData();
+  const { assets, addAsset, updateAsset, disposeAsset, deleteAsset, postDepreciation, addVoucher, accounts, vouchers, society, getAssetRegisterReconciliation } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -369,6 +369,8 @@ const AssetRegister: React.FC = () => {
     Other: hi ? 'अन्य' : 'Other',
   };
 
+  const assetRecon = getAssetRegisterReconciliation();   // ECR-05: register cost vs fixed-asset ledger
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -393,6 +395,17 @@ const AssetRegister: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* ECR-05: Register ↔ Ledger reconciliation banner */}
+      <Card className={assetRecon.reconciled ? 'bg-success/10 border-success/20' : 'bg-destructive/10 border-destructive/30'}>
+        <CardContent className="py-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+          {assetRecon.reconciled
+            ? <span className="flex items-center gap-2 font-medium text-green-700"><CheckCircle className="h-4 w-4" />{hi ? 'रजिस्टर ↔ लेजर मिलान सही' : 'Register ↔ Ledger reconciled'}</span>
+            : <span className="flex items-center gap-2 font-medium text-destructive"><AlertTriangle className="h-4 w-4" />{hi ? `रजिस्टर ↔ लेजर में अंतर: ${fmt(assetRecon.difference)}` : `Register ↔ Ledger drift: ${fmt(assetRecon.difference)}`}</span>}
+          <span className="text-muted-foreground">{hi ? 'रजिस्टर लागत' : 'Register cost'}: <span className="font-medium text-foreground">{fmt(assetRecon.registerTotal)}</span></span>
+          <span className="text-muted-foreground">{hi ? 'स्थायी-संपत्ति लेजर' : 'Fixed-asset ledger'}: <span className="font-medium text-foreground">{fmt(assetRecon.controlBalance)}</span></span>
+        </CardContent>
+      </Card>
 
       {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
