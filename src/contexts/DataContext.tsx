@@ -34,6 +34,7 @@ import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { resolveCapabilities } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
 import { logAudit, type AuditInput } from '@/lib/auditLog';
+import { snapshotDeletedMovements } from '@/lib/movementArchive';
 import { sumActiveMemberShareCapital, reconcileShareCapital, type ShareCapitalReconciliation } from '@/lib/shareReconciliation';
 import { sumActiveAssetCost, reconcileAssetRegister, type AssetReconciliation } from '@/lib/assetReconciliation';
 import { can as rbacCan, type Permission } from '@/lib/rbac';
@@ -4541,6 +4542,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     supabase.from('stock_items').update({ isActive: false, currentStock: 0 }).eq('id', id)
       .then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // ECR-21 (RULE-3): archive the movements to the WORM audit log before hard-deleting
+    // them (kept out of the live table so the stock formula stays correct).
+    const _delItemMovs = stockMovementsRef.current.filter(m => m.itemId === id);
+    if (_delItemMovs.length) emitAudit({ entityType: 'stockMovement', entityId: id, action: 'delete', before: { count: _delItemMovs.length, movements: snapshotDeletedMovements(_delItemMovs) }, reason: 'Stock item deleted' });
     supabase.from('stock_movements').delete().eq('itemId', id)
       .then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     console.info(`[AUDIT-DELETE] StockItem id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
@@ -4744,6 +4749,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
         // Cascade-delete stock_movements for this sale
         // (Inventory / Stock Valuation / Closing Stock all derive qty from movements.)
+        const _delSaleMovs = stockMovementsRef.current.filter(m => m.referenceNo === sale.saleNo);   // ECR-21: archive before hard-delete
+        if (_delSaleMovs.length) emitAudit({ entityType: 'stockMovement', entityId: sale.saleNo, action: 'delete', before: { count: _delSaleMovs.length, movements: snapshotDeletedMovements(_delSaleMovs) }, reason: `Sale ${sale.saleNo} deleted` });
         setStockMovementsState(s => s.filter(m => m.referenceNo !== sale.saleNo));
         supabase.from('stock_movements').delete().eq('referenceNo', sale.saleNo)
           .then(({ error }) => { if (error) console.error('Movements cascade-delete sync:', error.message); });
@@ -4799,6 +4806,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }));
 
     // 1b: Delete old stock_movements rows for this sale (so movement sum stays correct).
+    const _delSaleEditMovs = stockMovementsRef.current.filter(m => m.referenceNo === original.saleNo);   // ECR-21: archive before hard-delete
+    if (_delSaleEditMovs.length) emitAudit({ entityType: 'stockMovement', entityId: original.saleNo, action: 'delete', before: { count: _delSaleEditMovs.length, movements: snapshotDeletedMovements(_delSaleEditMovs) }, reason: `Sale ${original.saleNo} edited (movements replaced)` });
     setStockMovementsState(prev => prev.filter(m => m.referenceNo !== original.saleNo));
     supabase.from('stock_movements').delete().eq('referenceNo', original.saleNo)
       .then(({ error }) => { if (error) console.error('Old movements delete sync:', error.message); });
@@ -5068,6 +5077,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Cascade-delete stock_movements for this purchase
         // (Inventory / Stock Valuation / Closing Stock all compute qty from movements,
         //  so orphan movements would keep stock showing as if the purchase still existed.)
+        const _delPurMovs = stockMovementsRef.current.filter(m => m.referenceNo === purchase.purchaseNo);   // ECR-21: archive before hard-delete
+        if (_delPurMovs.length) emitAudit({ entityType: 'stockMovement', entityId: purchase.purchaseNo, action: 'delete', before: { count: _delPurMovs.length, movements: snapshotDeletedMovements(_delPurMovs) }, reason: `Purchase ${purchase.purchaseNo} deleted` });
         setStockMovementsState(s => s.filter(m => m.referenceNo !== purchase.purchaseNo));
         supabase.from('stock_movements').delete().eq('referenceNo', purchase.purchaseNo)
           .then(({ error }) => { if (error) console.error('Movements cascade-delete sync:', error.message); });
@@ -5129,6 +5140,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }));
 
     // 1️⃣b Delete old stock_movements for this purchase (so they don't double-count)
+    const _delPurEditMovs = stockMovementsRef.current.filter(m => m.referenceNo === original.purchaseNo);   // ECR-21: archive before hard-delete
+    if (_delPurEditMovs.length) emitAudit({ entityType: 'stockMovement', entityId: original.purchaseNo, action: 'delete', before: { count: _delPurEditMovs.length, movements: snapshotDeletedMovements(_delPurEditMovs) }, reason: `Purchase ${original.purchaseNo} edited (movements replaced)` });
     setStockMovementsState(prev => prev.filter(m => m.referenceNo !== original.purchaseNo));
     supabase.from('stock_movements').delete().eq('referenceNo', original.purchaseNo)
       .then(({ error }) => { if (error) console.error('Old movements delete sync:', error.message); });
