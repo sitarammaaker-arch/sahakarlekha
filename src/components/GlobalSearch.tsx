@@ -107,7 +107,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
             {filteredPages.length > 0 && <CommandSeparator />}
             <CommandGroup heading={hi ? 'सदस्य' : 'Members'}>
               {filteredMembers.map(m => (
-                <CommandItem key={m.id} value={`member-${m.id}`} onSelect={() => go('/members')} className="gap-2">
+                <CommandItem key={m.id} value={`member-${m.id}`} onSelect={() => go(`/members?q=${encodeURIComponent(m.memberId)}`)} className="gap-2">
                   <Users className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span className="font-medium">{m.name}</span>
                   <span className="text-muted-foreground text-xs ml-auto">{m.memberId}</span>
@@ -150,7 +150,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
           <><CommandSeparator />
             <CommandGroup heading={hi ? 'आपूर्तिकर्ता' : 'Suppliers'}>
               {filteredSuppliers.map(s => (
-                <CommandItem key={s.id} value={`supplier-${s.id}`} onSelect={() => go('/suppliers')} className="gap-2">
+                <CommandItem key={s.id} value={`supplier-${s.id}`} onSelect={() => go(`/suppliers?q=${encodeURIComponent(s.name)}`)} className="gap-2">
                   <Truck className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span>{hi ? (s.nameHi || s.name) : s.name}</span>
                 </CommandItem>
@@ -163,7 +163,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
           <><CommandSeparator />
             <CommandGroup heading={hi ? 'ग्राहक' : 'Customers'}>
               {filteredCustomers.map(c => (
-                <CommandItem key={c.id} value={`customer-${c.id}`} onSelect={() => go('/customers')} className="gap-2">
+                <CommandItem key={c.id} value={`customer-${c.id}`} onSelect={() => go(`/customers?q=${encodeURIComponent(c.name)}`)} className="gap-2">
                   <UserCheck className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span>{hi ? (c.nameHi || c.name) : c.name}</span>
                 </CommandItem>

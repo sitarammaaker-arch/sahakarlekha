@@ -25,6 +25,7 @@ import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MemberType, CasteCategory } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { useDeepLinkQuery } from '@/hooks/useDeepLinkQuery';
 import { generateMemberPassbookPDF, generateMemberApplicationPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
 import type { Member, MemberStatus, Nominee, KycStatus, ShareCertStatus } from '@/types';
@@ -331,6 +332,7 @@ const Members: React.FC = () => {
   const activeTab = searchParams.get('tab') || 'approved';
 
   const [searchQuery, setSearchQuery] = useState('');
+  useDeepLinkQuery(setSearchQuery);   // ECR-25 P2: focus a member deep-linked from global search (?q=)
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editMember, setEditMember] = useState<Member | null>(null);
   const [viewMember, setViewMember] = useState<Member | null>(null);
