@@ -2770,3 +2770,153 @@ alter table assets add column if not exists "acquisitionVoucherId" text;
 alter table society_users add column if not exists mfa_enabled boolean default false;
 alter table society_users add column if not exists mfa_secret text;
 alter table society_users add column if not exists mfa_enrolled_at timestamptz;
+
+-- ── ECR-12 slice 3: server-side TOTP verification + secret lockdown ───────────
+-- The authenticator secret must NEVER reach the client. It lives in user_mfa
+-- (RLS on, no policies/grants → not readable or writable by anon/authenticated),
+-- and every verification runs server-side via SECURITY DEFINER functions.
+-- (society_users.mfa_secret from slice 1 is now deprecated/unused — safe to keep
+--  empty; you may DROP it once no legacy secrets remain.)
+create extension if not exists pgcrypto with schema extensions;
+
+create table if not exists user_mfa (
+  email       text primary key,
+  secret      text not null,
+  enrolled_at timestamptz default now()
+);
+alter table user_mfa enable row level security;   -- no policies → clients blocked
+revoke all on user_mfa from anon, authenticated;
+
+-- RFC 4648 base32 decode → bytea.
+create or replace function base32_decode(p_in text)
+returns bytea language plpgsql immutable as $fn$
+declare
+  alphabet text := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  s text := upper(regexp_replace(coalesce(p_in, ''), '[^A-Za-z2-7]', '', 'g'));
+  bits int := 0;
+  val  int := 0;
+  idx  int;
+  out  bytea := ''::bytea;
+  i    int;
+begin
+  for i in 1..length(s) loop
+    idx := position(substr(s, i, 1) in alphabet) - 1;
+    if idx < 0 then continue; end if;
+    val := (val << 5) | idx;
+    bits := bits + 5;
+    if bits >= 8 then
+      bits := bits - 8;
+      out := out || set_byte('\x00'::bytea, 0, (val >> bits) & 255);
+      val := val & ((1 << bits) - 1);
+    end if;
+  end loop;
+  return out;
+end;
+$fn$;
+
+-- RFC 6238 TOTP match with ±window skew. p_at = unix seconds.
+create or replace function app_totp_matches(p_secret text, p_code text, p_at bigint, p_window int default 1)
+returns boolean language plpgsql
+set search_path = public, extensions as $fn$
+declare
+  key     bytea;
+  counter bigint;
+  c       bigint;
+  w       int;
+  msg     bytea;
+  hs      bytea;
+  offs    int;
+  bin     bigint;
+  expected text;
+begin
+  if p_secret is null or p_code !~ '^\d{6}$' then
+    return false;
+  end if;
+  key := base32_decode(p_secret);
+  counter := floor(p_at / 30);
+  for w in -p_window..p_window loop
+    c := counter + w;
+    if c < 0 then continue; end if;
+    msg := '\x0000000000000000'::bytea;
+    msg := set_byte(msg, 0, ((c >> 56) & 255)::int);
+    msg := set_byte(msg, 1, ((c >> 48) & 255)::int);
+    msg := set_byte(msg, 2, ((c >> 40) & 255)::int);
+    msg := set_byte(msg, 3, ((c >> 32) & 255)::int);
+    msg := set_byte(msg, 4, ((c >> 24) & 255)::int);
+    msg := set_byte(msg, 5, ((c >> 16) & 255)::int);
+    msg := set_byte(msg, 6, ((c >>  8) & 255)::int);
+    msg := set_byte(msg, 7, ( c        & 255)::int);
+    hs := hmac(msg, key, 'sha1');
+    offs := get_byte(hs, length(hs) - 1) & 15;
+    bin := ((get_byte(hs, offs)     & 127)::bigint << 24)
+         | ((get_byte(hs, offs + 1) & 255)::bigint << 16)
+         | ((get_byte(hs, offs + 2) & 255)::bigint <<  8)
+         |  (get_byte(hs, offs + 3) & 255)::bigint;
+    expected := lpad((bin % 1000000)::text, 6, '0');
+    if expected = p_code then
+      return true;
+    end if;
+  end loop;
+  return false;
+end;
+$fn$;
+
+-- Enrol: verify the first code against the given secret, then store it (locked
+-- table) and flip the flag. Client never writes the secret directly.
+create or replace function app_mfa_enroll(p_email text, p_secret text, p_code text)
+returns boolean language plpgsql security definer
+set search_path = public, extensions as $fn$
+begin
+  if not app_totp_matches(p_secret, p_code, floor(extract(epoch from now()))::bigint, 1) then
+    return false;
+  end if;
+  insert into user_mfa (email, secret, enrolled_at) values (p_email, p_secret, now())
+    on conflict (email) do update set secret = excluded.secret, enrolled_at = now();
+  update society_users set mfa_enabled = true where email = p_email;
+  return true;
+end;
+$fn$;
+
+-- Login: verify a code against the stored secret (secret stays server-side).
+create or replace function app_verify_mfa(p_email text, p_code text)
+returns boolean language plpgsql security definer
+set search_path = public, extensions as $fn$
+declare sec text;
+begin
+  select m.secret into sec
+    from user_mfa m join society_users u on u.email = m.email
+   where m.email = p_email and u.is_active = true and u.mfa_enabled = true
+   limit 1;
+  if sec is null then return false; end if;
+  return app_totp_matches(sec, p_code, floor(extract(epoch from now()))::bigint, 1);
+end;
+$fn$;
+
+-- Disable: verify a current code, then remove the secret and clear the flag.
+create or replace function app_mfa_disable(p_email text, p_code text)
+returns boolean language plpgsql security definer
+set search_path = public, extensions as $fn$
+declare sec text;
+begin
+  select secret into sec from user_mfa where email = p_email limit 1;
+  if sec is null then return false; end if;
+  if not app_totp_matches(sec, p_code, floor(extract(epoch from now()))::bigint, 1) then
+    return false;
+  end if;
+  delete from user_mfa where email = p_email;
+  update society_users set mfa_enabled = false where email = p_email;
+  return true;
+end;
+$fn$;
+
+grant execute on function app_mfa_enroll(text, text, text) to anon, authenticated;
+grant execute on function app_verify_mfa(text, text)        to anon, authenticated;
+grant execute on function app_mfa_disable(text, text)       to anon, authenticated;
+
+-- RFC 6238 SELF-TEST — run this once after creating the functions. Expected:
+-- t59 = t1234567890 = t1111111111 = true, and wrong = false.
+--   select
+--     app_totp_matches('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ','287082',59,0)         as t59,
+--     app_totp_matches('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ','005924',1234567890,0) as t1234567890,
+--     app_totp_matches('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ','050471',1111111111,0) as t1111111111,
+--     app_totp_matches('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ','000000',59,0)         as wrong;

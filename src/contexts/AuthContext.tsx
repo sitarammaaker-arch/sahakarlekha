@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useRe
 import { getAuthSession, setAuthSession } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import { can as rbacCan, type Permission } from '@/lib/rbac';
-import { generateSecret, verifyTotp, otpauthUri } from '@/lib/totp';
+import { generateSecret, otpauthUri } from '@/lib/totp';
 
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes of inactivity
 
@@ -131,7 +131,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ECR-12 — holds the password-verified user + their TOTP secret between the
   // two login steps. Kept in a ref (never state/localStorage) so a half-finished
   // login cannot be restored or inspected.
-  const pendingMfaRef = useRef<{ user: User; secret: string } | null>(null);
+  const pendingMfaRef = useRef<{ user: User } | null>(null);
 
   const doLogout = useCallback(() => {
     setUser(null);
@@ -203,16 +203,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const { data } = await supabase
         .from('society_users')
-        .select('mfa_enabled, mfa_secret')
+        .select('mfa_enabled')
         .eq('email', u.email)
         .maybeSingle();
-      const row = data as { mfa_enabled?: boolean; mfa_secret?: string } | null;
-      if (row?.mfa_enabled && row.mfa_secret) {
-        pendingMfaRef.current = { user: { ...u, mfaEnabled: true }, secret: row.mfa_secret };
+      if ((data as { mfa_enabled?: boolean } | null)?.mfa_enabled) {
+        // Only the flag is read here — the secret stays server-side (ECR-12 s3).
+        pendingMfaRef.current = { user: { ...u, mfaEnabled: true } };
         return { status: 'mfa' };
       }
     } catch {
-      // Supabase unreachable — cannot read the secret, so MFA can't be enforced
+      // Supabase unreachable — cannot read the flag, so MFA can't be enforced
       // (fail-open on offline; in production Supabase is always reachable here).
     }
     completeLogin(u);
@@ -222,7 +222,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const verifyMfaCode = useCallback(async (code: string): Promise<boolean> => {
     const pending = pendingMfaRef.current;
     if (!pending) return false;
-    if (!(await verifyTotp(pending.secret, code))) return false;
+    try {
+      // Server-side verify — the secret never reaches the client (ECR-12 s3).
+      const { data, error } = await supabase.rpc('app_verify_mfa', { p_email: pending.user.email, p_code: code });
+      if (error || data !== true) return false;
+    } catch {
+      return false; // offline → cannot verify → fail closed.
+    }
     completeLogin(pending.user);
     pendingMfaRef.current = null;
     return true;
@@ -418,14 +424,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user]);
 
   const confirmMfa = useCallback(async (secret: string, code: string): Promise<MfaResult> => {
-    if (!(await verifyTotp(secret, code))) return { ok: false, reason: 'bad-code' };
     if (!user) return { ok: false, reason: 'save-failed' };
     try {
-      const { error } = await supabase
-        .from('society_users')
-        .update({ mfa_enabled: true, mfa_secret: secret, mfa_enrolled_at: new Date().toISOString() })
-        .eq('email', user.email);
+      // Server verifies the code and stores the secret in the locked user_mfa
+      // table (SECURITY DEFINER) — the client never writes the secret (ECR-12 s3).
+      const { data, error } = await supabase.rpc('app_mfa_enroll', { p_email: user.email, p_secret: secret, p_code: code });
       if (error) return { ok: false, reason: 'save-failed' };
+      if (data !== true) return { ok: false, reason: 'bad-code' };
     } catch {
       return { ok: false, reason: 'save-failed' };
     }
@@ -436,19 +441,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const disableMfa = useCallback(async (code: string): Promise<MfaResult> => {
     if (!user) return { ok: false, reason: 'save-failed' };
     try {
-      const { data } = await supabase
-        .from('society_users')
-        .select('mfa_secret')
-        .eq('email', user.email)
-        .maybeSingle();
-      const secret = (data as { mfa_secret?: string } | null)?.mfa_secret;
-      if (!secret) return { ok: false, reason: 'save-failed' };
-      if (!(await verifyTotp(secret, code))) return { ok: false, reason: 'bad-code' };
-      const { error } = await supabase
-        .from('society_users')
-        .update({ mfa_enabled: false, mfa_secret: null, mfa_enrolled_at: null })
-        .eq('email', user.email);
+      const { data, error } = await supabase.rpc('app_mfa_disable', { p_email: user.email, p_code: code });
       if (error) return { ok: false, reason: 'save-failed' };
+      if (data !== true) return { ok: false, reason: 'bad-code' };
     } catch {
       return { ok: false, reason: 'save-failed' };
     }
