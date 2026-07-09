@@ -16,6 +16,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { FileText, Download } from 'lucide-react';
 import { downloadCSV } from '@/lib/exportUtils';
 import { computeGSTR9, type GstRecord } from '@/lib/gstr9';
+import { validateGstBatch, validateGSTIN, type GstCheckRecord } from '@/lib/gstTdsValidation';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
@@ -41,6 +43,18 @@ const GSTR9: React.FC = () => {
     purchaseReturns: purchaseReturns as unknown as GstRecord[],
     from, to,
   }), [sales, purchases, salesReturns, purchaseReturns, from, to]);
+
+  // ECR-22 slice C: read-only data checks over the period's GST records.
+  const issues = useMemo(() => {
+    const inFY = (d?: string) => !!d && d >= from && d <= to;
+    const recs: GstCheckRecord[] = [
+      ...sales.filter((s: { date?: string }) => inFY(s.date)).map((s: Record<string, unknown>) => ({ ref: `Sale ${(s.invoiceNo || s.saleNo || s.id) as string}`, netAmount: s.netAmount as number, cgstAmount: s.cgstAmount as number, sgstAmount: s.sgstAmount as number, igstAmount: s.igstAmount as number, cgstPct: s.cgstPct as number, sgstPct: s.sgstPct as number, igstPct: s.igstPct as number, isDeleted: s.isDeleted as boolean })),
+      ...purchases.filter((p: { date?: string }) => inFY(p.date)).map((p: Record<string, unknown>) => ({ ref: `Purchase ${(p.billNo || p.purchaseNo || p.id) as string}`, netAmount: p.netAmount as number, cgstAmount: p.cgstAmount as number, sgstAmount: p.sgstAmount as number, igstAmount: p.igstAmount as number, cgstPct: p.cgstPct as number, sgstPct: p.sgstPct as number, igstPct: p.igstPct as number, isDeleted: p.isDeleted as boolean })),
+    ];
+    const list = validateGstBatch(recs);
+    if (society.gstin && !validateGSTIN(society.gstin)) list.unshift({ ref: hi ? 'समिति' : 'Society', field: 'gstin', severity: 'error', message: `Invalid society GSTIN: ${society.gstin}` });
+    return list;
+  }, [sales, purchases, society.gstin, from, to, hi]);
 
   const exportCsv = () => {
     const headers = ['Table', 'Description', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Total Tax'];
@@ -145,6 +159,30 @@ const GSTR9: React.FC = () => {
           <p className="text-[11px] text-muted-foreground mt-1">C {fmt(g.creditCarryForward.cgst)} · S {fmt(g.creditCarryForward.sgst)} · I {fmt(g.creditCarryForward.igst)}</p>
         </CardContent></Card>
       </div>
+
+      {/* ECR-22 C — data checks */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2">
+          {issues.length === 0 ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+          {hi ? 'डेटा जाँच (GST/TDS)' : 'Data checks (GST/TDS)'}
+          {issues.length > 0 && <span className="text-xs font-normal text-muted-foreground">— {issues.length} {hi ? 'चेतावनी' : issues.length === 1 ? 'issue' : 'issues'}</span>}
+        </CardTitle></CardHeader>
+        <CardContent>
+          {issues.length === 0 ? (
+            <p className="text-sm text-emerald-700">{hi ? 'कोई समस्या नहीं मिली — GST डेटा consistent है।' : 'No issues found — GST data looks consistent.'}</p>
+          ) : (
+            <ul className="space-y-1 text-sm max-h-64 overflow-y-auto">
+              {issues.slice(0, 100).map((it, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className={`mt-0.5 text-[10px] font-semibold uppercase ${it.severity === 'error' ? 'text-red-600' : 'text-amber-600'}`}>{it.severity}</span>
+                  <span><span className="font-medium">{it.ref}:</span> {it.message}</span>
+                </li>
+              ))}
+              {issues.length > 100 && <li className="text-xs text-muted-foreground">…{issues.length - 100} {hi ? 'और' : 'more'}</li>}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <p className="text-[11px] text-muted-foreground">
         {hi
