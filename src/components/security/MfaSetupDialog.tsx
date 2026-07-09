@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import QRCode from 'qrcode';
 import { formatSecret } from '@/lib/totp';
 import { ShieldCheck, Copy, Check, KeyRound } from 'lucide-react';
 
@@ -23,10 +24,10 @@ export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
   const { user, enrollMfa, confirmMfa, disableMfa, generateRecoveryCodes } = useAuth();
   const { toast } = useToast();
   const [secret, setSecret] = useState('');
-  const [uri, setUri] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState('');
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
 
   const enrolled = !!user?.mfaEnabled;
@@ -36,9 +37,10 @@ export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
     if (open && !enrolled) {
       const { secret: s, uri: u } = enrollMfa();
       setSecret(s);
-      setUri(u);
+      // Render the otpauth URI as a scannable QR (falls back to manual key if it fails).
+      QRCode.toDataURL(u, { margin: 1, width: 200 }).then(setQrDataUrl).catch(() => setQrDataUrl(''));
     }
-    if (!open) { setCode(''); setCopied(false); setRecoveryCodes(null); }
+    if (!open) { setCode(''); setCopied(false); setRecoveryCodes(null); setQrDataUrl(''); }
   }, [open, enrolled, enrollMfa]);
 
   const copyKey = () => {
@@ -106,7 +108,13 @@ export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
 
         {!enrolled && (
           <div className="space-y-2">
-            <Label>Secret key (app में manually जोड़ें)</Label>
+            {qrDataUrl && (
+              <div className="flex flex-col items-center gap-1">
+                <img src={qrDataUrl} alt="2FA QR code" width={180} height={180} className="rounded-md border bg-white p-1" />
+                <p className="text-xs text-muted-foreground">Authenticator app से यह QR scan करें</p>
+              </div>
+            )}
+            <Label>{qrDataUrl ? 'या manually key जोड़ें' : 'Secret key (app में manually जोड़ें)'}</Label>
             <div className="flex items-center gap-2">
               <code className="flex-1 rounded-md bg-muted px-3 py-2 text-sm font-mono tracking-wider break-all">
                 {formatSecret(secret)}
@@ -115,9 +123,6 @@ export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
                 {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
-            <p className="break-all text-xs text-muted-foreground">
-              या यह लिंक/QR-URI इस्तेमाल करें: <span className="font-mono">{uri}</span>
-            </p>
           </div>
         )}
 
