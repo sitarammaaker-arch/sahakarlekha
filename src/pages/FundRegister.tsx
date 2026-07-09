@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { PiggyBank, ArrowDownCircle } from 'lucide-react';
 import { isFundAccount, buildFundStatement } from '@/lib/funds';
+import { fundBackingCoverage } from '@/lib/fundBacking';
 import { getBankAccountIds } from '@/lib/storage';
 
 const TODAY = () => new Date().toISOString().split('T')[0];
@@ -29,7 +30,7 @@ const KIND_LABEL: Record<string, { hi: string; en: string; cls: string }> = {
 };
 
 const FundRegister: React.FC = () => {
-  const { accounts, vouchers, recordFundUtilisation } = useData();
+  const { accounts, vouchers, recordFundUtilisation, getAccountBalance } = useData();
   const { user } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
@@ -40,6 +41,15 @@ const FundRegister: React.FC = () => {
   const funds = useMemo(() => accounts.filter(isFundAccount), [accounts]);
   const activeVouchers = useMemo(() => vouchers.filter(v => !v.isDeleted), [vouchers]);
   const corpusOf = useMemo(() => new Map(funds.map(f => [f.id, buildFundStatement(f, activeVouchers).closing])), [funds, activeVouchers]);
+
+  // ECR-27: are the statutory funds backed by earmarked investments (FDR / securities)?
+  const backing = useMemo(() => {
+    const fundsTotal = [...corpusOf.values()].reduce((s, c) => s + c, 0);
+    const investmentsTotal = accounts
+      .filter(a => a.subtype === 'investment' && !a.isGroup)
+      .reduce((s, a) => s + getAccountBalance(a.id), 0);
+    return fundBackingCoverage(fundsTotal, investmentsTotal);
+  }, [corpusOf, accounts, getAccountBalance]);
 
   const [fundId, setFundId] = useState('');
   const fund = funds.find(f => f.id === fundId);
@@ -89,6 +99,18 @@ const FundRegister: React.FC = () => {
               </button>
             ))}
           </div>
+
+          {/* ECR-27: fund backing by investments (FDR / securities) */}
+          <Card className={backing.backed ? 'bg-success/10 border-success/20' : 'bg-amber-500/10 border-amber-500/30'}>
+            <CardContent className="py-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+              {backing.backed
+                ? <span className="flex items-center gap-2 font-medium text-green-700"><PiggyBank className="h-4 w-4" />{hi ? 'निधियाँ निवेश से समर्थित' : 'Funds backed by investments'}</span>
+                : <span className="flex items-center gap-2 font-medium text-amber-700"><ArrowDownCircle className="h-4 w-4" />{hi ? `निधियाँ पूर्ण रूप से निवेशित नहीं — कमी ${fmt(backing.shortfall)}` : `Funds not fully invested — shortfall ${fmt(backing.shortfall)}`}</span>}
+              <span className="text-muted-foreground">{hi ? 'कुल निधि' : 'Total funds'}: <span className="font-medium text-foreground">{fmt(backing.fundsTotal)}</span></span>
+              <span className="text-muted-foreground">{hi ? 'निवेश (FDR/प्रतिभूति)' : 'Investments (FDR/securities)'}: <span className="font-medium text-foreground">{fmt(backing.investmentsTotal)}</span></span>
+              <span className="text-muted-foreground">{hi ? 'कवरेज' : 'Coverage'}: <span className="font-medium text-foreground">{backing.coveragePct}%</span></span>
+            </CardContent>
+          </Card>
 
           {fund && statement && (
             <Card>
