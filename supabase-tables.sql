@@ -2763,3 +2763,10 @@ end $$;
 
 -- ECR-15 (asset acquisition auto-posting): links the capitalization voucher (Dr Fixed-Asset / Cr Cash-Bank).
 alter table assets add column if not exists "acquisitionVoucherId" text;
+
+-- ECR-12 (two-factor auth): per-user TOTP enrolment. mfa_secret is the base32
+-- authenticator seed; only set once the user confirms a code. Login is not yet
+-- gated on MFA (later slice), so these default to off / null.
+alter table society_users add column if not exists mfa_enabled boolean default false;
+alter table society_users add column if not exists mfa_secret text;
+alter table society_users add column if not exists mfa_enrolled_at timestamptz;

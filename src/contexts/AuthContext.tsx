@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useRe
 import { getAuthSession, setAuthSession } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import { can as rbacCan, type Permission } from '@/lib/rbac';
+import { generateSecret, verifyTotp, otpauthUri } from '@/lib/totp';
 
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes of inactivity
 
@@ -13,7 +14,12 @@ interface User {
   email: string;
   role: UserRole;
   societyId: string;
+  /** ECR-12: whether this account has enrolled an authenticator app (TOTP 2FA). */
+  mfaEnabled?: boolean;
 }
+
+/** Result of an MFA enrol/disable attempt so the UI can show the right message. */
+export type MfaResult = { ok: true } | { ok: false; reason: 'bad-code' | 'save-failed' };
 
 interface AuthContextType {
   user: User | null;
@@ -25,6 +31,12 @@ interface AuthContextType {
   /** RBAC gate (SL-06): whether the current user's role is granted `permission`. */
   can: (permission: Permission) => boolean;
   sendPasswordReset: (email: string) => Promise<{ success: boolean; isEmailSent: boolean }>;
+  /** ECR-12 — generate a fresh TOTP secret + otpauth URI for enrolment (not yet saved). */
+  enrollMfa: () => { secret: string; uri: string };
+  /** ECR-12 — verify the first code against `secret`, then persist & enable 2FA. */
+  confirmMfa: (secret: string, code: string) => Promise<MfaResult>;
+  /** ECR-12 — verify a code against the stored secret, then disable 2FA. */
+  disableMfa: (code: string) => Promise<MfaResult>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -53,13 +65,14 @@ const demoUsers: { email: string; password: string; user: User }[] = [
   },
 ];
 
-function buildUser(data: { id: string; name: string; email: string; role: string; society_id: string }): User {
+function buildUser(data: { id: string; name: string; email: string; role: string; society_id: string; mfa_enabled?: boolean }): User {
   return {
     id: data.id,
     name: data.name,
     email: data.email,
     role: data.role as UserRole,
     societyId: data.society_id,
+    mfaEnabled: !!data.mfa_enabled,
   };
 }
 
@@ -127,7 +140,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
           const { data } = await supabase
             .from('society_users')
-            .select('id, name, email, role, society_id, is_active')
+            .select('id, name, email, role, society_id, is_active, mfa_enabled')
             .eq('email', session.user.email)
             .eq('is_active', true)
             .maybeSingle();
@@ -173,7 +186,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!authError && authData.user) {
         const { data: userData } = await supabase
           .from('society_users')
-          .select('id, name, email, role, society_id, is_active')
+          .select('id, name, email, role, society_id, is_active, mfa_enabled')
           .eq('email', email)
           .eq('is_active', true)
           .maybeSingle();
@@ -354,8 +367,54 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return rbacCan(user.role, permission);
   };
 
+  // ECR-12 — TOTP 2FA enrolment. Enrol/confirm/disable only; login is NOT yet
+  // gated on MFA (that is a later slice), so no existing user can be locked out.
+  const enrollMfa = useCallback((): { secret: string; uri: string } => {
+    const secret = generateSecret();
+    return { secret, uri: otpauthUri(secret, user?.email || 'user') };
+  }, [user]);
+
+  const confirmMfa = useCallback(async (secret: string, code: string): Promise<MfaResult> => {
+    if (!(await verifyTotp(secret, code))) return { ok: false, reason: 'bad-code' };
+    if (!user) return { ok: false, reason: 'save-failed' };
+    try {
+      const { error } = await supabase
+        .from('society_users')
+        .update({ mfa_enabled: true, mfa_secret: secret, mfa_enrolled_at: new Date().toISOString() })
+        .eq('email', user.email);
+      if (error) return { ok: false, reason: 'save-failed' };
+    } catch {
+      return { ok: false, reason: 'save-failed' };
+    }
+    setUser(u => (u ? { ...u, mfaEnabled: true } : u));
+    return { ok: true };
+  }, [user]);
+
+  const disableMfa = useCallback(async (code: string): Promise<MfaResult> => {
+    if (!user) return { ok: false, reason: 'save-failed' };
+    try {
+      const { data } = await supabase
+        .from('society_users')
+        .select('mfa_secret')
+        .eq('email', user.email)
+        .maybeSingle();
+      const secret = (data as { mfa_secret?: string } | null)?.mfa_secret;
+      if (!secret) return { ok: false, reason: 'save-failed' };
+      if (!(await verifyTotp(secret, code))) return { ok: false, reason: 'bad-code' };
+      const { error } = await supabase
+        .from('society_users')
+        .update({ mfa_enabled: false, mfa_secret: null, mfa_enrolled_at: null })
+        .eq('email', user.email);
+      if (error) return { ok: false, reason: 'save-failed' };
+    } catch {
+      return { ok: false, reason: 'save-failed' };
+    }
+    setUser(u => (u ? { ...u, mfaEnabled: false } : u));
+    return { ok: true };
+  }, [user]);
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isSuperAdmin, login, logout, hasPermission, can, sendPasswordReset }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isSuperAdmin, login, logout, hasPermission, can, sendPasswordReset, enrollMfa, confirmMfa, disableMfa }}>
       {children}
     </AuthContext.Provider>
   );
