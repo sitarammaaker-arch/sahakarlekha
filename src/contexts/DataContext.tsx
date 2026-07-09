@@ -17,6 +17,7 @@ import type {
   MusterEntry,
 } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { inventoryProcurementCost } from '@/lib/tradingAccount';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } from '@/lib/storage';
@@ -4017,6 +4018,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ...tb.filter(b => PURCHASE_ACTIVITY_IDS.includes(b.account.id) && Math.abs(b.netBalance) > 0.005)
         .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance })),
     ];
+
+    // ── Indian cooperative accounting (Trading A/c tie): goods PROCURED straight
+    // into a stock-in-trade (inventory) account — Dr stock / Cr payable-cash — are
+    // the cost of purchase and must sit on the Dr side, so the SAME goods in Closing
+    // Stock (Cr) net to nil Gross Profit while unsold. Without this, closing stock
+    // inflated Gross Profit / Net Surplus and the Balance Sheet went out by the stock
+    // value. The year-end closing-stock journal (Cr 5150/5101) is excluded in-helper.
+    const inventoryAcctIds = new Set(
+      tb.filter(b => b.account.parentId === '3400' && !b.account.isGroup).map(b => b.account.id)
+    );
+    const inventoryProcurement = inventoryProcurementCost(
+      closingScopedVouchers.map(v => ({ lines: getVoucherLines(v) })),
+      inventoryAcctIds,
+    );
+    if (inventoryProcurement > 0.005) {
+      purchaseItems.push({ name: 'Goods Procured (to stock)', nameHi: 'माल खरीद (स्टॉक में)', amount: inventoryProcurement });
+    }
 
     // Dr side: Direct Expenses (parentId '5100', excluding 5101 Purchase, the activity
     // purchase heads (now under Purchases), AND the 5150 Closing-Stock contra — the
