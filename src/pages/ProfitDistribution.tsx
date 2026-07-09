@@ -52,7 +52,8 @@ const usePosted = (
 const ProfitDistribution: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { vouchers, accounts, members, society, getProfitLoss, addVoucher } = useData();
+  const { vouchers, accounts, members, society, getProfitLoss, addVoucher, getShareCapitalReconciliation } = useData();
+  const shareRecon = getShareCapitalReconciliation();   // ECR-05: dividend reads the member (subsidiary) base — enforce it ties to the control ledger first
   const { toast } = useToast();
 
   const hi = language === 'hi';
@@ -361,6 +362,16 @@ const ProfitDistribution: React.FC = () => {
         </div>
       </div>
 
+      {/* ECR-05: block dividend distribution until share capital ties to the control ledger */}
+      {!shareRecon.reconciled && (
+        <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>{hi
+            ? `शेयर कैपिटल बही से मेल नहीं खाता — सदस्य रिकॉर्ड ₹${shareRecon.subsidiaryTotal.toLocaleString('en-IN')} बनाम बही ₹${shareRecon.controlBalance.toLocaleString('en-IN')} (अंतर ₹${Math.abs(shareRecon.difference).toLocaleString('en-IN')})। वितरण से पहले मिलान करें — तब तक "वितरण जर्नल पोस्ट करें" बंद है।`
+            : `Share capital does not tie to the ledger — member records ₹${shareRecon.subsidiaryTotal.toLocaleString('en-IN')} vs ledger ₹${shareRecon.controlBalance.toLocaleString('en-IN')} (drift ₹${Math.abs(shareRecon.difference).toLocaleString('en-IN')}). Reconcile before distributing — "Post Distribution Journals" is disabled until then.`}</span>
+        </div>
+      )}
+
       {/* Info banner */}
       <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
         <Info className="h-4 w-4 mt-0.5 shrink-0" />
@@ -484,7 +495,7 @@ const ProfitDistribution: React.FC = () => {
                 <Button
                   onClick={() => setConfirmOpen(true)}
                   className="w-full bg-yellow-700 hover:bg-yellow-800"
-                  disabled={totalDividend === 0 && bonusAmount === 0}
+                  disabled={(totalDividend === 0 && bonusAmount === 0) || !shareRecon.reconciled}
                 >
                   <Coins className="h-4 w-4 mr-2" />
                   {hi ? 'वितरण जर्नल पोस्ट करें' : 'Post Distribution Journals'}

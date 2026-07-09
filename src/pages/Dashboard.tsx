@@ -23,7 +23,7 @@ const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b
 
 const Dashboard: React.FC = () => {
   const { t, language } = useLanguage();
-  const { accounts, getAccountBalance, getShareCapitalReconciliation, members, vouchers, getProfitLoss, loans, society, getTrialBalance, getTradingAccount, auditObjections } = useData();
+  const { accounts, getAccountBalance, getShareCapitalReconciliation, getAssetRegisterReconciliation, members, vouchers, getProfitLoss, loans, society, getTrialBalance, getTradingAccount, auditObjections } = useData();
   const { housingFlats, maintenanceBills, complaints } = useHousingData();
   const { has } = useCapabilities();
 
@@ -142,11 +142,16 @@ const Dashboard: React.FC = () => {
     if (!shareRecon.reconciled)
       advisories.push({ severity: 'critical', en: `Share capital mismatch: member records ₹${shareRecon.subsidiaryTotal.toLocaleString('en-IN')} vs ledger ₹${shareRecon.controlBalance.toLocaleString('en-IN')} (difference ₹${Math.abs(shareRecon.difference).toLocaleString('en-IN')}) — reconcile before distributing dividend`, hi: `शेयर कैपिटल बेमेल: सदस्य रिकॉर्ड ₹${shareRecon.subsidiaryTotal.toLocaleString('en-IN')} बनाम बही ₹${shareRecon.controlBalance.toLocaleString('en-IN')} (अंतर ₹${Math.abs(shareRecon.difference).toLocaleString('en-IN')}) — डिविडेंड वितरण से पूर्व मिलान करें` });
 
+    // ECR-05: fixed-asset register vs ledger drift (parity with share capital).
+    const assetRecon = getAssetRegisterReconciliation();
+    if (!assetRecon.reconciled)
+      advisories.push({ severity: 'critical', en: `Asset register mismatch: register ₹${assetRecon.registerTotal.toLocaleString('en-IN')} vs fixed-asset ledger ₹${assetRecon.controlBalance.toLocaleString('en-IN')} (difference ₹${Math.abs(assetRecon.difference).toLocaleString('en-IN')}) — reconcile the asset register`, hi: `संपत्ति रजिस्टर बेमेल: रजिस्टर ₹${assetRecon.registerTotal.toLocaleString('en-IN')} बनाम स्थायी-संपत्ति बही ₹${assetRecon.controlBalance.toLocaleString('en-IN')} (अंतर ₹${Math.abs(assetRecon.difference).toLocaleString('en-IN')}) — संपत्ति रजिस्टर का मिलान करें` });
+
     if (advisories.length === 0)
       advisories.push({ severity: 'info', en: 'All compliance checks passed — cooperative is in good financial health', hi: 'सभी अनुपालन जांचें पास — सहकारी संस्था की वित्तीय स्थिति उत्तम है' });
 
     return { reservePosted, bsTallied, stockOk, sec32Ok, fyLocked, netProfit, healthScore, advisories, physicalClosingStock, sec32Pct, shareRecon };
-  }, [vouchers, getTrialBalance, getTradingAccount, loans, society, netProfit, auditObjections, getShareCapitalReconciliation]);
+  }, [vouchers, getTrialBalance, getTradingAccount, loans, society, netProfit, auditObjections, getShareCapitalReconciliation, getAssetRegisterReconciliation]);
 
   const recentVouchers = [...vouchers.filter(v => !v.isDeleted)]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
