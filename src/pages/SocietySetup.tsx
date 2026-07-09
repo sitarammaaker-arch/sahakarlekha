@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { unlockAction } from '@/lib/dualControlUnlock';
+import { NotificationChannelsCard } from '@/components/settings/NotificationChannelsCard';
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
 import { SOCIETY_TEMPLATES } from '@/lib/storage';
 import type { SocietyType } from '@/types';
@@ -885,6 +886,7 @@ const SocietySetup: React.FC = () => {
                   </Button>
                 </div>
               </div>
+              <NotificationChannelsCard />
             </CardContent>
           </Card>
         </TabsContent>

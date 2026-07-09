@@ -845,6 +845,9 @@ alter table society_settings add column if not exists "periodLockBy" text;
 alter table society_settings add column if not exists "fyUnlockRequestedBy" text;
 alter table society_settings add column if not exists "fyUnlockRequestedAt" text;
 
+-- ECR-13: which external notification channels the society enabled (in-app always on).
+alter table society_settings add column if not exists "notificationChannels" jsonb;
+
 -- ── P0 #2: Soft-delete parent records ───────────────────────────────────────
 -- Members / purchases / assets / audit-objections are now ARCHIVED (isDeleted=true)
 -- instead of hard-deleted, so statutory registers persist and deletes are auditable
