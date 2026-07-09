@@ -10,12 +10,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Download, Search, Edit, Trash2, Package, RefreshCw, CheckCircle, Banknote, AlertTriangle } from 'lucide-react';
+import { Plus, Download, Search, Edit, Trash2, Package, RefreshCw, CheckCircle, Banknote, AlertTriangle, Clock } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { generateAssetRegisterPDF } from '@/lib/pdf';
 import type { Asset, AssetCategory, AssetStatus } from '@/types';
 import { standardDepreciationRate, assetRateDeviations } from '@/lib/depreciationRateMaster';
+import { capexPendingAssets } from '@/lib/capexApproval';
 import { calcSLMDepreciation, calcWDVDepreciation, DEP_ACCOUNTS } from '@/lib/depreciation';
 
 const CATEGORIES: AssetCategory[] = ['Land', 'Building', 'Furniture', 'Equipment', 'Vehicle', 'Computer', 'Other'];
@@ -373,6 +374,10 @@ const AssetRegister: React.FC = () => {
 
   const assetRecon = getAssetRegisterReconciliation();   // ECR-05: register cost vs fixed-asset ledger
   const rateDeviations = assetRateDeviations(assets);     // ECR-15: assets off the standard depreciation rate
+  // ECR-15: acquisitions whose voucher is still pending maker-checker approval (not yet in the ledger).
+  const pendingVoucherIds = new Set(vouchers.filter(v => !v.isDeleted && v.approvalStatus === 'pending').map(v => v.id));
+  const capexPending = capexPendingAssets(assets, pendingVoucherIds);
+  const capexPendingIds = new Set(capexPending.map(a => a.id));
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -410,6 +415,11 @@ const AssetRegister: React.FC = () => {
           {rateDeviations.length > 0 && (
             <span className="flex items-center gap-1.5 text-amber-700" title={rateDeviations.map(d => `${d.name}: ${d.rate}% (मानक ${d.standard}%)`).join('\n')}>
               <AlertTriangle className="h-3.5 w-3.5" />{hi ? `${rateDeviations.length} संपत्ति गैर-मानक ह्रास दर पर` : `${rateDeviations.length} asset(s) on a non-standard rate`}
+            </span>
+          )}
+          {capexPending.length > 0 && (
+            <span className="flex items-center gap-1.5 text-blue-700" title={hi ? 'इनका अधिग्रहण वाउचर अनुमोदन की प्रतीक्षा में है — अनुमोदन पर लेजर में पूँजीकृत होगा।' : 'Their acquisition voucher awaits approval — capitalized to the ledger on approval.'}>
+              <Clock className="h-3.5 w-3.5" />{hi ? `${capexPending.length} अधिग्रहण capex-अनुमोदन की प्रतीक्षा में` : `${capexPending.length} acquisition(s) awaiting capex approval`}
             </span>
           )}
         </CardContent>
@@ -496,7 +506,13 @@ const AssetRegister: React.FC = () => {
                     <TableRow key={a.id} className="hover:bg-muted/30">
                       <TableCell className="font-mono text-sm">{a.assetNo}</TableCell>
                       <TableCell>
-                        <div className="font-medium">{a.name}</div>
+                        <div className="font-medium flex items-center gap-1.5">{a.name}
+                          {capexPendingIds.has(a.id) && (
+                            <span className="inline-flex items-center gap-1 rounded bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5" title={hi ? 'अधिग्रहण वाउचर अनुमोदन की प्रतीक्षा में' : 'Acquisition voucher awaiting approval'}>
+                              <Clock className="h-3 w-3" />{hi ? 'capex लंबित' : 'capex pending'}
+                            </span>
+                          )}
+                        </div>
                         {a.description && <div className="text-xs text-muted-foreground">{a.description}</div>}
                       </TableCell>
                       <TableCell>{catLabel[a.category]}</TableCell>
