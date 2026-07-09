@@ -131,6 +131,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'agingAnalysis',      titleKey: 'agingAnalysis',      icon: TrendingDown,    route: '/aging-analysis',       domain: 'reports', requiredCapabilities: U, order: 10 },
   { id: 'tdsForm16A',         titleKey: 'tdsForm16A',         icon: Receipt,         route: '/tds-form16a',          domain: 'reports', requiredCapabilities: ['tds'], order: 11 },
   { id: 'tdsRegister',        titleKey: 'tdsRegister',        icon: Receipt,         route: '/tds-register',         domain: 'reports', requiredCapabilities: ['tds'], order: 12 },
+  { id: 'statutoryReconciliation', titleKey: 'statutoryReconciliation', icon: Scale, route: '/statutory-reconciliation', domain: 'reports', requiredCapabilities: U, order: 12.5 },
   { id: 'stockValuation',     titleKey: 'stockValuation',     icon: Warehouse,       route: '/stock-valuation',      domain: 'reports', requiredCapabilities: ['inventory_sales'], order: 13 },
   { id: 'closingStockReport', titleKey: 'closingStockReport', icon: Package,         route: '/closing-stock-report', domain: 'reports', requiredCapabilities: ['inventory_sales'], order: 14 },
   { id: 'budgetModule',       titleKey: 'budgetModule',       icon: PiggyBank,       route: '/budget-module',        domain: 'reports', requiredCapabilities: U, order: 15 },
