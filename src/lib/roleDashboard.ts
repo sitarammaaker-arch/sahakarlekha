@@ -19,21 +19,32 @@ export type WidgetId =
   | 'cashBank'
   | 'trialBalance'
   | 'periodLock'
-  | 'unapprovedVouchers';
+  | 'unapprovedVouchers'
+  | 'stockValue'      // inventory value (Σ currentStock × rate)
+  | 'outOfStock'      // count of items at/below zero
+  | 'purchasesCount'; // number of purchase/procurement entries
 
 const ADMIN: WidgetId[] = ['netProfit', 'bsStatus', 'members', 'loanPortfolio', 'pendingApprovals', 'complianceDue'];
 const ACCOUNTANT: WidgetId[] = ['netProfit', 'trialBalance', 'cashBank', 'pendingApprovals', 'complianceDue', 'shareReconciliation'];
 const AUDITOR: WidgetId[] = ['auditObjections', 'shareReconciliation', 'unapprovedVouchers', 'periodLock', 'complianceDue', 'bsStatus'];
 const READ_ONLY: WidgetId[] = ['netProfit', 'members', 'loanPortfolio'];
 const CHAIRMAN: WidgetId[] = ['netProfit', 'bsStatus', 'members', 'loanPortfolio', 'pendingApprovals', 'auditObjections', 'complianceDue'];
+// ECR-18 — the remaining role-specific dashboards.
+const MANAGER: WidgetId[] = ['netProfit', 'bsStatus', 'pendingApprovals', 'loanPortfolio', 'purchasesCount', 'complianceDue'];
+const PROCUREMENT: WidgetId[] = ['purchasesCount', 'stockValue', 'pendingApprovals', 'complianceDue'];
+const INVENTORY: WidgetId[] = ['stockValue', 'outOfStock', 'purchasesCount'];
+// The Secretary owns statutory compliance in a cooperative → a compliance-first view.
+const COMPLIANCE: WidgetId[] = ['complianceDue', 'auditObjections', 'unapprovedVouchers', 'periodLock', 'bsStatus'];
 
 const ROLE_WIDGETS: Partial<Record<Role, WidgetId[]>> = {
   superAdmin: ADMIN,
   societyAdmin: ADMIN,
-  secretary: ADMIN,
-  manager: ADMIN,
+  secretary: COMPLIANCE,
+  manager: MANAGER,
   accountant: ACCOUNTANT,
   cashier: ['cashBank', 'netProfit', 'complianceDue'],
+  storeKeeper: INVENTORY,
+  procurementOfficer: PROCUREMENT,
   auditor: AUDITOR,
   internalAuditor: AUDITOR,
   externalCA: AUDITOR,

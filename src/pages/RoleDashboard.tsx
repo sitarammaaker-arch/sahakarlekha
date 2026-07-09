@@ -26,6 +26,7 @@ const RoleDashboard: React.FC = () => {
   const {
     getProfitLoss, getTrialBalance, getAccountBalance, getShareCapitalReconciliation,
     members, loans, vouchers, auditObjections, employees, society, accounts,
+    stockItems, purchases,
   } = useData();
   const navigate = useNavigate();
   const hi = language === 'hi';
@@ -53,8 +54,11 @@ const RoleDashboard: React.FC = () => {
       hasEmployees: (employees || []).some(e => e.status === 'active'),
       tan: !!society.tan?.trim(), gstin: !!society.gstin?.trim(),
     })).length;
-    return { netProfit, tbBalanced, activeMembers, loanOutstanding, overdueLoans, pendingVouchers, rejectedVouchers, pendingObjections, rec, cash, bank, complianceDue };
-  }, [getProfitLoss, getTrialBalance, getAccountBalance, getShareCapitalReconciliation, members, loans, vouchers, auditObjections, employees, society, accounts]);
+    const stockValue = (stockItems || []).reduce((s, it) => s + Math.max(0, it.currentStock || 0) * (it.purchaseRate || 0), 0);
+    const outOfStock = (stockItems || []).filter(it => (it.currentStock || 0) <= 0).length;
+    const purchasesCount = (purchases || []).filter(p => !p.isDeleted).length;
+    return { netProfit, tbBalanced, activeMembers, loanOutstanding, overdueLoans, pendingVouchers, rejectedVouchers, pendingObjections, rec, cash, bank, complianceDue, stockValue, outOfStock, purchasesCount };
+  }, [getProfitLoss, getTrialBalance, getAccountBalance, getShareCapitalReconciliation, members, loans, vouchers, auditObjections, employees, society, accounts, stockItems, purchases]);
 
   const widget = (id: WidgetId): { label: string; value: string; sub?: string; tone: Tone; route: string } => {
     switch (id) {
@@ -70,6 +74,9 @@ const RoleDashboard: React.FC = () => {
       case 'shareReconciliation': return { label: hi ? 'शेयर मिलान' : 'Share Reconciliation', value: data.rec.reconciled ? (hi ? 'मिला' : 'Reconciled') : (hi ? 'बेमेल' : 'Drift'), tone: data.rec.reconciled ? 'ok' : 'bad', route: '/share-register' };
       case 'cashBank': return { label: hi ? 'नकद + बैंक' : 'Cash + Bank', value: fmt(data.cash + data.bank), tone: 'neutral', route: '/cash-book' };
       case 'periodLock': return { label: hi ? 'अवधि लॉक' : 'Period Lock', value: society.periodLockDate || (hi ? 'नहीं' : 'None'), tone: society.periodLockDate ? 'ok' : 'neutral', route: '/society-setup' };
+      case 'stockValue': return { label: hi ? 'स्टॉक मूल्य' : 'Stock Value', value: fmt(data.stockValue), tone: 'neutral', route: '/inventory' };
+      case 'outOfStock': return { label: hi ? 'स्टॉक खत्म' : 'Out of Stock', value: String(data.outOfStock), sub: hi ? 'आइटम' : 'items', tone: data.outOfStock > 0 ? 'warn' : 'ok', route: '/inventory' };
+      case 'purchasesCount': return { label: hi ? 'खरीद प्रविष्टियां' : 'Purchase Entries', value: String(data.purchasesCount), tone: 'neutral', route: '/purchases' };
       default: return { label: id, value: '—', tone: 'neutral', route: '/' };
     }
   };

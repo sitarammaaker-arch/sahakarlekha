@@ -9,9 +9,14 @@ const ACCOUNTANT = ['netProfit', 'trialBalance', 'cashBank', 'pendingApprovals',
 const AUDITOR = ['auditObjections', 'shareReconciliation', 'unapprovedVouchers', 'periodLock', 'complianceDue', 'bsStatus'];
 const READ_ONLY = ['netProfit', 'members', 'loanPortfolio'];
 const CHAIRMAN = ['netProfit', 'bsStatus', 'members', 'loanPortfolio', 'pendingApprovals', 'auditObjections', 'complianceDue'];
+const MANAGER = ['netProfit', 'bsStatus', 'pendingApprovals', 'loanPortfolio', 'purchasesCount', 'complianceDue'];
+const PROCUREMENT = ['purchasesCount', 'stockValue', 'pendingApprovals', 'complianceDue'];
+const INVENTORY = ['stockValue', 'outOfStock', 'purchasesCount'];
+const COMPLIANCE = ['complianceDue', 'auditObjections', 'unapprovedVouchers', 'periodLock', 'bsStatus'];
 const ROLE_WIDGETS = {
-  superAdmin: ADMIN, societyAdmin: ADMIN, secretary: ADMIN, manager: ADMIN,
+  superAdmin: ADMIN, societyAdmin: ADMIN, secretary: COMPLIANCE, manager: MANAGER,
   accountant: ACCOUNTANT, cashier: ['cashBank', 'netProfit', 'complianceDue'],
+  storeKeeper: INVENTORY, procurementOfficer: PROCUREMENT,
   auditor: AUDITOR, internalAuditor: AUDITOR, externalCA: AUDITOR,
   chairman: CHAIRMAN, boardMember: CHAIRMAN, readOnly: READ_ONLY,
 };
@@ -39,6 +44,15 @@ ok(!has(roleWidgets('viewer'), 'pendingApprovals') && roleWidgets('viewer').leng
 
 // 3. Cashier gets a cash-focused set.
 ok(roleWidgets('cashier')[0] === 'cashBank', 'cashier leads with cash/bank');
+
+// 3b. ECR-18 — the added role dashboards are distinct (not the default).
+ok(has(roleWidgets('procurementOfficer'), 'purchasesCount') && has(roleWidgets('procurementOfficer'), 'stockValue'), 'procurement: purchases + stock value');
+ok(has(roleWidgets('storeKeeper'), 'stockValue') && has(roleWidgets('storeKeeper'), 'outOfStock'), 'inventory: stock value + out-of-stock');
+ok(has(roleWidgets('secretary'), 'complianceDue') && has(roleWidgets('secretary'), 'auditObjections') && !has(roleWidgets('secretary'), 'members'), 'secretary: compliance-first, not the admin set');
+ok(has(roleWidgets('manager'), 'purchasesCount') && has(roleWidgets('manager'), 'netProfit'), 'manager: ops + finance');
+for (const r of ['procurementOfficer', 'storeKeeper', 'secretary', 'manager']) {
+  ok(JSON.stringify(roleWidgets(r)) !== JSON.stringify(DEFAULT_WIDGETS), `${r} has a tailored (non-default) dashboard`);
+}
 
 // 4. Unknown / missing role → default.
 ok(JSON.stringify(roleWidgets('someUnknownRole')) === JSON.stringify(DEFAULT_WIDGETS), 'unknown role → default widgets');
