@@ -75,10 +75,12 @@ const BalanceSheet: React.FC = () => {
   // start) — instead of a manual snapshot. Same debit-positive convention as the
   // snapshot (so the column's meaning is unchanged); falls back to the saved
   // snapshot when the dataset carries no prior-period figures.
-  const fyStart = society.financialYearStart;
-  const priorEndDate = fyStart
-    ? (() => { const d = new Date(fyStart); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })()
-    : '';
+  // Prior FY end = 31 March of the FIRST year of the current FY (e.g. FY 2026-27
+  // → 2026-03-31). Derived from the FY string — the same robust approach as
+  // fyEndDate above. NEVER parse society.financialYearStart with new Date(): it
+  // can be missing or non-ISO and threw "Invalid time value" (crashed the page).
+  const fyFirstYear = (society.financialYear || '').split('-')[0];
+  const priorEndDate = /^\d{4}$/.test(fyFirstYear) ? `${fyFirstYear}-03-31` : '';
   const pyComputed: Record<string, number> = {};
   if (priorEndDate) {
     getTrialBalance(priorEndDate).forEach(b => { if (!b.account.isGroup) pyComputed[b.account.id] = b.netBalance; });
