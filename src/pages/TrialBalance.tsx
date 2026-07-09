@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { generateTrialBalancePDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
+import { isEmptyPeriod } from '@/lib/reportComparative';
 
 const TrialBalance: React.FC = () => {
   const { t, language } = useLanguage();
@@ -31,6 +32,19 @@ const TrialBalance: React.FC = () => {
   const allBalances = getTrialBalance(asOnDate);
   // Hide accounts with no activity and no opening balance.
   const balances = allBalances.filter(b => b.totalDebit > 0 || b.totalCredit > 0 || b.openingDebit > 0 || b.openingCredit > 0);
+
+  // ECR-19: computed prior-year closing column — the position as at the prior FY
+  // end (day before FY start), derived from actual data. Shown only when prior-
+  // period figures exist. Same debit-positive convention as `netBalance`.
+  const fyFirstYear = society.financialYear.split('-')[0];
+  const priorEndDate = /^\d{4}$/.test(fyFirstYear) ? `${fyFirstYear}-03-31` : '';
+  const priorClosing: Record<string, number> = {};
+  if (priorEndDate) {
+    getTrialBalance(priorEndDate).forEach(b => { if (!b.account.isGroup) priorClosing[b.account.id] = b.netBalance; });
+  }
+  const hasPY = !isEmptyPeriod(priorClosing);
+  const priorLabel = fyFirstYear ? `${Number(fyFirstYear) - 1}-${String(Number(fyFirstYear)).slice(-2)}` : '';
+  const getPY = (id: string) => priorClosing[id] ?? 0;
 
   // ── Audit C-6: NCDC Annexure-I two-section layout ────────────────────────
   // Section I = "Liabilities & Income" (credit-nature: liability, equity, income).
@@ -97,13 +111,13 @@ const TrialBalance: React.FC = () => {
     return (
       <>
         <TableRow className={headerClass}>
-          <TableCell colSpan={6} className="font-bold uppercase text-sm tracking-wide">
+          <TableCell colSpan={hasPY ? 7 : 6} className="font-bold uppercase text-sm tracking-wide">
             {language === 'hi' ? titleHi : titleEn}
           </TableCell>
         </TableRow>
         {rows.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={6} className="text-center text-muted-foreground text-sm py-2">
+            <TableCell colSpan={hasPY ? 7 : 6} className="text-center text-muted-foreground text-sm py-2">
               {language === 'hi' ? 'कोई खाता नहीं' : 'No accounts'}
             </TableCell>
           </TableRow>
@@ -125,6 +139,10 @@ const TrialBalance: React.FC = () => {
               {b.netBalance > 0 ? <>{fmt(b.netBalance)} <span className="text-[10px] text-info">Dr</span></>
                 : b.netBalance < 0 ? <>{fmt(-b.netBalance)} <span className="text-[10px] text-warning">Cr</span></> : '—'}
             </TableCell>
+            {hasPY && <TableCell className="text-right text-xs text-muted-foreground">
+              {getPY(b.account.id) > 0 ? <>{fmt(getPY(b.account.id))} <span className="text-[9px]">Dr</span></>
+                : getPY(b.account.id) < 0 ? <>{fmt(-getPY(b.account.id))} <span className="text-[9px]">Cr</span></> : '—'}
+            </TableCell>}
           </TableRow>
         ))}
         <TableRow className="bg-muted/50 font-semibold">
@@ -138,6 +156,11 @@ const TrialBalance: React.FC = () => {
             {t2.clDr >= t2.clCr ? <>{fmt(t2.clDr - t2.clCr)} <span className="text-[10px] text-info">Dr</span></>
               : <>{fmt(t2.clCr - t2.clDr)} <span className="text-[10px] text-warning">Cr</span></>}
           </TableCell>
+          {hasPY && (() => { const py = rows.reduce((s, b) => s + getPY(b.account.id), 0); return (
+            <TableCell className="text-right text-xs text-muted-foreground">
+              {py > 0 ? <>{fmt(py)} <span className="text-[9px]">Dr</span></> : py < 0 ? <>{fmt(-py)} <span className="text-[9px]">Cr</span></> : '—'}
+            </TableCell>
+          ); })()}
         </TableRow>
       </>
     );
@@ -218,6 +241,7 @@ const TrialBalance: React.FC = () => {
                   <TableHead className="font-semibold text-right">{t('debit')} (₹)</TableHead>
                   <TableHead className="font-semibold text-right">{t('credit')} (₹)</TableHead>
                   <TableHead className="font-semibold text-right">{language === 'hi' ? 'क्लोज़िंग बैलेंस' : 'Closing'}</TableHead>
+                  {hasPY && <TableHead className="font-semibold text-right text-muted-foreground text-xs" title={language === 'hi' ? 'डेटा से गणना (पिछले FY अंत)' : 'Computed from data (prior FY end)'}>{priorLabel} *</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -233,6 +257,11 @@ const TrialBalance: React.FC = () => {
                   <TableCell className="text-right text-primary">
                     {fmt(grandClosingDr)} <span className="text-[10px]">Dr</span> = {fmt(grandClosingCr)} <span className="text-[10px]">Cr</span>
                   </TableCell>
+                  {hasPY && (() => { const py = balances.reduce((s, b) => s + getPY(b.account.id), 0); return (
+                    <TableCell className="text-right text-xs text-muted-foreground">
+                      {py > 0 ? <>{fmt(py)} <span className="text-[9px]">Dr</span></> : py < 0 ? <>{fmt(-py)} <span className="text-[9px]">Cr</span></> : '—'}
+                    </TableCell>
+                  ); })()}
                 </TableRow>
               </TableFooter>
             </Table>
