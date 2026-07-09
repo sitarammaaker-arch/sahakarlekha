@@ -27,3 +27,12 @@ export function filterByBranch<T extends HasBranch>(records: T[], activeBranchId
 export function branchToStamp(activeBranchId: string, headOfficeId?: string): string | undefined {
   return activeBranchId && activeBranchId !== ALL_BRANCHES ? activeBranchId : headOfficeId;
 }
+
+/**
+ * ECR-17 Phase 4b (RBAC): the active branch a user is allowed to view. A
+ * branch-restricted user (restrictedBranchId set) can NEVER leave their home
+ * branch — any requested switch collapses to it. Unrestricted → honour the request.
+ */
+export function resolveActiveBranch(restrictedBranchId: string | undefined, requestedId: string): string {
+  return restrictedBranchId || requestedId;
+}

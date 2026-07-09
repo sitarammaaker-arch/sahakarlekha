@@ -3064,3 +3064,8 @@ alter table stock_movements add column if not exists "godownId" text;
 alter table sales     add column if not exists "branchId" text;
 alter table purchases add column if not exists "branchId" text;
 alter table members   add column if not exists "branchId" text;
+
+-- ── ECR-17 Phase 4b: RBAC branch-restriction ─────────────────────────────────
+-- A user with branch_id set is restricted to that branch (sees/enters only its
+-- data); NULL = society-wide (admin / consolidated). Assigned in User Management.
+alter table society_users add column if not exists branch_id text;
