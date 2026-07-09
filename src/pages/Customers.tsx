@@ -24,6 +24,7 @@ import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import type { EntityLink, Customer, CustomerType, GstRegistrationType } from '@/types';
 import { UserCheck, Plus, Pencil, Trash2, Search, IndianRupee, FileSpreadsheet, Download, User, Building2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useDeepLinkQuery } from '@/hooks/useDeepLinkQuery';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const fmt = (amount: number) =>
@@ -110,6 +111,7 @@ const Customers: React.FC = () => {
   const hi = language === 'hi';
 
   const [search, setSearch] = useState('');
+  useDeepLinkQuery(setSearch);   // ECR-25 P2: focus a customer deep-linked from global search (?q=)
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<FormShape>(EMPTY_FORM());
