@@ -22,7 +22,7 @@ const fmtAmt = (n: number) =>
 
 const SaleRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { society, sales, vouchers } = useData();
+  const { society, sales, vouchers, matchesActiveBranch } = useData();
   const hi = language === 'hi';
   const fy = society.financialYear;
   const fyDates = parseFY(fy);
@@ -41,13 +41,14 @@ const SaleRegister: React.FC = () => {
   const filtered = useMemo(() => {
     return sales
       .filter(s => {
+        if (!matchesActiveBranch(s.branchId)) return false;   // ECR-17 Phase 4: active-branch scope ('all' → no filter)
         if (fromDate && s.date < fromDate) return false;
         if (toDate && s.date > toDate) return false;
         if (partyFilter && !s.customerName.toLowerCase().includes(partyFilter.toLowerCase())) return false;
         return true;
       })
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [sales, fromDate, toDate, partyFilter]);
+  }, [sales, fromDate, toDate, partyFilter, matchesActiveBranch]);
 
   const totals = useMemo(() => ({
     netAmount: filtered.reduce((s, r) => s + r.netAmount, 0),

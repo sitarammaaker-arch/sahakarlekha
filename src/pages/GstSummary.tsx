@@ -29,7 +29,7 @@ function fyBounds(fy: string): { from: string; to: string } {
 }
 
 export default function GstSummary() {
-  const { sales, purchases, customers, society, stockItems } = useData();
+  const { sales, purchases, customers, society, stockItems, matchesActiveBranch } = useData();
   const { salesReturns, purchaseReturns } = useConsumerData();
   const { language } = useLanguage();
 
@@ -41,8 +41,8 @@ export default function GstSummary() {
 
   // ── Filter active records in date range ───────────────────────────────────
   const activeSales = useMemo(() =>
-    sales.filter(s => !(s as any).isDeleted && s.date >= fromDate && s.date <= toDate),
-    [sales, fromDate, toDate]);
+    sales.filter(s => !(s as any).isDeleted && s.date >= fromDate && s.date <= toDate && matchesActiveBranch(s.branchId)),   // ECR-17 Phase 4: branch scope
+    [sales, fromDate, toDate, matchesActiveBranch]);
 
   // Sales returns reduce output GST liability (credit notes). Netted into output totals.
   const returnTotals = useMemo(() => {
@@ -71,8 +71,8 @@ export default function GstSummary() {
   }, [purchaseReturns, fromDate, toDate]);
 
   const activePurchases = useMemo(() =>
-    purchases.filter(p => !(p as any).isDeleted && p.date >= fromDate && p.date <= toDate),
-    [purchases, fromDate, toDate]);
+    purchases.filter(p => !(p as any).isDeleted && p.date >= fromDate && p.date <= toDate && matchesActiveBranch(p.branchId)),   // ECR-17 Phase 4: branch scope
+    [purchases, fromDate, toDate, matchesActiveBranch]);
 
   // Customer map for B2B lookup
   const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);

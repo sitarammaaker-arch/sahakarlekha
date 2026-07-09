@@ -52,6 +52,7 @@ interface DataContextType {
   updateBranch: (id: string, data: Partial<Branch>) => void;
   deleteBranch: (id: string) => void;
   transferBetweenBranches: (input: { fromBranchId: string; toBranchId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; narration?: string }) => void;
+  matchesActiveBranch: (branchId?: string) => boolean;   // ECR-17 Phase 4: does an entity's branch fall under the active branch? ('all' → always true)
   // ECR-17 Phase 3 — godown-wise stock
   godowns: Godown[];
   activeGodownId: string;                       // '' = none (movements unassigned)
@@ -2002,17 +2003,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addMember = useCallback((data: Omit<Member, 'id'>): Member => {
     if (guardFYLocked()) return { ...data, id: '' } as Member;
-    const newMember: Member = { ...data, id: crypto.randomUUID() };
+    const newMember: Member = { ...data, id: crypto.randomUUID(), branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) };
     setMembersState(prev => {
       const updated = [...prev, newMember];
       return updated;
     });
-    supabase.from('members').upsert(withSoc(newMember)).then(({ error }) => {
+    // ECR-17 Phase 4: branchId is a late-added column — keep it out of the base
+    // upsert (schema-cache safe) and patch it in step-2 so RULE-1 rollback still fires.
+    const { branchId: mBranch, ...memberBase } = newMember;
+    supabase.from('members').upsert(withSoc(memberBase)).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message);
         setMembersState(prev => prev.filter(m => m.id !== newMember.id));   // RULE 1: roll back local state
         toastRef.current({ title: 'सदस्य सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        return;
       }
+      if (mBranch) supabase.from('members').update({ branchId: mBranch }).eq('id', newMember.id).then(({ error: bErr }) => { if (bErr) console.warn('Member branch patch:', bErr.message); });
     });
     // Skip auto-vouchers for pending applications (created on approval)
     if (newMember.approvalStatus === 'pending') return newMember;
@@ -2041,12 +2047,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = prev.map(m => m.id === id ? updatedMember : m);
       return updated;
     });
-    supabase.from('members').upsert(withSoc(updatedMember)).then(({ error }) => {
+    const { branchId: umBranch, ...updatedMemberBase } = updatedMember;   // ECR-17 Phase 4: branchId patched in step-2 (schema-cache safe)
+    supabase.from('members').upsert(withSoc(updatedMemberBase)).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message);
         setMembersState(prev => prev.map(m => m.id === id ? oldMember : m));   // RULE 1: roll back to prior state
         toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        return;
       }
+      if (umBranch) supabase.from('members').update({ branchId: umBranch }).eq('id', id).then(({ error: bErr }) => { if (bErr) console.warn('Member branch patch:', bErr.message); });
     });
     // Helper: re-sync a member's auto-voucher (Share Capital / Admission Fee).
     // Updates amount + narration + lines AND syncs voucher_entries so SQL reports match.
@@ -3492,6 +3501,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     matchesBranch(v.branchId, activeBranchId, headOfficeBranchId)
   );
 
+  // ECR-17 Phase 4: shared predicate for branch-scoping non-voucher entities
+  // (sales / purchases / members) in report pages. Same rule as activeVouchers.
+  const matchesActiveBranch = useCallback((branchId?: string) =>
+    matchesBranch(branchId, activeBranchId, headOfficeBranchId), [activeBranchId, headOfficeBranchId]);
+
   const getAccountBalance = useCallback((accountId: string): number => {
     const account = accounts.find(a => a.id === accountId);
     if (!account) return 0;
@@ -4574,21 +4588,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // receivableAccountId is routing-only (chose the credit debtor above) — never store it on
     // the sale row (no column; would break a later updateSale upsert).
     const { receivableAccountId: _omitRcv, ...saleFields } = data;
-    const sale: Sale = { ...saleFields, id: saleId, saleNo, voucherId: newVoucher.id, gstVoucherIds: undefined, createdAt: new Date().toISOString() };
+    const sale: Sale = { ...saleFields, id: saleId, saleNo, voucherId: newVoucher.id, gstVoucherIds: undefined, createdAt: new Date().toISOString(), branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) };
     salesRef.current = [...salesRef.current, sale];
     setSalesState(prev => [...prev, sale]);
 
     // Two-step save — same pattern as purchases fix:
     // Step 1: upsert base columns only (schema cache always knows these)
     // Step 2: update GST columns separately (ALTER TABLE columns — schema cache may lag)
-    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember, gstVoucherIds: _gv, ...saleBase } = sale;
+    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember, branchId: sBranch, gstVoucherIds: _gv, ...saleBase } = sale;
     // Feature 6: a duplicate saleNo (another till) makes the base upsert fail with 23505 —
     // bump to the next number, restamp local state, and retry (only saleNo changes).
     const attemptSaleSave = (base: typeof saleBase, tries: number) => {
       supabase.from('sales').upsert(withSoc(base)).then(({ error }) => {
         if (!error) {
           // Step 2: GST columns update (only Sale GST fields — no TDS for sales)
-          supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember })
+          supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember, branchId: sBranch })
             .eq('id', sale.id)
             .then(({ error: gstErr }) => { if (gstErr) console.warn('Sale GST/extra fields update:', gstErr.message); });
           return;
@@ -4781,17 +4795,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       voucherId: newVoucher.id,
       gstVoucherIds: undefined,
       createdAt: original.createdAt,
+      branchId: original.branchId ?? data.branchId,   // ECR-17 Phase 4: a sale keeps its branch across edits
     };
     salesRef.current = salesRef.current.map(s => s.id === id ? updated : s);
     setSalesState(prev => prev.map(s => s.id === id ? updated : s));
 
-    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, gstVoucherIds: _gv, ...saleBase } = updated;
+    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, branchId: sBranch, gstVoucherIds: _gv, ...saleBase } = updated;
     supabase.from('sales').upsert(withSoc(saleBase)).then(({ error }) => {
       if (error) {
         console.error('Sale update failed:', error.message);
         toastRef.current({ title: 'Sale update nahi hua', description: error.message, variant: 'destructive' });
       } else {
-        supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId })
+        supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, branchId: sBranch })
           .eq('id', id)
           .then(({ error: gstErr }) => { if (gstErr) console.warn('Sale GST fields update:', gstErr.message); });
       }
@@ -4897,20 +4912,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       persistMovement(mv);
     });
 
-    const purchase: Purchase = { ...data, id: purchaseId, purchaseNo, voucherId: newVoucher.id, taxVoucherIds: undefined, createdAt: new Date().toISOString() };
+    const purchase: Purchase = { ...data, id: purchaseId, purchaseNo, voucherId: newVoucher.id, taxVoucherIds: undefined, createdAt: new Date().toISOString(), branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) };
     purchasesRef.current = [...purchasesRef.current, purchase];
     setPurchasesState(prev => [...prev, purchase]);
 
     // Two-step save — same pattern as editHistory fix for vouchers:
     // Step 1: upsert ONLY the original-table base columns (schema cache always knows these → never fails)
     // Step 2: update GST/TDS columns separately (added via ALTER TABLE — schema cache may lag)
-    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, taxVoucherIds: _tv, ...purchaseBase } = purchase;
+    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, branchId: pBranch, taxVoucherIds: _tv, ...purchaseBase } = purchase;
     // Feature 6: duplicate purchaseNo (another till) → 23505; bump + retry (only purchaseNo changes).
     const attemptPurchaseSave = (base: typeof purchaseBase, tries: number) => {
       supabase.from('purchases').upsert(withSoc(base)).then(({ error }) => {
         if (!error) {
           // Step 2: GST/TDS columns update (safe — if this fails, base record is already saved)
-          supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false })
+          supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, branchId: pBranch })
             .eq('id', purchase.id)
             .then(({ error: gstErr }) => { if (gstErr) console.warn('Purchase GST fields update:', gstErr.message); });
           return;
@@ -5117,17 +5132,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       voucherId: newVoucher.id,
       taxVoucherIds: undefined,
       createdAt: original.createdAt,
+      branchId: original.branchId ?? data.branchId,   // ECR-17 Phase 4: a purchase keeps its branch across edits
     };
     purchasesRef.current = purchasesRef.current.map(p => p.id === id ? updated : p);
     setPurchasesState(prev => prev.map(p => p.id === id ? updated : p));
 
-    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, taxVoucherIds: _tv, ...purchaseBase } = updated;
+    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, branchId: pBranch, taxVoucherIds: _tv, ...purchaseBase } = updated;
     supabase.from('purchases').upsert(withSoc(purchaseBase)).then(({ error }) => {
       if (error) {
         console.error('Purchase update failed:', error.message);
         toastRef.current({ title: 'Purchase update nahi hua', description: error.message, variant: 'destructive' });
       } else {
-        supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false })
+        supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, branchId: pBranch })
           .eq('id', id)
           .then(({ error: gstErr }) => { if (gstErr) console.warn('Purchase GST fields update:', gstErr.message); });
       }
@@ -5847,7 +5863,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   return (
     <DataContext.Provider value={{
-      branches, activeBranchId, setActiveBranch, addBranch, updateBranch, deleteBranch, transferBetweenBranches,
+      branches, activeBranchId, setActiveBranch, addBranch, updateBranch, deleteBranch, transferBetweenBranches, matchesActiveBranch,
       godowns, activeGodownId, setActiveGodown, addGodown, updateGodown, deleteGodown,
       vouchers, members, accounts, society, loans, assets, auditObjections,
       depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,

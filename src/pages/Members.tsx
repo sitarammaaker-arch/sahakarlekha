@@ -319,7 +319,9 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
 const Members: React.FC = () => {
   const { t, language } = useLanguage();
   const { hasPermission } = useAuth();
-  const { members, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks } = useData();
+  const { members: allMembers, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks, matchesActiveBranch } = useData();
+  // ECR-17 Phase 4: scope the member list to the active branch ('all' → every member).
+  const members = allMembers.filter(m => matchesActiveBranch(m.branchId));
   const canEdit = hasPermission(['admin', 'accountant']);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -363,7 +365,7 @@ const Members: React.FC = () => {
   const activeApproved = approvedMembers.filter(m => m.status === 'active').length;
 
   const getNextMemberId = () => {
-    const nums = members
+    const nums = allMembers   // scan ALL members (not branch-scoped) so IDs stay unique society-wide
       .map(m => parseInt(m.memberId.replace(/\D/g, ''), 10))
       .filter(n => !isNaN(n) && n > 0);
     const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
