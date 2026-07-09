@@ -2909,9 +2909,32 @@ begin
 end;
 $fn$;
 
-grant execute on function app_mfa_enroll(text, text, text) to anon, authenticated;
+-- Admin reset: an active admin clears a locked-out member's 2FA (lost device).
+-- The target must belong to the SAME society as the admin. No code needed — the
+-- user then logs in without 2FA and can re-enrol.
+create or replace function app_mfa_admin_reset(p_admin_email text, p_target_email text)
+returns boolean language plpgsql security definer
+set search_path = public, extensions as $fn$
+declare allowed boolean;
+begin
+  select exists(
+    select 1
+      from society_users a
+      join society_users t on t.society_id = a.society_id
+     where a.email = p_admin_email and a.role = 'admin' and a.is_active = true
+       and t.email = p_target_email
+  ) into allowed;
+  if not allowed then return false; end if;
+  delete from user_mfa where email = p_target_email;
+  update society_users set mfa_enabled = false where email = p_target_email;
+  return true;
+end;
+$fn$;
+
+grant execute on function app_mfa_enroll(text, text, text)  to anon, authenticated;
 grant execute on function app_verify_mfa(text, text)        to anon, authenticated;
 grant execute on function app_mfa_disable(text, text)       to anon, authenticated;
+grant execute on function app_mfa_admin_reset(text, text)   to anon, authenticated;
 
 -- RFC 6238 SELF-TEST — run this once after creating the functions. Expected:
 -- t59 = t1234567890 = t1111111111 = true, and wrong = false.

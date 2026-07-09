@@ -44,6 +44,8 @@ interface AuthContextType {
   confirmMfa: (secret: string, code: string) => Promise<MfaResult>;
   /** ECR-12 — verify a code against the stored secret, then disable 2FA. */
   disableMfa: (code: string) => Promise<MfaResult>;
+  /** ECR-12 — admin clears another user's 2FA (lost device). Returns false if not authorised. */
+  adminResetMfa: (targetEmail: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -235,6 +237,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [completeLogin]);
 
   const cancelMfa = useCallback(() => { pendingMfaRef.current = null; }, []);
+
+  const adminResetMfa = useCallback(async (targetEmail: string): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      const { data, error } = await supabase.rpc('app_mfa_admin_reset', { p_admin_email: user.email, p_target_email: targetEmail });
+      return !error && data === true;
+    } catch {
+      return false;
+    }
+  }, [user]);
 
   const login = async (email: string, password: string): Promise<LoginResult> => {
     // 1. Try Supabase Auth (signInWithPassword — JWT based)
@@ -452,7 +464,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user]);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isSuperAdmin, login, verifyMfaCode, cancelMfa, logout, hasPermission, can, sendPasswordReset, enrollMfa, confirmMfa, disableMfa }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isSuperAdmin, login, verifyMfaCode, cancelMfa, logout, hasPermission, can, sendPasswordReset, enrollMfa, confirmMfa, disableMfa, adminResetMfa }}>
       {children}
     </AuthContext.Provider>
   );
