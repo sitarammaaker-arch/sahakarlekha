@@ -23,7 +23,7 @@ import { resolveItemPrice } from '@/lib/consumer/pricing';
 import { resolveMemberReceivableAccountId, resolvePatronageDistributionAccountId, resolveRebatePayableAccountId, resolveDividendDistributionAccountId, resolveDividendPayableAccountId, resolveSalesReturnAccountId, MEMBER_RECEIVABLE_SUBTYPE, PATRONAGE_DISTRIBUTION_SUBTYPE, REBATE_PAYABLE_SUBTYPE, DIVIDEND_DISTRIBUTION_SUBTYPE, DIVIDEND_PAYABLE_SUBTYPE, SALES_RETURN_SUBTYPE } from '@/lib/consumer/accounts';
 import { memberOutstanding, memberAgeing, type Ageing, type RecoveryRow } from '@/lib/consumer/credit';
 import { computePatronageLines, computeDividendLines, patronageTotal, patronageLegs } from '@/lib/consumer/patronage';
-import { poTotal, poReceivedTotal, poToPurchaseItems } from '@/lib/consumer/purchaseOrder';
+import { poTotal, buildGrnInvoice } from '@/lib/consumer/purchaseOrder';
 import { getBankAccountIds } from '@/lib/storage';
 import { isUniqueViolation, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import type { ConsumerPrice, ConsumerPriceTier, Voucher, PatronageRun, PurchaseOrder, PurchaseOrderItem, Purchase, SalesReturn, SalesReturnItem, SalesReturnRefund, PurchaseReturn, PurchaseReturnItem, PurchaseReturnRefund } from '@/types';
@@ -420,20 +420,22 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     return next;
   }, [purchaseOrders, guardFYLocked, commitPO, user]);
 
-  const receivePurchaseOrder = useCallback((id: string, data: { receivedQty?: Record<string, number>; paymentMode: 'cash' | 'bank' | 'credit'; bankAccountId?: string; date: string }): Purchase | null => {
+  const receivePurchaseOrder = useCallback((id: string, data: { receivedQty?: Record<string, number>; billedRate?: Record<string, number>; gstPct?: number; interState?: boolean; paymentMode: 'cash' | 'bank' | 'credit'; bankAccountId?: string; date: string }): Purchase | null => {
     if (guardFYLocked()) return null;
     const cur = purchaseOrders.find(p => p.id === id);
     if (!cur || cur.status !== 'approved') { toastRef.current({ title: 'पहले ऑर्डर approve करें', variant: 'destructive' }); return null; }
     const items: PurchaseOrderItem[] = cur.items.map(i => ({ ...i, receivedQty: data.receivedQty?.[i.itemId] ?? i.qty }));
-    const purchaseItems = poToPurchaseItems(items);
-    if (purchaseItems.length === 0) { toastRef.current({ title: 'कोई माल प्राप्त नहीं', description: 'कम-से-कम एक वस्तु की received मात्रा डालें।', variant: 'destructive' }); return null; }
-    const total = poReceivedTotal(items);
+    // ECR-21 Phase 2: value the invoice at the supplier's actual billed rate (default PO rate)
+    // + real GST split, so input credit posts and the 3-way match sees a genuine variance.
+    const invoice = buildGrnInvoice(items, { billedRate: data.billedRate, gstPct: data.gstPct, interState: data.interState });
+    if (invoice.items.length === 0) { toastRef.current({ title: 'कोई माल प्राप्त नहीं', description: 'कम-से-कम एक वस्तु की received मात्रा डालें।', variant: 'destructive' }); return null; }
     try {
       const purchase = addPurchase({
         date: data.date, supplierName: cur.supplierName, supplierPhone: cur.supplierPhone, supplierId: cur.supplierId,
-        items: purchaseItems, totalAmount: total, discount: 0, netAmount: total,
-        cgstPct: 0, sgstPct: 0, igstPct: 0, tdsPct: 0, cgstAmount: 0, sgstAmount: 0, igstAmount: 0, tdsAmount: 0,
-        taxAmount: 0, grandTotal: total, paymentMode: data.paymentMode, bankAccountId: data.bankAccountId,
+        items: invoice.items, totalAmount: invoice.netAmount, discount: 0, netAmount: invoice.netAmount,
+        cgstPct: invoice.cgstPct, sgstPct: invoice.sgstPct, igstPct: invoice.igstPct, tdsPct: 0,
+        cgstAmount: invoice.cgstAmount, sgstAmount: invoice.sgstAmount, igstAmount: invoice.igstAmount, tdsAmount: 0,
+        taxAmount: invoice.taxAmount, grandTotal: invoice.grandTotal, paymentMode: data.paymentMode, bankAccountId: data.bankAccountId,
         narration: `PO ${cur.poNo} — माल प्राप्ति (GRN)`, createdBy: user?.name ?? 'admin',
       });
       if (!purchase?.id) return null;

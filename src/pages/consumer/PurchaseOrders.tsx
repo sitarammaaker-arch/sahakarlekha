@@ -50,6 +50,9 @@ const PurchaseOrders: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [resolutionNo, setResolutionNo] = useState('');
   const [recvQty, setRecvQty] = useState<Record<string, number>>({});
+  const [recvRate, setRecvRate] = useState<Record<string, number>>({});   // ECR-21 P2: supplier's billed rate (default PO rate)
+  const [recvGst, setRecvGst] = useState(0);                              // ECR-21 P2: invoice GST %
+  const [recvInterState, setRecvInterState] = useState(false);            // ECR-21 P2: inter-state → IGST
   const [recvMode, setRecvMode] = useState<'cash' | 'bank' | 'credit'>('credit');
   const [recvDate, setRecvDate] = useState(TODAY());
 
@@ -87,7 +90,11 @@ const PurchaseOrders: React.FC = () => {
   const openReceive = (id: string) => {
     setSelectedId(id);
     const po = list.find(p => p.id === id);
-    if (po) setRecvQty(Object.fromEntries(po.items.map(i => [i.itemId, i.qty])));
+    if (po) {
+      setRecvQty(Object.fromEntries(po.items.map(i => [i.itemId, i.qty])));
+      setRecvRate(Object.fromEntries(po.items.map(i => [i.itemId, i.rate])));   // default billed rate = PO rate
+    }
+    setRecvGst(0); setRecvInterState(false);
     setRecvDate(TODAY());
   };
 
@@ -224,20 +231,28 @@ const PurchaseOrders: React.FC = () => {
                 <p className="text-sm text-emerald-800 font-medium">{hi ? 'माल प्राप्ति (GRN) — प्राप्त मात्रा दर्ज करें' : 'Goods receipt (GRN) — enter received quantity'}</p>
                 <div className="overflow-x-auto">
                   <Table>
-                    <TableHeader><TableRow><TableHead>{hi ? 'वस्तु' : 'Item'}</TableHead><TableHead className="w-28">{hi ? 'ऑर्डर' : 'Ordered'}</TableHead><TableHead className="w-32">{hi ? 'प्राप्त' : 'Received'}</TableHead><TableHead className="w-28 text-right">{hi ? 'दर' : 'Rate'}</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>{hi ? 'वस्तु' : 'Item'}</TableHead><TableHead className="w-24">{hi ? 'ऑर्डर' : 'Ordered'}</TableHead><TableHead className="w-28">{hi ? 'प्राप्त' : 'Received'}</TableHead><TableHead className="w-24 text-right">{hi ? 'PO दर' : 'PO rate'}</TableHead><TableHead className="w-32 text-right">{hi ? 'बिल दर' : 'Billed rate'}</TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {selected.items.map(it => (
+                      {selected.items.map(it => {
+                        const billed = recvRate[it.itemId] ?? it.rate;
+                        const diff = +(billed - it.rate).toFixed(2);
+                        return (
                         <TableRow key={it.itemId}>
                           <TableCell className="font-medium">{it.itemName}<span className="text-xs text-muted-foreground ml-1">/ {it.unit}</span></TableCell>
                           <TableCell>{it.qty}</TableCell>
-                          <TableCell><Input type="number" min={0} value={recvQty[it.itemId] ?? it.qty} onChange={e => setRecvQty(p => ({ ...p, [it.itemId]: Math.max(0, Number(e.target.value)) }))} className="w-24 h-8" /></TableCell>
-                          <TableCell className="text-right">{fmt(it.rate)}</TableCell>
+                          <TableCell><Input type="number" min={0} value={recvQty[it.itemId] ?? it.qty} onChange={e => setRecvQty(p => ({ ...p, [it.itemId]: Math.max(0, Number(e.target.value)) }))} className="w-20 h-8" /></TableCell>
+                          <TableCell className="text-right text-muted-foreground">{fmt(it.rate)}</TableCell>
+                          <TableCell className="text-right">
+                            <Input type="number" min={0} value={billed} onChange={e => setRecvRate(p => ({ ...p, [it.itemId]: Math.max(0, Number(e.target.value)) }))} className="w-24 h-8 text-right inline-block" />
+                            {Math.abs(diff) > 0.005 && <div className={cn('text-[10px] mt-0.5', diff > 0 ? 'text-red-600' : 'text-amber-600')}>{diff > 0 ? '+' : ''}{fmt(diff)} {hi ? 'बनाम PO' : 'vs PO'}</div>}
+                          </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
                   <div className="space-y-1">
                     <Label>{hi ? 'भुगतान विधि' : 'Payment'}</Label>
                     <Select value={recvMode} onValueChange={v => setRecvMode(v as 'cash' | 'bank' | 'credit')}>
@@ -250,7 +265,14 @@ const PurchaseOrders: React.FC = () => {
                     </Select>
                   </div>
                   <div className="space-y-1"><Label>{hi ? 'तिथि' : 'Date'}</Label><Input type="date" value={recvDate} onChange={e => setRecvDate(e.target.value)} /></div>
-                  <Button className="gap-1" onClick={() => { const p = receivePurchaseOrder(selected.id, { receivedQty: recvQty, paymentMode: recvMode, date: recvDate }); if (p) setSelectedId(null); }}>
+                  <div className="space-y-1"><Label>{hi ? 'GST %' : 'GST %'}</Label><Input type="number" min={0} step="0.01" value={recvGst} onChange={e => setRecvGst(Math.max(0, Number(e.target.value)))} /></div>
+                  <label className="flex items-center gap-2 text-sm pb-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={recvInterState} onChange={e => setRecvInterState(e.target.checked)} className="h-4 w-4" />
+                    {hi ? 'अंतरराज्यीय (IGST)' : 'Inter-state (IGST)'}
+                  </label>
+                </div>
+                <div className="flex justify-end">
+                  <Button className="gap-1" onClick={() => { const p = receivePurchaseOrder(selected.id, { receivedQty: recvQty, billedRate: recvRate, gstPct: recvGst || undefined, interState: recvInterState, paymentMode: recvMode, date: recvDate }); if (p) setSelectedId(null); }}>
                     <PackageCheck className="h-4 w-4" />{hi ? 'माल प्राप्त करें' : 'Receive Goods'}
                   </Button>
                 </div>

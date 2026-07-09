@@ -266,6 +266,19 @@ const poReceivedTotal = (items) => r2(items.reduce((s, i) => s + lineAmount(i.re
 function poToPurchaseItems(items) {
   return items.map(i => { const qty = i.receivedQty ?? i.qty; return { itemId: i.itemId, itemName: i.itemName, unit: i.unit, qty, rate: i.rate, amount: lineAmount(qty, i.rate) }; }).filter(i => i.qty > 0);
 }
+// ECR-21 Phase 2
+function poToBilledItems(items, billedRate) {
+  return items.map(i => { const qty = i.receivedQty ?? i.qty; const rate = billedRate?.[i.itemId] ?? i.rate; return { itemId: i.itemId, itemName: i.itemName, unit: i.unit, qty, rate, amount: lineAmount(qty, rate) }; }).filter(i => i.qty > 0);
+}
+function buildGrnInvoice(items, opts = {}) {
+  const invoiceItems = poToBilledItems(items, opts.billedRate);
+  const netAmount = r2(invoiceItems.reduce((s, i) => s + i.amount, 0));
+  const gst = Math.max(0, opts.gstPct ?? 0), interState = !!opts.interState;
+  const cgstPct = interState ? 0 : r2(gst / 2), sgstPct = interState ? 0 : r2(gst / 2), igstPct = interState ? gst : 0;
+  const cgstAmount = r2(netAmount * cgstPct / 100), sgstAmount = r2(netAmount * sgstPct / 100), igstAmount = r2(netAmount * igstPct / 100);
+  const taxAmount = r2(cgstAmount + sgstAmount + igstAmount);
+  return { items: invoiceItems, netAmount, cgstPct, sgstPct, igstPct, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal: r2(netAmount + taxAmount) };
+}
 
 // 21. PO total = Σ amount; received total honours receivedQty; partial GRN drops zero-received lines
 {
@@ -278,6 +291,33 @@ function poToPurchaseItems(items) {
   ok(poReceivedTotal(received) === 352, 'received total = 8×44 = 352 (salt 0)');
   const pItems = poToPurchaseItems(received);
   ok(pItems.length === 1 && pItems[0].itemId === 'A' && pItems[0].qty === 8 && pItems[0].amount === 352, 'GRN → 1 purchase line (Sugar × 8 = 352), zero-received Salt dropped');
+}
+
+// 21b. ECR-21 Phase 2 — billed rate + GST at goods receipt (buildGrnInvoice)
+{
+  const items = [
+    { itemId: 'A', itemName: 'Sugar', unit: 'kg', qty: 10, rate: 44, amount: 440, receivedQty: 10 },
+    { itemId: 'B', itemName: 'Salt', unit: 'kg', qty: 5, rate: 15, amount: 75, receivedQty: 5 },
+  ];
+  // Default: no billed override, no GST → invoice mirrors received at PO rate, tax 0.
+  const base = buildGrnInvoice(items);
+  ok(base.netAmount === 515 && base.taxAmount === 0 && base.grandTotal === 515, 'GRN default: net 515, no GST (backward-compatible)');
+  // Billed rate override on Sugar (44 → 46) → net rises, invoice differs from PO.
+  const billed = buildGrnInvoice(items, { billedRate: { A: 46 } });
+  ok(billed.items.find(i => i.itemId === 'A').rate === 46, 'billed rate override applied to Sugar');
+  ok(billed.netAmount === 535, 'billed net = 10×46 + 5×15 = 535');
+  // Intra-state GST 5% → split CGST 2.5% + SGST 2.5%, no IGST.
+  const intra = buildGrnInvoice(items, { gstPct: 5 });
+  ok(intra.cgstPct === 2.5 && intra.sgstPct === 2.5 && intra.igstPct === 0, 'intra-state: 5% splits into 2.5+2.5, IGST 0');
+  ok(intra.cgstAmount === 12.88 && intra.sgstAmount === 12.88 && intra.taxAmount === 25.76, 'intra-state GST amounts (515 @ 5% = 25.76)');
+  ok(intra.grandTotal === 540.76, 'intra-state grand total = 515 + 25.76');
+  // Inter-state GST 5% → full IGST, no CGST/SGST.
+  const inter = buildGrnInvoice(items, { gstPct: 5, interState: true });
+  ok(inter.igstPct === 5 && inter.cgstPct === 0 && inter.sgstPct === 0, 'inter-state: full IGST 5%, no CGST/SGST');
+  ok(inter.igstAmount === 25.75 && inter.taxAmount === 25.75, 'inter-state IGST amount (515 @ 5% = 25.75)');
+  // Short delivery still honoured under buildGrnInvoice (zero-received dropped).
+  const partial = buildGrnInvoice([{ ...items[0], receivedQty: 8 }, { ...items[1], receivedQty: 0 }]);
+  ok(partial.items.length === 1 && partial.netAmount === 352, 'buildGrnInvoice honours short delivery (Sugar×8=352, Salt dropped)');
 }
 
 // ── Mirror: src/lib/consumer/barcode.ts (Code 39) ──
