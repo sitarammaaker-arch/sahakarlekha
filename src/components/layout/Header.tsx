@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -52,7 +52,21 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
   }, [society.tan, society.gstin, employees, getComplianceFiledIds]);
   const totalNotifications = overdueLoans.length + pendingObjections.length + (cancelledVouchers.length > 0 ? 1 : 0) + (complianceAlerts.length > 0 ? 1 : 0);
 
-  // Ctrl+K / Cmd+K shortcut disabled — search box still opens on click.
+  // ECR-25: Ctrl+K / Cmd+K opens the global search palette (toggles if already open).
+  // Ignores the shortcut while typing in an input/textarea/contenteditable.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        const el = document.activeElement as HTMLElement | null;
+        const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+        if (typing) return;
+        e.preventDefault();
+        setSearchOpen(o => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const getInitials = (name: string) =>
     name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
