@@ -109,5 +109,71 @@ ok(growthPct(50, -100) === 150, 'negative base uses magnitude: (50−(−100))/1
   ok(z.grossMarginPct === 0 && z.surplusMarginPct === 0 && z.expenseRatioPct === 0, 'zero denominators → 0 (no NaN)');
 }
 
+// ── ECR-24 Phase 2 helpers ──
+function priorFy(fy) {
+  const startYear = parseInt((fy || '').split('-')[0], 10);
+  if (!startYear || Number.isNaN(startYear)) return '';
+  const p = startYear - 1;
+  return `${p}-${String((p + 1) % 100).padStart(2, '0')}`;
+}
+function fyRange(fy) {
+  const startYear = parseInt((fy || '').split('-')[0], 10);
+  if (!startYear || Number.isNaN(startYear)) return { start: '', end: '' };
+  return { start: `${startYear}-04-01`, end: `${startYear + 1}-03-31` };
+}
+function sumInRange(items, start, end) {
+  if (!start || !end) return 0;
+  let sum = 0;
+  for (const it of items) { const d = it.date || ''; if (d >= start && d <= end) sum += it.amount || 0; }
+  return round2(sum);
+}
+function withCumulative(rows, field, cumField, opening = 0) {
+  let running = opening;
+  return rows.map(r => { running = round2(running + (Number(r[field]) || 0)); return { ...r, [cumField]: running }; });
+}
+
+// 7. priorFy — year decrement + wrap.
+ok(priorFy('2024-25') === '2023-24', 'priorFy 2024-25 → 2023-24');
+ok(priorFy('2000-01') === '1999-00', 'priorFy 2000-01 → 1999-00 (wrap to 00)');
+ok(priorFy('bad') === '', 'priorFy bad → empty');
+
+// 8. fyRange — Apr 1 to Mar 31.
+{
+  const r = fyRange('2024-25');
+  ok(r.start === '2024-04-01' && r.end === '2025-03-31', 'fyRange 2024-25 = 2024-04-01 .. 2025-03-31');
+  ok(fyRange('x').start === '', 'fyRange bad → empty');
+}
+
+// 9. sumInRange — inclusive bounds, string compare.
+{
+  const items = [
+    { date: '2024-04-01', amount: 10 }, // in (boundary start)
+    { date: '2025-03-31', amount: 20 }, // in (boundary end)
+    { date: '2024-03-31', amount: 99 }, // before → out
+    { date: '2025-04-01', amount: 99 }, // after → out
+  ];
+  ok(sumInRange(items, '2024-04-01', '2025-03-31') === 30, 'sumInRange includes both boundaries, excludes outside (30)');
+  ok(sumInRange(items, '', '2025-03-31') === 0, 'empty bound → 0');
+}
+
+// 10. withCumulative — running total with opening.
+{
+  const rows = [{ label: 'Apr', net: 100 }, { label: 'May', net: -30 }, { label: 'Jun', net: 50 }];
+  const out = withCumulative(rows, 'net', 'balance', 1000);
+  ok(out[0].balance === 1100 && out[1].balance === 1070 && out[2].balance === 1120, 'cumulative: 1000→1100→1070→1120');
+  ok(out[0].label === 'Apr' && out[0].net === 100, 'original fields preserved');
+  const noOpen = withCumulative([{ n: 2 }, { n: 3 }], 'n', 'c');
+  ok(noOpen[1].c === 5, 'no opening → runs from 0');
+}
+
+// 11. YoY via sumInRange over both FYs.
+{
+  const sales = [{ date: '2024-06-10', amount: 500 }, { date: '2023-06-10', amount: 400 }];
+  const cur = sumInRange(sales, ...Object.values(fyRange('2024-25')));
+  const prev = sumInRange(sales, ...Object.values(fyRange('2023-24')));
+  ok(cur === 500 && prev === 400, 'YoY buckets: current FY 500, prior FY 400');
+  ok(growthPct(cur, prev) === 25, 'YoY growth 400→500 = +25%');
+}
+
 console.log(`\nAnalytics metrics (pure): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
