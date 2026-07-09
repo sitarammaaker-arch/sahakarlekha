@@ -160,6 +160,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'auditCertificate',     titleKey: 'auditCertificate',     icon: FileCheck,    route: '/audit-certificate',     domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 9 },
   { id: 'auditSchedules',       titleKey: 'auditSchedules',       icon: ClipboardList, route: '/audit-schedules',      domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 10 },
   { id: 'reserveFund',          titleKey: 'reserveFund',          icon: Shield,       route: '/reserve-fund',          domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 11 },
+  { id: 'fundRegister',         titleKey: 'fundRegister',         icon: PiggyBank,    route: '/fund-register',         domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant', 'auditor'], order: 11.5 },
   { id: 'profitDistribution',   titleKey: 'profitDistribution',   icon: Coins,        route: '/profit-distribution',   domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 12 },
   { id: 'deletedVouchers',      titleKey: 'deletedVouchers',      icon: Trash2,       route: '/deleted-vouchers',      domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin'], order: 13 },
   { id: 'kccLoan',              titleKey: 'kccLoan',              icon: Wheat,        route: '/kcc-loan',              domain: 'registers', requiredCapabilities: ['lending'], order: 14 },

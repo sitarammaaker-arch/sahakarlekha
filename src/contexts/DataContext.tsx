@@ -21,6 +21,7 @@ import type {
 import { matchesBranch, branchToStamp, resolveActiveBranch, ALL_BRANCHES } from '@/lib/branchScope';
 import { buildInterBranchTransfer, INTER_BRANCH_CONTROL_ID } from '@/lib/interBranch';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import * as storage from '@/lib/storage';
@@ -238,6 +239,9 @@ interface DataContextType {
     netProfit: number;
   };
   getReceiptsPayments: (asOnDate?: string) => ReceiptsPaymentsData;
+  // ECR-27: spend a statutory fund (Dr fund / Cr cash|bank). Balance-guarded, FY-locked,
+  // and >₹50,000 needs a committee/AGM resolution. Returns null if blocked.
+  recordFundUtilisation: (data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; purpose?: string; resolutionNo?: string }) => Voucher | null;
   getTradingAccount: (asOnDate?: string) => {
     salesItems:        { name: string; nameHi: string; amount: number }[];
     closingStockItems: { name: string; nameHi: string; amount: number }[];
@@ -3546,6 +3550,45 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return reconcileShareCapital(sumActiveMemberShareCapital(members), controlBalance);
   }, [members, getAccountBalance]);
 
+  // ECR-27: spend a statutory fund (Education/Building/Welfare/etc.) — Dr fund / Cr cash|bank.
+  // Balance-guarded (can't exceed the fund's corpus), FY-locked, and utilisation above
+  // ₹50,000 requires a committee/AGM resolution number (stored in the narration for audit).
+  const FUND_RESOLUTION_THRESHOLD = 50000;
+  const recordFundUtilisation = useCallback((data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; purpose?: string; resolutionNo?: string }): Voucher | null => {
+    if (guardFYLocked()) return null;
+    const fund = accounts.find(a => a.id === data.fundAccountId);
+    if (!fund || !isFundAccount(fund)) { toastRef.current({ title: 'निधि खाता नहीं मिला', description: 'Fund account not found or not a reserve fund.', variant: 'destructive', duration: 8000 }); return null; }
+    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return null; }
+    // Balance guard — never spend more than the fund currently holds (corpus).
+    const corpus = buildFundStatement(fund, vouchersRef.current.filter(v => !v.isDeleted)).closing;
+    if (data.amount > corpus + 0.005) {
+      toastRef.current({ title: 'निधि में पर्याप्त शेष नहीं', description: `${fund.nameHi || fund.name} में केवल ₹${corpus.toLocaleString('en-IN')} उपलब्ध है — इससे अधिक उपयोग नहीं हो सकता।`, variant: 'destructive', duration: 12000 });
+      return null;
+    }
+    // Governance gate — large utilisation needs a resolution reference.
+    if (data.amount > FUND_RESOLUTION_THRESHOLD && !data.resolutionNo?.trim()) {
+      toastRef.current({ title: 'प्रस्ताव संख्या आवश्यक', description: `₹${FUND_RESOLUTION_THRESHOLD.toLocaleString('en-IN')} से ऊपर निधि उपयोग के लिए समिति/AGM प्रस्ताव संख्या दर्ज करें।`, variant: 'destructive', duration: 12000 });
+      return null;
+    }
+    const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    const lid = () => crypto.randomUUID();
+    const resNote = data.resolutionNo?.trim() ? `प्रस्ताव ${data.resolutionNo.trim()}` : '';
+    const note = [data.purpose?.trim(), resNote].filter(Boolean).join(' · ');
+    const v = addVoucher({
+      type: 'payment', date: data.date,
+      debitAccountId: data.fundAccountId, creditAccountId: bankAcc, amount: data.amount,
+      narration: `निधि उपयोग — ${fund.nameHi || fund.name}${note ? ` · ${note}` : ''}`,
+      refType: 'fund.utilisation', refId: data.fundAccountId,
+      createdBy: user?.name || 'System',
+      lines: [
+        { id: lid(), accountId: data.fundAccountId, type: 'Dr', amount: data.amount },
+        { id: lid(), accountId: bankAcc, type: 'Cr', amount: data.amount },
+      ],
+    });
+    if (v?.id) toastRef.current({ title: 'निधि उपयोग दर्ज', description: `${fund.nameHi || fund.name} · ₹${data.amount.toLocaleString('en-IN')}`, duration: 6000 });
+    return v?.id ? v : null;
+  }, [accounts, addVoucher, user]);
+
   const getCashBookEntries = useCallback((fromDate?: string, toDate?: string): CashBookEntry[] => {
     const cashAccount = accounts.find(a => a.id === ACCOUNT_IDS.CASH);
     if (!cashAccount) return [];
@@ -5917,7 +5960,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addSupplier, updateSupplier, deleteSupplier,
       addCustomer, updateCustomer, deleteCustomer,
       getAccountBalance, getShareCapitalReconciliation, getCashBookEntries, getBankBookEntries,
-      getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments, postClosingStock,
+      getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments, postClosingStock, recordFundUtilisation,
       getEntityLinks,
       isLoading,
     }}>
