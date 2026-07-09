@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import { generateAssetRegisterPDF } from '@/lib/pdf';
 import type { Asset, AssetCategory, AssetStatus } from '@/types';
+import { standardDepreciationRate, assetRateDeviations } from '@/lib/depreciationRateMaster';
 import { calcSLMDepreciation, calcWDVDepreciation, DEP_ACCOUNTS } from '@/lib/depreciation';
 
 const CATEGORIES: AssetCategory[] = ['Land', 'Building', 'Furniture', 'Equipment', 'Vehicle', 'Computer', 'Other'];
@@ -24,7 +25,7 @@ const EMPTY_FORM = {
   category: 'Furniture' as AssetCategory,
   purchaseDate: new Date().toISOString().split('T')[0],
   cost: '',
-  depreciationRate: '',
+  depreciationRate: String(standardDepreciationRate('Furniture')),   // ECR-15: default from rate master
   depreciationMethod: 'SLM' as 'SLM' | 'WDV',
   usefulLife: '',
   residualValue: '',
@@ -55,7 +56,7 @@ const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCa
       </div>
       <div className="space-y-1">
         <Label>{hi ? 'श्रेणी' : 'Category'}</Label>
-        <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v as AssetCategory }))}>
+        <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v as AssetCategory, depreciationRate: String(standardDepreciationRate(v as AssetCategory)) }))}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             {CATEGORIES.map(c => <SelectItem key={c} value={c}>{hi ? { Land: 'भूमि', Building: 'भवन', Furniture: 'फर्नीचर', Equipment: 'उपकरण', Vehicle: 'वाहन', Computer: 'कंप्यूटर', Other: 'अन्य' }[c] : c}</SelectItem>)}
@@ -77,6 +78,7 @@ const AssetForm: React.FC<AssetFormProps> = ({ form, setForm, hi, onSubmit, onCa
       <div className="space-y-1">
         <Label>{hi ? 'ह्रास दर (%)' : 'Dep. Rate (%)'}</Label>
         <Input type="number" step="0.01" min="0" max="100" value={form.depreciationRate} onChange={e => setForm(f => ({ ...f, depreciationRate: e.target.value }))} placeholder="10" />
+        <p className="text-[11px] text-muted-foreground">{hi ? `मानक (${form.category}): ${standardDepreciationRate(form.category)}%` : `Standard (${form.category}): ${standardDepreciationRate(form.category)}%`}</p>
       </div>
       <div className="space-y-1">
         <Label>{hi ? 'ह्रास पद्धति' : 'Dep. Method'}</Label>
@@ -370,6 +372,7 @@ const AssetRegister: React.FC = () => {
   };
 
   const assetRecon = getAssetRegisterReconciliation();   // ECR-05: register cost vs fixed-asset ledger
+  const rateDeviations = assetRateDeviations(assets);     // ECR-15: assets off the standard depreciation rate
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -404,6 +407,11 @@ const AssetRegister: React.FC = () => {
             : <span className="flex items-center gap-2 font-medium text-destructive"><AlertTriangle className="h-4 w-4" />{hi ? `रजिस्टर ↔ लेजर में अंतर: ${fmt(assetRecon.difference)}` : `Register ↔ Ledger drift: ${fmt(assetRecon.difference)}`}</span>}
           <span className="text-muted-foreground">{hi ? 'रजिस्टर लागत' : 'Register cost'}: <span className="font-medium text-foreground">{fmt(assetRecon.registerTotal)}</span></span>
           <span className="text-muted-foreground">{hi ? 'स्थायी-संपत्ति लेजर' : 'Fixed-asset ledger'}: <span className="font-medium text-foreground">{fmt(assetRecon.controlBalance)}</span></span>
+          {rateDeviations.length > 0 && (
+            <span className="flex items-center gap-1.5 text-amber-700" title={rateDeviations.map(d => `${d.name}: ${d.rate}% (मानक ${d.standard}%)`).join('\n')}>
+              <AlertTriangle className="h-3.5 w-3.5" />{hi ? `${rateDeviations.length} संपत्ति गैर-मानक ह्रास दर पर` : `${rateDeviations.length} asset(s) on a non-standard rate`}
+            </span>
+          )}
         </CardContent>
       </Card>
 
