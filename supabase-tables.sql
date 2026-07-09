@@ -2931,10 +2931,69 @@ begin
 end;
 $fn$;
 
+-- ── ECR-12 deferred B: one-time backup / recovery codes ──────────────────────
+-- Only sha256 hashes are stored (locked table); each code works once. Lets a
+-- user log in if they lose their authenticator, without an admin reset.
+create table if not exists user_mfa_recovery (
+  id        bigint generated always as identity primary key,
+  email     text not null,
+  code_hash text not null,
+  used_at   timestamptz
+);
+alter table user_mfa_recovery enable row level security;   -- no policies → blocked
+revoke all on user_mfa_recovery from anon, authenticated;
+create index if not exists idx_user_mfa_recovery_email on user_mfa_recovery(email);
+
+-- Generate a fresh set of 8 codes (after verifying a current TOTP). Returns the
+-- plaintext codes ONCE; only their hashes are stored. Replaces any prior set.
+create or replace function app_mfa_gen_recovery(p_email text, p_code text)
+returns text[] language plpgsql security definer
+set search_path = public, extensions as $fn$
+declare sec text; codes text[] := '{}'; c text; i int;
+begin
+  select m.secret into sec from user_mfa m join society_users u on u.email = m.email
+    where m.email = p_email and u.is_active = true and u.mfa_enabled = true limit 1;
+  if sec is null then return null; end if;
+  if not app_totp_matches(sec, p_code, floor(extract(epoch from now()))::bigint, 1) then
+    return null;
+  end if;
+  delete from user_mfa_recovery where email = p_email;
+  for i in 1..8 loop
+    c := substr(encode(gen_random_bytes(8), 'hex'), 1, 10);   -- 10 lowercase hex chars
+    codes := array_append(codes, c);
+    insert into user_mfa_recovery (email, code_hash)
+      values (p_email, encode(digest(c, 'sha256'), 'hex'));
+  end loop;
+  return codes;
+end;
+$fn$;
+
+-- Verify + consume a recovery code at login (one-time). Separators/case ignored.
+create or replace function app_verify_recovery(p_email text, p_code text)
+returns boolean language plpgsql security definer
+set search_path = public, extensions as $fn$
+declare norm text; h text; rid bigint;
+begin
+  norm := lower(regexp_replace(coalesce(p_code, ''), '[^a-zA-Z0-9]', '', 'g'));
+  if length(norm) < 8 then return false; end if;
+  h := encode(digest(norm, 'sha256'), 'hex');
+  select r.id into rid from user_mfa_recovery r
+    join society_users u on u.email = r.email
+   where r.email = p_email and r.used_at is null and r.code_hash = h
+     and u.is_active = true and u.mfa_enabled = true
+   limit 1;
+  if rid is null then return false; end if;
+  update user_mfa_recovery set used_at = now() where id = rid;
+  return true;
+end;
+$fn$;
+
 grant execute on function app_mfa_enroll(text, text, text)  to anon, authenticated;
 grant execute on function app_verify_mfa(text, text)        to anon, authenticated;
 grant execute on function app_mfa_disable(text, text)       to anon, authenticated;
 grant execute on function app_mfa_admin_reset(text, text)   to anon, authenticated;
+grant execute on function app_mfa_gen_recovery(text, text)  to anon, authenticated;
+grant execute on function app_verify_recovery(text, text)   to anon, authenticated;
 
 -- RFC 6238 SELF-TEST — run this once after creating the functions. Expected:
 -- t59 = t1234567890 = t1111111111 = true, and wrong = false.

@@ -15,7 +15,7 @@ import { Lock, Mail, Eye, EyeOff, Languages, AlertCircle, KeyRound, HelpCircle, 
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
-  const { login, verifyMfaCode, cancelMfa, sendPasswordReset } = useAuth();
+  const { login, verifyMfaCode, verifyRecoveryCode, cancelMfa, sendPasswordReset } = useAuth();
   const { language, setLanguage, t } = useLanguage();
 
   const [email, setEmail] = useState('');
@@ -27,6 +27,7 @@ const Login: React.FC = () => {
   // ECR-12 — two-factor step: shown after a correct password when the account has 2FA on.
   const [mfaStep, setMfaStep] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
+  const [useRecovery, setUseRecovery] = useState(false);
 
   // Forgot Password modal
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -68,9 +69,9 @@ const Login: React.FC = () => {
     setError('');
     setIsLoading(true);
     try {
-      const ok = await verifyMfaCode(mfaCode);
+      const ok = useRecovery ? await verifyRecoveryCode(mfaCode) : await verifyMfaCode(mfaCode);
       if (ok) {
-        trackEvent('login', { method: 'email+mfa' });
+        trackEvent('login', { method: useRecovery ? 'email+recovery' : 'email+mfa' });
         navigate('/dashboard');
       } else {
         setError(language === 'hi' ? 'गलत कोड — फिर कोशिश करें' : 'Invalid code — try again');
@@ -86,9 +87,15 @@ const Login: React.FC = () => {
     cancelMfa();
     setMfaStep(false);
     setMfaCode('');
+    setUseRecovery(false);
     setError('');
     setPassword('');
   };
+
+  // valid entry: 6-digit TOTP, or a recovery code with ≥8 alphanumerics
+  const mfaEntryInvalid = useRecovery
+    ? mfaCode.replace(/[^a-zA-Z0-9]/g, '').length < 8
+    : mfaCode.length !== 6;
 
   const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -185,25 +192,37 @@ const Login: React.FC = () => {
               )}
               <div className="flex items-center gap-2 rounded-md bg-muted/60 p-3 text-sm text-muted-foreground">
                 <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
-                {language === 'hi'
-                  ? 'Authenticator app का 6-अंकों वाला कोड डालें'
-                  : 'Enter the 6-digit code from your authenticator app'}
+                {useRecovery
+                  ? (language === 'hi' ? 'अपने सुरक्षित recovery codes में से कोई एक डालें' : 'Enter one of your saved recovery codes')
+                  : (language === 'hi' ? 'Authenticator app का 6-अंकों वाला कोड डालें' : 'Enter the 6-digit code from your authenticator app')}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="otp">{language === 'hi' ? '2FA कोड' : '2FA code'}</Label>
-                <Input
-                  id="otp"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  autoFocus
-                  placeholder="123456"
-                  value={mfaCode}
-                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="text-center text-lg tracking-[0.5em] font-mono"
-                />
+                <Label htmlFor="otp">{useRecovery ? 'Recovery code' : (language === 'hi' ? '2FA कोड' : '2FA code')}</Label>
+                {useRecovery ? (
+                  <Input
+                    id="otp"
+                    autoComplete="one-time-code"
+                    autoFocus
+                    placeholder="xxxxx-xxxxx"
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value.replace(/[^a-zA-Z0-9-]/g, '').slice(0, 12))}
+                    className="text-center text-lg tracking-widest font-mono"
+                  />
+                ) : (
+                  <Input
+                    id="otp"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    autoFocus
+                    placeholder="123456"
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="text-center text-lg tracking-[0.5em] font-mono"
+                  />
+                )}
               </div>
-              <Button type="submit" className="w-full" size="lg" disabled={isLoading || mfaCode.length !== 6}>
+              <Button type="submit" className="w-full" size="lg" disabled={isLoading || mfaEntryInvalid}>
                 {isLoading ? (
                   <span className="flex items-center gap-2">
                     <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -211,9 +230,20 @@ const Login: React.FC = () => {
                   </span>
                 ) : (language === 'hi' ? 'सत्यापित करें' : 'Verify')}
               </Button>
-              <Button type="button" variant="ghost" className="w-full" onClick={exitMfa} disabled={isLoading}>
-                {language === 'hi' ? '← वापस' : '← Back'}
-              </Button>
+              <div className="flex items-center justify-between">
+                <Button type="button" variant="ghost" size="sm" onClick={exitMfa} disabled={isLoading}>
+                  {language === 'hi' ? '← वापस' : '← Back'}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => { setUseRecovery(v => !v); setMfaCode(''); setError(''); }}
+                  className="text-xs text-primary hover:underline"
+                >
+                  {useRecovery
+                    ? (language === 'hi' ? 'Authenticator कोड डालें' : 'Use authenticator code')
+                    : (language === 'hi' ? 'Recovery code इस्तेमाल करें' : 'Use a recovery code')}
+                </button>
+              </div>
             </form>
             ) : (
             <form onSubmit={handleSubmit} className="space-y-4">

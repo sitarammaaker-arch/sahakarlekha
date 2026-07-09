@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { formatSecret } from '@/lib/totp';
-import { ShieldCheck, Copy, Check } from 'lucide-react';
+import { ShieldCheck, Copy, Check, KeyRound } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -20,13 +20,14 @@ interface Props {
  * this is safe and reversible.
  */
 export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
-  const { user, enrollMfa, confirmMfa, disableMfa } = useAuth();
+  const { user, enrollMfa, confirmMfa, disableMfa, generateRecoveryCodes } = useAuth();
   const { toast } = useToast();
   const [secret, setSecret] = useState('');
   const [uri, setUri] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
 
   const enrolled = !!user?.mfaEnabled;
 
@@ -37,7 +38,7 @@ export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
       setSecret(s);
       setUri(u);
     }
-    if (!open) { setCode(''); setCopied(false); }
+    if (!open) { setCode(''); setCopied(false); setRecoveryCodes(null); }
   }, [open, enrolled, enrollMfa]);
 
   const copyKey = () => {
@@ -68,6 +69,24 @@ export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
     const r = await disableMfa(code);
     setBusy(false);
     showResult(r, '2FA बंद', 'Two-factor authentication हटा दिया गया.');
+  };
+
+  const handleGenRecovery = async () => {
+    setBusy(true);
+    const codes = await generateRecoveryCodes(code);
+    setBusy(false);
+    if (codes) {
+      setRecoveryCodes(codes);
+      setCode('');
+    } else {
+      toast({ title: 'नहीं बने', description: 'मौजूदा authenticator कोड सही डालें, फिर दोबारा कोशिश करें.', variant: 'destructive' });
+    }
+  };
+
+  const copyRecovery = () => {
+    navigator.clipboard?.writeText((recoveryCodes || []).join('\n')).then(() => {
+      toast({ title: 'Copy हो गया', description: 'Recovery codes clipboard में हैं — सुरक्षित जगह रखें.' });
+    }).catch(() => { /* clipboard unavailable — codes are visible on screen */ });
   };
 
   return (
@@ -128,6 +147,37 @@ export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
             </Button>
           )}
         </div>
+
+        {enrolled && (
+          <div className="space-y-2 border-t pt-3">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-1.5">
+                <KeyRound className="h-4 w-4 text-primary" /> Recovery codes
+              </Label>
+              <Button type="button" size="sm" variant="outline" onClick={handleGenRecovery} disabled={busy || code.length !== 6}>
+                {recoveryCodes ? 'फिर से बनाएं' : 'बनाएं'}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Phone/authenticator खो जाए तो इनमें से कोई एक कोड डालकर login कर सकते हैं. हर कोड सिर्फ़ एक बार चलता है. बनाने के लिए ऊपर मौजूदा 6-अंकों वाला कोड डालें.
+            </p>
+            {recoveryCodes && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2 rounded-md bg-muted p-3">
+                  {recoveryCodes.map((rc, i) => (
+                    <code key={i} className="text-sm font-mono tracking-wider">{rc.replace(/(.{5})(.{5})/, '$1-$2')}</code>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-amber-600">⚠️ अभी save कर लें — ये दोबारा नहीं दिखेंगे.</p>
+                  <Button type="button" size="sm" variant="ghost" className="gap-1" onClick={copyRecovery}>
+                    <Copy className="h-3.5 w-3.5" /> Copy
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
