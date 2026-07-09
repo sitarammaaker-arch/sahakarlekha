@@ -142,7 +142,7 @@ const BalanceSheet: React.FC = () => {
     const nonZero = (b: AccountBalance) => b.netBalance !== 0 || getPY(b.account.id) !== 0;
     const mkLeaf = (b: AccountBalance, indent: number): BSItem => {
       capturedIds.add(b.account.id);
-      return { account: b, displayAmount: signFlip ? -b.netBalance : b.netBalance, pyAmount: getPY(b.account.id), indent };
+      return { account: b, displayAmount: signFlip ? -b.netBalance : b.netBalance, pyAmount: signFlip ? -getPY(b.account.id) : getPY(b.account.id), indent };
     };
 
     // Recursively build rows for a group to ANY depth: direct leaves at `depth`,
@@ -199,7 +199,7 @@ const BalanceSheet: React.FC = () => {
     // Catch orphaned accounts not captured by any group
     const orphans = balances
       .filter(b => !capturedIds.has(b.account.id) && (b.netBalance !== 0 || getPY(b.account.id) !== 0))
-      .map(b => ({ account: b, displayAmount: signFlip ? -b.netBalance : b.netBalance, pyAmount: getPY(b.account.id) }));
+      .map(b => ({ account: b, displayAmount: signFlip ? -b.netBalance : b.netBalance, pyAmount: signFlip ? -getPY(b.account.id) : getPY(b.account.id) }));
 
     if (orphans.length > 0) {
       groups.push({
