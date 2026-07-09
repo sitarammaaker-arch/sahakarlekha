@@ -17,6 +17,7 @@ import { FileSpreadsheet, Download, Calendar, ExternalLink } from 'lucide-react'
 import { generateBalanceSheetPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
+import { isEmptyPeriod } from '@/lib/reportComparative';
 import { useToast } from '@/hooks/use-toast';
 import type { AccountBalance } from '@/types';
 
@@ -69,8 +70,24 @@ const BalanceSheet: React.FC = () => {
   // hardcoded 25% of net profit. Reserve appropriation is posted on the Reserve
   // Fund page (Dr 1208 / Cr 1201) and flows in naturally as an equity balance.
 
-  const pyBalances = society.previousYearBalances || {};
-  const pyYear = society.previousFinancialYear || '';
+  // ECR-19: the prior-year column is now COMPUTED from actual data — the balance
+  // sheet position as at the prior FY end (getTrialBalance for the day before FY
+  // start) — instead of a manual snapshot. Same debit-positive convention as the
+  // snapshot (so the column's meaning is unchanged); falls back to the saved
+  // snapshot when the dataset carries no prior-period figures.
+  const fyStart = society.financialYearStart;
+  const priorEndDate = fyStart
+    ? (() => { const d = new Date(fyStart); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })()
+    : '';
+  const pyComputed: Record<string, number> = {};
+  if (priorEndDate) {
+    getTrialBalance(priorEndDate).forEach(b => { if (!b.account.isGroup) pyComputed[b.account.id] = b.netBalance; });
+  }
+  const usingComputedPY = !isEmptyPeriod(pyComputed);
+  const pyBalances = usingComputedPY ? pyComputed : (society.previousYearBalances || {});
+  const [fyA, fyB] = (society.financialYear || '').split('-');
+  const computedPyLabel = fyA && fyB ? `${Number(fyA) - 1}-${String(Number(fyB) - 1).padStart(2, '0')}` : '';
+  const pyYear = usingComputedPY ? computedPyLabel : (society.previousFinancialYear || '');
   const hasPY = !!pyYear && Object.keys(pyBalances).length > 0;
   const getPY = (id: string) => pyBalances[id] ?? 0;
 
@@ -247,7 +264,7 @@ const BalanceSheet: React.FC = () => {
       <Table>
         <TableHeader>
           <TableRow>
-            {hasPY && <TableHead className="text-right text-muted-foreground text-xs w-24">{pyYear}</TableHead>}
+            {hasPY && <TableHead className="text-right text-muted-foreground text-xs w-24" title={usingComputedPY ? (hi ? 'डेटा से गणना (पिछले FY अंत)' : 'Computed from data (prior FY end)') : (hi ? 'सहेजा गया स्नैपशॉट' : 'Saved snapshot')}>{pyYear}{usingComputedPY ? ' *' : ''}</TableHead>}
             <TableHead>{t('particulars')}</TableHead>
             <TableHead className="text-right w-28">{hi ? 'राशि' : 'Amount'}</TableHead>
             <TableHead className="text-right w-28">{hi ? 'कुल योग' : 'Grand'}</TableHead>
