@@ -17,7 +17,8 @@ import { FileText, Download } from 'lucide-react';
 import { downloadCSV } from '@/lib/exportUtils';
 import { computeGSTR9, type GstRecord } from '@/lib/gstr9';
 import { validateGstBatch, validateGSTIN, type GstCheckRecord } from '@/lib/gstTdsValidation';
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { buildGstr9Export } from '@/lib/gstExport';
+import { AlertTriangle, CheckCircle2, FileJson } from 'lucide-react';
 
 const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
@@ -69,6 +70,17 @@ const GSTR9: React.FC = () => {
     downloadCSV(headers, rows, `GSTR9_${from}_to_${to}.csv`);
   };
 
+  // ECR-22 slice D: GSTN-style JSON draft for manual portal reconciliation (not an upload file).
+  const exportJson = () => {
+    const obj = buildGstr9Export(g, society.gstin || '', society.financialYear);
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `GSTR9_draft_${society.financialYear}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const rowCells = (label: string, t: { taxableValue: number; cgst: number; sgst: number; igst: number; tax: number }, showTaxable = true) => (
     <>
       <TableCell className="font-medium">{label}</TableCell>
@@ -90,7 +102,10 @@ const GSTR9: React.FC = () => {
             <p className="text-sm text-muted-foreground">{society.gstin ? `GSTIN: ${society.gstin}` : (hi ? 'सालाना GST consolidation' : 'Annual GST consolidation')}</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" className="gap-1" onClick={exportCsv}><Download className="h-4 w-4" />CSV</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="gap-1" onClick={exportCsv}><Download className="h-4 w-4" />CSV</Button>
+          <Button variant="outline" size="sm" className="gap-1" onClick={exportJson} title={hi ? 'GSTN-शैली JSON draft (portal पर मिलान हेतु, upload फ़ाइल नहीं)' : 'GSTN-style JSON draft (for portal reconciliation, not an upload file)'}><FileJson className="h-4 w-4" />JSON</Button>
+        </div>
       </div>
 
       <div className="flex items-end gap-2 flex-wrap">
