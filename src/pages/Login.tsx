@@ -15,7 +15,7 @@ import { Lock, Mail, Eye, EyeOff, Languages, AlertCircle, KeyRound, HelpCircle, 
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
-  const { login, sendPasswordReset } = useAuth();
+  const { login, verifyMfaCode, cancelMfa, sendPasswordReset } = useAuth();
   const { language, setLanguage, t } = useLanguage();
 
   const [email, setEmail] = useState('');
@@ -23,6 +23,10 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // ECR-12 — two-factor step: shown after a correct password when the account has 2FA on.
+  const [mfaStep, setMfaStep] = useState(false);
+  const [mfaCode, setMfaCode] = useState('');
 
   // Forgot Password modal
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -42,10 +46,13 @@ const Login: React.FC = () => {
     setError('');
     setIsLoading(true);
     try {
-      const success = await login(email, password);
-      if (success) {
+      const result = await login(email, password);
+      if (result.status === 'ok') {
         trackEvent('login', { method: 'email' });
         navigate('/dashboard');
+      } else if (result.status === 'mfa') {
+        setMfaStep(true);
+        setMfaCode('');
       } else {
         setError(language === 'hi' ? 'गलत ईमेल या पासवर्ड' : 'Invalid email or password');
       }
@@ -54,6 +61,33 @@ const Login: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+    try {
+      const ok = await verifyMfaCode(mfaCode);
+      if (ok) {
+        trackEvent('login', { method: 'email+mfa' });
+        navigate('/dashboard');
+      } else {
+        setError(language === 'hi' ? 'गलत कोड — फिर कोशिश करें' : 'Invalid code — try again');
+      }
+    } catch {
+      setError(language === 'hi' ? 'कोई त्रुटि हुई' : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const exitMfa = () => {
+    cancelMfa();
+    setMfaStep(false);
+    setMfaCode('');
+    setError('');
+    setPassword('');
   };
 
   const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
@@ -141,6 +175,47 @@ const Login: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {mfaStep ? (
+            <form onSubmit={handleMfaSubmit} className="space-y-4">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              <div className="flex items-center gap-2 rounded-md bg-muted/60 p-3 text-sm text-muted-foreground">
+                <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
+                {language === 'hi'
+                  ? 'Authenticator app का 6-अंकों वाला कोड डालें'
+                  : 'Enter the 6-digit code from your authenticator app'}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="otp">{language === 'hi' ? '2FA कोड' : '2FA code'}</Label>
+                <Input
+                  id="otp"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  autoFocus
+                  placeholder="123456"
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="text-center text-lg tracking-[0.5em] font-mono"
+                />
+              </div>
+              <Button type="submit" className="w-full" size="lg" disabled={isLoading || mfaCode.length !== 6}>
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    {language === 'hi' ? 'जाँच हो रही है...' : 'Verifying...'}
+                  </span>
+                ) : (language === 'hi' ? 'सत्यापित करें' : 'Verify')}
+              </Button>
+              <Button type="button" variant="ghost" className="w-full" onClick={exitMfa} disabled={isLoading}>
+                {language === 'hi' ? '← वापस' : '← Back'}
+              </Button>
+            </form>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
                 <Alert variant="destructive">
@@ -206,6 +281,7 @@ const Login: React.FC = () => {
                 ) : t('login')}
               </Button>
             </form>
+            )}
 
             {/* Forgot User ID link */}
             <div className="mt-4 text-center">

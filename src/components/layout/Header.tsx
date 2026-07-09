@@ -14,10 +14,11 @@ import {
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Languages, Bell, User, Settings, HelpCircle, Menu, LogOut, Search, Landmark, ShieldAlert, XCircle, Lock, CalendarClock } from 'lucide-react';
+import { Languages, Bell, User, Settings, HelpCircle, Menu, LogOut, Search, Landmark, ShieldAlert, XCircle, Lock, CalendarClock, ShieldCheck } from 'lucide-react';
 import { buildComplianceCalendar, complianceNotifications } from '@/lib/complianceCalendar';
 import { cn } from '@/lib/utils';
 import { GlobalSearch } from '@/components/GlobalSearch';
+import { MfaSetupDialog } from '@/components/security/MfaSetupDialog';
 import { helpForRoute } from '@/content/help';
 
 interface HeaderProps {
@@ -33,6 +34,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
   const { pathname } = useLocation();
   const ctxHelp = helpForRoute(pathname); // matching how-to for the current screen, if any
   const [searchOpen, setSearchOpen] = useState(false);
+  const [mfaOpen, setMfaOpen] = useState(false);
 
   // Live notification data
   const overdueLoans = loans.filter(l => l.status === 'overdue');
@@ -251,6 +253,11 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
                   <Settings className="h-4 w-4 mr-2" />
                   {t('settings')}
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMfaOpen(true)}>
+                  <ShieldCheck className="h-4 w-4 mr-2" />
+                  {language === 'hi' ? 'सुरक्षा (2FA)' : 'Security (2FA)'}
+                  {user?.mfaEnabled && <Badge variant="outline" className="ml-auto text-[10px] px-1">ON</Badge>}
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => window.open('/help', '_blank', 'noopener')}>
                   <HelpCircle className="h-4 w-4 mr-2" />
@@ -268,6 +275,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
       </header>
 
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
+      <MfaSetupDialog open={mfaOpen} onOpenChange={setMfaOpen} />
     </>
   );
 };
