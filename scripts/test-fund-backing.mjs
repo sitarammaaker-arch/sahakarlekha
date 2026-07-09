@@ -1,0 +1,48 @@
+// Fund backing-investment coverage (ECR-27) — mirrors src/lib/fundBacking.ts.
+// Run: node scripts/test-fund-backing.mjs
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+function fundBackingCoverage(fundsTotal, investmentsTotal) {
+  const funds = round2(fundsTotal), investments = round2(investmentsTotal);
+  const coveragePct = funds < 0.005 ? 100 : round2((investments / funds) * 100);
+  const shortfall = round2(Math.max(0, funds - investments));
+  return { fundsTotal: funds, investmentsTotal: investments, coveragePct, shortfall, backed: investments >= funds - 1 };
+}
+
+let pass = 0, fail = 0;
+const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
+
+// 1. Fully backed — investments ≥ funds.
+{
+  const r = fundBackingCoverage(100000, 100000);
+  ok(r.backed && r.coveragePct === 100 && r.shortfall === 0, 'funds == investments → backed, 100%, no shortfall');
+}
+// 2. Over-backed.
+{
+  const r = fundBackingCoverage(100000, 150000);
+  ok(r.backed && r.coveragePct === 150 && r.shortfall === 0, 'investments > funds → backed, 150%, no shortfall');
+}
+// 3. Under-backed — shortfall + coverage%.
+{
+  const r = fundBackingCoverage(100000, 60000);
+  ok(!r.backed && r.coveragePct === 60 && r.shortfall === 40000, 'investments 60% of funds → not backed, ₹40000 shortfall');
+}
+// 4. No funds → 100% (nothing to back), backed.
+{
+  const r = fundBackingCoverage(0, 0);
+  ok(r.backed && r.coveragePct === 100 && r.shortfall === 0, 'no funds → 100% backed (nothing to cover)');
+}
+// 5. Funds but zero investments → 0%, full shortfall.
+{
+  const r = fundBackingCoverage(50000, 0);
+  ok(!r.backed && r.coveragePct === 0 && r.shortfall === 50000, 'funds with no investments → 0%, full shortfall');
+}
+// 6. ₹1 tolerance — investments just under funds still counts as backed.
+{
+  const r = fundBackingCoverage(100000, 99999.5);
+  ok(r.backed, 'investments within ₹1 of funds → backed (tolerance)');
+  const r2 = fundBackingCoverage(100000, 99998);
+  ok(!r2.backed && r2.shortfall === 2, '₹2 short → not backed, ₹2 shortfall');
+}
+
+console.log(`\nFund backing (pure): ${pass} passed, ${fail} failed`);
+process.exit(fail > 0 ? 1 : 0);
