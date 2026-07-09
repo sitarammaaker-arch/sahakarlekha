@@ -15,7 +15,7 @@ import {
   Scale, ArrowLeftRight, TrendingUp, FileSpreadsheet, BarChart3, Clock, Percent, TrendingDown, Receipt, Warehouse,
   Package, PiggyBank, FileJson, Hash, Landmark, ScrollText, BookMarked, ShieldCheck, Users2, FileCheck, Shield,
   Coins, Trash2, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks, HardHat,
-  MessageSquareWarning, Car, Wrench, Building, ScanBarcode, Tags, PackageX, Undo2, GitCompareArrows,
+  MessageSquareWarning, Car, Wrench, Building, ScanBarcode, Tags, PackageX, Undo2, GitCompareArrows, Stethoscope,
 } from 'lucide-react';
 import type { Capability, NavDomain, Role } from './capabilities';
 
@@ -128,6 +128,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'purchaseRegister',   titleKey: 'purchaseRegister',   icon: PackagePlus,     route: '/purchase-register',    domain: 'reports', requiredCapabilities: U, order: 7 },
   { id: 'procurementMatch',   titleKey: 'procurementMatch',   icon: GitCompareArrows, route: '/procurement-match',   domain: 'reports', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant', 'auditor'], order: 7.5 },
   { id: 'billsOutstanding',   titleKey: 'billsOutstanding',   icon: Clock,           route: '/bills-outstanding',    domain: 'reports', requiredCapabilities: U, order: 8 },
+  { id: 'ledgerHygiene',      titleKey: 'ledgerHygiene',      icon: Stethoscope,     route: '/ledger-hygiene',       domain: 'reports', requiredCapabilities: U, requiredRoles: ['admin', 'accountant', 'auditor'], order: 8.5 },
   { id: 'gstSummary',         titleKey: 'gstSummary',         icon: Percent,         route: '/gst-summary',          domain: 'reports', requiredCapabilities: ['gst'], order: 9 },
   { id: 'gstr9',              titleKey: 'gstr9',              icon: FileText,        route: '/gstr-9',               domain: 'reports', requiredCapabilities: ['gst'], order: 9.5 },
   { id: 'agingAnalysis',      titleKey: 'agingAnalysis',      icon: TrendingDown,    route: '/aging-analysis',       domain: 'reports', requiredCapabilities: U, order: 10 },

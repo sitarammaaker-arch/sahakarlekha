@@ -69,6 +69,7 @@ export const translations: Translations = {
   branches: { hi: 'शाखाएँ', en: 'Branches' },
   godowns: { hi: 'गोदाम', en: 'Godowns' },
   procurementMatch: { hi: '3-तरफ़ा मिलान', en: '3-Way Match' },
+  ledgerHygiene: { hi: 'लेजर हाइजीन', en: 'Ledger Hygiene' },
   features: { hi: 'सुविधाएँ', en: 'Features' },
   eWayBill: { hi: 'e-Way Bill', en: 'e-Way Bill' },
   hsnMaster: { hi: 'HSN/SAC मास्टर', en: 'HSN/SAC Master' },

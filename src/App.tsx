@@ -126,6 +126,7 @@ const GSTR9 = lazyWithRetry(() => import("./pages/GSTR9"));
 const Branches = lazyWithRetry(() => import("./pages/Branches"));
 const Godowns = lazyWithRetry(() => import("./pages/Godowns"));
 const ProcurementMatch = lazyWithRetry(() => import("./pages/ProcurementMatch"));
+const LedgerHygiene = lazyWithRetry(() => import("./pages/LedgerHygiene"));
 const AgingAnalysis = lazyWithRetry(() => import("./pages/AgingAnalysis"));
 const StockValuation = lazyWithRetry(() => import("./pages/StockValuation"));
 const ClosingStockReport = lazyWithRetry(() => import("./pages/ClosingStockReport"));
@@ -352,6 +353,7 @@ const AppRoutes = () => {
       <Route path="/branches" element={<ProtectedRoute><Branches /></ProtectedRoute>} />
       <Route path="/godowns" element={<ProtectedRoute><Godowns /></ProtectedRoute>} />
       <Route path="/procurement-match" element={<ProtectedRoute><ProcurementMatch /></ProtectedRoute>} />
+      <Route path="/ledger-hygiene" element={<ProtectedRoute><LedgerHygiene /></ProtectedRoute>} />
       <Route path="/hsn-master" element={<ProtectedRoute><HsnMaster /></ProtectedRoute>} />
       <Route path="/aging-analysis" element={<ProtectedRoute><AgingAnalysis /></ProtectedRoute>} />
       <Route path="/stock-valuation" element={<ProtectedRoute><StockValuation /></ProtectedRoute>} />
