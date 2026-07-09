@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,8 @@ import { isEmptyPeriod } from '@/lib/reportComparative';
 
 const TrialBalance: React.FC = () => {
   const { t, language } = useLanguage();
+  const { can } = useAuth();
+  const canExport = can('export');   // ECR-19
   const { getTrialBalance, society } = useData();
   const navigate = useNavigate();
   // P1-5: Default to the last day of the selected FY (31 March), not today's date.
@@ -180,12 +183,14 @@ const TrialBalance: React.FC = () => {
           <Button variant="outline" size="sm" className="gap-2" onClick={() => generateTrialBalancePDF(balances, society, asOnDate, language)}>
             <Download className="h-4 w-4" />PDF
           </Button>
+          {canExport && <>
           <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
             <FileSpreadsheet className="h-4 w-4" />Excel
           </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
             <FileSpreadsheet className="h-4 w-4" />CSV
           </Button>
+          </>}
         </div>
       </div>
 

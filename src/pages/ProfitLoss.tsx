@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,8 @@ const ACC_EDUCATION_FUND = '1203';// Education Fund
 
 const ProfitLoss: React.FC = () => {
   const { language } = useLanguage();
+  const { can } = useAuth();
+  const canExport = can('export');   // ECR-19
   const navigate = useNavigate();
   const { getProfitLoss, society, vouchers } = useData();
 
@@ -128,12 +131,14 @@ const ProfitLoss: React.FC = () => {
           >
             <Download className="h-4 w-4" />PDF
           </Button>
+          {canExport && <>
           <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
             <FileSpreadsheet className="h-4 w-4" />Excel
           </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
             <FileSpreadsheet className="h-4 w-4" />CSV
           </Button>
+          </>}
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,8 @@ import type { ReceiptsPaymentsItem } from '@/types';
 
 const ReceiptsPayments: React.FC = () => {
   const { language } = useLanguage();
+  const { can } = useAuth();
+  const canExport = can('export');   // ECR-19
   const { getReceiptsPayments, society } = useData();
 
   const fmt = (amount: number) =>
@@ -102,12 +105,14 @@ const ReceiptsPayments: React.FC = () => {
           <Button variant="outline" size="sm" className="gap-2" onClick={() => generateReceiptsPaymentsPDF(data, society)}>
             <Download className="h-4 w-4" />PDF
           </Button>
+          {canExport && <>
           <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
             <FileSpreadsheet className="h-4 w-4" />Excel
           </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
             <FileSpreadsheet className="h-4 w-4" />CSV
           </Button>
+          </>}
         </div>
       </div>
 
