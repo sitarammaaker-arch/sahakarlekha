@@ -22,6 +22,7 @@ import { matchesBranch, branchToStamp, resolveActiveBranch, ALL_BRANCHES } from 
 import { buildInterBranchTransfer, INTER_BRANCH_CONTROL_ID } from '@/lib/interBranch';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { isFundAccount, buildFundStatement } from '@/lib/funds';
+import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import * as storage from '@/lib/storage';
@@ -91,7 +92,7 @@ interface DataContextType {
   addSettlementDeductionLine: (data: { settlementId: string; deductionType: string; accountId: string; amount: number; reference?: string; remarks?: string }) => void;
   removeSettlementDeductionLine: (data: { settlementId: string; lineId: string }) => void;
   approveFarmerSettlement: (data: { settlementId: string }) => FarmerSettlement;
-  recordFarmerPayment: (data: { engineVoucherId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; paymentDate: string; reference?: string; remarks?: string }) => Voucher;
+  recordFarmerPayment: (data: { engineVoucherId: string; amount: number; mode: 'cash' | 'bank' | 'agency'; bankAccountId?: string; agencyAccountId?: string; paymentDate: string; reference?: string; remarks?: string }) => Voucher;
   loans: Loan[];
   depositAccounts: DepositAccount[];
   depositTransactions: DepositTransaction[];
@@ -3456,7 +3457,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // account (its Cr leg); Cr = Cash / selected Bank. Outstanding reads the STORED settlement (SoT):
   // netPayable − amountPaid. The payment voucher is the authoritative base; advancing amountPaid is the
   // extra (RULE-1 step-2 — mild warning on failure, since amountPaid is reconcilable from payments).
-  const recordFarmerPayment = useCallback((data: { engineVoucherId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; paymentDate: string; reference?: string; remarks?: string }): Voucher => {
+  const recordFarmerPayment = useCallback((data: { engineVoucherId: string; amount: number; mode: 'cash' | 'bank' | 'agency'; bankAccountId?: string; agencyAccountId?: string; paymentDate: string; reference?: string; remarks?: string }): Voucher => {
     const sentinel = { id: '', voucherNo: '', type: 'payment', date: data.paymentDate, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
     const ev = vouchersRef.current.find(v => v.id === data.engineVoucherId && !v.isDeleted && isEngineVoucher(v));
@@ -3479,15 +3480,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return sentinel;
     }
     const payableAcc = ev.lines?.find(l => l.type === 'Cr')?.accountId || ev.creditAccountId;
-    const creditAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    // ECR: credit side by mode. 'agency' = the agency (Hafed) paid the farmers directly, so
+    // the society's cash/bank are untouched — we Cr the agency receivable instead (crediting
+    // cash/bank there wrongly drove those balances negative).
+    const bankFallback = data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK;
+    const creditAcc = resolveFarmerPaymentCredit(data.mode, { cash: ACCOUNT_IDS.CASH, bank: bankFallback, agency: data.agencyAccountId });
+    if (data.mode === 'agency' && (!creditAcc || !accounts.some(a => a.id === creditAcc && !a.isGroup))) {
+      toastRef.current({ title: 'एजेंसी खाता चुनें', description: 'सीधे-एजेंसी भुगतान के लिए एक वैध एजेंसी प्राप्य खाता (जैसे Hafed Control) चुनें।', variant: 'destructive', duration: 9000 });
+      return sentinel;
+    }
+    if (!creditAcc) return sentinel;
     const lid = () => crypto.randomUUID();
     const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
     const rem = data.remarks?.trim() ? ` · ${data.remarks.trim()}` : '';
+    const modeNote = data.mode === 'agency' ? ' · एजेंसी द्वारा सीधे भुगतान' : '';
     // Authoritative base: the payment voucher (addVoucher self-manages RULE-1).
     const voucher = addVoucher({
       type: 'payment', date: data.paymentDate,
       debitAccountId: payableAcc, creditAccountId: creditAcc, amount: data.amount,
-      narration: `किसान को भुगतान — ${ev.voucherNo}${ref}${rem}`,
+      narration: `किसान को भुगतान — ${ev.voucherNo}${ref}${rem}${modeNote}`,
       refType: 'farmer.payment', refId: ev.id,
       createdBy: user?.name || 'System',
       lines: [
