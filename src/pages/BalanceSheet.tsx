@@ -17,7 +17,7 @@ import { FileSpreadsheet, Download, Calendar, ExternalLink } from 'lucide-react'
 import { generateBalanceSheetPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
-import { isEmptyPeriod } from '@/lib/reportComparative';
+import { isEmptyPeriod, comparative } from '@/lib/reportComparative';
 import { useToast } from '@/hooks/use-toast';
 import type { AccountBalance } from '@/types';
 
@@ -258,6 +258,23 @@ const BalanceSheet: React.FC = () => {
   };
 
   // Render a grouped side (liabilities or assets)
+  // ECR-19: variance cell (current − prior) with % change. Prior is already
+  // sign-aligned to the current column, so the variance reads correctly per side.
+  const varCell = (curr: number, prior: number) => {
+    const v = comparative(curr, prior);
+    if (v.current === 0 && v.prior === 0) return <TableCell className="text-right text-xs text-muted-foreground" />;
+    const up = v.variance > 0;
+    const tone = v.variance === 0 ? 'text-muted-foreground' : up ? 'text-emerald-600' : 'text-red-600';
+    return (
+      <TableCell className={`text-right text-xs ${tone}`}>
+        {v.variance > 0 ? '+' : v.variance < 0 ? '−' : ''}{fmt(Math.abs(v.variance))}
+        {v.variancePct !== null && v.variance !== 0 && (
+          <span className="block text-[10px] opacity-80">{up ? '+' : '−'}{Math.abs(v.variancePct)}%</span>
+        )}
+      </TableCell>
+    );
+  };
+
   const renderSide = (groups: BSGroup[], sideLabel: string, sideLabelHi: string, total: number, pyTotal: number, isLiabSide: boolean) => (
     <div className="space-y-2">
       <h3 className="text-lg font-semibold text-primary pb-2 border-b">
@@ -267,6 +284,7 @@ const BalanceSheet: React.FC = () => {
         <TableHeader>
           <TableRow>
             {hasPY && <TableHead className="text-right text-muted-foreground text-xs w-24" title={usingComputedPY ? (hi ? 'डेटा से गणना (पिछले FY अंत)' : 'Computed from data (prior FY end)') : (hi ? 'सहेजा गया स्नैपशॉट' : 'Saved snapshot')}>{pyYear}{usingComputedPY ? ' *' : ''}</TableHead>}
+            {hasPY && <TableHead className="text-right text-muted-foreground text-xs w-24">{hi ? 'बदलाव' : 'Change'}</TableHead>}
             <TableHead>{t('particulars')}</TableHead>
             <TableHead className="text-right w-28">{hi ? 'राशि' : 'Amount'}</TableHead>
             <TableHead className="text-right w-28">{hi ? 'कुल योग' : 'Grand'}</TableHead>
@@ -278,6 +296,7 @@ const BalanceSheet: React.FC = () => {
               {/* Group Header */}
               <TableRow className="bg-primary/5 font-bold">
                 {hasPY && <TableCell className="text-right text-muted-foreground">{group.pyGrandTotal !== 0 ? fmt(group.pyGrandTotal) : ''}</TableCell>}
+                {hasPY && varCell(group.grandTotal, group.pyGrandTotal)}
                 <TableCell className="font-bold uppercase text-sm">
                   {hi ? group.nameHi : group.name}
                 </TableCell>
@@ -299,6 +318,7 @@ const BalanceSheet: React.FC = () => {
                   return (
                     <TableRow key={b.account.id} className="bg-muted/30">
                       {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyAmount !== 0 ? fmt(pyAmount) : '—'}</TableCell>}
+                      {hasPY && varCell(displayAmount, pyAmount)}
                       <TableCell className="text-sm font-semibold" style={{ paddingLeft: padLeft }}>{hi ? b.account.nameHi : b.account.name}</TableCell>
                       <TableCell className="text-right text-sm font-semibold">
                         {isNegative ? `(${fmt(Math.abs(displayAmount))})` : fmt(displayAmount)}
@@ -319,6 +339,7 @@ const BalanceSheet: React.FC = () => {
                     title={hi ? 'लेजर देखें' : 'View Ledger'}
                   >
                     {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyAmount !== 0 ? fmt(pyAmount) : '—'}</TableCell>}
+                    {hasPY && varCell(displayAmount, pyAmount)}
                     <TableCell className="text-sm group" style={{ paddingLeft: padLeft }}>
                       <span className="group-hover:text-primary group-hover:underline">
                         {hi ? b.account.nameHi : b.account.name}
@@ -340,6 +361,7 @@ const BalanceSheet: React.FC = () => {
           {isLiabSide && netProfit !== 0 && (
             <TableRow className={netProfit > 0 ? 'bg-success/10 font-bold' : 'bg-destructive/10 font-bold'}>
               {hasPY && <TableCell></TableCell>}
+              {hasPY && <TableCell></TableCell>}
               <TableCell className={`font-bold uppercase text-sm ${netProfit > 0 ? 'text-success' : 'text-destructive'}`}>
                 {hi ? 'प्रॉफ़िट एंड लॉस खाता' : 'Profit & Loss A/c'}
               </TableCell>
@@ -354,6 +376,7 @@ const BalanceSheet: React.FC = () => {
           {!isLiabSide && unpostedStock > 0 && (
             <TableRow className="font-semibold">
               {hasPY && <TableCell></TableCell>}
+              {hasPY && <TableCell></TableCell>}
               <TableCell className="text-sm">
                 {hi ? 'समापन माल (इन्वेंट्री से)' : 'Closing Stock (from Inventory)'}
               </TableCell>
@@ -365,6 +388,7 @@ const BalanceSheet: React.FC = () => {
           {/* GRAND TOTAL */}
           <TableRow className="bg-primary/15 font-bold text-base border-t-2 border-primary">
             {hasPY && <TableCell className="text-right text-muted-foreground">{fmt(pyTotal)}</TableCell>}
+            {hasPY && varCell(total, pyTotal)}
             <TableCell className="font-bold">{hi ? 'कुल योग' : 'GRAND TOTAL'}</TableCell>
             <TableCell className="text-right font-bold text-primary">{fmt(total)}</TableCell>
             <TableCell className="text-right font-bold text-primary">{fmt(total)}</TableCell>
