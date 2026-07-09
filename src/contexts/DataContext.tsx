@@ -35,6 +35,7 @@ import { resolveCapabilities } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
 import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { sumActiveMemberShareCapital, reconcileShareCapital, type ShareCapitalReconciliation } from '@/lib/shareReconciliation';
+import { sumActiveAssetCost, reconcileAssetRegister, type AssetReconciliation } from '@/lib/assetReconciliation';
 import { can as rbacCan, type Permission } from '@/lib/rbac';
 import { splitVoucherExtras, extrasFailureToast } from '@/lib/voucherPersistence';
 import { shareOpPosting, validateShareOp, applyShareOp, type ShareOpType } from '@/lib/shareOps';
@@ -226,6 +227,7 @@ interface DataContextType {
 
   getAccountBalance: (accountId: string) => number;
   getShareCapitalReconciliation: () => ShareCapitalReconciliation;
+  getAssetRegisterReconciliation: () => AssetReconciliation;   // ECR-05: register cost vs fixed-asset ledger
   getCashBookEntries: (fromDate?: string, toDate?: string) => CashBookEntry[];
   getBankBookEntries: (fromDate?: string, toDate?: string, bankAccountId?: string) => BankBookEntry[];
   getTrialBalance: (asOnDate?: string) => AccountBalance[];
@@ -3561,6 +3563,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return reconcileShareCapital(sumActiveMemberShareCapital(members), controlBalance);
   }, [members, getAccountBalance]);
 
+  // ECR-05 (asset side): Asset Register cost vs the fixed-asset ledger control. Detects the
+  // other dual-source-of-truth the register calls out. Read-only — mirrors the share recon.
+  const getAssetRegisterReconciliation = useCallback((): AssetReconciliation => {
+    const registerTotal = sumActiveAssetCost(assets);
+    const controlBalance = accounts
+      .filter(a => a.subtype === 'fixed_asset' && !a.isGroup)
+      .reduce((s, a) => s + getAccountBalance(a.id), 0);   // Dr (gross cost)
+    return reconcileAssetRegister(registerTotal, controlBalance);
+  }, [assets, accounts, getAccountBalance]);
+
   // ECR-27: spend a statutory fund (Education/Building/Welfare/etc.) — Dr fund / Cr cash|bank.
   // Balance-guarded (can't exceed the fund's corpus), FY-locked, and utilisation above
   // ₹50,000 requires a committee/AGM resolution number (stored in the narration for audit).
@@ -5970,7 +5982,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addSalaryRecord, updateSalaryRecord, deleteSalaryRecord,
       addSupplier, updateSupplier, deleteSupplier,
       addCustomer, updateCustomer, deleteCustomer,
-      getAccountBalance, getShareCapitalReconciliation, getCashBookEntries, getBankBookEntries,
+      getAccountBalance, getShareCapitalReconciliation, getAssetRegisterReconciliation, getCashBookEntries, getBankBookEntries,
       getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments, postClosingStock, recordFundUtilisation,
       getEntityLinks,
       isLoading,
