@@ -31,6 +31,7 @@ const CAT: Record<HygieneCategory, { hi: string; en: string; hintHi: string; hin
   'duplicate-name': { hi: 'दोहरे नाम', en: 'Duplicate names', hintHi: 'एक ही नाम के कई खाते — भ्रम का जोखिम। Ledger Heads पर merge करें।', hintEn: 'Several accounts share a name — ambiguity risk. Merge them on Ledger Heads.' },
   'empty-group': { hi: 'खाली समूह', en: 'Empty groups', hintHi: 'इस समूह/शीर्ष के अंदर कोई खाता नहीं। child जोड़ें या समूह हटाएँ।', hintEn: 'This group/header has no child account. Add a child or remove the group.' },
   'blank-name': { hi: 'रिक्त नाम', en: 'Blank names', hintHi: 'नाम या हिंदी नाम खाली है। Ledger Heads पर भरें।', hintEn: 'Missing English or Hindi name. Fill it in on Ledger Heads.' },
+  'abnormal-balance': { hi: 'असामान्य शेष', en: 'Abnormal balances', hintHi: 'शेष अपनी स्वाभाविक दिशा के उलट है — जैसे नकद (asset) में Cr शेष = नेगेटिव कैश, या receivable किसी liability खाते में। entries जाँचें या खाते का प्रकार Ledger Heads पर सुधारें।', hintEn: 'Balance is on the opposite side to the account’s nature — e.g. Cash (asset) with a Cr balance = negative cash, or a receivable parked in a liability account. Review the entries, or fix the account type on Ledger Heads.' },
 };
 
 const SEV_ICON: Record<HygieneSeverity, React.ReactNode> = {

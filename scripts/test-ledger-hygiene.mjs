@@ -52,6 +52,20 @@ function analyzeLedgerHygiene(accounts, usage) {
   const blanks = accounts.filter(a => !norm(a.name) || !norm(a.nameHi)).map(a => ({ id: a.id, name: a.name || a.nameHi || a.id, detail: 'missing name' }));
   if (blanks.length) findings.push({ category: 'blank-name', severity: 'warning', accounts: blanks });
 
+  const abnormal = [];
+  for (const a of accounts) {
+    if (a.isGroup || a.subtype === 'surplus') continue;
+    const b = usage.balance[a.id] || 0;
+    if (Math.abs(b) < ZERO) continue;
+    const naturalDebit = a.type === 'asset' || a.type === 'expense';
+    const balIsDebit = b > 0;
+    if (naturalDebit === balIsDebit) continue;
+    if (naturalDebit && a.openingBalanceType === 'credit') continue;
+    if (!naturalDebit && a.openingBalanceType === 'debit') continue;
+    abnormal.push({ id: a.id, name: a.name, detail: `${Math.abs(b).toLocaleString('en-IN')} ${balIsDebit ? 'Dr' : 'Cr'} · expected ${naturalDebit ? 'Dr' : 'Cr'}` });
+  }
+  if (abnormal.length) findings.push({ category: 'abnormal-balance', severity: 'error', accounts: abnormal });
+
   return findings;
 }
 const hygieneSummary = (findings) => {
@@ -150,6 +164,41 @@ const noUsage = { voucherRefCount: {}, balance: {}, linkedParty: {} };
   ok(s.warnings === 1, 'summary: 1 warning (unused head)');
   ok(s.infos === 1, 'summary: 1 info (empty group)');
   ok(s.total === 4, 'summary: 4 total flagged');
+}
+
+// 11. Abnormal balance — the two real Rania cases + guards against false positives.
+{
+  const accs = [
+    acc('3301', 'Cash', { type: 'asset', openingBalanceType: 'debit', isSystem: true }),          // negative cash (asset, Cr balance)
+    acc('hafed', 'Hafed Control', { type: 'liability', openingBalanceType: 'credit' }),            // receivable in a liability (Dr balance)
+    acc('3302', 'Bank', { type: 'asset', openingBalanceType: 'debit' }),                           // normal (Dr balance) → not flagged
+    acc('1211', 'Dividend Distribution', { type: 'equity', openingBalanceType: 'debit' }),         // contra: opens debit → Dr balance is fine
+    acc('1208', 'Net Surplus', { type: 'equity', subtype: 'surplus', openingBalanceType: 'credit' }), // deficit swing → exempt
+    acc('2100', 'Liab Group', { type: 'liability', isGroup: true, openingBalanceType: 'credit' }), // group → skip
+  ];
+  const balance = {
+    '3301': -294100,   // asset carrying a CREDIT balance → negative cash
+    'hafed': 150000,   // liability carrying a DEBIT balance → misclassified receivable
+    '3302': 50000,     // asset with normal debit balance → fine
+    '1211': 8000,      // debit-opened equity with a debit balance → intentional, fine
+    '1208': -20000,    // surplus with a debit (deficit) → exempt via subtype
+  };
+  const f = analyzeLedgerHygiene(accs, { voucherRefCount: {}, balance, linkedParty: {} });
+  const ab = cat(f, 'abnormal-balance');
+  ok(ab && ab.severity === 'error', 'abnormal-balance is an error');
+  ok(ab && ab.accounts.length === 2, 'exactly 2 flagged (Cash + Hafed); Bank/Dividend/Surplus/group exempt');
+  const cash = ab.accounts.find(x => x.id === '3301');
+  ok(cash && cash.detail.includes('Cr') && cash.detail.includes('expected Dr'), 'cash: credit balance, expected Dr');
+  const hafed = ab.accounts.find(x => x.id === 'hafed');
+  ok(hafed && hafed.detail.includes('Dr') && hafed.detail.includes('expected Cr'), 'hafed: debit balance, expected Cr');
+  ok(!ab.accounts.some(x => x.id === '3302' || x.id === '1211' || x.id === '1208' || x.id === '2100'), 'no false positives');
+}
+
+// 12. Zero balance is never abnormal.
+{
+  const accs = [acc('x', 'Zero Asset', { type: 'liability', openingBalanceType: 'credit' })];
+  const f = analyzeLedgerHygiene(accs, { voucherRefCount: {}, balance: { x: 0 }, linkedParty: {} });
+  ok(!cat(f, 'abnormal-balance'), 'zero balance → not abnormal');
 }
 
 console.log(`\nLedger hygiene (pure): ${pass} passed, ${fail} failed`);

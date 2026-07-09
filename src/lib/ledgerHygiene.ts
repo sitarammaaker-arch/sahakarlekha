@@ -20,7 +20,11 @@ export type HygieneCategory =
   | 'unused-head'          // postable account with no opening balance and no usage
   | 'duplicate-name'       // 2+ accounts share the same name (ambiguity / merge candidate)
   | 'empty-group'          // group/header account with no child
-  | 'blank-name';          // missing name or nameHi
+  | 'blank-name'           // missing name or nameHi
+  | 'abnormal-balance';    // balance sits on the side opposite the account's natural side
+                           // (asset/expense with a credit balance — e.g. negative cash; or
+                           //  liability/income/equity with a debit balance — e.g. a receivable
+                           //  parked in a liability account)
 
 export interface HygieneAccountRef {
   id: string;
@@ -113,6 +117,31 @@ export function analyzeLedgerHygiene(
   const blanks = accounts.filter(a => !norm(a.name) || !norm(a.nameHi))
     .map(a => ({ id: a.id, name: a.name || a.nameHi || a.id, detail: 'missing name' }));
   if (blanks.length) findings.push({ category: 'blank-name', severity: 'warning', accounts: blanks });
+
+  // 8. Abnormal balances — an account whose net balance sits on the side OPPOSITE its
+  //    natural side (by type). Catches negative cash (asset 3301 carrying a credit balance)
+  //    and a receivable parked in a liability account (liability carrying a debit balance).
+  //    usage.balance is signed Dr−Cr (Dr positive). Skips: group accounts; the P&L result
+  //    (subtype 'surplus', which legitimately swings to a deficit); and accounts intentionally
+  //    opened on the opposite side (openingBalanceType already the "abnormal" side — e.g. the
+  //    debit-nature Dividend Distribution / Patronage reserve accounts).
+  const abnormal: HygieneAccountRef[] = [];
+  for (const a of accounts) {
+    if (a.isGroup || a.subtype === 'surplus') continue;
+    const b = usage.balance[a.id] || 0;
+    if (Math.abs(b) < ZERO) continue;
+    const naturalDebit = a.type === 'asset' || a.type === 'expense';
+    const balIsDebit = b > 0;
+    if (naturalDebit === balIsDebit) continue;             // balance on its natural side → fine
+    const openingType = a.openingBalanceType;              // an intentional contra opens on the "abnormal" side
+    if (naturalDebit && openingType === 'credit') continue;
+    if (!naturalDebit && openingType === 'debit') continue;
+    abnormal.push({
+      id: a.id, name: a.name,
+      detail: `${Math.abs(b).toLocaleString('en-IN')} ${balIsDebit ? 'Dr' : 'Cr'} · expected ${naturalDebit ? 'Dr' : 'Cr'}`,
+    });
+  }
+  if (abnormal.length) findings.push({ category: 'abnormal-balance', severity: 'error', accounts: abnormal });
 
   return findings;
 }
