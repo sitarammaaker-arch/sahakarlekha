@@ -1479,6 +1479,7 @@ export interface Purchase {
   createdAt: string;
   createdBy: string;
   isDeleted?: boolean;      // P0 #2 soft-delete: archived purchase (retained in DB, hidden from app)
+  rcmApplicable?: boolean;  // ECR-22: inward supply liable to GST under Reverse Charge (recipient pays) — self-assessed GST + matching ITC
 }
 
 // ── Supplier ──────────────────────────────────────────────────────────────────

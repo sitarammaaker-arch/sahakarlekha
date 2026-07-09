@@ -74,6 +74,7 @@ const PurchaseManagement: React.FC = () => {
   const [sgstPct, setSgstPct] = useState<number>(0);
   const [igstPct, setIgstPct] = useState<number>(0);
   const [tdsPct, setTdsPct] = useState<number>(0);
+  const [rcmApplicable, setRcmApplicable] = useState<boolean>(false); // ECR-22: reverse charge
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
   const [narration, setNarration] = useState('');
   const [savedPurchaseNo, setSavedPurchaseNo] = useState<string | null>(null);
@@ -182,7 +183,7 @@ const PurchaseManagement: React.FC = () => {
     setSupplierPhone('');
     setItems([EMPTY_ITEM()]);
     setDiscount(0);
-    setCgstPct(0); setSgstPct(0); setIgstPct(0); setTdsPct(0);
+    setCgstPct(0); setSgstPct(0); setIgstPct(0); setTdsPct(0); setRcmApplicable(false);
     setPaymentMode('cash');
     setNarration('');
     setEditingId(null);
@@ -201,6 +202,7 @@ const PurchaseManagement: React.FC = () => {
     setSgstPct(purchase.sgstPct || 0);
     setIgstPct(purchase.igstPct || 0);
     setTdsPct(purchase.tdsPct || 0);
+    setRcmApplicable(!!purchase.rcmApplicable);
     setPaymentMode(purchase.paymentMode);
     setNarration(purchase.narration || '');
     setSavedPurchaseNo(null);
@@ -237,6 +239,7 @@ const PurchaseManagement: React.FC = () => {
       cgstPct, sgstPct, igstPct, tdsPct,
       cgstAmount, sgstAmount, igstAmount, tdsAmount,
       taxAmount, grandTotal,
+      rcmApplicable,
       paymentMode,
       narration: narration.trim(),
       createdBy: user?.name ?? 'Unknown',
@@ -655,6 +658,11 @@ const PurchaseManagement: React.FC = () => {
                     <Input type="number" min={0} max={28} step={0.5} value={igstPct} onChange={e => setIgstPct(Math.max(0, Number(e.target.value)))} className="w-20 h-7 text-right text-sm" />
                     <span className="w-24 text-right text-muted-foreground">{fmt(igstAmount)}</span>
                   </div>
+                  {/* ECR-22: Reverse Charge Mechanism */}
+                  <label className="flex items-center gap-2 pt-1 text-sm cursor-pointer">
+                    <input type="checkbox" checked={rcmApplicable} onChange={e => setRcmApplicable(e.target.checked)} className="h-4 w-4" />
+                    <span>{language === 'hi' ? 'रिवर्स चार्ज (RCM) लागू' : 'Reverse Charge (RCM) applicable'}</span>
+                  </label>
                   {taxAmount > 0 && (
                     <div className="flex justify-between border-t border-blue-200 pt-1 font-medium text-blue-700 dark:text-blue-300">
                       <span>{language === 'hi' ? 'कुल GST' : 'Total GST'}</span>
