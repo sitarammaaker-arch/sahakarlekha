@@ -29,7 +29,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuToggle }) => {
   const { language, setLanguage, t } = useLanguage();
   const { user, logout } = useAuth();
-  const { society, loans, auditObjections, vouchers, employees, getComplianceFiledIds } = useData();
+  const { society, loans, auditObjections, vouchers, employees, getComplianceFiledIds, branches, activeBranchId, setActiveBranch } = useData();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const ctxHelp = helpForRoute(pathname); // matching how-to for the current screen, if any
@@ -117,6 +117,31 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
               </kbd>
             </Button>
             {/* Search icon hidden on mobile — use sidebar nav or Ctrl+K on desktop */}
+
+            {/* ECR-17: Active branch selector (only when branches exist) */}
+            {branches.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2" title={language === 'hi' ? 'सक्रिय शाखा' : 'Active branch'}>
+                    <Landmark className="h-4 w-4" />
+                    <span className="hidden sm:inline max-w-[120px] truncate">
+                      {activeBranchId === 'all' ? (language === 'hi' ? 'सभी शाखाएँ' : 'All branches') : (branches.find(b => b.id === activeBranchId)?.name || (language === 'hi' ? 'शाखा' : 'Branch'))}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
+                  <DropdownMenuItem onClick={() => setActiveBranch('all')}>
+                    <span className={cn(activeBranchId === 'all' && 'font-semibold')}>{language === 'hi' ? 'सभी शाखाएँ (समेकित)' : 'All branches (consolidated)'}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {branches.map(b => (
+                    <DropdownMenuItem key={b.id} onClick={() => setActiveBranch(b.id)}>
+                      <span className={cn(activeBranchId === b.id && 'font-semibold')}>{b.name}{b.isHeadOffice ? (language === 'hi' ? ' (हेड ऑफ़िस)' : ' (HO)') : ''}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
             {/* Language Toggle */}
             <DropdownMenu>

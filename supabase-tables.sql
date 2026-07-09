@@ -3012,3 +3012,26 @@ grant execute on function app_verify_recovery(text, text)   to anon, authenticat
 --     app_totp_matches('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ','005924',1234567890,0) as t1234567890,
 --     app_totp_matches('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ','050471',1111111111,0) as t1111111111,
 --     app_totp_matches('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ','000000',59,0)         as wrong;
+
+-- ── ECR-17 multi-branch (Phase 1) ────────────────────────────────────────────
+-- Branch master (each society has one Head Office). Vouchers carry a branchId;
+-- reports view per-branch or consolidated. Unbranched legacy vouchers → Head Office.
+create table if not exists branches (
+  id text primary key,
+  society_id text,
+  name text not null,
+  code text,
+  "isHeadOffice" boolean default false,
+  address text,
+  "isActive" boolean default true,
+  "createdAt" timestamptz default now()
+);
+alter table branches enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='branches' and policyname='allow_all_branches') then
+    create policy "allow_all_branches" on branches for all using (true) with check (true);
+  end if;
+end $$;
+
+-- Voucher branch dimension (overlay column — patched in step-2, base save never fails).
+alter table vouchers add column if not exists "branchId" text;
