@@ -15,7 +15,7 @@ import {
   Scale, ArrowLeftRight, TrendingUp, FileSpreadsheet, BarChart3, Clock, Percent, TrendingDown, Receipt, Warehouse,
   Package, PiggyBank, FileJson, Hash, Landmark, ScrollText, BookMarked, ShieldCheck, Users2, FileCheck, Shield,
   Coins, Trash2, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks, HardHat,
-  MessageSquareWarning, Car, Wrench, Building, ScanBarcode, Tags, PackageX, Undo2,
+  MessageSquareWarning, Car, Wrench, Building, ScanBarcode, Tags, PackageX, Undo2, GitCompareArrows,
 } from 'lucide-react';
 import type { Capability, NavDomain, Role } from './capabilities';
 
@@ -126,6 +126,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'reports',            titleKey: 'reports',            icon: BarChart3,       route: '/reports',              domain: 'reports', requiredCapabilities: U, order: 5 },
   { id: 'saleRegister',       titleKey: 'saleRegister',       icon: ShoppingCart,    route: '/sale-register',        domain: 'reports', requiredCapabilities: ['inventory_sales'], order: 6 },
   { id: 'purchaseRegister',   titleKey: 'purchaseRegister',   icon: PackagePlus,     route: '/purchase-register',    domain: 'reports', requiredCapabilities: U, order: 7 },
+  { id: 'procurementMatch',   titleKey: 'procurementMatch',   icon: GitCompareArrows, route: '/procurement-match',   domain: 'reports', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant', 'auditor'], order: 7.5 },
   { id: 'billsOutstanding',   titleKey: 'billsOutstanding',   icon: Clock,           route: '/bills-outstanding',    domain: 'reports', requiredCapabilities: U, order: 8 },
   { id: 'gstSummary',         titleKey: 'gstSummary',         icon: Percent,         route: '/gst-summary',          domain: 'reports', requiredCapabilities: ['gst'], order: 9 },
   { id: 'gstr9',              titleKey: 'gstr9',              icon: FileText,        route: '/gstr-9',               domain: 'reports', requiredCapabilities: ['gst'], order: 9.5 },
