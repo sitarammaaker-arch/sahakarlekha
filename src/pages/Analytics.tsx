@@ -9,11 +9,14 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, ShoppingCart, PackagePlus, TrendingUp, Percent } from 'lucide-react';
+import { BarChart3, ShoppingCart, PackagePlus, TrendingUp, Percent, Wallet, Users } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid, Cell,
 } from 'recharts';
-import { monthlySeries, momGrowth, topN, ratios, type Dated } from '@/lib/analyticsMetrics';
+import { monthlySeries, momGrowth, topN, ratios, priorFy, fyRange, sumInRange, withCumulative, growthPct, type Dated } from '@/lib/analyticsMetrics';
+import { getVoucherLines } from '@/lib/voucherUtils';
+import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
+import { cn } from '@/lib/utils';
 
 const fmtShort = (n: number) => {
   const a = Math.abs(n);
@@ -26,7 +29,7 @@ const fmtShort = (n: number) => {
 
 const Analytics: React.FC = () => {
   const { language } = useLanguage();
-  const { sales, purchases, society, getProfitLoss, getTradingAccount } = useData();
+  const { sales, purchases, society, getProfitLoss, getTradingAccount, vouchers, members, accounts } = useData();
   const hi = language === 'hi';
   const fy = society.financialYear;
   const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
@@ -55,8 +58,66 @@ const Analytics: React.FC = () => {
   const topExpense = useMemo(() => topN((pl.expenseItems || []).map(e => ({ name: hi ? (e.nameHi || e.name) : e.name, amount: e.amount })), 5), [pl.expenseItems, hi]);
 
   const hasMonthly = monthly.some(m => m.sales > 0 || m.purchases > 0);
+
+  // ── Phase 2 ───────────────────────────────────────────────────────────────
+  const salesDated = useMemo<Dated[]>(() => sales.filter(x => !(x as { isDeleted?: boolean }).isDeleted).map(x => ({ date: x.date, amount: x.netAmount || 0 })), [sales]);
+  const purchDated = useMemo<Dated[]>(() => purchases.filter(x => !x.isDeleted).map(x => ({ date: x.date, amount: x.netAmount || 0 })), [purchases]);
+
+  // 1. YoY — Sales & Purchases, current FY vs prior FY (bucketed from the arrays by FY range).
+  const yoy = useMemo(() => {
+    const cur = fyRange(fy); const prev = fyRange(priorFy(fy));
+    const cs = sumInRange(salesDated, cur.start, cur.end), ps = sumInRange(salesDated, prev.start, prev.end);
+    const cp = sumInRange(purchDated, cur.start, cur.end), pp = sumInRange(purchDated, prev.start, prev.end);
+    return {
+      rows: [
+        { name: hi ? 'बिक्री' : 'Sales', prior: ps, current: cs, growth: growthPct(cs, ps) },
+        { name: hi ? 'खरीद' : 'Purchases', prior: pp, current: cp, growth: growthPct(cp, pp) },
+      ],
+      hasPrior: ps > 0 || pp > 0,
+    };
+  }, [salesDated, purchDated, fy, hi]);
+
+  // 2. Activity-wise sales / purchases / margin.
+  const activities = useMemo(() => (trading.activities || [])
+    .filter(a => a.sales > 0 || a.purchases > 0)
+    .map(a => ({ name: hi ? a.keyHi : a.key, sales: a.sales, purchases: a.purchases, margin: a.grossMargin })), [trading.activities, hi]);
+
+  // 3. Liquidity — monthly running Cash+Bank balance. Opening = signed opening balances +
+  //    net cash/bank movement BEFORE this FY, then cumulative within-FY monthly net.
+  const liquidity = useMemo(() => {
+    const cashBankIds = new Set<string>([ACCOUNT_IDS.CASH, ...getBankAccountIds(accounts)]);
+    const legs: Dated[] = [];
+    let preFyNet = 0;
+    const { start } = fyRange(fy);
+    for (const v of vouchers) {
+      if (v.isDeleted) continue;
+      for (const l of getVoucherLines(v)) {
+        if (!cashBankIds.has(l.accountId)) continue;
+        const signed = l.type === 'Dr' ? (l.amount || 0) : -(l.amount || 0);
+        legs.push({ date: v.date, amount: signed });
+        if ((v.date || '') < start) preFyNet += signed;
+      }
+    }
+    const openingSigned = accounts.filter(a => cashBankIds.has(a.id))
+      .reduce((s, a) => s + (a.openingBalanceType === 'debit' ? (a.openingBalance || 0) : -(a.openingBalance || 0)), 0);
+    const monthlyNet = monthlySeries(fy, { net: legs });
+    const rows = withCumulative(monthlyNet, 'net', 'balance', openingSigned + preFyNet);
+    return { rows, hasData: legs.length > 0 };
+  }, [vouchers, accounts, fy]);
+
+  // 4. Member growth — new members per month + cumulative total.
+  const memberGrowth = useMemo(() => {
+    const approved = members.filter(m => !m.isDeleted && (!m.approvalStatus || m.approvalStatus === 'approved') && m.joinDate);
+    const dated: Dated[] = approved.map(m => ({ date: m.joinDate, amount: 1 }));
+    const { start } = fyRange(fy);
+    const priorCount = approved.filter(m => (m.joinDate || '') < start).length;
+    const rows = withCumulative(monthlySeries(fy, { joined: dated }), 'joined', 'total', priorCount);
+    return { rows, hasData: approved.length > 0 };
+  }, [members, fy]);
+
   const L = {
     sales: hi ? 'बिक्री' : 'Sales', purchases: hi ? 'खरीद' : 'Purchases', margin: hi ? 'सकल मार्जिन' : 'Gross margin',
+    prior: hi ? 'पिछला वर्ष' : 'Prior FY', current: hi ? 'इस वर्ष' : 'This FY',
   };
   const INCOME_COLOR = '#10b981', EXPENSE_COLOR = '#ef4444';
 
@@ -158,6 +219,97 @@ const Analytics: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Phase 2 — YoY comparative + activity-wise */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><TrendingUp className="h-4 w-4 text-primary" />{hi ? 'वर्ष-दर-वर्ष (YoY)' : 'Year-over-year (YoY)'}</CardTitle></CardHeader>
+          <CardContent>
+            {yoy.hasPrior ? (
+              <>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={yoy.rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11 }} width={54} />
+                    <Tooltip formatter={(v: number) => fmt(v)} />
+                    <Legend />
+                    <Bar dataKey="prior" name={L.prior} fill="#94a3b8" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="current" name={L.current} fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="flex flex-wrap gap-4 mt-2 pl-1">
+                  {yoy.rows.map(row => (
+                    <div key={row.name} className="text-sm">
+                      <span className="text-muted-foreground">{row.name}: </span>
+                      <span className={cn('font-semibold', row.growth >= 0 ? 'text-green-600' : 'text-red-600')}>{row.growth >= 0 ? '▲' : '▼'} {Math.abs(row.growth)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : <div className="py-10 text-center text-sm text-muted-foreground">{hi ? 'पिछले वर्ष का कोई डेटा नहीं (तुलना के लिए)।' : 'No prior-year data to compare.'}</div>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" />{hi ? 'गतिविधि-वार (बिक्री/खरीद/मार्जिन)' : 'Activity-wise (sales/purchases/margin)'}</CardTitle></CardHeader>
+          <CardContent>
+            {activities.length ? (
+              <ResponsiveContainer width="100%" height={Math.max(200, activities.length * 56)}>
+                <BarChart data={activities} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11 }} width={54} />
+                  <Tooltip formatter={(v: number) => fmt(v)} />
+                  <Legend />
+                  <Bar dataKey="sales" name={L.sales} fill="#10b981" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="purchases" name={L.purchases} fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="margin" name={L.margin} fill="#f59e0b" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <div className="py-10 text-center text-sm text-muted-foreground">{hi ? 'कोई गतिविधि-वार बिक्री/खरीद नहीं।' : 'No activity-wise sales/purchases.'}</div>}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Phase 2 — Liquidity + member growth */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" />{hi ? 'तरलता — नकद + बैंक (माह-अंत शेष)' : 'Liquidity — Cash + Bank (month-end balance)'}</CardTitle></CardHeader>
+          <CardContent>
+            {liquidity.hasData ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={liquidity.rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                  <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11 }} width={54} />
+                  <Tooltip formatter={(v: number) => fmt(v)} />
+                  <Line type="monotone" dataKey="balance" name={hi ? 'नकद+बैंक शेष' : 'Cash+Bank balance'} stroke="#06b6d4" strokeWidth={2} dot={{ r: 2 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : <div className="py-10 text-center text-sm text-muted-foreground">{hi ? 'कोई नकद/बैंक लेन-देन नहीं।' : 'No cash/bank movement.'}</div>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4 text-primary" />{hi ? 'सदस्य वृद्धि' : 'Member growth'}</CardTitle></CardHeader>
+          <CardContent>
+            {memberGrowth.hasData ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={memberGrowth.rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 11 }} width={40} allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="total" name={hi ? 'कुल सदस्य' : 'Total members'} stroke="#8b5cf6" strokeWidth={2} dot={{ r: 2 }} />
+                  <Line type="monotone" dataKey="joined" name={hi ? 'नए (माह)' : 'New (month)'} stroke="#10b981" strokeWidth={2} strokeDasharray="4 2" dot={{ r: 2 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : <div className="py-10 text-center text-sm text-muted-foreground">{hi ? 'कोई सदस्य नहीं।' : 'No members.'}</div>}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

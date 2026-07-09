@@ -31,6 +31,47 @@ export function fyMonths(fy: string): FyMonth[] {
 
 export interface Dated { date: string; amount: number }
 
+/** The prior FY string. "2024-25" → "2023-24". '' for a bad FY. */
+export function priorFy(fy: string): string {
+  const startYear = parseInt((fy || '').split('-')[0], 10);
+  if (!startYear || Number.isNaN(startYear)) return '';
+  const p = startYear - 1;
+  return `${p}-${String((p + 1) % 100).padStart(2, '0')}`;
+}
+
+/** Inclusive date bounds of an FY. "2024-25" → { start:'2024-04-01', end:'2025-03-31' }. */
+export function fyRange(fy: string): { start: string; end: string } {
+  const startYear = parseInt((fy || '').split('-')[0], 10);
+  if (!startYear || Number.isNaN(startYear)) return { start: '', end: '' };
+  return { start: `${startYear}-04-01`, end: `${startYear + 1}-03-31` };
+}
+
+/** Total amount whose date falls in [start, end] (lexicographic YYYY-MM-DD compare). */
+export function sumInRange(items: ReadonlyArray<Dated>, start: string, end: string): number {
+  if (!start || !end) return 0;
+  let sum = 0;
+  for (const it of items) {
+    const d = it.date || '';
+    if (d >= start && d <= end) sum += it.amount || 0;
+  }
+  return round2(sum);
+}
+
+/** Append a running-total field to each row (opening seeds the first). Used for
+ *  liquidity (cash+bank) and cumulative member count. */
+export function withCumulative<T extends Record<string, number | string>>(
+  rows: ReadonlyArray<T>,
+  field: string,
+  cumField: string,
+  opening = 0,
+): Array<T & Record<string, number>> {
+  let running = opening;
+  return rows.map(r => {
+    running = round2(running + (Number(r[field]) || 0));
+    return { ...r, [cumField]: running };
+  });
+}
+
 /**
  * Roll a set of named series into one row per FY month, ready for a recharts dataset.
  * Each row is { key, label, <seriesName>: total, … }. Items outside the FY are ignored.
