@@ -13,11 +13,19 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { ClipboardList, Plus, Trash2, CheckCircle2, PackageCheck } from 'lucide-react';
+import { ClipboardList, Plus, Trash2, CheckCircle2, PackageCheck, AlertTriangle } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { buildGrnInvoice } from '@/lib/consumer/purchaseOrder';
+import { threeWayMatch, hasBlockingVariance, blockingReasons } from '@/lib/consumer/threeWayMatch';
 import type { PurchaseOrderItem, PurchaseOrderStatus } from '@/types';
+
+const REASON_HI: Record<string, { hi: string; en: string }> = {
+  'short-delivery': { hi: 'कम डिलीवरी', en: 'Short delivery' }, 'over-delivery': { hi: 'ज़्यादा डिलीवरी', en: 'Over delivery' },
+  'over-billed-qty': { hi: 'ज़्यादा बिल (मात्रा)', en: 'Over-billed qty' }, 'under-billed-qty': { hi: 'कम बिल (मात्रा)', en: 'Under-billed qty' },
+  'price-variance': { hi: 'दर अंतर', en: 'Price variance' }, 'unbilled': { hi: 'बिल नहीं', en: 'Unbilled' }, 'extra-invoice-line': { hi: 'अतिरिक्त बिल पंक्ति', en: 'Extra invoice line' },
+};
 
 const TODAY = () => new Date().toISOString().split('T')[0];
 const fmt = (amount: number) =>
@@ -55,6 +63,8 @@ const PurchaseOrders: React.FC = () => {
   const [recvInterState, setRecvInterState] = useState(false);            // ECR-21 P2: inter-state → IGST
   const [recvMode, setRecvMode] = useState<'cash' | 'bank' | 'credit'>('credit');
   const [recvDate, setRecvDate] = useState(TODAY());
+  const [varianceApprove, setVarianceApprove] = useState(false);          // ECR-21 P3: approve an over-tolerance receipt
+  const [varianceReason, setVarianceReason] = useState('');
 
   const list = useMemo(() => purchaseOrders.filter(p => !p.isDeleted).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)), [purchaseOrders]);
   const selected = selectedId ? list.find(p => p.id === selectedId) : undefined;
@@ -95,8 +105,18 @@ const PurchaseOrders: React.FC = () => {
       setRecvRate(Object.fromEntries(po.items.map(i => [i.itemId, i.rate])));   // default billed rate = PO rate
     }
     setRecvGst(0); setRecvInterState(false);
+    setVarianceApprove(false); setVarianceReason('');
     setRecvDate(TODAY());
   };
+
+  // ECR-21 Phase 3: live 3-way match for the GRN being entered (PO ↔ received ↔ billed).
+  const recvMatch = useMemo(() => {
+    if (!selected || selected.status !== 'approved') return null;
+    const items = selected.items.map(i => ({ ...i, receivedQty: recvQty[i.itemId] ?? i.qty }));
+    const invoice = buildGrnInvoice(items, { billedRate: recvRate, gstPct: recvGst || undefined, interState: recvInterState });
+    return threeWayMatch(items, invoice.items);
+  }, [selected, recvQty, recvRate, recvGst, recvInterState]);
+  const recvBlocked = !!recvMatch && hasBlockingVariance(recvMatch);
 
   return (
     <div className="p-4 space-y-4">
@@ -271,8 +291,26 @@ const PurchaseOrders: React.FC = () => {
                     {hi ? 'अंतरराज्यीय (IGST)' : 'Inter-state (IGST)'}
                   </label>
                 </div>
+                {/* ECR-21 Phase 3: variance hold — an over-tolerance receipt needs explicit approval */}
+                {recvBlocked && recvMatch && (
+                  <div className="rounded-lg border border-red-300 bg-red-50 p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium text-red-800">
+                      <AlertTriangle className="h-4 w-4" />
+                      {hi ? '3-तरफ़ा मिलान में अंतर — approve किए बिना दर्ज नहीं होगा' : '3-way match variance — cannot post without approval'}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {blockingReasons(recvMatch).map(r => <Badge key={r} variant="outline" className="text-[10px] border-red-300 text-red-700">{hi ? REASON_HI[r]?.hi : REASON_HI[r]?.en}</Badge>)}
+                    </div>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer select-none text-red-900">
+                      <input type="checkbox" checked={varianceApprove} onChange={e => setVarianceApprove(e.target.checked)} className="h-4 w-4" />
+                      {hi ? 'मैं यह अंतर approve करता/करती हूँ' : 'I approve this variance'}
+                    </label>
+                    {varianceApprove && <Input value={varianceReason} onChange={e => setVarianceReason(e.target.value)} placeholder={hi ? 'कारण (वैकल्पिक)' : 'Reason (optional)'} className="h-8" />}
+                  </div>
+                )}
                 <div className="flex justify-end">
-                  <Button className="gap-1" onClick={() => { const p = receivePurchaseOrder(selected.id, { receivedQty: recvQty, billedRate: recvRate, gstPct: recvGst || undefined, interState: recvInterState, paymentMode: recvMode, date: recvDate }); if (p) setSelectedId(null); }}>
+                  <Button className="gap-1" disabled={recvBlocked && !varianceApprove}
+                    onClick={() => { const p = receivePurchaseOrder(selected.id, { receivedQty: recvQty, billedRate: recvRate, gstPct: recvGst || undefined, interState: recvInterState, varianceApproved: varianceApprove, varianceReason, paymentMode: recvMode, date: recvDate }); if (p) setSelectedId(null); }}>
                     <PackageCheck className="h-4 w-4" />{hi ? 'माल प्राप्त करें' : 'Receive Goods'}
                   </Button>
                 </div>

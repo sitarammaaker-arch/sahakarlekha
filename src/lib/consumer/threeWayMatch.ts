@@ -186,3 +186,20 @@ export function threeWayMatch(
 
   return { lines, summary };
 }
+
+/**
+ * ECR-21 Phase 3 — does this match carry a payment-risk exception that should HOLD
+ * the goods receipt until a variance approval? True when any line is an exception
+ * (over-billed qty / price / amount beyond tolerance, unbilled receipt, or an extra
+ * invoice line). Delivery-only variances (within-tolerance) do NOT block.
+ */
+export function hasBlockingVariance(result: ThreeWayMatchResult): boolean {
+  return result.summary.exceptions > 0;
+}
+
+/** Short, human-readable list of the distinct exception reasons (for an approval prompt). */
+export function blockingReasons(result: ThreeWayMatchResult): MatchReason[] {
+  const seen = new Set<MatchReason>();
+  for (const l of result.lines) if (l.status === 'exception') for (const r of l.reasons) seen.add(r);
+  return [...seen];
+}

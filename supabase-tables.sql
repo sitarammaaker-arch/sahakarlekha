@@ -3069,3 +3069,9 @@ alter table members   add column if not exists "branchId" text;
 -- A user with branch_id set is restricted to that branch (sees/enters only its
 -- data); NULL = society-wide (admin / consolidated). Assigned in User Management.
 alter table society_users add column if not exists branch_id text;
+
+-- ── ECR-21 Phase 3: goods-receipt variance approval ───────────────────────────
+-- Stamped only when a receipt is posted despite a 3-way match exception.
+alter table consumer_purchase_orders add column if not exists "varianceStatus" text;
+alter table consumer_purchase_orders add column if not exists "varianceReason" text;
+alter table consumer_purchase_orders add column if not exists "varianceApprovedBy" text;
