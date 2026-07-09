@@ -840,6 +840,11 @@ alter table society_settings add column if not exists "maxSharePremiumPercent" n
 alter table society_settings add column if not exists "periodLockDate" text;
 alter table society_settings add column if not exists "periodLockBy" text;
 
+-- ECR-07 dual-control: FY unlock must be requested by one admin and approved by
+-- another. These hold the open request until a second admin finalises it.
+alter table society_settings add column if not exists "fyUnlockRequestedBy" text;
+alter table society_settings add column if not exists "fyUnlockRequestedAt" text;
+
 -- ── P0 #2: Soft-delete parent records ───────────────────────────────────────
 -- Members / purchases / assets / audit-objections are now ARCHIVED (isDeleted=true)
 -- instead of hard-deleted, so statutory registers persist and deletes are auditable

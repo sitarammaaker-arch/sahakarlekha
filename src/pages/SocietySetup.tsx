@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { unlockAction } from '@/lib/dualControlUnlock';
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
 import { SOCIETY_TEMPLATES } from '@/lib/storage';
 import type { SocietyType } from '@/types';
@@ -117,14 +118,23 @@ const SocietySetup: React.FC = () => {
     });
   };
 
-  const handleToggleFYLock = () => {
-    if (society.fyLocked) {
-      updateSociety({ fyLocked: false, fyLockedAt: undefined, fyLockedBy: undefined });
-      toast({ title: language === 'hi' ? 'वित्तीय वर्ष अनलॉक किया गया' : 'Financial Year Unlocked', description: language === 'hi' ? 'अब नई एंट्रियां की जा सकती हैं।' : 'New entries are now allowed.' });
-    } else {
-      updateSociety({ fyLocked: true, fyLockedAt: new Date().toISOString().split('T')[0], fyLockedBy: 'Admin' });
-      toast({ title: language === 'hi' ? 'वित्तीय वर्ष लॉक किया गया' : `FY ${society.financialYear} Locked`, description: language === 'hi' ? 'अब इस वर्ष में कोई नई एंट्री नहीं हो सकती।' : 'No new vouchers can be added to this financial year.' });
-    }
+  // ECR-07 dual-control: locking is single-admin; UNLOCKING needs a request by one
+  // admin and approval by a different admin.
+  const handleLockFY = () => {
+    updateSociety({ fyLocked: true, fyLockedAt: new Date().toISOString().split('T')[0], fyLockedBy: user?.name || 'Admin', fyUnlockRequestedBy: undefined, fyUnlockRequestedAt: undefined });
+    toast({ title: language === 'hi' ? `FY ${society.financialYear} लॉक किया गया` : `FY ${society.financialYear} Locked`, description: language === 'hi' ? 'अब इस वर्ष में कोई नई एंट्री नहीं हो सकती।' : 'No new vouchers can be added to this financial year.' });
+  };
+  const handleRequestUnlock = () => {
+    updateSociety({ fyUnlockRequestedBy: user?.email || '', fyUnlockRequestedAt: new Date().toISOString().split('T')[0] });
+    toast({ title: language === 'hi' ? 'अनलॉक अनुरोध दर्ज' : 'Unlock requested', description: language === 'hi' ? 'किसी दूसरे admin की मंज़ूरी के बाद FY अनलॉक होगा।' : 'A different admin must approve before the FY unlocks.' });
+  };
+  const handleApproveUnlock = () => {
+    updateSociety({ fyLocked: false, fyLockedAt: undefined, fyLockedBy: undefined, fyUnlockRequestedBy: undefined, fyUnlockRequestedAt: undefined });
+    toast({ title: language === 'hi' ? 'वित्तीय वर्ष अनलॉक किया गया' : 'Financial Year Unlocked', description: language === 'hi' ? 'दूसरे admin ने मंज़ूरी दी — अब नई एंट्रियां हो सकती हैं।' : 'Approved by a second admin — new entries are now allowed.' });
+  };
+  const handleCancelUnlock = () => {
+    updateSociety({ fyUnlockRequestedBy: undefined, fyUnlockRequestedAt: undefined });
+    toast({ title: language === 'hi' ? 'अनलॉक अनुरोध रद्द' : 'Unlock request cancelled' });
   };
 
   const handleSaveOB = () => {
@@ -712,14 +722,41 @@ const SocietySetup: React.FC = () => {
                           : 'Locking prevents any new voucher entries for this financial year. Use after audit completion.')}
                     </p>
                   </div>
-                  <Button
-                    variant={society.fyLocked ? 'outline' : 'destructive'}
-                    size="sm"
-                    className="gap-2 flex-shrink-0"
-                    onClick={handleToggleFYLock}
-                  >
-                    {society.fyLocked ? <><Unlock className="h-4 w-4" />{language === 'hi' ? 'अनलॉक करें' : 'Unlock FY'}</> : <><Lock className="h-4 w-4" />{language === 'hi' ? 'FY लॉक करें' : 'Lock FY'}</>}
-                  </Button>
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    {!society.fyLocked ? (
+                      <Button variant="destructive" size="sm" className="gap-2" onClick={handleLockFY}>
+                        <Lock className="h-4 w-4" />{language === 'hi' ? 'FY लॉक करें' : 'Lock FY'}
+                      </Button>
+                    ) : (() => {
+                      const act = unlockAction({ locked: true, requestedBy: society.fyUnlockRequestedBy }, user?.email || '');
+                      if (act === 'request') return (
+                        <Button variant="outline" size="sm" className="gap-2" onClick={handleRequestUnlock}>
+                          <Unlock className="h-4 w-4" />{language === 'hi' ? 'अनलॉक अनुरोध करें' : 'Request unlock'}
+                        </Button>
+                      );
+                      if (act === 'awaiting') return (
+                        <div className="text-right space-y-1">
+                          <p className="text-xs text-amber-700 dark:text-amber-400 max-w-[220px]">
+                            {language === 'hi' ? 'आपने अनलॉक अनुरोध किया है — किसी दूसरे admin की मंज़ूरी बाकी है।' : 'You requested unlock — waiting for a different admin to approve.'}
+                          </p>
+                          <Button variant="ghost" size="sm" onClick={handleCancelUnlock}>{language === 'hi' ? 'अनुरोध रद्द करें' : 'Cancel request'}</Button>
+                        </div>
+                      );
+                      return (
+                        <div className="text-right space-y-1">
+                          <p className="text-xs text-muted-foreground max-w-[220px]">
+                            {language === 'hi' ? `अनलॉक अनुरोध: ${society.fyUnlockRequestedBy}` : `Unlock requested by ${society.fyUnlockRequestedBy}`}
+                          </p>
+                          <div className="flex gap-2 justify-end">
+                            <Button variant="ghost" size="sm" onClick={handleCancelUnlock}>{language === 'hi' ? 'रद्द' : 'Cancel'}</Button>
+                            <Button variant="outline" size="sm" className="gap-2" onClick={handleApproveUnlock}>
+                              <Unlock className="h-4 w-4" />{language === 'hi' ? 'अनलॉक मंज़ूर करें' : 'Approve unlock'}
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
 
