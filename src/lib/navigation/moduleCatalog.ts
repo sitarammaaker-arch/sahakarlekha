@@ -36,6 +36,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   // ── core (was mainNavItems) ──
   { id: 'dashboard',          titleKey: 'dashboard',          icon: LayoutDashboard, route: '/dashboard',          domain: 'core', requiredCapabilities: U, order: 0 },
   { id: 'myDashboard',        titleKey: 'myDashboard',        icon: LayoutDashboard, route: '/my-dashboard',       domain: 'core', requiredCapabilities: U, order: 0.5 },
+  { id: 'analytics',          titleKey: 'analytics',          icon: BarChart3,       route: '/analytics',          domain: 'core', requiredCapabilities: U, requiredRoles: ['admin', 'accountant', 'auditor'], order: 0.7 },
   { id: 'cashBook',           titleKey: 'cashBook',           icon: Wallet,          route: '/cash-book',          domain: 'core', requiredCapabilities: U, order: 1 },
   { id: 'bankBook',           titleKey: 'bankBook',           icon: Building2,       route: '/bank-book',          domain: 'core', requiredCapabilities: U, order: 2 },
   { id: 'bankReconciliation', titleKey: 'bankReconciliation', icon: CheckCircle2,    route: '/bank-reconciliation', domain: 'core', requiredCapabilities: U, order: 3 },
