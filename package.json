@@ -27,7 +27,9 @@
     "test:soft-delete": "node scripts/test-soft-delete.mjs",
     "test:audit": "node scripts/test-audit-log.mjs",
     "test:share-recon": "node scripts/test-share-reconciliation.mjs",
-    "test:persist": "node scripts/test-voucher-persistence.mjs"
+    "test:persist": "node scripts/test-voucher-persistence.mjs",
+    "test:xlsx": "node scripts/test-xlsx-compat.mjs",
+    "test:ob": "node scripts/test-opening-balances.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -88,7 +90,7 @@
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.9",
     "web-vitals": "^5.3.0",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^3.25.76"
   },
   "devDependencies": {
