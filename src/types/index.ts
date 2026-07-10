@@ -1291,6 +1291,7 @@ export interface Sale {
   createdAt: string;
   createdBy: string;
   branchId?: string;       // ECR-17 Phase 4: branch this sale belongs to (unset = head office)
+  isDeleted?: boolean;     // ECR-02 / RULE-5: soft-delete — retain the sale row for audit, hide from the app (mirrors Purchase).
 }
 
 // ── Consumer store — multi-tier pricing (C2) ─────────────────────────────────
