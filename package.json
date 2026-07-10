@@ -36,7 +36,8 @@
     "test:export-generator": "node scripts/test-export-generator.mjs",
     "test:export-jobs": "node scripts/test-export-jobs.mjs",
     "test:export-source": "node scripts/test-export-source.mjs",
-    "test:export-preflight": "node scripts/test-export-preflight.mjs"
+    "test:export-preflight": "node scripts/test-export-preflight.mjs",
+    "test:export-buttons": "node scripts/test-export-buttons.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

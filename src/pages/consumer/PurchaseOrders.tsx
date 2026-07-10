@@ -20,6 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { buildGrnInvoice } from '@/lib/consumer/purchaseOrder';
 import { threeWayMatch, hasBlockingVariance, blockingReasons } from '@/lib/consumer/threeWayMatch';
 import type { PurchaseOrderItem, PurchaseOrderStatus } from '@/types';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const REASON_HI: Record<string, { hi: string; en: string }> = {
   'short-delivery': { hi: 'कम डिलीवरी', en: 'Short delivery' }, 'over-delivery': { hi: 'ज़्यादा डिलीवरी', en: 'Over delivery' },
@@ -125,6 +126,12 @@ const PurchaseOrders: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{hi ? 'खरीद ऑर्डर (PO / GRN)' : 'Purchase Orders (PO / GRN)'}</h1>
           <p className="text-sm text-gray-500">{society.name}</p>
+        </div>
+        {/* T-22: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="consumer_purchase_order" />
         </div>
       </div>
 
