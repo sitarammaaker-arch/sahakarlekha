@@ -109,9 +109,9 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
         aEn: 'Yes, SahakarLekha is fully responsive. Works well on mobile browsers (Chrome, Safari). No separate app download needed.',
       },
       {
-        q: 'बैकअप कैसे लें? / How to take backup?',
-        aHi: 'Settings → Backup & Restore पर जाएं। \'Download Backup\' बटन दबाएं — सभी डेटा JSON फाइल में डाउनलोड हो जाता है। इसे बाद में Restore भी किया जा सकता है।',
-        aEn: 'Go to Settings → Backup & Restore. Click \'Download Backup\' — all data downloads as a JSON file. It can be restored later as well.',
+        q: 'डेटा एक्सपोर्ट कैसे लें? / How to export data?',
+        aHi: 'Settings → डेटा एक्सपोर्ट पर जाएं। \'एक्सपोर्ट डाउनलोड करें\' बटन दबाएं — मुख्य डेटा JSON फाइल में डाउनलोड हो जाता है। ध्यान दें: यह एक्सपोर्ट है, रिस्टोर करने योग्य बैकअप नहीं। आपका असली डेटा Supabase क्लाउड में सुरक्षित रहता है; पूरा बैकअप व रिस्टोर बनाया जा रहा है।',
+        aEn: 'Go to Settings → Data Export. Click \'Download Export\' — the core data downloads as a JSON file. Note: this is an export, not a restorable backup. Your actual data lives safely in Supabase cloud; a complete backup and restore is being built.',
       },
     ],
   },

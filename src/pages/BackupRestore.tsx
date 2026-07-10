@@ -1,18 +1,37 @@
 /**
- * Data Backup & Restore — Supabase-primary version
- * Exports data from DataContext (loaded from Supabase) as JSON.
- * Restore from file is not supported in cloud mode.
+ * Data Export — Supabase-primary version
+ *
+ * T-01 (ROADMAP-DATA-PORTABILITY): this page used to call itself "Backup & Restore"
+ * and offered a Restore button. That was untrue and unsafe:
+ *
+ *   - The JSON covers 16 of ~93 persisted collections (no housing / dairy / marketing /
+ *     consumer / labour / procurement / deposits / voucher_entries).
+ *   - The old restore re-imported ONLY accounts + members and silently discarded the
+ *     other 14 exported collections — every voucher, sale, purchase, loan and asset.
+ *
+ * A restore that recovers a chart of accounts and drops every transaction is worse than
+ * no restore at all, because the user stops looking for their data. So the restore path
+ * is removed and the word "backup" is gone until a real, round-trippable backup ships
+ * (roadmap T-23…T-35). This page now claims exactly what it does: it exports JSON.
+ *
+ * FORMAT CONTRACT — DO NOT CHANGE. `MultiSocietyConsolidation.tsx` consumes these files
+ * and reads { version, createdAt, societyName, financialYear, data, stats }.
  */
-import React, { useState, useRef } from 'react';
+import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { DatabaseBackup, Download, Upload, CheckCircle2, Info, Shield, Cloud, AlertTriangle } from 'lucide-react';
+import { Download, Info, Shield, Cloud, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
+/** Consumed by MultiSocietyConsolidation — do not bump without updating that reader. */
 const BACKUP_VERSION = '3.0-supabase';
+
+/** Collections included in this export. Total persisted collections in the app: ~93. */
+const EXPORTED_COLLECTIONS = 16;
+const TOTAL_COLLECTIONS = 93;
 
 // ────────────────────────────────────────────────────────────────────────────
 const BackupRestore: React.FC = () => {
@@ -22,23 +41,10 @@ const BackupRestore: React.FC = () => {
     auditObjections, stockItems, stockMovements,
     sales, purchases, suppliers, customers,
     employees, salaryRecords, kccLoans,
-    addAccount, addMember,
   } = useData();
   const { toast } = useToast();
 
   const hi = language === 'hi';
-  const [lastBackupTime, setLastBackupTime] = useState<string | null>(
-    () => localStorage.getItem('sahayata_last_backup')
-  );
-
-  // Restore state
-  const restoreFileRef = useRef<HTMLInputElement>(null);
-  const [restorePreview, setRestorePreview] = useState<{
-    societyName: string; createdAt: string; version: string;
-    counts: Record<string, number>;
-    data: Record<string, unknown[]>;
-  } | null>(null);
-  const [restoring, setRestoring] = useState(false);
 
   // ── Summary stats ─────────────────────────────────────────────────────────
   const stats = {
@@ -58,8 +64,8 @@ const BackupRestore: React.FC = () => {
     auditObjections: auditObjections.length,
   };
 
-  // ── Backup ─────────────────────────────────────────────────────────────────
-  const handleBackup = () => {
+  // ── Export ────────────────────────────────────────────────────────────────
+  const handleExport = () => {
     const backup = {
       version: BACKUP_VERSION,
       createdAt: new Date().toISOString(),
@@ -92,100 +98,17 @@ const BackupRestore: React.FC = () => {
     const a    = document.createElement('a');
     const ts   = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     a.href     = url;
-    a.download = `sahakarlekha-backup-${society.financialYear}-${ts}.json`;
+    a.download = `sahakarlekha-export-${society.financialYear}-${ts}.json`;
     a.click();
     URL.revokeObjectURL(url);
 
-    const now = new Date().toLocaleString('hi-IN');
-    localStorage.setItem('sahayata_last_backup', now);
-    setLastBackupTime(now);
-
     toast({
-      title: hi ? 'बैकअप सफलतापूर्वक डाउनलोड हुआ' : 'Backup downloaded successfully',
-      description: `${Object.values(stats).reduce((a, b) => a + b, 0)} ${hi ? 'रिकॉर्ड' : 'records'}`,
+      title: hi ? 'एक्सपोर्ट डाउनलोड हुआ' : 'Export downloaded',
+      description: hi
+        ? `${Object.values(stats).reduce((a, b) => a + b, 0)} रिकॉर्ड। यह रिस्टोर करने योग्य बैकअप नहीं है।`
+        : `${Object.values(stats).reduce((a, b) => a + b, 0)} records. This is not a restorable backup.`,
     });
   };
-
-  // ── Restore ───────────────────────────────────────────────────────────────
-  function handleRestoreFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try {
-        const json = JSON.parse(ev.target?.result as string);
-        if (!json.data || !json.version) throw new Error('Invalid backup file');
-        const d = json.data;
-        setRestorePreview({
-          societyName: json.societyName || '—',
-          createdAt: json.createdAt || '—',
-          version: json.version,
-          counts: {
-            accounts: (d.accounts || []).length,
-            members: (d.members || []).length,
-            vouchers: (d.vouchers || []).length,
-            loans: (d.loans || []).length,
-            assets: (d.assets || []).length,
-          },
-          data: d,
-        });
-      } catch {
-        toast({ title: hi ? 'गलत फ़ाइल' : 'Invalid file', description: hi ? 'Valid Sahakarlekha backup JSON चुनें' : 'Please select a valid Sahakarlekha backup JSON file', variant: 'destructive' });
-      }
-    };
-    reader.readAsText(file, 'UTF-8');
-    e.target.value = '';
-  }
-
-  async function handleRestore() {
-    if (!restorePreview) return;
-    setRestoring(true);
-    const d = restorePreview.data;
-    let imported = { accounts: 0, members: 0 };
-
-    // Restore accounts
-    const backupAccounts = (d.accounts || []) as Array<Record<string, unknown>>;
-    for (const acct of backupAccounts) {
-      const name = String(acct.name || '');
-      if (!name || accounts.find(a => a.name.toLowerCase() === name.toLowerCase())) continue;
-      addAccount({
-        name,
-        nameHi: String(acct.nameHi || name),
-        type: String(acct.type || 'asset') as 'asset' | 'liability' | 'income' | 'expense',
-        openingBalance: Number(acct.openingBalance) || 0,
-        openingBalanceType: String(acct.openingBalanceType || 'debit') as 'debit' | 'credit',
-        isSystem: false,
-      });
-      imported.accounts++;
-    }
-
-    // Restore members
-    const backupMembers = (d.members || []) as Array<Record<string, unknown>>;
-    for (const m of backupMembers) {
-      const mid = String(m.memberId || '');
-      if (!mid || members.find(x => x.memberId === mid)) continue;
-      addMember({
-        memberId: mid,
-        name: String(m.name || ''),
-        fatherName: String(m.fatherName || ''),
-        address: String(m.address || ''),
-        phone: String(m.phone || ''),
-        shareCapital: Number(m.shareCapital) || 0,
-        admissionFee: Number(m.admissionFee) || 0,
-        memberType: String(m.memberType || 'member') as 'member' | 'nominal',
-        joinDate: String(m.joinDate || new Date().toISOString().split('T')[0]),
-        status: String(m.status || 'active') as 'active' | 'inactive',
-      });
-      imported.members++;
-    }
-
-    setRestoring(false);
-    setRestorePreview(null);
-    toast({
-      title: hi ? 'Restore सफल!' : 'Restore successful!',
-      description: `${imported.accounts} accounts, ${imported.members} members restored. Vouchers manually re-enter करें।`,
-    });
-  }
 
   const STAT_LABELS: Array<{ key: keyof typeof stats; hi: string; en: string; color: string }> = [
     { key: 'vouchers',       hi: 'वाउचर',          en: 'Vouchers',       color: 'text-blue-700' },
@@ -210,14 +133,34 @@ const BackupRestore: React.FC = () => {
       {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="p-2 bg-slate-100 rounded-lg">
-          <DatabaseBackup className="h-6 w-6 text-slate-700" />
+          <Download className="h-6 w-6 text-slate-700" />
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {hi ? 'डेटा बैकअप' : 'Data Backup'}
+            {hi ? 'डेटा एक्सपोर्ट' : 'Data Export'}
           </h1>
           <p className="text-sm text-gray-500">
             {society.name} · {hi ? 'वित्तीय वर्ष' : 'FY'} {society.financialYear}
+          </p>
+        </div>
+      </div>
+
+      {/* T-01: the honest warning. This is an export, not a backup. */}
+      <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-300 rounded-lg text-sm text-amber-900">
+        <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+        <div className="space-y-1">
+          <p className="font-semibold">
+            {hi ? 'यह एक्सपोर्ट है, बैकअप नहीं।' : 'This is an export, not a backup.'}
+          </p>
+          <p>
+            {hi
+              ? `इस JSON फ़ाइल से डेटा वापस रिस्टोर नहीं किया जा सकता। इसमें ${EXPORTED_COLLECTIONS} सूचियाँ हैं, जबकि ऐप में कुल लगभग ${TOTAL_COLLECTIONS} हैं — हाउसिंग, डेयरी, मार्केटिंग, कंज़्यूमर, श्रमिक, खरीद (procurement) और जमा (deposits) का डेटा इसमें नहीं आता।`
+              : `Data cannot be restored from this JSON file. It contains ${EXPORTED_COLLECTIONS} collections out of roughly ${TOTAL_COLLECTIONS} in the app — housing, dairy, marketing, consumer, labour, procurement and deposits data are not included.`}
+          </p>
+          <p>
+            {hi
+              ? 'आपका असली डेटा Supabase क्लाउड में सुरक्षित है। पूरा, रिस्टोर होने वाला बैकअप बनाया जा रहा है।'
+              : 'Your actual data lives safely in Supabase cloud. A complete, restorable backup is being built.'}
           </p>
         </div>
       </div>
@@ -227,8 +170,8 @@ const BackupRestore: React.FC = () => {
         <Cloud className="h-4 w-4 mt-0.5 shrink-0" />
         <span>
           {hi
-            ? 'आपका डेटा Supabase क्लाउड में सुरक्षित रूप से संग्रहीत है। यह बैकअप आपके Supabase डेटाबेस से सभी डेटा का JSON एक्सपोर्ट है — अतिरिक्त सुरक्षा के लिए नियमित रूप से डाउनलोड करें।'
-            : 'Your data is stored securely in Supabase cloud. This backup is a JSON export of all your data from Supabase — download regularly for extra safety.'}
+            ? 'यह फ़ाइल Supabase से पढ़े गए डेटा का JSON स्नैपशॉट है — रिकॉर्ड देखने, ऑडिटर को भेजने, या बहु-समिति समेकन में उपयोग के लिए।'
+            : 'This file is a JSON snapshot of data read from Supabase — for inspecting records, sharing with an auditor, or use in Multi-Society Consolidation.'}
         </span>
       </div>
 
@@ -249,79 +192,41 @@ const BackupRestore: React.FC = () => {
         ))}
       </div>
 
-      {/* Backup card */}
+      {/* Export card */}
       <Card className="border-green-200">
         <CardHeader className="py-3">
           <CardTitle className="text-base flex items-center gap-2 text-green-700">
             <Download className="h-4 w-4" />
-            {hi ? 'बैकअप बनाएं' : 'Create Backup'}
+            {hi ? 'JSON एक्सपोर्ट डाउनलोड करें' : 'Download JSON Export'}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-gray-600">
             {hi
-              ? 'सभी मौजूदा डेटा (Supabase से) को JSON फ़ाइल में डाउनलोड करें।'
-              : 'Download all current data (from Supabase) as a JSON file.'}
+              ? `नीचे दी गई ${EXPORTED_COLLECTIONS} सूचियों का मौजूदा डेटा एक JSON फ़ाइल में डाउनलोड करें।`
+              : `Download the current data for the ${EXPORTED_COLLECTIONS} collections listed below as a JSON file.`}
           </p>
-          {lastBackupTime && (
-            <div className="flex items-center gap-2 text-xs text-green-700">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              {hi ? 'अंतिम बैकअप:' : 'Last backup:'} {lastBackupTime}
-            </div>
-          )}
-          <Button onClick={handleBackup} className="gap-2 bg-green-700 hover:bg-green-800">
+          <Button onClick={handleExport} className="gap-2 bg-green-700 hover:bg-green-800">
             <Download className="h-4 w-4" />
-            {hi ? 'अभी बैकअप करें' : 'Backup Now'}
+            {hi ? 'एक्सपोर्ट डाउनलोड करें' : 'Download Export'}
           </Button>
         </CardContent>
       </Card>
 
-      {/* Restore card */}
-      <Card className="border-orange-200">
+      {/* Restore — removed in T-01, explained rather than silently dropped */}
+      <Card className="border-gray-200 bg-gray-50/60">
         <CardHeader className="py-3">
-          <CardTitle className="text-base flex items-center gap-2 text-orange-700">
-            <Upload className="h-4 w-4" />
-            {hi ? 'बैकअप से Restore करें' : 'Restore from Backup'}
+          <CardTitle className="text-base flex items-center gap-2 text-gray-600">
+            <Info className="h-4 w-4" />
+            {hi ? 'रिस्टोर उपलब्ध नहीं है' : 'Restore is not available'}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-start gap-2 p-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-800">
-            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+        <CardContent>
+          <p className="text-sm text-gray-600">
             {hi
-              ? 'Accounts और Members restore होंगे। Vouchers manually re-enter करने होंगे।'
-              : 'Accounts and Members will be restored. Vouchers need to be re-entered manually.'}
-          </div>
-
-          {!restorePreview ? (
-            <>
-              <input ref={restoreFileRef} type="file" accept=".json" className="hidden" onChange={handleRestoreFile} />
-              <Button variant="outline" className="gap-2" onClick={() => restoreFileRef.current?.click()}>
-                <Upload className="h-4 w-4" />
-                {hi ? 'Backup JSON File चुनें' : 'Select Backup JSON File'}
-              </Button>
-            </>
-          ) : (
-            <div className="space-y-3">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm space-y-1">
-                <p className="font-semibold text-blue-800">{restorePreview.societyName}</p>
-                <p className="text-xs text-blue-600">{hi ? 'बनाया गया:' : 'Created:'} {new Date(restorePreview.createdAt).toLocaleString('hi-IN')}</p>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {Object.entries(restorePreview.counts).map(([k, v]) => (
-                    <Badge key={k} variant="outline" className="text-xs">{k}: {v}</Badge>
-                  ))}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button className="gap-2 bg-orange-600 hover:bg-orange-700" disabled={restoring} onClick={handleRestore}>
-                  <CheckCircle2 className="h-4 w-4" />
-                  {restoring ? (hi ? 'Restore हो रहा है...' : 'Restoring...') : (hi ? 'Restore करें' : 'Restore Now')}
-                </Button>
-                <Button variant="outline" onClick={() => setRestorePreview(null)}>
-                  {hi ? 'रद्द करें' : 'Cancel'}
-                </Button>
-              </div>
-            </div>
-          )}
+              ? 'पहले यहाँ एक Restore बटन था, लेकिन वह सिर्फ़ खाता शीर्षक और सदस्य वापस लाता था — वाउचर, बिक्री, खरीद, ऋण और संपत्ति चुपचाप छूट जाते थे। ऐसा अधूरा रिस्टोर न होने से भी ज़्यादा ख़तरनाक है, क्योंकि यूज़र अपना असली डेटा ढूँढ़ना बंद कर देता है। इसलिए उसे हटा दिया गया है। पूरा बैकअप और रिस्टोर अलग से बनाया जा रहा है।'
+              : 'A Restore button used to sit here, but it only brought back accounts and members — vouchers, sales, purchases, loans and assets were silently dropped. A partial restore is more dangerous than none, because it ends the search for the real data. It has been removed. A complete backup and restore is being built separately.'}
+          </p>
         </CardContent>
       </Card>
 
@@ -330,7 +235,7 @@ const BackupRestore: React.FC = () => {
         <CardHeader className="py-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Shield className="h-4 w-4 text-gray-500" />
-            {hi ? 'डेटा सूची (Supabase से)' : 'Data Inventory (from Supabase)'}
+            {hi ? 'इस एक्सपोर्ट में शामिल डेटा' : 'Data included in this export'}
           </CardTitle>
         </CardHeader>
         <CardContent>
