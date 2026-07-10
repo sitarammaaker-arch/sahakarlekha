@@ -17,14 +17,19 @@
  * FORMAT CONTRACT — DO NOT CHANGE. `MultiSocietyConsolidation.tsx` consumes these files
  * and reads { version, createdAt, societyName, financialYear, data, stats }.
  */
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Download, Info, Shield, Cloud, AlertTriangle } from 'lucide-react';
+import { Download, Info, Shield, Cloud, AlertTriangle, History, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  listExportHistory, describeExport, mayContainPii,
+  type ExportHistoryEntry,
+} from '@/lib/export/jobs';
 
 /** Consumed by MultiSocietyConsolidation — do not bump without updating that reader. */
 const BACKUP_VERSION = '3.0-supabase';
@@ -43,8 +48,29 @@ const BackupRestore: React.FC = () => {
     employees, salaryRecords, kccLoans,
   } = useData();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const hi = language === 'hi';
+
+  // ── Export history (T-15) ─────────────────────────────────────────────────
+  // Read from audit_log's `export` events — see the deviation note in lib/export/jobs.ts
+  // explaining why there is no separate export_jobs table yet. This page is already
+  // gated on requiredRoles: ['admin'] in moduleCatalog, which is where the blueprint
+  // wants the history surface (§8.2).
+  const [history, setHistory] = useState<ExportHistoryEntry[] | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const societyId = user?.societyId;
+    if (!societyId) return;
+    let cancelled = false;
+    listExportHistory(societyId, 50).then(({ entries, error }) => {
+      if (cancelled) return;
+      setHistory(entries);
+      setHistoryError(error);
+    });
+    return () => { cancelled = true; };
+  }, [user?.societyId]);
 
   // ── Summary stats ─────────────────────────────────────────────────────────
   const stats = {
@@ -227,6 +253,70 @@ const BackupRestore: React.FC = () => {
               ? 'पहले यहाँ एक Restore बटन था, लेकिन वह सिर्फ़ खाता शीर्षक और सदस्य वापस लाता था — वाउचर, बिक्री, खरीद, ऋण और संपत्ति चुपचाप छूट जाते थे। ऐसा अधूरा रिस्टोर न होने से भी ज़्यादा ख़तरनाक है, क्योंकि यूज़र अपना असली डेटा ढूँढ़ना बंद कर देता है। इसलिए उसे हटा दिया गया है। पूरा बैकअप और रिस्टोर अलग से बनाया जा रहा है।'
               : 'A Restore button used to sit here, but it only brought back accounts and members — vouchers, sales, purchases, loans and assets were silently dropped. A partial restore is more dangerous than none, because it ends the search for the real data. It has been removed. A complete backup and restore is being built separately.'}
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Export history — the compliance surface (gap EXP-05) */}
+      <Card>
+        <CardHeader className="py-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <History className="h-4 w-4 text-gray-500" />
+            {hi ? 'एक्सपोर्ट इतिहास' : 'Export History'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-600 mb-3">
+            {hi
+              ? 'किसने, कब, कौन-सा डेटा बाहर निकाला — यह रिकॉर्ड बदला नहीं जा सकता।'
+              : 'Who took what data, and when. This record cannot be altered.'}
+          </p>
+
+          {historyError && (
+            <div className="flex items-start gap-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              {/* Never render a read failure as "no exports ever happened". */}
+              {hi ? 'इतिहास पढ़ा नहीं जा सका: ' : 'Could not read the history: '}{historyError}
+            </div>
+          )}
+
+          {!historyError && history === null && (
+            <p className="text-sm text-gray-400">{hi ? 'लोड हो रहा है…' : 'Loading…'}</p>
+          )}
+
+          {!historyError && history?.length === 0 && (
+            <p className="text-sm text-gray-500">
+              {hi
+                ? 'अभी तक कोई एक्सपोर्ट दर्ज नहीं। नए एक्सपोर्ट यहाँ अपने-आप दिखेंगे।'
+                : 'No exports recorded yet. New exports will appear here automatically.'}
+            </p>
+          )}
+
+          {!historyError && history && history.length > 0 && (
+            <div className="space-y-2">
+              {history.map(entry => (
+                <div key={entry.id} className="flex items-start justify-between gap-3 px-3 py-2 rounded-lg bg-gray-50 text-sm">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-800 truncate">{describeExport(entry, hi)}</p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {entry.actorName || entry.actorEmail || (hi ? 'अज्ञात उपयोगकर्ता' : 'unknown user')}
+                      {entry.actorRole ? ` · ${entry.actorRole}` : ''}
+                      {entry.at ? ` · ${new Date(entry.at).toLocaleString(hi ? 'hi-IN' : 'en-IN')}` : ''}
+                    </p>
+                  </div>
+                  {mayContainPii(entry) ? (
+                    <Badge variant="outline" className="shrink-0 text-xs text-amber-700 border-amber-300">
+                      {hi ? 'निजी डेटा' : 'personal data'}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="shrink-0 text-xs text-green-700 border-green-300 gap-1">
+                      <EyeOff className="h-3 w-3" />
+                      {hi ? 'रिडैक्टेड' : 'redacted'}
+                    </Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

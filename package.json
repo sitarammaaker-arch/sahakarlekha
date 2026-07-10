@@ -33,7 +33,8 @@
     "test:export-registry": "node scripts/test-export-registry.mjs",
     "test:drift": "node scripts/test-schema-drift.mjs",
     "test:export-utils": "node scripts/test-export-utils.mjs",
-    "test:export-generator": "node scripts/test-export-generator.mjs"
+    "test:export-generator": "node scripts/test-export-generator.mjs",
+    "test:export-jobs": "node scripts/test-export-jobs.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
