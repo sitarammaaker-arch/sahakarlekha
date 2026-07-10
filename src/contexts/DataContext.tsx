@@ -25,6 +25,8 @@ import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
+import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
+import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } from '@/lib/storage';
 import { isUniqueViolation, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
@@ -190,6 +192,7 @@ interface DataContextType {
   updateStockItem: (id: string, data: Partial<StockItem>) => void;
   deleteStockItem: (id: string) => void;
   addStockMovement: (data: Omit<StockMovement, 'id' | 'createdAt'>) => void;
+  transferStock: (input: { itemId: string; fromGodownId: string; toGodownId: string; qty: number; date?: string }) => boolean;
 
   // Sales
   sales: Sale[];
@@ -4602,6 +4605,53 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }));
   }, []);
 
+  // ECR-20: inter-godown transfer — moves stock between godowns as a pair of adjustment
+  // movements (OUT -qty at source, IN +qty at dest) that net to zero society-wide, so the
+  // canonical stock formula (RULE-2) needs no change. Persisted atomically: if either leg's
+  // base save fails, BOTH are rolled back (RULE-1) so a half-transfer can never occur.
+  const transferStock = useCallback((input: { itemId: string; fromGodownId: string; toGodownId: string; qty: number; date?: string }): boolean => {
+    if (guardFYLocked()) return false;
+    const movs = stockMovementsRef.current;
+    const rows = computeGodownStock(movs as unknown as Parameters<typeof computeGodownStock>[0]);
+    const srcRow = rows.find(r => r.itemId === input.itemId && r.godownId === input.fromGodownId);
+    const availableQty = srcRow?.qty ?? 0;
+    const v = validateTransfer({ fromGodownId: input.fromGodownId, toGodownId: input.toGodownId, qty: input.qty, availableQty });
+    if (!v.ok) { toastRef.current({ title: 'स्थानांतरण नहीं हुआ', description: v.error, variant: 'destructive', duration: 8000 }); return false; }
+
+    const rate = srcRow && srcRow.qty > 0 ? srcRow.value / srcRow.qty : 0;
+    const nameOf = (id: string) => id === UNASSIGNED_GODOWN ? 'बिना गोदाम' : (godowns.find(g => g.id === id)?.name || id);
+    const seq = new Set(movs.filter(m => (m.referenceNo || '').startsWith('TRF/')).map(m => m.referenceNo)).size + 1;
+    const transferNo = `TRF/${seq}`;
+    const date = input.date || new Date().toISOString().split('T')[0];
+    const [outLeg, inLeg] = buildTransferLegs({ ...input, rate, date, transferNo, fromLabel: nameOf(input.fromGodownId), toLabel: nameOf(input.toGodownId) });
+    const now = new Date().toISOString();
+    const outMv: StockMovement = { ...outLeg, id: crypto.randomUUID(), createdAt: now };
+    const inMv: StockMovement = { ...inLeg, id: crypto.randomUUID(), createdAt: now };
+
+    stockMovementsRef.current = [...movs, outMv, inMv];
+    setStockMovementsState(prev => [...prev, outMv, inMv]);
+
+    const rollback = (msg: string) => {
+      stockMovementsRef.current = stockMovementsRef.current.filter(m => m.id !== outMv.id && m.id !== inMv.id);
+      setStockMovementsState(prev => prev.filter(m => m.id !== outMv.id && m.id !== inMv.id));   // RULE 1: roll back BOTH legs
+      toastRef.current({ title: 'स्थानांतरण सेव नहीं हुआ', description: `Cloud save fail — ${msg}. Refresh par transfer nahi rahega.`, variant: 'destructive', duration: 12000 });
+    };
+    const baseOf = (m: StockMovement) => { const { godownId: _g, ...base } = m; return base; };
+    Promise.all([
+      supabase.from('stock_movements').upsert(withSoc(baseOf(outMv))),
+      supabase.from('stock_movements').upsert(withSoc(baseOf(inMv))),
+    ]).then(([r1, r2]) => {
+      const err = r1.error || r2.error;
+      if (err) { console.error('DB sync error (transfer):', err.message); rollback(err.message); return; }
+      // step-2: patch godownId on both legs (overlay column — never blocks the base save).
+      supabase.from('stock_movements').update({ godownId: outMv.godownId }).eq('id', outMv.id).then(({ error }) => { if (error) console.warn('Transfer OUT godown patch:', error.message); });
+      supabase.from('stock_movements').update({ godownId: inMv.godownId }).eq('id', inMv.id).then(({ error }) => { if (error) console.warn('Transfer IN godown patch:', error.message); });
+      emitAudit({ entityType: 'stockMovement', entityId: transferNo, action: 'create', after: { itemId: input.itemId, from: input.fromGodownId, to: input.toGodownId, qty: input.qty }, reason: `Inter-godown transfer ${transferNo}` });
+    });
+    toastRef.current({ title: 'स्थानांतरण दर्ज', description: `${transferNo}: ${input.qty} ${nameOf(input.fromGodownId)} → ${nameOf(input.toGodownId)}` });
+    return true;
+  }, [godowns]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Sales ──────────────────────────────────────────────────────────────────
   const addSale = useCallback((data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>): Sale => {
     if (guardFYLocked()) return { ...data, id: '' } as unknown as Sale;
@@ -6004,7 +6054,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       recoverables, addRecoverable, updateRecoverable, deleteRecoverable,
       kachiAaratEntries, addKachiAaratEntry, updateKachiAaratEntry, deleteKachiAaratEntry,
       p7Entries, upsertP7Entry, deleteP7Entry,
-      addStockItem, updateStockItem, deleteStockItem, addStockMovement,
+      addStockItem, updateStockItem, deleteStockItem, addStockMovement, transferStock,
       addSale, updateSale, deleteSale, addBillReceipt, addBillPayment,
       addPurchase, updatePurchase, deletePurchase,
       addEmployee, updateEmployee, deleteEmployee,
