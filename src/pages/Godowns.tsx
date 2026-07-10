@@ -19,9 +19,10 @@ import type { Godown } from '@/types';
 import { computeGodownStock, godownTotals, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { buildStackCard } from '@/lib/stackCard';
 import { capacityUtilisation } from '@/lib/godownCapacity';
+import { computeStorageLoss } from '@/lib/storageLoss';
 
 const Godowns: React.FC = () => {
-  const { godowns, addGodown, updateGodown, deleteGodown, branches, stockMovements, stockItems, transferStock } = useData();
+  const { godowns, addGodown, updateGodown, deleteGodown, branches, stockMovements, stockItems, transferStock, society } = useData();
   const { user } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
@@ -85,6 +86,15 @@ const Godowns: React.FC = () => {
     const qty = Number(tx.qty);
     if (transferStock({ itemId: tx.itemId, fromGodownId: tx.from, toGodownId: tx.to, qty })) setTxOpen(false);
   };
+
+  // ECR-20: storage-loss vs norm — items exceeding the society's permitted godown loss %.
+  const normPct = society.storageLossNormPct ?? 0;
+  const overNorm = useMemo(
+    () => normPct > 0
+      ? computeStorageLoss(stockMovements as unknown as Parameters<typeof computeStorageLoss>[0], normPct).filter(r => !r.withinNorm).sort((a, b) => b.excessPct - a.excessPct)
+      : [],
+    [stockMovements, normPct],
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -228,6 +238,39 @@ const Godowns: React.FC = () => {
               )}
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* ECR-20: storage-loss vs norm */}
+      {normPct > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold flex items-center gap-2"><Warehouse className="h-5 w-5 text-primary" />{hi ? `भंडारण हानि (norm ${normPct}%)` : `Storage Loss (norm ${normPct}%)`}</h2>
+          {overNorm.length === 0 ? (
+            <Card><CardContent className="pt-4 text-sm text-muted-foreground">{hi ? 'सभी वस्तुएँ norm के भीतर हैं।' : 'All items are within the norm.'}</CardContent></Card>
+          ) : (
+            <Card><CardContent className="p-0 overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>{hi ? 'वस्तु' : 'Item'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'आवक' : 'Inward'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'हानि' : 'Loss'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'हानि %' : 'Loss %'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'norm से अधिक' : 'Over norm'}</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {overNorm.map(r => (
+                    <TableRow key={r.itemId}>
+                      <TableCell>{nameOfItem(r.itemId)}</TableCell>
+                      <TableCell className="text-right">{r.inwardQty}</TableCell>
+                      <TableCell className="text-right">{r.lossQty}</TableCell>
+                      <TableCell className="text-right font-medium text-red-600">{r.actualLossPct}%</TableCell>
+                      <TableCell className="text-right text-red-600">+{r.excessPct}%</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent></Card>
+          )}
         </div>
       )}
 

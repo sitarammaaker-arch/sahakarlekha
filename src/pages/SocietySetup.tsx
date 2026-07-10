@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Settings, Building2, Calendar, Wallet, Save, History, HardDrive, Download, Upload, AlertTriangle, Plus, Trash2, Lock, Unlock, FastForward, CheckCircle2 } from 'lucide-react';
+import { Settings, Building2, Calendar, Wallet, Save, History, HardDrive, Download, Upload, AlertTriangle, Plus, Trash2, Lock, Unlock, FastForward, CheckCircle2, Warehouse } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -51,6 +51,12 @@ const SocietySetup: React.FC = () => {
   const saveApprovalThreshold = () => {
     updateSociety({ approvalThresholdAmount: approvalThresholdInput === '' ? undefined : Number(approvalThresholdInput) });
     toast({ title: language === 'hi' ? 'अनुमोदन सीमा सहेजी' : 'Approval threshold saved' });
+  };
+  // ECR-20: godown storage-loss norm %
+  const [storageLossNormInput, setStorageLossNormInput] = useState(String(society.storageLossNormPct ?? ''));
+  const saveStorageLossNorm = () => {
+    updateSociety({ storageLossNormPct: storageLossNormInput === '' ? undefined : Number(storageLossNormInput) });
+    toast({ title: language === 'hi' ? 'भंडारण-हानि norm सहेजा' : 'Storage-loss norm saved' });
   };
   const toggleApprovalRequired = () => {
     const next = !society.approvalRequired;
@@ -858,6 +864,30 @@ const SocietySetup: React.FC = () => {
                         );
                       })}
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ECR-20: godown storage-loss norm */}
+              <div className="mt-6 p-4 rounded-lg border-2 border-primary/30 bg-primary/5">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="min-w-[220px]">
+                    <div className="flex items-center gap-2 font-semibold text-primary">
+                      <Warehouse className="h-4 w-4" />
+                      {language === 'hi' ? 'भंडारण-हानि norm' : 'Storage-loss Norm'}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {language === 'hi'
+                        ? 'गोदाम में अनुमत हानि (driage/shrinkage) %. इससे अधिक हानि वाले items गोदाम पेज पर flag होंगे।'
+                        : 'Permitted godown loss (driage/shrinkage) %. Items exceeding it are flagged on the Godowns page.'}
+                    </p>
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <div>
+                      <Label className="text-xs">{language === 'hi' ? 'norm %' : 'Norm %'}</Label>
+                      <Input type="number" min="0" step="0.1" value={storageLossNormInput} onChange={e => setStorageLossNormInput(e.target.value)} className="w-28 h-9 mt-1" placeholder="0" />
+                    </div>
+                    <Button variant="outline" size="sm" className="h-9" onClick={saveStorageLossNorm}>{language === 'hi' ? 'सहेजें' : 'Save'}</Button>
                   </div>
                 </div>
               </div>

@@ -802,6 +802,10 @@ alter table society_settings add column if not exists "societyType" text default
 alter table society_settings add column if not exists "approvalVoucherTypes" jsonb;
 -- alter table salary_records    add column if not exists society_id text default 'SOC001';
 
+-- ── ECR-20: godown storage-loss norm on society_settings ─────────────────────
+-- Permitted storage-loss (driage/shrinkage) %; items above it are flagged. NULL = no norm.
+alter table society_settings add column if not exists "storageLossNormPct" numeric;
+
 -- ── STEP 15: platform_admins — super admin table (cross-society access) ──────
 create table if not exists platform_admins (
   id uuid default gen_random_uuid() primary key,
