@@ -533,19 +533,11 @@ create index if not exists idx_sales_society_date        on sales(society_id, da
 create index if not exists idx_purchases_society_date    on purchases(society_id, date);
 create index if not exists idx_salary_records_employee   on salary_records("employeeId");
 
--- 14. Suppliers
-create table if not exists suppliers (
-  id text primary key,
-  society_id text not null default 'SOC001',
-  "supplierCode" text,
-  name text,
-  address text,
-  "gstNo" text,
-  phone text,
-  "accountId" text,
-  "isActive" boolean default true,
-  "createdAt" timestamp default now()
-);
+-- 14. Suppliers — table created in STEP 6 above.
+-- T-12: the duplicate `create table if not exists suppliers (...)` that used to sit here
+-- was a no-op (STEP 6 wins) AND it disagreed with STEP 6: it dropped `not null` on `name`.
+-- A reader could not tell which definition was live. Removed; the RLS/index/ALTER lines
+-- below are idempotent and stay.
 alter table suppliers enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='suppliers' and policyname='allow_all') then
@@ -555,18 +547,10 @@ end $$;
 create index if not exists idx_suppliers_society on suppliers(society_id);
 alter table suppliers add column if not exists "nameHi" text;
 
--- 15. Customers
-create table if not exists customers (
-  id text primary key,
-  society_id text not null default 'SOC001',
-  "customerCode" text,
-  name text,
-  address text,
-  phone text,
-  "accountId" text,
-  "isActive" boolean default true,
-  "createdAt" timestamp default now()
-);
+-- 15. Customers — table created in STEP 6 above.
+-- T-12: the duplicate `create table if not exists customers (...)` that used to sit here
+-- was a no-op AND it disagreed with STEP 6 twice: it dropped `not null` on `name` and it
+-- omitted `gstNo` entirely. Removed; the idempotent lines below stay.
 alter table customers enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='customers' and policyname='allow_all') then
@@ -3091,3 +3075,79 @@ alter table society_users add column if not exists branch_id text;
 alter table consumer_purchase_orders add column if not exists "varianceStatus" text;
 alter table consumer_purchase_orders add column if not exists "varianceReason" text;
 alter table consumer_purchase_orders add column if not exists "varianceApprovedBy" text;
+
+-- ── T-12: three tables the app has always used, with no DDL in this repo ─────────────
+-- DataContext.tsx loads and upserts `recoverables`, `kachi_aarat_entries` and
+-- `p7_entries`, but their schema lived nowhere. Wherever they exist today they were
+-- created by hand. Columns below are derived from src/types/index.ts (Recoverable,
+-- KachiAaratEntry, P7Entry) plus `withSoc` (which stamps society_id on every upsert).
+--
+-- NOTE ON DELETION: all three are HARD-deleted by DataContext (`.delete()`), even though
+-- Recoverable and KachiAaratEntry carry an `isDeleted` field. The column is created for
+-- row fidelity, but the export registry does NOT declare a softDeleteField for them —
+-- claiming soft-delete where the code hard-deletes would be a lie. See RULE 5.
+
+create table if not exists recoverables (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "partyName" text,
+  category text,
+  "legalStage" text,
+  "openingBalance" numeric default 0,
+  additions numeric default 0,
+  recoveries numeric default 0,
+  "fyStartDate" text,
+  narration text,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table recoverables enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='recoverables' and policyname='allow_all') then
+    create policy "allow_all" on recoverables for all using (true) with check (true);
+  end if;
+end $$;
+create index if not exists idx_recoverables_society on recoverables(society_id);
+
+create table if not exists kachi_aarat_entries (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  date text,
+  "fyStartDate" text,
+  crop text,
+  "partyName" text,
+  "businessValue" numeric default 0,
+  "damiEarned" numeric default 0,
+  narration text,
+  "isDeleted" boolean default false,
+  "createdAt" timestamptz default now()
+);
+alter table kachi_aarat_entries enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='kachi_aarat_entries' and policyname='allow_all') then
+    create policy "allow_all" on kachi_aarat_entries for all using (true) with check (true);
+  end if;
+end $$;
+create index if not exists idx_kachi_aarat_entries_society on kachi_aarat_entries(society_id);
+
+create table if not exists p7_entries (
+  id text primary key,
+  society_id text not null default 'SOC001',
+  "fyStartDate" text,
+  "rentedGodownCount" numeric default 0,
+  "rentedCapacityMT" numeric default 0,
+  "godownRentPaid" numeric default 0,
+  "truckCount" numeric default 0,
+  "transportChargesPaid" numeric default 0,
+  "sugarCattleFeedSales" numeric default 0,
+  "consumerProductSales" numeric default 0,
+  narration text,
+  "createdAt" timestamptz default now()
+);
+alter table p7_entries enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='p7_entries' and policyname='allow_all') then
+    create policy "allow_all" on p7_entries for all using (true) with check (true);
+  end if;
+end $$;
+create index if not exists idx_p7_entries_society on p7_entries(society_id);

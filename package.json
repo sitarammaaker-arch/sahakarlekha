@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/prerender-guide.mjs",
+    "build": "node scripts/test-schema-drift.mjs && vite build && node scripts/prerender-guide.mjs",
     "build:dev": "vite build --mode development && node scripts/prerender-guide.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -29,7 +29,9 @@
     "test:share-recon": "node scripts/test-share-reconciliation.mjs",
     "test:persist": "node scripts/test-voucher-persistence.mjs",
     "test:xlsx": "node scripts/test-xlsx-compat.mjs",
-    "test:ob": "node scripts/test-opening-balances.mjs"
+    "test:ob": "node scripts/test-opening-balances.mjs",
+    "test:export-registry": "node scripts/test-export-registry.mjs",
+    "test:drift": "node scripts/test-schema-drift.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
