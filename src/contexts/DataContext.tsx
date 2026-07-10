@@ -36,6 +36,7 @@ import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherI
 import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { snapshotDeletedMovements } from '@/lib/movementArchive';
 import { isSelfApproval } from '@/lib/sod';
+import { requiresApproval } from '@/lib/approvalMatrix';
 import { sumActiveMemberShareCapital, reconcileShareCapital, type ShareCapitalReconciliation } from '@/lib/shareReconciliation';
 import { sumActiveAssetCost, reconcileAssetRegister, type AssetReconciliation } from '@/lib/assetReconciliation';
 import { can as rbacCan, type Permission } from '@/lib/rbac';
@@ -274,11 +275,6 @@ const reverseEntryLines = (lines: VoucherLine[]): VoucherLine[] =>
 // reversed, or is posted-under-control (opt-in maker-checker regime + approved). Pure.
 const isEditLocked = (v: Pick<Voucher, 'reversedBy' | 'approvalStatus'>, approvalRequired: boolean): boolean =>
   !!v.reversedBy || (!!approvalRequired && v.approvalStatus === 'approved');
-
-// ECR-11: approval matrix — does a manual voucher of `amount` need approval? True when the
-// all-manual flag is on, OR the amount meets the configured threshold. Pure.
-const requiresApproval = (amount: number, opts: { approvalRequired?: boolean; threshold?: number }): boolean =>
-  !!opts.approvalRequired || (!!opts.threshold && opts.threshold > 0 && (amount || 0) >= opts.threshold);
 
 // ── ECR-16 (member lifecycle) pure helpers ────────────────────────────────────
 const MEMBER_STATUSES: MemberStatus[] = ['active', 'inactive', 'resigned', 'expelled', 'deceased'];
@@ -1349,7 +1345,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // amount ≥ threshold). Only origin==='manual' is subject to this — auto/engine vouchers
     // are never held. If the caller already set a status, respect it.
     const needsApproval = data.origin === 'manual' && data.approvalStatus === undefined &&
-      requiresApproval(amount, { approvalRequired: society.approvalRequired, threshold: society.approvalThresholdAmount });
+      requiresApproval(amount, data.type, { approvalRequired: society.approvalRequired, threshold: society.approvalThresholdAmount, types: society.approvalVoucherTypes });
     const newVoucher: Voucher = {
       ...data,
       id: lid(),
