@@ -35,6 +35,7 @@ import { resolveCapabilities } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
 import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { snapshotDeletedMovements } from '@/lib/movementArchive';
+import { isSelfApproval } from '@/lib/sod';
 import { sumActiveMemberShareCapital, reconcileShareCapital, type ShareCapitalReconciliation } from '@/lib/shareReconciliation';
 import { sumActiveAssetCost, reconcileAssetRegister, type AssetReconciliation } from '@/lib/assetReconciliation';
 import { can as rbacCan, type Permission } from '@/lib/rbac';
@@ -1853,6 +1854,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
+    // ECR-06: identity-level SoD — maker ≠ checker. A user may not approve their OWN voucher.
+    // Only ever reached for opted-in maker-checker societies (pending vouchers), so it can't
+    // stall a society that never enabled approval.
+    if (isSelfApproval(current.createdBy, approvedBy)) {
+      toastRef.current({ title: 'स्व-अनुमोदन मना है', description: `आप अपना ही बनाया वाउचर (${current.voucherNo}) approve नहीं कर सकते। किसी अन्य अधिकृत सदस्य से approve कराएँ, या Society Setup में approval-required बंद करें।`, variant: 'destructive', duration: 12000 });
+      return;
+    }
     const updated = { ...current, approvalStatus: 'approved' as const, approvedBy, approvedAt: new Date().toISOString() };
     emitAudit({ entityType: 'voucher', entityId: id, action: 'approve', before: { approvalStatus: current.approvalStatus ?? null }, after: { approvalStatus: 'approved' } });
     setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); return u; });
