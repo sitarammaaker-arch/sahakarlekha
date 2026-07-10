@@ -14,14 +14,14 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Warehouse, Plus, Edit2, Trash2, Package, ClipboardList } from 'lucide-react';
+import { Warehouse, Plus, Edit2, Trash2, Package, ClipboardList, ArrowLeftRight } from 'lucide-react';
 import type { Godown } from '@/types';
 import { computeGodownStock, godownTotals, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { buildStackCard } from '@/lib/stackCard';
 import { capacityUtilisation } from '@/lib/godownCapacity';
 
 const Godowns: React.FC = () => {
-  const { godowns, addGodown, updateGodown, deleteGodown, branches, stockMovements, stockItems } = useData();
+  const { godowns, addGodown, updateGodown, deleteGodown, branches, stockMovements, stockItems, transferStock } = useData();
   const { user } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
@@ -73,6 +73,19 @@ const Godowns: React.FC = () => {
     return m;
   }, [stock]);
 
+  // ECR-20: inter-godown transfer dialog.
+  const [txOpen, setTxOpen] = useState(false);
+  const [tx, setTx] = useState({ itemId: '', from: '', to: '', qty: '' });
+  const txAvailable = useMemo(
+    () => stock.filter(r => r.itemId === tx.itemId && r.godownId === tx.from).reduce((s, r) => s + r.qty, 0),
+    [stock, tx.itemId, tx.from],
+  );
+  const openTransfer = () => { setTx({ itemId: stockItems[0]?.id || '', from: '', to: '', qty: '' }); setTxOpen(true); };
+  const submitTransfer = () => {
+    const qty = Number(tx.qty);
+    if (transferStock({ itemId: tx.itemId, fromGodownId: tx.from, toGodownId: tx.to, qty })) setTxOpen(false);
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -83,7 +96,12 @@ const Godowns: React.FC = () => {
             <p className="text-sm text-muted-foreground">{hi ? 'गोदाम-वार स्टॉक (Header में सक्रिय गोदाम चुनें)' : 'Godown-wise stock (pick the active godown in the Header)'}</p>
           </div>
         </div>
-        {isAdmin && <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" />{hi ? 'नया गोदाम' : 'New Godown'}</Button>}
+        <div className="flex items-center gap-2">
+          {stockItems.length > 0 && godowns.length > 0 && (
+            <Button variant="outline" onClick={openTransfer} className="gap-2"><ArrowLeftRight className="h-4 w-4" />{hi ? 'स्थानांतरण' : 'Transfer'}</Button>
+          )}
+          {isAdmin && <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" />{hi ? 'नया गोदाम' : 'New Godown'}</Button>}
+        </div>
       </div>
 
       {/* Godown master */}
@@ -212,6 +230,44 @@ const Godowns: React.FC = () => {
           </Card>
         </div>
       )}
+
+      {/* ECR-20: inter-godown transfer dialog */}
+      <Dialog open={txOpen} onOpenChange={setTxOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><ArrowLeftRight className="h-4 w-4" />{hi ? 'गोदाम स्थानांतरण' : 'Inter-godown Transfer'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label>{hi ? 'वस्तु' : 'Item'}</Label>
+              <select value={tx.itemId} onChange={e => setTx(p => ({ ...p, itemId: e.target.value }))} className="w-full h-9 rounded-md border bg-background px-2 text-sm">
+                {stockItems.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>{hi ? 'से (स्रोत)' : 'From'}</Label>
+                <select value={tx.from} onChange={e => setTx(p => ({ ...p, from: e.target.value }))} className="w-full h-9 rounded-md border bg-background px-2 text-sm">
+                  <option value="">—</option>
+                  {godowns.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  <option value={UNASSIGNED_GODOWN}>{hi ? 'बिना गोदाम' : 'Unassigned'}</option>
+                </select>
+              </div>
+              <div><Label>{hi ? 'को (गंतव्य)' : 'To'}</Label>
+                <select value={tx.to} onChange={e => setTx(p => ({ ...p, to: e.target.value }))} className="w-full h-9 rounded-md border bg-background px-2 text-sm">
+                  <option value="">—</option>
+                  {godowns.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  <option value={UNASSIGNED_GODOWN}>{hi ? 'बिना गोदाम' : 'Unassigned'}</option>
+                </select>
+              </div>
+            </div>
+            <div><Label>{hi ? 'मात्रा' : 'Quantity'}</Label>
+              <Input type="number" min="0" value={tx.qty} onChange={e => setTx(p => ({ ...p, qty: e.target.value }))} />
+              {tx.itemId && tx.from && <p className="text-xs text-muted-foreground mt-1">{hi ? 'स्रोत में उपलब्ध' : 'Available at source'}: <span className={txAvailable < Number(tx.qty || 0) ? 'text-red-600 font-medium' : ''}>{txAvailable}</span></p>}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setTxOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+              <Button onClick={submitTransfer}>{hi ? 'स्थानांतरित करें' : 'Transfer'}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
