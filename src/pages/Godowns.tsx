@@ -14,9 +14,10 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Warehouse, Plus, Edit2, Trash2, Package } from 'lucide-react';
+import { Warehouse, Plus, Edit2, Trash2, Package, ClipboardList } from 'lucide-react';
 import type { Godown } from '@/types';
 import { computeGodownStock, godownTotals, UNASSIGNED_GODOWN } from '@/lib/godownStock';
+import { buildStackCard } from '@/lib/stackCard';
 
 const Godowns: React.FC = () => {
   const { godowns, addGodown, updateGodown, deleteGodown, branches, stockMovements, stockItems } = useData();
@@ -43,6 +44,19 @@ const Godowns: React.FC = () => {
 
   const nameOfGodown = (id: string) => id === UNASSIGNED_GODOWN ? (hi ? 'बिना गोदाम' : 'Unassigned') : (godowns.find(g => g.id === id)?.name || id);
   const nameOfItem = (id: string) => stockItems.find(s => s.id === id)?.name || id;
+
+  // ECR-20: stack card (bin card) — chronological running-balance ledger for one item × godown.
+  const [scItem, setScItem] = useState('');
+  const [scGodown, setScGodown] = useState('');
+  const effItem = scItem || stockItems[0]?.id || '';
+  const effGodown = scGodown || UNASSIGNED_GODOWN;
+  const stackCard = useMemo(
+    () => effItem ? buildStackCard(stockMovements as unknown as Parameters<typeof buildStackCard>[0], effItem, effGodown) : [],
+    [stockMovements, effItem, effGodown],
+  );
+  const typeLabel = (t: string) => hi
+    ? ({ purchase: 'खरीद', sale: 'बिक्री', opening: 'ओपनिंग', adjustment: 'समायोजन' } as Record<string, string>)[t] || t
+    : t;
 
   const stock = useMemo(() => computeGodownStock(stockMovements as unknown as Parameters<typeof computeGodownStock>[0]), [stockMovements]);
   const totals = useMemo(() => godownTotals(stock), [stock]);
@@ -128,6 +142,60 @@ const Godowns: React.FC = () => {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* ECR-20: Stack card (bin card) — per-item-per-godown running-balance ledger */}
+      {stockItems.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold flex items-center gap-2"><ClipboardList className="h-5 w-5 text-primary" />{hi ? 'स्टॉक कार्ड (बिन कार्ड)' : 'Stack Card (Bin Card)'}</h2>
+          <Card>
+            <CardContent className="pt-4 space-y-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <Label className="text-xs">{hi ? 'वस्तु' : 'Item'}</Label>
+                  <select value={effItem} onChange={e => setScItem(e.target.value)} className="w-56 h-9 rounded-md border bg-background px-2 text-sm mt-1">
+                    {stockItems.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-xs">{hi ? 'गोदाम' : 'Godown'}</Label>
+                  <select value={effGodown} onChange={e => setScGodown(e.target.value)} className="w-56 h-9 rounded-md border bg-background px-2 text-sm mt-1">
+                    {godowns.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                    <option value={UNASSIGNED_GODOWN}>{hi ? 'बिना गोदाम' : 'Unassigned'}</option>
+                  </select>
+                </div>
+              </div>
+              {stackCard.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{hi ? 'इस वस्तु/गोदाम के लिए कोई हलचल नहीं।' : 'No movements for this item / godown.'}</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader><TableRow>
+                      <TableHead>{hi ? 'तारीख' : 'Date'}</TableHead>
+                      <TableHead>{hi ? 'प्रकार' : 'Type'}</TableHead>
+                      <TableHead>{hi ? 'संदर्भ' : 'Ref'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'आवक' : 'In'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'जावक' : 'Out'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'शेष' : 'Balance'}</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      {stackCard.map((e, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-sm">{e.date || '—'}</TableCell>
+                          <TableCell className="text-sm">{typeLabel(e.type)}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{e.referenceNo || '—'}</TableCell>
+                          <TableCell className="text-right text-emerald-600">{e.inQty || ''}</TableCell>
+                          <TableCell className="text-right text-red-500">{e.outQty || ''}</TableCell>
+                          <TableCell className={`text-right font-medium ${e.balance < 0 ? 'text-red-600' : ''}`}>{e.balance}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
