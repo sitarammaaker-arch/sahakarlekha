@@ -53,6 +53,7 @@ export const translations: Translations = {
   auditSchedules: { hi: 'ऑडिट अनुसूचियां', en: 'Audit Schedules' },
   backupRestore: { hi: 'डेटा एक्सपोर्ट', en: 'Data Export' },
   exportCenter: { hi: 'एक्सपोर्ट सेंटर', en: 'Export Center' },
+  restoreCenter: { hi: 'रिस्टोर सेंटर', en: 'Restore Center' },
   multiSocietyConsolidation: { hi: 'बहु-समिति समेकन', en: 'Multi-Society Consolidation' },
   universalImporter: { hi: 'डेटा Import (Universal)', en: 'Universal Importer' },
   gstSummary: { hi: 'GST सारांश', en: 'GST Summary' },

@@ -42,7 +42,8 @@
     "test:backup-writer": "node scripts/test-backup-writer.mjs",
     "test:backup-crypto": "node scripts/test-backup-crypto.mjs",
     "test:restore-dag": "node scripts/test-restore-dag.mjs",
-    "test:restore-diff": "node scripts/test-restore-diff.mjs"
+    "test:restore-diff": "node scripts/test-restore-diff.mjs",
+    "test:restore-archive": "node scripts/test-restore-archive.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
