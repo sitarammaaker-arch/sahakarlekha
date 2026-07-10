@@ -32,7 +32,8 @@
     "test:ob": "node scripts/test-opening-balances.mjs",
     "test:export-registry": "node scripts/test-export-registry.mjs",
     "test:drift": "node scripts/test-schema-drift.mjs",
-    "test:export-utils": "node scripts/test-export-utils.mjs"
+    "test:export-utils": "node scripts/test-export-utils.mjs",
+    "test:export-generator": "node scripts/test-export-generator.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
