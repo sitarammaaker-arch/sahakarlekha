@@ -257,5 +257,79 @@ caught = null;
 try { await exportEntity([], { entityKey: 'nope', format: 'csv', mode: 'standard' }, env); } catch (e) { caught = e; }
 ok(caught instanceof ExportDeniedError, 'an unknown entity key is denied');
 
+// ── 8. runEntityExport (T-18) — the one runner every caller uses ─────────────
+// It returns an OUTCOME rather than throwing, because each failure deserves a different
+// sentence to the user. The one thing no caller may do is read any of them as
+// "exported zero rows".
+const { runEntityExport } = await import(abs('../src/lib/export/run.ts'));
+
+const okFetch = (rows, over = {}) => async () => ({ rows, truncated: false, fetched: rows.length, error: null, ...over });
+const req8 = { entityKey: 'member', format: 'csv', mode: 'standard' };
+const env8 = { ...env, principal: viewer };
+
+let exportCalls = 0;
+const spyExport = async (rows) => { exportCalls++; return rows.length; };
+
+// 8a. Happy path.
+exportCalls = 0;
+let out = await runEntityExport(member, 'SOC-A', req8, env8, { fetchRows: okFetch(rows), runExport: spyExport });
+ok(out.status === 'exported' && out.rowCount === 2, 'a normal export reports how many rows left');
+ok(exportCalls === 1, 'the export ran exactly once');
+
+// 8b. TRUNCATION IS REFUSED BEFORE ANY EXPORT HAPPENS.
+// A partial file that looks complete is the same class of bug as a backup that cannot
+// restore. We hand the user nothing, and say how many rows we saw.
+exportCalls = 0;
+out = await runEntityExport(member, 'SOC-A', req8, env8, {
+  fetchRows: async () => ({ rows: rows.slice(0, 1), truncated: true, fetched: 1, error: null }),
+  runExport: spyExport,
+});
+ok(out.status === 'too-large' && out.fetched === 1, 'a truncated read reports too-large with the row count seen');
+ok(exportCalls === 0, 'NOTHING WAS EXPORTED: the export never ran on a truncated read');
+
+// 8c. A read failure is not an empty export.
+exportCalls = 0;
+out = await runEntityExport(member, 'SOC-A', req8, env8, {
+  fetchRows: async () => ({ rows: [], truncated: false, fetched: 0, error: 'permission denied' }),
+  runExport: spyExport,
+});
+ok(out.status === 'read-failed' && out.message === 'permission denied', 'a read failure surfaces its message');
+ok(exportCalls === 0, 'a failed read does not export an empty file');
+
+// 8d. An unreadable entity (exclude / global) is a DENIAL, not a read failure — the rows
+// were never going to leave.
+out = await runEntityExport(userMfa, 'SOC-A', req8, env8, {
+  fetchRows: async () => { const e = new Error('"user_mfa" is excluded'); e.name = 'EntityNotReadableError'; throw e; },
+  runExport: spyExport,
+});
+ok(out.status === 'denied' && /excluded/.test(out.message), 'an excluded entity is reported as denied, not as a read error');
+
+// 8e. Authorization failure from the generator.
+out = await runEntityExport(member, 'SOC-A', req8, env8, {
+  fetchRows: okFetch(rows),
+  runExport: async () => { throw new ExportDeniedError('"member" requires role accountant'); },
+});
+ok(out.status === 'denied' && /requires role/.test(out.message), 'a generate-time denial is reported as denied');
+
+// 8f. THE DPDP GUARANTEE. A failed audit write is its own outcome, because it is the
+// system working, not breaking: no trail, no bytes.
+out = await runEntityExport(member, 'SOC-A', req8, env8, {
+  fetchRows: okFetch(rows),
+  runExport: async () => { throw new AuditWriteError('Audit write failed: relation "audit_log" does not exist'); },
+});
+ok(out.status === 'audit-failed', 'a failed audit write is its own outcome, distinct from a generic failure');
+ok(/audit_log/.test(out.message), 'the audit failure carries its cause');
+
+// 8g. Anything else is a plain failure, never silently swallowed.
+out = await runEntityExport(member, 'SOC-A', req8, env8, {
+  fetchRows: okFetch(rows),
+  runExport: async () => { throw new Error('disk on fire'); },
+});
+ok(out.status === 'failed' && out.message === 'disk on fire', 'an unexpected error surfaces as failed');
+
+// Every outcome is distinguishable — no caller can collapse them into "zero rows".
+const statuses = new Set(['exported', 'too-large', 'read-failed', 'denied', 'audit-failed', 'failed']);
+ok(statuses.size === 6, 'six distinct outcomes, each deserving a different sentence to the user');
+
 console.log(`\nExport generator (pure + wired): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

@@ -35,8 +35,8 @@ import { Download, ShieldAlert, Loader2, EyeOff, Info } from 'lucide-react';
 
 import { REGISTRY } from '@/lib/export/registry';
 import type { EntityDescriptor } from '@/lib/export/registry.types';
-import { authorizeExport, exportEntity, type ExportMode, type TabularFormat } from '@/lib/export/generator';
-import { fetchEntityRows } from '@/lib/export/source';
+import { authorizeExport, type ExportMode, type TabularFormat } from '@/lib/export/generator';
+import { runEntityExport } from '@/lib/export/run';
 import { preflightExport, formatBytes, type PreflightResult } from '@/lib/export/preflight';
 
 const MODES: { value: ExportMode; hi: string; en: string; hint: string; hintHi: string }[] = [
@@ -135,62 +135,76 @@ const ExportCenter: React.FC = () => {
     setChosenColumns(selected!.columns.filter(c => next.has(c.key)).map(c => c.key));
   };
 
+  /** T-18: the fetch → refuse-if-truncated → audit → deliver sequence lives in one place. */
   async function handleExport() {
     if (!selected || !user?.societyId) return;
     setBusy(true);
     try {
-      const { rows, truncated, fetched, error } = await fetchEntityRows(selected, user.societyId);
-
-      if (error) {
-        toast({ title: hi ? 'डेटा पढ़ा नहीं जा सका' : 'Could not read the data', description: error, variant: 'destructive', duration: 10000 });
-        return;
-      }
-
-      // NO SILENT CAPS. A partial file that looks complete is data loss with a success toast.
-      if (truncated) {
-        toast({
-          title: hi ? 'एक्सपोर्ट रोका गया — डेटा बहुत बड़ा है' : 'Export stopped — too much data',
-          description: hi
-            ? `${fetched} पंक्तियाँ पढ़ी गईं, पर टेबल में और भी हैं। अधूरी फ़ाइल देने के बजाय रोका गया।`
-            : `Read ${fetched} rows, but the table holds more. Stopped rather than hand you an incomplete file.`,
-          variant: 'destructive',
-          duration: 15000,
-        });
-        return;
-      }
-
-      const count = await exportEntity(rows, {
-        entityKey: selected.key,
-        format,
-        mode,
-        columns: chosenColumns ?? undefined,
-        filenameBase: `${selected.key}-${society.financialYear}`,
-      }, {
-        societyId: user.societyId,
-        actor: { name: user.name, email: user.email, role: user.role },
-        principal,
-        language,
-        meta: {
-          societyName: society.name,
-          registrationNo: society.registrationNo,
-          financialYear: society.financialYear,
-          generatedBy: user.name,
+      const outcome = await runEntityExport(
+        selected,
+        user.societyId,
+        {
+          entityKey: selected.key,
+          format,
           mode,
+          columns: chosenColumns ?? undefined,
+          filenameBase: `${selected.key}-${society.financialYear}`,
         },
-      });
+        {
+          societyId: user.societyId,
+          actor: { name: user.name, email: user.email, role: user.role },
+          principal,
+          language,
+          meta: {
+            societyName: society.name,
+            registrationNo: society.registrationNo,
+            financialYear: society.financialYear,
+            generatedBy: user.name,
+            mode,
+          },
+        },
+      );
 
-      toast({
-        title: hi ? 'एक्सपोर्ट डाउनलोड हुआ' : 'Export downloaded',
-        description: hi ? `${count} पंक्तियाँ · इतिहास में दर्ज` : `${count} rows · recorded in the export history`,
-      });
-    } catch (e) {
-      // Includes AuditWriteError: if the trail cannot be written, no file is delivered.
-      toast({
-        title: hi ? 'एक्सपोर्ट नहीं हुआ' : 'Export failed',
-        description: e instanceof Error ? e.message : String(e),
-        variant: 'destructive',
-        duration: 12000,
-      });
+      switch (outcome.status) {
+        case 'exported':
+          toast({
+            title: hi ? 'एक्सपोर्ट डाउनलोड हुआ' : 'Export downloaded',
+            description: hi ? `${outcome.rowCount} पंक्तियाँ · इतिहास में दर्ज` : `${outcome.rowCount} rows · recorded in the export history`,
+          });
+          break;
+        case 'too-large':
+          // NO SILENT CAPS. A partial file that looks complete is data loss with a success toast.
+          toast({
+            title: hi ? 'एक्सपोर्ट रोका गया — डेटा बहुत बड़ा है' : 'Export stopped — too much data',
+            description: hi
+              ? `${outcome.fetched} पंक्तियाँ पढ़ी गईं, पर टेबल में और भी हैं। अधूरी फ़ाइल देने के बजाय रोका गया।`
+              : `Read ${outcome.fetched} rows, but the table holds more. Stopped rather than hand you an incomplete file.`,
+            variant: 'destructive',
+            duration: 15000,
+          });
+          break;
+        case 'audit-failed':
+          // The trail could not be written, so no bytes left. The safeguard working.
+          toast({
+            title: hi ? 'एक्सपोर्ट दर्ज नहीं हो सका' : 'Export could not be recorded',
+            description: hi
+              ? 'ऑडिट लॉग में लिखा नहीं जा सका, इसलिए कोई फ़ाइल नहीं बनी।'
+              : 'The audit trail could not be written, so no file was produced.',
+            variant: 'destructive',
+            duration: 12000,
+          });
+          break;
+        case 'read-failed':
+        case 'denied':
+        case 'failed':
+          toast({
+            title: hi ? 'एक्सपोर्ट नहीं हुआ' : 'Export failed',
+            description: outcome.message,
+            variant: 'destructive',
+            duration: 12000,
+          });
+          break;
+      }
     } finally {
       setBusy(false);
     }
