@@ -1062,6 +1062,7 @@ export interface SocietySettings {
   approvalRequired?: boolean;  // opt-in maker-checker: when true, PENDING vouchers are held out of the ledger/reports until approved (REJECTED are always excluded). Default (undefined/false) = no gating — behaviour unchanged.
   approvalThresholdAmount?: number;  // ECR-11: manual vouchers with amount ≥ this need approval (matrix). Undefined/0 = no threshold rule.
   approvalVoucherTypes?: VoucherType[];  // ECR-11: voucher types that ALWAYS need approval regardless of amount (e.g. journal/contra). Undefined/[] = no type rule.
+  storageLossNormPct?: number;  // ECR-20: permitted godown storage-loss (driage/shrinkage) % — items above this are flagged. Undefined/0 = no norm.
   // Board & Signing Authority
   boardType?: BoardType;       // 'bod' (elected) or 'boa' (appointed by Registrar)
   boardMembers?: BoardMember[];
