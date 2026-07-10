@@ -644,7 +644,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (migErr) {
           console.warn('Auto member voucher migration error (non-fatal):', migErr);
         }
-        setLoansState(lData || []);
+        setLoansState((lData || []).filter(l => !l.isDeleted));            // ECR-02: exclude archived loans
         setAssetsState((asData || []).filter(a => !a.isDeleted));          // P0 #2: exclude archived
         setAuditObjectionsState((aoData || []).filter(o => !o.isDeleted)); // P0 #2: exclude archived
         setStockItemsState(siData || []);
@@ -3899,7 +3899,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     const loan = loansRef.current.find(l => l.id === id);
     setLoansState(prev => { const updated = prev.filter(l => l.id !== id); return updated; });
-    supabase.from('loans').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // Soft-delete (ECR-02 / RULE-5): retain the loan register row (isDeleted=true) for audit; the
+    // loader filters it out. The linked disbursement voucher is still soft-cancelled below (RULE-3).
+    supabase.from('loans').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    emitAudit({ entityType: 'loan', entityId: id, action: 'delete', reason: 'Loan deleted' });
     // RULE 3: soft-cancel the auto-generated disbursement voucher (matched by the unique loanNo
     // in its narration) so no ghost "Loans & Advances" asset lingers in Trial Balance / Balance Sheet.
     if (loan?.loanNo) {
