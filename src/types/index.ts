@@ -571,6 +571,7 @@ export interface Loan {
   status: LoanStatus;
   security: string;
   createdAt: string;
+  isDeleted?: boolean;   // ECR-02 / RULE-5: soft-delete — retain the loan register row for audit, hide from the app.
 }
 
 // ── Deposits (Core for Credit/PACS) — SB / FD / RD / Pigmy ─────────────────────
