@@ -31,7 +31,8 @@
     "test:xlsx": "node scripts/test-xlsx-compat.mjs",
     "test:ob": "node scripts/test-opening-balances.mjs",
     "test:export-registry": "node scripts/test-export-registry.mjs",
-    "test:drift": "node scripts/test-schema-drift.mjs"
+    "test:drift": "node scripts/test-schema-drift.mjs",
+    "test:export-utils": "node scripts/test-export-utils.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
