@@ -18,6 +18,7 @@ import { Warehouse, Plus, Edit2, Trash2, Package, ClipboardList } from 'lucide-r
 import type { Godown } from '@/types';
 import { computeGodownStock, godownTotals, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { buildStackCard } from '@/lib/stackCard';
+import { capacityUtilisation } from '@/lib/godownCapacity';
 
 const Godowns: React.FC = () => {
   const { godowns, addGodown, updateGodown, deleteGodown, branches, stockMovements, stockItems } = useData();
@@ -30,13 +31,13 @@ const Godowns: React.FC = () => {
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Godown | null>(null);
-  const [form, setForm] = useState({ name: '', code: '', branchId: '', address: '' });
+  const [form, setForm] = useState({ name: '', code: '', branchId: '', address: '', capacityMT: '' });
 
-  const openNew = () => { setEditing(null); setForm({ name: '', code: '', branchId: branches.find(b => b.isHeadOffice)?.id || '', address: '' }); setOpen(true); };
-  const openEdit = (g: Godown) => { setEditing(g); setForm({ name: g.name, code: g.code || '', branchId: g.branchId || '', address: g.address || '' }); setOpen(true); };
+  const openNew = () => { setEditing(null); setForm({ name: '', code: '', branchId: branches.find(b => b.isHeadOffice)?.id || '', address: '', capacityMT: '' }); setOpen(true); };
+  const openEdit = (g: Godown) => { setEditing(g); setForm({ name: g.name, code: g.code || '', branchId: g.branchId || '', address: g.address || '', capacityMT: g.capacityMT != null ? String(g.capacityMT) : '' }); setOpen(true); };
   const save = () => {
     if (!form.name.trim()) { toast({ title: hi ? 'नाम ज़रूरी' : 'Name required', variant: 'destructive' }); return; }
-    const data = { name: form.name.trim(), code: form.code.trim(), branchId: form.branchId || undefined, address: form.address.trim() };
+    const data = { name: form.name.trim(), code: form.code.trim(), branchId: form.branchId || undefined, address: form.address.trim(), capacityMT: form.capacityMT === '' ? undefined : Number(form.capacityMT) };
     if (editing) updateGodown(editing.id, data); else addGodown({ ...data, isActive: true });
     setOpen(false); toast({ title: hi ? 'गोदाम सहेजा गया' : 'Godown saved' });
   };
@@ -65,6 +66,12 @@ const Godowns: React.FC = () => {
     for (const r of stock) { const arr = map.get(r.godownId) || []; arr.push(r); map.set(r.godownId, arr); }
     return [...map.entries()];
   }, [stock]);
+  // ECR-20: on-hand quantity per godown (for capacity utilisation).
+  const usedQtyByGodown = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const r of stock) m[r.godownId] = (m[r.godownId] || 0) + r.qty;
+    return m;
+  }, [stock]);
 
   return (
     <div className="p-6 space-y-6">
@@ -90,14 +97,20 @@ const Godowns: React.FC = () => {
           <Table>
             <TableHeader><TableRow>
               <TableHead>{hi ? 'नाम' : 'Name'}</TableHead><TableHead>{hi ? 'कोड' : 'Code'}</TableHead>
-              <TableHead>{hi ? 'शाखा' : 'Branch'}</TableHead><TableHead className="text-right">{hi ? 'स्टॉक मूल्य' : 'Stock Value'}</TableHead><TableHead />
+              <TableHead>{hi ? 'शाखा' : 'Branch'}</TableHead><TableHead className="text-right">{hi ? 'क्षमता (MT)' : 'Capacity (MT)'}</TableHead><TableHead className="text-right">{hi ? 'उपयोग' : 'Utilisation'}</TableHead><TableHead className="text-right">{hi ? 'स्टॉक मूल्य' : 'Stock Value'}</TableHead><TableHead />
             </TableRow></TableHeader>
             <TableBody>
-              {godowns.map(g => (
+              {godowns.map(g => {
+                const util = capacityUtilisation(usedQtyByGodown[g.id] || 0, g.capacityMT);
+                return (
                 <TableRow key={g.id}>
                   <TableCell className="font-medium">{g.name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{g.code || '—'}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{branches.find(b => b.id === g.branchId)?.name || '—'}</TableCell>
+                  <TableCell className="text-right text-sm">{util.capacityMT ?? '—'}</TableCell>
+                  <TableCell className={`text-right text-sm ${util.overCapacity ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
+                    {util.utilisationPct == null ? '—' : `${util.utilisationPct}%${util.overCapacity ? (hi ? ' (क्षमता से अधिक)' : ' (over)') : ''}`}
+                  </TableCell>
                   <TableCell className="text-right">{fmt(totals[g.id] || 0)}</TableCell>
                   <TableCell>{isAdmin && (
                     <div className="flex justify-end gap-1">
@@ -106,7 +119,8 @@ const Godowns: React.FC = () => {
                     </div>
                   )}</TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent></Card>
@@ -212,7 +226,10 @@ const Godowns: React.FC = () => {
                 </select>
               </div>
             </div>
-            <div><Label>{hi ? 'पता' : 'Address'}</Label><Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>{hi ? 'क्षमता (MT)' : 'Capacity (MT)'}</Label><Input type="number" min="0" value={form.capacityMT} onChange={e => setForm(p => ({ ...p, capacityMT: e.target.value }))} placeholder={hi ? 'वैकल्पिक' : 'optional'} /></div>
+              <div><Label>{hi ? 'पता' : 'Address'}</Label><Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} /></div>
+            </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
               <Button onClick={save}>{hi ? 'सहेजें' : 'Save'}</Button>
