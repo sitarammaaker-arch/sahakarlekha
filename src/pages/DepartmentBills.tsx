@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
 import { Receipt, IndianRupee, Trash2 } from 'lucide-react';
 import type { DepartmentBill, DeptBillType } from '@/types';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const BILL_TYPES: { id: DeptBillType; en: string; hi: string }[] = [
   { id: 'running', en: 'Running Bill', hi: 'रनिंग बिल' },
@@ -132,6 +133,12 @@ export default function DepartmentBills() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'विभाग बिल' : 'Department Bills'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'विभाग/नियोक्ता को कार्य के विरुद्ध बिल बनाएँ व वसूली दर्ज करें (आय व प्राप्य)' : 'Raise bills on departments/employers for work done and record collection (income & receivable)'}</p>
+        </div>
+        {/* T-22: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="department_bill" />
         </div>
       </div>
 

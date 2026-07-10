@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { HandCoins, Trash2, CheckCircle2, Plus } from 'lucide-react';
 import type { DairySettlement } from '@/types';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN')}`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -136,6 +137,12 @@ export default function FarmerSettlement() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'दुग्ध सेटलमेंट (सदस्य भुगतान)' : 'Farmer Settlement (Milk Payout)'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'सदस्य-वार चक्र: सकल − वसूली = नेट देय → भुगतान' : 'Per-member cycle: gross − recoveries = net payable → pay'}</p>
+        </div>
+        {/* T-21: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="dairy_settlement" />
         </div>
       </div>
 

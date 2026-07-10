@@ -24,6 +24,7 @@ import { buildRdSchedule, missedCount } from '@/lib/rdSchedule';
 import { pigmyAgents, pigmyAccountsForAgent, collectionTotal } from '@/lib/pigmy';
 import { useToast } from '@/hooks/use-toast';
 import type { DepositType, DepositAccount } from '@/types';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const TYPE_LABELS: Record<DepositType, { hi: string; en: string }> = {
   SB: { hi: 'बचत (SB)', en: 'Savings (SB)' },
@@ -161,14 +162,23 @@ const Deposits: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">{hi ? 'जमा (SB/FD/RD/पिग्मी)' : 'Deposits (SB/FD/RD/Pigmy)'}</h1>
           <p className="text-sm text-gray-500">{hi ? 'सदस्य जमा खाते — खोलें, जमा करें, निकासी करें' : 'Member deposit accounts — open, deposit, withdraw'}</p>
         </div>
-        {canEdit && (
-          <div className="ml-auto flex gap-2">
-            {agents.length > 0 && (
-              <Button variant="outline" className="gap-2" onClick={openCollect}><PiggyBank className="h-4 w-4" />{hi ? 'दैनिक संग्रह' : 'Daily Collection'}</Button>
-            )}
-            <Button className="gap-2" onClick={() => setOpenNew(true)}><Plus className="h-4 w-4" />{hi ? 'नया खाता' : 'New Account'}</Button>
-          </div>
-        )}
+        <div className="ml-auto flex gap-2">
+          {/*
+            T-18: this register had no export at all (audit gap EXP-10). One line, and the
+            Export Registry decides the rest — whether this user may export it, which
+            columns, and whether the audit row was written before any bytes left.
+            Deliberately OUTSIDE `canEdit`: a viewer may export what a viewer may see.
+          */}
+          <EntityExportButton entityKey="deposit_account" />
+          {canEdit && (
+            <>
+              {agents.length > 0 && (
+                <Button variant="outline" className="gap-2" onClick={openCollect}><PiggyBank className="h-4 w-4" />{hi ? 'दैनिक संग्रह' : 'Daily Collection'}</Button>
+              )}
+              <Button className="gap-2" onClick={() => setOpenNew(true)}><Plus className="h-4 w-4" />{hi ? 'नया खाता' : 'New Account'}</Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Summary */}

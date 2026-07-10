@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Table2, Trash2, Calculator } from 'lucide-react';
 import type { DairyRateBand } from '@/types';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 // "3.0,3.5,4.0,4.5" → bands [3-3.5),[3.5-4),[4-4.5)
 function parseBands(csv: string): DairyRateBand[] {
@@ -71,6 +72,12 @@ export default function RateCharts() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'दुग्ध रेट चार्ट (Fat + SNF)' : 'Milk Rate Charts (Fat + SNF)'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'Fat × SNF दो-अक्ष रेट टेबल — प्रभावी तिथि के अनुसार' : 'Fat × SNF two-axis rate table — effective-dated'}</p>
+        </div>
+        {/* T-21: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="dairy_rate_chart" />
         </div>
       </div>
 

@@ -16,6 +16,7 @@ import {
   Package, PiggyBank, FileJson, Hash, Landmark, ScrollText, BookMarked, ShieldCheck, Users2, FileCheck, Shield,
   Coins, Trash2, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks, HardHat,
   MessageSquareWarning, Car, Wrench, Building, ScanBarcode, Tags, PackageX, Undo2, GitCompareArrows, Stethoscope,
+  Download,
 } from 'lucide-react';
 import type { Capability, NavDomain, Role } from './capabilities';
 
@@ -176,5 +177,12 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'backupRestore',              titleKey: 'backupRestore',              icon: DatabaseBackup,  route: '/backup-restore',               domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 3 },
   { id: 'multiSocietyConsolidation',  titleKey: 'multiSocietyConsolidation',  icon: Building2,       route: '/multi-society-consolidation',  domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 4 },
   { id: 'universalImporter',          titleKey: 'universalImporter',          icon: FileSpreadsheet, route: '/universal-importer',           domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 5 },
+  // Export Center (T-16b). Open to every role: the Export Registry gates each ENTITY by
+  // its own minRole and capability, so a viewer sees only what a viewer may export.
+  { id: 'exportCenter',               titleKey: 'exportCenter',               icon: Download,        route: '/export-center',                domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin', 'accountant', 'viewer'], order: 7 },
+  // Restore Center (T-32). Admin only, and the page re-checks the role itself — a restore
+  // can rewrite the whole society's books. Today it cannot write at all: it verifies an
+  // archive and shows what a restore WOULD do. The commit saga lands in T-33.
+  { id: 'restoreCenter',              titleKey: 'restoreCenter',              icon: ShieldCheck,     route: '/restore-center',               domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 8 },
   { id: 'features',                   titleKey: 'features',                   icon: Blocks,          route: '/features',                     domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 6 },
 ];

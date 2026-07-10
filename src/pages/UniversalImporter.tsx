@@ -12,6 +12,7 @@ import {
   FileSpreadsheet, Users, BookOpen, ArrowRight, Info, FileText
 } from 'lucide-react';
 import { LedgerAccount, Member, VoucherType } from '@/types';
+import { mapImportedOpenings, type ImportedOpeningRow } from '@/lib/openingBalances';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -230,7 +231,7 @@ function validateObRow(row: Record<string, string>, accounts: LedgerAccount[], r
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const UniversalImporter: React.FC = () => {
-  const { accounts, members, vouchers, addAccount, addMember, addVoucher, society } = useData();
+  const { accounts, members, vouchers, addAccount, addMember, addVoucher, updateAccount, society } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -418,35 +419,59 @@ const UniversalImporter: React.FC = () => {
     e.target.value = '';
   }
 
+  /**
+   * T-04: opening balances now persist to Supabase via `updateAccount`, exactly as the
+   * Opening Balances page does. They used to be written to a `sahayata_opening_balances`
+   * localStorage key that NOTHING ever read — the import reported success and the data
+   * was discarded. `updateAccount` carries the RULE 1 contract (optimistic update, roll
+   * back + destructive toast on cloud failure) and the RULE 6 FY-lock guard.
+   */
   function handleObImport() {
     if (!obPreview) return;
+
+    // RULE 6 — check here too. `updateAccount` bails silently when the FY is locked,
+    // which would let us report "N imported" while nothing was written.
+    if (society.fyLocked) {
+      toast({
+        title: 'FY Locked',
+        description: 'वित्तीय वर्ष audit-locked है — opening balances import नहीं हो सकते।',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const validRows = obPreview.filter(r => r.status === 'ok');
     if (validRows.length === 0) {
       toast({ title: 'Import नहीं हो सकता', description: 'सभी rows में errors हैं।', variant: 'destructive' });
       return;
     }
-    setObImporting(true);
-    const OB_KEY = 'sahayata_opening_balances';
-    const existing: Record<string, { accountId: string; amount: number; type: 'debit' | 'credit' }> =
-      JSON.parse(localStorage.getItem(OB_KEY) || '{}');
 
-    let imported = 0;
-    for (const row of validRows) {
-      const acct = accounts.find(a => a.name.toLowerCase().trim() === row.data.account_name.toLowerCase().trim());
-      if (!acct) continue;
-      existing[acct.id] = {
-        accountId: acct.id,
-        amount: parseFloat(row.data.opening_balance) || 0,
-        type: row.data.balance_type.toLowerCase() as 'debit' | 'credit',
-      };
-      imported++;
+    setObImporting(true);
+    const { entries, unmatched } = mapImportedOpenings(
+      validRows.map(r => r.data as unknown as ImportedOpeningRow),
+      accounts
+    );
+
+    for (const entry of entries) {
+      updateAccount(entry.accountId, { openingBalance: entry.amount, openingBalanceType: entry.type });
     }
-    localStorage.setItem(OB_KEY, JSON.stringify(existing));
+
     setObImporting(false);
     setObPreview(null);
+
+    // Never silently drop a row (P7). Validation already blocks unknown accounts, so
+    // `unmatched` here means the chart changed between preview and commit.
+    if (unmatched.length > 0) {
+      toast({
+        title: `${unmatched.length} rows skip हुईं`,
+        description: `ये accounts अब नहीं मिले: ${unmatched.slice(0, 3).join(', ')}${unmatched.length > 3 ? '…' : ''}. दोबारा preview करें।`,
+        variant: 'destructive',
+        duration: 12000,
+      });
+    }
     toast({
-      title: `${imported} Opening Balances Set हुए`,
-      description: 'Opening Balances successfully save हो गए। Opening Balances page से verify करें।',
+      title: `${entries.length} Opening Balances Set हुए`,
+      description: 'Supabase में save हो रहे हैं। कोई cloud error आया तो अलग से चेतावनी दिखेगी। Opening Balances page से verify करें।',
     });
   }
 

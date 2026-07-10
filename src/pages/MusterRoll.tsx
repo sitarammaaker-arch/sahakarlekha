@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { getBankAccountIds } from '@/lib/storage';
 import { UserCheck, Pencil, Trash2, IndianRupee } from 'lucide-react';
 import type { MusterEntry } from '@/types';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const thisMonth = new Date().toISOString().slice(0, 7); // current YYYY-MM
 
@@ -139,6 +140,12 @@ export default function MusterRoll() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'मस्टर रोल / हाज़िरी' : 'Muster Roll'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'कार्य आदेश व महीने के अनुसार श्रमिक हाज़िरी व मज़दूरी-आधार दर्ज करें' : 'Record labourer attendance & wage basis by work order and month'}</p>
+        </div>
+        {/* T-19: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="muster_entry" />
         </div>
       </div>
 

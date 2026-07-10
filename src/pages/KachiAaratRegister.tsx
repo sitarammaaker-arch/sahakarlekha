@@ -22,6 +22,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { Plus, Pencil, Trash2, AlertCircle, Scale } from 'lucide-react';
 import type { KachiAaratEntry, KachiAaratCrop } from '@/types';
 import { KACHI_CROP_LABELS } from '@/lib/annualReview/p8Calculator';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const EMPTY_FORM = {
   date: new Date().toISOString().split('T')[0],
@@ -160,6 +161,12 @@ const KachiAaratRegister: React.FC = () => {
                   <div className="space-y-1">
                     <Label className="text-xs">{hi ? 'तिथि' : 'Date'} *</Label>
                     <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required />
+                    {/* T-22: this register had no export at all (audit gap EXP-10). The
+                        Export Registry decides whether it renders, which columns leave, and whether
+                        the audit row was written before any bytes did. */}
+                    <div className="ml-auto">
+                      <EntityExportButton entityKey="kachi_aarat_entry" />
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">{hi ? 'FY प्रारंभ तिथि' : 'FY Start Date'} *</Label>

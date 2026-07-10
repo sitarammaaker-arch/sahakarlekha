@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { ClipboardList, Pencil, Trash2 } from 'lucide-react';
 import type { WorkOrder } from '@/types';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const STATUSES = [
   { id: 'open', en: 'Open', hi: 'चालू' },
@@ -129,6 +130,12 @@ export default function WorkOrders() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'कार्य आदेश / श्रम ठेका' : 'Work Orders'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'समिति के कार्य आदेश/ठेके दर्ज करें (मस्टर रोल व मज़दूरी की नींव)' : 'Record the society’s work orders/contracts (basis for muster roll & wages)'}</p>
+        </div>
+        {/* T-19: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="work_order" />
         </div>
       </div>
 

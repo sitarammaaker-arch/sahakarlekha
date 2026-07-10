@@ -18,6 +18,7 @@ import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { ConsumerPriceTier } from '@/types';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const TODAY = () => new Date().toISOString().split('T')[0];
 
@@ -78,6 +79,12 @@ const PriceLists: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{hi ? 'मूल्य सूची' : 'Price Lists'}</h1>
           <p className="text-sm text-gray-500">{society.name}</p>
+        </div>
+        {/* T-22: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="consumer_price_list" />
         </div>
       </div>
 

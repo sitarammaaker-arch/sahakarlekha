@@ -20,7 +20,7 @@ import type {
 } from '@/types';
 import { matchesBranch, branchToStamp, resolveActiveBranch, ALL_BRANCHES } from '@/lib/branchScope';
 import { buildInterBranchTransfer, INTER_BRANCH_CONTROL_ID } from '@/lib/interBranch';
-import { getVoucherLines } from '@/lib/voucherUtils';
+import { getVoucherLines, buildVoucherEntries } from '@/lib/voucherUtils';
 import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
@@ -1141,26 +1141,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user?.societyId]);
 
   // ── voucher_entries helpers ───────────────────────────────────────────────
-  // Build VoucherEntry rows from a Voucher (one row per Dr/Cr leg).
-  const buildEntries = (v: Voucher, sid: string): VoucherEntry[] =>
-    getVoucherLines(v).map(l => ({
-      id: `${v.id}-${l.id}`,
-      voucherId: v.id,
-      accountId: l.accountId,
-      dr: l.type === 'Dr' ? l.amount : 0,
-      cr: l.type === 'Cr' ? l.amount : 0,
-      narration: l.narration,
-      societyId: sid,
-      // Denormalize the optional dimension only when present — keeps non-labour
-      // entries byte-identical and safe even before the columns are migrated.
-      ...(v.workOrderId !== undefined ? { workOrderId: v.workOrderId } : {}),
-      ...(v.costCentreId !== undefined ? { costCentreId: v.costCentreId } : {}),
-    }));
+  // The posting rule lives in voucherUtils.buildVoucherEntries — NOT here. A restore
+  // replays `voucher_entries` rather than inserting the archived rows, and it must replay
+  // through the same function this context posts through. Two copies of one posting rule
+  // would make the replay assertion (T-33) compare a copy against a copy.
 
   // Write (upsert) entries for a voucher — fire-and-forget, non-blocking.
   const syncEntries = (v: Voucher) => {
     const sid = societyIdRef.current;
-    const rows = buildEntries(v, sid).map(e => ({ ...e, society_id: sid }));
+    const rows = buildVoucherEntries(v, sid).map(e => ({ ...e, society_id: sid }));
     if (rows.length === 0) return;
     supabase.from('voucher_entries').upsert(rows).then(({ error }) => {
       if (error) console.warn('voucher_entries sync error:', error.message);

@@ -199,6 +199,9 @@ const RecoverablesRegister = lazyWithRetry(() => import("./pages/RecoverablesReg
 const KachiAaratRegister = lazyWithRetry(() => import("./pages/KachiAaratRegister"));
 const AuditSchedules = lazyWithRetry(() => import("./pages/AuditSchedules"));
 const UniversalImporter = lazyWithRetry(() => import("./pages/UniversalImporter"));
+const ExportCenter = lazyWithRetry(() => import("./pages/ExportCenter"));
+const VerifyBackup = lazyWithRetry(() => import("./pages/VerifyBackup"));
+const RestoreCenter = lazyWithRetry(() => import("./pages/RestoreCenter"));
 const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
 const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
 const TermsConditions = lazyWithRetry(() => import("./pages/TermsConditions"));
@@ -276,6 +279,12 @@ const AppRoutes = () => {
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsConditions />} />
       <Route path="/faq" element={<FAQ />} />
+      {/*
+        T-25: deliberately PUBLIC. An auditor or registrar handed a .slbak file must be
+        able to check it without an account. Nothing is uploaded — verifyArchive runs in
+        the browser and touches neither Supabase nor the society.
+      */}
+      <Route path="/verify-backup" element={<VerifyBackup />} />
       <Route path="/guide" element={<GuideHub />} />
       <Route path="/guide/quick-start" element={<UserGuide />} />
       <Route path="/guide/certificate" element={<GuideCertificate />} />
@@ -426,6 +435,8 @@ const AppRoutes = () => {
       <Route path="/recoverables" element={<ProtectedRoute><RecoverablesRegister /></ProtectedRoute>} />
       <Route path="/kachi-aarat" element={<ProtectedRoute><KachiAaratRegister /></ProtectedRoute>} />
       <Route path="/universal-importer" element={<ProtectedRoute><UniversalImporter /></ProtectedRoute>} />
+      <Route path="/export-center" element={<ProtectedRoute><ExportCenter /></ProtectedRoute>} />
+      <Route path="/restore-center" element={<ProtectedRoute><RestoreCenter /></ProtectedRoute>} />
 
       {/* Super Admin (Platform Owner) */}
       <Route path="/super-admin" element={<SuperAdminRoute><MainLayout><SuperAdminDashboard /></MainLayout></SuperAdminRoute>} />

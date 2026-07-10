@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PackagePlus, Trash2 } from 'lucide-react';
 import type { DairyInputType } from '@/types';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN')}`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -67,6 +68,12 @@ export default function DairyInputs() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'सदस्य आदान (उधार)' : 'Member Inputs (on credit)'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'पशु आहार / दवा / AI उधार पर — सेटलमेंट में वसूली' : 'Feed / medicine / AI on credit — recovered at settlement'}</p>
+        </div>
+        {/* T-21: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="dairy_input_issue" />
         </div>
       </div>
 

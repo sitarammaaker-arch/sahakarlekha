@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Truck, Trash2, HandCoins } from 'lucide-react';
 import type { DairyDispatch, MilkShift } from '@/types';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN')}`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -97,6 +98,12 @@ export default function MilkDispatch() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'दुग्ध डिस्पैच (यूनियन बिक्री)' : 'Milk Dispatch (Union Sales)'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'यूनियन को दूध भेजें → Dr देनदार / Cr दुग्ध बिक्री; भुगतान प्राप्त करें' : 'Dispatch to the union → Dr receivable / Cr milk sales; receive payment'}</p>
+        </div>
+        {/* T-21: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="dairy_dispatch" />
         </div>
       </div>
 

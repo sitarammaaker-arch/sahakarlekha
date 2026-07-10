@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { MessageSquareWarning, Trash2 } from 'lucide-react';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const CATEGORIES = [
   { id: 'plumbing', en: 'Plumbing', hi: 'नलसाजी' },
@@ -77,6 +78,12 @@ export default function Complaints() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'शिकायत रजिस्टर' : 'Complaints Register'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'निवासी शिकायतें दर्ज करें और स्थिति ट्रैक करें' : 'Log resident complaints and track their status'}</p>
+        </div>
+        {/* T-20: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="housing_complaint" />
         </div>
       </div>
 

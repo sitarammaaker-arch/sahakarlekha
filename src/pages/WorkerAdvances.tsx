@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
 import { HandCoins, IndianRupee, Trash2 } from 'lucide-react';
 import type { WorkerAdvance } from '@/types';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 export default function WorkerAdvances() {
   const { workers, workerAdvances, addWorkerAdvance, recordAdvanceRecovery, deleteWorkerAdvance } = useLabourData();
@@ -81,6 +82,12 @@ export default function WorkerAdvances() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'श्रमिक अग्रिम' : 'Worker Advances'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'श्रमिकों को अग्रिम दें व वसूली दर्ज करें (परिसंपत्ति — ऋण एवं अग्रिम 3304)' : 'Give advances to workers and record recovery (asset — Loans & Advances 3304)'}</p>
+        </div>
+        {/* T-19: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="worker_advance" />
         </div>
       </div>
 

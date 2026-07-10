@@ -26,6 +26,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { Plus, Pencil, Trash2, AlertCircle, Scale } from 'lucide-react';
 import type { Recoverable, RecoverableCategory, RecoverableLegalStage } from '@/types';
 import { RECOVERABLE_CATEGORY_LABELS, RECOVERABLE_STAGE_LABELS } from '@/lib/annualReview/p2Calculator';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const EMPTY_FORM = {
   partyName: '',
@@ -187,6 +188,12 @@ const RecoverablesRegister: React.FC = () => {
                   <div className="space-y-1 col-span-2">
                     <Label className="text-xs">{hi ? 'पार्टी का नाम' : 'Party Name'} *</Label>
                     <Input value={form.partyName} onChange={e => setForm(f => ({ ...f, partyName: e.target.value }))} required />
+                    {/* T-22: this register had no export at all (audit gap EXP-10). The
+                        Export Registry decides whether it renders, which columns leave, and whether
+                        the audit row was written before any bytes did. */}
+                    <div className="ml-auto">
+                      <EntityExportButton entityKey="recoverable" />
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">{hi ? 'श्रेणी' : 'Category'}</Label>

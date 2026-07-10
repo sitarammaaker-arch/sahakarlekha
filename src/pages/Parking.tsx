@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Car, Trash2 } from 'lucide-react';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const VEHICLES = [
   { id: 'car', en: 'Car', hi: 'कार' },
@@ -62,6 +63,12 @@ export default function Parking() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'पार्किंग रजिस्टर' : 'Parking Register'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'पार्किंग स्लॉट आवंटन और वाहन विवरण' : 'Parking slot allotment and vehicle details'}</p>
+        </div>
+        {/* T-20: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="housing_parking" />
         </div>
       </div>
 
