@@ -1054,7 +1054,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setPurchasesState(puData || []);
         }
 
-        setEmployeesState(emData || []);
+        setEmployeesState((emData || []).filter(e => !e.isDeleted));       // ECR-02: exclude archived employees
         setSalaryRecordsState(srData || []);
         setSuppliersState(supData || []);
         setCustomersState(cusData || []);
@@ -5359,8 +5359,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const deleteEmployee = useCallback((id: string) => {
     if (guardFYLocked()) return;
+    // Guard (H9-style): block if the employee has salary records — deleting would orphan those
+    // payslips (SalaryRecord has no denormalized name), breaking the statutory wage register.
+    const linkedSlips = salaryRecordsRef.current.filter(r => r.employeeId === id).length;
+    if (linkedSlips > 0) {
+      toastRef.current({ title: 'कर्मचारी हटाया नहीं जा सकता', description: `${linkedSlips} वेतन-पर्ची इस कर्मचारी से जुड़ी हैं। पहले वे हटाएँ, या कर्मचारी को रखें (वेतन रजिस्टर के लिए ज़रूरी)।`, variant: 'destructive', duration: 10000 });
+      return;
+    }
+    // Soft-delete (ECR-02 / RULE-5): retain the employee row (isDeleted=true) for audit; the loader filters it out.
     setEmployeesState(prev => { const updated = prev.filter(e => e.id !== id); return updated; });
-    supabase.from('employees').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('employees').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    emitAudit({ entityType: 'employee', entityId: id, action: 'delete', reason: 'Employee deleted' });
     console.info(`[AUDIT-DELETE] Employee id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 

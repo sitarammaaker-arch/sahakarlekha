@@ -872,6 +872,8 @@ alter table assets           add column if not exists "isDeleted" boolean defaul
 alter table audit_objections add column if not exists "isDeleted" boolean default false;
 -- ECR-02: the loan register (कर्ज रजिस्टर) is now soft-deleted too (was hard-deleted).
 alter table loans            add column if not exists "isDeleted" boolean default false;
+-- ECR-02: the employee master (वेतन रजिस्टर) is now soft-deleted (was hard-deleted).
+alter table employees        add column if not exists "isDeleted" boolean default false;
 
 -- ── P0 #3: Append-only (WORM) audit log ─────────────────────────────────────
 -- One immutable trail of who/what/when/before/after/reason across all mutations.
