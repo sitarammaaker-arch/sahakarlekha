@@ -1714,6 +1714,7 @@ export interface Employee {
   uan?: string;                        // EPF Universal Account Number
   esiNo?: string;                      // ESIC insurance number
   pan?: string;                        // deductee PAN (for Form 24Q)
+  isDeleted?: boolean;                 // ECR-02 / RULE-5: soft-delete — retain the employee (wage register) row for audit, hide from the app.
 }
 
 export interface SalaryRecord {
