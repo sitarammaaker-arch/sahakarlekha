@@ -1008,7 +1008,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const patchedPurchaseIds = new Set(patchedPurchases.map(p => p.id));
             const finalPurchases = ((puData || []) as Purchase[]).map(p => patchedPurchaseIds.has(p.id)
               ? patchedPurchases.find(pp => pp.id === p.id)! : p);
-            setSalesState(finalSales);
+            setSalesState(finalSales.filter(s => !s.isDeleted)); // ECR-02: exclude archived
             setPurchasesState(finalPurchases.filter(p => !p.isDeleted)); // P0 #2: exclude archived
 
             // Persist NEW repair vouchers
@@ -1045,12 +1045,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               duration: 8000,
             });
           } else {
-            setSalesState(slData || []);
+            setSalesState((slData || []).filter(s => !s.isDeleted)); // ECR-02: exclude archived
             setPurchasesState((puData || []).filter(p => !p.isDeleted)); // P0 #2: exclude archived
           }
         } catch (repairErr) {
           console.warn('Sale/Purchase voucher auto-repair non-fatal error:', repairErr);
-          setSalesState(slData || []);
+          setSalesState((slData || []).filter(s => !s.isDeleted)); // ECR-02: exclude archived
           setPurchasesState(puData || []);
         }
 
@@ -4827,7 +4827,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = prev.filter(s => s.id !== id);
       return updated;
     });
-    supabase.from('sales').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // Soft-delete (ECR-02 / RULE-5): retain the sale row (isDeleted=true) for audit — mirrors
+    // deletePurchase. Linked vouchers are soft-cancelled and movements audit-snapshotted above.
+    supabase.from('sales').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    emitAudit({ entityType: 'sale', entityId: id, action: 'delete', reason: 'Sale deleted' });
     console.info(`[AUDIT-DELETE] Sale id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
