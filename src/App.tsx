@@ -199,6 +199,7 @@ const RecoverablesRegister = lazyWithRetry(() => import("./pages/RecoverablesReg
 const KachiAaratRegister = lazyWithRetry(() => import("./pages/KachiAaratRegister"));
 const AuditSchedules = lazyWithRetry(() => import("./pages/AuditSchedules"));
 const UniversalImporter = lazyWithRetry(() => import("./pages/UniversalImporter"));
+const ExportCenter = lazyWithRetry(() => import("./pages/ExportCenter"));
 const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
 const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
 const TermsConditions = lazyWithRetry(() => import("./pages/TermsConditions"));
@@ -426,6 +427,7 @@ const AppRoutes = () => {
       <Route path="/recoverables" element={<ProtectedRoute><RecoverablesRegister /></ProtectedRoute>} />
       <Route path="/kachi-aarat" element={<ProtectedRoute><KachiAaratRegister /></ProtectedRoute>} />
       <Route path="/universal-importer" element={<ProtectedRoute><UniversalImporter /></ProtectedRoute>} />
+      <Route path="/export-center" element={<ProtectedRoute><ExportCenter /></ProtectedRoute>} />
 
       {/* Super Admin (Platform Owner) */}
       <Route path="/super-admin" element={<SuperAdminRoute><MainLayout><SuperAdminDashboard /></MainLayout></SuperAdminRoute>} />
