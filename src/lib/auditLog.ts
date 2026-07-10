@@ -5,14 +5,36 @@
  * replacing the scattered `console.info('[AUDIT-DELETE]')` lines. Writes to the WORM
  * `audit_log` table (INSERT + SELECT only; no UPDATE/DELETE → immutable at the DB).
  *
- * `logAudit` is STRICTLY NON-BLOCKING: it never throws into, blocks, or rolls back the
- * business write. A logging failure (e.g. table not yet migrated) is caught and warned,
- * never surfaced to the user or the caller. The pure helpers (`buildAuditEvent`, `redact`)
- * are unit-tested by scripts/test-audit-log.mjs (mirror pattern, as test-nav.mjs).
+ * ── TWO CONTRACTS. Pick the right one; they fail in OPPOSITE directions. ─────────────
+ *
+ * 1. `logAudit` — BUSINESS MUTATIONS (create/update/delete/approve/…).
+ *    STRICTLY NON-BLOCKING: never throws into, blocks, or rolls back the business write.
+ *    A logging failure (e.g. table not yet migrated) is caught and warned, never surfaced.
+ *    Rationale: an audit-log outage must NEVER prevent a society from saving a voucher.
+ *
+ * 2. `logAuditBlocking` / `logExportAudit` — DATA CUSTODY (export/restore).
+ *    STRICTLY BLOCKING: awaited, and THROWS on failure. The caller MUST abort the
+ *    operation and deliver no bytes.
+ *    Rationale: an untraced bulk export of member PII is worse than a failed one. Under
+ *    the DPDP Act, "who took the member list, and when" must always be answerable.
+ *
+ * DO NOT "simplify" (2) by reusing (1). Swallowing the error there silently reopens the
+ * compliance gap that this module exists to close. See ROADMAP-DATA-PORTABILITY T-02.
+ *
+ * The pure helpers (`buildAuditEvent`, `buildExportAuditEvent`, `redact`,
+ * `throwIfAuditFailed`) are unit-tested by scripts/test-audit-log.mjs (mirror pattern,
+ * as test-nav.mjs). The side-effecting inserts are not.
  */
 import { supabase } from '@/lib/supabase';
 
-export type AuditAction = 'create' | 'update' | 'delete' | 'approve' | 'reject' | 'cancel' | 'restore' | 'reverse';
+/**
+ * `export` and `restore` (T-02) are DATA-CUSTODY actions, not business mutations.
+ * They MUST be written with `logAuditBlocking` / `logExportAudit`, never `logAudit`.
+ * See "Two contracts" above.
+ */
+export type AuditAction =
+  | 'create' | 'update' | 'delete' | 'approve' | 'reject' | 'cancel' | 'restore' | 'reverse'
+  | 'export';
 
 export interface AuditActor {
   name?: string | null;
@@ -84,4 +106,72 @@ export function logAudit(input: AuditInput, ctx: AuditContext): void {
   } catch (e) {
     console.warn('[audit] logAudit error:', e);
   }
+}
+
+// ─── CONTRACT 2: data custody (export / restore) — BLOCKING, THROWS ──────────────────
+
+/** Thrown when a custody-action audit row could not be written. Callers MUST abort. */
+export class AuditWriteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuditWriteError';
+  }
+}
+
+/** What an export delivered. Goes into the event's `after` snapshot (PII-redacted). */
+export interface ExportAuditInput {
+  exportId: string;                    // job id, or a generated id for an inline export
+  entities: string[];                  // registry entity keys included
+  format: 'csv' | 'xlsx' | 'pdf' | 'json' | 'zip';
+  mode: 'standard' | 'full' | 'redacted' | 'statutory';
+  rowCount: number;
+  filters?: Record<string, unknown>;   // date range, includeDeleted, etc.
+  artifactSha256?: string;
+  byteSize?: number;
+}
+
+/**
+ * PURE — throw if the audit insert reported an error. Isolated so the inverted
+ * failure semantics are unit-testable without mocking Supabase.
+ */
+export function throwIfAuditFailed(error: { message: string } | null | undefined): void {
+  if (error) throw new AuditWriteError(`Audit write failed: ${error.message}`);
+}
+
+/** PURE — shapes an export event. Deterministic given (input, ctx). */
+export function buildExportAuditEvent(input: ExportAuditInput, ctx: AuditContext) {
+  return buildAuditEvent({
+    entityType: 'export',
+    entityId: input.exportId,
+    action: 'export',
+    after: {
+      entities: input.entities,
+      format: input.format,
+      mode: input.mode,
+      rowCount: input.rowCount,
+      filters: input.filters ?? null,
+      artifactSha256: input.artifactSha256 ?? null,
+      byteSize: input.byteSize ?? null,
+    },
+  }, ctx);
+}
+
+/**
+ * BLOCKING audit write for custody actions. Awaited; THROWS on failure.
+ * The caller must let the throw propagate and abort the operation.
+ */
+export async function logAuditBlocking(input: AuditInput, ctx: AuditContext): Promise<void> {
+  const row = buildAuditEvent(input, ctx);
+  const { error } = await supabase.from('audit_log').insert(row);
+  throwIfAuditFailed(error);
+}
+
+/**
+ * BLOCKING audit write for an export. Call this BEFORE delivering any bytes to the user.
+ * If it throws, deliver nothing.
+ */
+export async function logExportAudit(input: ExportAuditInput, ctx: AuditContext): Promise<void> {
+  const row = buildExportAuditEvent(input, ctx);
+  const { error } = await supabase.from('audit_log').insert(row);
+  throwIfAuditFailed(error);
 }
