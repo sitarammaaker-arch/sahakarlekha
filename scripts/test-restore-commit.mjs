@@ -75,7 +75,7 @@ try {
   process.exit(1);
 }
 
-const { commitRestore, summarizeOutcome } = commitMod;
+const { commitRestore, summarizeOutcome, buildRestoreRunRecord } = commitMod;
 const { buildVoucherEntries } = utilsMod;
 const { REGISTRY } = reg;
 
@@ -118,31 +118,37 @@ function baseInput(over = {}) {
     vouchers: [voucher],
     archivedEntries,
     societyId: 'SOC1',
+    sourceManifestHash: 'HASH-1',
     preRestoreBackup: backup,
     applyWrites: spyWriter(),
-    recordRestore: async (s) => { audit.calls.push(s); },
+    // T-34: the recorder is called on EVERY outcome, and it receives a RestoreRunRecord.
+    recordAttempt: async (r) => { audit.calls.push(r); },
     ...over,
   };
   return { input, audit };
 }
 
-// ── 1. FY LOCK writes nothing (RULE 6) ───────────────────────────────────────
+// ── 1. FY LOCK writes nothing (RULE 6), but the ATTEMPT is recorded (T-34) ────
 
 {
   const { input, audit } = baseInput({ fyLocked: true });
   const out = await commitRestore(input);
   ok(out.status === 'fy-locked', 'an audit-locked FY refuses the restore');
   ok(input.applyWrites.order.length === 0, 'and writes nothing');
-  ok(audit.calls.length === 0, 'and records no audit event');
+  // T-34: even a refused attempt leaves a row. An "only log successes" trail would lose it.
+  ok(audit.calls.length === 1, 'the refused attempt IS recorded — the trail keeps aborted ones');
+  ok(audit.calls[0].outcome === 'fy-locked' && audit.calls[0].replay === 'not-run',
+    'and the record names the outcome and says the replay never ran');
 }
 
 // ── 2. NO PRE-RESTORE BACKUP: the only undo is missing ───────────────────────
 
 {
-  const { input } = baseInput({ preRestoreBackup: undefined, mode: 'merge' });
+  const { input, audit } = baseInput({ preRestoreBackup: undefined, mode: 'merge' });
   const out = await commitRestore(input);
   ok(out.status === 'no-backup', 'Merge without a verified backup is refused');
   ok(input.applyWrites.order.length === 0, 'and writes nothing — the backup is the only undo');
+  ok(audit.calls.length === 1 && audit.calls[0].outcome === 'no-backup', 'and the refusal is recorded');
 }
 {
   const { input } = baseInput({ preRestoreBackup: undefined, mode: 'replace' });
@@ -160,10 +166,11 @@ function baseInput(over = {}) {
 
 {
   // A keyless archive row blocks the diff (T-31). The saga must re-run the diff and stop.
-  const { input } = baseInput({ archiveRows: { member: [{ name: 'no key' }] } });
+  const { input, audit } = baseInput({ archiveRows: { member: [{ name: 'no key' }] } });
   const out = await commitRestore(input);
   ok(out.status === 'blocked', 'a blocked dry run stops the restore');
   ok(input.applyWrites.order.length === 0, 'before any write');
+  ok(audit.calls.length === 1 && audit.calls[0].outcome === 'blocked', 'and the block is recorded');
 }
 
 // ── 4. THE REPLAY ASSERTION ──────────────────────────────────────────────────
@@ -171,11 +178,16 @@ function baseInput(over = {}) {
 {
   // The archive's entries say the Cr leg was 1400; the posting rule now produces 1500.
   const wrongEntries = archivedEntries.map(e => (e.id === 'V1-L1' ? { ...e, cr: '1400.00' } : e));
-  const { input } = baseInput({ archivedEntries: wrongEntries });
+  const { input, audit } = baseInput({ archivedEntries: wrongEntries });
   const out = await commitRestore(input);
   ok(out.status === 'replay-failed', 'a replay that does not reproduce the backup stops the restore');
   ok(out.verdict.vouchers.join() === 'V1', 'and names the disagreeing voucher');
   ok(input.applyWrites.order.length === 0, 'NOTHING is written when the replay fails');
+  // T-34: this is the single most important row an auditor can find — a backup that failed
+  // to restore. It MUST be recorded, with the failure marked as such.
+  ok(audit.calls.length === 1 && audit.calls[0].outcome === 'replay-failed', 'the failed replay is recorded');
+  ok(audit.calls[0].replay === 'failed' && audit.calls[0].disagreeingVouchers === 1,
+    'and the record marks the replay as failed and counts the disagreeing voucher');
 }
 
 // ── 5. THE HAPPY PATH, and the ORDER ─────────────────────────────────────────
@@ -209,9 +221,13 @@ function baseInput(over = {}) {
   }
   ok(violations.length === 0, `writes are dependency-first (${violations.slice(0, 3).join('; ')})`);
 
-  ok(audit.calls.length === 1, 'EXACTLY ONE audit event is written');
+  ok(audit.calls.length === 1, 'EXACTLY ONE trail record is written');
+  ok(audit.calls[0].outcome === 'committed' && audit.calls[0].replay === 'passed',
+    'it records a committed restore with a passing replay');
   ok(audit.calls[0].mode === 'merge' && audit.calls[0].entitiesWritten === order.length,
-    'and it describes what was actually written');
+    'and describes what was actually written');
+  ok(audit.calls[0].sourceManifestHash === 'HASH-1' && audit.calls[0].preRestoreBackup?.filename === 'pre.slbak',
+    'and ties the attempt to the source archive and the backup to roll back to');
 }
 
 // ── 6. A WRITE THAT THROWS: honest about partial state ───────────────────────
@@ -225,18 +241,47 @@ function baseInput(over = {}) {
   ok(out.entitiesWritten === writer.order.length, 'and how many were written before it');
   ok(out.preRestoreBackup?.filename === 'pre.slbak',
     'it carries the backup to roll back to — the only undo there is');
-  ok(audit.calls.length === 0, 'a partial restore does not write a "success" audit event');
+  // T-34: a partial restore is the second-most-important row to keep — the books are now
+  // half-written. It is recorded with outcome=partial, and NOT as a clean success.
+  ok(audit.calls.length === 1 && audit.calls[0].outcome === 'partial',
+    'a partial restore is recorded as partial, never omitted and never a success');
+  ok(audit.calls[0].replay === 'passed', 'its replay had passed — that is how it reached the writes');
   ok(summarizeOutcome(out, false).includes('roll back'), 'and the operator is told to roll back');
 }
 
-// ── 7. AUDIT FAILURE after the writes ────────────────────────────────────────
+// ── 7. TRAIL FAILURE after the writes → audit-failed ─────────────────────────
 
 {
-  const { input } = baseInput({ recordRestore: async () => { throw new Error('audit_log unreachable'); } });
+  const { input } = baseInput({ recordAttempt: async () => { throw new Error('audit_log unreachable'); } });
   const out = await commitRestore(input);
-  ok(out.status === 'audit-failed', 'a restore whose audit write fails is reported as audit-failed');
+  ok(out.status === 'audit-failed', 'a committed restore whose trail write fails is reported as audit-failed');
   ok(out.summary.entitiesWritten > 0, 'the writes DID happen — this is not a clean success and not a silent one');
   ok(input.applyWrites.order.length > 0, 'the rows are in the database; only the trail is missing');
+}
+
+// A trail-write failure on an ABORTED attempt does not mask why it was aborted.
+{
+  const { input } = baseInput({ fyLocked: true, recordAttempt: async () => { throw new Error('trail down'); } });
+  const out = await commitRestore(input);
+  ok(out.status === 'fy-locked',
+    'if recording an aborted attempt fails, the real reason (fy-locked) is still what is returned');
+}
+
+// ── 7b. THE RECORD MAPPING (buildRestoreRunRecord) is pure ───────────────────
+
+{
+  const { input } = baseInput();
+  const rec = buildRestoreRunRecord(input, { status: 'fy-locked' });
+  ok(rec.outcome === 'fy-locked' && rec.replay === 'not-run' && rec.entitiesWritten === 0,
+    'a pre-replay outcome records replay=not-run and no writes');
+  const rf = buildRestoreRunRecord(input, { status: 'replay-failed', verdict: { vouchers: ['A', 'B'] } });
+  ok(rf.replay === 'failed' && rf.disagreeingVouchers === 2, 'a replay-failed outcome records the failure and count');
+  const done = buildRestoreRunRecord(input, { status: 'committed', summary: { mode: 'merge', entitiesWritten: 5, rowsWritten: 40, entriesReplayed: 12 } });
+  ok(done.replay === 'passed' && done.rowsWritten === 40 && done.entriesReplayed === 12,
+    'a committed outcome records a passing replay and the written counts');
+  ok(done.preRestoreBackup?.filename === 'pre.slbak', 'and always carries the rollback target');
+  const fresh = buildRestoreRunRecord({ ...input, preRestoreBackup: undefined }, { status: 'committed', summary: { mode: 'fresh', entitiesWritten: 1, rowsWritten: 1, entriesReplayed: 0 } });
+  ok(fresh.preRestoreBackup === null, 'a Fresh restore records a null rollback target — it has nothing to undo');
 }
 
 // ── 8. SUMMARIES ─────────────────────────────────────────────────────────────

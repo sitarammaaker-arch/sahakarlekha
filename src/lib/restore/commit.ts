@@ -49,14 +49,9 @@ import { planRestore } from './dag';
 import { diffRestore, type RestoreMode, type RestoreDiff } from './diff';
 import { replayEntries, compareReplay, type ReplayVerdict } from './replay';
 import type { Row } from './naturalKeys';
+import type { PreRestoreBackup, RestoreRunRecord, ReplayResult } from './trail';
 
-/** Identity of the backup an operator could roll back to. Recorded, never the bytes. */
-export interface PreRestoreBackup {
-  filename: string;
-  bytes: number;
-  createdAt: string;
-  manifestHash: string;
-}
+export type { PreRestoreBackup } from './trail';
 
 /**
  * The one write primitive the saga drives. Given an entity and its rows, persist them and
@@ -69,8 +64,14 @@ export type ApplyWrites = (
   mode: RestoreMode,
 ) => Promise<{ written: number }>;
 
-/** Writes the audit `restore` event. Awaited; THROWS on failure. */
-export type RecordRestore = (summary: RestoreCommitSummary) => Promise<void>;
+/**
+ * Records ONE restore attempt (T-34). Awaited; THROWS on failure.
+ *
+ * Called on EVERY outcome — committed and aborted alike. A restore that was refused because
+ * the backup did not replay is the most important thing to record, and it is exactly the
+ * one an "only log successes" trail would lose.
+ */
+export type RecordAttempt = (record: RestoreRunRecord) => Promise<void>;
 
 export interface RestoreCommitInput {
   entities: readonly EntityDescriptor[];
@@ -91,8 +92,11 @@ export interface RestoreCommitInput {
   /** Required for Replace and Merge. Absent ⇒ the saga refuses to start. */
   preRestoreBackup?: PreRestoreBackup;
 
+  /** The source archive's manifest hash — ties the trail record to the exact bytes restored. */
+  sourceManifestHash: string;
+
   applyWrites: ApplyWrites;
-  recordRestore: RecordRestore;
+  recordAttempt: RecordAttempt;
 
   onProgress?: (done: number, total: number, entityKey: string) => void;
 }
@@ -120,13 +124,18 @@ export type RestoreOutcome =
 const VOUCHER_ENTRY_KEY = 'voucher_entry';
 
 /**
- * Run the restore. Returns an outcome; never throws.
+ * The gates and the writes. Returns an outcome; never throws; NEVER records.
  *
  * Every early return writes nothing. `applyWrites` is not called until every gate has
  * passed, and `voucher_entry` is never passed to it — its rows are replayed into whatever
  * `applyWrites` does for the vouchers, not inserted from the archive.
+ *
+ * Recording is the OUTER function's job (T-34): the trail must capture aborted attempts
+ * too, and threading a recorder through every early return here would be easy to get wrong.
+ * So this stays purely about the decision, and `commitRestore` records whatever it decides.
+ * `audit-failed` is therefore produced only by the outer function.
  */
-export async function commitRestore(input: RestoreCommitInput): Promise<RestoreOutcome> {
+async function runSaga(input: RestoreCommitInput): Promise<RestoreOutcome> {
   try {
     // ── 0. RULE 6 ────────────────────────────────────────────────────────────
     if (input.fyLocked) return { status: 'fy-locked' };
@@ -184,27 +193,74 @@ export async function commitRestore(input: RestoreCommitInput): Promise<RestoreO
       }
     }
 
-    const summary: RestoreCommitSummary = {
-      mode: input.mode,
-      entitiesWritten,
-      rowsWritten,
-      entriesReplayed: replayed.length,
-      preRestoreBackup: input.preRestoreBackup,
+    return {
+      status: 'committed',
+      summary: {
+        mode: input.mode,
+        entitiesWritten,
+        rowsWritten,
+        entriesReplayed: replayed.length,
+        preRestoreBackup: input.preRestoreBackup,
+      },
     };
-
-    // ── 6. Exactly one audit event, awaited ──────────────────────────────────
-    // The writes are done; this cannot un-write them. But a data-custody action that
-    // could not be recorded is reported as such, never as a clean success.
-    try {
-      await input.recordRestore(summary);
-    } catch (e) {
-      return { status: 'audit-failed', message: e instanceof Error ? e.message : String(e), summary };
-    }
-
-    return { status: 'committed', summary };
   } catch (e) {
     return { status: 'failed', message: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/**
+ * PURE — map an outcome to the trail record (T-34).
+ *
+ * The `replay` field is recorded EITHER WAY, which is the point of the trail: a restore
+ * that was refused because its backup did not reproduce the ledger is the row an auditor
+ * most needs to find. An outcome that reached the writes had a passing replay by
+ * construction (the saga returns replay-failed before the first write); an outcome that
+ * stopped before the replay records it as not-run, not as a silent pass.
+ */
+export function buildRestoreRunRecord(input: RestoreCommitInput, outcome: RestoreOutcome): RestoreRunRecord {
+  const reachedWrites = outcome.status === 'committed' || outcome.status === 'partial' || outcome.status === 'audit-failed';
+  const replay: ReplayResult =
+    outcome.status === 'replay-failed' ? 'failed' : reachedWrites ? 'passed' : 'not-run';
+
+  const summary = outcome.status === 'committed' || outcome.status === 'audit-failed' ? outcome.summary : null;
+
+  return {
+    sourceManifestHash: input.sourceManifestHash,
+    mode: input.mode,
+    outcome: outcome.status,
+    replay,
+    disagreeingVouchers: outcome.status === 'replay-failed' ? outcome.verdict.vouchers.length : 0,
+    entitiesWritten: summary?.entitiesWritten ?? (outcome.status === 'partial' ? outcome.entitiesWritten : 0),
+    rowsWritten: summary?.rowsWritten ?? (outcome.status === 'partial' ? outcome.rowsWritten : 0),
+    entriesReplayed: summary?.entriesReplayed ?? 0,
+    preRestoreBackup: input.preRestoreBackup ?? null,
+    message: 'message' in outcome ? outcome.message : null,
+  };
+}
+
+/**
+ * Run the restore and RECORD the attempt — every attempt, committed or aborted (T-34).
+ * Returns an outcome; never throws.
+ *
+ * The trail write is blocking. If it fails on a COMMITTED restore, the rows are in the
+ * database but the custody record is not — that is `audit-failed`, reported so, never a
+ * clean success. If it fails on an already-aborted attempt, the restore did not happen
+ * anyway; the best-effort trail write is swallowed rather than masking why it was aborted.
+ */
+export async function commitRestore(input: RestoreCommitInput): Promise<RestoreOutcome> {
+  const outcome = await runSaga(input);
+
+  try {
+    await input.recordAttempt(buildRestoreRunRecord(input, outcome));
+  } catch (e) {
+    if (outcome.status === 'committed') {
+      return { status: 'audit-failed', message: e instanceof Error ? e.message : String(e), summary: outcome.summary };
+    }
+    // Aborted anyway — the recording failure does not change the outcome, and reporting it
+    // instead of the real reason (e.g. replay-failed) would hide the important fact.
+  }
+
+  return outcome;
 }
 
 /** PURE — one line for the operator, per outcome. Hindi first (RULE 7). */

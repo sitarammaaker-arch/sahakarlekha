@@ -29,7 +29,7 @@
  *     skip it to.
  * ─────────────────────────────────────────────────────────────────────────────────────
  */
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -40,7 +40,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   ShieldCheck, ShieldAlert, Upload, Loader2, KeyRound, FileWarning,
-  Lock, ArrowRight, Building2, Ban,
+  Lock, ArrowRight, Building2, Ban, History,
 } from 'lucide-react';
 
 import { REGISTRY } from '@/lib/export/registry';
@@ -50,6 +50,7 @@ import { planRestore } from '@/lib/restore/dag';
 import { diffRestore, summarizeDiff, type RestoreDiff, type RestoreMode } from '@/lib/restore/diff';
 import { decryptArchive, WrongPassphraseError, NotAnEncryptedArchiveError } from '@/lib/backup/crypto';
 import { summarizeVerification, type VerifyReport } from '@/lib/backup/verify';
+import { listRestoreHistory, describeRestoreEntry, wasClean, type RestoreHistoryEntry } from '@/lib/restore/trail';
 import type { Row } from '@/lib/restore/naturalKeys';
 
 type Stage = 'idle' | 'encrypted' | 'verified' | 'dry-run';
@@ -77,6 +78,16 @@ const RestoreCenter: React.FC = () => {
   const [mode, setMode] = useState<RestoreMode>('merge');
   const [diff, setDiff] = useState<RestoreDiff | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
+
+  // T-34: past restore attempts — including the refused ones, which are the ones worth
+  // seeing. Read-only; this reads audit_log through a helper and writes nothing.
+  const [history, setHistory] = useState<RestoreHistoryEntry[]>([]);
+  useEffect(() => {
+    if (!user?.societyId) return;
+    let alive = true;
+    listRestoreHistory(user.societyId).then(({ entries }) => { if (alive) setHistory(entries); });
+    return () => { alive = false; };
+  }, [user?.societyId]);
 
   // Restore rewrites the books. The page hides itself from anyone who could not be trusted
   // to run it; T-33's saga will re-check server-side, because a hidden button is a courtesy
@@ -471,11 +482,43 @@ const RestoreCenter: React.FC = () => {
 
                 <p className="text-xs text-gray-500">
                   {hi
-                    ? 'यहीं तक। लिखने वाला हिस्सा (T-33) अभी बना नहीं है — और जब बनेगा, तब भी उससे पहले एक बैकअप अनिवार्य होगा।'
-                    : 'This is as far as it goes. The part that writes (T-33) does not exist yet — and when it does, a pre-restore backup will be mandatory before it runs.'}
+                    ? 'यहीं तक। लिखने वाली प्रक्रिया मौजूद है पर अभी इस पेज से नहीं जुड़ी — और जुड़ने पर भी उससे पहले एक बैकअप अनिवार्य होगा।'
+                    : 'This is as far as it goes. The saga that writes exists, but is not wired to this page yet — and when it is, a pre-restore backup will be mandatory before it runs.'}
                 </p>
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── T-34: past restore attempts, refused ones included ─────────────── */}
+      {history.length > 0 && (
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <History className="h-4 w-4" />
+              {hi ? 'पिछले restore प्रयास' : 'Past restore attempts'} ({history.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1 max-h-80 overflow-y-auto">
+              {history.map(h => (
+                <div key={h.id} className="flex items-center justify-between gap-2 px-2 py-1 rounded text-sm bg-gray-50">
+                  <span className="truncate">
+                    {describeRestoreEntry(h, hi)}
+                    <span className="text-xs text-gray-400"> · {new Date(h.at).toLocaleDateString(hi ? 'hi-IN' : 'en-IN')}</span>
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] shrink-0 ${wasClean(h.outcome)
+                      ? 'text-green-700 border-green-300'
+                      : 'text-red-700 border-red-300'}`}
+                  >
+                    {h.outcome}
+                  </Badge>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}

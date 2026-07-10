@@ -45,7 +45,8 @@
     "test:restore-diff": "node scripts/test-restore-diff.mjs",
     "test:restore-archive": "node scripts/test-restore-archive.mjs",
     "test:restore-replay": "node scripts/test-restore-replay.mjs",
-    "test:restore-commit": "node scripts/test-restore-commit.mjs"
+    "test:restore-commit": "node scripts/test-restore-commit.mjs",
+    "test:restore-trail": "node scripts/test-restore-trail.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
