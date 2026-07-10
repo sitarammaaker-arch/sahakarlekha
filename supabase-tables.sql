@@ -794,6 +794,12 @@ alter table accounts add column if not exists subtype text;
 
 -- ── STEP 14: societyType on society_settings ────────────────────────────────
 alter table society_settings add column if not exists "societyType" text default 'marketing_processing';
+
+-- ── ECR-11: per-type approval matrix on society_settings ─────────────────────
+-- Voucher types that always require maker-checker approval (regardless of amount).
+-- Stored as a JSON array of VoucherType strings. Safe to run before the UI is used —
+-- the column stays NULL until an admin configures per-type rules.
+alter table society_settings add column if not exists "approvalVoucherTypes" jsonb;
 -- alter table salary_records    add column if not exists society_id text default 'SOC001';
 
 -- ── STEP 15: platform_admins — super admin table (cross-society access) ──────

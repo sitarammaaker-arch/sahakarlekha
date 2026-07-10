@@ -25,7 +25,7 @@ import { unlockAction } from '@/lib/dualControlUnlock';
 import { NotificationChannelsCard } from '@/components/settings/NotificationChannelsCard';
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
 import { SOCIETY_TEMPLATES } from '@/lib/storage';
-import type { SocietyType } from '@/types';
+import type { SocietyType, VoucherType } from '@/types';
 
 const SocietySetup: React.FC = () => {
   const { t, language } = useLanguage();
@@ -56,6 +56,23 @@ const SocietySetup: React.FC = () => {
     const next = !society.approvalRequired;
     updateSociety({ approvalRequired: next });
     toast({ title: next ? (language === 'hi' ? 'हर manual वाउचर अनुमोदन-आवश्यक' : 'All manual vouchers need approval') : (language === 'hi' ? 'सभी-manual अनुमोदन बंद' : 'All-manual approval off') });
+  };
+  // ECR-11: per-type approval rule — toggle a voucher type that always needs approval.
+  const APPROVAL_VOUCHER_TYPES: { value: VoucherType; label: string }[] = [
+    { value: 'receipt', label: language === 'hi' ? 'रसीद' : 'Receipt' },
+    { value: 'payment', label: language === 'hi' ? 'भुगतान' : 'Payment' },
+    { value: 'journal', label: language === 'hi' ? 'जर्नल' : 'Journal' },
+    { value: 'contra', label: language === 'hi' ? 'कॉन्ट्रा' : 'Contra' },
+    { value: 'purchase', label: language === 'hi' ? 'खरीद' : 'Purchase' },
+    { value: 'sale', label: language === 'hi' ? 'बिक्री' : 'Sale' },
+    { value: 'debit_note', label: language === 'hi' ? 'डेबिट नोट' : 'Debit Note' },
+    { value: 'credit_note', label: language === 'hi' ? 'क्रेडिट नोट' : 'Credit Note' },
+  ];
+  const toggleApprovalType = (type: VoucherType) => {
+    const cur = society.approvalVoucherTypes ?? [];
+    const next = cur.includes(type) ? cur.filter(t => t !== type) : [...cur, type];
+    updateSociety({ approvalVoucherTypes: next.length ? next : undefined });
+    toast({ title: language === 'hi' ? 'प्रकार-वार अनुमोदन नियम सहेजा' : 'Per-type approval rule saved' });
   };
 
   // Basic info form state
@@ -826,6 +843,20 @@ const SocietySetup: React.FC = () => {
                         <Input type="number" min="0" value={approvalThresholdInput} onChange={e => setApprovalThresholdInput(e.target.value)} className="w-32 h-9 mt-1" placeholder="0" />
                       </div>
                       <Button variant="outline" size="sm" className="h-9" onClick={saveApprovalThreshold}>{language === 'hi' ? 'सहेजें' : 'Save'}</Button>
+                    </div>
+                  </div>
+                  {/* ECR-11: per-type approval rules — types held regardless of amount */}
+                  <div className="basis-full mt-2">
+                    <Label className="text-xs">{language === 'hi' ? 'ये वाउचर प्रकार हमेशा अनुमोदन चाहिए (राशि चाहे कुछ भी हो)' : 'These voucher types always need approval (any amount)'}</Label>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {APPROVAL_VOUCHER_TYPES.map(t => {
+                        const on = (society.approvalVoucherTypes ?? []).includes(t.value);
+                        return (
+                          <Button key={t.value} type="button" variant={on ? 'default' : 'outline'} size="sm" className="h-8" onClick={() => toggleApprovalType(t.value)}>
+                            {t.label}
+                          </Button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

@@ -1061,6 +1061,7 @@ export interface SocietySettings {
   notificationChannels?: { email?: boolean; sms?: boolean; whatsapp?: boolean };  // ECR-13: which external alert channels the society has switched on (in-app is always on; actual sending needs a wired provider)
   approvalRequired?: boolean;  // opt-in maker-checker: when true, PENDING vouchers are held out of the ledger/reports until approved (REJECTED are always excluded). Default (undefined/false) = no gating — behaviour unchanged.
   approvalThresholdAmount?: number;  // ECR-11: manual vouchers with amount ≥ this need approval (matrix). Undefined/0 = no threshold rule.
+  approvalVoucherTypes?: VoucherType[];  // ECR-11: voucher types that ALWAYS need approval regardless of amount (e.g. journal/contra). Undefined/[] = no type rule.
   // Board & Signing Authority
   boardType?: BoardType;       // 'bod' (elected) or 'boa' (appointed by Registrar)
   boardMembers?: BoardMember[];
