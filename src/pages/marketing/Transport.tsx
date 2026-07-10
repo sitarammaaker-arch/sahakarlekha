@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Truck, Plus, Pencil, Trash2 } from 'lucide-react';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 /**
  * Transport (T1) — transporter master. Trips + freight posting + settlement land in T2.
@@ -51,6 +52,12 @@ export default function Transport() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'परिवहन' : 'Transport'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'ट्रांसपोर्टर मास्टर — ट्रिप व भाड़ा निपटान अगले चरण में' : 'Transporter master — trips & freight settlement next'}</p>
+        </div>
+        {/* T-21: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="marketing_transporter" />
         </div>
       </div>
 
