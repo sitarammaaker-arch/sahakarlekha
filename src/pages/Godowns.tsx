@@ -14,12 +14,13 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Warehouse, Plus, Edit2, Trash2, Package, ClipboardList, ArrowLeftRight } from 'lucide-react';
+import { Warehouse, Plus, Edit2, Trash2, Package, ClipboardList, ArrowLeftRight, Printer } from 'lucide-react';
 import type { Godown } from '@/types';
 import { computeGodownStock, godownTotals, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { buildStackCard } from '@/lib/stackCard';
 import { capacityUtilisation } from '@/lib/godownCapacity';
 import { computeStorageLoss } from '@/lib/storageLoss';
+import { buildWarehouseDoc } from '@/lib/warehouseDoc';
 
 const Godowns: React.FC = () => {
   const { godowns, addGodown, updateGodown, deleteGodown, branches, stockMovements, stockItems, transferStock, society } = useData();
@@ -59,6 +60,25 @@ const Godowns: React.FC = () => {
   const typeLabel = (t: string) => hi
     ? ({ purchase: 'खरीद', sale: 'बिक्री', opening: 'ओपनिंग', adjustment: 'समायोजन' } as Record<string, string>)[t] || t
     : t;
+
+  // ECR-20: print a Warehouse Receipt (inward) or Gate Pass (outward) for a stack-card row.
+  const printWarehouseDoc = (e: { type: string; inQty: number; outQty: number; date?: string; referenceNo?: string }) => {
+    const isIn = e.inQty > 0;
+    const qty = isIn ? e.inQty : -e.outQty;
+    const item = stockItems.find(s => s.id === effItem);
+    const doc = buildWarehouseDoc({
+      movementType: e.type, qty, date: e.date, referenceNo: e.referenceNo,
+      docNo: `${isIn ? 'WHR' : 'GP'}/${e.referenceNo || e.date || ''}`,
+      societyName: society.name, godownName: nameOfGodown(effGodown), itemName: nameOfItem(effItem), itemUnit: item?.unit,
+    });
+    const esc = (s: string) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+    const w = window.open('', '_blank', 'width=720,height=820');
+    if (!w) { toast({ title: hi ? 'प्रिंट विंडो खुल नहीं सकी (popup blocked)' : 'Print window blocked', variant: 'destructive' }); return; }
+    const rows = doc.fields.map(f => `<tr><td class="l">${esc(f.label)}</td><td class="v">${esc(f.value || '')}</td></tr>`).join('');
+    const manual = doc.manualFields.map(l => `<tr><td class="l">${esc(l)}</td><td class="v blank"></td></tr>`).join('');
+    w.document.write(`<!doctype html><html lang="hi"><head><meta charset="utf-8"><title>${esc(doc.docNo)}</title><style>body{font-family:system-ui,sans-serif;padding:28px;color:#111}.no{float:right;font-size:12px;color:#555}h1{font-size:18px;margin:0}h2{font-size:14px;color:#555;margin:4px 0 18px}table{width:100%;border-collapse:collapse}td{padding:9px 6px;border-bottom:1px solid #ddd;font-size:13px}td.l{width:48%;color:#555}td.v.blank{height:22px}.sign{margin-top:52px;display:flex;justify-content:space-between;font-size:12px;color:#555;text-align:center}</style></head><body onload="window.print()"><div class="no">${esc(doc.docNo)}</div><h1>${esc(doc.societyName)}</h1><h2>${esc(doc.title)}</h2><table>${rows}${manual}</table><div class="sign"><span>_______________<br/>तैयारकर्ता</span><span>_______________<br/>अधिकृत हस्ताक्षर</span></div></body></html>`);
+    w.document.close();
+  };
 
   const stock = useMemo(() => computeGodownStock(stockMovements as unknown as Parameters<typeof computeGodownStock>[0]), [stockMovements]);
   const totals = useMemo(() => godownTotals(stock), [stock]);
@@ -220,6 +240,7 @@ const Godowns: React.FC = () => {
                       <TableHead className="text-right">{hi ? 'आवक' : 'In'}</TableHead>
                       <TableHead className="text-right">{hi ? 'जावक' : 'Out'}</TableHead>
                       <TableHead className="text-right">{hi ? 'शेष' : 'Balance'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'दस्तावेज़' : 'Doc'}</TableHead>
                     </TableRow></TableHeader>
                     <TableBody>
                       {stackCard.map((e, i) => (
@@ -230,6 +251,11 @@ const Godowns: React.FC = () => {
                           <TableCell className="text-right text-emerald-600">{e.inQty || ''}</TableCell>
                           <TableCell className="text-right text-red-500">{e.outQty || ''}</TableCell>
                           <TableCell className={`text-right font-medium ${e.balance < 0 ? 'text-red-600' : ''}`}>{e.balance}</TableCell>
+                          <TableCell className="text-right">
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" title={e.inQty > 0 ? (hi ? 'गोदाम रसीद (WHR)' : 'Warehouse Receipt') : (hi ? 'निकासी पर्ची (Gate Pass)' : 'Gate Pass')} onClick={() => printWarehouseDoc(e)}>
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
