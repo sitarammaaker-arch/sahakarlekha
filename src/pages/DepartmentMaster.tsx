@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { Landmark, Pencil, Trash2 } from 'lucide-react';
 import type { Department, DepartmentType } from '@/types';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const TYPES: { id: DepartmentType; en: string; hi: string }[] = [
   { id: 'govt_department', en: 'Govt Department', hi: 'सरकारी विभाग' },
@@ -146,6 +147,12 @@ export default function DepartmentMaster() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'विभाग / नियोक्ता' : 'Department / Employer'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'कार्य आदेश देने वाले विभाग/नियोक्ता दर्ज करें — हर एक का प्राप्य खाता बनेगा (बिलिंग की नींव)' : 'Record departments/employers that award work orders — each gets a receivable ledger (basis for billing)'}</p>
+        </div>
+        {/* T-19: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="department" />
         </div>
       </div>
 

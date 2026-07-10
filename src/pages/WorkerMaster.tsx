@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { HardHat, Pencil, Trash2 } from 'lucide-react';
 import type { Worker, WorkerType, WorkerCategory } from '@/types';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const TYPES: { id: WorkerType; en: string; hi: string }[] = [
   { id: 'member', en: 'Member', hi: 'सदस्य' },
@@ -248,6 +249,12 @@ export default function WorkerMaster() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'श्रमिक मास्टर' : 'Worker Master'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'समिति के श्रमिक (सदस्य/गैर-सदस्य/ठेका) दर्ज करें — मस्टर रोल व मज़दूरी की नींव' : 'Record the society’s workers (member/non-member/contract) — basis for muster roll & wages'}</p>
+        </div>
+        {/* T-19: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="worker" />
         </div>
       </div>
 
