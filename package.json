@@ -37,7 +37,10 @@
     "test:export-jobs": "node scripts/test-export-jobs.mjs",
     "test:export-source": "node scripts/test-export-source.mjs",
     "test:export-preflight": "node scripts/test-export-preflight.mjs",
-    "test:export-buttons": "node scripts/test-export-buttons.mjs"
+    "test:export-buttons": "node scripts/test-export-buttons.mjs",
+    "test:backup-manifest": "node scripts/test-backup-manifest.mjs",
+    "test:backup-writer": "node scripts/test-backup-writer.mjs",
+    "test:backup-crypto": "node scripts/test-backup-crypto.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -75,6 +78,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
+    "fflate": "^0.8.3",
     "input-otp": "^1.4.2",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
