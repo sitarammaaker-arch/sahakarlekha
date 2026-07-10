@@ -13,7 +13,7 @@ The blueprint left seven decisions (D1–D7) open. This roadmap assumes the **re
 
 | Decision | Assumed | Tasks affected if reversed |
 |---|---|---|
-| D1 — build server tier (Edge Functions + Storage + `pg_cron`) | **Yes** | T-20…T-23, T-29 deleted; backup becomes client-only degraded mode |
+| D1 — build server tier (Edge Functions + Storage + `pg_cron`) | **DEFERRED (2026-07-10)** | See below |
 | D2 — password escrow | **No escrow** | T-19 gains a key-management sub-task |
 | D3 — scheduled-backup encryption | Bucket-level, no per-file password | T-22 |
 | D4 — `.slbak` extension | Yes | T-17 |
@@ -22,6 +22,37 @@ The blueprint left seven decisions (D1–D7) open. This roadmap assumes the **re
 | D7 — ship outbound Tally XML | **Yes** | T-33 deleted |
 
 **Nothing in Phase 1 or later should start before D1 is answered.** Phase 0 is independent of all seven.
+
+---
+
+## 0a. D1 — DEFERRED, and what that changes (decided 2026-07-10)
+
+The server tier is not being built yet. **T-27 (Edge Function), T-28 (schedules + `pg_cron`)
+and T-35 (restore rehearsal) are on hold.** Work continues with Phase 4 (Restore), which is
+entirely client-side.
+
+Why, in the order the reasons actually weigh:
+
+1. **Restore is where the P0 closes.** T-33's commit saga and replay assertion are what turn
+   a `.slbak` file into a backup. Today an archive is written, hashed and verified — and
+   cannot be put back. That is the same lie T-01 removed from the UI, one layer down.
+2. **The server tier buys scheduling, large exports and automated rehearsal.** Valuable, and
+   none of them is the P0.
+3. **Nothing about T-27 could be verified from the workspace.** There is no
+   `supabase/config.toml`, no linked project, no `SUPABASE_ACCESS_TOKEN`, and no Storage
+   bucket. Writing an Edge Function nobody can run, and calling the task done, is the kind
+   of unverified claim this whole workstream exists to stop.
+
+Two facts worth keeping for when D1 is revisited:
+
+- The registry **can** be shared with Deno rather than forked. `tsconfig.app.json` already
+  sets `allowImportingTsExtensions: true`, so explicit `.ts` specifiers are legal for both
+  Vite and tsc; the `@/` alias needs a Deno import map. Roadmap acceptance "Registry is
+  shared, not forked" is achievable — at the cost of touching the import specifiers in
+  ~15 files under `src/lib/export/`.
+- Until scheduling and rehearsal exist, **the UI must keep calling the archive an export,
+  not a backup** (T-24b's amber warning). That constraint is now load-bearing rather than
+  temporary.
 
 ---
 
