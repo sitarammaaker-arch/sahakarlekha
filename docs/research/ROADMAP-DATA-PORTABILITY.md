@@ -426,9 +426,35 @@ The task that makes the backup a backup. `voucher_entries` is **replayed** throu
 
 ---
 
-### T-35 — Restore rehearsal `[DI]` · **P0** · *D1, D6*
+### T-35 — Restore rehearsal `[DI]` · **P0** · *D1, D6* · **PARTIAL (2026-07-10)**
 
 **The highest-value task in this roadmap.** It is the only mechanism that can honestly claim a backup works — because it was restored last night into a throwaway shadow society.
+
+> **Status: assertion core + health card DONE and verified; server orchestration BLOCKED on D1.**
+>
+> What shipped (pure, tested, browser-verified):
+> - `src/lib/backup/rehearsal.ts` — the equality assertions the whole rehearsal turns on:
+>   a trial-balance signature (summed from `voucher_entries`, not a cached field — RULE 2),
+>   the double-entry `balanced` invariant, and per-item stock by the canonical formula
+>   (RULE 2, the ₹1,12,500 phantom). `compareRehearsal` reports every account/item that
+>   differs. Pure — runs identically in an Edge Function, in a client-side rehearsal with no
+>   shadow society, and in a test.
+> - `src/lib/backup/health.ts` — the Backup Health card (acceptance 3). **Never green on
+>   missing data**: green requires a recent backup, a verification, AND a fresh passing
+>   rehearsal. A never-rehearsed backup is amber (unproven); a failed one is red. This is the
+>   function that enforces "do not ship the word *backup* until a rehearsal is green".
+>
+> What is NOT built, and why it cannot be from this workspace:
+> - `supabase/functions/rehearsal/index.ts` (the Edge Function), the shadow-society
+>   create/destroy lifecycle, and the weekly `pg_cron` schedule. All three need the server
+>   tier (**D1**), a linked Supabase project, a service-role key, and a deploy — none of
+>   which exist here. Writing an Edge Function nobody can run and calling T-35 "green" would
+>   be the exact unverified claim this workstream exists to prevent.
+>
+> **T-35 is therefore NOT green.** No rehearsal has actually run, so `backupHealth` returns
+> amber/red for every real society, by design. The UI must keep calling the archive an
+> *export*, not a *backup*, until a rehearsal runs and passes — which needs D1 to be taken
+> off hold, the project linked, and the Edge Function deployed.
 
 | | |
 |---|---|
