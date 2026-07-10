@@ -40,7 +40,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   ShieldCheck, ShieldAlert, Upload, Loader2, KeyRound, FileWarning,
-  Lock, ArrowRight, Building2, Ban, History,
+  Lock, ArrowRight, Building2, Ban, History, HeartPulse,
 } from 'lucide-react';
 
 import { REGISTRY } from '@/lib/export/registry';
@@ -50,6 +50,7 @@ import { planRestore } from '@/lib/restore/dag';
 import { diffRestore, summarizeDiff, type RestoreDiff, type RestoreMode } from '@/lib/restore/diff';
 import { decryptArchive, WrongPassphraseError, NotAnEncryptedArchiveError } from '@/lib/backup/crypto';
 import { summarizeVerification, type VerifyReport } from '@/lib/backup/verify';
+import { runRehearsal, summarizeRun, type RehearsalRunOutcome } from '@/lib/backup/rehearsalRun';
 import { listRestoreHistory, describeRestoreEntry, wasClean, type RestoreHistoryEntry } from '@/lib/restore/trail';
 import type { Row } from '@/lib/restore/naturalKeys';
 
@@ -78,6 +79,9 @@ const RestoreCenter: React.FC = () => {
   const [mode, setMode] = useState<RestoreMode>('merge');
   const [diff, setDiff] = useState<RestoreDiff | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
+
+  // Rehearsal: does this backup, if restored, reproduce today's books? Read-only.
+  const [rehearsal, setRehearsal] = useState<RehearsalRunOutcome | null>(null);
 
   // T-34: past restore attempts — including the refused ones, which are the ones worth
   // seeing. Read-only; this reads audit_log through a helper and writes nothing.
@@ -122,6 +126,7 @@ const RestoreCenter: React.FC = () => {
   function reset() {
     setReport(null); setRows({}); setLoadProblems([]); setCompat(null);
     setPassphrase(''); setPassError(null); setDiff(null); setDiffError(null);
+    setRehearsal(null);
   }
 
   /** Gate 1 + 2 + 4 + 5. Verification happens inside loadArchive, before any row is parsed. */
@@ -227,8 +232,39 @@ const RestoreCenter: React.FC = () => {
     }
   }
 
+  /**
+   * The rehearsal. Proves this backup, if restored, would reproduce today's books — the
+   * client-side realization of T-35, with no shadow society and no server. Read-only: it
+   * verifies the archive, replays its ledger, reads the live rows, replays theirs, and
+   * compares. The runner aborts on any partial live read.
+   */
+  async function handleRehearse() {
+    if (!user?.societyId || !bytes || !report?.manifest) return;
+    setBusy(true);
+    setRehearsal(null);
+    try {
+      const outcome = await runRehearsal({
+        bytes,
+        societyId: user.societyId,
+        entities: REGISTRY,
+        loadArchive,
+        // Adapt fetchEntityRows (which also returns `fetched`) to the runner's FetchRows.
+        fetchRows: async (entity, societyId) => {
+          const r = await fetchEntityRows(entity, societyId);
+          return { rows: r.rows as Row[], truncated: r.truncated, error: r.error };
+        },
+        now: new Date().toISOString(),
+        backupCreatedAt: report.manifest.createdAt,
+      });
+      setRehearsal(outcome);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const canDryRun = stage === 'verified' && !!compat?.safe && loadProblems.length === 0;
   const changed = diff?.entities.filter(e => e.insert || e.update || e.conflicts.length || e.orphan) ?? [];
+  const healthColor = (s: string) => (s === 'green' ? 'border-green-300 text-green-800' : s === 'red' ? 'border-red-300 text-red-800' : 'border-amber-300 text-amber-900');
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-4">
@@ -485,6 +521,67 @@ const RestoreCenter: React.FC = () => {
                     ? 'यहीं तक। लिखने वाली प्रक्रिया मौजूद है पर अभी इस पेज से नहीं जुड़ी — और जुड़ने पर भी उससे पहले एक बैकअप अनिवार्य होगा।'
                     : 'This is as far as it goes. The saga that writes exists, but is not wired to this page yet — and when it is, a pre-restore backup will be mandatory before it runs.'}
                 </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── T-35 (client-side): rehearsal — does this backup reproduce today's books? ── */}
+      {report?.ok && (
+        <Card className={rehearsal ? healthColor(rehearsal.status === 'passed' ? 'green' : rehearsal.status === 'failed' ? 'red' : 'amber') : ''}>
+          <CardHeader className="py-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <HeartPulse className="h-4 w-4" />
+              {hi ? 'बैकअप पूर्वाभ्यास (rehearsal)' : 'Backup rehearsal'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-gray-500">
+              {hi
+                ? 'बिना कुछ लिखे परखता है कि यह बैकअप restore करने पर मौजूदा किताबें (trial balance + stock) हूबहू लौटेंगी या नहीं। यही वह जाँच है जो "बैकअप है" को "बैकअप काम करता है" बनाती है।'
+                : 'Checks — writing nothing — whether restoring this backup would reproduce the current books (trial balance + stock) exactly. This is the check that turns "we have a backup" into "the backup works".'}
+            </p>
+            <Button onClick={handleRehearse} disabled={busy || !canDryRun} className="gap-2">
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <HeartPulse className="h-4 w-4" />}
+              {hi ? 'बैकअप को परखें' : 'Rehearse this backup'}
+            </Button>
+
+            {rehearsal && (
+              <div className="space-y-2">
+                <p className={`font-semibold ${rehearsal.status === 'passed' ? 'text-green-800' : rehearsal.status === 'failed' ? 'text-red-800' : 'text-amber-900'}`}>
+                  {summarizeRun(rehearsal, hi)}
+                </p>
+
+                {(rehearsal.status === 'passed' || rehearsal.status === 'failed') && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={`text-[10px] ${healthColor(rehearsal.health.status)}`}>
+                      {hi ? 'बैकअप स्थिति' : 'backup health'}: {rehearsal.health.status}
+                    </Badge>
+                    {!rehearsal.live.balanced && (
+                      <span className="text-xs text-red-700">
+                        {hi ? 'चेतावनी: मौजूदा किताबें ही संतुलित नहीं (Dr ≠ Cr)।' : 'Warning: the live books do not balance (Dr ≠ Cr).'}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {rehearsal.status === 'failed' && (
+                  <div className="text-sm text-red-800 space-y-1">
+                    {rehearsal.verdict.accounts.length > 0 && (
+                      <p>{hi ? 'मेल न खाने वाले खाते' : 'Accounts that differ'}: {rehearsal.verdict.accounts.slice(0, 8).join(', ')}{rehearsal.verdict.accounts.length > 8 ? ` +${rehearsal.verdict.accounts.length - 8}` : ''}</p>
+                    )}
+                    {rehearsal.verdict.items.length > 0 && (
+                      <p>{hi ? 'मेल न खाने वाली मद' : 'Items that differ'}: {rehearsal.verdict.items.slice(0, 8).join(', ')}{rehearsal.verdict.items.length > 8 ? ` +${rehearsal.verdict.items.length - 8}` : ''}</p>
+                    )}
+                  </div>
+                )}
+
+                {rehearsal.status === 'archive-invalid' && (
+                  <ul className="text-sm text-red-800 list-disc pl-5">
+                    {rehearsal.problems.map((p, i) => <li key={i}>{p}</li>)}
+                  </ul>
+                )}
               </div>
             )}
           </CardContent>

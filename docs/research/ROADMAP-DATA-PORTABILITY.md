@@ -451,10 +451,22 @@ The task that makes the backup a backup. `voucher_entries` is **replayed** throu
 >   which exist here. Writing an Edge Function nobody can run and calling T-35 "green" would
 >   be the exact unverified claim this workstream exists to prevent.
 >
-> **T-35 is therefore NOT green.** No rehearsal has actually run, so `backupHealth` returns
-> amber/red for every real society, by design. The UI must keep calling the archive an
-> *export*, not a *backup*, until a rehearsal runs and passes — which needs D1 to be taken
-> off hold, the project linked, and the Edge Function deployed.
+> **Update 2026-07-10 — a CLIENT-SIDE rehearsal now runs, no server needed.**
+> The user chose the D1-free realization over deploying an Edge Function. `rehearsalRun.ts`
+> runs the same proof entirely in the browser: verify the backup, replay its ledger in
+> memory, read the live rows, replay theirs, and compare (`compareRehearsal`). If restoring
+> the backup would reproduce today's trial balance and stock, it passes; a stale or
+> incomplete backup fails and names the accounts/items that differ. It writes nothing, needs
+> no service-role key, and ships with the normal frontend. Wired into Restore Center as a
+> read-only "Rehearse this backup" action, with the health card driven by the result.
+> Verified end-to-end in a real browser (pass → green, stale → red, truncated read → aborts).
+>
+> **This is now an on-demand rehearsal, not the weekly automated one.** A backup a user
+> actually rehearses and passes IS proven for that moment. What is still missing (and still
+> needs D1): the WEEKLY unattended run (`pg_cron`), the shadow-society isolation, and a
+> persisted rehearsal outcome so the health card reflects the last run across sessions
+> rather than only the just-run one. Until that persistence exists, treat a green health
+> reading as "this backup, rehearsed just now" — not "backups are healthy in general".
 
 | | |
 |---|---|
