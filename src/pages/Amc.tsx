@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Wrench, Trash2 } from 'lucide-react';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const EQUIPMENT = [
   { id: 'lift', en: 'Lift / Elevator', hi: 'लिफ्ट' },
@@ -60,6 +61,12 @@ export default function Amc() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'AMC / अनुबंध रजिस्टर' : 'AMC / Contract Register'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'लिफ्ट/पंप/सुरक्षा आदि के वार्षिक अनुबंध और नवीनीकरण ट्रैकिंग' : 'Annual maintenance contracts (lift/pump/security) with renewal tracking'}</p>
+        </div>
+        {/* T-20: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="housing_amc" />
         </div>
       </div>
 

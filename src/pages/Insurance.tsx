@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { ShieldCheck, Trash2 } from 'lucide-react';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const COVERAGE = [
   { id: 'building', en: 'Building', hi: 'भवन' },
@@ -59,6 +60,12 @@ export default function Insurance() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'बीमा रजिस्टर' : 'Insurance Register'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'भवन/संपत्ति बीमा पॉलिसियाँ और समाप्ति ट्रैकिंग' : 'Building/asset insurance policies with expiry tracking'}</p>
+        </div>
+        {/* T-20: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="housing_insurance" />
         </div>
       </div>
 

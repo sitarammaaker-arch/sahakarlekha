@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { Building2, Pencil, Trash2, Search } from 'lucide-react';
 import type { HousingFlat } from '@/types';
+import EntityExportButton from '@/components/export/EntityExportButton';
 
 const UNIT_TYPES = [
   { id: '1bhk', en: '1 BHK', hi: '1 BHK' },
@@ -167,6 +168,12 @@ export default function FlatsRegister() {
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'फ्लैट / यूनिट रजिस्टर' : 'Flats / Units Register'}</h1>
           <p className="text-sm text-muted-foreground">{hi ? 'समिति की इकाइयाँ, सदस्य आवंटन और मासिक रखरखाव दर्ज करें' : 'Record society units, member allocation and monthly maintenance'}</p>
+        </div>
+        {/* T-20: this register had no export at all (audit gap EXP-10). The
+            Export Registry decides whether it renders, which columns leave, and whether
+            the audit row was written before any bytes did. */}
+        <div className="ml-auto">
+          <EntityExportButton entityKey="housing_flat" />
         </div>
       </div>
 
