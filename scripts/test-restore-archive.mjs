@@ -122,10 +122,20 @@ ok(!('voucher_entry' in loaded.rows), 'derived/voucher_entry.ndjson is NEVER loa
 ok(!('audit_log' in loaded.rows), 'evidence/audit_log.ndjson is NEVER loaded — it is WORM');
 ok(!('guide_certificate' in loaded.rows), 'evidence/guide_certificate.ndjson is never loaded either');
 
-// They ARE in the file. The reader chooses not to look.
+// They ARE in the file. The reader chooses not to load them AS RESTORABLE rows.
 const inside = Object.keys(unzipSync(archive));
 ok(inside.includes('derived/voucher_entry.ndjson'), 'though voucher_entry IS present in the archive');
 ok(inside.includes('evidence/audit_log.ndjson'), 'and so is audit_log');
+
+// But the archive's RECORDED voucher_entries ARE read into `derivedEntries` — for the replay
+// assertion only, never for insertion. The commit saga replays entries from the archived
+// vouchers and asserts they reproduce these (T-33 / RULE 2).
+ok(Array.isArray(loaded.derivedEntries) && loaded.derivedEntries.length === ROWS,
+  `derivedEntries carries the archive's recorded voucher_entries (${loaded.derivedEntries.length})`);
+ok(!('voucher_entry' in loaded.rows), 'and they are NOT in the restorable rows — replayed, not written');
+// A corrupt archive yields no derived entries.
+ok((await loadArchive(new Uint8Array([1, 2, 3]), REGISTRY)).derivedEntries.length === 0,
+  'a corrupt archive yields no derived entries');
 
 // ── 2. Nothing is parsed until everything is verified ────────────────────────
 
@@ -241,12 +251,15 @@ for (const forbidden of ['supabase', 'fetch(', 'localStorage', 'document.', 'Dat
 }
 ok(source.includes('verifyArchive(bytes'), 'archive.ts verifies before it parses');
 
-// ── 6. The Restore Center cannot write ───────────────────────────────────────
+// ── 6. The Restore Center's commit is GATED (the T-32 guard, moved) ──────────
 //
-// T-32 ships the gates BEFORE the writes, on purpose: a restore is the one operation that
-// can destroy a society's books in a single click. The page's claim to write nothing is
-// only worth what enforces it. This is what enforces it. When T-33 lands a commit saga,
-// this assertion must be moved to guard the saga's preconditions — not deleted.
+// T-32 shipped this page unable to write, and asserted it. T-33 wired the commit (EXP-01).
+// Per T-32's own note, the no-write guard did not get deleted — it MOVED onto the saga's
+// preconditions. Two things must still hold, and two new ones now must too:
+//   still: the page holds no RAW write call, and never imports the Supabase client — the
+//          writes live in rowWriter/commitLive, reached only through the gated entry point.
+//   now:   the commit goes through commitRestoreLive, and is gated by the rehearsal passing,
+//          a mandatory pre-restore backup, and a typed confirmation.
 
 /**
  * Comments are stripped before scanning. The first version of this guard failed on a clean
@@ -257,13 +270,37 @@ ok(source.includes('verifyArchive(bytes'), 'archive.ts verifies before it parses
 const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
 const page = stripComments(readFileSync(pathResolve(SRC, 'pages', 'RestoreCenter.tsx'), 'utf8'));
+
+// STILL TRUE: no raw write call, and no direct Supabase import. The destructive I/O is
+// delegated to the tested writer, never hand-rolled in the view.
 ok(!/\.insert\(|\.update\(|\.delete\(|\.upsert\(|\.rpc\(/.test(page),
-  'RestoreCenter.tsx has NO commit path — no insert, update, delete, upsert or rpc call');
-// Prove the stripper does not simply blank the file, or the assertion above is vacuous.
+  'RestoreCenter.tsx holds NO raw write call — writes live in rowWriter/commitLive');
 ok(page.includes('handleDryRun') && page.length > 2000, 'the guard is scanning real code, not an empty string');
+ok(!/from ['"]@\/lib\/supabase['"]/.test(page), 'it never imports the Supabase client directly');
+
+// NOW TRUE: the commit is reached only through the gated entry point.
+ok(page.includes('commitRestoreLive'), 'the commit goes through commitRestoreLive, not a hand-wired saga call');
+
+// NOW TRUE: every precondition the T-32 guard moved onto is ANDed INTO `canCommit` itself —
+// not merely present somewhere in the file. Capturing the expression makes the guard survive
+// a gate being quietly dropped from it while its variable is left defined.
+const canCommitExpr = (page.match(/const canCommit\s*=([\s\S]*?);/) || [, ''])[1];
+ok(canCommitExpr.length > 0, 'a single canCommit gate governs the button');
+ok(/rehearsalPassed/.test(canCommitExpr), 'canCommit requires the rehearsal to have PASSED (T-35)');
+ok(/backupReady/.test(canCommitExpr), 'canCommit requires a mandatory pre-restore backup — the only undo');
+ok(/confirmOk/.test(canCommitExpr), 'canCommit requires a typed confirmation');
+ok(/dryRunOkForMode/.test(canCommitExpr), 'canCommit requires a clean dry run for the mode');
+ok(/fyLocked/.test(canCommitExpr), 'canCommit respects the FY lock (RULE 6)');
+ok(/compat\?\.safe/.test(canCommitExpr), 'canCommit requires a same-society (safe) archive');
+// And the definitions behind those flags are the real checks.
+ok(/rehearsal\?\.status === 'passed'/.test(page), 'rehearsalPassed is the real rehearsal-passed check');
+ok(/preRestoreBackup/.test(page), 'backupReady is backed by an actual pre-restore backup');
+// The button itself must consult the gate.
+ok(/disabled=\{!canCommit/.test(page), 'the commit button is dead unless canCommit holds');
+
+// It still reads and previews before it writes.
 ok(page.includes('fetchEntityRows'), 'it reads the database');
 ok(page.includes('planRestore') && page.includes('diffRestore'), 'and diffs the archive against it');
-ok(!/from ['"]@\/lib\/supabase['"]/.test(page), 'it never imports the Supabase client directly');
 
 console.log(`\nRestore archive: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

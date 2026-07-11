@@ -49,6 +49,12 @@ export interface LoadedArchive {
   unplaceable: string[];
   /** Parse failures, one per entity. Non-empty ⇒ the archive is unusable. */
   problems: string[];
+  /**
+   * The archive's RECORDED voucher_entries (derived/), read for the replay assertion only —
+   * NOT to be inserted. The commit saga replays entries from the archived vouchers and
+   * asserts they reproduce these (T-33 / RULE 2). Empty when the archive carried none.
+   */
+  derivedEntries: Row[];
 }
 
 /**
@@ -63,7 +69,7 @@ export async function loadArchive(
 ): Promise<LoadedArchive> {
   const report = await verifyArchive(bytes, { entities });
   if (!report.ok || !report.manifest) {
-    return { report, rows: {}, unplaceable: report.unplaceable, problems: [] };
+    return { report, rows: {}, unplaceable: report.unplaceable, problems: [], derivedEntries: [] };
   }
 
   const byKey = new Map(entities.map(e => [e.key, e]));
@@ -106,9 +112,26 @@ export async function loadArchive(
 
   // A parse problem invalidates the whole load. Returning "the entities that worked" would
   // let a restore proceed against a partial archive.
-  if (problems.length) return { report, rows: {}, unplaceable: report.unplaceable, problems };
+  if (problems.length) return { report, rows: {}, unplaceable: report.unplaceable, problems, derivedEntries: [] };
 
-  return { report, rows, unplaceable: report.unplaceable, problems: [] };
+  // The archive's recorded voucher_entries, for the replay assertion (NOT for insertion).
+  // These live in derived/ and are the one collection a restore regenerates rather than
+  // writes; the commit saga asserts the regeneration reproduces them.
+  let derivedEntries: Row[] = [];
+  const derivedPath = entityPath('voucher_entry', 'replay');
+  const derivedFile = files[derivedPath];
+  if (derivedFile) {
+    try {
+      derivedEntries = parseNdjson(strFromU8(derivedFile));
+    } catch (e) {
+      return {
+        report, rows: {}, unplaceable: report.unplaceable, derivedEntries: [],
+        problems: [`voucher_entry: ${e instanceof Error ? e.message : String(e)}`],
+      };
+    }
+  }
+
+  return { report, rows, unplaceable: report.unplaceable, problems: [], derivedEntries };
 }
 
 /** The three ways an archive can fail to belong to the society trying to restore it. */

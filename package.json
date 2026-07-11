@@ -50,7 +50,8 @@
     "test:backup-rehearsal": "node scripts/test-backup-rehearsal.mjs",
     "test:backup-health": "node scripts/test-backup-health.mjs",
     "test:backup-rehearsal-run": "node scripts/test-backup-rehearsal-run.mjs",
-    "test:restore-writer": "node scripts/test-restore-writer.mjs"
+    "test:restore-writer": "node scripts/test-restore-writer.mjs",
+    "test:restore-commit-live": "node scripts/test-restore-commit-live.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
