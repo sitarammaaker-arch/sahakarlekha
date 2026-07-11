@@ -474,6 +474,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [depositTransactions, setDepositTransactionsState] = useState<DepositTransaction[]>([]);
   const [complianceFilings, setComplianceFilingsState] = useState<ComplianceFiling[]>([]);
   const [societyCapabilities, setSocietyCapabilitiesState] = useState<SocietyCapabilityRow[]>([]);
+  const societyCapabilitiesRef = useRef(societyCapabilities);
+  useEffect(() => { societyCapabilitiesRef.current = societyCapabilities; }, [societyCapabilities]);
+  // T-14 (ADR-0002): bind behaviour to CAPABILITIES, not the society TYPE. Resolved from the
+  // current refs so it is correct inside []-dep callbacks. NO super-admin bypass — a data
+  // default must reflect what the SOCIETY does, not who is viewing it.
+  const hasCap = (c: Capability): boolean =>
+    resolveCapabilities(societyRef.current?.societyType ?? 'other', societyCapabilitiesRef.current, undefined, societyRef.current?.state).has(c);
   const [procurementFarmers, setProcurementFarmersState] = useState<Farmer[]>(() => storage.getProcurementFarmers());
   const [procurementLots, setProcurementLotsState] = useState<ProcurementLot[]>(() => storage.getProcurementLots());
   const [procurementEvents, setProcurementEventsState] = useState<ProcurementEvent[]>(() => storage.getProcurementEvents());
@@ -4489,11 +4496,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return m ? Math.max(max, parseInt(m[1])) : max;
       }, 0);
       const itemCode = `ITM/${String(maxNum + 1).padStart(3, '0')}`;
-      // Consumer stores: give new items a default Sales/Purchase A/c (RULE-4 default 4101/5101)
+      // POS-retail stores: give new items a default Sales/Purchase A/c (RULE-4 default 4101/5101)
       // so a non-technical operator isn't blocked by the "assign a Sales/Purchase A/c" guard on
-      // the first sale/purchase. They can still reassign for per-category routing. Scoped to
-      // consumer so marketing/dairy keep their mandatory dedicated-account routing.
-      const consumerDefaults = societyRef.current?.societyType === 'consumer'
+      // the first sale/purchase. They can still reassign for per-category routing. Gated on the
+      // pos_billing CAPABILITY (T-14 / ADR-0002), not the society type — so marketing/dairy keep
+      // their mandatory dedicated-account routing, and a licensed retail society follows suit too.
+      const consumerDefaults = hasCap('pos_billing')
         ? { salesAccountId: data.salesAccountId || '4101', purchaseAccountId: data.purchaseAccountId || '5101' }
         : null;
       newItem = { ...data, ...consumerDefaults, id: crypto.randomUUID(), itemCode };
@@ -4510,10 +4518,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = prev.map(i => {
         if (i.id !== id) return i;
         const merged = { ...i, ...data };
-        // Consumer stores: backfill a default Sales/Purchase A/c on save if still unset, so a
+        // POS-retail stores: backfill a default Sales/Purchase A/c on save if still unset, so a
         // pre-existing item (created before this default) becomes sellable without the operator
-        // needing to know about ledger accounts. (Same RULE-4 default; consumer-scoped.)
-        if (societyRef.current?.societyType === 'consumer') {
+        // needing to know about ledger accounts. (Same RULE-4 default; gated on pos_billing — T-14.)
+        if (hasCap('pos_billing')) {
           if (!merged.salesAccountId) merged.salesAccountId = '4101';
           if (!merged.purchaseAccountId) merged.purchaseAccountId = '5101';
         }
