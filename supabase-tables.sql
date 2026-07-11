@@ -3185,3 +3185,20 @@ alter table budgets          add column if not exists jurisdiction text;
 create index if not exists vouchers_jurisdiction_idx        on vouchers (society_id, jurisdiction);
 create index if not exists voucher_entries_jurisdiction_idx on voucher_entries (society_id, jurisdiction);
 create index if not exists members_jurisdiction_idx         on members (society_id, jurisdiction);
+
+-- T-01 (continued — write-path stamping): the app stamps (society_id, jurisdiction) on every
+-- write through ONE chokepoint (withSoc → stampTenant), which writes to EVERY tenant-scoped
+-- table. So every table that has `society_id` must also have `jurisdiction`, or those upserts
+-- would fail on a missing column (RULE 1). This dynamic block adds it to all of them at once,
+-- idempotently — a superset of the explicit list above, and self-maintaining as tables are
+-- added. REQUIRED before the withSoc change goes live.
+do $$
+declare r record;
+begin
+  for r in
+    select table_name from information_schema.columns
+    where table_schema = 'public' and column_name = 'society_id'
+  loop
+    execute format('alter table public.%I add column if not exists jurisdiction text', r.table_name);
+  end loop;
+end $$;

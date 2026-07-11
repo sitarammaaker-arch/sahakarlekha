@@ -36,6 +36,7 @@ import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { resolveCapabilities } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
 import { logAudit, type AuditInput } from '@/lib/auditLog';
+import { resolveJurisdiction, stampTenant } from '@/lib/jurisdiction';
 import { snapshotDeletedMovements } from '@/lib/movementArchive';
 import { isSelfApproval } from '@/lib/sod';
 import { requiresApproval } from '@/lib/approvalMatrix';
@@ -297,9 +298,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const societyIdRef = useRef(user?.societyId || 'SOC001');
   // Keep ref updated when user changes
   useEffect(() => { societyIdRef.current = user?.societyId || 'SOC001'; }, [user?.societyId]);
-  // Helper: adds society_id to any Supabase record
+  // T-01 (ADR-0009 / Canonical CL-5): the society's jurisdiction code, kept in a ref and
+  // synced from society.state below (where societyRef is synced). Resolved by the SSOT so
+  // every stamped row uses the same code.
+  const jurisdictionRef = useRef('');
+  // Helper: stamps BOTH tenancy keys (society_id, jurisdiction) onto any Supabase record —
+  // the SINGLE seam every write goes through (T-01, anti-IRR-4). stampTenant is the tested,
+  // pure primitive; the row's tenancy is set by context, never by whatever it carried.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const withSoc = (d: Record<string, any>) => ({ ...d, society_id: societyIdRef.current });
+  const withSoc = (d: Record<string, any>) => stampTenant(d, { societyId: societyIdRef.current, jurisdiction: jurisdictionRef.current });
   // P0 #3: append-only audit. Actor is read from a ref so it is never stale inside the
   // delete/approve useCallbacks; emitAudit is fire-and-forget and never blocks the write.
   const userRef = useRef(user);
@@ -418,7 +425,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [accounts, setAccountsState] = useState<LedgerAccount[]>([]);
   const [society, setSocietyState] = useState<SocietySettings>(() => storage.getSociety());
   const societyRef = useRef(society);
-  useEffect(() => { societyRef.current = society; }, [society]);
+  useEffect(() => {
+    societyRef.current = society;
+    // T-01: keep the jurisdiction code in sync with the society's state, via the SSOT.
+    jurisdictionRef.current = resolveJurisdiction(society.state);
+  }, [society]);
   // FY-lock guard — reads the LATEST society via ref, so it is never stale even
   // inside useCallbacks declared with empty deps. Returns true (and toasts) when locked.
   const guardFYLocked = useCallback((): boolean => {
