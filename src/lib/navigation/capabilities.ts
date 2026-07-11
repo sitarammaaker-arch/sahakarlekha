@@ -76,4 +76,13 @@ export interface SocietyCapabilityRow {
   createdAt?: string | null;  // audit: when (display only; resolver ignores)
 }
 
+/**
+ * CORE (is_core) capabilities — compliance/universal, ALWAYS active if entitled and NEVER
+ * gated by a society's declared activities (T-12). TDS applies to every society's payments;
+ * GST to any registered society; jurisdiction packs apply by state. Activity-gating exempts
+ * these so a declared activity can never HIDE a compliance obligation — and so the cutover
+ * from type-templates to activities loses no compliance module (empty-diff parity, MR-1).
+ */
+export const CORE_CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>(['gst', 'tds', 'haryana_compliance']);
+
 export type { SocietyType };

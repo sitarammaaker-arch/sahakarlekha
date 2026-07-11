@@ -78,6 +78,7 @@ ok(noAct.has('lending') && noAct.has('inventory_sales'), 'and it still contains 
 const credit = resolveCapabilities('pacs', [], NOW, undefined, ['credit_short_term']);
 ok(credit.has('lending'), 'a declared activity surfaces its entitled capability');
 ok(!credit.has('inventory_sales'), 'entitled caps NOT lit by a declared activity are gated out (activity-primary within entitlement)');
+ok(credit.has('gst') && credit.has('tds'), 'T-12: core compliance caps (gst/tds) stay active regardless of the declared activity (is_core, never gated)');
 
 // Two activities union their caps.
 const multi = resolveCapabilities('pacs', [], NOW, undefined, ['credit_short_term', 'agri_input_retail']);
@@ -99,9 +100,11 @@ const hidden = resolveCapabilities('pacs',
   [{ capability: 'lending', mode: 'revoke', source: 'admin' }], NOW, undefined, ['credit_short_term']);
 ok(!hidden.has('lending'), 'an admin-hidden capability stays hidden even when a declared activity lights it');
 
-// common_service_centre maps to [] (no capability yet) → declaring it surfaces nothing.
+// common_service_centre maps to [] (no capability yet) → surfaces no OPERATIONAL capability
+// (only the entitled is_core compliance caps remain — T-12).
 const noCap = resolveCapabilities('pacs', [], NOW, undefined, ['common_service_centre']);
-ok(noCap.size === 0, 'an activity whose capability does not exist yet ([]) surfaces nothing');
+ok(!noCap.has('lending') && !noCap.has('inventory_sales'), 'an activity with no capability surfaces no operational capability');
+ok([...noCap].every((c) => ['gst', 'tds', 'haryana_compliance'].includes(c)), 'only entitled core (compliance) caps remain');
 
 // ── 4b. T-13 — the new deposit_ledger capability flows through the resolver ───
 // pacs is now entitled to deposit_ledger; declaring the deposits activity surfaces it.

@@ -17,6 +17,7 @@
 import type { SocietyType } from '@/types';
 import { resolveJurisdiction } from '@/lib/jurisdiction';
 import type { Capability, CapabilitySource, SocietyCapabilityRow } from './capabilities';
+import { CORE_CAPABILITIES } from './capabilities';
 import { SOCIETY_TYPE_CAPABILITIES } from './societyTypeCapabilities';
 import type { Activity } from './activities';
 import { ACTIVITY_CAPABILITY_MAP } from './activityCapabilities';
@@ -104,6 +105,12 @@ export function resolveCapabilities(
   const base =
     activities.length === 0
       ? entitled
-      : new Set<Capability>([...activityCapabilities(activities)].filter((c) => entitled.has(c)));
+      : new Set<Capability>([
+          // is_core compliance caps (gst/tds/jurisdiction) stay active if entitled — never
+          // gated by a declared activity, so the cutover loses no compliance module (T-12/MR-1).
+          ...[...entitled].filter((c) => CORE_CAPABILITIES.has(c)),
+          // everything else is activity-gated, and only within entitlement (MR-4).
+          ...[...activityCapabilities(activities)].filter((c) => entitled.has(c)),
+        ]);
   return new Set<Capability>([...base].filter((c) => !adminHidden.has(c)));
 }
