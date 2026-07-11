@@ -49,6 +49,7 @@ const { canonicalize, sha256Text, sha256Canonical, sha256Bytes, digestsEqual, ve
 const {
   buildManifest, verifyManifest, computeManifestHash, registryFingerprint,
   entityPath, fileDigests, unplaceableEntities, BACKUP_FORMAT_VERSION,
+  classifyFormatVersion, SUPPORTED_FORMAT_MAJOR,
 } = manifestMod;
 const { REGISTRY } = reg;
 
@@ -175,6 +176,37 @@ ok(!(await verifyManifest({ ...m, formatVersion: '99.0' })).ok, 'an archive from
 const relied = await buildManifest({ ...INPUT, entities: ENTITIES });
 ok((await verifyManifest({ ...relied, totals: { ...relied.totals, rowCount: 1 } })).ok === false,
   'totals that disagree with the entity list are rejected');
+
+// ── 8b. FORMAT-VERSION NEGOTIATION (T-04 / ADR-0004, IRR-6) ───────────────────
+// A version-stamped format must EVOLVE WITHOUT BREAKING PRIOR ARCHIVES. Same major is
+// tolerantly accepted (VER-2/VER-4); a newer major is refused, never guessed at (VER-1).
+
+// The pure negotiation core.
+ok(classifyFormatVersion(`${SUPPORTED_FORMAT_MAJOR}.0`).ok, 'the current major.minor is accepted');
+ok(classifyFormatVersion(`${SUPPORTED_FORMAT_MAJOR}.9`).ok, 'a FUTURE MINOR of the same major is accepted (additive, tolerantly read)');
+const tooNew = classifyFormatVersion(`${SUPPORTED_FORMAT_MAJOR + 1}.0`);
+ok(!tooNew.ok && tooNew.kind === 'too-new' && /newer version/i.test(tooNew.reason),
+  'a NEWER MAJOR is refused with an "update the app" reason (a major bump is breaking)');
+ok(classifyFormatVersion('0.9').kind === 'too-old', 'an older major than this build reads is refused as too-old');
+for (const bad of ['', '   ', 'abc', '1', '1.2.3', '1.x', null, undefined, 42]) {
+  const v = classifyFormatVersion(bad);
+  ok(!v.ok && v.kind === 'malformed', `a malformed version (${JSON.stringify(bad)}) is refused as malformed, never accepted`);
+}
+
+// End-to-end through verifyManifest, hash re-stamped so ONLY the version differs.
+const futureMinor = { ...m, formatVersion: `${SUPPORTED_FORMAT_MAJOR}.9` };
+futureMinor.manifestHash = await computeManifestHash(futureMinor);
+ok((await verifyManifest(futureMinor)).ok, 'a VALID future-minor archive verifies end-to-end (forward compatibility, VER-4)');
+
+const futureMajor = { ...m, formatVersion: `${SUPPORTED_FORMAT_MAJOR + 1}.0` };
+futureMajor.manifestHash = await computeManifestHash(futureMajor);
+const majV = await verifyManifest(futureMajor);
+ok(!majV.ok && /newer version/i.test(majV.reason),
+  'a hash-VALID NEWER-MAJOR archive is still refused on version — never silently mis-read');
+
+// Negotiation never weakens integrity: a same-major archive with a bad hash still fails.
+ok(!(await verifyManifest({ ...m, formatVersion: `${SUPPORTED_FORMAT_MAJOR}.9`, manifestHash: 'deadbeef' })).ok,
+  'accepting a future minor does not bypass the manifest-hash check');
 
 // ── 9. THE KEY NEVER SHIPS ───────────────────────────────────────────────────
 for (const forbidden of ['key', 'password', 'passphrase', 'secret', 'derivedKey']) {
