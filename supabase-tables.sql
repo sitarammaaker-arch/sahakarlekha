@@ -3239,3 +3239,31 @@ as $$
   do update set last_number = document_sequences.last_number + 1, updated_at = now()
   returning last_number;
 $$;
+
+-- ── T-10 (ADR-0003, gap BA-1): the Activities layer ──────────────────────────────────
+-- A society declares MANY business activities (a Multipurpose PACS runs credit + dairy + a
+-- fair-price shop at once). Each row is one declared activity; the catalog of what can be
+-- declared, and the activity→capability map, live in code (src/lib/navigation/activities.ts,
+-- activityCapabilities.ts). The resolver (T-11) unions these into capabilities WITHIN
+-- entitlement. Additive + dormant: nothing reads or writes this table until T-11/T-12, so
+-- running this migration changes nothing. `jurisdiction` mirrors T-01; `config` is edge
+-- config (rate-chart refs etc.), the one legitimate JSONB per the Canonical Model.
+create table if not exists society_activities (
+  id           text primary key,
+  society_id   text not null default 'SOC001',
+  jurisdiction text,
+  activity     text not null,                     -- Activity code (see activities.ts)
+  status       text not null default 'active',    -- active | paused | retired
+  enabled_at   timestamptz not null default now(),
+  disabled_at  timestamptz,
+  config       jsonb default '{}',
+  "isDeleted"  boolean default false,
+  unique (society_id, activity)
+);
+alter table society_activities enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='society_activities' and policyname='allow_all') then
+    create policy "allow_all" on society_activities for all using (true) with check (true);
+  end if;
+end $$;
+create index if not exists idx_society_activities_society on society_activities(society_id);

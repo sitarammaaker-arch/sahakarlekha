@@ -16,6 +16,7 @@
     "test:money": "node scripts/test-money.mjs",
     "test:document-number": "node scripts/test-document-number.mjs",
     "test:ledger-lines": "node scripts/test-ledger-lines.mjs",
+    "test:activities": "node scripts/test-activities.mjs",
     "test:related": "node scripts/test-related.mjs",
     "test:dist": "node scripts/test-dist.mjs",
     "seo:report": "node scripts/seo-report.mjs",

@@ -37,6 +37,10 @@ const KNOWN_EXCLUSIONS = Object.freeze({
   // DECLARED in the Export Registry when it goes live, so a restore preserves the last-issued
   // number and can never re-issue an existing one. Excluded only while it is dormant.
   document_sequences: 'server-side numbering authority (T-03); dormant until the T-06 cutover, then registered for backup',
+  // T-10: per-society declared activities (Activities layer). Dormant until the resolver
+  // reads it (T-11) and the cutover wires writes (T-12); it will be DECLARED in the Export
+  // Registry then, so a society's declared activities are backed up. Excluded while dormant.
+  society_activities: 'Activities-layer join (T-10); dormant until the T-11/T-12 wiring, then registered for backup',
 });
 
 let fail = 0;
