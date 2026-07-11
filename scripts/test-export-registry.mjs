@@ -662,10 +662,19 @@ ok(evidenceKeys.join(',') === EVIDENCE_KEYS.join(','), `evidence entities are ex
 for (const k of EVIDENCE_KEYS) {
   ok(byKey(k).nature === 'evidence', `${k} is nature 'evidence'`);
   ok(byKey(k).backupPolicy === 'sidecar', `${k} is sidecar`);
-  ok(backupEntities().some(e => e.key === k), `${k} IS exported (custody)`);
   ok(!restorableEntities().some(e => e.key === k), `${k} is NEVER restored (restoring it would forge history)`);
   ok(byKey(k).minRole === 'admin', `${k} is admin-only`);
 }
+
+// The two evidence tables differ in SCOPE, and the scope is load-bearing for backup.
+// audit_log has a society_id and is custody-exported per society. guide_certificates has
+// NO society_id (cert_no PK, all societies' certs in one RLS+definer-RPC registry), so it
+// is GLOBAL — a per-society backup that tried to read it by society_id aborted on
+// "column society_id does not exist" (found when the server backup first ran for real).
+ok(byKey('audit_log').scope === 'society' && backupEntities().some(e => e.key === 'audit_log'),
+  'audit_log is society-scoped and IS custody-exported in a society backup');
+ok(byKey('guide_certificate').scope === 'global' && !backupEntities().some(e => e.key === 'guide_certificate'),
+  'guide_certificate is GLOBAL (no society_id) and is NOT in a per-society backup');
 
 // EXCLUDE — secrets, credentials, entitlement, cross-tenant registries. These leave in
 // no format, ever. `formats: []` is what makes them unreachable from every export path.

@@ -18,43 +18,58 @@
  * society is reported failed rather than getting a half-archive that looks complete.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { buildArchive, archiveFileName, REGISTRY, BACKUP_FORMAT_VERSION } from '../_shared/backup-core.mjs';
+import { buildArchive, archiveFileName, planArchive, REGISTRY, BACKUP_FORMAT_VERSION } from '../_shared/backup-core.mjs';
 
 const PAGE = 1000;
 const MAX_ROWS = 50_000;
 const BUCKET = 'backups';
+// How many tables to read at once. The free tier caps a request at 150s wall-clock, and
+// reading ~87 tables one-at-a-time blows past it. Reading in parallel batches turns ~87
+// sequential round-trips into ~11, without overwhelming the connection pool.
+const READ_CONCURRENCY = 8;
+
+type FetchResult = { rows: any[]; truncated: boolean; fetched: number; error: string | null };
 
 /** Faithful port of src/lib/export/source.ts fetchEntityRows — society-scoped, paginated,
  *  ordered by the natural key, and REFUSING (truncated:true) rather than silently capping. */
-function makeFetchRows(supabase: any) {
-  return async (entity: any, societyId: string) => {
-    const order: string[] = entity.naturalKey ?? [];
-    const rows: any[] = [];
-    let from = 0;
+async function readEntity(supabase: any, entity: any, societyId: string): Promise<FetchResult> {
+  const order: string[] = entity.naturalKey ?? [];
+  const rows: any[] = [];
+  let from = 0;
 
-    const readPage = async (a: number, b: number) => {
-      let q = supabase.from(entity.table).select('*').eq('society_id', societyId);
-      for (const col of order) q = q.order(col);
-      const { data, error } = await q.range(a, b);
-      return { data: data ?? [], error: error?.message ?? null };
-    };
-
-    for (;;) {
-      const remaining = MAX_ROWS - rows.length;
-      if (remaining <= 0) {
-        // Exactly MAX_ROWS is complete, not truncated — probe one past the cap.
-        const probe = await readPage(MAX_ROWS, MAX_ROWS);
-        if (probe.error) return { rows, truncated: true, fetched: rows.length, error: probe.error };
-        return { rows, truncated: probe.data.length > 0, fetched: rows.length, error: null };
-      }
-      const size = Math.min(PAGE, remaining);
-      const page = await readPage(from, from + size - 1);
-      if (page.error) return { rows, truncated: false, fetched: rows.length, error: page.error };
-      rows.push(...page.data);
-      if (page.data.length < size) return { rows, truncated: false, fetched: rows.length, error: null };
-      from += size;
-    }
+  const readPage = async (a: number, b: number) => {
+    let q = supabase.from(entity.table).select('*').eq('society_id', societyId);
+    for (const col of order) q = q.order(col);
+    const { data, error } = await q.range(a, b);
+    return { data: data ?? [], error: error?.message ?? null };
   };
+
+  for (;;) {
+    const remaining = MAX_ROWS - rows.length;
+    if (remaining <= 0) {
+      const probe = await readPage(MAX_ROWS, MAX_ROWS);
+      if (probe.error) return { rows, truncated: true, fetched: rows.length, error: probe.error };
+      return { rows, truncated: probe.data.length > 0, fetched: rows.length, error: null };
+    }
+    const size = Math.min(PAGE, remaining);
+    const page = await readPage(from, from + size - 1);
+    if (page.error) return { rows, truncated: false, fetched: rows.length, error: page.error };
+    rows.push(...page.data);
+    if (page.data.length < size) return { rows, truncated: false, fetched: rows.length, error: null };
+    from += size;
+  }
+}
+
+/** Read every backup-able table for one society, in parallel batches, into a cache. */
+async function readAllRows(supabase: any, societyId: string, entities: any[]): Promise<Record<string, FetchResult>> {
+  const cache: Record<string, FetchResult> = {};
+  for (let i = 0; i < entities.length; i += READ_CONCURRENCY) {
+    const chunk = entities.slice(i, i + READ_CONCURRENCY);
+    await Promise.all(chunk.map(async (entity) => {
+      cache[entity.key] = await readEntity(supabase, entity, societyId);
+    }));
+  }
+  return cache;
 }
 
 async function backupSociety(supabase: any, societyId: string) {
@@ -75,11 +90,17 @@ async function backupSociety(supabase: any, societyId: string) {
     encryption: null,
   };
 
+  // Read all tables in parallel FIRST (fast), then let buildArchive assemble from the cache.
+  // buildArchive itself iterates entities one at a time; feeding it a pre-filled cache keeps
+  // the slow part (dozens of DB round-trips) parallel while the archive format stays identical.
+  const toRead = planArchive(REGISTRY).written.map((w: any) => w.entity);
+  const cache = await readAllRows(supabase, societyId, toRead);
+
   // Same entity set the client passes, so the registry fingerprint matches exactly.
   const { archive, manifest } = await buildArchive({
     entities: REGISTRY,
     societyId,
-    fetchRows: makeFetchRows(supabase),
+    fetchRows: async (entity: any) => cache[entity.key] ?? { rows: [], truncated: false, fetched: 0, error: null },
     meta,
   });
 

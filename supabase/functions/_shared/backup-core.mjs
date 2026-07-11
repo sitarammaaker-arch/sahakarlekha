@@ -2755,7 +2755,11 @@ var guideCertificate = {
   label: "Guide Certificates",
   labelHi: "\u0917\u093E\u0907\u0921 \u092A\u094D\u0930\u092E\u093E\u0923\u092A\u0924\u094D\u0930",
   minRole: "admin",
-  scope: "society",
+  // GLOBAL, not society — this table has NO society_id column (cert_no PK, all societies'
+  // certificates in one RLS+definer-RPC registry). Marking it 'society' made both the
+  // server AND client backup try to read it with `.eq('society_id', …)` and abort on
+  // "column society_id does not exist". A global entity is excluded from per-society backup.
+  scope: "global",
   nature: "evidence",
   dependsOn: [],
   naturalKey: ["cert_no"],

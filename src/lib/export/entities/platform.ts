@@ -518,7 +518,11 @@ const guideCertificate: EntityDescriptor = {
   label: 'Guide Certificates',
   labelHi: 'गाइड प्रमाणपत्र',
   minRole: 'admin',
-  scope: 'society',
+  // GLOBAL, not society — this table has NO society_id column (cert_no PK, all societies'
+  // certificates in one RLS+definer-RPC registry). Marking it 'society' made both the
+  // server AND client backup try to read it with `.eq('society_id', …)` and abort on
+  // "column society_id does not exist". A global entity is excluded from per-society backup.
+  scope: 'global',
   nature: 'evidence',
   dependsOn: [],
   naturalKey: ['cert_no'],
