@@ -3202,3 +3202,40 @@ begin
     execute format('alter table public.%I add column if not exists jurisdiction text', r.table_name);
   end loop;
 end $$;
+
+-- ── T-03 (ADR-0005 / CA-03): server-authoritative gapless document numbering ─────────
+-- Statutory audit requires GAPLESS, non-duplicated numbers. Client-side numbering from
+-- in-memory/localStorage state gaps and collides across devices. The database issues the
+-- next number for a (society, book, financial-year) ATOMICALLY, so two concurrent tills can
+-- never mint the same number or leave a gap. The client calls next_document_number() and
+-- formats the result (src/lib/documentNumber.ts). Additive + idempotent; the RPC is unused
+-- until the save-path cutover (which assigns the number at durable append — pairs with T-06),
+-- so running this now changes nothing.
+create table if not exists document_sequences (
+  society_id  text not null,
+  book        text not null,          -- register/voucher-type key, e.g. 'receipt','payment','journal'
+  fy          text not null,          -- financial year, e.g. '2025-26'
+  last_number bigint not null default 0,
+  updated_at  timestamptz not null default now(),
+  primary key (society_id, book, fy)
+);
+alter table document_sequences enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='document_sequences' and policyname='allow_all') then
+    create policy "allow_all" on document_sequences for all using (true) with check (true);
+  end if;
+end $$;
+
+-- Atomic issue: increment and return the next number in ONE statement. `on conflict do
+-- update ... returning` takes the row lock and returns the post-increment value, so
+-- concurrent callers get consecutive numbers (1,2,3…) — never a duplicate, never a gap.
+create or replace function next_document_number(p_society_id text, p_book text, p_fy text)
+returns bigint
+language sql
+as $$
+  insert into document_sequences (society_id, book, fy, last_number, updated_at)
+  values (p_society_id, p_book, p_fy, 1, now())
+  on conflict (society_id, book, fy)
+  do update set last_number = document_sequences.last_number + 1, updated_at = now()
+  returning last_number;
+$$;

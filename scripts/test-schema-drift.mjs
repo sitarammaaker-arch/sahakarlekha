@@ -32,7 +32,11 @@ const ENTITIES_DIR = join(ROOT, 'src', 'lib', 'export', 'entities');
  * Every entry needs a written reason. An empty list is the goal; it is empty today.
  */
 const KNOWN_EXCLUSIONS = Object.freeze({
-  // (none — all 93 tables are declared. Add here only with a reason, never to silence.)
+  // T-03: server-side numbering authority — an operational counter, not user data, and not
+  // yet wired into any write (the cutover pairs with the event ledger, T-06). It will be
+  // DECLARED in the Export Registry when it goes live, so a restore preserves the last-issued
+  // number and can never re-issue an existing one. Excluded only while it is dormant.
+  document_sequences: 'server-side numbering authority (T-03); dormant until the T-06 cutover, then registered for backup',
 });
 
 let fail = 0;
