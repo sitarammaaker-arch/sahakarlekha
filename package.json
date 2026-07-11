@@ -17,6 +17,7 @@
     "test:document-number": "node scripts/test-document-number.mjs",
     "test:ledger-lines": "node scripts/test-ledger-lines.mjs",
     "test:activities": "node scripts/test-activities.mjs",
+    "test:activity-resolution": "node scripts/test-activity-resolution.mjs",
     "test:related": "node scripts/test-related.mjs",
     "test:dist": "node scripts/test-dist.mjs",
     "seo:report": "node scripts/seo-report.mjs",
