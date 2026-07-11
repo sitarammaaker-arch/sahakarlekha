@@ -300,6 +300,18 @@ const UniversalImporter: React.FC = () => {
 
   function handleAccountImport() {
     if (!accountPreview) return;
+
+    // RULE 6 — `addAccount` bails silently when the FY is locked, so without this the
+    // loop below would report "N imported" while nothing was written. Stop, and say so.
+    if (society.fyLocked) {
+      toast({
+        title: 'FY Locked',
+        description: 'वित्तीय वर्ष audit-locked है — accounts import नहीं हो सकते।',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const validRows = accountPreview.filter(r => r.status === 'ok');
     if (validRows.length === 0) {
       toast({ title: 'Import नहीं हो सकता', description: 'सभी rows में errors हैं। पहले CSV fix करें।', variant: 'destructive' });
@@ -349,6 +361,19 @@ const UniversalImporter: React.FC = () => {
 
   function handleMemberImport() {
     if (!memberPreview) return;
+
+    // RULE 6 — `addMember` bails silently when the FY is locked (via guardFYLocked), so
+    // without this the loop would fire a toast per row AND report "N imported" while nothing
+    // was written. Stop once, honestly, before the loop.
+    if (society.fyLocked) {
+      toast({
+        title: 'FY Locked',
+        description: 'वित्तीय वर्ष audit-locked है — members import नहीं हो सकते।',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const validRows = memberPreview.filter(r => r.status === 'ok');
     if (validRows.length === 0) {
       toast({ title: 'Import नहीं हो सकता', description: 'सभी rows में errors हैं। पहले CSV fix करें।', variant: 'destructive' });
