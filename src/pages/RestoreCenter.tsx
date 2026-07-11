@@ -411,13 +411,13 @@ const RestoreCenter: React.FC = () => {
         </div>
       </div>
 
-      {/* The most important sentence on the page. */}
+      {/* The framing of the page: everything is read-only until the very last, gated step. */}
       <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-sm text-amber-900 flex items-start gap-2">
         <Lock className="h-4 w-4 mt-0.5 shrink-0" />
         <span>
           {hi
-            ? 'यह पृष्ठ कुछ भी नहीं लिखता। यह केवल दिखाता है कि restore क्या करेगा। असल restore अभी उपलब्ध नहीं है।'
-            : 'This page writes nothing. It only shows what a restore would do. The restore itself is not available yet.'}
+            ? 'ऊपर सब पढ़ने-भर का है — जाँच, dry-run और rehearsal कुछ नहीं लिखते। असल restore सबसे नीचे है, और तभी चलता है जब हर गेट पूरा हो और उससे पहले एक सुरक्षा-बैकअप बन चुका हो।'
+            : 'Everything above is read-only — verify, dry run and rehearsal write nothing. The actual restore is at the very bottom, and runs only once every gate is met and a mandatory safety backup has been taken first.'}
         </span>
       </div>
 

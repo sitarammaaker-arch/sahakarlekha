@@ -300,8 +300,8 @@ const BackupRestore: React.FC = () => {
           </p>
           <p>
             {hi
-              ? 'आपका असली डेटा Supabase क्लाउड में सुरक्षित है। पूरा, रिस्टोर होने वाला बैकअप बनाया जा रहा है।'
-              : 'Your actual data lives safely in Supabase cloud. A complete, restorable backup is being built.'}
+              ? 'आपका असली डेटा Supabase क्लाउड में सुरक्षित है। पूरा, रिस्टोर होने वाला आर्काइव (.slbak) नीचे मौजूद है — उसे बग़ल के Restore Center में जाँचकर, परखकर (rehearse) वापस restore किया जा सकता है।'
+              : 'Your actual data lives safely in Supabase cloud. The complete, restorable archive (.slbak) is below — and it can be verified, rehearsed and restored in the Restore Center.'}
           </p>
         </div>
       </div>
@@ -364,8 +364,8 @@ const BackupRestore: React.FC = () => {
             <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <span>
               {hi
-                ? 'यह अब भी एक्सपोर्ट है, बैकअप नहीं। रिस्टोर अभी बना नहीं है, और जब तक कोई आर्काइव सचमुच रिस्टोर होकर न दिखे, उसे "बैकअप" कहना वही झूठ है जो पहले था।'
-                : 'This is still an export, not a backup. Restore does not exist yet, and until an archive has actually been restored and verified, calling it a backup would be the same lie as before.'}
+                ? 'यह अब भी "एक्सपोर्ट" कहलाता है, "बैकअप" नहीं — पर रिस्टोर अब मौजूद है: इस आर्काइव को बग़ल के Restore Center में जाँचें, परखें (rehearse) और सख़्त गेट्स के पीछे restore करें। जब तक rehearsal अपने-आप चलकर दर्ज न होने लगे, तब तक हम सावधानी से "एक्सपोर्ट" शब्द ही रखते हैं।'
+                : 'This is still called an export, not a backup — but restore now exists: verify, rehearse and restore this archive in the Restore Center, behind mandatory gates. Until a rehearsal runs automatically and its result is recorded, we keep the cautious word "export".'}
             </span>
           </div>
 
@@ -504,14 +504,14 @@ const BackupRestore: React.FC = () => {
         <CardHeader className="py-3">
           <CardTitle className="text-base flex items-center gap-2 text-gray-600">
             <Info className="h-4 w-4" />
-            {hi ? 'रिस्टोर उपलब्ध नहीं है' : 'Restore is not available'}
+            {hi ? 'रिस्टोर अब Restore Center में है' : 'Restore has moved to the Restore Center'}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-gray-600">
             {hi
-              ? 'पहले यहाँ एक Restore बटन था, लेकिन वह सिर्फ़ खाता शीर्षक और सदस्य वापस लाता था — वाउचर, बिक्री, खरीद, ऋण और संपत्ति चुपचाप छूट जाते थे। ऐसा अधूरा रिस्टोर न होने से भी ज़्यादा ख़तरनाक है, क्योंकि यूज़र अपना असली डेटा ढूँढ़ना बंद कर देता है। इसलिए उसे हटा दिया गया है। पूरा बैकअप और रिस्टोर अलग से बनाया जा रहा है।'
-              : 'A Restore button used to sit here, but it only brought back accounts and members — vouchers, sales, purchases, loans and assets were silently dropped. A partial restore is more dangerous than none, because it ends the search for the real data. It has been removed. A complete backup and restore is being built separately.'}
+              ? 'पहले यहाँ एक Restore बटन था, लेकिन वह सिर्फ़ खाता शीर्षक और सदस्य वापस लाता था — वाउचर, बिक्री, खरीद, ऋण और संपत्ति चुपचाप छूट जाते थे। ऐसा अधूरा रिस्टोर न होने से भी ज़्यादा ख़तरनाक है, इसलिए उसे हटा दिया गया। अब पूरा, सुरक्षित रिस्टोर बग़ल के "Restore Center" में है — जहाँ आर्काइव पहले verify और rehearse होता है, एक सुरक्षा-बैकअप अनिवार्य है, और तभी restore होता है।'
+              : 'A Restore button used to sit here, but it only brought back accounts and members — vouchers, sales, purchases, loans and assets were silently dropped. A partial restore is more dangerous than none, so it was removed. A complete, gated restore now lives in the Restore Center (in the sidebar): an archive is verified and rehearsed first, a safety backup is mandatory, and only then is it restored.'}
           </p>
         </CardContent>
       </Card>
