@@ -1,38 +1,37 @@
 /**
- * Restore Center — gates 1 to 5 (T-32 / gap EXP-03).
+ * Restore Center — gates, dry run, rehearsal, and the actual commit (T-32/T-33 / gap EXP-01, EXP-03).
  *
  * ─────────────────────────────────────────────────────────────────────────────────────
- * THIS PAGE CANNOT WRITE. THAT IS THE FEATURE, NOT AN OVERSIGHT.
+ * THIS PAGE NOW WRITES — BUT ONLY THROUGH A WALL OF GATES.
  *
- * There is no commit path here — no insert, no update, no delete, no upsert. It reads the
- * archive, reads the database, and shows an operator exactly what a restore WOULD do. The
- * commit saga arrives in T-33, behind this dry run.
+ * Up to T-33 this page deliberately could not write; the commit is now wired (EXP-01). The
+ * write does NOT happen here, though: the page holds no `.insert(`/`.upsert(`/`.delete(` and
+ * never imports the Supabase client. It calls `commitRestoreLive`, which wires the
+ * society-scoped writer and the trail recorder into the saga. scripts/test-restore-archive.mjs
+ * still asserts this file has no raw write call and no direct Supabase import, AND now asserts
+ * the commit is GATED — the T-32 no-write guard moved onto the preconditions, as its own note
+ * said it should.
  *
- * Shipping the gates before the writes is deliberate. A restore is the one operation in
- * this product that can destroy a society's books in a single click, and the only honest
- * way to earn that click is to make the operator read the consequences first.
+ * A restore is the one operation in this product that can destroy a society's books in a
+ * single click, so the commit button is dead until EVERY gate holds:
  *
- * That claim is enforced, not merely stated: scripts/test-restore-archive.mjs asserts this
- * file contains no `.insert(`, `.update(`, `.delete(`, `.upsert(` or `.rpc(`. When T-33
- * lands its commit saga, that assertion must MOVE to guard the saga's preconditions —
- * a mandatory pre-restore backup and a replay assertion — not be deleted.
+ *   1. Upload · Identify · Decrypt · Verify · Compatible   (the archive is sound and ours)
+ *   2. Dry run              a clean preview for THIS mode — nothing blocked.
+ *   3. Rehearsal PASSED     the backup provably reproduces today's books (T-35).
+ *   4. Safety backup        a fresh, verified backup of the current society — the ONLY undo
+ *                           (Merge/Replace; Fresh targets an empty society and needs none).
+ *   5. Typed confirmation   the operator types the society's own name.
+ *   6. FY not locked        RULE 6.
  *
- * THE FIVE GATES, EACH ABLE TO STOP THE REST
- *
- *   1. Upload      bytes, from the operator's disk. Nothing is sent anywhere.
- *   2. Identify    what society, what year, who made it — readable even when encrypted.
- *   3. Decrypt     in the browser. The passphrase never leaves this page.
- *   4. Verify      every digest, and that the archive contains ONLY what its manifest lists.
- *   5. Compatible  is this OUR archive? Can this build place every collection in it?
- *
- *   → then, mandatorily, the dry run. It cannot be skipped, because there is nothing to
- *     skip it to.
+ * Inside the saga, two more gates the UI cannot bypass: the dry run is re-run, and the replay
+ * assertion must reproduce the archived ledger, or nothing is written.
  * ─────────────────────────────────────────────────────────────────────────────────────
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,19 +39,26 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   ShieldCheck, ShieldAlert, Upload, Loader2, KeyRound, FileWarning,
-  Lock, ArrowRight, Building2, Ban, History, HeartPulse,
+  Lock, ArrowRight, Building2, Ban, History, HeartPulse, Save, AlertTriangle,
 } from 'lucide-react';
 
 import { REGISTRY } from '@/lib/export/registry';
 import { fetchEntityRows } from '@/lib/export/source';
+import { triggerDownload } from '@/lib/exportUtils';
 import { loadArchive, checkCompatibility, type Compatibility } from '@/lib/restore/archive';
 import { planRestore } from '@/lib/restore/dag';
 import { diffRestore, summarizeDiff, type RestoreDiff, type RestoreMode } from '@/lib/restore/diff';
 import { decryptArchive, WrongPassphraseError, NotAnEncryptedArchiveError } from '@/lib/backup/crypto';
 import { summarizeVerification, type VerifyReport } from '@/lib/backup/verify';
+import { runBackup } from '@/lib/backup/run';
 import { runRehearsal, summarizeRun, type RehearsalRunOutcome } from '@/lib/backup/rehearsalRun';
-import { listRestoreHistory, describeRestoreEntry, wasClean, type RestoreHistoryEntry } from '@/lib/restore/trail';
+import { commitRestoreLive } from '@/lib/restore/commitLive';
+import { summarizeOutcome, type RestoreOutcome } from '@/lib/restore/commit';
+import { listRestoreHistory, describeRestoreEntry, wasClean, type RestoreHistoryEntry, type PreRestoreBackup } from '@/lib/restore/trail';
 import type { Row } from '@/lib/restore/naturalKeys';
+
+const BACKUP_VERSION = '3.0-supabase';
+const TOTAL_COLLECTIONS = 93;
 
 type Stage = 'idle' | 'encrypted' | 'verified' | 'dry-run';
 
@@ -61,6 +67,7 @@ const RestoreCenter: React.FC = () => {
   const hi = language === 'hi';
   const { society } = useData();
   const { user } = useAuth();
+  const { toast } = useToast();
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -70,6 +77,7 @@ const RestoreCenter: React.FC = () => {
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
   const [report, setReport] = useState<VerifyReport | null>(null);
   const [rows, setRows] = useState<Record<string, Row[]>>({});
+  const [derivedEntries, setDerivedEntries] = useState<Row[]>([]);
   const [loadProblems, setLoadProblems] = useState<string[]>([]);
   const [compat, setCompat] = useState<Compatibility | null>(null);
 
@@ -79,9 +87,17 @@ const RestoreCenter: React.FC = () => {
   const [mode, setMode] = useState<RestoreMode>('merge');
   const [diff, setDiff] = useState<RestoreDiff | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
+  // The live rows the dry run read — reused by the writer so preview and commit agree.
+  const [currentRows, setCurrentRows] = useState<Record<string, Row[]> | null>(null);
 
   // Rehearsal: does this backup, if restored, reproduce today's books? Read-only.
   const [rehearsal, setRehearsal] = useState<RehearsalRunOutcome | null>(null);
+
+  // Commit (EXP-01). Every one of these is a GATE the button checks before it will fire.
+  const [preRestoreBackup, setPreRestoreBackup] = useState<PreRestoreBackup | null>(null);
+  const [confirmText, setConfirmText] = useState('');
+  const [committing, setCommitting] = useState(false);
+  const [commitOutcome, setCommitOutcome] = useState<RestoreOutcome | null>(null);
 
   // T-34: past restore attempts — including the refused ones, which are the ones worth
   // seeing. Read-only; this reads audit_log through a helper and writes nothing.
@@ -124,9 +140,10 @@ const RestoreCenter: React.FC = () => {
     : 'idle';
 
   function reset() {
-    setReport(null); setRows({}); setLoadProblems([]); setCompat(null);
-    setPassphrase(''); setPassError(null); setDiff(null); setDiffError(null);
+    setReport(null); setRows({}); setDerivedEntries([]); setLoadProblems([]); setCompat(null);
+    setPassphrase(''); setPassError(null); setDiff(null); setDiffError(null); setCurrentRows(null);
     setRehearsal(null);
+    setPreRestoreBackup(null); setConfirmText(''); setCommitOutcome(null);
   }
 
   /** Gate 1 + 2 + 4 + 5. Verification happens inside loadArchive, before any row is parsed. */
@@ -134,6 +151,7 @@ const RestoreCenter: React.FC = () => {
     const loaded = await loadArchive(raw, REGISTRY);
     setReport(loaded.report);
     setRows(loaded.rows);
+    setDerivedEntries(loaded.derivedEntries);
     setLoadProblems(loaded.problems);
     setCompat(
       loaded.report.manifest && user?.societyId
@@ -223,6 +241,9 @@ const RestoreCenter: React.FC = () => {
         current[entity.key] = result.rows as Row[];
       }
 
+      // Keep the live rows: the writer reuses them so the preview and the commit cannot
+      // disagree about what exists (and it avoids a second full read at commit time).
+      setCurrentRows(current);
       setDiff(diffRestore(plan.insert, rows, current, mode));
     } catch (err) {
       setDiffError(err instanceof Error ? err.message : String(err));
@@ -262,9 +283,117 @@ const RestoreCenter: React.FC = () => {
     }
   }
 
+  /**
+   * The mandatory pre-restore backup — the ONLY undo a restore has.
+   *
+   * A browser cannot wrap a restore in a transaction, so "rollback" means one thing:
+   * restore the backup taken moments before. This runs a real, full, verified backup of the
+   * current society, downloads it to the operator, and records its identity. The saga
+   * refuses a Merge or Replace without it.
+   */
+  async function handleSafetyBackup() {
+    if (!user?.societyId || !society) return;
+    setBusy(true);
+    setProgress({ done: 0, total: 1, label: hi ? 'सुरक्षा बैकअप' : 'safety backup' });
+    try {
+      const outcome = await runBackup({
+        entities: REGISTRY,
+        societyId: user.societyId,
+        fetchRows: fetchEntityRows,
+        deliver: (b, filename) => triggerDownload(new Blob([b as BlobPart], { type: 'application/zip' }), filename),
+        appVersion: BACKUP_VERSION,
+        schemaVersion: String(TOTAL_COLLECTIONS),
+        societyName: society.name,
+        registrationNo: society.registrationNo,
+        financialYear: society.financialYear,
+        createdAt: new Date().toISOString(),
+        createdBy: { name: user.name, email: user.email, role: user.role },
+        trigger: 'manual',
+        auditContext: { societyId: user.societyId, actor: { name: user.name, email: user.email, role: user.role } },
+        onProgress: (done, total) => setProgress({ done, total, label: hi ? 'सुरक्षा बैकअप' : 'safety backup' }),
+      });
+      if (outcome.status === 'created') {
+        setPreRestoreBackup({
+          filename: outcome.filename,
+          bytes: outcome.bytes,
+          createdAt: outcome.manifest.createdAt,
+          manifestHash: outcome.manifest.manifestHash,
+        });
+        toast({
+          title: hi ? 'सुरक्षा बैकअप बन गया' : 'Safety backup created',
+          description: hi
+            ? 'यह फ़ाइल संभालकर रखें — restore बिगड़ने पर यही एकमात्र वापसी है।'
+            : 'Keep this file — it is the only way back if the restore goes wrong.',
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: hi ? 'सुरक्षा बैकअप नहीं बना' : 'Safety backup failed',
+          description: 'message' in outcome ? outcome.message : (hi ? 'बैकअप विफल' : 'backup failed'),
+        });
+      }
+    } catch (e) {
+      toast({ variant: 'destructive', title: hi ? 'सुरक्षा बैकअप त्रुटि' : 'Safety backup error', description: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setProgress(null);
+      setBusy(false);
+    }
+  }
+
+  /**
+   * THE COMMIT. The one action on this page that writes.
+   *
+   * It reaches commitRestoreLive, which wires the society-scoped writer and the trail
+   * recorder into the saga. Every safety gate — FY-lock, the re-run dry run, the mandatory
+   * backup, the replay assertion — is enforced inside the saga; this only fires once the
+   * UI-side gates (rehearsal passed, backup taken, confirmation typed) are also satisfied.
+   */
+  async function handleCommit() {
+    if (!user?.societyId || !report?.manifest || !currentRows || !canCommit) return;
+    setCommitting(true);
+    setCommitOutcome(null);
+    try {
+      const outcome = await commitRestoreLive({
+        mode,
+        fyLocked: !!society?.fyLocked,
+        archiveRows: rows,
+        currentRows,
+        archivedEntries: derivedEntries,
+        societyId: user.societyId,
+        sourceManifestHash: report.manifest.manifestHash,
+        preRestoreBackup: preRestoreBackup ?? undefined,
+        auditContext: { societyId: user.societyId, actor: { name: user.name, email: user.email, role: user.role } },
+        onProgress: (done, total, entityKey) => setProgress({ done, total, label: entityKey }),
+      });
+      setCommitOutcome(outcome);
+      setConfirmText('');
+      toast({
+        variant: outcome.status === 'committed' ? 'default' : 'destructive',
+        title: outcome.status === 'committed' ? (hi ? 'Restore पूरा' : 'Restore complete') : (hi ? 'Restore नहीं हुआ' : 'Restore did not complete'),
+        description: summarizeOutcome(outcome, hi),
+        duration: 12000,
+      });
+      // Refresh the trail — the attempt was just recorded.
+      listRestoreHistory(user.societyId).then(({ entries }) => setHistory(entries));
+    } finally {
+      setProgress(null);
+      setCommitting(false);
+    }
+  }
+
   const canDryRun = stage === 'verified' && !!compat?.safe && loadProblems.length === 0;
   const changed = diff?.entities.filter(e => e.insert || e.update || e.conflicts.length || e.orphan) ?? [];
   const healthColor = (s: string) => (s === 'green' ? 'border-green-300 text-green-800' : s === 'red' ? 'border-red-300 text-red-800' : 'border-amber-300 text-amber-900');
+
+  // ── THE COMMIT GATES. The button is dead unless EVERY one of these holds. ──────
+  const confirmPhrase = society?.name ?? '';
+  const rehearsalPassed = rehearsal?.status === 'passed';
+  const dryRunOkForMode = !!diff && diff.ok && diff.mode === mode;
+  const backupReady = mode === 'fresh' ? true : !!preRestoreBackup;   // Fresh has nothing to undo
+  const confirmOk = confirmText.trim() === confirmPhrase && confirmPhrase.length > 0;
+  const canCommit =
+    !!compat?.safe && loadProblems.length === 0 && !society?.fyLocked &&
+    dryRunOkForMode && rehearsalPassed && backupReady && confirmOk;
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-4">
@@ -446,7 +575,7 @@ const RestoreCenter: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Select value={mode} onValueChange={v => { setMode(v as RestoreMode); setDiff(null); }} disabled={busy}>
+              <Select value={mode} onValueChange={v => { setMode(v as RestoreMode); setDiff(null); setCommitOutcome(null); setConfirmText(''); }} disabled={busy || committing}>
                 <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="fresh">{hi ? 'Fresh — खाली संस्था में' : 'Fresh — into an empty society'}</SelectItem>
@@ -518,8 +647,8 @@ const RestoreCenter: React.FC = () => {
 
                 <p className="text-xs text-gray-500">
                   {hi
-                    ? 'यहीं तक। लिखने वाली प्रक्रिया मौजूद है पर अभी इस पेज से नहीं जुड़ी — और जुड़ने पर भी उससे पहले एक बैकअप अनिवार्य होगा।'
-                    : 'This is as far as it goes. The saga that writes exists, but is not wired to this page yet — and when it is, a pre-restore backup will be mandatory before it runs.'}
+                    ? 'यह सिर्फ़ पूर्वावलोकन है — यहाँ कुछ नहीं लिखा जाता। असल restore नीचे है, और उससे पहले एक सुरक्षा बैकअप अनिवार्य है।'
+                    : 'This is a preview only — nothing is written here. The actual restore is below, and a safety backup is mandatory before it runs.'}
                 </p>
               </div>
             )}
@@ -581,6 +710,88 @@ const RestoreCenter: React.FC = () => {
                   <ul className="text-sm text-red-800 list-disc pl-5">
                     {rehearsal.problems.map((p, i) => <li key={i}>{p}</li>)}
                   </ul>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── THE COMMIT (EXP-01). The one action on this page that writes. ──── */}
+      {report?.ok && compat?.safe && (
+        <Card className="border-red-300">
+          <CardHeader className="py-3">
+            <CardTitle className="text-base flex items-center gap-2 text-red-800">
+              <AlertTriangle className="h-4 w-4" />
+              {hi ? 'असल restore — किताबें बदल देगा' : 'Actual restore — this rewrites the books'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-900">
+              {hi
+                ? 'यह वास्तव में डेटाबेस में लिखता है और इसे पलटा नहीं जा सकता — सिवाय नीचे बनने वाले सुरक्षा बैकअप से। पहली बार किसी असली संस्था पर चलाने से पहले एक ग़ैर-ज़रूरी/परीक्षण संस्था पर आज़माएँ।'
+                : 'This actually writes to the database and cannot be undone — except by restoring the safety backup below. Before running it on a real society for the first time, try it on a throwaway/test society.'}
+            </div>
+
+            {society?.fyLocked && (
+              <p className="text-sm text-blue-900">{hi ? 'वित्तीय वर्ष लॉक है — restore नहीं चलेगा (RULE 6)।' : 'The financial year is locked — a restore will not run (RULE 6).'}</p>
+            )}
+
+            {/* Step 1 — the mandatory safety backup (the only undo). Fresh needs none. */}
+            {mode !== 'fresh' && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" onClick={handleSafetyBackup} disabled={busy || committing} className="gap-2">
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {hi ? '1. सुरक्षा बैकअप बनाएँ' : '1. Create safety backup'}
+                </Button>
+                {preRestoreBackup
+                  ? <span className="text-xs text-green-700">✓ {preRestoreBackup.filename}</span>
+                  : <span className="text-xs text-gray-500">{hi ? 'restore से पहले अनिवार्य' : 'required before restore'}</span>}
+              </div>
+            )}
+
+            {/* Step 2 — type the society name to confirm. */}
+            <div className="space-y-1">
+              <p className="text-xs text-gray-600">
+                {hi ? `पुष्टि के लिए संस्था का नाम टाइप करें: ` : `Type the society name to confirm: `}
+                <span className="font-semibold">{confirmPhrase}</span>
+              </p>
+              <Input
+                value={confirmText}
+                onChange={e => setConfirmText(e.target.value)}
+                placeholder={confirmPhrase}
+                disabled={committing}
+                className="max-w-sm"
+              />
+            </div>
+
+            {/* Step 3 — the commit. Dead unless every gate holds; the list says what is missing. */}
+            <Button onClick={handleCommit} disabled={!canCommit || committing} variant="destructive" className="gap-2">
+              {committing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldAlert className="h-4 w-4" />}
+              {hi ? `${mode.toUpperCase()} restore चलाएँ` : `Run ${mode.toUpperCase()} restore`}
+            </Button>
+
+            {!canCommit && !commitOutcome && (
+              <ul className="text-xs text-gray-500 list-disc pl-5">
+                {!dryRunOkForMode && <li>{hi ? 'पहले इसी mode पर dry run चलाएँ और वह साफ़ हो' : 'run a clean dry run for this mode first'}</li>}
+                {!rehearsalPassed && <li>{hi ? 'rehearsal पास होना चाहिए' : 'the rehearsal must pass'}</li>}
+                {!backupReady && <li>{hi ? 'सुरक्षा बैकअप बनाएँ' : 'create the safety backup'}</li>}
+                {!confirmOk && <li>{hi ? 'संस्था का नाम सही टाइप करें' : 'type the society name exactly'}</li>}
+                {!!society?.fyLocked && <li>{hi ? 'वित्तीय वर्ष लॉक है' : 'the financial year is locked'}</li>}
+              </ul>
+            )}
+
+            {progress && committing && (
+              <p className="text-xs text-gray-500">{hi ? 'लिखा जा रहा है' : 'Writing'} — {progress.done}/{progress.total} · {progress.label}</p>
+            )}
+
+            {commitOutcome && (
+              <div className={`p-3 rounded text-sm ${commitOutcome.status === 'committed' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                <p className="font-semibold">{summarizeOutcome(commitOutcome, hi)}</p>
+                {commitOutcome.status === 'partial' && (
+                  <p className="mt-1">{hi
+                    ? `"${commitOutcome.entityKey}" पर रुका। सुरक्षा बैकअप (${preRestoreBackup?.filename ?? ''}) से वापस लाएँ।`
+                    : `Stopped at "${commitOutcome.entityKey}". Roll back with the safety backup (${preRestoreBackup?.filename ?? ''}).`}</p>
                 )}
               </div>
             )}
