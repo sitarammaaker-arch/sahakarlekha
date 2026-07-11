@@ -41,6 +41,10 @@ const KNOWN_EXCLUSIONS = Object.freeze({
   // reads it (T-11) and the cutover wires writes (T-12); it will be DECLARED in the Export
   // Registry then, so a society's declared activities are backed up. Excluded while dormant.
   society_activities: 'Activities-layer join (T-10); dormant until the T-11/T-12 wiring, then registered for backup',
+  // T-06: the append-only event journal (system of record). Dormant until the dual-write
+  // cutover (T-06 live / T-09); it becomes the AUTHORITATIVE store and will be registered for
+  // backup then (and existing tables become its projections). Excluded while dormant.
+  ledger_events: 'append-only event journal (T-06); dormant until the dual-write cutover, then the backup master',
 });
 
 let fail = 0;

@@ -3267,3 +3267,42 @@ do $$ begin
   end if;
 end $$;
 create index if not exists idx_society_activities_society on society_activities(society_id);
+
+-- ── T-06 (ADR-0001 / INV-1): the append-only EVENT JOURNAL — the system of record ────
+-- Financial truth is an append-only stream of immutable events; balances/registers/reports
+-- are PROJECTIONS derived by replay (src/lib/ledger/*). A correction is a NEW reversing event
+-- (reversal_of), never a mutation or a delete — which retires the RULE 1 divergence class.
+-- WORM like audit_log: INSERT + SELECT only, no UPDATE/DELETE. Additive + DORMANT — nothing
+-- writes or reads it until the dual-write cutover (T-06 live / T-09), so this changes nothing.
+create table if not exists ledger_events (
+  event_id       text primary key,
+  event_type     text not null,                      -- past-tense fact, e.g. 'voucher.posted'
+  schema_version int  not null default 1,
+  society_id     text not null default 'SOC001',     -- tenant
+  jurisdiction   text,
+  aggregate_type text not null,                       -- 'voucher' | 'member' | ...
+  aggregate_id   text not null,
+  sequence       bigint not null,                     -- per-(tenant, aggregate) ordering, 1-based
+  occurred_at    timestamptz not null default now(),
+  producer_kind  text not null default 'human',       -- human | agent | import | integration (AI-A)
+  producer_id    text,
+  on_behalf_of   text,
+  reversal_of    text,                                -- event_id this reverses (CL-2)
+  payload        jsonb not null,
+  created_at     timestamptz not null default now()
+);
+-- Gapless per-aggregate ordering: no two events share a (tenant, aggregate, sequence).
+create unique index if not exists ledger_events_aggregate_seq
+  on ledger_events (society_id, aggregate_type, aggregate_id, sequence);
+create index if not exists ledger_events_scope
+  on ledger_events (society_id, aggregate_type, aggregate_id, sequence);
+alter table ledger_events enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='ledger_events' and policyname='ledger_events_insert') then
+    create policy "ledger_events_insert" on ledger_events for insert with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='ledger_events' and policyname='ledger_events_select') then
+    create policy "ledger_events_select" on ledger_events for select using (true);
+  end if;
+  -- Intentionally NO update/delete policy ⇒ ledger_events is WORM (append-only, CL-2).
+end $$;
