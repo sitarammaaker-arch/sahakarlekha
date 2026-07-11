@@ -981,7 +981,7 @@ export interface VoucherEntry {
   costCentreId?: string;
 }
 
-export type SocietyType = 'marketing_processing' | 'pacs' | 'consumer' | 'labour' | 'dairy' | 'housing' | 'sugar' | 'other';
+export type SocietyType = 'marketing_processing' | 'pacs' | 'consumer' | 'labour' | 'dairy' | 'housing' | 'sugar' | 'producer' | 'multistate' | 'multipurpose' | 'other';
 
 // Board of Directors / Board of Administration
 export type BoardType = 'bod' | 'boa';

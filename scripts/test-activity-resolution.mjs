@@ -99,9 +99,17 @@ const hidden = resolveCapabilities('pacs',
   [{ capability: 'lending', mode: 'revoke', source: 'admin' }], NOW, undefined, ['credit_short_term']);
 ok(!hidden.has('lending'), 'an admin-hidden capability stays hidden even when a declared activity lights it');
 
-// deposits_savings maps to [] (capability arrives in T-13) → declaring it surfaces nothing.
-const deposits = resolveCapabilities('pacs', [], NOW, undefined, ['deposits_savings']);
-ok(deposits.size === 0, 'an activity whose capability does not exist yet ([]) surfaces nothing');
+// common_service_centre maps to [] (no capability yet) → declaring it surfaces nothing.
+const noCap = resolveCapabilities('pacs', [], NOW, undefined, ['common_service_centre']);
+ok(noCap.size === 0, 'an activity whose capability does not exist yet ([]) surfaces nothing');
+
+// ── 4b. T-13 — the new deposit_ledger capability flows through the resolver ───
+// pacs is now entitled to deposit_ledger; declaring the deposits activity surfaces it.
+const dep = resolveCapabilities('pacs', [], NOW, undefined, ['deposits_savings']);
+ok(dep.has('deposit_ledger'), 'a pacs declaring deposits_savings surfaces deposit_ledger (T-13, within entitlement)');
+// dairy is NOT entitled to deposit_ledger, so the same declared activity grants nothing (MR-4).
+const depDairy = resolveCapabilities('dairy', [], NOW, undefined, ['deposits_savings']);
+ok(!depDairy.has('deposit_ledger'), 'a dairy (not entitled) declaring deposits gets nothing — MR-4 holds for the new capability too');
 
 // ── 5. DETERMINISM ───────────────────────────────────────────────────────────
 ok(setEq(resolveCapabilities('pacs', [], NOW, undefined, ['credit_short_term']),

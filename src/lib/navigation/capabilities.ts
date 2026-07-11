@@ -24,6 +24,8 @@ export type Capability =
   | 'housing'
   | 'labour'
   | 'pf_esi'
+  | 'deposit_ledger'          // member deposits / savings ledger (T-13 / CAP-1, BA-2)
+  | 'subsidy_reconciliation'  // government subsidy claim & reconciliation — FPS / fertilizer (T-13 / CAP-2, BA-3)
   | 'haryana_compliance';  // jurisdiction pack: HAFED annual-review proformas (Haryana marketing only)
 
 /** Sidebar groups — 1:1 with today's visual groups, in render order. */

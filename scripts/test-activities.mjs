@@ -43,10 +43,11 @@ register(
 
 const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
 
-let cat, map;
+let cat, map, stc;
 try {
   cat = await import(abs('../src/lib/navigation/activities.ts'));
   map = await import(abs('../src/lib/navigation/activityCapabilities.ts'));
+  stc = await import(abs('../src/lib/navigation/societyTypeCapabilities.ts'));
 } catch (e) {
   console.error('\nFAIL    Could not import the activities modules.');
   console.error('        ' + String(e?.message ?? e).split('\n')[0]);
@@ -90,6 +91,19 @@ const multi = new Set([
 ]);
 ok(multi.has('lending') && multi.has('dairy_collection') && multi.has('pos_billing'),
   'a Multipurpose PACS (credit + dairy + retail) unions to lending + dairy_collection + pos_billing');
+
+// ── 4. T-13 — new capabilities + legal types are wired ───────────────────────
+ok(ACTIVITY_CAPABILITY_MAP.deposits_savings.includes('deposit_ledger'), 'deposits_savings now lights deposit_ledger (CAP-1 / BA-2 — no longer [])');
+ok(ACTIVITY_CAPABILITY_MAP.deposits_term.includes('deposit_ledger'), 'deposits_term lights deposit_ledger');
+ok(ACTIVITY_CAPABILITY_MAP.fair_price_shop_pds.includes('subsidy_reconciliation'), 'fair_price_shop_pds lights subsidy_reconciliation (CAP-2 / BA-3)');
+ok(ACTIVITY_CAPABILITY_MAP.agri_input_retail.includes('subsidy_reconciliation'), 'agri_input_retail lights subsidy_reconciliation (fertilizer/seed subsidy)');
+
+const T = stc.SOCIETY_TYPE_CAPABILITIES;
+ok(T.producer && T.multistate && T.multipurpose, 'new legal types producer/multistate/multipurpose have templates (SC-1/2/3)');
+ok(T.pacs.includes('deposit_ledger'), 'PACS is entitled to deposit_ledger (they take deposits) — so the deposits activity can surface it');
+ok(T.multipurpose.includes('deposit_ledger') && T.multipurpose.includes('subsidy_reconciliation') && T.multipurpose.includes('dairy_collection'),
+  'multipurpose is broad — credit + deposits + dairy + subsidy at once (the multipurpose-PACS reality)');
+ok(!T.dairy.includes('deposit_ledger'), 'dairy is NOT auto-entitled to deposits (a declared deposits activity there stays gated — MR-4)');
 
 console.log(`\nActivities layer (catalog + map): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

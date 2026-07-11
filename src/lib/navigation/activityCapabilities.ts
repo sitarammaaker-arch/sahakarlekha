@@ -16,17 +16,17 @@ import type { Capability } from './capabilities';
 export const ACTIVITY_CAPABILITY_MAP: Record<Activity, Capability[]> = {
   credit_short_term: ['lending'],
   credit_long_term: ['lending'],
-  deposits_savings: [], // → deposit_ledger (T-13)
-  deposits_term: [], // → deposit_ledger (T-13)
+  deposits_savings: ['deposit_ledger'],
+  deposits_term: ['deposit_ledger'],
   milk_procurement: ['dairy_collection'],
   milk_sales: ['inventory_sales', 'gst'],
-  agri_input_retail: ['inventory_sales', 'fertilizer_distribution', 'seed_distribution', 'gst'],
+  agri_input_retail: ['inventory_sales', 'fertilizer_distribution', 'seed_distribution', 'subsidy_reconciliation', 'gst'],
   custom_hiring_centre: [], // service; no dedicated capability yet
   foodgrain_procurement: ['procurement_msp'],
   warehousing: ['warehousing'],
   cold_storage: ['warehousing'],
   consumer_retail: ['inventory_sales', 'pos_billing', 'gst'],
-  fair_price_shop_pds: ['inventory_sales', 'pos_billing'], // → + subsidy_reconciliation (T-13)
+  fair_price_shop_pds: ['inventory_sales', 'pos_billing', 'subsidy_reconciliation'],
   lpg_cng_petrol_distribution: ['inventory_sales', 'gst'],
   marketing_aggregation: ['procurement_msp', 'inventory_sales'],
   processing: ['inventory_sales', 'procurement_msp'],
