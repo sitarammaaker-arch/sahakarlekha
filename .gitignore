@@ -25,3 +25,6 @@ dist-ssr
 .env
 brand-assets/templates/export/
 _archive-old-brand/
+
+# Supabase CLI local state (not for the repo)
+supabase/.temp/
