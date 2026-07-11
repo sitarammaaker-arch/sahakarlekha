@@ -50,6 +50,7 @@
     "test:backup-rehearsal": "node scripts/test-backup-rehearsal.mjs",
     "test:backup-health": "node scripts/test-backup-health.mjs",
     "test:backup-rehearsal-run": "node scripts/test-backup-rehearsal-run.mjs",
+    "test:rehearsal-audit": "node scripts/test-rehearsal-audit.mjs",
     "test:restore-writer": "node scripts/test-restore-writer.mjs",
     "test:restore-commit-live": "node scripts/test-restore-commit-live.mjs",
     "test:import-fylock": "node scripts/test-import-fylock.mjs",

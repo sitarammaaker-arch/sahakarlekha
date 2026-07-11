@@ -26,7 +26,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Download, Info, Shield, Cloud, AlertTriangle, History, EyeOff, Archive, Loader2, Lock, KeyRound } from 'lucide-react';
+import { Download, Info, Shield, ShieldCheck, Cloud, AlertTriangle, History, EyeOff, Archive, Loader2, Lock, KeyRound } from 'lucide-react';
+import { useBackupHealth } from '@/hooks/useBackupHealth';
 import { useToast } from '@/hooks/use-toast';
 import {
   listExportHistory, describeExport, mayContainPii,
@@ -58,6 +59,11 @@ const BackupRestore: React.FC = () => {
   const { user } = useAuth();
 
   const hi = language === 'hi';
+
+  // T-35: the archive is only called a "backup" once a PERSISTED rehearsal proves it restores
+  // to the current books. `proven` is true only for a fresh, passing, recorded rehearsal
+  // (see useBackupHealth → backupHealth, "NEVER GREEN ON MISSING DATA").
+  const { proven } = useBackupHealth();
 
   // ── Export history (T-15) ─────────────────────────────────────────────────
   // Read from audit_log's `export` events — see the deviation note in lib/export/jobs.ts
@@ -337,8 +343,10 @@ const BackupRestore: React.FC = () => {
       <Card className="border-blue-200">
         <CardHeader className="py-3">
           <CardTitle className="text-base flex items-center gap-2 text-blue-800">
-            <Archive className="h-4 w-4" />
-            {hi ? 'पूर्ण डेटा आर्काइव (.slbak)' : 'Full Data Archive (.slbak)'}
+            {proven ? <ShieldCheck className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+            {proven
+              ? (hi ? 'पूर्ण बैकअप (.slbak)' : 'Full Backup (.slbak)')
+              : (hi ? 'पूर्ण डेटा आर्काइव (.slbak)' : 'Full Data Archive (.slbak)')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -360,14 +368,25 @@ const BackupRestore: React.FC = () => {
             unverified archive a backup is precisely the lie that started this whole
             workstream — see the warning above, and T-01.
           */}
-          <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-300 rounded text-xs text-amber-900">
-            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-            <span>
-              {hi
-                ? 'यह अब भी "एक्सपोर्ट" कहलाता है, "बैकअप" नहीं — पर रिस्टोर अब मौजूद है: इस आर्काइव को बग़ल के Restore Center में जाँचें, परखें (rehearse) और सख़्त गेट्स के पीछे restore करें। जब तक rehearsal अपने-आप चलकर दर्ज न होने लगे, तब तक हम सावधानी से "एक्सपोर्ट" शब्द ही रखते हैं।'
-                : 'This is still called an export, not a backup — but restore now exists: verify, rehearse and restore this archive in the Restore Center, behind mandatory gates. Until a rehearsal runs automatically and its result is recorded, we keep the cautious word "export".'}
-            </span>
-          </div>
+          {proven ? (
+            <div className="flex items-start gap-2 p-2 bg-green-50 border border-green-300 rounded text-xs text-green-900">
+              <ShieldCheck className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>
+                {hi
+                  ? 'यह अब एक सिद्ध बैकअप है — एक दर्ज (recorded) rehearsal ने पुष्टि की है कि यह आर्काइव restore करने पर आपकी मौजूदा किताबें हूबहू लौटाता है। restore फिर भी बग़ल के Restore Center में सुरक्षा-गेट्स के पीछे ही होता है।'
+                  : 'This is now a proven backup — a recorded rehearsal confirms this archive restores to your exact current books. Restore still happens only in the Restore Center, behind its safety gates.'}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-300 rounded text-xs text-amber-900">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>
+                {hi
+                  ? 'यह अब भी "एक्सपोर्ट" कहलाता है, "बैकअप" नहीं — पर रिस्टोर अब मौजूद है: इस आर्काइव को बग़ल के Restore Center में जाँचें, परखें (rehearse) और सख़्त गेट्स के पीछे restore करें। जब तक rehearsal चलकर दर्ज न हो, तब तक हम सावधानी से "एक्सपोर्ट" शब्द ही रखते हैं।'
+                  : 'This is still called an export, not a backup — but restore now exists: verify, rehearse and restore this archive in the Restore Center, behind mandatory gates. Until a rehearsal runs and its result is recorded, we keep the cautious word "export".'}
+              </span>
+            </div>
+          )}
 
           {/* ── Encryption (T-26b) ────────────────────────────────────────── */}
           <div className="border-t pt-3 space-y-3">

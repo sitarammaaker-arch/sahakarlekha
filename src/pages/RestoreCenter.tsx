@@ -52,6 +52,7 @@ import { decryptArchive, WrongPassphraseError, NotAnEncryptedArchiveError } from
 import { summarizeVerification, type VerifyReport } from '@/lib/backup/verify';
 import { runBackup } from '@/lib/backup/run';
 import { runRehearsal, summarizeRun, type RehearsalRunOutcome } from '@/lib/backup/rehearsalRun';
+import { logRehearsalAudit } from '@/lib/auditLog';
 import { commitRestoreLive } from '@/lib/restore/commitLive';
 import { summarizeOutcome, type RestoreOutcome } from '@/lib/restore/commit';
 import { listRestoreHistory, describeRestoreEntry, wasClean, type RestoreHistoryEntry, type PreRestoreBackup } from '@/lib/restore/trail';
@@ -278,6 +279,36 @@ const RestoreCenter: React.FC = () => {
         backupCreatedAt: report.manifest.createdAt,
       });
       setRehearsal(outcome);
+
+      // Persist the proof (T-35). Append-only evidence in `audit_log` (action='rehearse') so
+      // `backupHealth` can go green across reloads and the UI may honestly say "backup"
+      // (Digital Preservation DP-P7; ADR-0001 — evidence is a record, health is a projection).
+      // The rehearsal is read-only, so a failed WRITE is surfaced, never rolled back.
+      if (outcome.status === 'passed' || outcome.status === 'failed') {
+        try {
+          await logRehearsalAudit(
+            {
+              backupRef: report.manifest.manifestHash,
+              backupCreatedAt: report.manifest.createdAt,
+              passed: outcome.status === 'passed',
+              sourceBalanced: outcome.live.balanced,
+              entryCount: outcome.live.entryCount,
+              stockItemCount: outcome.live.stockItemCount,
+              mismatchAccounts: outcome.verdict.accounts.length,
+              mismatchItems: outcome.verdict.items.length,
+            },
+            { societyId: user.societyId, actor: { name: user.name, email: user.email, role: user.role } },
+          );
+        } catch {
+          toast({
+            variant: 'destructive',
+            title: hi ? 'rehearsal दर्ज नहीं हुआ' : 'Rehearsal not recorded',
+            description: hi
+              ? 'परख हो गई, पर उसका प्रमाण ऑडिट लॉग में लिखा नहीं जा सका — इसलिए यह अभी "बैकअप" नहीं कहलाएगा।'
+              : 'The rehearsal ran, but its proof could not be written to the audit log — so this is not yet called a "backup".',
+          });
+        }
+      }
     } finally {
       setBusy(false);
     }

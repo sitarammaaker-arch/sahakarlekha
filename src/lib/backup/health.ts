@@ -124,6 +124,49 @@ export function backupHealth(inputs: HealthInputs): BackupHealth {
   return { status, reasons, backupAgeDays, rehearsalAgeDays, proven };
 }
 
+/**
+ * A `rehearse` row read back from `audit_log` — only the fields health needs.
+ * Its `after` payload is written by `buildRehearsalAuditEvent` (lib/auditLog.ts).
+ */
+export interface RehearsalAuditRow {
+  created_at?: string | null;
+  after?: { passed?: unknown; backupCreatedAt?: unknown } | null;
+}
+
+/**
+ * PURE — backup health projected from the PERSISTED rehearsal evidence (T-35).
+ *
+ * The append-only `audit_log` `rehearse` rows are the record; "current health" is derived
+ * from the LATEST of them (ADR-0001 / CL-4 — a projection, never a stored flag). No rows ⇒
+ * "never rehearsed" ⇒ amber/red, never green. Deterministic: `now` is injected, dates are
+ * parsed from ISO strings, nothing reads the clock (so the purity scan stays green).
+ */
+export function healthFromRehearsalRows(
+  rows: readonly RehearsalAuditRow[],
+  now: string,
+  freshnessDays?: number,
+): BackupHealth {
+  let latest: RehearsalAuditRow | null = null;
+  let latestMs = -Infinity;
+  for (const r of rows) {
+    const at = r?.created_at;
+    if (!at) continue;
+    const ms = Date.parse(at);
+    if (Number.isNaN(ms)) continue;
+    if (ms > latestMs) { latestMs = ms; latest = r; }
+  }
+  if (!latest) {
+    return backupHealth({ lastBackupAt: null, lastVerifyAt: null, lastRehearsal: null, now, freshnessDays });
+  }
+  const at = latest.created_at as string;
+  const passed = latest.after?.passed === true;
+  const backupCreatedAt =
+    typeof latest.after?.backupCreatedAt === 'string' ? latest.after.backupCreatedAt : at;
+  // A rehearsal verifies the archive before comparing, so a recorded rehearsal is also a
+  // recorded verification at the same instant.
+  return backupHealth({ lastBackupAt: backupCreatedAt, lastVerifyAt: at, lastRehearsal: { at, passed }, now, freshnessDays });
+}
+
 /** PURE — one line for the card header. Hindi first (RULE 7). */
 export function summarizeHealth(health: BackupHealth, hi = true): string {
   switch (health.status) {

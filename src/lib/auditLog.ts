@@ -34,7 +34,7 @@ import { supabase } from '@/lib/supabase';
  */
 export type AuditAction =
   | 'create' | 'update' | 'delete' | 'approve' | 'reject' | 'cancel' | 'restore' | 'reverse'
-  | 'export';
+  | 'export' | 'rehearse';
 
 export interface AuditActor {
   name?: string | null;
@@ -172,6 +172,70 @@ export async function logAuditBlocking(input: AuditInput, ctx: AuditContext): Pr
  */
 export async function logExportAudit(input: ExportAuditInput, ctx: AuditContext): Promise<void> {
   const row = buildExportAuditEvent(input, ctx);
+  const { error } = await supabase.from('audit_log').insert(row);
+  throwIfAuditFailed(error);
+}
+
+// ─── CONTRACT 2 (custody): restore-rehearsal EVIDENCE — the T-35 persisted proof ─────
+//
+// A rehearsal proves a backup restores to the same BOOKS (see lib/backup/rehearsal.ts).
+// T-35's remaining half is PERSISTING that proof, so `backupHealth` can go green across
+// reloads and the UI may honestly say "backup" (Digital Preservation DP-P7; ADR-0001:
+// the evidence is an append-only, attributed record, and "current health" is a projection
+// over these rows — never a mutable stored flag).
+//
+// PRIVACY (Canonical CL-6, ADR-0007): the evidence is STATUS + COUNTS + TIMESTAMPS only —
+// never a monetary figure, an account/member id, or any per-record detail. `mismatch*` are
+// COUNTS of differing accounts/items, not which ones and not by how much.
+//
+// It reuses the WORM `audit_log` (action='rehearse'), so there is NO new table and NO
+// schema change. Written blocking (awaited, throws) so a failure to record is visible; the
+// caller catches it — a rehearsal is read-only, so there is nothing to roll back, only a
+// note that the proof was not recorded.
+
+/** What a rehearsal proved. STATUS + COUNTS only — no figures, no ids, no PII. */
+export interface RehearsalAuditInput {
+  /** The rehearsed backup's identity (manifest hash or filename), for the trail. */
+  backupRef?: string | null;
+  /** When the rehearsed backup was created — the freshness the health card reads. */
+  backupCreatedAt: string | null;
+  /** Did the restored books reproduce the live books exactly? */
+  passed: boolean;
+  /** Did the LIVE books themselves balance (Dr = Cr, CL-1)? A finding of its own. */
+  sourceBalanced: boolean;
+  entryCount: number;
+  stockItemCount: number;
+  /** COUNT of accounts that differed — never which, never by how much. */
+  mismatchAccounts: number;
+  /** COUNT of stock items that differed. */
+  mismatchItems: number;
+}
+
+/** PURE — shapes a rehearsal-evidence event. Deterministic given (input, ctx). */
+export function buildRehearsalAuditEvent(input: RehearsalAuditInput, ctx: AuditContext) {
+  return buildAuditEvent({
+    entityType: 'backup',
+    entityId: input.backupRef ?? input.backupCreatedAt ?? 'unknown',
+    action: 'rehearse',
+    after: {
+      passed: input.passed,
+      backupCreatedAt: input.backupCreatedAt,
+      sourceBalanced: input.sourceBalanced,
+      entryCount: input.entryCount,
+      stockItemCount: input.stockItemCount,
+      mismatchAccounts: input.mismatchAccounts,
+      mismatchItems: input.mismatchItems,
+    },
+  }, ctx);
+}
+
+/**
+ * BLOCKING evidence write for a rehearsal. Awaited; THROWS on failure so the operator can
+ * be told "the proof was not recorded". Unlike an export, there is nothing to abort — the
+ * rehearsal already ran read-only — so the caller catches and surfaces, never rolls back.
+ */
+export async function logRehearsalAudit(input: RehearsalAuditInput, ctx: AuditContext): Promise<void> {
+  const row = buildRehearsalAuditEvent(input, ctx);
   const { error } = await supabase.from('audit_log').insert(row);
   throwIfAuditFailed(error);
 }
