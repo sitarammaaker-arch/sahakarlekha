@@ -15,6 +15,7 @@
  * (societyType, rows, now) → fully deterministic.
  */
 import type { SocietyType } from '@/types';
+import { resolveJurisdiction } from '@/lib/jurisdiction';
 import type { Capability, CapabilitySource, SocietyCapabilityRow } from './capabilities';
 import { SOCIETY_TYPE_CAPABILITIES } from './societyTypeCapabilities';
 
@@ -32,9 +33,9 @@ function activeRows(rows: SocietyCapabilityRow[], now: number): SocietyCapabilit
  * Add other states' packs here (e.g. Punjab → 'punjab_compliance') — the core stays untouched.
  */
 export function jurisdictionCapabilities(societyType: SocietyType, state?: string): Capability[] {
-  const s = (state || '').trim().toLowerCase();
-  const isHaryana = s === 'hr' || s === 'haryana' || s === 'हरियाणा';
-  if (societyType === 'marketing_processing' && isHaryana) return ['haryana_compliance'];
+  // Jurisdiction normalization lives in ONE place — resolveJurisdiction (T-01) — so 'HR',
+  // 'Haryana' and 'हरियाणा' all resolve to the same code here and on every financial row.
+  if (societyType === 'marketing_processing' && resolveJurisdiction(state) === 'hr') return ['haryana_compliance'];
   return [];
 }
 

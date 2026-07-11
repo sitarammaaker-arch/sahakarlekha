@@ -12,6 +12,7 @@
     "validate:glossary": "node scripts/validate-glossary.mjs",
     "test:calc": "node scripts/test-calculators.mjs",
     "test:nav": "node scripts/test-nav.mjs",
+    "test:jurisdiction": "node scripts/test-jurisdiction.mjs",
     "test:related": "node scripts/test-related.mjs",
     "test:dist": "node scripts/test-dist.mjs",
     "seo:report": "node scripts/seo-report.mjs",

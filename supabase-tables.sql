@@ -3151,3 +3151,37 @@ do $$ begin
   end if;
 end $$;
 create index if not exists idx_p7_entries_society on p7_entries(society_id);
+
+-- ── T-01 (ADR-0009 / Canonical CL-5, gap IRR-4): the jurisdiction key ────────────────
+-- Every financial row must carry (society_id, jurisdiction). society_id already exists (the
+-- tenant); jurisdiction is the residency / consolidation scope, resolved from the society's
+-- `state` by resolveJurisdiction() in src/lib/jurisdiction.ts — the SINGLE source of truth,
+-- deliberately NOT reimplemented in SQL, which is why the column is not value-backfilled
+-- here (an app routine that runs the same resolver backfills existing rows in the follow-on).
+--
+-- REQUIRED MIGRATION — run this in the Supabase SQL Editor. Purely additive (nullable), so
+-- nothing breaks before it runs. Per RULE 1, the app does NOT yet write this column — the
+-- write-path stamping ships only AFTER this migration is applied — so no upsert can fail on
+-- a missing column in the meantime. This block covers the canonical financial spine; the
+-- remaining domain tables (housing / dairy / marketing / consumer / procurement / deposits)
+-- get the column in the same additive way when their write paths are wired.
+alter table accounts         add column if not exists jurisdiction text;
+alter table vouchers         add column if not exists jurisdiction text;
+alter table voucher_entries  add column if not exists jurisdiction text;
+alter table members          add column if not exists jurisdiction text;
+alter table loans            add column if not exists jurisdiction text;
+alter table kcc_loans        add column if not exists jurisdiction text;
+alter table assets           add column if not exists jurisdiction text;
+alter table stock_items      add column if not exists jurisdiction text;
+alter table stock_movements  add column if not exists jurisdiction text;
+alter table sales            add column if not exists jurisdiction text;
+alter table purchases        add column if not exists jurisdiction text;
+alter table employees        add column if not exists jurisdiction text;
+alter table salary_records   add column if not exists jurisdiction text;
+alter table suppliers        add column if not exists jurisdiction text;
+alter table customers        add column if not exists jurisdiction text;
+alter table audit_objections add column if not exists jurisdiction text;
+alter table budgets          add column if not exists jurisdiction text;
+create index if not exists vouchers_jurisdiction_idx        on vouchers (society_id, jurisdiction);
+create index if not exists voucher_entries_jurisdiction_idx on voucher_entries (society_id, jurisdiction);
+create index if not exists members_jurisdiction_idx         on members (society_id, jurisdiction);
