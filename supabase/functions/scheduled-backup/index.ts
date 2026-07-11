@@ -140,6 +140,15 @@ async function backupSociety(supabase: any, societyId: string) {
 }
 
 Deno.serve(async (req) => {
+  // Secret gate. Once BACKUP_CRON_SECRET is set (supabase secrets set …) the function
+  // refuses any call whose `x-backup-secret` header does not match — so only the cron job
+  // (which sends it) can trigger backups, not anyone who guesses the URL. Before the secret
+  // is configured the function is open, which is what let the deploy be tested first.
+  const secret = Deno.env.get('BACKUP_CRON_SECRET') ?? '';
+  if (secret && req.headers.get('x-backup-secret') !== secret) {
+    return new Response(JSON.stringify({ ok: false, error: 'unauthorized' }), { status: 401, headers: { 'content-type': 'application/json' } });
+  }
+
   const url = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   if (!url || !serviceKey) {
