@@ -22,6 +22,7 @@
     "test:type-branch-parity": "node scripts/test-type-branch-parity.mjs",
     "test:ledger-event": "node scripts/test-ledger-event.mjs",
     "test:ledger-projections": "node scripts/test-ledger-projections.mjs",
+    "test:ledger-correction": "node scripts/test-ledger-correction.mjs",
     "test:related": "node scripts/test-related.mjs",
     "test:dist": "node scripts/test-dist.mjs",
     "seo:report": "node scripts/seo-report.mjs",
