@@ -432,6 +432,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deleteBranch = useCallback((id: string) => {
+    if (guardPermission('delete', 'शाखा मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;   // RULE 6
     let snapshot: Branch[] = [];
     setBranchesState(prev => { snapshot = prev; const next = prev.filter(b => b.id !== id); cacheBranches(next); return next; });
@@ -483,6 +484,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const deleteGodown = useCallback((id: string) => {
+    if (guardPermission('delete', 'गोदाम मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;   // RULE 6
     let snapshot: Godown[] = [];
     setGodownsState(prev => { snapshot = prev; const next = prev.filter(g => g.id !== id); cacheGodowns(next); return next; });
@@ -1741,6 +1743,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // and showed its own toast). Callers should only show a success message when true.
   const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string): boolean => {
     if (guardFYLocked()) return false;
+    if (guardPermission('delete', 'वाउचर रद्द करने')) return false;   // ECR-06: role gate
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return false;
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
@@ -2062,6 +2065,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteAuditObjection = useCallback((id: string) => {
+    if (guardPermission('delete', 'ऑडिट आपत्ति मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     setAuditObjectionsState(prev => { const updated = prev.filter(o => o.id !== id); return updated; });
     // Soft-delete (P0 #2): retain the audit-objection row (isDeleted=true) — statutory
@@ -2104,6 +2108,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteRecoverable = useCallback((id: string) => {
+    if (guardPermission('delete', 'वसूली मद मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     setRecoverablesState(prev => prev.filter(r => r.id !== id));
     supabase.from('recoverables').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
@@ -2142,6 +2147,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteKachiAaratEntry = useCallback((id: string) => {
+    if (guardPermission('delete', 'कच्ची आढ़त एंट्री मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     setKachiAaratEntriesState(prev => prev.filter(e => e.id !== id));
     supabase.from('kachi_aarat_entries').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
@@ -2165,6 +2171,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteP7Entry = useCallback((id: string) => {
+    if (guardPermission('delete', 'P7 एंट्री मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     setP7EntriesState(prev => prev.filter(e => e.id !== id));
     supabase.from('p7_entries').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
@@ -2309,6 +2316,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteMember = useCallback((id: string) => {
+    if (guardPermission('delete', 'सदस्य मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     setMembersState(prev => {
       const updated = prev.filter(m => m.id !== id);
@@ -2743,6 +2751,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [workOrders]);
 
   const deleteWorkOrder = useCallback((id: string) => {
+    if (guardPermission('delete', 'वर्क ऑर्डर मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const old = workOrders.find(w => w.id === id);
     setWorkOrdersState(prev => { const u = prev.filter(w => w.id !== id); storage.setWorkOrders(u); return u; });
@@ -2829,6 +2838,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [musterEntries, postWageAccrual, cancelVoucher, user]);
 
   const deleteMusterEntry = useCallback((id: string) => {
+    if (guardPermission('delete', 'मस्टर एंट्री मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const old = musterEntries.find(x => x.id === id);
     if (old?.paid || (old?.paidAmount || 0) > 0) { toastRef.current({ title: 'भुगतान हो चुका', description: 'जिस entry की कुछ/पूरी मज़दूरी चुक चुकी है, उसे हटाया नहीं जा सकता। पहले भुगतान voucher रद्द करें।', variant: 'destructive', duration: 9000 }); return; }
@@ -2984,6 +2994,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteAccount = useCallback((id: string) => {
+    if (guardPermission('delete', 'खाता मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
 
     // H11: Block deletion of built-in system accounts (CASH, BANK, 5101, 3403, etc.)
@@ -4046,6 +4057,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteLoan = useCallback((id: string) => {
+    if (guardPermission('delete', 'ऋण मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const loan = loansRef.current.find(l => l.id === id);
     setLoansState(prev => { const updated = prev.filter(l => l.id !== id); return updated; });
@@ -4168,6 +4180,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [accounts, addVoucher]);
 
   const deleteAsset = useCallback((id: string) => {
+    if (guardPermission('delete', 'संपत्ति मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const asset = assetsRef.current.find(a => a.id === id);
     setAssetsState(prev => { const updated = prev.filter(a => a.id !== id); return updated; });
@@ -4695,6 +4708,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteStockItem = useCallback((id: string) => {
+    if (guardPermission('delete', 'स्टॉक मद मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const today = new Date().toISOString().split('T')[0];
     setStockItemsState(prev => {
@@ -4955,6 +4969,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.financialYear, customers, accounts, addVoucher, stockItems]);
 
   const deleteSale = useCallback((id: string) => {
+    if (guardPermission('delete', 'बिक्री मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     setSalesState(prev => {
       const sale = prev.find(s => s.id === id);
@@ -5289,6 +5304,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.financialYear, suppliers, accounts, addVoucher, stockItems]);
 
   const deletePurchase = useCallback((id: string) => {
+    if (guardPermission('delete', 'खरीद मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     setPurchasesState(prev => {
       const purchase = prev.find(p => p.id === id);
@@ -5534,6 +5550,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteEmployee = useCallback((id: string) => {
+    if (guardPermission('delete', 'कर्मचारी मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     // Guard (H9-style): block if the employee has salary records — deleting would orphan those
     // payslips (SalaryRecord has no denormalized name), breaking the statutory wage register.
@@ -5726,6 +5743,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [employees, accounts, addVoucher]);
 
   const deleteSalaryRecord = useCallback((id: string) => {
+    if (guardPermission('delete', 'वेतन रिकॉर्ड मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     // H8+: Cascade-cancel BOTH the accrual and the payment vouchers so the expense,
     // liability and cash all reverse cleanly.
@@ -5874,6 +5892,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteSupplier = useCallback((id: string) => {
+    if (guardPermission('delete', 'आपूर्तिकर्ता मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const sup = suppliers.find(s => s.id === id);
     if (!sup) return;
@@ -6033,6 +6052,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteCustomer = useCallback((id: string) => {
+    if (guardPermission('delete', 'ग्राहक मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const cus = customers.find(c => c.id === id);
     if (!cus) return;
