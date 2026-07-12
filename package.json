@@ -30,6 +30,7 @@
     "test:statement-selection": "node scripts/test-statement-selection.mjs",
     "test:governance-authority": "node scripts/test-governance-authority.mjs",
     "test:year-close": "node scripts/test-year-close.mjs",
+    "test:identity-split": "node scripts/test-identity-split.mjs",
     "test:related": "node scripts/test-related.mjs",
     "test:dist": "node scripts/test-dist.mjs",
     "seo:report": "node scripts/seo-report.mjs",
