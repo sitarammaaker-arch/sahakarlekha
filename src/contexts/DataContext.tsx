@@ -311,6 +311,31 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // pure primitive; the row's tenancy is set by context, never by whatever it carried.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const withSoc = (d: Record<string, any>) => stampTenant(d, { societyId: societyIdRef.current, jurisdiction: jurisdictionRef.current });
+
+  // T-06 · best-effort append of a shadow ledger event to the WORM ledger_events table. Fire-and-
+  // forget: the voucher save is authoritative and this never blocks or affects it; a failed insert
+  // is logged and dropped (the in-memory event remains for the session). Maps the LedgerEvent
+  // (built by buildEvent) onto the existing ledger_events columns — no new schema.
+  const persistLedgerEvent = (ev: LedgerEvent) => {
+    try {
+      supabase.from('ledger_events').insert({
+        event_id: ev.eventId,
+        event_type: ev.eventType,
+        schema_version: ev.schemaVersion,
+        society_id: ev.tenantId,
+        jurisdiction: ev.jurisdiction || null,
+        aggregate_type: ev.aggregateType,
+        aggregate_id: ev.aggregateId,
+        sequence: ev.sequence,
+        occurred_at: ev.occurredAt,
+        producer_kind: ev.producer.kind,
+        producer_id: ev.producer.id ?? null,
+        on_behalf_of: ev.producer.onBehalfOf ?? null,
+        reversal_of: ev.reversalOf ?? null,
+        payload: ev.payload,
+      }).then(({ error }) => { if (error) console.warn('ledger_events append (best-effort):', error.message); });
+    } catch { /* best-effort — never affects the voucher save */ }
+  };
   // P0 #3: append-only audit. Actor is read from a ref so it is never stale inside the
   // delete/approve useCallbacks; emitAudit is fire-and-forget and never blocks the write.
   const userRef = useRef(user);
@@ -1202,7 +1227,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // stale they cause "Could not find column X" errors that nuke the whole upsert.
   // Solution: upsert ONLY base columns (always succeeds), then patch extras in a
   // second .update() call — that one is allowed to fail without losing the row.
-  const persistVoucher = (v: Voucher, opts: { onBaseFail: () => void; isUpdate?: boolean }) => {
+  const persistVoucher = (v: Voucher, opts: { onBaseFail: () => void; onBaseSuccess?: () => void; isUpdate?: boolean }) => {
     // Strip out everything that may live in late-added columns
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { lines, refType, refId, billAllocations, isCleared, clearedDate, editHistory, groupId,
@@ -1251,6 +1276,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           handleBaseFailure(verifyErr?.message || 'Verification failed — row not found after upsert');
           return;
         }
+      // Base row is confirmed durable — the voucher save is authoritative. Only now is it safe to
+      // append the shadow ledger event to the WORM ledger_events table (never before, so a failed/
+      // rolled-back voucher can never leave an un-deletable orphan event).
+      opts.onBaseSuccess?.();
       // Step 2: best-effort patch of overlay columns. ECR-04: critical control/audit
       // overlays (approvalStatus/editHistory/…) must NOT be lost silently. Split the
       // buckets, retry once (clears the common PostgREST schema-cache lag), and on a
@@ -1388,10 +1417,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // voucher. Best-effort and fully isolated — any failure here can never affect the voucher save.
     // Built before persist so the rollback below can drop it too, keeping the shadow ledger
     // consistent with the vouchers it mirrors.
-    let shadowEventId: string | null = null;
+    let shadowEvent: LedgerEvent | null = null;
     try {
       if (newVoucher.approvalStatus !== 'pending') {
-        const ev = buildEvent({
+        shadowEvent = buildEvent({
           eventType: 'voucher.posted',
           tenantId: societyIdRef.current,
           jurisdiction: jurisdictionRef.current,
@@ -1401,8 +1430,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           producer: { kind: 'human', id: userRef.current?.name ?? null },
           payload: { voucherNo: newVoucher.voucherNo, type: newVoucher.type, amount: newVoucher.amount, date: newVoucher.date },
         }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
-        shadowEventId = ev.eventId;
-        ledgerEventsRef.current = [...ledgerEventsRef.current, ev];
+        ledgerEventsRef.current = [...ledgerEventsRef.current, shadowEvent];
       }
     } catch { /* shadow ledger is best-effort — never touches the voucher save path */ }
 
@@ -1412,11 +1440,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // shown as "saved" once the failure was confirmed.
     persistVoucher(newVoucher, {
       isUpdate: false,
+      // The voucher save is authoritative; the ledger event is durably appended ONLY after the base
+      // row is confirmed (WORM-safe — a rolled-back voucher never orphans an event).
+      onBaseSuccess: () => { if (shadowEvent) persistLedgerEvent(shadowEvent); },
       onBaseFail: () => {
         vouchersRef.current = vouchersRef.current.filter(v => v.id !== newVoucher.id);
         setVouchersState(prev => prev.filter(v => v.id !== newVoucher.id));
         // Keep the shadow ledger consistent with the rolled-back voucher.
-        if (shadowEventId) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== shadowEventId);
+        if (shadowEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== shadowEvent!.eventId);
       },
     });
     return newVoucher;
