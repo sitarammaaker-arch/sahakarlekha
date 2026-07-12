@@ -114,10 +114,22 @@ const SuperAdminDashboard: React.FC = () => {
         countMap[r.society_id] = Number(r.user_count);
       });
 
-      const rows: Society[] = (societyData ?? []).map((s: Society) => ({
-        ...s,
-        user_count: countMap[s.society_id] ?? 0,
-      }));
+      // get_all_societies is drifted in production: it returns the tenant key as
+      // `id` (+ snake_case registration_no / society_type) instead of the repo
+      // contract's society_id / registrationNo / societyType. Normalize BOTH
+      // shapes so the count join, search and plan-save all key off society_id
+      // regardless of which function definition is deployed (see migration 009).
+      type RawSociety = Society & { id?: string; registration_no?: string; society_type?: string };
+      const rows: Society[] = (societyData ?? []).map((raw: RawSociety) => {
+        const society_id = raw.society_id ?? raw.id ?? '';
+        return {
+          ...raw,
+          society_id,
+          registrationNo: raw.registrationNo ?? raw.registration_no ?? '',
+          societyType:    raw.societyType    ?? raw.society_type    ?? '',
+          user_count: countMap[society_id] ?? 0,
+        };
+      });
       setSocieties(rows);
     } catch (err) {
       console.error('Failed to load societies:', err);
