@@ -27,6 +27,7 @@ import { generatePurchaseRecordPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
+import { computeInvoiceTotals } from '@/lib/invoiceTotals';
 import { useToast } from '@/hooks/use-toast';
 import type { PurchaseItem, PaymentMode } from '@/types';
 
@@ -135,13 +136,9 @@ const PurchaseManagement: React.FC = () => {
 
   // ── Derived totals ────────────────────────────────────────────────────────
   const totalAmount = items.reduce((s, i) => s + i.amount, 0);
-  const netAmount   = Math.max(0, totalAmount - discount); // taxable amount
-  const cgstAmount  = +(netAmount * cgstPct / 100).toFixed(2);
-  const sgstAmount  = +(netAmount * sgstPct / 100).toFixed(2);
-  const igstAmount  = +(netAmount * igstPct / 100).toFixed(2);
-  const taxAmount   = cgstAmount + sgstAmount + igstAmount;
-  const tdsAmount   = +(netAmount * tdsPct / 100).toFixed(2);
-  const grandTotal  = +(netAmount + taxAmount - tdsAmount).toFixed(2);
+  // T-02: net / GST / TDS / grand-total born exact in integer paise (shared with SaleManagement).
+  const { netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, tdsAmount, grandTotal } =
+    computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct, tdsPct });
 
   // ── Item row helpers ──────────────────────────────────────────────────────
   const updateItem = (index: number, patch: Partial<PurchaseItem>) => {

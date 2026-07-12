@@ -14,6 +14,9 @@
     "test:nav": "node scripts/test-nav.mjs",
     "test:jurisdiction": "node scripts/test-jurisdiction.mjs",
     "test:money": "node scripts/test-money.mjs",
+    "test:money-tb": "node scripts/test-money-trial-balance.mjs",
+    "test:sale-split": "node scripts/test-sale-split.mjs",
+    "test:invoice-totals": "node scripts/test-invoice-totals.mjs",
     "test:document-number": "node scripts/test-document-number.mjs",
     "test:ledger-lines": "node scripts/test-ledger-lines.mjs",
     "test:activities": "node scripts/test-activities.mjs",
@@ -95,7 +98,9 @@
     "test:rls-coverage": "node scripts/test-rls-coverage.mjs",
     "test:cross-tenant-isolation": "node scripts/test-cross-tenant-isolation.mjs",
     "build:backup-core": "esbuild supabase/functions/_shared/backup-core.entry.ts --bundle --format=esm --platform=neutral --alias:@=./src --outfile=supabase/functions/_shared/backup-core.mjs --log-level=warning",
-    "test:backup-core-bundle": "node scripts/test-backup-core-bundle.mjs"
+    "test:backup-core-bundle": "node scripts/test-backup-core-bundle.mjs",
+    "build:rehearsal-core": "esbuild supabase/functions/_shared/rehearsal-core.entry.ts --bundle --format=esm --platform=neutral --alias:@=./src --outfile=supabase/functions/_shared/rehearsal-core.mjs --log-level=warning",
+    "test:rehearsal-core-bundle": "node scripts/test-rehearsal-core-bundle.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -20,10 +20,11 @@ import type {
 } from '@/types';
 import { matchesBranch, branchToStamp, resolveActiveBranch, ALL_BRANCHES } from '@/lib/branchScope';
 import { buildInterBranchTransfer, INTER_BRANCH_CONTROL_ID } from '@/lib/interBranch';
-import { getVoucherLines, buildVoucherEntries } from '@/lib/voucherUtils';
+import { getVoucherLines, buildVoucherEntries, splitNetByAccount } from '@/lib/voucherUtils';
 import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
+import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
@@ -944,10 +945,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const lines: VoucherLine[] = [];
             const lid = () => crypto.randomUUID();
             lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
-            buckets.forEach((amt, accId) => {
-              const rounded = Math.round(amt * 100) / 100;
-              if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: rounded });
-            });
+            // T-02 / RULE 4: allocate net (grandTotal − tax) across accounts in exact paise so
+            // the Cr lines sum to exactly the net and the voucher balances by construction.
+            splitNetByAccount(
+              sale.items.map(it => ({ accountId: stockMap.get(it.itemId)?.salesAccountId || '4101', weight: it.amount })),
+              grandTotal, sale.taxAmount || 0,
+            ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Cr', amount }));
             if ((sale.taxAmount ?? 0) > 0) {
               lines.push({ id: lid(), accountId: '2201', type: 'Cr', amount: sale.taxAmount!, narration: `GST: CGST ₹${sale.cgstAmount||0} + SGST ₹${sale.sgstAmount||0} + IGST ₹${sale.igstAmount||0}` });
             }
@@ -1015,10 +1018,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const buckets = computePurchaseAccBuckets(purchase);
             const lines: VoucherLine[] = [];
             const lid = () => crypto.randomUUID();
-            buckets.forEach((amt, accId) => {
-              const rounded = Math.round(amt * 100) / 100;
-              if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Dr', amount: rounded });
-            });
+            // T-02 / RULE 4: allocate net (grandTotal − tax + tds) across accounts in exact
+            // paise so the Dr lines sum to exactly the net and the voucher balances by construction.
+            splitNetByAccount(
+              purchase.items.map(it => ({ accountId: stockMap.get(it.itemId)?.purchaseAccountId || '5101', weight: it.amount })),
+              grandTotal, purchase.taxAmount || 0, purchase.tdsAmount || 0,
+            ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Dr', amount }));
             if ((purchase.taxAmount ?? 0) > 0) {
               lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: purchase.taxAmount!, narration: `GST ITC: CGST ₹${purchase.cgstAmount||0} + SGST ₹${purchase.sgstAmount||0} + IGST ₹${purchase.igstAmount||0}` });
             }
@@ -3883,34 +3888,48 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ? activeVouchers.filter(v => v.date <= asOnDate)
       : activeVouchers;
 
-    // Build results for existing accounts
+    // Build results for existing accounts.
+    // T-02 (money precision / ADR-0006): every leg is summed in exact integer paise, so a
+    // trial balance over thousands of legs cannot drift in the last paisa the way float
+    // accumulation does (RULE 2 / CA-02, the phantom-balance class). Storage stays rupees;
+    // only this COMPUTE is minor-unit. Values return as rupees in the same shape — correct
+    // data yields identical numbers, drifty data is now exact.
     const accountIds = new Set(accounts.filter(a => !a.isGroup).map(a => a.id));
     const results = accounts.filter(a => !a.isGroup).map(account => {
-      const openingDebit = account.openingBalanceType === 'debit' ? account.openingBalance : 0;
-      const openingCredit = account.openingBalanceType === 'credit' ? account.openingBalance : 0;
-      let transactionDebit = 0;
-      let transactionCredit = 0;
+      const openingDebitMinor = account.openingBalanceType === 'debit' ? toMinor(Number(account.openingBalance) || 0) : 0;
+      const openingCreditMinor = account.openingBalanceType === 'credit' ? toMinor(Number(account.openingBalance) || 0) : 0;
+      let txnDebitMinor: Minor = 0;
+      let txnCreditMinor: Minor = 0;
       vouchersToUse.forEach(v => {
         getVoucherLines(v).forEach(l => {
           if (l.accountId === account.id) {
-            if (l.type === 'Dr') transactionDebit += l.amount;
-            else transactionCredit += l.amount;
+            if (l.type === 'Dr') txnDebitMinor = addMinor(txnDebitMinor, toMinor(Number(l.amount) || 0));
+            else txnCreditMinor = addMinor(txnCreditMinor, toMinor(Number(l.amount) || 0));
           }
         });
       });
-      const totalDebit = openingDebit + transactionDebit;
-      const totalCredit = openingCredit + transactionCredit;
-      return { account, openingDebit, openingCredit, transactionDebit, transactionCredit, totalDebit, totalCredit, netBalance: totalDebit - totalCredit };
+      const totalDebitMinor = addMinor(openingDebitMinor, txnDebitMinor);
+      const totalCreditMinor = addMinor(openingCreditMinor, txnCreditMinor);
+      return {
+        account,
+        openingDebit: toRupees(openingDebitMinor),
+        openingCredit: toRupees(openingCreditMinor),
+        transactionDebit: toRupees(txnDebitMinor),
+        transactionCredit: toRupees(txnCreditMinor),
+        totalDebit: toRupees(totalDebitMinor),
+        totalCredit: toRupees(totalCreditMinor),
+        netBalance: toRupees(subMinor(totalDebitMinor, totalCreditMinor)),
+      };
     });
 
     // Detect orphaned transactions (voucher lines referencing deleted/missing accounts)
-    const orphanMap: Record<string, { dr: number; cr: number }> = {};
+    const orphanMap: Record<string, { dr: Minor; cr: Minor }> = {};
     vouchersToUse.forEach(v => {
       getVoucherLines(v).forEach(l => {
         if (!accountIds.has(l.accountId)) {
           if (!orphanMap[l.accountId]) orphanMap[l.accountId] = { dr: 0, cr: 0 };
-          if (l.type === 'Dr') orphanMap[l.accountId].dr += l.amount;
-          else orphanMap[l.accountId].cr += l.amount;
+          if (l.type === 'Dr') orphanMap[l.accountId].dr = addMinor(orphanMap[l.accountId].dr, toMinor(Number(l.amount) || 0));
+          else orphanMap[l.accountId].cr = addMinor(orphanMap[l.accountId].cr, toMinor(Number(l.amount) || 0));
         }
       });
     });
@@ -3920,7 +3939,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         id, name: `[Deleted] ${id.slice(0, 8)}...`, nameHi: `[हटाया] ${id.slice(0, 8)}...`,
         type: 'liability', openingBalance: 0, openingBalanceType: 'credit',
       };
-      results.push({ account: syntheticAccount, openingDebit: 0, openingCredit: 0, transactionDebit: dr, transactionCredit: cr, totalDebit: dr, totalCredit: cr, netBalance: dr - cr });
+      results.push({ account: syntheticAccount, openingDebit: 0, openingCredit: 0, transactionDebit: toRupees(dr), transactionCredit: toRupees(cr), totalDebit: toRupees(dr), totalCredit: toRupees(cr), netBalance: toRupees(subMinor(dr, cr)) });
     });
 
     return results;
@@ -4399,9 +4418,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const movementsToUse = stockMovements.filter(m => m.date <= effDate);
     // Value closing stock at weighted-average COST from movements (NOT the stale
     // purchaseRate field, which is 0 after some imports → silently zeroed closing stock).
-    const physicalClosingStock = stockItems
-      .filter(s => s.isActive)
-      .reduce((sum, s) => sum + computeStockValue(s, movementsToUse), 0);
+    const physicalClosingStock = toRupees(sumMinor(
+      stockItems.filter(s => s.isActive).map(s => toMinor(Number(computeStockValue(s, movementsToUse)) || 0)),
+    ));
 
     // Check if the closing-stock journal has been posted for this FY.
     // Audit C-8: the NEW journal credits the dedicated 5150 (Purchases stay gross);
@@ -4434,7 +4453,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.openingDebit }))
       .filter(i => i.amount > 0);
 
-    const totalClosingStockEarly = closingStockItems.reduce((s, i) => s + i.amount, 0);
+    const totalClosingStockMinor = sumMinor(closingStockItems.map(i => toMinor(Number(i.amount) || 0)));
+    const totalClosingStockEarly = toRupees(totalClosingStockMinor);
 
     // Dr side: Purchases (account 5101).
     // Audit C-8: a LEGACY closing-stock journal (Dr 3403 / Cr 5101) reduced 5101 by
@@ -4445,7 +4465,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Expenses, so the Trading A/c lists each commodity's purchase under "Purchases".
     const PURCHASE_ACTIVITY_IDS = ['5110', '5111', '5112', '5113', '5114', '5115', '5116'];
     const purchase5101Net = (tb.find(b => b.account.id === '5101')?.netBalance) || 0;
-    const purchase5101Gross = closingViaLegacy ? purchase5101Net + totalClosingStockEarly : purchase5101Net;
+    const purchase5101Gross = closingViaLegacy ? toRupees(addMinor(toMinor(Number(purchase5101Net) || 0), totalClosingStockMinor)) : purchase5101Net;
     // Include even when net is negative (abnormal — e.g. returns exceed purchases) so
     // the figure ties to the ledger (BS-tie fix).
     const purchaseItems = [
@@ -4480,15 +4500,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }))
       .filter(i => Math.abs(i.amount) > 0.005);
 
-    const totalSales        = salesItems.reduce((s, i) => s + i.amount, 0);
-    const totalClosingStock = totalClosingStockEarly;
-    const totalOpeningStock = openingStockItems.reduce((s, i) => s + i.amount, 0);
-    const totalPurchases    = purchaseItems.reduce((s, i) => s + i.amount, 0);
-    const totalDirectExp    = directExpItems.reduce((s, i) => s + i.amount, 0);
+    // T-02: sum each side's items in integer paise, then combine Cr/Dr in paise, so Gross
+    // Profit over many items/legs cannot drift in the last paisa (values return as rupees).
+    const totalSalesMinor        = sumMinor(salesItems.map(i => toMinor(Number(i.amount) || 0)));
+    const totalOpeningStockMinor = sumMinor(openingStockItems.map(i => toMinor(Number(i.amount) || 0)));
+    const totalPurchasesMinor    = sumMinor(purchaseItems.map(i => toMinor(Number(i.amount) || 0)));
+    const totalDirectExpMinor    = sumMinor(directExpItems.map(i => toMinor(Number(i.amount) || 0)));
 
-    const crTotal   = totalSales + totalClosingStock;
-    const drTotal   = totalOpeningStock + totalPurchases + totalDirectExp;
-    const grossProfit = crTotal - drTotal;
+    const totalSales        = toRupees(totalSalesMinor);
+    const totalClosingStock = toRupees(totalClosingStockMinor);
+    const totalOpeningStock = toRupees(totalOpeningStockMinor);
+    const totalPurchases    = toRupees(totalPurchasesMinor);
+    const totalDirectExp    = toRupees(totalDirectExpMinor);
+
+    const crTotalMinor = addMinor(totalSalesMinor, totalClosingStockMinor);
+    const drTotalMinor = addMinor(totalOpeningStockMinor, totalPurchasesMinor, totalDirectExpMinor);
+    const grossProfit = toRupees(subMinor(crTotalMinor, drTotalMinor));
 
     // ── Audit C-7: activity-wise Trading breakdown (NCDC Annexure V) ─────────────
     // ADDITIVE — does NOT change grossProfit / the combined totals above (P&L and
@@ -4515,17 +4542,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const purchases = a.purchaseId ? nbById(a.purchaseId) : 0; // debit-nature → positive
       const hasRoutedPurchase = Math.abs(purchases) > 0.005;
       return { key: a.key, keyHi: a.keyHi, salesId: a.salesId, purchaseId: a.purchaseId,
-        sales, purchases, hasRoutedPurchase, grossMargin: sales - purchases };
+        sales, purchases, hasRoutedPurchase, grossMargin: toRupees(subMinor(toMinor(Number(sales) || 0), toMinor(Number(purchases) || 0))) };
     }).filter(a => Math.abs(a.sales) > 0.005 || a.hasRoutedPurchase);
 
     // Unallocated bucket: generic 5101 purchases + non-purchase direct expenses +
     // any 4100 sales not mapped to a defined activity.
     const unallocated = {
       purchases: nbById('5101'),
-      directExp: tb.filter(b => b.account.parentId === '5100' && b.account.id !== '5101' && b.account.id !== '5150' && !activityPurchaseIds.has(b.account.id))
-        .reduce((s, b) => s + b.netBalance, 0),
-      otherSales: tb.filter(b => b.account.parentId === '4100' && !activitySalesIds.has(b.account.id))
-        .reduce((s, b) => s + (-b.netBalance), 0),
+      directExp: toRupees(sumMinor(tb.filter(b => b.account.parentId === '5100' && b.account.id !== '5101' && b.account.id !== '5150' && !activityPurchaseIds.has(b.account.id))
+        .map(b => toMinor(Number(b.netBalance) || 0)))),
+      otherSales: toRupees(sumMinor(tb.filter(b => b.account.parentId === '4100' && !activitySalesIds.has(b.account.id))
+        .map(b => toMinor(Number(-b.netBalance) || 0)))),
     };
 
     return { salesItems, closingStockItems, openingStockItems, purchaseItems, directExpItems,
@@ -4546,9 +4573,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Use movement-based qty (same formula as Inventory / Stock Valuation / Trading Account)
     // so the journal posts the same number user sees in reports.
-    const amount = stockItems
-      .filter(s => s.isActive)
-      .reduce((sum, s) => sum + computeStockValue(s, stockMovements), 0);
+    const amount = toRupees(sumMinor(
+      stockItems.filter(s => s.isActive).map(s => toMinor(Number(computeStockValue(s, stockMovements)) || 0)),
+    ));
 
     if (amount <= 0) return { posted: false, amount: 0, alreadyPosted: false };
 
@@ -4618,9 +4645,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     }
 
-    const totalIncome = incomeItems.reduce((s, i) => s + i.amount, 0);
-    const totalExpenses = expenseItems.reduce((s, i) => s + i.amount, 0);
-    return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit: totalIncome - totalExpenses };
+    const totalIncomeMinor = sumMinor(incomeItems.map(i => toMinor(Number(i.amount) || 0)));
+    const totalExpensesMinor = sumMinor(expenseItems.map(i => toMinor(Number(i.amount) || 0)));
+    const totalIncome = toRupees(totalIncomeMinor);
+    const totalExpenses = toRupees(totalExpensesMinor);
+    return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit: toRupees(subMinor(totalIncomeMinor, totalExpensesMinor)) };
   }, [getTrialBalance, getTradingAccount, society.financialYear, society.societyType, societyCapabilities]);
 
   // ── Inventory ──────────────────────────────────────────────────────────────
@@ -4874,22 +4903,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Cr: Sales A/c — split by each item's salesAccountId so multi-product societies
     // get per-category lines in TB / Trading A/c. Falls back to '4101' for unmapped items.
-    const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0));
-    if (netAmt > 0) {
-      const totalItemAmount = data.items.reduce((s, it) => s + it.amount, 0) || 1;
-      const salesAccBuckets = new Map<string, number>();
-      data.items.forEach(it => {
-        const stock = stockItems.find(s => s.id === it.itemId);
-        const acc = stock?.salesAccountId || '4101';
-        // Pro-rate net amount by item value share (handles discount + tax-exclusive routing)
-        const itemNet = (it.amount / totalItemAmount) * netAmt;
-        salesAccBuckets.set(acc, (salesAccBuckets.get(acc) || 0) + itemNet);
-      });
-      salesAccBuckets.forEach((amt, accId) => {
-        const rounded = Math.round(amt * 100) / 100;
-        if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: rounded });
-      });
-    }
+    // Cr: Sales A/c — T-02 / RULE 4: split net (grandTotal − tax) across each item's
+    // salesAccountId in exact paise so the Cr lines sum to exactly the net and the voucher
+    // balances by construction. Falls back to '4101' for unmapped items.
+    splitNetByAccount(
+      data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.salesAccountId || '4101', weight: it.amount })),
+      grandTotal, data.taxAmount || 0,
+    ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Cr', amount }));
 
     // Cr: GST Output Payable (2201) for tax amount
     if ((data.taxAmount ?? 0) > 0) {
@@ -5097,22 +5117,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       : (data.receivableAccountId || (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303'));
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
 
-    const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0));
-    if (netAmt > 0) {
-      // Split by each item's salesAccountId (same logic as addSale)
-      const totalItemAmount = data.items.reduce((s, it) => s + it.amount, 0) || 1;
-      const salesAccBuckets = new Map<string, number>();
-      data.items.forEach(it => {
-        const stock = stockItems.find(s => s.id === it.itemId);
-        const acc = stock?.salesAccountId || '4101';
-        const itemNet = (it.amount / totalItemAmount) * netAmt;
-        salesAccBuckets.set(acc, (salesAccBuckets.get(acc) || 0) + itemNet);
-      });
-      salesAccBuckets.forEach((amt, accId) => {
-        const rounded = Math.round(amt * 100) / 100;
-        if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: rounded });
-      });
-    }
+    // T-02 / RULE 4: exact-paise split by salesAccountId (same shared rule as addSale / repair).
+    splitNetByAccount(
+      data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.salesAccountId || '4101', weight: it.amount })),
+      grandTotal, data.taxAmount || 0,
+    ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Cr', amount }));
     if ((data.taxAmount ?? 0) > 0) {
       lines.push({ id: lid(), accountId: '2201', type: 'Cr', amount: data.taxAmount!, narration: `GST: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
     }
@@ -5203,21 +5212,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Dr: Purchases A/c — split by each item's purchaseAccountId so multi-product
     // societies get per-category lines. Falls back to '5101' for unmapped items.
-    const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0) + (data.tdsAmount || 0));
-    if (netAmt > 0) {
-      const totalItemAmount = data.items.reduce((s, it) => s + it.amount, 0) || 1;
-      const purchaseAccBuckets = new Map<string, number>();
-      data.items.forEach(it => {
-        const stock = stockItems.find(s => s.id === it.itemId);
-        const acc = stock?.purchaseAccountId || '5101';
-        const itemNet = (it.amount / totalItemAmount) * netAmt;
-        purchaseAccBuckets.set(acc, (purchaseAccBuckets.get(acc) || 0) + itemNet);
-      });
-      purchaseAccBuckets.forEach((amt, accId) => {
-        const rounded = Math.round(amt * 100) / 100;
-        if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Dr', amount: rounded });
-      });
-    }
+    // Dr: Purchases A/c — T-02 / RULE 4: split net (grandTotal − tax + tds) across each item's
+    // purchaseAccountId in exact paise so the Dr lines sum to exactly the net and the voucher
+    // balances by construction. Falls back to '5101' for unmapped items.
+    splitNetByAccount(
+      data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.purchaseAccountId || '5101', weight: it.amount })),
+      grandTotal, data.taxAmount || 0, data.tdsAmount || 0,
+    ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Dr', amount }));
 
     // Dr: GST Input Credit (3310) for tax amount
     if ((data.taxAmount ?? 0) > 0) {
@@ -5434,22 +5435,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       : data.paymentMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
       : supplierAccId;
 
-    const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0) + (data.tdsAmount || 0));
-    if (netAmt > 0) {
-      // Split by each item's purchaseAccountId (same logic as addPurchase)
-      const totalItemAmount = data.items.reduce((s, it) => s + it.amount, 0) || 1;
-      const purchaseAccBuckets = new Map<string, number>();
-      data.items.forEach(it => {
-        const stock = stockItems.find(s => s.id === it.itemId);
-        const acc = stock?.purchaseAccountId || '5101';
-        const itemNet = (it.amount / totalItemAmount) * netAmt;
-        purchaseAccBuckets.set(acc, (purchaseAccBuckets.get(acc) || 0) + itemNet);
-      });
-      purchaseAccBuckets.forEach((amt, accId) => {
-        const rounded = Math.round(amt * 100) / 100;
-        if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Dr', amount: rounded });
-      });
-    }
+    // T-02 / RULE 4: exact-paise split by purchaseAccountId (same shared rule as addPurchase / repair).
+    splitNetByAccount(
+      data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.purchaseAccountId || '5101', weight: it.amount })),
+      grandTotal, data.taxAmount || 0, data.tdsAmount || 0,
+    ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Dr', amount }));
     if ((data.taxAmount ?? 0) > 0) {
       lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: data.taxAmount!, narration: `GST ITC: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
     }
