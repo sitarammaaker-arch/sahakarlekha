@@ -87,6 +87,22 @@ const Vouchers: React.FC = () => {
   const [contraDir, setContraDir] = useState<'cash_to_bank' | 'bank_to_cash'>('cash_to_bank');
   const bankIds = useMemo(() => getBankAccountIds(accounts), [accounts]);
   const [contraBankId, setContraBankId] = useState('');
+  // Easy templates hardcode the bank side to the '3302' Bank Accounts GROUP. When the society
+  // has real bank child accounts, substitute the first one (a postable account, never a group)
+  // so a cash↔bank contra never posts to a group; the simplified form lets the operator pick
+  // WHICH bank among several. (Fixes: contra posted to a group + no bank choice in Easy mode.)
+  const applyTemplate = (tmpl: typeof VOUCHER_TEMPLATES[0]) => {
+    const realBank = bankIds[0] || ACCOUNT_IDS.BANK;
+    setSelectedTemplate(tmpl);
+    setVoucherType(tmpl.type);
+    setDebitAccount(tmpl.debitAccountId === ACCOUNT_IDS.BANK ? realBank : tmpl.debitAccountId);
+    setCreditAccount(tmpl.creditAccountId === ACCOUNT_IDS.BANK ? realBank : tmpl.creditAccountId);
+    setSavedVoucherNo(null);
+  };
+  // Which side of the selected template is the bank — drives the Easy-mode bank picker.
+  const bankTplSide: 'debit' | 'credit' | null = !selectedTemplate ? null
+    : selectedTemplate.debitAccountId === ACCOUNT_IDS.BANK ? 'debit'
+    : selectedTemplate.creditAccountId === ACCOUNT_IDS.BANK ? 'credit' : null;
   const [voucherDate, setVoucherDate] = useState(new Date().toISOString().split('T')[0]);
   const [debitAccount, setDebitAccount] = useState('');
   const [creditAccount, setCreditAccount] = useState('');
@@ -540,13 +556,7 @@ const Vouchers: React.FC = () => {
                       {VOUCHER_TEMPLATES.filter(t => t.category === 'receipt').map(tmpl => (
                         <button
                           key={tmpl.id}
-                          onClick={() => {
-                            setSelectedTemplate(tmpl);
-                            setVoucherType(tmpl.type);
-                            setDebitAccount(tmpl.debitAccountId);
-                            setCreditAccount(tmpl.creditAccountId);
-                            setSavedVoucherNo(null);
-                          }}
+                          onClick={() => applyTemplate(tmpl)}
                           className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent bg-success/5 hover:border-success/40 hover:bg-success/10 transition-all text-center"
                         >
                           <span className="text-3xl">{tmpl.icon}</span>
@@ -567,13 +577,7 @@ const Vouchers: React.FC = () => {
                       {VOUCHER_TEMPLATES.filter(t => t.category === 'payment').map(tmpl => (
                         <button
                           key={tmpl.id}
-                          onClick={() => {
-                            setSelectedTemplate(tmpl);
-                            setVoucherType(tmpl.type);
-                            setDebitAccount(tmpl.debitAccountId);
-                            setCreditAccount(tmpl.creditAccountId);
-                            setSavedVoucherNo(null);
-                          }}
+                          onClick={() => applyTemplate(tmpl)}
                           className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent bg-destructive/5 hover:border-destructive/30 hover:bg-destructive/10 transition-all text-center"
                         >
                           <span className="text-3xl">{tmpl.icon}</span>
@@ -644,6 +648,22 @@ const Vouchers: React.FC = () => {
                           />
                         </div>
                       </div>
+                      {/* Bank picker for cash↔bank templates — choose WHICH bank (never post to the group). */}
+                      {bankTplSide && bankIds.length >= 1 && (
+                        <div className="space-y-2">
+                          <Label className="text-base font-semibold">{language === 'hi' ? 'बैंक खाता' : 'Bank Account'}</Label>
+                          <select
+                            value={bankTplSide === 'debit' ? debitAccount : creditAccount}
+                            onChange={e => bankTplSide === 'debit' ? setDebitAccount(e.target.value) : setCreditAccount(e.target.value)}
+                            className="h-12 w-full rounded-md border border-input bg-background px-3 text-lg"
+                          >
+                            {bankIds.map(bid => {
+                              const acc = accounts.find(a => a.id === bid);
+                              return <option key={bid} value={bid}>{acc?.name || bid}{acc?.nameHi && language === 'hi' ? ` (${acc.nameHi})` : ''}</option>;
+                            })}
+                          </select>
+                        </div>
+                      )}
                       <div className="space-y-2">
                         <Label className="text-base font-semibold">{t('narration')} ({language === 'hi' ? 'वैकल्पिक' : 'Optional'})</Label>
                         <Input
