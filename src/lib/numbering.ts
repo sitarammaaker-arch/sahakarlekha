@@ -32,3 +32,32 @@ export function parseDocNumber(no: string | undefined | null): DocNumberParts | 
 export function formatDocNumber(book: string, fy: string, seq: number, width: number): string {
   return `${book}/${fy}/${String(Math.trunc(seq)).padStart(Math.max(0, width), '0')}`;
 }
+
+/** The server sequence, injected: returns the next number for (society, book, fy), or null on
+ *  failure. Injecting it keeps issueOfficialNumber testable without Supabase and reusable
+ *  across voucher / sale / purchase (T-03 / ADR-0005). */
+export type DocSeqRpc = (societyId: string, book: string, fy: string) => Promise<number | null>;
+
+/**
+ * Issue the OFFICIAL number for a client-provisional `BOOK/FY/SEQ`, taking the SEQ from the
+ * server sequence. The ONE numbering rule every save path shares. Returns the provisional
+ * number UNCHANGED when it isn't well-formed, or when the rpc throws / fails / returns a
+ * non-positive number — the offline/error fallback, with the caller's unique-index
+ * collision-retry as the safety net (so it's correct even before the sequences are seeded).
+ */
+export async function issueOfficialNumber(
+  rpc: DocSeqRpc,
+  societyId: string,
+  provisional: string | undefined,
+): Promise<string | undefined> {
+  const parsed = parseDocNumber(provisional);
+  if (!parsed) return provisional;
+  let n: number | null;
+  try {
+    n = await rpc(societyId, parsed.book, parsed.fy);
+  } catch {
+    return provisional;
+  }
+  if (n === null || !Number.isFinite(n) || n <= 0) return provisional;
+  return formatDocNumber(parsed.book, parsed.fy, n, parsed.width);
+}
