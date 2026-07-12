@@ -92,6 +92,8 @@
     "test:restore-writer": "node scripts/test-restore-writer.mjs",
     "test:restore-commit-live": "node scripts/test-restore-commit-live.mjs",
     "test:import-fylock": "node scripts/test-import-fylock.mjs",
+    "test:rls-coverage": "node scripts/test-rls-coverage.mjs",
+    "test:cross-tenant-isolation": "node scripts/test-cross-tenant-isolation.mjs",
     "build:backup-core": "esbuild supabase/functions/_shared/backup-core.entry.ts --bundle --format=esm --platform=neutral --alias:@=./src --outfile=supabase/functions/_shared/backup-core.mjs --log-level=warning",
     "test:backup-core-bundle": "node scripts/test-backup-core-bundle.mjs"
   },
