@@ -32,6 +32,7 @@
     "test:year-close": "node scripts/test-year-close.mjs",
     "test:identity-split": "node scripts/test-identity-split.mjs",
     "test:consent-erasure": "node scripts/test-consent-erasure.mjs",
+    "test:auth-root": "node scripts/test-auth-root.mjs",
     "test:related": "node scripts/test-related.mjs",
     "test:dist": "node scripts/test-dist.mjs",
     "seo:report": "node scripts/seo-report.mjs",
