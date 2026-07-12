@@ -392,31 +392,57 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user?.societyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addBranch = useCallback((data: Omit<Branch, 'id' | 'createdAt'>): Branch => {
+    if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as Branch;   // RULE 6: FY-lock guard
     const branch: Branch = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString(), isActive: data.isActive ?? true };
+    let snapshot: Branch[] = [];
     setBranchesState(prev => {
+      snapshot = prev;
       const demoted = branch.isHeadOffice ? prev.map(b => ({ ...b, isHeadOffice: false })) : prev; // only one Head Office
       const next = [...demoted, branch];
       cacheBranches(next);
       return next;
     });
-    supabase.from('branches').upsert(withSoc({ ...branch })).then(({ error }) => { if (error) console.warn('Branch save:', error.message); });
+    supabase.from('branches').upsert(withSoc({ ...branch })).then(({ error }) => {
+      if (error) {   // RULE 1: roll back so a failed cloud save can't silently diverge on F5
+        console.error('Branch save:', error.message);
+        setBranchesState(() => { cacheBranches(snapshot); return snapshot; });
+        toastRef.current({ title: 'Branch सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga.`, variant: 'destructive', duration: 12000 });
+      }
+    });
     return branch;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateBranch = useCallback((id: string, data: Partial<Branch>) => {
+    if (guardFYLocked()) return;   // RULE 6
+    let snapshot: Branch[] = [];
     setBranchesState(prev => {
+      snapshot = prev;
       let next = prev.map(b => b.id === id ? { ...b, ...data } : b);
       if (data.isHeadOffice) next = next.map(b => b.id === id ? b : { ...b, isHeadOffice: false });
       cacheBranches(next);
       return next;
     });
-    supabase.from('branches').update(data).eq('id', id).then(({ error }) => { if (error) console.warn('Branch update:', error.message); });
+    supabase.from('branches').update(data).eq('id', id).then(({ error }) => {
+      if (error) {   // RULE 1: restore prior state on failure
+        console.error('Branch update:', error.message);
+        setBranchesState(() => { cacheBranches(snapshot); return snapshot; });
+        toastRef.current({ title: 'Branch अपडेट नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deleteBranch = useCallback((id: string) => {
-    setBranchesState(prev => { const next = prev.filter(b => b.id !== id); cacheBranches(next); return next; });
+    if (guardFYLocked()) return;   // RULE 6
+    let snapshot: Branch[] = [];
+    setBranchesState(prev => { snapshot = prev; const next = prev.filter(b => b.id !== id); cacheBranches(next); return next; });
     if (activeBranchIdRef.current === id) setActiveBranch(ALL_BRANCHES);
-    supabase.from('branches').delete().eq('id', id).then(({ error }) => { if (error) console.warn('Branch delete:', error.message); });
+    supabase.from('branches').delete().eq('id', id).then(({ error }) => {
+      if (error) {   // RULE 1: restore the deleted row on failure
+        console.error('Branch delete:', error.message);
+        setBranchesState(() => { cacheBranches(snapshot); return snapshot; });
+        toastRef.current({ title: 'Branch delete नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par branch wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
   }, [setActiveBranch]);
 
   // ── ECR-17 Phase 3: godowns ────────────────────────────────────────────────
@@ -431,19 +457,43 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .then(({ data }) => { if (data && data.length) { const gs = data as Godown[]; setGodownsState(gs); cacheGodowns(gs); } });
   }, [user?.societyId]); // eslint-disable-line react-hooks/exhaustive-deps
   const addGodown = useCallback((data: Omit<Godown, 'id' | 'createdAt'>): Godown => {
+    if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as Godown;   // RULE 6
     const g: Godown = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString(), isActive: data.isActive ?? true };
-    setGodownsState(prev => { const next = [...prev, g]; cacheGodowns(next); return next; });
-    supabase.from('godowns').upsert(withSoc({ ...g })).then(({ error }) => { if (error) console.warn('Godown save:', error.message); });
+    let snapshot: Godown[] = [];
+    setGodownsState(prev => { snapshot = prev; const next = [...prev, g]; cacheGodowns(next); return next; });
+    supabase.from('godowns').upsert(withSoc({ ...g })).then(({ error }) => {
+      if (error) {   // RULE 1
+        console.error('Godown save:', error.message);
+        setGodownsState(() => { cacheGodowns(snapshot); return snapshot; });
+        toastRef.current({ title: 'Godown सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga.`, variant: 'destructive', duration: 12000 });
+      }
+    });
     return g;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const updateGodown = useCallback((id: string, data: Partial<Godown>) => {
-    setGodownsState(prev => { const next = prev.map(g => g.id === id ? { ...g, ...data } : g); cacheGodowns(next); return next; });
-    supabase.from('godowns').update(data).eq('id', id).then(({ error }) => { if (error) console.warn('Godown update:', error.message); });
+    if (guardFYLocked()) return;   // RULE 6
+    let snapshot: Godown[] = [];
+    setGodownsState(prev => { snapshot = prev; const next = prev.map(g => g.id === id ? { ...g, ...data } : g); cacheGodowns(next); return next; });
+    supabase.from('godowns').update(data).eq('id', id).then(({ error }) => {
+      if (error) {   // RULE 1
+        console.error('Godown update:', error.message);
+        setGodownsState(() => { cacheGodowns(snapshot); return snapshot; });
+        toastRef.current({ title: 'Godown अपडेट नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const deleteGodown = useCallback((id: string) => {
-    setGodownsState(prev => { const next = prev.filter(g => g.id !== id); cacheGodowns(next); return next; });
+    if (guardFYLocked()) return;   // RULE 6
+    let snapshot: Godown[] = [];
+    setGodownsState(prev => { snapshot = prev; const next = prev.filter(g => g.id !== id); cacheGodowns(next); return next; });
     if (activeGodownIdRef.current === id) setActiveGodown('');
-    supabase.from('godowns').delete().eq('id', id).then(({ error }) => { if (error) console.warn('Godown delete:', error.message); });
+    supabase.from('godowns').delete().eq('id', id).then(({ error }) => {
+      if (error) {   // RULE 1
+        console.error('Godown delete:', error.message);
+        setGodownsState(() => { cacheGodowns(snapshot); return snapshot; });
+        toastRef.current({ title: 'Godown delete नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par godown wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
   }, [setActiveGodown]);
   // Persist a stock movement safely (ECR-17 Phase 3): base upsert WITHOUT godownId
   // (never fails pre-migration), then a best-effort step-2 patch of godownId.
@@ -2856,33 +2906,49 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [musterEntries, workOrders, accounts, addVoucher, cancelVoucher, user]);
 
   const approveMember = useCallback((id: string) => {
+    if (guardFYLocked()) return;   // RULE 6
     const member = membersRef.current.find(m => m.id === id);
     if (!member) return;
     const approved = { ...member, approvalStatus: 'approved' as const };
     setMembersState(prev => prev.map(m => m.id === id ? approved : m));
-    supabase.from('members').upsert(withSoc(approved)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    // Now create auto-vouchers for Share Capital and Admission Fee
-    if ((approved.shareCapital || 0) > 0) {
-      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: approved.shareCapital, narration: `Share Capital received from ${approved.name}`, memberId: approved.id, createdAt: new Date().toISOString(), createdBy: 'System' };
-      vouchersRef.current = [...vouchersRef.current, v];
-      setVouchersState(prev => [...prev, v]);
-      supabase.from('vouchers').upsert(withSoc(v)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    }
-    if ((approved.admissionFee || 0) > 0) {
-      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: approved.admissionFee!, narration: `Admission Fee received from ${approved.name}`, memberId: approved.id, createdAt: new Date().toISOString(), createdBy: 'System' };
-      vouchersRef.current = [...vouchersRef.current, v];
-      setVouchersState(prev => [...prev, v]);
-      supabase.from('vouchers').upsert(withSoc(v)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    }
+    supabase.from('members').upsert(withSoc(approved)).then(({ error }) => {
+      if (error) {   // RULE 1: revert the approval so state matches Supabase; NO auto-vouchers on a failed approve
+        console.error('DB sync error:', error.message);
+        setMembersState(prev => prev.map(m => m.id === id ? member : m));
+        toastRef.current({ title: 'Approve सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par member wapas pending dikhega.`, variant: 'destructive', duration: 12000 });
+        return;
+      }
+      // Member approval is durable — ONLY now create the auto-vouchers (never before, so a
+      // failed approve can never leave orphan share-capital / admission-fee vouchers).
+      if ((approved.shareCapital || 0) > 0) {
+        const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: approved.shareCapital, narration: `Share Capital received from ${approved.name}`, memberId: approved.id, createdAt: new Date().toISOString(), createdBy: 'System' };
+        vouchersRef.current = [...vouchersRef.current, v];
+        setVouchersState(prev => [...prev, v]);
+        supabase.from('vouchers').upsert(withSoc(v)).then(({ error: vErr }) => { if (vErr) { console.error('DB sync error:', vErr.message); toastRef.current({ title: 'Save failed', description: vErr.message, variant: 'destructive' }); } });
+      }
+      if ((approved.admissionFee || 0) > 0) {
+        const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: approved.admissionFee!, narration: `Admission Fee received from ${approved.name}`, memberId: approved.id, createdAt: new Date().toISOString(), createdBy: 'System' };
+        vouchersRef.current = [...vouchersRef.current, v];
+        setVouchersState(prev => [...prev, v]);
+        supabase.from('vouchers').upsert(withSoc(v)).then(({ error: vErr }) => { if (vErr) { console.error('DB sync error:', vErr.message); toastRef.current({ title: 'Save failed', description: vErr.message, variant: 'destructive' }); } });
+      }
+    });
     console.info(`[AUDIT] Member id=${id} approved by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, [society.financialYear]);
 
   const rejectMember = useCallback((id: string) => {
+    if (guardFYLocked()) return;   // RULE 6
     const member = membersRef.current.find(m => m.id === id);
     if (!member) return;
     const rejected = { ...member, approvalStatus: 'rejected' as const };
     setMembersState(prev => prev.map(m => m.id === id ? rejected : m));
-    supabase.from('members').upsert(withSoc(rejected)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('members').upsert(withSoc(rejected)).then(({ error }) => {
+      if (error) {   // RULE 1: revert so state matches Supabase
+        console.error('DB sync error:', error.message);
+        setMembersState(prev => prev.map(m => m.id === id ? member : m));
+        toastRef.current({ title: 'Reject सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par member wapas pending dikhega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
     console.info(`[AUDIT] Member id=${id} rejected by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
