@@ -36,6 +36,7 @@
     "test:api-principal": "node scripts/test-api-principal.mjs",
     "test:event-stream": "node scripts/test-event-stream.mjs",
     "test:adapter-ring": "node scripts/test-adapter-ring.mjs",
+    "test:gov-adapters": "node scripts/test-gov-adapters.mjs",
     "test:related": "node scripts/test-related.mjs",
     "test:dist": "node scripts/test-dist.mjs",
     "seo:report": "node scripts/seo-report.mjs",
