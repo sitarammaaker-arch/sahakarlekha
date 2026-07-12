@@ -25,6 +25,7 @@ import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
+import { parseDocNumber, formatDocNumber } from '@/lib/numbering';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
@@ -1368,7 +1369,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       handleBaseFailure(`Network/promise rejection: ${msg}`);
     });
     };
-    attemptBase(baseCols, 0);
+    // T-03 (ADR-0005): for a NEW voucher, take the OFFICIAL number from the server sequence at
+    // this durable-append point — atomic, gapless, collision-free (next_document_number). Restamp
+    // local state to the issued number. Falls back to the client-provisional number on
+    // offline/RPC failure; the 23505 collision-retry above stays the safety net, so this is safe
+    // even BEFORE the document_sequences backfill (migration 016) runs. Updates keep their number.
+    const issueOfficialNumber = async (provisional: string | undefined): Promise<string | undefined> => {
+      const parsed = parseDocNumber(provisional);
+      if (!parsed) return provisional;
+      try {
+        const { data, error } = await supabase.rpc('next_document_number', {
+          p_society_id: societyIdRef.current, p_book: parsed.book, p_fy: parsed.fy,
+        });
+        const n = typeof data === 'number' ? data : Number(data);
+        if (error || !Number.isFinite(n) || n <= 0) return provisional;
+        return formatDocNumber(parsed.book, parsed.fy, n, parsed.width);
+      } catch {
+        return provisional;
+      }
+    };
+    const provisionalNo = (baseCols as { voucherNo?: string }).voucherNo;
+    if (opts.isUpdate) {
+      attemptBase(baseCols, 0);
+    } else {
+      issueOfficialNumber(provisionalNo).then((officialNo) => {
+        if (officialNo && officialNo !== provisionalNo) {
+          vouchersRef.current = vouchersRef.current.map(x => x.id === v.id ? { ...x, voucherNo: officialNo } : x);
+          setVouchersState(prev => prev.map(x => x.id === v.id ? { ...x, voucherNo: officialNo } : x));
+        }
+        attemptBase({ ...baseCols, voucherNo: officialNo ?? provisionalNo }, 0);
+      });
+    }
   };
 
   const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }): Voucher => {
