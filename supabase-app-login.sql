@@ -1,4 +1,9 @@
 -- ============================================================================
+--  ⚠️ RETIRED (P1-SEC-4, 2026-07-12) — DROPPED in migration 010_retire_app_login.
+--  The client no longer calls app_login (PR #60) and every active user is on
+--  Supabase Auth (jwt_less_legacy = 0). Kept here only as the source for the
+--  010 rollback (010_retire_app_login_down.sql). Do NOT re-run in production.
+-- ============================================================================
 --  SahakarLekha — Secure server-side login (app_login RPC)
 -- ----------------------------------------------------------------------------
 --  Why this exists:
