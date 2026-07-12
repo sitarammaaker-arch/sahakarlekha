@@ -38,6 +38,20 @@ from (
          (split_part("purchaseNo", '/', 3))::bigint
   from purchases
   where "purchaseNo" ~ '^[^/]+/[^/]+/[0-9]+$'
+  union all
+  select society_id,
+         split_part("loanNo", '/', 1),
+         split_part("loanNo", '/', 2),
+         (split_part("loanNo", '/', 3))::bigint
+  from loans
+  where "loanNo" ~ '^[^/]+/[^/]+/[0-9]+$'
+  union all
+  select society_id,
+         split_part("objectionNo", '/', 1),
+         split_part("objectionNo", '/', 2),
+         (split_part("objectionNo", '/', 3))::bigint
+  from audit_objections
+  where "objectionNo" ~ '^[^/]+/[^/]+/[0-9]+$'
 ) s
 group by s.society_id, s.book, s.fy
 on conflict (society_id, book, fy)
