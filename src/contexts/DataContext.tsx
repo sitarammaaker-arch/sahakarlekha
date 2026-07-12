@@ -37,6 +37,7 @@ import { resolveCapabilities } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
 import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { resolveJurisdiction, stampTenant } from '@/lib/jurisdiction';
+import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
 import { snapshotDeletedMovements } from '@/lib/movementArchive';
 import { isSelfApproval } from '@/lib/sod';
 import { requiresApproval } from '@/lib/approvalMatrix';
@@ -239,6 +240,9 @@ interface DataContextType {
   getCashBookEntries: (fromDate?: string, toDate?: string) => CashBookEntry[];
   getBankBookEntries: (fromDate?: string, toDate?: string, bankAccountId?: string) => BankBookEntry[];
   getTrialBalance: (asOnDate?: string) => AccountBalance[];
+  /** T-06 shadow dual-write: the immutable ledger events emitted this session as vouchers are
+   *  posted. Read-only; reporting still derives from vouchers (the ledger cutover is T-09). */
+  getLedgerEvents: () => LedgerEvent[];
   // M15: All point-in-time aggregators accept asOnDate so Day Book / Balance Sheet
   // historical lookups don't silently show current-day numbers.
   getMemberLedger: (memberId: string) => MemberLedgerEntry[];
@@ -311,6 +315,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // delete/approve useCallbacks; emitAudit is fire-and-forget and never blocks the write.
   const userRef = useRef(user);
   useEffect(() => { userRef.current = user; }, [user]);
+
+  // T-06 · append-only event ledger (shadow dual-write). As vouchers are posted, addVoucher also
+  // emits an immutable `voucher.posted` event via the tested buildEvent core. This is a SHADOW:
+  // no read path consumes it (reporting still derives from vouchers), so it changes no behavior;
+  // the ledger cutover that flips reports to the projection is T-09. In-memory this session.
+  const ledgerEventsRef = useRef<LedgerEvent[]>([]);
   const emitAudit = (input: AuditInput) => logAudit(input, {
     societyId: societyIdRef.current,
     actor: { name: userRef.current?.name, email: userRef.current?.email, role: userRef.current?.role },
@@ -1374,6 +1384,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     vouchersRef.current = [...vouchersRef.current, newVoucher];
     setVouchersState(prev => [...prev, newVoucher]);
 
+    // T-06 shadow dual-write: emit an immutable `voucher.posted` event for a posted (non-pending)
+    // voucher. Best-effort and fully isolated — any failure here can never affect the voucher save.
+    // Built before persist so the rollback below can drop it too, keeping the shadow ledger
+    // consistent with the vouchers it mirrors.
+    let shadowEventId: string | null = null;
+    try {
+      if (newVoucher.approvalStatus !== 'pending') {
+        const ev = buildEvent({
+          eventType: 'voucher.posted',
+          tenantId: societyIdRef.current,
+          jurisdiction: jurisdictionRef.current,
+          aggregateType: 'voucher',
+          aggregateId: newVoucher.id,
+          sequence: 1,
+          producer: { kind: 'human', id: userRef.current?.name ?? null },
+          payload: { voucherNo: newVoucher.voucherNo, type: newVoucher.type, amount: newVoucher.amount, date: newVoucher.date },
+        }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
+        shadowEventId = ev.eventId;
+        ledgerEventsRef.current = [...ledgerEventsRef.current, ev];
+      }
+    } catch { /* shadow ledger is best-effort — never touches the voucher save path */ }
+
     // Persist with two-step + rollback. If base save fails, REMOVE the voucher
     // from local state so the UI reflects what's actually in Supabase — F5 won't
     // silently delete the user's work because the work was never optimistically
@@ -1383,6 +1415,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       onBaseFail: () => {
         vouchersRef.current = vouchersRef.current.filter(v => v.id !== newVoucher.id);
         setVouchersState(prev => prev.filter(v => v.id !== newVoucher.id));
+        // Keep the shadow ledger consistent with the rolled-back voucher.
+        if (shadowEventId) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== shadowEventId);
       },
     });
     return newVoucher;
@@ -6086,6 +6120,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addCustomer, updateCustomer, deleteCustomer,
       getAccountBalance, getShareCapitalReconciliation, getAssetRegisterReconciliation, getCashBookEntries, getBankBookEntries,
       getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments, postClosingStock, recordFundUtilisation,
+      getLedgerEvents: () => [...ledgerEventsRef.current],
       getEntityLinks,
       isLoading,
     }}>
