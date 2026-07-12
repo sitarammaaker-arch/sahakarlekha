@@ -217,7 +217,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
           <><CommandSeparator />
             <CommandGroup heading={hi ? 'कर्मचारी' : 'Employees'}>
               {filteredEmployees.map(e => (
-                <CommandItem key={e.id} value={`emp-${e.id}`} onSelect={() => go('/payroll')} className="gap-2">
+                <CommandItem key={e.id} value={`emp-${e.id}`} onSelect={() => go('/salary')} className="gap-2">
                   <HardHat className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span>{e.name}</span>
                   <span className="text-muted-foreground text-xs ml-auto">{(e as { designation?: string }).designation}</span>
