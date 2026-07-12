@@ -24,6 +24,7 @@ import { getVoucherLines, buildVoucherEntries } from '@/lib/voucherUtils';
 import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
+import { toMinor, toRupees, addMinor, subMinor, type Minor } from '@/lib/money';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
@@ -3883,34 +3884,48 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ? activeVouchers.filter(v => v.date <= asOnDate)
       : activeVouchers;
 
-    // Build results for existing accounts
+    // Build results for existing accounts.
+    // T-02 (money precision / ADR-0006): every leg is summed in exact integer paise, so a
+    // trial balance over thousands of legs cannot drift in the last paisa the way float
+    // accumulation does (RULE 2 / CA-02, the phantom-balance class). Storage stays rupees;
+    // only this COMPUTE is minor-unit. Values return as rupees in the same shape — correct
+    // data yields identical numbers, drifty data is now exact.
     const accountIds = new Set(accounts.filter(a => !a.isGroup).map(a => a.id));
     const results = accounts.filter(a => !a.isGroup).map(account => {
-      const openingDebit = account.openingBalanceType === 'debit' ? account.openingBalance : 0;
-      const openingCredit = account.openingBalanceType === 'credit' ? account.openingBalance : 0;
-      let transactionDebit = 0;
-      let transactionCredit = 0;
+      const openingDebitMinor = account.openingBalanceType === 'debit' ? toMinor(Number(account.openingBalance) || 0) : 0;
+      const openingCreditMinor = account.openingBalanceType === 'credit' ? toMinor(Number(account.openingBalance) || 0) : 0;
+      let txnDebitMinor: Minor = 0;
+      let txnCreditMinor: Minor = 0;
       vouchersToUse.forEach(v => {
         getVoucherLines(v).forEach(l => {
           if (l.accountId === account.id) {
-            if (l.type === 'Dr') transactionDebit += l.amount;
-            else transactionCredit += l.amount;
+            if (l.type === 'Dr') txnDebitMinor = addMinor(txnDebitMinor, toMinor(Number(l.amount) || 0));
+            else txnCreditMinor = addMinor(txnCreditMinor, toMinor(Number(l.amount) || 0));
           }
         });
       });
-      const totalDebit = openingDebit + transactionDebit;
-      const totalCredit = openingCredit + transactionCredit;
-      return { account, openingDebit, openingCredit, transactionDebit, transactionCredit, totalDebit, totalCredit, netBalance: totalDebit - totalCredit };
+      const totalDebitMinor = addMinor(openingDebitMinor, txnDebitMinor);
+      const totalCreditMinor = addMinor(openingCreditMinor, txnCreditMinor);
+      return {
+        account,
+        openingDebit: toRupees(openingDebitMinor),
+        openingCredit: toRupees(openingCreditMinor),
+        transactionDebit: toRupees(txnDebitMinor),
+        transactionCredit: toRupees(txnCreditMinor),
+        totalDebit: toRupees(totalDebitMinor),
+        totalCredit: toRupees(totalCreditMinor),
+        netBalance: toRupees(subMinor(totalDebitMinor, totalCreditMinor)),
+      };
     });
 
     // Detect orphaned transactions (voucher lines referencing deleted/missing accounts)
-    const orphanMap: Record<string, { dr: number; cr: number }> = {};
+    const orphanMap: Record<string, { dr: Minor; cr: Minor }> = {};
     vouchersToUse.forEach(v => {
       getVoucherLines(v).forEach(l => {
         if (!accountIds.has(l.accountId)) {
           if (!orphanMap[l.accountId]) orphanMap[l.accountId] = { dr: 0, cr: 0 };
-          if (l.type === 'Dr') orphanMap[l.accountId].dr += l.amount;
-          else orphanMap[l.accountId].cr += l.amount;
+          if (l.type === 'Dr') orphanMap[l.accountId].dr = addMinor(orphanMap[l.accountId].dr, toMinor(Number(l.amount) || 0));
+          else orphanMap[l.accountId].cr = addMinor(orphanMap[l.accountId].cr, toMinor(Number(l.amount) || 0));
         }
       });
     });
@@ -3920,7 +3935,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         id, name: `[Deleted] ${id.slice(0, 8)}...`, nameHi: `[हटाया] ${id.slice(0, 8)}...`,
         type: 'liability', openingBalance: 0, openingBalanceType: 'credit',
       };
-      results.push({ account: syntheticAccount, openingDebit: 0, openingCredit: 0, transactionDebit: dr, transactionCredit: cr, totalDebit: dr, totalCredit: cr, netBalance: dr - cr });
+      results.push({ account: syntheticAccount, openingDebit: 0, openingCredit: 0, transactionDebit: toRupees(dr), transactionCredit: toRupees(cr), totalDebit: toRupees(dr), totalCredit: toRupees(cr), netBalance: toRupees(subMinor(dr, cr)) });
     });
 
     return results;

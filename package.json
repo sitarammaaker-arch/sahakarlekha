@@ -14,6 +14,7 @@
     "test:nav": "node scripts/test-nav.mjs",
     "test:jurisdiction": "node scripts/test-jurisdiction.mjs",
     "test:money": "node scripts/test-money.mjs",
+    "test:money-tb": "node scripts/test-money-trial-balance.mjs",
     "test:document-number": "node scripts/test-document-number.mjs",
     "test:ledger-lines": "node scripts/test-ledger-lines.mjs",
     "test:activities": "node scripts/test-activities.mjs",
