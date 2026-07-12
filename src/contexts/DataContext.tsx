@@ -4150,7 +4150,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     if (!voucher?.id) return false;
     const before = asset;
-    const updated: Asset = { ...asset, status: 'disposed', disposalDate: opts.date, saleProceeds: opts.saleProceeds };
+    const updated: Asset = { ...asset, status: 'disposed', disposalDate: opts.date, saleProceeds: opts.saleProceeds,
+      voucherIds: [...(asset.voucherIds ?? []), voucher.id] };   // P0-3: link the disposal voucher by id
     assetsRef.current = assetsRef.current.map(a => a.id === id ? updated : a);
     setAssetsState(prev => prev.map(a => a.id === id ? updated : a));
     supabase.from('assets').upsert(withSoc(updated)).then(({ error }) => {
@@ -4175,14 +4176,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('assets').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     // RULE 3: soft-cancel any depreciation journal(s) auto-posted for this asset (matched by its
     // unique assetNo in the narration) so no orphan depreciation expense / accumulated-dep lingers.
-    if (asset?.assetNo) {
+    if (asset) {
       const now = new Date().toISOString();
-      const linkedIds = new Set(vouchersRef.current.filter(v => !v.isDeleted && v.narration?.includes(asset.assetNo) && !isEngineVoucher(v)).map(v => v.id));
+      // P0-3: prefer the stored voucher ids (capitalization + depreciation + disposal); fall back
+      // to the legacy narration match only for assets created before these ids were stored. The old
+      // substring match (`narration.includes(assetNo)`) collided "AST/0001" with "AST/00010".
+      const storedIds = [asset.acquisitionVoucherId, ...(asset.voucherIds ?? [])].filter(Boolean) as string[];
+      const linkedIds = storedIds.length > 0
+        ? new Set(vouchersRef.current.filter(v => storedIds.includes(v.id) && !v.isDeleted && !isEngineVoucher(v)).map(v => v.id))
+        : (asset.assetNo
+            ? new Set(vouchersRef.current.filter(v => !v.isDeleted && v.narration?.includes(asset.assetNo) && !isEngineVoucher(v)).map(v => v.id))
+            : new Set<string>());
       if (linkedIds.size > 0) {
         const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Asset deleted' } : v;
         vouchersRef.current = vouchersRef.current.map(cancel);
         setVouchersState(prev => prev.map(cancel));
-        linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) console.error('Asset depreciation voucher cancel sync:', error.message); else deleteEntries(vid); }));
+        linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) console.error('Asset voucher cancel sync:', error.message); else deleteEntries(vid); }));
       }
     }
     emitAudit({ entityType: 'asset', entityId: id, action: 'delete', reason: 'Asset deleted' });
@@ -4223,7 +4232,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const depAmount = calcDepForFY(asset, targetFY, priorAccumDep);
       if (depAmount <= 0) { skipped++; continue; }
 
-      addVoucher({
+      const dv = addVoucher({
         type: 'journal',
         date: depDate,
         debitAccountId:  depAcc.expenseId,
@@ -4233,9 +4242,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         createdBy,
       });
 
-      // Mark FY as posted on the asset record
+      // Mark FY as posted on the asset record + link the depreciation voucher by id (P0-3),
+      // so deleteAsset cancels exactly it, not a narration-substring match.
       updateAsset(asset.id, {
         depreciationPostedFY: [...(asset.depreciationPostedFY ?? []), targetFY],
+        ...(dv?.id ? { voucherIds: [...(asset.voucherIds ?? []), dv.id] } : {}),
       });
 
       posted++;

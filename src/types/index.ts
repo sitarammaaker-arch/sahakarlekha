@@ -804,6 +804,7 @@ export interface Asset {
   disposalDate?: string;           // ISO date when disposed/sold
   saleProceeds?: number;           // amount received on disposal (₹)
   acquisitionVoucherId?: string;   // ECR-15: capitalization voucher (Dr Fixed-Asset / Cr Cash-Bank) when purchased
+  voucherIds?: string[];           // P0-3 (L3): ids of this asset's depreciation + disposal vouchers, so deleteAsset cancels exactly them instead of a fragile narration-substring match.
   location: string;
   description: string;
   status: AssetStatus;

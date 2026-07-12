@@ -2782,6 +2782,9 @@ end $$;
 
 -- ECR-15 (asset acquisition auto-posting): links the capitalization voucher (Dr Fixed-Asset / Cr Cash-Bank).
 alter table assets add column if not exists "acquisitionVoucherId" text;
+-- P0-3 (L3): ids of the asset's depreciation + disposal vouchers, so deleteAsset cancels
+-- exactly them (not a fragile narration-substring match that collides AST/0001 with AST/00010).
+alter table assets add column if not exists "voucherIds" jsonb default '[]';
 
 -- ECR-12 (two-factor auth): per-user TOTP enrolment. mfa_secret is the base32
 -- authenticator seed; only set once the user confirms a code. Login is not yet
