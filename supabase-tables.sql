@@ -992,19 +992,23 @@ alter table suppliers add column if not exists "notes"            text;
 
 -- ── STEP 17: get_all_societies() — SECURITY DEFINER bypasses RLS ─────────────
 -- Super admin calls this to see all societies regardless of society_id filter.
+-- Return shape MATCHES the deployed production definition (Item #4 drift reconcile,
+-- 2026-07-12): the tenant key is aliased society_id -> `id`, and registrationNo /
+-- societyType (camelCase columns on society_settings) -> registration_no /
+-- society_type; trial/expiry are returned as `date`. The client
+-- (SuperAdminDashboard) normalizes `id`/snake_case back. Keep this in lock-step
+-- with prod so a future create-or-replace does not 42P13 on a return-type change.
 create or replace function get_all_societies()
 returns table (
-  society_id        text,
+  id                text,
   name              text,
-  "nameHi"          text,
-  "registrationNo"  text,
+  registration_no   text,
+  society_type      text,
   district          text,
   state             text,
-  "societyType"     text,
-  "financialYear"   text,
   plan              text,
-  trial_ends_at     timestamptz,
-  plan_expires_at   timestamptz,
+  trial_ends_at     date,
+  plan_expires_at   date,
   is_locked         boolean,
   subscription_notes text,
   created_at        timestamptz
@@ -1014,11 +1018,11 @@ security definer
 set search_path = public, extensions
 as $$
   select
-    society_id, name, "nameHi", "registrationNo", district, state,
-    "societyType", "financialYear", plan, trial_ends_at, plan_expires_at,
-    is_locked, subscription_notes, created_at
-  from society_settings
-  order by created_at desc;
+    ss.society_id, ss.name, ss."registrationNo", ss."societyType",
+    ss.district, ss.state, ss.plan, ss.trial_ends_at, ss.plan_expires_at,
+    ss.is_locked, ss.subscription_notes, ss.created_at
+  from society_settings ss
+  order by ss.created_at desc;
 $$;
 
 -- ── STEP 18: get_society_user_counts() — user count per society ───────────────
