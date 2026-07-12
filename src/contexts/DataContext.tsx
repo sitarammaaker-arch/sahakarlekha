@@ -2068,13 +2068,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const newObj: AuditObjection = { ...data, id: crypto.randomUUID(), objectionNo, createdAt: new Date().toISOString() };
     auditObjectionsRef.current = [...auditObjectionsRef.current, newObj];
     setAuditObjectionsState(prev => { const updated = [...prev, newObj]; return updated; });
-    supabase.from('audit_objections').upsert(withSoc(newObj)).then(({ error }) => {
-      if (error) {
-        console.error('DB sync error:', error.message);
-        auditObjectionsRef.current = auditObjectionsRef.current.filter(o => o.id !== newObj.id);
-        setAuditObjectionsState(prev => prev.filter(o => o.id !== newObj.id));   // RULE 1: roll back
-        toastRef.current({ title: 'सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+    // T-03 (ADR-0005): take the OFFICIAL objectionNo from the server sequence (book 'AUD') at
+    // persist, restamp local state. Falls back to the client-provisional number on offline/RPC fail.
+    issueOfficialNumber(nextDocNumber, societyIdRef.current, newObj.objectionNo).then((officialNo) => {
+      const objToSave = (officialNo && officialNo !== newObj.objectionNo) ? { ...newObj, objectionNo: officialNo } : newObj;
+      if (objToSave !== newObj) {
+        auditObjectionsRef.current = auditObjectionsRef.current.map(o => o.id === newObj.id ? objToSave : o);
+        setAuditObjectionsState(prev => prev.map(o => o.id === newObj.id ? objToSave : o));
       }
+      supabase.from('audit_objections').upsert(withSoc(objToSave)).then(({ error }) => {
+        if (error) {
+          console.error('DB sync error:', error.message);
+          auditObjectionsRef.current = auditObjectionsRef.current.filter(o => o.id !== newObj.id);
+          setAuditObjectionsState(prev => prev.filter(o => o.id !== newObj.id));   // RULE 1: roll back
+          toastRef.current({ title: 'सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        }
+      });
     });
     return newObj;
   }, []);
@@ -4036,13 +4045,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const newLoan: Loan = { ...data, id: crypto.randomUUID(), loanNo, createdAt: new Date().toISOString() };
     loansRef.current = [...loansRef.current, newLoan];
     setLoansState(prev => { const updated = [...prev, newLoan]; return updated; });
-    supabase.from('loans').upsert(withSoc(newLoan)).then(({ error }) => {
-      if (error) {
-        console.error('DB sync error:', error.message);
-        loansRef.current = loansRef.current.filter(l => l.id !== newLoan.id);
-        setLoansState(prev => prev.filter(l => l.id !== newLoan.id));   // RULE 1: roll back
-        toastRef.current({ title: 'ऋण सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+    // T-03 (ADR-0005): take the OFFICIAL loanNo from the server sequence (book 'L') at persist,
+    // restamp local state. Falls back to the client-provisional number on offline/RPC failure.
+    issueOfficialNumber(nextDocNumber, societyIdRef.current, newLoan.loanNo).then((officialNo) => {
+      const loanToSave = (officialNo && officialNo !== newLoan.loanNo) ? { ...newLoan, loanNo: officialNo } : newLoan;
+      if (loanToSave !== newLoan) {
+        loansRef.current = loansRef.current.map(l => l.id === newLoan.id ? loanToSave : l);
+        setLoansState(prev => prev.map(l => l.id === newLoan.id ? loanToSave : l));
       }
+      supabase.from('loans').upsert(withSoc(loanToSave)).then(({ error }) => {
+        if (error) {
+          console.error('DB sync error:', error.message);
+          loansRef.current = loansRef.current.filter(l => l.id !== newLoan.id);
+          setLoansState(prev => prev.filter(l => l.id !== newLoan.id));   // RULE 1: roll back
+          toastRef.current({ title: 'ऋण सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        }
+      });
     });
 
     // M16: Create disbursement voucher so loan appears as an asset in Trial Balance / Balance Sheet.

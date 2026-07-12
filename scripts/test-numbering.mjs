@@ -21,6 +21,8 @@ const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  âœ
 const p = parseDocNumber('RCP/2025-26/0007');
 ok(p && p.book === 'RCP' && p.fy === '2025-26' && p.seq === 7 && p.width === 4, 'parses BOOK/FY/SEQ incl. zero-pad width');
 ok(parseDocNumber('SL/2025-26/012')?.width === 3, 'width follows the actual pad (3)');
+ok(parseDocNumber('L/2025-26/007')?.book === 'L', 'loan L/FY/SEQ parses (book L)');
+ok(parseDocNumber('AUD/2025-26/003')?.book === 'AUD', 'audit-objection AUD/FY/SEQ parses (book AUD)');
 for (const bad of [undefined, null, '', 'RCP/2025-26', 'RCP/2025-26/', 'RCP//007', 'RCP/2025-26/07a', 'a/b/c/d']) {
   ok(parseDocNumber(bad) === null, `rejects malformed "${bad}"`);
 }
