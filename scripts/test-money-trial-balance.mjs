@@ -24,7 +24,7 @@ try {
   console.error('        ' + String(e?.message ?? e).split('\n')[0]);
   process.exit(1);
 }
-const { toMinor, toRupees, addMinor, subMinor } = m;
+const { toMinor, toRupees, addMinor, subMinor, sumMinor } = m;
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -86,6 +86,28 @@ ok(toRupees(sumLegsMinor(acc).netMinor) === 9000, 'net balance = ₹9000.00 exac
 // ── 5. BAD / MISSING AMOUNTS DEGRADE TO ZERO, NEVER THROW (render safety) ─────
 ok(toRupees(sumLegsMinor([{ type: 'Dr', amount: undefined }, { type: 'Dr', amount: NaN }, { type: 'Dr', amount: 500 }]).drMinor) === 500,
    'undefined/NaN legs count as 0 — getTrialBalance never throws in render');
+
+// ── 6. TRADING GROSS PROFIT combines in paise (getTradingAccount, slice 2) ────
+// GP = (Sales + ClosingStock) − (Opening + Purchases + DirectExp), each a sum of
+// many item lines. Drift-prone lists; the minor combine must land exactly.
+const sumItemsMinor = (items) => sumMinor(items.map((i) => toMinor(Number(i.amount) || 0)));
+const t_sales     = Array.from({ length: 300 }, () => ({ amount: 10.10 })); // 3030.00
+const t_closing   = [{ amount: 500.50 }];
+const t_opening   = [{ amount: 200.20 }];
+const t_purchases = Array.from({ length: 300 }, () => ({ amount: 10.10 })); // 3030.00
+const t_directExp = [{ amount: 100.30 }];
+const crMinor = addMinor(sumItemsMinor(t_sales), sumItemsMinor(t_closing));
+const drMinor = addMinor(sumItemsMinor(t_opening), sumItemsMinor(t_purchases), sumItemsMinor(t_directExp));
+const gp = toRupees(subMinor(crMinor, drMinor));
+// (3030.00 + 500.50) − (200.20 + 3030.00 + 100.30) = 3530.50 − 3330.50 = 200.00
+ok(toRupees(sumItemsMinor(t_sales)) === 3030, '300×₹10.10 sales = exactly ₹3030.00 (float drifts here)');
+ok(gp === 200, `Trading Gross Profit combines exactly to ₹200.00 (got ${gp})`);
+
+// ── 7. P&L NET PROFIT combines in paise (getProfitLoss, slice 2) ──────────────
+const p_income   = Array.from({ length: 100 }, () => ({ amount: 33.33 })); // 3333.00
+const p_expenses = [{ amount: 1333.00 }];
+const np = toRupees(subMinor(sumItemsMinor(p_income), sumItemsMinor(p_expenses)));
+ok(np === 2000, `P&L Net Profit = exactly ₹2000.00 (got ${np})`);
 
 console.log(`\nTrial-balance money precision: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

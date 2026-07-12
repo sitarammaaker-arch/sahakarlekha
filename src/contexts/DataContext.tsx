@@ -24,7 +24,7 @@ import { getVoucherLines, buildVoucherEntries } from '@/lib/voucherUtils';
 import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
-import { toMinor, toRupees, addMinor, subMinor, type Minor } from '@/lib/money';
+import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
@@ -4414,9 +4414,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const movementsToUse = stockMovements.filter(m => m.date <= effDate);
     // Value closing stock at weighted-average COST from movements (NOT the stale
     // purchaseRate field, which is 0 after some imports → silently zeroed closing stock).
-    const physicalClosingStock = stockItems
-      .filter(s => s.isActive)
-      .reduce((sum, s) => sum + computeStockValue(s, movementsToUse), 0);
+    const physicalClosingStock = toRupees(sumMinor(
+      stockItems.filter(s => s.isActive).map(s => toMinor(Number(computeStockValue(s, movementsToUse)) || 0)),
+    ));
 
     // Check if the closing-stock journal has been posted for this FY.
     // Audit C-8: the NEW journal credits the dedicated 5150 (Purchases stay gross);
@@ -4449,7 +4449,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.openingDebit }))
       .filter(i => i.amount > 0);
 
-    const totalClosingStockEarly = closingStockItems.reduce((s, i) => s + i.amount, 0);
+    const totalClosingStockMinor = sumMinor(closingStockItems.map(i => toMinor(Number(i.amount) || 0)));
+    const totalClosingStockEarly = toRupees(totalClosingStockMinor);
 
     // Dr side: Purchases (account 5101).
     // Audit C-8: a LEGACY closing-stock journal (Dr 3403 / Cr 5101) reduced 5101 by
@@ -4460,7 +4461,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Expenses, so the Trading A/c lists each commodity's purchase under "Purchases".
     const PURCHASE_ACTIVITY_IDS = ['5110', '5111', '5112', '5113', '5114', '5115', '5116'];
     const purchase5101Net = (tb.find(b => b.account.id === '5101')?.netBalance) || 0;
-    const purchase5101Gross = closingViaLegacy ? purchase5101Net + totalClosingStockEarly : purchase5101Net;
+    const purchase5101Gross = closingViaLegacy ? toRupees(addMinor(toMinor(Number(purchase5101Net) || 0), totalClosingStockMinor)) : purchase5101Net;
     // Include even when net is negative (abnormal — e.g. returns exceed purchases) so
     // the figure ties to the ledger (BS-tie fix).
     const purchaseItems = [
@@ -4495,15 +4496,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }))
       .filter(i => Math.abs(i.amount) > 0.005);
 
-    const totalSales        = salesItems.reduce((s, i) => s + i.amount, 0);
-    const totalClosingStock = totalClosingStockEarly;
-    const totalOpeningStock = openingStockItems.reduce((s, i) => s + i.amount, 0);
-    const totalPurchases    = purchaseItems.reduce((s, i) => s + i.amount, 0);
-    const totalDirectExp    = directExpItems.reduce((s, i) => s + i.amount, 0);
+    // T-02: sum each side's items in integer paise, then combine Cr/Dr in paise, so Gross
+    // Profit over many items/legs cannot drift in the last paisa (values return as rupees).
+    const totalSalesMinor        = sumMinor(salesItems.map(i => toMinor(Number(i.amount) || 0)));
+    const totalOpeningStockMinor = sumMinor(openingStockItems.map(i => toMinor(Number(i.amount) || 0)));
+    const totalPurchasesMinor    = sumMinor(purchaseItems.map(i => toMinor(Number(i.amount) || 0)));
+    const totalDirectExpMinor    = sumMinor(directExpItems.map(i => toMinor(Number(i.amount) || 0)));
 
-    const crTotal   = totalSales + totalClosingStock;
-    const drTotal   = totalOpeningStock + totalPurchases + totalDirectExp;
-    const grossProfit = crTotal - drTotal;
+    const totalSales        = toRupees(totalSalesMinor);
+    const totalClosingStock = toRupees(totalClosingStockMinor);
+    const totalOpeningStock = toRupees(totalOpeningStockMinor);
+    const totalPurchases    = toRupees(totalPurchasesMinor);
+    const totalDirectExp    = toRupees(totalDirectExpMinor);
+
+    const crTotalMinor = addMinor(totalSalesMinor, totalClosingStockMinor);
+    const drTotalMinor = addMinor(totalOpeningStockMinor, totalPurchasesMinor, totalDirectExpMinor);
+    const grossProfit = toRupees(subMinor(crTotalMinor, drTotalMinor));
 
     // ── Audit C-7: activity-wise Trading breakdown (NCDC Annexure V) ─────────────
     // ADDITIVE — does NOT change grossProfit / the combined totals above (P&L and
@@ -4530,17 +4538,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const purchases = a.purchaseId ? nbById(a.purchaseId) : 0; // debit-nature → positive
       const hasRoutedPurchase = Math.abs(purchases) > 0.005;
       return { key: a.key, keyHi: a.keyHi, salesId: a.salesId, purchaseId: a.purchaseId,
-        sales, purchases, hasRoutedPurchase, grossMargin: sales - purchases };
+        sales, purchases, hasRoutedPurchase, grossMargin: toRupees(subMinor(toMinor(Number(sales) || 0), toMinor(Number(purchases) || 0))) };
     }).filter(a => Math.abs(a.sales) > 0.005 || a.hasRoutedPurchase);
 
     // Unallocated bucket: generic 5101 purchases + non-purchase direct expenses +
     // any 4100 sales not mapped to a defined activity.
     const unallocated = {
       purchases: nbById('5101'),
-      directExp: tb.filter(b => b.account.parentId === '5100' && b.account.id !== '5101' && b.account.id !== '5150' && !activityPurchaseIds.has(b.account.id))
-        .reduce((s, b) => s + b.netBalance, 0),
-      otherSales: tb.filter(b => b.account.parentId === '4100' && !activitySalesIds.has(b.account.id))
-        .reduce((s, b) => s + (-b.netBalance), 0),
+      directExp: toRupees(sumMinor(tb.filter(b => b.account.parentId === '5100' && b.account.id !== '5101' && b.account.id !== '5150' && !activityPurchaseIds.has(b.account.id))
+        .map(b => toMinor(Number(b.netBalance) || 0)))),
+      otherSales: toRupees(sumMinor(tb.filter(b => b.account.parentId === '4100' && !activitySalesIds.has(b.account.id))
+        .map(b => toMinor(Number(-b.netBalance) || 0)))),
     };
 
     return { salesItems, closingStockItems, openingStockItems, purchaseItems, directExpItems,
@@ -4561,9 +4569,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Use movement-based qty (same formula as Inventory / Stock Valuation / Trading Account)
     // so the journal posts the same number user sees in reports.
-    const amount = stockItems
-      .filter(s => s.isActive)
-      .reduce((sum, s) => sum + computeStockValue(s, stockMovements), 0);
+    const amount = toRupees(sumMinor(
+      stockItems.filter(s => s.isActive).map(s => toMinor(Number(computeStockValue(s, stockMovements)) || 0)),
+    ));
 
     if (amount <= 0) return { posted: false, amount: 0, alreadyPosted: false };
 
@@ -4633,9 +4641,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     }
 
-    const totalIncome = incomeItems.reduce((s, i) => s + i.amount, 0);
-    const totalExpenses = expenseItems.reduce((s, i) => s + i.amount, 0);
-    return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit: totalIncome - totalExpenses };
+    const totalIncomeMinor = sumMinor(incomeItems.map(i => toMinor(Number(i.amount) || 0)));
+    const totalExpensesMinor = sumMinor(expenseItems.map(i => toMinor(Number(i.amount) || 0)));
+    const totalIncome = toRupees(totalIncomeMinor);
+    const totalExpenses = toRupees(totalExpensesMinor);
+    return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit: toRupees(subMinor(totalIncomeMinor, totalExpensesMinor)) };
   }, [getTrialBalance, getTradingAccount, society.financialYear, society.societyType, societyCapabilities]);
 
   // ── Inventory ──────────────────────────────────────────────────────────────
