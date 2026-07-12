@@ -1,5 +1,5 @@
 import type { Voucher, VoucherEntry, VoucherLine } from '@/types';
-import { toMinor, toRupees, subMinor, allocateMinor } from '@/lib/money';
+import { toMinor, toRupees, subMinor, addMinor, allocateMinor } from '@/lib/money';
 
 /**
  * Returns the voucher lines array.
@@ -82,8 +82,12 @@ export function splitNetByAccount(
   entries: { accountId: string; weight: number }[],
   grandTotal: number,
   taxAmount: number,
+  tdsAmount = 0,
 ): { accountId: string; amount: number }[] {
-  const netMinor = subMinor(toMinor(Number(grandTotal) || 0), toMinor(Number(taxAmount) || 0));
+  // net = grandTotal − tax, plus TDS for a PURCHASE: its goods value adds back the TDS the
+  // supplier payable already deducted, so Dr(net)+ITC === Cr(grandTotal)+TDS. tds defaults 0,
+  // so sale callers (grandTotal − tax) are unchanged.
+  const netMinor = addMinor(subMinor(toMinor(Number(grandTotal) || 0), toMinor(Number(taxAmount) || 0)), toMinor(Number(tdsAmount) || 0));
   if (netMinor <= 0 || entries.length === 0) return [];
   const order: string[] = [];
   const weightByAcc = new Map<string, number>();

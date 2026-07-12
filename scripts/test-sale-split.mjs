@@ -82,5 +82,18 @@ ok(merged.find(l => l.accountId === 'X').amount === 150, 'X (weight 10+5=15 of 2
 ok(splitNetByAccount([], 100, 0).length === 0, 'no items → no split lines');
 ok(splitNetByAccount([{ accountId: 'A', weight: 1 }], 50, 50).length === 0, 'net 0 (grandTotal == tax) → no split lines');
 
+// ── 6. PURCHASE: net = grandTotal − tax + tds; voucher balances by construction ──
+// Dr(purchase split = net) + Dr(ITC = tax) === Cr(payable = grandTotal) + Cr(TDS = tds).
+const pGt = 106, pTax = 18, pTds = 12; // net = 106 − 18 + 12 = 100
+const pSplit = splitNetByAccount(
+  [{ accountId: 'P1', weight: 1 }, { accountId: 'P2', weight: 1 }, { accountId: 'P3', weight: 1 }],
+  pGt, pTax, pTds,
+);
+ok(sumAmt(pSplit) === toMinor(100), 'purchase split sums to exactly net (grandTotal − tax + tds) = ₹100');
+ok(addMinor(sumAmt(pSplit), toMinor(pTax)) === addMinor(toMinor(pGt), toMinor(pTds)),
+   'Dr(split)+ITC === Cr(grandTotal)+TDS exactly — purchase voucher balances with ZERO tolerance');
+// tds defaults to 0, so a sale-style 3-arg call is unaffected by the new param.
+ok(sumAmt(splitNetByAccount([{ accountId: 'A', weight: 1 }], 118, 18)) === toMinor(100), 'omitting tds (sale call) still nets grandTotal − tax');
+
 console.log(`\nSale account split (born-exact): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
