@@ -46,6 +46,7 @@
     "test:preservation": "node scripts/test-preservation.mjs",
     "test:federation": "node scripts/test-federation.mjs",
     "test:archive-aip": "node scripts/test-archive-aip.mjs",
+    "test:i18n-locale": "node scripts/test-i18n-locale.mjs",
     "test:related": "node scripts/test-related.mjs",
     "test:dist": "node scripts/test-dist.mjs",
     "seo:report": "node scripts/seo-report.mjs",
