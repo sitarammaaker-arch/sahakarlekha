@@ -152,7 +152,32 @@ var voucherEntry = {
     internal("workOrderId", "Work Order", "\u0915\u093E\u0930\u094D\u092F \u0906\u0926\u0947\u0936")
   ]
 };
-var CORE_ENTITIES = [society, account, voucher, voucherEntry];
+var societyActivities = {
+  key: "society_activity",
+  table: "society_activities",
+  domain: "core",
+  label: "Society Activities",
+  labelHi: "\u0938\u092E\u093F\u0924\u093F \u0917\u0924\u093F\u0935\u093F\u0927\u093F\u092F\u093E\u0901",
+  minRole: "admin",
+  scope: "society",
+  nature: "master",
+  dependsOn: [],
+  naturalKey: ["activity"],
+  softDeleteField: "isDeleted",
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  columns: [
+    c("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c("activity", "Activity", "\u0917\u0924\u093F\u0935\u093F\u0927\u093F", { type: "enum" }),
+    c("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
+    internal("jurisdiction", "Jurisdiction", "\u0915\u094D\u0937\u0947\u0924\u094D\u0930\u093E\u0927\u093F\u0915\u093E\u0930"),
+    internal("enabled_at", "Enabled At", "\u0938\u0915\u094D\u0930\u093F\u092F", { type: "date" }),
+    internal("disabled_at", "Disabled At", "\u0928\u093F\u0937\u094D\u0915\u094D\u0930\u093F\u092F", { type: "date" }),
+    internal("config", "Config", "\u0915\u0949\u0928\u094D\u092B\u093C\u093F\u0917", { type: "json" }),
+    internal("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E", { type: "boolean" })
+  ]
+};
+var CORE_ENTITIES = [society, account, voucher, voucherEntry, societyActivities];
 
 // src/lib/export/entities/member.ts
 var c2 = (key, header, headerHi, over = {}) => ({ key, header, headerHi, type: "string", piiClass: "none", defaultVisible: true, ...over });
@@ -2890,6 +2915,48 @@ var userMfaRecovery = {
     c12("code_hash", "Recovery Code Hash", "\u0930\u093F\u0915\u0935\u0930\u0940 \u0915\u094B\u0921 \u0939\u0948\u0936", { piiClass: "identity", defaultVisible: false })
   ]
 };
+var documentSequences = {
+  key: "document_sequence",
+  table: "document_sequences",
+  domain: "system",
+  label: "Document Numbering",
+  labelHi: "\u0926\u0938\u094D\u0924\u093E\u0935\u0947\u091C\u093C \u0915\u094D\u0930\u092E\u093E\u0902\u0915\u0928",
+  minRole: "admin",
+  scope: "society",
+  nature: "system",
+  dependsOn: [],
+  naturalKey: ["book", "fy"],
+  formats: ["json"],
+  backupPolicy: "full",
+  columns: [
+    c12("book", "Book", "\u092C\u0939\u0940"),
+    c12("fy", "Financial Year", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937"),
+    c12("last_number", "Last Number", "\u0905\u0902\u0924\u093F\u092E \u0938\u0902\u0916\u094D\u092F\u093E", { type: "number" }),
+    c12("updated_at", "Updated At", "\u0905\u0926\u094D\u092F\u0924\u0928", { type: "date", defaultVisible: false })
+  ]
+};
+var ledgerEvents = {
+  key: "ledger_event",
+  table: "ledger_events",
+  domain: "system",
+  label: "Ledger Events",
+  labelHi: "\u0932\u0947\u091C\u0930 \u0907\u0935\u0947\u0902\u091F\u094D\u0938",
+  minRole: "admin",
+  scope: "society",
+  nature: "evidence",
+  dependsOn: [],
+  naturalKey: ["event_id"],
+  formats: ["json"],
+  backupPolicy: "sidecar",
+  columns: [
+    c12("event_id", "Event ID", "\u0907\u0935\u0947\u0902\u091F \u0906\u0908\u0921\u0940"),
+    c12("event_type", "Event Type", "\u0907\u0935\u0947\u0902\u091F \u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
+    c12("aggregate_type", "Aggregate", "\u090F\u0917\u094D\u0930\u0940\u0917\u0947\u091F", { type: "enum" }),
+    c12("aggregate_id", "Aggregate ID", "\u090F\u0917\u094D\u0930\u0940\u0917\u0947\u091F \u0906\u0908\u0921\u0940"),
+    c12("sequence", "Sequence", "\u0915\u094D\u0930\u092E", { type: "number", defaultVisible: false }),
+    c12("occurred_at", "Occurred At", "\u0918\u091F\u093F\u0924", { type: "date", defaultVisible: false })
+  ]
+};
 var PLATFORM_ENTITIES = [
   asset,
   bankReconciliation,
@@ -2907,6 +2974,8 @@ var PLATFORM_ENTITIES = [
   election,
   auditLog,
   guideCertificate,
+  documentSequences,
+  ledgerEvents,
   societies,
   societyUsers,
   societyCapabilities,

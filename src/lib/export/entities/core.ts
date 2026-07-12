@@ -195,4 +195,34 @@ const voucherEntry: EntityDescriptor = {
   ],
 };
 
-export const CORE_ENTITIES: EntityDescriptor[] = [society, account, voucher, voucherEntry];
+// ─── society_activities (T-10 Activities layer) ────────────────────────────────
+// What the society DOES — activity codes + status + config. Society-scoped config
+// (not ledger data); backed up 'full' so a restore reproduces the society's
+// activity/capability posture. society_id is tenant scoping → not declared.
+const societyActivities: EntityDescriptor = {
+  key: 'society_activity',
+  table: 'society_activities',
+  domain: 'core',
+  label: 'Society Activities',
+  labelHi: 'समिति गतिविधियाँ',
+  minRole: 'admin',
+  scope: 'society',
+  nature: 'master',
+  dependsOn: [],
+  naturalKey: ['activity'],
+  softDeleteField: 'isDeleted',
+  formats: ['csv', 'xlsx', 'json'],
+  backupPolicy: 'full',
+  columns: [
+    c('id', 'ID', 'आईडी', { defaultVisible: false }),
+    c('activity', 'Activity', 'गतिविधि', { type: 'enum' }),
+    c('status', 'Status', 'स्थिति', { type: 'enum' }),
+    internal('jurisdiction', 'Jurisdiction', 'क्षेत्राधिकार'),
+    internal('enabled_at', 'Enabled At', 'सक्रिय', { type: 'date' }),
+    internal('disabled_at', 'Disabled At', 'निष्क्रिय', { type: 'date' }),
+    internal('config', 'Config', 'कॉन्फ़िग', { type: 'json' }),
+    internal('isDeleted', 'Deleted', 'हटाया', { type: 'boolean' }),
+  ],
+};
+
+export const CORE_ENTITIES: EntityDescriptor[] = [society, account, voucher, voucherEntry, societyActivities];

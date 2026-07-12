@@ -392,6 +392,8 @@ const EXPECTED = [
   'user_mfa', 'user_mfa_recovery',
   // T-12 — the three tables that had no DDL until now
   'recoverable', 'kachi_aarat_entry', 'p7_entry',
+  // 2026-07 — numbering authority (full), shadow event journal (sidecar), activities config (full)
+  'document_sequence', 'ledger_event', 'society_activity',
 ].sort();
 ok(keys.join(',') === EXPECTED.join(','), `declares exactly the expected ${EXPECTED.length} tables (got ${keys.length}: ${keys.join(',')})`);
 
@@ -656,9 +658,9 @@ ok(realOrder.indexOf('account') < realOrder.indexOf('housing_charge_head'), 'acc
 // flip audit_log's nature and it drops out of the list, so every per-entity check below
 // silently stops running and one lone assertion fails. The guard must name the entities
 // it protects, by KEY, independent of the field being sabotaged.
-const EVIDENCE_KEYS = ['audit_log', 'guide_certificate'];
+const EVIDENCE_KEYS = ['audit_log', 'guide_certificate', 'ledger_event'].sort();
 const evidenceKeys = REGISTRY.filter(e => e.nature === 'evidence').map(e => e.key).sort();
-ok(evidenceKeys.join(',') === EVIDENCE_KEYS.join(','), `evidence entities are exactly audit_log + guide_certificate (got: ${evidenceKeys.join(',') || 'none'})`);
+ok(evidenceKeys.join(',') === EVIDENCE_KEYS.join(','), `evidence entities are exactly audit_log + guide_certificate + ledger_event (got: ${evidenceKeys.join(',') || 'none'})`);
 for (const k of EVIDENCE_KEYS) {
   ok(byKey(k).nature === 'evidence', `${k} is nature 'evidence'`);
   ok(byKey(k).backupPolicy === 'sidecar', `${k} is sidecar`);

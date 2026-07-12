@@ -114,10 +114,10 @@ ok(plan.written.length + plan.skipped.length === REGISTRY.length,
   `EVERY ONE OF THE ${REGISTRY.length} COLLECTIONS IS ACCOUNTED FOR — ${plan.written.length} written, ${plan.skipped.length} skipped`);
 
 const skippedKeys = plan.skipped.map(s => s.key).sort();
-ok(skippedKeys.join(',') === 'platform_admin,societies,society_capability,society_user,user_mfa,user_mfa_recovery',
-  `only the six secret / cross-tenant entities are skipped (got: ${skippedKeys.join(',')})`);
+ok(skippedKeys.join(',') === 'guide_certificate,platform_admin,societies,society_capability,society_user,user_mfa,user_mfa_recovery',
+  `only the 6 excluded + guide_certificate (global) entities are skipped (got: ${skippedKeys.join(',')})`);
 ok(plan.skipped.every(s => s.reason === 'exclude' || s.reason === 'global'), 'every skip carries a written reason');
-ok(plan.written.length === REGISTRY.length - 6, `${REGISTRY.length - 6} collections are written`);
+ok(plan.written.length === REGISTRY.length - 7, `${REGISTRY.length - 7} collections are written`);
 
 // The three custody classes are visible in the directory layout.
 const paths = plan.written.map(w => w.path);
@@ -287,7 +287,7 @@ ok(recorded.rowCount === out.manifest.totals.rowCount, 'the audit row records th
 ok(typeof recorded.artifactSha256 === 'string' && recorded.artifactSha256.length === 64,
   'the audit row records the artifact hash — later it can prove WHICH bytes left');
 ok(recorded.byteSize === out.bytes, 'the audit row records the artifact size');
-ok(recorded.filters.skipped.length === 6, 'the audit row names the six entities deliberately skipped');
+ok(recorded.filters.skipped.length === 7, 'the audit row names the seven entities deliberately skipped (6 excluded + guide_certificate global)');
 
 // 9b. THE AUDIT FAILS -> NOTHING IS DELIVERED.
 events = [];
