@@ -127,6 +127,38 @@ export function applyPercent(baseMinor: Minor, pct: number, mode: RoundingMode =
   return { minor: roundMinor((baseMinor * pct) / 100, mode), mode };
 }
 
+/**
+ * PURE — split a total into integer-paise parts by weight, LARGEST-REMAINDER so the parts
+ * sum to EXACTLY `totalMinor` (never ±1 paisa off). Each slot gets the floor of its ideal
+ * share; the leftover paise go to the largest fractional remainders first. This is how a net
+ * amount is apportioned across per-account / per-item voucher lines so the voucher balances
+ * BY CONSTRUCTION (the RULE 4 split) instead of leaning on a rounding tolerance.
+ *
+ * Non-positive / non-finite weights count as 0. If every weight is 0, the whole total lands
+ * on the first slot. Works for a negative total too (e.g. a net return). Result length
+ * always === weights.length.
+ */
+export function allocateMinor(totalMinor: Minor, weights: number[]): Minor[] {
+  assertMinor(totalMinor, 'allocateMinor');
+  const n = weights.length;
+  if (n === 0) return [];
+  const w = weights.map((x) => (Number.isFinite(x) && x > 0 ? x : 0));
+  const totalWeight = w.reduce((s, x) => s + x, 0);
+  if (totalWeight === 0) {
+    const out = new Array<Minor>(n).fill(0);
+    out[0] = totalMinor;
+    return out;
+  }
+  const ideal = w.map((x) => (totalMinor * x) / totalWeight);
+  const out = ideal.map((v) => Math.floor(v));
+  let residual = totalMinor - out.reduce((s, x) => s + x, 0); // integer paise left to hand out, in [0, n)
+  const order = ideal
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac || a.i - b.i);
+  for (let k = 0; k < order.length && residual > 0; k++) { out[order[k].i] += 1; residual -= 1; }
+  return out;
+}
+
 /** Indian digit grouping for an integer string: last 3, then groups of 2 (12,34,567). */
 function groupIndian(intStr: string): string {
   if (intStr.length <= 3) return intStr;

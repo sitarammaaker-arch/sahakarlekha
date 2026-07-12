@@ -15,6 +15,7 @@
     "test:jurisdiction": "node scripts/test-jurisdiction.mjs",
     "test:money": "node scripts/test-money.mjs",
     "test:money-tb": "node scripts/test-money-trial-balance.mjs",
+    "test:sale-split": "node scripts/test-sale-split.mjs",
     "test:document-number": "node scripts/test-document-number.mjs",
     "test:ledger-lines": "node scripts/test-ledger-lines.mjs",
     "test:activities": "node scripts/test-activities.mjs",

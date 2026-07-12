@@ -20,7 +20,7 @@ import type {
 } from '@/types';
 import { matchesBranch, branchToStamp, resolveActiveBranch, ALL_BRANCHES } from '@/lib/branchScope';
 import { buildInterBranchTransfer, INTER_BRANCH_CONTROL_ID } from '@/lib/interBranch';
-import { getVoucherLines, buildVoucherEntries } from '@/lib/voucherUtils';
+import { getVoucherLines, buildVoucherEntries, splitNetByAccount } from '@/lib/voucherUtils';
 import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
@@ -945,10 +945,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const lines: VoucherLine[] = [];
             const lid = () => crypto.randomUUID();
             lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
-            buckets.forEach((amt, accId) => {
-              const rounded = Math.round(amt * 100) / 100;
-              if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: rounded });
-            });
+            // T-02 / RULE 4: allocate net (grandTotal − tax) across accounts in exact paise so
+            // the Cr lines sum to exactly the net and the voucher balances by construction.
+            splitNetByAccount(
+              sale.items.map(it => ({ accountId: stockMap.get(it.itemId)?.salesAccountId || '4101', weight: it.amount })),
+              grandTotal, sale.taxAmount || 0,
+            ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Cr', amount }));
             if ((sale.taxAmount ?? 0) > 0) {
               lines.push({ id: lid(), accountId: '2201', type: 'Cr', amount: sale.taxAmount!, narration: `GST: CGST ₹${sale.cgstAmount||0} + SGST ₹${sale.sgstAmount||0} + IGST ₹${sale.igstAmount||0}` });
             }
@@ -4899,22 +4901,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Cr: Sales A/c — split by each item's salesAccountId so multi-product societies
     // get per-category lines in TB / Trading A/c. Falls back to '4101' for unmapped items.
-    const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0));
-    if (netAmt > 0) {
-      const totalItemAmount = data.items.reduce((s, it) => s + it.amount, 0) || 1;
-      const salesAccBuckets = new Map<string, number>();
-      data.items.forEach(it => {
-        const stock = stockItems.find(s => s.id === it.itemId);
-        const acc = stock?.salesAccountId || '4101';
-        // Pro-rate net amount by item value share (handles discount + tax-exclusive routing)
-        const itemNet = (it.amount / totalItemAmount) * netAmt;
-        salesAccBuckets.set(acc, (salesAccBuckets.get(acc) || 0) + itemNet);
-      });
-      salesAccBuckets.forEach((amt, accId) => {
-        const rounded = Math.round(amt * 100) / 100;
-        if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: rounded });
-      });
-    }
+    // Cr: Sales A/c — T-02 / RULE 4: split net (grandTotal − tax) across each item's
+    // salesAccountId in exact paise so the Cr lines sum to exactly the net and the voucher
+    // balances by construction. Falls back to '4101' for unmapped items.
+    splitNetByAccount(
+      data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.salesAccountId || '4101', weight: it.amount })),
+      grandTotal, data.taxAmount || 0,
+    ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Cr', amount }));
 
     // Cr: GST Output Payable (2201) for tax amount
     if ((data.taxAmount ?? 0) > 0) {
@@ -5122,22 +5115,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       : (data.receivableAccountId || (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303'));
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
 
-    const netAmt = data.netAmount || (grandTotal - (data.taxAmount || 0));
-    if (netAmt > 0) {
-      // Split by each item's salesAccountId (same logic as addSale)
-      const totalItemAmount = data.items.reduce((s, it) => s + it.amount, 0) || 1;
-      const salesAccBuckets = new Map<string, number>();
-      data.items.forEach(it => {
-        const stock = stockItems.find(s => s.id === it.itemId);
-        const acc = stock?.salesAccountId || '4101';
-        const itemNet = (it.amount / totalItemAmount) * netAmt;
-        salesAccBuckets.set(acc, (salesAccBuckets.get(acc) || 0) + itemNet);
-      });
-      salesAccBuckets.forEach((amt, accId) => {
-        const rounded = Math.round(amt * 100) / 100;
-        if (rounded > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: rounded });
-      });
-    }
+    // T-02 / RULE 4: exact-paise split by salesAccountId (same shared rule as addSale / repair).
+    splitNetByAccount(
+      data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.salesAccountId || '4101', weight: it.amount })),
+      grandTotal, data.taxAmount || 0,
+    ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Cr', amount }));
     if ((data.taxAmount ?? 0) > 0) {
       lines.push({ id: lid(), accountId: '2201', type: 'Cr', amount: data.taxAmount!, narration: `GST: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
     }

@@ -1,4 +1,5 @@
 import type { Voucher, VoucherEntry, VoucherLine } from '@/types';
+import { toMinor, toRupees, subMinor, allocateMinor } from '@/lib/money';
 
 /**
  * Returns the voucher lines array.
@@ -63,4 +64,36 @@ export function voucherCrTotal(v: Voucher): number {
 
 export function isMultiLine(v: Voucher): boolean {
   return !!(v.lines && v.lines.length > 2);
+}
+
+/**
+ * PURE — the RULE 4 split, born exact (T-02). Apportions a sale/purchase NET amount
+ * (grandTotal − tax) across ledger accounts in exact integer paise, so the per-account
+ * lines sum to EXACTLY the net and the voucher balances BY CONSTRUCTION — instead of each
+ * account being rounded independently (which drifts by paise and is why the balance check
+ * carries a 1-paisa tolerance). `entries` carry each item's resolved account + value weight;
+ * weights are grouped by account (first-seen order) and allocated largest-remainder.
+ * Returns one { accountId, amount } per distinct account with amount > 0.
+ *
+ * This is the ONE split rule — addSale, updateSale and the load-repair rebuild all call it,
+ * so a repaired voucher is byte-identical to a freshly-posted one (RULE 2).
+ */
+export function splitNetByAccount(
+  entries: { accountId: string; weight: number }[],
+  grandTotal: number,
+  taxAmount: number,
+): { accountId: string; amount: number }[] {
+  const netMinor = subMinor(toMinor(Number(grandTotal) || 0), toMinor(Number(taxAmount) || 0));
+  if (netMinor <= 0 || entries.length === 0) return [];
+  const order: string[] = [];
+  const weightByAcc = new Map<string, number>();
+  for (const e of entries) {
+    if (!weightByAcc.has(e.accountId)) order.push(e.accountId);
+    const w = Number.isFinite(e.weight) && e.weight > 0 ? e.weight : 0;
+    weightByAcc.set(e.accountId, (weightByAcc.get(e.accountId) || 0) + w);
+  }
+  const alloc = allocateMinor(netMinor, order.map((acc) => weightByAcc.get(acc) || 0));
+  const out: { accountId: string; amount: number }[] = [];
+  order.forEach((acc, i) => { if (alloc[i] > 0) out.push({ accountId: acc, amount: toRupees(alloc[i]) }); });
+  return out;
 }
