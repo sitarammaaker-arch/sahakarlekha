@@ -28,6 +28,7 @@
     "test:ucas-rules": "node scripts/test-ucas-rules.mjs",
     "test:ucas-appropriation": "node scripts/test-ucas-appropriation.mjs",
     "test:statement-selection": "node scripts/test-statement-selection.mjs",
+    "test:governance-authority": "node scripts/test-governance-authority.mjs",
     "test:related": "node scripts/test-related.mjs",
     "test:dist": "node scripts/test-dist.mjs",
     "seo:report": "node scripts/seo-report.mjs",
