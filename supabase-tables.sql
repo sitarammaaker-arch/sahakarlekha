@@ -1011,6 +1011,7 @@ returns table (
 )
 language sql
 security definer
+set search_path = public, extensions
 as $$
   select
     society_id, name, "nameHi", "registrationNo", district, state,
@@ -1025,6 +1026,7 @@ create or replace function get_society_user_counts()
 returns table (society_id text, user_count bigint)
 language sql
 security definer
+set search_path = public, extensions
 as $$
   select society_id, count(*) as user_count
   from society_users
@@ -1043,6 +1045,7 @@ create or replace function update_society_subscription(
 returns void
 language sql
 security definer
+set search_path = public, extensions
 as $$
   update society_settings set
     plan              = p_plan,
@@ -1080,6 +1083,7 @@ create or replace function issue_certificate(
 returns void
 language plpgsql
 security definer
+set search_path = public, extensions
 as $$
 begin
   insert into guide_certificates(cert_no, holder_name, email, society_name, parts_passed)
@@ -1104,6 +1108,7 @@ create or replace function verify_certificate(p_cert_no text, p_name text)
 returns table(holder_name text, issued_at timestamptz)
 language sql
 security definer
+set search_path = public, extensions
 as $$
   select holder_name, issued_at
   from guide_certificates
