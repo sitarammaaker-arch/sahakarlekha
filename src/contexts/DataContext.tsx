@@ -2955,11 +2955,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addAccount = useCallback((data: Omit<LedgerAccount, 'id'>): LedgerAccount => {
     if (guardFYLocked()) return { ...data, id: '' } as LedgerAccount;
     const newAccount: LedgerAccount = { ...data, id: crypto.randomUUID() };
-    setAccountsState(prev => {
-      const updated = [...prev, newAccount];
-      return updated;
+    setAccountsState(prev => [...prev, newAccount]);
+    supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => {
+      if (error) {   // RULE 1: roll back so a failed cloud save can't silently diverge on F5
+        console.error('DB sync error:', error.message);
+        setAccountsState(prev => prev.filter(a => a.id !== newAccount.id));
+        toastRef.current({ title: 'खाता सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
     });
-    supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     return newAccount;
   }, []);
 
@@ -5110,7 +5113,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('sales').upsert(withSoc(saleBase)).then(({ error }) => {
       if (error) {
         console.error('Sale update failed:', error.message);
-        toastRef.current({ title: 'Sale update nahi hua', description: error.message, variant: 'destructive' });
+        // A sale edit is a multi-write cascade (stock + vouchers already posted); only the
+        // sale ROW failed here, and the cascade can't be cleanly undone from the client. Per
+        // RULE 1 we make the failure impossible to miss and tell the user to refresh and
+        // re-verify. (A fully atomic sale-edit is a separate, larger redesign.)
+        toastRef.current({ title: 'बिक्री edit cloud-save fail', description: `Sale row cloud save fail — ${error.message}. Refresh karke sale dobara check karein; zaroorat ho to phir se edit karein.`, variant: 'destructive', duration: 15000 });
       } else {
         supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, branchId: sBranch })
           .eq('id', id)
