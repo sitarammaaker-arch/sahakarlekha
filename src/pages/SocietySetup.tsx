@@ -24,6 +24,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { unlockAction } from '@/lib/dualControlUnlock';
 import { NotificationChannelsCard } from '@/components/settings/NotificationChannelsCard';
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
+import { ucasReserveMinPct } from '@/lib/rules/ucas';
 import { SOCIETY_TEMPLATES } from '@/lib/storage';
 import type { SocietyType, VoucherType } from '@/types';
 
@@ -95,7 +96,9 @@ const SocietySetup: React.FC = () => {
     phone: society.phone,
     email: society.email,
     societyType: society.societyType || 'marketing_processing',
-    reserveFundPct: society.reserveFundPct ?? 25,
+    // Statutory reserve minimum from the UCAS rule SSOT (T-16), not a local literal — national
+    // default resolves to 25% (value-identical to the prior hardcoded fallback).
+    reserveFundPct: society.reserveFundPct ?? ucasReserveMinPct({ asOf: new Date().toISOString() }),
     maintenanceGstEnabled: society.maintenanceGstEnabled ?? false,
     maintenanceGstRate: society.maintenanceGstRate ?? 18,
     gstin: society.gstin || '',
