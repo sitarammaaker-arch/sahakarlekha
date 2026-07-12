@@ -54,6 +54,12 @@ const Login: React.FC = () => {
       } else if (result.status === 'mfa') {
         setMfaStep(true);
         setMfaCode('');
+      } else if (result.reason === 'password_reset_required') {
+        // W-1: correct legacy password but no Supabase Auth session (JWT). Under
+        // tenant RLS the user must reset their password to sign in.
+        setError(language === 'hi'
+          ? 'साइन इन करने के लिए कृपया "पासवर्ड भूल गए?" से पासवर्ड रीसेट करें।'
+          : 'Please reset your password (use "Forgot password?") to sign in.');
       } else {
         setError(language === 'hi' ? 'गलत ईमेल या पासवर्ड' : 'Invalid email or password');
       }

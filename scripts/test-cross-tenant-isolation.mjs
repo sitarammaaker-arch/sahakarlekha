@@ -60,11 +60,24 @@ await assertReadIsolation(A, A_SID, B_SID, 'A');
 await assertReadIsolation(B, B_SID, A_SID, 'B');
 
 // ── WRITE isolation (WITH CHECK) — stamping another tenant's id must be denied
+// W-4: assert the denial is SPECIFICALLY an RLS policy violation (Postgres 42501 /
+// "violates row-level security policy") — not just any error — so a non-RLS failure
+// (constraint, etc.) cannot false-pass this check.
+const isRlsError = (e) => !!e && (
+  e.code === '42501' ||
+  /violates row-level security policy|row-level security|new row violates/i.test(e.message || '')
+);
 const probeId = `rls-probe-${Date.now()}`;
 const { error: aWriteB } = await A.from('accounts').insert({ id: probeId, society_id: B_SID, name: 'RLS PROBE — should be denied', type: 'asset' });
-ok(!!aWriteB, "A cannot INSERT an account stamped with B's society_id (WITH CHECK denies)");
-// safety net: if it somehow succeeded, remove it (and that's a FAIL already).
-if (!aWriteB) { await A.from('accounts').delete().eq('id', probeId); }
+ok(isRlsError(aWriteB), "A cannot INSERT an account stamped with B's society_id — denied by RLS (42501)");
+if (!aWriteB) { await A.from('accounts').delete().eq('id', probeId); } // never happens if isolated
+
+// positive control: A CAN insert its OWN account — proves the denial above is RLS,
+// not a broken insert path (rules out a false pass).
+const ownProbeId = `rls-own-probe-${Date.now()}`;
+const { error: aWriteOwn } = await A.from('accounts').insert({ id: ownProbeId, society_id: A_SID, name: 'RLS own probe', type: 'asset' });
+ok(!aWriteOwn, 'A CAN insert its OWN account (own-tenant write allowed — denial above is RLS-specific)');
+if (!aWriteOwn) { await A.from('accounts').delete().eq('id', ownProbeId); } // cleanup
 
 // ── WORM: ledger_events/audit_log are append-only (no UPDATE/DELETE reaches a row)
 const { data: aEvents } = await A.from('ledger_events').select('event_id').limit(1);

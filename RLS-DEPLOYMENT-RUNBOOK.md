@@ -14,6 +14,12 @@ Legend: 🟢 must pass · ⛔ stop-and-rollback trigger.
 - [ ] Auth pre-flight (`supabase/diagnostics/rls-preflight-auth-check.sql`): query (1)
       `jwt_less_legacy = 0`, and live requests carry an `Authorization: Bearer` JWT.
 - [ ] `scripts/test-rls-coverage.mjs` passes locally (static migration correctness).
+- [ ] **W-1** — the JWT-less login fallback (path-3 `app_login`) now refuses to create a
+      session with no JWT and shows "reset your password". Confirm on staging that a normal
+      (Supabase Auth) login is unaffected; a legacy/JWT-less login is redirected to reset.
+- [ ] **W-7** — reviewed `supabase/diagnostics/P1-SEC-1b-tenant-table-review.md`: all
+      society_id tables are per-society; WORM tables have no client UPDATE/DELETE; no shared
+      reference table is wrongly scoped.
 
 ---
 
@@ -32,14 +38,15 @@ Legend: 🟢 must pass · ⛔ stop-and-rollback trigger.
 - [ ] No error returned.
 
 ## 3. Cross-tenant verification 🟢 ⛔
-Run the LIVE assertion SQL printed by `node scripts/test-rls-coverage.mjs`:
-- [ ] (a) every `society_id` table: `rls_enabled = true`, `policies >= 1`,
-      `has_permissive = false`. ⛔ if any row is permissive or has 0 policies.
-- [ ] (b) `ledger_events` + `audit_log`: **0** UPDATE/DELETE policies.
-- [ ] (c) no permissive policy remains anywhere: **0** rows.
+- [ ] **Automated live coverage (W-5):** `DATABASE_URL=postgres://… node scripts/test-rls-coverage.mjs`
+      (needs the optional `pg` package: `npm i -D pg`). It asserts, against the live DB:
+      every `society_id` table is RLS-enabled + scoped + non-permissive; WORM has 0 UPDATE/DELETE
+      policies; 0 permissive policies remain. ⛔ on any failure. (Without `pg`, run the SQL the
+      script prints — queries (a)/(b)/(c) — and confirm the expected results.)
 - [ ] Run `node scripts/test-cross-tenant-isolation.mjs` with two staging test
       societies (A, B): all assertions pass — A cannot read/write B (and vice
-      versa), each sees only its own, WORM update/delete affect 0 rows. ⛔ on any fail.
+      versa), each sees only its own, the foreign-write denial is a **42501 RLS**
+      violation (positive control: own-write allowed), WORM update/delete affect 0 rows. ⛔ on any fail.
 
 ## 4. Registration smoke test 🟢
 - [ ] Register a brand-new society end-to-end (via the app UI). Success screen shows.
@@ -64,16 +71,21 @@ Run the LIVE assertion SQL printed by `node scripts/test-rls-coverage.mjs`:
 
 ## 7. Rollback procedure ⛔
 Trigger if step 3–6 fails or an access regression appears in production.
-1. [ ] **Revert the client first if P1-SEC-1a is implicated** — otherwise leave the
-       app as-is (007 is DB-only; no app change ships with it).
+1. [ ] 007 is DB-only (no app change ships with it), so leave the app as-is. (If
+       P1-SEC-1a is separately implicated, revert its client change first.)
 2. [ ] Run `supabase/migrations/007_rls_tenant_isolation_down.sql` in the SQL Editor.
-       It restores permissive access on every `society_id` table (WORM stays
-       append-only) and reverts `societies` to permissive select/update.
-3. [ ] Re-run the cross-tenant script — it will now show access is open again
-       (expected for the rolled-back state).
-4. [ ] Confirm the app is fully functional (signup, voucher save, reports).
-5. [ ] If the down-migration is insufficient, restore from the step-1 backup.
-6. [ ] File an incident with the failing assertion + `pg_policies` diff; do not
+       **Faithful restore (W-3):** it drops 007's tenant policies and re-creates
+       EXACTLY the permissive policies 007 removed, from the `rls_policy_backup`
+       snapshot — it does NOT blanket-open tables. Tables that were deny-all or
+       scoped-only before 007 return to that state; 001's scoped policies remain;
+       WORM stays append-only (its snapshot held no UPDATE/DELETE). RLS stays enabled.
+3. [ ] Confirm the app is functional again (signup, voucher save, reports).
+4. [ ] Sanity-check the restore matches the step-1 policy export
+       (`select tablename, policyname, cmd, qual, with_check from pg_policies …`).
+       If the snapshot is missing/incomplete, restore policies from that step-1 export
+       (the authoritative pre-007 state).
+5. [ ] If the down-migration is insufficient, restore from the step-1 database backup.
+6. [ ] File an incident with the failing assertion + the `pg_policies` diff; do not
        re-attempt 007 until the root cause is fixed.
 
 ---

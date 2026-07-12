@@ -25,20 +25,47 @@
 
 begin;
 
--- ── Tenant helpers (idempotent — identical to 001; makes 007 self-sufficient) ─
+-- ── Tenant helpers (extends 001; HARDENED per W-6) ────────────────────────────
+-- Same resolution as 001, but SECURITY DEFINER search-path is pinned to '' and
+-- every object is schema-qualified (guards against search-path hijacking). Result
+-- is behaviourally identical (LIMIT 1 preserved). auth.jwt() is schema-qualified.
 create or replace function get_current_society_id()
-returns text as $$
-  select society_id from society_users
-  where email = auth.jwt()->>'email'
+returns text
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select society_id from public.society_users
+  where email = auth.jwt() ->> 'email'
   limit 1;
-$$ language sql security definer stable;
+$$;
 
 create or replace function get_current_user_role()
-returns text as $$
-  select role from society_users
-  where email = auth.jwt()->>'email'
+returns text
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select role from public.society_users
+  where email = auth.jwt() ->> 'email'
   limit 1;
-$$ language sql security definer stable;
+$$;
+
+-- ── Policy snapshot for a FAITHFUL rollback (W-3) ─────────────────────────────
+-- Before dropping any permissive policy we record its exact definition here, so
+-- the down-migration restores precisely what was removed (nothing more) — it does
+-- NOT blanket-open tables that were deny-all/scoped-only before 007.
+create table if not exists rls_policy_backup (
+  id          bigserial primary key,
+  table_name  text not null,
+  policy_name text not null,
+  cmd         text,
+  qual        text,
+  with_check  text,
+  backed_up_at timestamptz not null default now()
+);
 
 -- ── Every society_id table: scope CRUD, drop permissive, WORM-aware ───────────
 do $$
@@ -65,11 +92,14 @@ begin
     execute format('alter table public.%I enable row level security', tbl);
 
     -- (6) remove ONLY the permissive policies; keep any already-scoped ones (001).
+    --     Snapshot each into rls_policy_backup first (W-3 faithful rollback).
     for pol in
-      select policyname from pg_policies
+      select policyname, cmd, qual, with_check from pg_policies
       where schemaname = 'public' and tablename = tbl
         and (coalesce(qual, '') = 'true' or coalesce(with_check, '') = 'true')
     loop
+      insert into rls_policy_backup(table_name, policy_name, cmd, qual, with_check)
+        values (tbl, pol.policyname, pol.cmd, pol.qual, pol.with_check);
       execute format('drop policy %I on public.%I', pol.policyname, tbl);
     end loop;
 
@@ -113,10 +143,12 @@ begin
   alter table public.societies enable row level security;
 
   for pol in
-    select policyname from pg_policies
+    select policyname, cmd, qual, with_check from pg_policies
     where schemaname='public' and tablename='societies'
       and (coalesce(qual,'')='true' or coalesce(with_check,'')='true')
   loop
+    insert into rls_policy_backup(table_name, policy_name, cmd, qual, with_check)
+      values ('societies', pol.policyname, pol.cmd, pol.qual, pol.with_check);
     execute format('drop policy %I on public.societies', pol.policyname);
   end loop;
 
