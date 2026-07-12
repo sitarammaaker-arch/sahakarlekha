@@ -29,6 +29,7 @@
     "test:ucas-rules": "node scripts/test-ucas-rules.mjs",
     "test:ucas-appropriation": "node scripts/test-ucas-appropriation.mjs",
     "test:statement-selection": "node scripts/test-statement-selection.mjs",
+    "test:reports-statements-wiring": "node scripts/test-reports-statements-wiring.mjs",
     "test:governance-authority": "node scripts/test-governance-authority.mjs",
     "test:year-close": "node scripts/test-year-close.mjs",
     "test:identity-split": "node scripts/test-identity-split.mjs",
