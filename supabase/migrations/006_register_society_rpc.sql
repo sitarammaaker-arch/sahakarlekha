@@ -41,8 +41,9 @@ set search_path = ''
 as $$
 begin
   -- Bootstrap guard — never touch an already-registered society (anti-hijack / idempotency).
-  if exists (select 1 from public.societies      where id = p_society_id)
-     or exists (select 1 from public.society_users where society_id = p_society_id) then
+  -- societies.id / society_users.society_id are uuid; p_society_id is text → compare as text.
+  if exists (select 1 from public.societies      where id::text = p_society_id)
+     or exists (select 1 from public.society_users where society_id::text = p_society_id) then
     return jsonb_build_object('ok', false, 'error_code', 'society_exists',
                               'error_message', 'This society is already registered.');
   end if;

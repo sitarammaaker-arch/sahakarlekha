@@ -36,7 +36,8 @@ security definer
 stable
 set search_path = ''
 as $$
-  select society_id from public.society_users
+  -- ::text so a uuid-typed society_id coerces cleanly to the declared text return.
+  select society_id::text from public.society_users
   where email = auth.jwt() ->> 'email'
   limit 1;
 $$;
@@ -104,12 +105,15 @@ begin
     end loop;
 
     -- (3) fill gaps: create a tenant policy for any command lacking one.
+    --     society_id columns are MIXED type across tables (some text, some uuid);
+    --     get_current_society_id() returns text, so cast the column ::text on both
+    --     sides of the comparison → correct for every table, no uuid=text error.
     if not exists (select 1 from pg_policies where schemaname='public' and tablename=tbl and cmd in ('SELECT','ALL')) then
-      execute format('create policy %I on public.%I for select using (society_id = get_current_society_id())',
+      execute format('create policy %I on public.%I for select using (society_id::text = get_current_society_id())',
                      tbl || '_tenant_select', tbl);
     end if;
     if not exists (select 1 from pg_policies where schemaname='public' and tablename=tbl and cmd in ('INSERT','ALL')) then
-      execute format('create policy %I on public.%I for insert with check (society_id = get_current_society_id())',
+      execute format('create policy %I on public.%I for insert with check (society_id::text = get_current_society_id())',
                      tbl || '_tenant_insert', tbl);
     end if;
 
@@ -123,11 +127,11 @@ begin
       end loop;
     else
       if not exists (select 1 from pg_policies where schemaname='public' and tablename=tbl and cmd in ('UPDATE','ALL')) then
-        execute format('create policy %I on public.%I for update using (society_id = get_current_society_id()) with check (society_id = get_current_society_id())',
+        execute format('create policy %I on public.%I for update using (society_id::text = get_current_society_id()) with check (society_id::text = get_current_society_id())',
                        tbl || '_tenant_update', tbl);
       end if;
       if not exists (select 1 from pg_policies where schemaname='public' and tablename=tbl and cmd in ('DELETE','ALL')) then
-        execute format('create policy %I on public.%I for delete using (society_id = get_current_society_id())',
+        execute format('create policy %I on public.%I for delete using (society_id::text = get_current_society_id())',
                        tbl || '_tenant_delete', tbl);
       end if;
     end if;
@@ -152,11 +156,12 @@ begin
     execute format('drop policy %I on public.societies', pol.policyname);
   end loop;
 
+  -- societies.id is uuid; get_current_society_id() is text → cast id ::text.
   if not exists (select 1 from pg_policies where schemaname='public' and tablename='societies' and cmd in ('SELECT','ALL')) then
-    execute format('create policy societies_tenant_select on public.societies for select using (id = get_current_society_id())');
+    execute format('create policy societies_tenant_select on public.societies for select using (id::text = get_current_society_id())');
   end if;
   if not exists (select 1 from pg_policies where schemaname='public' and tablename='societies' and cmd in ('UPDATE','ALL')) then
-    execute format('create policy societies_tenant_update on public.societies for update using (id = get_current_society_id()) with check (id = get_current_society_id())');
+    execute format('create policy societies_tenant_update on public.societies for update using (id::text = get_current_society_id()) with check (id::text = get_current_society_id())');
   end if;
 end $$;
 
