@@ -87,14 +87,20 @@ const Register: React.FC = () => {
     setError('');
 
     try {
-      // 1. Insert society. Generate the id CLIENT-SIDE so we do NOT need a
-      //    RETURNING/select-back: under strict RLS, anon has only the seed INSERT
-      //    policy on societies (no SELECT), so .insert().select() would fail with
-      //    "new row violates row-level security policy".
+      // Atomic bootstrap via the register_society SECURITY DEFINER RPC (P1-SEC-1a):
+      // one call creates the society, the confirmed admin (auth login + society_users),
+      // society_settings, and the seed accounts — all-or-nothing, so a partial failure
+      // never leaves an orphan society/admin. The id is generated client-side (as before)
+      // so no RETURNING/select-back is needed. The payloads are the SAME objects the old
+      // flow inserted, so behaviour is identical.
       const newSocietyId = crypto.randomUUID();
-      const { error: societyError } = await supabase
-        .from('societies')
-        .insert({
+      const templateAccounts = SOCIETY_TEMPLATES[societyType] ?? CMS_SOCIETY_ACCOUNTS;
+      const { data, error: rpcError } = await supabase.rpc('register_society', {
+        p_society_id: newSocietyId,
+        p_email: adminEmail,
+        p_password: adminPassword,
+        p_name: adminName,
+        p_society: {
           id: newSocietyId,
           name: societyName,
           name_hi: societyNameHi || null,
@@ -104,71 +110,41 @@ const Register: React.FC = () => {
           state,
           phone: phone || null,
           financial_year: financialYear,
-        });
+        },
+        p_settings: {
+          id: newSocietyId,
+          society_id: newSocietyId,
+          name: societyName,
+          nameHi: societyNameHi || societyName,
+          registrationNo: registrationNo,
+          financialYear: financialYear,
+          financialYearStart: financialYear.split('-')[0] + '-04-01',
+          address: address || '',
+          district: district,
+          state: state,
+          phone: phone || '',
+          email: adminEmail,
+          pinCode: '',
+          societyType: societyType,
+          gstin: gstin || undefined,
+        },
+        p_accounts: templateAccounts.map(a => ({ ...a, society_id: newSocietyId })),
+      });
 
-      if (societyError) {
-        if (societyError.code === '23505') {
+      const result = (data ?? {}) as { ok?: boolean; error_code?: string; error_message?: string };
+      if (rpcError || !result.ok) {
+        const code = result.error_code;
+        if (code === 'duplicate_registration') {
           setError('Registration number already exists. Please use a different registration number.');
-        } else {
-          setError(societyError.message);
-        }
-        setLoading(false);
-        return;
-      }
-
-      // 2. Create the admin atomically server-side: a CONFIRMED Supabase Auth
-      //    login (+ identity) AND the society_users admin row. This guarantees the
-      //    new admin can sign in (real JWT) and see their data under society-scoped
-      //    RLS — unlike the old auth.signUp, which could leave an unconfirmed or
-      //    broken login that fell back to a no-JWT session. anon may call this only
-      //    for a society that has no users yet (bootstrap guard inside the RPC).
-      const { error: adminError } = await supabase.rpc('app_register_admin', {
-        p_email: adminEmail,
-        p_password: adminPassword,
-        p_name: adminName,
-        p_society_id: newSocietyId,
-      });
-
-      if (adminError) {
-        // Roll back the society so the user can retry cleanly.
-        await supabase.from('societies').delete().eq('id', newSocietyId);
-        const msg = adminError.message || '';
-        if (/already/i.test(msg)) {
+        } else if (code === 'duplicate_email') {
           setError('This email is already registered. Please use a different email.');
+        } else if (code === 'society_exists') {
+          setError('This society is already registered.');
         } else {
-          setError(msg || 'Could not create the admin account. Please try again.');
+          setError(result.error_message || rpcError?.message || 'Could not complete registration. Please try again.');
         }
         setLoading(false);
         return;
-      }
-
-      // 3. Insert society_settings so the correct name shows after login
-      await supabase.from('society_settings').insert({
-        id: newSocietyId,
-        society_id: newSocietyId,
-        name: societyName,
-        nameHi: societyNameHi || societyName,
-        registrationNo: registrationNo,
-        financialYear: financialYear,
-        financialYearStart: financialYear.split('-')[0] + '-04-01',
-        address: address || '',
-        district: district,
-        state: state,
-        phone: phone || '',
-        email: adminEmail,
-        pinCode: '',
-        societyType: societyType,
-        gstin: gstin || undefined,
-      });
-
-      // 4. Insert template accounts based on society type
-      const sid = newSocietyId;
-      const templateAccounts = SOCIETY_TEMPLATES[societyType] ?? CMS_SOCIETY_ACCOUNTS;
-      // Insert in batches of 50 to avoid Supabase row limits
-      const BATCH = 50;
-      for (let i = 0; i < templateAccounts.length; i += BATCH) {
-        const batch = templateAccounts.slice(i, i + BATCH).map(a => ({ ...a, society_id: sid }));
-        await supabase.from('accounts').insert(batch);
       }
 
       setSuccess(true);
