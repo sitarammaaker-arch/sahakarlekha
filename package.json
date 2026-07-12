@@ -25,6 +25,7 @@
     "test:ledger-correction": "node scripts/test-ledger-correction.mjs",
     "test:ledger-cutover": "node scripts/test-ledger-cutover.mjs",
     "test:rules-engine": "node scripts/test-rules-engine.mjs",
+    "test:ucas-rules": "node scripts/test-ucas-rules.mjs",
     "test:related": "node scripts/test-related.mjs",
     "test:dist": "node scripts/test-dist.mjs",
     "seo:report": "node scripts/seo-report.mjs",
