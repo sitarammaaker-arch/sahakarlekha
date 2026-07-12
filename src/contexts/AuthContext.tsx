@@ -24,8 +24,11 @@ interface User {
 /** Result of an MFA enrol/disable attempt so the UI can show the right message. */
 export type MfaResult = { ok: true } | { ok: false; reason: 'bad-code' | 'save-failed' };
 
-/** Outcome of a login attempt. `mfa` = password OK but a 2FA code is now required. */
-export type LoginResult = { status: 'ok' | 'mfa' | 'failed' };
+/** Outcome of a login attempt. `mfa` = password OK but a 2FA code is now required.
+ *  `reason: 'password_reset_required'` = the password was correct on the legacy
+ *  (JWT-less) path, but there is no Supabase Auth session — under tenant RLS such a
+ *  session can read nothing, so the user must reset their password to sign in (W-1). */
+export type LoginResult = { status: 'ok' | 'mfa' | 'failed'; reason?: 'password_reset_required' };
 
 interface AuthContextType {
   user: User | null;
@@ -346,16 +349,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     // 3. Secure server-side verify via SECURITY DEFINER RPC (app_login).
-    //    Reliable bridge for users whose Supabase Auth (JWT) login is unavailable.
-    //    Works even under strict RLS — anon can EXECUTE the function but cannot
-    //    read society_users directly, and the password is verified server-side
-    //    (never exposed). Returns the user record only on a correct password.
+    //    A bridge for users whose Supabase Auth (JWT) login is unavailable: the
+    //    password is verified server-side (never exposed) and a user record is
+    //    returned. IMPORTANT (W-1): app_login establishes NO Supabase Auth session
+    //    (no JWT). Under tenant RLS (P1-SEC-1b) a JWT-less session can read nothing,
+    //    so we must NOT complete a login that would land the user in an empty app.
+    //    If there is no live session, guide them to reset their password (which
+    //    enrols them in Supabase Auth → path-1 works). Under the P1-SEC-1b
+    //    precondition (all users on Supabase Auth) this branch is unreachable.
     try {
       const { data, error } = await supabase
         .rpc('app_login', { p_email: email, p_password: password })
         .maybeSingle();
 
       if (!error && data) {
+        const { data: sess } = await supabase.auth.getSession();
+        if (!sess.session) {
+          return { status: 'failed', reason: 'password_reset_required' };
+        }
         return await finishOrChallenge(buildUser(data as { id: string; name: string; email: string; role: string; society_id: string }));
       }
     } catch {
@@ -408,9 +419,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.error('[Auth] Password reset error:', error.message);
 
       // If Supabase Auth fails (user might be on legacy plain-text auth),
-      // try to sign them up in Supabase Auth first, then reset
+      // try to sign them up in Supabase Auth first, then reset.
+      // W-2: under tenant RLS this UNAUTHENTICATED society_users read resolves to
+      // NULL (no JWT → get_current_society_id() is NULL), so `legacyUser` is null
+      // and this legacy self-migration branch is inert. That is acceptable and
+      // safer — it also closes an email-enumeration vector. Per the P1-SEC-1b
+      // precondition every user is already on Supabase Auth, so no legacy user
+      // reaches here; any straggler is handled via Admin reset (isEmailSent:false).
       if (error.message?.includes('Unable to process') || error.status === 500) {
-        // Check if user exists in society_users (legacy auth)
+        // Check if user exists in society_users (legacy auth) — RLS-gated (see W-2).
         const { data: legacyUser } = await supabase
           .from('society_users')
           .select('email, name')
