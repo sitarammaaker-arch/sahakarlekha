@@ -38,6 +38,7 @@
     "test:adapter-ring": "node scripts/test-adapter-ring.mjs",
     "test:gov-adapters": "node scripts/test-gov-adapters.mjs",
     "test:bank-adapters": "node scripts/test-bank-adapters.mjs",
+    "test:ai-principal": "node scripts/test-ai-principal.mjs",
     "test:related": "node scripts/test-related.mjs",
     "test:dist": "node scripts/test-dist.mjs",
     "seo:report": "node scripts/seo-report.mjs",
