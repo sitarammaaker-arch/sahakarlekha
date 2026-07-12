@@ -44,6 +44,7 @@
     "test:capture-queue": "node scripts/test-capture-queue.mjs",
     "test:sync-engine": "node scripts/test-sync-engine.mjs",
     "test:preservation": "node scripts/test-preservation.mjs",
+    "test:federation": "node scripts/test-federation.mjs",
     "test:related": "node scripts/test-related.mjs",
     "test:dist": "node scripts/test-dist.mjs",
     "seo:report": "node scripts/seo-report.mjs",
