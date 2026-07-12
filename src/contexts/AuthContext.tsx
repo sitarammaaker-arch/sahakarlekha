@@ -348,30 +348,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Supabase unreachable — fall through
     }
 
-    // 3. Secure server-side verify via SECURITY DEFINER RPC (app_login).
-    //    A bridge for users whose Supabase Auth (JWT) login is unavailable: the
-    //    password is verified server-side (never exposed) and a user record is
-    //    returned. IMPORTANT (W-1): app_login establishes NO Supabase Auth session
-    //    (no JWT). Under tenant RLS (P1-SEC-1b) a JWT-less session can read nothing,
-    //    so we must NOT complete a login that would land the user in an empty app.
-    //    If there is no live session, guide them to reset their password (which
-    //    enrols them in Supabase Auth → path-1 works). Under the P1-SEC-1b
-    //    precondition (all users on Supabase Auth) this branch is unreachable.
-    try {
-      const { data, error } = await supabase
-        .rpc('app_login', { p_email: email, p_password: password })
-        .maybeSingle();
-
-      if (!error && data) {
-        const { data: sess } = await supabase.auth.getSession();
-        if (!sess.session) {
-          return { status: 'failed', reason: 'password_reset_required' };
-        }
-        return await finishOrChallenge(buildUser(data as { id: string; name: string; email: string; role: string; society_id: string }));
-      }
-    } catch {
-      // Supabase unreachable — fall through to demo users
-    }
+    // 3. (RETIRED — P1-SEC-4) The legacy JWT-less app_login RPC path was removed.
+    //    It established no Supabase Auth session, so under tenant RLS (P1-SEC-1b) it
+    //    could never complete a usable login (W-1 already made it a dead-end that
+    //    only told users to reset). Every active user is enrolled in Supabase Auth
+    //    (jwt_less_legacy = 0), so path 1 covers them, and the app_login RPC — which
+    //    verified plain-text passwords server-side — is dropped. A user whose Auth
+    //    is somehow unavailable resets their password (enrolling them in Auth →
+    //    path 1). `reason: 'password_reset_required'` is retained on LoginResult for
+    //    the reset-flow messaging but is no longer emitted here.
 
     // 4. Demo users — ONLY on localhost (disabled in production for security)
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
