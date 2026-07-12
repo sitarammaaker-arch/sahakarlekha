@@ -83,7 +83,9 @@ export default function UserManagement() {
       const societyId = currentUser?.societyId;
       const { data, error } = await supabase
         .from('society_users')
-        .select('id, name, email, role, is_active, society_id, created_at, password, mfa_enabled, branch_id')
+        // P1-SEC-5: never fetch society_users.password (plain-text). Auth is via
+        // Supabase Auth; the list does not need/display the stored password.
+        .select('id, name, email, role, is_active, society_id, created_at, mfa_enabled, branch_id')
         .eq('society_id', societyId)
         .order('created_at', { ascending: true });
 
@@ -92,7 +94,7 @@ export default function UserManagement() {
           id: u.id,
           name: u.name,
           email: u.email,
-          password: u.password || '',
+          password: '', // P1-SEC-5: password is no longer read from society_users
           role: u.role as UserRole,
           isActive: u.is_active,
           society_id: u.society_id,
