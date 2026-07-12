@@ -41,6 +41,7 @@
     "test:ai-principal": "node scripts/test-ai-principal.mjs",
     "test:ai-proposal": "node scripts/test-ai-proposal.mjs",
     "test:ai-memory": "node scripts/test-ai-memory.mjs",
+    "test:capture-queue": "node scripts/test-capture-queue.mjs",
     "test:related": "node scripts/test-related.mjs",
     "test:dist": "node scripts/test-dist.mjs",
     "seo:report": "node scripts/seo-report.mjs",
