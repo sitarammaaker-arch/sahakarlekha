@@ -25,7 +25,7 @@ import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
-import { parseDocNumber, formatDocNumber } from '@/lib/numbering';
+import { issueOfficialNumber } from '@/lib/numbering';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
@@ -1285,6 +1285,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // stale they cause "Could not find column X" errors that nuke the whole upsert.
   // Solution: upsert ONLY base columns (always succeeds), then patch extras in a
   // second .update() call — that one is allowed to fail without losing the row.
+  // T-03: the server document sequence, wrapped for issueOfficialNumber — returns null on any
+  // error/absent data so the caller falls back to the client-provisional number (the
+  // unique-index collision-retry stays the net). Shared by voucher / sale / purchase saves.
+  const nextDocNumber = async (societyId: string, book: string, fy: string): Promise<number | null> => {
+    const { data, error } = await supabase.rpc('next_document_number', { p_society_id: societyId, p_book: book, p_fy: fy });
+    return error || data == null ? null : (typeof data === 'number' ? data : Number(data));
+  };
+
   const persistVoucher = (v: Voucher, opts: { onBaseFail: () => void; onBaseSuccess?: () => void; isUpdate?: boolean }) => {
     // Strip out everything that may live in late-added columns
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1374,25 +1382,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // local state to the issued number. Falls back to the client-provisional number on
     // offline/RPC failure; the 23505 collision-retry above stays the safety net, so this is safe
     // even BEFORE the document_sequences backfill (migration 016) runs. Updates keep their number.
-    const issueOfficialNumber = async (provisional: string | undefined): Promise<string | undefined> => {
-      const parsed = parseDocNumber(provisional);
-      if (!parsed) return provisional;
-      try {
-        const { data, error } = await supabase.rpc('next_document_number', {
-          p_society_id: societyIdRef.current, p_book: parsed.book, p_fy: parsed.fy,
-        });
-        const n = typeof data === 'number' ? data : Number(data);
-        if (error || !Number.isFinite(n) || n <= 0) return provisional;
-        return formatDocNumber(parsed.book, parsed.fy, n, parsed.width);
-      } catch {
-        return provisional;
-      }
-    };
     const provisionalNo = (baseCols as { voucherNo?: string }).voucherNo;
     if (opts.isUpdate) {
       attemptBase(baseCols, 0);
     } else {
-      issueOfficialNumber(provisionalNo).then((officialNo) => {
+      issueOfficialNumber(nextDocNumber, societyIdRef.current, provisionalNo).then((officialNo) => {
         if (officialNo && officialNo !== provisionalNo) {
           vouchersRef.current = vouchersRef.current.map(x => x.id === v.id ? { ...x, voucherNo: officialNo } : x);
           setVouchersState(prev => prev.map(x => x.id === v.id ? { ...x, voucherNo: officialNo } : x));
@@ -5015,7 +5009,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toastRef.current({ title: 'Sale save nahi hua', description: error.message, variant: 'destructive' });
       });
     };
-    attemptSaleSave(saleBase, 0);
+    // T-03 (ADR-0005): take the OFFICIAL saleNo from the server sequence (book 'SL') at persist;
+    // restamp local state. Falls back to the provisional number on offline/RPC failure — the
+    // saleNo unique-index collision-retry above stays the safety net.
+    issueOfficialNumber(nextDocNumber, societyIdRef.current, sale.saleNo).then((officialNo) => {
+      const changed = !!officialNo && officialNo !== sale.saleNo;
+      if (changed) {
+        salesRef.current = salesRef.current.map(s => s.id === sale.id ? { ...s, saleNo: officialNo! } : s);
+        setSalesState(prev => prev.map(s => s.id === sale.id ? { ...s, saleNo: officialNo! } : s));
+      }
+      attemptSaleSave(changed ? { ...saleBase, saleNo: officialNo! } : saleBase, 0);
+    });
     return sale;
   }, [society.financialYear, customers, accounts, addVoucher, stockItems]);
 
@@ -5331,7 +5335,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toastRef.current({ title: 'Purchase save nahi hua', description: error.message, variant: 'destructive' });
       });
     };
-    attemptPurchaseSave(purchaseBase, 0);
+    // T-03 (ADR-0005): take the OFFICIAL purchaseNo from the server sequence (book 'PUR') at
+    // persist; restamp local state. Falls back to the provisional on offline/RPC failure — the
+    // purchaseNo unique-index collision-retry above stays the safety net.
+    issueOfficialNumber(nextDocNumber, societyIdRef.current, purchase.purchaseNo).then((officialNo) => {
+      const changed = !!officialNo && officialNo !== purchase.purchaseNo;
+      if (changed) {
+        purchasesRef.current = purchasesRef.current.map(p => p.id === purchase.id ? { ...p, purchaseNo: officialNo! } : p);
+        setPurchasesState(prev => prev.map(p => p.id === purchase.id ? { ...p, purchaseNo: officialNo! } : p));
+      }
+      attemptPurchaseSave(changed ? { ...purchaseBase, purchaseNo: officialNo! } : purchaseBase, 0);
+    });
     return purchase;
   }, [society.financialYear, suppliers, accounts, addVoucher, stockItems]);
 
