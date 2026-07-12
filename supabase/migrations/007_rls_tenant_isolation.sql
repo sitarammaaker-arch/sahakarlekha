@@ -74,6 +74,12 @@ declare
   tbl   text;
   pol   record;
   worm  text[] := array['ledger_events', 'audit_log'];  -- append-only (requirement 5)
+  -- PUBLIC inboxes: carry a society_id column but are NOT tenant-isolated — anon
+  -- visitors must be able to INSERT (marketing contact/review forms). Tenant-
+  -- scoping their INSERT would deny anonymous submission. Skipped entirely here;
+  -- they keep their own (public-insert + admin-read) policies from earlier
+  -- migrations (see 002_feedback.sql / 008_feedback_public_insert.sql).
+  public_tables text[] := array['feedback'];
   is_worm boolean;
 begin
   for tbl in
@@ -88,6 +94,8 @@ begin
       )
     order by c.relname
   loop
+    continue when tbl = any(public_tables);  -- leave public inboxes untouched
+
     is_worm := tbl = any(worm);
 
     execute format('alter table public.%I enable row level security', tbl);
