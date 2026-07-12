@@ -3999,7 +3999,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         || accounts.find(a => a.parentId === '3300' && /loan/i.test(a.name) && !a.isGroup);
       if (loanAccount) {
         const member = membersRef.current.find(m => m.id === newLoan.memberId);
-        addVoucher({
+        const dv = addVoucher({
           type: 'payment',
           date: newLoan.disbursementDate || new Date().toISOString().split('T')[0],
           debitAccountId: loanAccount.id,
@@ -4009,6 +4009,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           createdBy: user?.name ?? 'System',
           memberId: newLoan.memberId,
         });
+        // P0-3: remember the disbursement voucher's id on the loan so deleteLoan cancels
+        // exactly it (not a fragile narration-substring match). voucherId is a late-added
+        // column → best-effort step-2 update; the base loan row (upserted above) stays safe.
+        if (dv?.id) {
+          newLoan.voucherId = dv.id;
+          loansRef.current = loansRef.current.map(l => l.id === newLoan.id ? { ...l, voucherId: dv.id } : l);
+          setLoansState(prev => prev.map(l => l.id === newLoan.id ? { ...l, voucherId: dv.id } : l));
+          supabase.from('loans').update({ voucherId: dv.id }).eq('id', newLoan.id).then(({ error }) => { if (error) console.warn('Loan voucherId patch:', error.message); });
+        }
       } else {
         toastRef.current({
           title: 'Loan saved, voucher skipped',
@@ -4046,9 +4055,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     emitAudit({ entityType: 'loan', entityId: id, action: 'delete', reason: 'Loan deleted' });
     // RULE 3: soft-cancel the auto-generated disbursement voucher (matched by the unique loanNo
     // in its narration) so no ghost "Loans & Advances" asset lingers in Trial Balance / Balance Sheet.
-    if (loan?.loanNo) {
+    if (loan) {
       const now = new Date().toISOString();
-      const linkedIds = new Set(vouchersRef.current.filter(v => !v.isDeleted && v.memberId === loan.memberId && v.narration?.includes(loan.loanNo) && !isEngineVoucher(v)).map(v => v.id));
+      // P0-3: prefer the stored disbursement voucherId (exact); fall back to the legacy
+      // narration match only for loans created before voucherId existed. The old substring
+      // match (`narration.includes(loanNo)`) collided "L/…/1" with "L/…/10".
+      const linkedIds = loan.voucherId
+        ? new Set(vouchersRef.current.filter(v => v.id === loan.voucherId && !v.isDeleted && !isEngineVoucher(v)).map(v => v.id))
+        : (loan.loanNo
+            ? new Set(vouchersRef.current.filter(v => !v.isDeleted && v.memberId === loan.memberId && v.narration?.includes(loan.loanNo) && !isEngineVoucher(v)).map(v => v.id))
+            : new Set<string>());
       if (linkedIds.size > 0) {
         const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Loan deleted' } : v;
         vouchersRef.current = vouchersRef.current.map(cancel);

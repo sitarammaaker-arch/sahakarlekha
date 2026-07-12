@@ -572,6 +572,7 @@ export interface Loan {
   security: string;
   createdAt: string;
   isDeleted?: boolean;   // ECR-02 / RULE-5: soft-delete — retain the loan register row for audit, hide from the app.
+  voucherId?: string;    // P0-3 (L3): id of the auto-generated disbursement voucher, so deleteLoan cancels exactly it instead of a fragile narration-substring match.
 }
 
 // ── Deposits (Core for Credit/PACS) — SB / FD / RD / Pigmy ─────────────────────
