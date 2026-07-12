@@ -666,11 +666,66 @@ const userMfaRecovery: EntityDescriptor = {
   ],
 };
 
+// ─── document_sequences (T-03 numbering authority) ─────────────────────────────
+// Server-authoritative gapless numbering counters (society_id, book, fy → last_number).
+// Backed up 'full' so a restore preserves the next-number state — otherwise a
+// restored society would re-issue numbers already used and collide. society_id is
+// tenant scoping → not declared; the natural key within a society is (book, fy).
+const documentSequences: EntityDescriptor = {
+  key: 'document_sequence',
+  table: 'document_sequences',
+  domain: 'system',
+  label: 'Document Numbering',
+  labelHi: 'दस्तावेज़ क्रमांकन',
+  minRole: 'admin',
+  scope: 'society',
+  nature: 'system',
+  dependsOn: [],
+  naturalKey: ['book', 'fy'],
+  formats: ['json'],
+  backupPolicy: 'full',
+  columns: [
+    c('book', 'Book', 'बही'),
+    c('fy', 'Financial Year', 'वित्तीय वर्ष'),
+    c('last_number', 'Last Number', 'अंतिम संख्या', { type: 'number' }),
+    c('updated_at', 'Updated At', 'अद्यतन', { type: 'date', defaultVisible: false }),
+  ],
+};
+
+// ─── ledger_events (T-06 shadow event journal) ─────────────────────────────────
+// Append-only WORM event log (like audit_log): immutable custody evidence. Exported
+// for legal custody but NEVER restored — re-inserting WORM rows would forge the
+// journal, and the books are reproduced from the vouchers anyway. Hence
+// nature 'evidence' + backupPolicy 'sidecar' (the audit_log classification).
+const ledgerEvents: EntityDescriptor = {
+  key: 'ledger_event',
+  table: 'ledger_events',
+  domain: 'system',
+  label: 'Ledger Events',
+  labelHi: 'लेजर इवेंट्स',
+  minRole: 'admin',
+  scope: 'society',
+  nature: 'evidence',
+  dependsOn: [],
+  naturalKey: ['event_id'],
+  formats: ['json'],
+  backupPolicy: 'sidecar',
+  columns: [
+    c('event_id', 'Event ID', 'इवेंट आईडी'),
+    c('event_type', 'Event Type', 'इवेंट प्रकार', { type: 'enum' }),
+    c('aggregate_type', 'Aggregate', 'एग्रीगेट', { type: 'enum' }),
+    c('aggregate_id', 'Aggregate ID', 'एग्रीगेट आईडी'),
+    c('sequence', 'Sequence', 'क्रम', { type: 'number', defaultVisible: false }),
+    c('occurred_at', 'Occurred At', 'घटित', { type: 'date', defaultVisible: false }),
+  ],
+};
+
 export const PLATFORM_ENTITIES: EntityDescriptor[] = [
   asset,
   bankReconciliation, tdsEntry, tdsChallan, tdsChallanLink, ewayBill, complianceFiling,
   recoverable, kachiAaratEntry, p7Entry,
   budget, auditObjection, meeting, election,
   auditLog, guideCertificate,
+  documentSequences, ledgerEvents,
   societies, societyUsers, societyCapabilities, platformAdmins, userMfa, userMfaRecovery,
 ];

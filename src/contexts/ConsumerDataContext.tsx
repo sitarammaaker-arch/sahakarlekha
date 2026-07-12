@@ -16,6 +16,7 @@
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
+import { useCapabilities } from '@/hooks/useCapabilities';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
@@ -103,6 +104,7 @@ const ConsumerDataContext = createContext<ConsumerDataContextValue | null>(null)
 export function ConsumerProvider({ children }: { children: ReactNode }) {
   const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase, addStockMovement, purchases, suppliers, stockItems } = useData();
   const { user, isSuperAdmin } = useAuth();
+  const { capabilities } = useCapabilities(); // T-14: raw set — seed by capability, not type
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
   const withSoc = <T extends object>(d: T) => ({ ...d, society_id: societyId });
@@ -185,7 +187,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     // policy for table accounts"). Never seed the chart from the super-admin context; a real
     // society user (with a session) seeds it on their normal login.
     if (isSuperAdmin) return;
-    if (society?.societyType !== 'consumer') return;
+    if (!capabilities.has('pos_billing')) return; // T-14 (ADR-0002): seed by capability, not type
     if (!accounts || accounts.length === 0) return;
     if (society.fyLocked) return; // seeding mutates the chart; retry on a later unlocked load
     const needRecv = resolveMemberReceivableAccountId(accounts) === null;
@@ -202,7 +204,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (needDivDist) addAccount({ name: 'Dividend Distribution', nameHi: 'लाभांश वितरण', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: DIVIDEND_DISTRIBUTION_SUBTYPE });
     if (needDivPay) addAccount({ name: 'Dividend Payable', nameHi: 'देय लाभांश', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: DIVIDEND_PAYABLE_SUBTYPE });
     if (needSalesRet) addAccount({ name: 'Sales Return', nameHi: 'बिक्री वापसी', type: 'income', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '4100', subtype: SALES_RETURN_SUBTYPE });
-  }, [user?.societyId, isSuperAdmin, society?.societyType, society?.fyLocked, accounts, addAccount]);
+  }, [user?.societyId, isSuperAdmin, capabilities, society?.fyLocked, accounts, addAccount]);
 
   const memberReceivableAccountId = resolveMemberReceivableAccountId(accounts);
 

@@ -1,6 +1,7 @@
 import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun, ConsumerPrice, PatronageRun, PurchaseOrder, SalesReturn, PurchaseReturn, BankReconciliationRecord, TdsEntry, TdsChallan, TdsChallanLink } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement, Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
 import type { Transporter } from '@/lib/marketing/transport';
+import { composeDocumentNumber, parseDocumentNumber } from './documentNumber';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
 export interface VoucherTemplate {
@@ -943,25 +944,26 @@ export const getNextVoucherNo = (
   existingVouchers: { voucherNo?: string }[] = []
 ): string => {
   const prefix = type === 'receipt' ? 'RV' : type === 'payment' ? 'PV' : type === 'contra' ? 'CV' : 'JV';
-  const yr = financialYear.replace('-', '/');
   const ctrKey = `${VCTR_PREFIX}${type}_${financialYear}`;
   const storedCtr = get<number | null>(ctrKey, null);
 
   let next: number;
   if (storedCtr === null) {
-    // First use for this type+FY — bootstrap from existing vouchers to avoid duplicates
-    const escapedYr = yr.replace('/', '\\/');
-    const pattern = new RegExp(`^${prefix}\\/${escapedYr}\\/(\\d+)$`);
+    // First use for this type+FY — bootstrap from existing vouchers to avoid duplicates.
+    // Parse via the canonical document-number authority (T-03) rather than an inline regex, so the
+    // number's shape is defined in exactly one place (documentNumber.ts).
     const nums = existingVouchers
-      .map(v => { const m = v.voucherNo?.match(pattern); return m ? parseInt(m[1], 10) : 0; })
-      .filter(n => n > 0);
+      .map(v => parseDocumentNumber(v.voucherNo ?? ''))
+      .filter((p): p is NonNullable<typeof p> => p != null && p.prefix === prefix && p.fy === financialYear)
+      .map(p => p.seq);
     next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
   } else {
     next = storedCtr + 1;
   }
 
   set(ctrKey, next);
-  return `${prefix}/${yr}/${String(next).padStart(3, '0')}`;
+  // Format via the canonical composer (T-03) — the single source of the number's shape.
+  return composeDocumentNumber(prefix, financialYear, next);
 };
 
 export const getLoans = (): Loan[] => get(KEYS.loans, []);

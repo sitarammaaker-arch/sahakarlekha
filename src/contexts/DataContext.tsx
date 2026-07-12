@@ -36,6 +36,8 @@ import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
 import { resolveCapabilities } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
 import { logAudit, type AuditInput } from '@/lib/auditLog';
+import { resolveJurisdiction, stampTenant } from '@/lib/jurisdiction';
+import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
 import { snapshotDeletedMovements } from '@/lib/movementArchive';
 import { isSelfApproval } from '@/lib/sod';
 import { requiresApproval } from '@/lib/approvalMatrix';
@@ -238,6 +240,9 @@ interface DataContextType {
   getCashBookEntries: (fromDate?: string, toDate?: string) => CashBookEntry[];
   getBankBookEntries: (fromDate?: string, toDate?: string, bankAccountId?: string) => BankBookEntry[];
   getTrialBalance: (asOnDate?: string) => AccountBalance[];
+  /** T-06 shadow dual-write: the immutable ledger events emitted this session as vouchers are
+   *  posted. Read-only; reporting still derives from vouchers (the ledger cutover is T-09). */
+  getLedgerEvents: () => LedgerEvent[];
   // M15: All point-in-time aggregators accept asOnDate so Day Book / Balance Sheet
   // historical lookups don't silently show current-day numbers.
   getMemberLedger: (memberId: string) => MemberLedgerEntry[];
@@ -297,13 +302,50 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const societyIdRef = useRef(user?.societyId || 'SOC001');
   // Keep ref updated when user changes
   useEffect(() => { societyIdRef.current = user?.societyId || 'SOC001'; }, [user?.societyId]);
-  // Helper: adds society_id to any Supabase record
+  // T-01 (ADR-0009 / Canonical CL-5): the society's jurisdiction code, kept in a ref and
+  // synced from society.state below (where societyRef is synced). Resolved by the SSOT so
+  // every stamped row uses the same code.
+  const jurisdictionRef = useRef('');
+  // Helper: stamps BOTH tenancy keys (society_id, jurisdiction) onto any Supabase record —
+  // the SINGLE seam every write goes through (T-01, anti-IRR-4). stampTenant is the tested,
+  // pure primitive; the row's tenancy is set by context, never by whatever it carried.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const withSoc = (d: Record<string, any>) => ({ ...d, society_id: societyIdRef.current });
+  const withSoc = (d: Record<string, any>) => stampTenant(d, { societyId: societyIdRef.current, jurisdiction: jurisdictionRef.current });
+
+  // T-06 · best-effort append of a shadow ledger event to the WORM ledger_events table. Fire-and-
+  // forget: the voucher save is authoritative and this never blocks or affects it; a failed insert
+  // is logged and dropped (the in-memory event remains for the session). Maps the LedgerEvent
+  // (built by buildEvent) onto the existing ledger_events columns — no new schema.
+  const persistLedgerEvent = (ev: LedgerEvent) => {
+    try {
+      supabase.from('ledger_events').insert({
+        event_id: ev.eventId,
+        event_type: ev.eventType,
+        schema_version: ev.schemaVersion,
+        society_id: ev.tenantId,
+        jurisdiction: ev.jurisdiction || null,
+        aggregate_type: ev.aggregateType,
+        aggregate_id: ev.aggregateId,
+        sequence: ev.sequence,
+        occurred_at: ev.occurredAt,
+        producer_kind: ev.producer.kind,
+        producer_id: ev.producer.id ?? null,
+        on_behalf_of: ev.producer.onBehalfOf ?? null,
+        reversal_of: ev.reversalOf ?? null,
+        payload: ev.payload,
+      }).then(({ error }) => { if (error) console.warn('ledger_events append (best-effort):', error.message); });
+    } catch { /* best-effort — never affects the voucher save */ }
+  };
   // P0 #3: append-only audit. Actor is read from a ref so it is never stale inside the
   // delete/approve useCallbacks; emitAudit is fire-and-forget and never blocks the write.
   const userRef = useRef(user);
   useEffect(() => { userRef.current = user; }, [user]);
+
+  // T-06 · append-only event ledger (shadow dual-write). As vouchers are posted, addVoucher also
+  // emits an immutable `voucher.posted` event via the tested buildEvent core. This is a SHADOW:
+  // no read path consumes it (reporting still derives from vouchers), so it changes no behavior;
+  // the ledger cutover that flips reports to the projection is T-09. In-memory this session.
+  const ledgerEventsRef = useRef<LedgerEvent[]>([]);
   const emitAudit = (input: AuditInput) => logAudit(input, {
     societyId: societyIdRef.current,
     actor: { name: userRef.current?.name, email: userRef.current?.email, role: userRef.current?.role },
@@ -350,31 +392,57 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user?.societyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addBranch = useCallback((data: Omit<Branch, 'id' | 'createdAt'>): Branch => {
+    if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as Branch;   // RULE 6: FY-lock guard
     const branch: Branch = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString(), isActive: data.isActive ?? true };
+    let snapshot: Branch[] = [];
     setBranchesState(prev => {
+      snapshot = prev;
       const demoted = branch.isHeadOffice ? prev.map(b => ({ ...b, isHeadOffice: false })) : prev; // only one Head Office
       const next = [...demoted, branch];
       cacheBranches(next);
       return next;
     });
-    supabase.from('branches').upsert(withSoc({ ...branch })).then(({ error }) => { if (error) console.warn('Branch save:', error.message); });
+    supabase.from('branches').upsert(withSoc({ ...branch })).then(({ error }) => {
+      if (error) {   // RULE 1: roll back so a failed cloud save can't silently diverge on F5
+        console.error('Branch save:', error.message);
+        setBranchesState(() => { cacheBranches(snapshot); return snapshot; });
+        toastRef.current({ title: 'Branch सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga.`, variant: 'destructive', duration: 12000 });
+      }
+    });
     return branch;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateBranch = useCallback((id: string, data: Partial<Branch>) => {
+    if (guardFYLocked()) return;   // RULE 6
+    let snapshot: Branch[] = [];
     setBranchesState(prev => {
+      snapshot = prev;
       let next = prev.map(b => b.id === id ? { ...b, ...data } : b);
       if (data.isHeadOffice) next = next.map(b => b.id === id ? b : { ...b, isHeadOffice: false });
       cacheBranches(next);
       return next;
     });
-    supabase.from('branches').update(data).eq('id', id).then(({ error }) => { if (error) console.warn('Branch update:', error.message); });
+    supabase.from('branches').update(data).eq('id', id).then(({ error }) => {
+      if (error) {   // RULE 1: restore prior state on failure
+        console.error('Branch update:', error.message);
+        setBranchesState(() => { cacheBranches(snapshot); return snapshot; });
+        toastRef.current({ title: 'Branch अपडेट नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deleteBranch = useCallback((id: string) => {
-    setBranchesState(prev => { const next = prev.filter(b => b.id !== id); cacheBranches(next); return next; });
+    if (guardFYLocked()) return;   // RULE 6
+    let snapshot: Branch[] = [];
+    setBranchesState(prev => { snapshot = prev; const next = prev.filter(b => b.id !== id); cacheBranches(next); return next; });
     if (activeBranchIdRef.current === id) setActiveBranch(ALL_BRANCHES);
-    supabase.from('branches').delete().eq('id', id).then(({ error }) => { if (error) console.warn('Branch delete:', error.message); });
+    supabase.from('branches').delete().eq('id', id).then(({ error }) => {
+      if (error) {   // RULE 1: restore the deleted row on failure
+        console.error('Branch delete:', error.message);
+        setBranchesState(() => { cacheBranches(snapshot); return snapshot; });
+        toastRef.current({ title: 'Branch delete नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par branch wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
   }, [setActiveBranch]);
 
   // ── ECR-17 Phase 3: godowns ────────────────────────────────────────────────
@@ -389,19 +457,43 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .then(({ data }) => { if (data && data.length) { const gs = data as Godown[]; setGodownsState(gs); cacheGodowns(gs); } });
   }, [user?.societyId]); // eslint-disable-line react-hooks/exhaustive-deps
   const addGodown = useCallback((data: Omit<Godown, 'id' | 'createdAt'>): Godown => {
+    if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as Godown;   // RULE 6
     const g: Godown = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString(), isActive: data.isActive ?? true };
-    setGodownsState(prev => { const next = [...prev, g]; cacheGodowns(next); return next; });
-    supabase.from('godowns').upsert(withSoc({ ...g })).then(({ error }) => { if (error) console.warn('Godown save:', error.message); });
+    let snapshot: Godown[] = [];
+    setGodownsState(prev => { snapshot = prev; const next = [...prev, g]; cacheGodowns(next); return next; });
+    supabase.from('godowns').upsert(withSoc({ ...g })).then(({ error }) => {
+      if (error) {   // RULE 1
+        console.error('Godown save:', error.message);
+        setGodownsState(() => { cacheGodowns(snapshot); return snapshot; });
+        toastRef.current({ title: 'Godown सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga.`, variant: 'destructive', duration: 12000 });
+      }
+    });
     return g;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const updateGodown = useCallback((id: string, data: Partial<Godown>) => {
-    setGodownsState(prev => { const next = prev.map(g => g.id === id ? { ...g, ...data } : g); cacheGodowns(next); return next; });
-    supabase.from('godowns').update(data).eq('id', id).then(({ error }) => { if (error) console.warn('Godown update:', error.message); });
+    if (guardFYLocked()) return;   // RULE 6
+    let snapshot: Godown[] = [];
+    setGodownsState(prev => { snapshot = prev; const next = prev.map(g => g.id === id ? { ...g, ...data } : g); cacheGodowns(next); return next; });
+    supabase.from('godowns').update(data).eq('id', id).then(({ error }) => {
+      if (error) {   // RULE 1
+        console.error('Godown update:', error.message);
+        setGodownsState(() => { cacheGodowns(snapshot); return snapshot; });
+        toastRef.current({ title: 'Godown अपडेट नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const deleteGodown = useCallback((id: string) => {
-    setGodownsState(prev => { const next = prev.filter(g => g.id !== id); cacheGodowns(next); return next; });
+    if (guardFYLocked()) return;   // RULE 6
+    let snapshot: Godown[] = [];
+    setGodownsState(prev => { snapshot = prev; const next = prev.filter(g => g.id !== id); cacheGodowns(next); return next; });
     if (activeGodownIdRef.current === id) setActiveGodown('');
-    supabase.from('godowns').delete().eq('id', id).then(({ error }) => { if (error) console.warn('Godown delete:', error.message); });
+    supabase.from('godowns').delete().eq('id', id).then(({ error }) => {
+      if (error) {   // RULE 1
+        console.error('Godown delete:', error.message);
+        setGodownsState(() => { cacheGodowns(snapshot); return snapshot; });
+        toastRef.current({ title: 'Godown delete नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par godown wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
   }, [setActiveGodown]);
   // Persist a stock movement safely (ECR-17 Phase 3): base upsert WITHOUT godownId
   // (never fails pre-migration), then a best-effort step-2 patch of godownId.
@@ -418,7 +510,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [accounts, setAccountsState] = useState<LedgerAccount[]>([]);
   const [society, setSocietyState] = useState<SocietySettings>(() => storage.getSociety());
   const societyRef = useRef(society);
-  useEffect(() => { societyRef.current = society; }, [society]);
+  useEffect(() => {
+    societyRef.current = society;
+    // T-01: keep the jurisdiction code in sync with the society's state, via the SSOT.
+    jurisdictionRef.current = resolveJurisdiction(society.state);
+  }, [society]);
   // FY-lock guard — reads the LATEST society via ref, so it is never stale even
   // inside useCallbacks declared with empty deps. Returns true (and toasts) when locked.
   const guardFYLocked = useCallback((): boolean => {
@@ -463,6 +559,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [depositTransactions, setDepositTransactionsState] = useState<DepositTransaction[]>([]);
   const [complianceFilings, setComplianceFilingsState] = useState<ComplianceFiling[]>([]);
   const [societyCapabilities, setSocietyCapabilitiesState] = useState<SocietyCapabilityRow[]>([]);
+  const societyCapabilitiesRef = useRef(societyCapabilities);
+  useEffect(() => { societyCapabilitiesRef.current = societyCapabilities; }, [societyCapabilities]);
+  // T-14 (ADR-0002): bind behaviour to CAPABILITIES, not the society TYPE. Resolved from the
+  // current refs so it is correct inside []-dep callbacks. NO super-admin bypass — a data
+  // default must reflect what the SOCIETY does, not who is viewing it.
+  const hasCap = (c: Capability): boolean =>
+    resolveCapabilities(societyRef.current?.societyType ?? 'other', societyCapabilitiesRef.current, undefined, societyRef.current?.state).has(c);
   const [procurementFarmers, setProcurementFarmersState] = useState<Farmer[]>(() => storage.getProcurementFarmers());
   const [procurementLots, setProcurementLotsState] = useState<ProcurementLot[]>(() => storage.getProcurementLots());
   const [procurementEvents, setProcurementEventsState] = useState<ProcurementEvent[]>(() => storage.getProcurementEvents());
@@ -1174,7 +1277,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // stale they cause "Could not find column X" errors that nuke the whole upsert.
   // Solution: upsert ONLY base columns (always succeeds), then patch extras in a
   // second .update() call — that one is allowed to fail without losing the row.
-  const persistVoucher = (v: Voucher, opts: { onBaseFail: () => void; isUpdate?: boolean }) => {
+  const persistVoucher = (v: Voucher, opts: { onBaseFail: () => void; onBaseSuccess?: () => void; isUpdate?: boolean }) => {
     // Strip out everything that may live in late-added columns
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { lines, refType, refId, billAllocations, isCleared, clearedDate, editHistory, groupId,
@@ -1223,6 +1326,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           handleBaseFailure(verifyErr?.message || 'Verification failed — row not found after upsert');
           return;
         }
+      // Base row is confirmed durable — the voucher save is authoritative. Only now is it safe to
+      // append the shadow ledger event to the WORM ledger_events table (never before, so a failed/
+      // rolled-back voucher can never leave an un-deletable orphan event).
+      opts.onBaseSuccess?.();
       // Step 2: best-effort patch of overlay columns. ECR-04: critical control/audit
       // overlays (approvalStatus/editHistory/…) must NOT be lost silently. Split the
       // buckets, retry once (clears the common PostgREST schema-cache lag), and on a
@@ -1356,15 +1463,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     vouchersRef.current = [...vouchersRef.current, newVoucher];
     setVouchersState(prev => [...prev, newVoucher]);
 
+    // T-06 shadow dual-write: emit an immutable `voucher.posted` event for a posted (non-pending)
+    // voucher. Best-effort and fully isolated — any failure here can never affect the voucher save.
+    // Built before persist so the rollback below can drop it too, keeping the shadow ledger
+    // consistent with the vouchers it mirrors.
+    let shadowEvent: LedgerEvent | null = null;
+    try {
+      if (newVoucher.approvalStatus !== 'pending') {
+        shadowEvent = buildEvent({
+          eventType: 'voucher.posted',
+          tenantId: societyIdRef.current,
+          jurisdiction: jurisdictionRef.current,
+          aggregateType: 'voucher',
+          aggregateId: newVoucher.id,
+          sequence: 1,
+          producer: { kind: 'human', id: userRef.current?.name ?? null },
+          payload: { voucherNo: newVoucher.voucherNo, type: newVoucher.type, amount: newVoucher.amount, date: newVoucher.date },
+        }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
+        ledgerEventsRef.current = [...ledgerEventsRef.current, shadowEvent];
+      }
+    } catch { /* shadow ledger is best-effort — never touches the voucher save path */ }
+
     // Persist with two-step + rollback. If base save fails, REMOVE the voucher
     // from local state so the UI reflects what's actually in Supabase — F5 won't
     // silently delete the user's work because the work was never optimistically
     // shown as "saved" once the failure was confirmed.
     persistVoucher(newVoucher, {
       isUpdate: false,
+      // The voucher save is authoritative; the ledger event is durably appended ONLY after the base
+      // row is confirmed (WORM-safe — a rolled-back voucher never orphans an event).
+      onBaseSuccess: () => { if (shadowEvent) persistLedgerEvent(shadowEvent); },
       onBaseFail: () => {
         vouchersRef.current = vouchersRef.current.filter(v => v.id !== newVoucher.id);
         setVouchersState(prev => prev.filter(v => v.id !== newVoucher.id));
+        // Keep the shadow ledger consistent with the rolled-back voucher.
+        if (shadowEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== shadowEvent!.eventId);
       },
     });
     return newVoucher;
@@ -2773,44 +2906,63 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [musterEntries, workOrders, accounts, addVoucher, cancelVoucher, user]);
 
   const approveMember = useCallback((id: string) => {
+    if (guardFYLocked()) return;   // RULE 6
     const member = membersRef.current.find(m => m.id === id);
     if (!member) return;
     const approved = { ...member, approvalStatus: 'approved' as const };
     setMembersState(prev => prev.map(m => m.id === id ? approved : m));
-    supabase.from('members').upsert(withSoc(approved)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    // Now create auto-vouchers for Share Capital and Admission Fee
-    if ((approved.shareCapital || 0) > 0) {
-      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: approved.shareCapital, narration: `Share Capital received from ${approved.name}`, memberId: approved.id, createdAt: new Date().toISOString(), createdBy: 'System' };
-      vouchersRef.current = [...vouchersRef.current, v];
-      setVouchersState(prev => [...prev, v]);
-      supabase.from('vouchers').upsert(withSoc(v)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    }
-    if ((approved.admissionFee || 0) > 0) {
-      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: approved.admissionFee!, narration: `Admission Fee received from ${approved.name}`, memberId: approved.id, createdAt: new Date().toISOString(), createdBy: 'System' };
-      vouchersRef.current = [...vouchersRef.current, v];
-      setVouchersState(prev => [...prev, v]);
-      supabase.from('vouchers').upsert(withSoc(v)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    }
+    supabase.from('members').upsert(withSoc(approved)).then(({ error }) => {
+      if (error) {   // RULE 1: revert the approval so state matches Supabase; NO auto-vouchers on a failed approve
+        console.error('DB sync error:', error.message);
+        setMembersState(prev => prev.map(m => m.id === id ? member : m));
+        toastRef.current({ title: 'Approve सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par member wapas pending dikhega.`, variant: 'destructive', duration: 12000 });
+        return;
+      }
+      // Member approval is durable — ONLY now create the auto-vouchers (never before, so a
+      // failed approve can never leave orphan share-capital / admission-fee vouchers).
+      if ((approved.shareCapital || 0) > 0) {
+        const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: approved.shareCapital, narration: `Share Capital received from ${approved.name}`, memberId: approved.id, createdAt: new Date().toISOString(), createdBy: 'System' };
+        vouchersRef.current = [...vouchersRef.current, v];
+        setVouchersState(prev => [...prev, v]);
+        supabase.from('vouchers').upsert(withSoc(v)).then(({ error: vErr }) => { if (vErr) { console.error('DB sync error:', vErr.message); toastRef.current({ title: 'Save failed', description: vErr.message, variant: 'destructive' }); } });
+      }
+      if ((approved.admissionFee || 0) > 0) {
+        const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: approved.admissionFee!, narration: `Admission Fee received from ${approved.name}`, memberId: approved.id, createdAt: new Date().toISOString(), createdBy: 'System' };
+        vouchersRef.current = [...vouchersRef.current, v];
+        setVouchersState(prev => [...prev, v]);
+        supabase.from('vouchers').upsert(withSoc(v)).then(({ error: vErr }) => { if (vErr) { console.error('DB sync error:', vErr.message); toastRef.current({ title: 'Save failed', description: vErr.message, variant: 'destructive' }); } });
+      }
+    });
     console.info(`[AUDIT] Member id=${id} approved by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, [society.financialYear]);
 
   const rejectMember = useCallback((id: string) => {
+    if (guardFYLocked()) return;   // RULE 6
     const member = membersRef.current.find(m => m.id === id);
     if (!member) return;
     const rejected = { ...member, approvalStatus: 'rejected' as const };
     setMembersState(prev => prev.map(m => m.id === id ? rejected : m));
-    supabase.from('members').upsert(withSoc(rejected)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('members').upsert(withSoc(rejected)).then(({ error }) => {
+      if (error) {   // RULE 1: revert so state matches Supabase
+        console.error('DB sync error:', error.message);
+        setMembersState(prev => prev.map(m => m.id === id ? member : m));
+        toastRef.current({ title: 'Reject सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par member wapas pending dikhega.`, variant: 'destructive', duration: 12000 });
+      }
+    });
     console.info(`[AUDIT] Member id=${id} rejected by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
   const addAccount = useCallback((data: Omit<LedgerAccount, 'id'>): LedgerAccount => {
     if (guardFYLocked()) return { ...data, id: '' } as LedgerAccount;
     const newAccount: LedgerAccount = { ...data, id: crypto.randomUUID() };
-    setAccountsState(prev => {
-      const updated = [...prev, newAccount];
-      return updated;
+    setAccountsState(prev => [...prev, newAccount]);
+    supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => {
+      if (error) {   // RULE 1: roll back so a failed cloud save can't silently diverge on F5
+        console.error('DB sync error:', error.message);
+        setAccountsState(prev => prev.filter(a => a.id !== newAccount.id));
+        toastRef.current({ title: 'खाता सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+      }
     });
-    supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     return newAccount;
   }, []);
 
@@ -3847,7 +3999,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         || accounts.find(a => a.parentId === '3300' && /loan/i.test(a.name) && !a.isGroup);
       if (loanAccount) {
         const member = membersRef.current.find(m => m.id === newLoan.memberId);
-        addVoucher({
+        const dv = addVoucher({
           type: 'payment',
           date: newLoan.disbursementDate || new Date().toISOString().split('T')[0],
           debitAccountId: loanAccount.id,
@@ -3857,6 +4009,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           createdBy: user?.name ?? 'System',
           memberId: newLoan.memberId,
         });
+        // P0-3: remember the disbursement voucher's id on the loan so deleteLoan cancels
+        // exactly it (not a fragile narration-substring match). voucherId is a late-added
+        // column → best-effort step-2 update; the base loan row (upserted above) stays safe.
+        if (dv?.id) {
+          newLoan.voucherId = dv.id;
+          loansRef.current = loansRef.current.map(l => l.id === newLoan.id ? { ...l, voucherId: dv.id } : l);
+          setLoansState(prev => prev.map(l => l.id === newLoan.id ? { ...l, voucherId: dv.id } : l));
+          supabase.from('loans').update({ voucherId: dv.id }).eq('id', newLoan.id).then(({ error }) => { if (error) console.warn('Loan voucherId patch:', error.message); });
+        }
       } else {
         toastRef.current({
           title: 'Loan saved, voucher skipped',
@@ -3894,9 +4055,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     emitAudit({ entityType: 'loan', entityId: id, action: 'delete', reason: 'Loan deleted' });
     // RULE 3: soft-cancel the auto-generated disbursement voucher (matched by the unique loanNo
     // in its narration) so no ghost "Loans & Advances" asset lingers in Trial Balance / Balance Sheet.
-    if (loan?.loanNo) {
+    if (loan) {
       const now = new Date().toISOString();
-      const linkedIds = new Set(vouchersRef.current.filter(v => !v.isDeleted && v.memberId === loan.memberId && v.narration?.includes(loan.loanNo) && !isEngineVoucher(v)).map(v => v.id));
+      // P0-3: prefer the stored disbursement voucherId (exact); fall back to the legacy
+      // narration match only for loans created before voucherId existed. The old substring
+      // match (`narration.includes(loanNo)`) collided "L/…/1" with "L/…/10".
+      const linkedIds = loan.voucherId
+        ? new Set(vouchersRef.current.filter(v => v.id === loan.voucherId && !v.isDeleted && !isEngineVoucher(v)).map(v => v.id))
+        : (loan.loanNo
+            ? new Set(vouchersRef.current.filter(v => !v.isDeleted && v.memberId === loan.memberId && v.narration?.includes(loan.loanNo) && !isEngineVoucher(v)).map(v => v.id))
+            : new Set<string>());
       if (linkedIds.size > 0) {
         const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Loan deleted' } : v;
         vouchersRef.current = vouchersRef.current.map(cancel);
@@ -4478,11 +4646,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return m ? Math.max(max, parseInt(m[1])) : max;
       }, 0);
       const itemCode = `ITM/${String(maxNum + 1).padStart(3, '0')}`;
-      // Consumer stores: give new items a default Sales/Purchase A/c (RULE-4 default 4101/5101)
+      // POS-retail stores: give new items a default Sales/Purchase A/c (RULE-4 default 4101/5101)
       // so a non-technical operator isn't blocked by the "assign a Sales/Purchase A/c" guard on
-      // the first sale/purchase. They can still reassign for per-category routing. Scoped to
-      // consumer so marketing/dairy keep their mandatory dedicated-account routing.
-      const consumerDefaults = societyRef.current?.societyType === 'consumer'
+      // the first sale/purchase. They can still reassign for per-category routing. Gated on the
+      // pos_billing CAPABILITY (T-14 / ADR-0002), not the society type — so marketing/dairy keep
+      // their mandatory dedicated-account routing, and a licensed retail society follows suit too.
+      const consumerDefaults = hasCap('pos_billing')
         ? { salesAccountId: data.salesAccountId || '4101', purchaseAccountId: data.purchaseAccountId || '5101' }
         : null;
       newItem = { ...data, ...consumerDefaults, id: crypto.randomUUID(), itemCode };
@@ -4499,10 +4668,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = prev.map(i => {
         if (i.id !== id) return i;
         const merged = { ...i, ...data };
-        // Consumer stores: backfill a default Sales/Purchase A/c on save if still unset, so a
+        // POS-retail stores: backfill a default Sales/Purchase A/c on save if still unset, so a
         // pre-existing item (created before this default) becomes sellable without the operator
-        // needing to know about ledger accounts. (Same RULE-4 default; consumer-scoped.)
-        if (societyRef.current?.societyType === 'consumer') {
+        // needing to know about ledger accounts. (Same RULE-4 default; gated on pos_billing — T-14.)
+        if (hasCap('pos_billing')) {
           if (!merged.salesAccountId) merged.salesAccountId = '4101';
           if (!merged.purchaseAccountId) merged.purchaseAccountId = '5101';
         }
@@ -4960,7 +5129,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('sales').upsert(withSoc(saleBase)).then(({ error }) => {
       if (error) {
         console.error('Sale update failed:', error.message);
-        toastRef.current({ title: 'Sale update nahi hua', description: error.message, variant: 'destructive' });
+        // A sale edit is a multi-write cascade (stock + vouchers already posted); only the
+        // sale ROW failed here, and the cascade can't be cleanly undone from the client. Per
+        // RULE 1 we make the failure impossible to miss and tell the user to refresh and
+        // re-verify. (A fully atomic sale-edit is a separate, larger redesign.)
+        toastRef.current({ title: 'बिक्री edit cloud-save fail', description: `Sale row cloud save fail — ${error.message}. Refresh karke sale dobara check karein; zaroorat ho to phir se edit karein.`, variant: 'destructive', duration: 15000 });
       } else {
         supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, branchId: sBranch })
           .eq('id', id)
@@ -6067,6 +6240,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addCustomer, updateCustomer, deleteCustomer,
       getAccountBalance, getShareCapitalReconciliation, getAssetRegisterReconciliation, getCashBookEntries, getBankBookEntries,
       getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments, postClosingStock, recordFundUtilisation,
+      getLedgerEvents: () => [...ledgerEventsRef.current],
       getEntityLinks,
       isLoading,
     }}>

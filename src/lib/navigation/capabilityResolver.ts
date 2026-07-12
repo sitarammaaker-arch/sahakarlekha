@@ -15,8 +15,12 @@
  * (societyType, rows, now) → fully deterministic.
  */
 import type { SocietyType } from '@/types';
+import { resolveJurisdiction } from '@/lib/jurisdiction';
 import type { Capability, CapabilitySource, SocietyCapabilityRow } from './capabilities';
+import { CORE_CAPABILITIES } from './capabilities';
 import { SOCIETY_TYPE_CAPABILITIES } from './societyTypeCapabilities';
+import type { Activity } from './activities';
+import { ACTIVITY_CAPABILITY_MAP } from './activityCapabilities';
 
 const ADMIN_SOURCE: CapabilitySource = 'admin';
 
@@ -32,9 +36,9 @@ function activeRows(rows: SocietyCapabilityRow[], now: number): SocietyCapabilit
  * Add other states' packs here (e.g. Punjab → 'punjab_compliance') — the core stays untouched.
  */
 export function jurisdictionCapabilities(societyType: SocietyType, state?: string): Capability[] {
-  const s = (state || '').trim().toLowerCase();
-  const isHaryana = s === 'hr' || s === 'haryana' || s === 'हरियाणा';
-  if (societyType === 'marketing_processing' && isHaryana) return ['haryana_compliance'];
+  // Jurisdiction normalization lives in ONE place — resolveJurisdiction (T-01) — so 'HR',
+  // 'Haryana' and 'हरियाणा' all resolve to the same code here and on every financial row.
+  if (societyType === 'marketing_processing' && resolveJurisdiction(state) === 'hr') return ['haryana_compliance'];
   return [];
 }
 
@@ -60,16 +64,36 @@ export function resolveEntitlements(
 }
 
 /**
- * Step 2 — final navigation VISIBILITY = entitled − admin-hidden. This is the
+ * PURE — the capabilities a set of declared ACTIVITIES lights up (T-11 / ADR-0003). The union
+ * over ACTIVITY_CAPABILITY_MAP. This is NOT bounded by entitlement here; resolveCapabilities
+ * intersects it with entitlement so an activity can never grant an unpaid capability (MR-4).
+ */
+export function activityCapabilities(activities: readonly Activity[]): Set<Capability> {
+  const out = new Set<Capability>();
+  for (const a of activities) for (const c of ACTIVITY_CAPABILITY_MAP[a] ?? []) out.add(c);
+  return out;
+}
+
+/**
+ * Step 2 — final navigation VISIBILITY = active-set − admin-hidden. This is the
  * consumer-facing function (useNavigation / navigationService). An admin `revoke` hides
  * an entitled capability; an admin `grant` cannot reveal an unentitled one (it is a no-op
  * for an already-entitled capability).
+ *
+ * ACTIVITIES (T-11) gate WHICH entitled capabilities are active, strictly WITHIN entitlement:
+ *   • no declared activities  → all entitled caps are active (today's behaviour — the
+ *     Activities layer is additive and non-breaking until a society opts in);
+ *   • declared activities     → only the capabilities those activities light up, AND only if
+ *     the society is already entitled to them. A declared activity can NEVER surface an unpaid
+ *     capability (MR-4) — the monetization boundary is intact. The shift to activities being
+ *     the PRIMARY source (retiring the type template) is T-14; the parity cutover is T-12.
  */
 export function resolveCapabilities(
   societyType: SocietyType,
   rows: SocietyCapabilityRow[] = [],
   nowMs?: number,
   state?: string,
+  activities: readonly Activity[] = [],
 ): Set<Capability> {
   const now = nowMs ?? Date.now();
   const entitled = resolveEntitlements(societyType, rows, now, state);
@@ -78,5 +102,15 @@ export function resolveCapabilities(
       .filter((r) => r.source === ADMIN_SOURCE && r.mode === 'revoke')
       .map((r) => r.capability),
   );
-  return new Set<Capability>([...entitled].filter((c) => !adminHidden.has(c)));
+  const base =
+    activities.length === 0
+      ? entitled
+      : new Set<Capability>([
+          // is_core compliance caps (gst/tds/jurisdiction) stay active if entitled — never
+          // gated by a declared activity, so the cutover loses no compliance module (T-12/MR-1).
+          ...[...entitled].filter((c) => CORE_CAPABILITIES.has(c)),
+          // everything else is activity-gated, and only within entitlement (MR-4).
+          ...[...activityCapabilities(activities)].filter((c) => entitled.has(c)),
+        ]);
+  return new Set<Capability>([...base].filter((c) => !adminHidden.has(c)));
 }

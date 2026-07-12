@@ -70,7 +70,7 @@ const core = await import(pathToFileURL(BUNDLE).href);
 const { verifyArchive } = await import(pathToFileURL(pathResolve(SRC, 'lib', 'backup', 'verify.ts')).href);
 
 ok(typeof core.buildArchive === 'function', 'the bundle exports buildArchive');
-ok(Array.isArray(core.REGISTRY) && core.REGISTRY.length === 93, `the bundle carries the full registry (${core.REGISTRY?.length})`);
+ok(Array.isArray(core.REGISTRY) && core.REGISTRY.length === 96, `the bundle carries the full registry (${core.REGISTRY?.length})`);
 
 // 3. Build an archive with the BUNDLE, verify it with the SOURCE verifier.
 const fetchRows = async (e) => ({

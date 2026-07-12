@@ -17,6 +17,7 @@ import { Shield, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { appropriationWaterfall } from '@/lib/appropriation';
+import { ucasReserveMinPct } from '@/lib/rules/ucas';
 import { useToast } from '@/hooks/use-toast';
 
 const fmt = (amount: number) =>
@@ -28,7 +29,9 @@ const RESERVES_GROUP  = '1200'; // parent group "Reserves & Surplus"
 
 // Suggested default rates (editable — appropriation is OPTIONAL). A society may
 // set any percentage or a flat amount per fund, or skip a fund entirely.
-const DEFAULT_RESERVE_PCT = 25;   // Reserve Fund 1201
+// Reserve Fund 1201 — the statutory minimum comes from the UCAS rule SSOT (T-16), not a local
+// literal. National default resolves to 25% (value-identical to the prior hardcoded constant).
+const DEFAULT_RESERVE_PCT = ucasReserveMinPct({ asOf: new Date().toISOString() });
 const DEFAULT_EDUCATION_PCT = 1;  // Education Fund 1203
 
 type Mode = 'pct' | 'amt';

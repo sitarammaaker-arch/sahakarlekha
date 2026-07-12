@@ -24,6 +24,8 @@ export type Capability =
   | 'housing'
   | 'labour'
   | 'pf_esi'
+  | 'deposit_ledger'          // member deposits / savings ledger (T-13 / CAP-1, BA-2)
+  | 'subsidy_reconciliation'  // government subsidy claim & reconciliation — FPS / fertilizer (T-13 / CAP-2, BA-3)
   | 'haryana_compliance';  // jurisdiction pack: HAFED annual-review proformas (Haryana marketing only)
 
 /** Sidebar groups — 1:1 with today's visual groups, in render order. */
@@ -73,5 +75,14 @@ export interface SocietyCapabilityRow {
   grantedBy?: string | null;  // audit: who (display only; resolver ignores)
   createdAt?: string | null;  // audit: when (display only; resolver ignores)
 }
+
+/**
+ * CORE (is_core) capabilities — compliance/universal, ALWAYS active if entitled and NEVER
+ * gated by a society's declared activities (T-12). TDS applies to every society's payments;
+ * GST to any registered society; jurisdiction packs apply by state. Activity-gating exempts
+ * these so a declared activity can never HIDE a compliance obligation — and so the cutover
+ * from type-templates to activities loses no compliance module (empty-diff parity, MR-1).
+ */
+export const CORE_CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>(['gst', 'tds', 'haryana_compliance']);
 
 export type { SocietyType };

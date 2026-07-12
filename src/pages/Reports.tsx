@@ -21,6 +21,9 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useCapabilities } from '@/hooks/useCapabilities';
+import { selectStatements } from '@/lib/reports/statements';
+import type { SocietyType } from '@/types';
 
 interface ReportCard {
   key: string;
@@ -37,7 +40,8 @@ interface ReportCard {
 const Reports: React.FC = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
-  const { getProfitLoss, members, accounts, getAccountBalance } = useData();
+  const { getProfitLoss, members, accounts, getAccountBalance, society } = useData();
+  const { capabilities } = useCapabilities();
 
   const { totalIncome, totalExpenses, netProfit } = getProfitLoss();
   const cashBalance = getAccountBalance(ACCOUNT_IDS.CASH);
@@ -47,6 +51,28 @@ const Reports: React.FC = () => {
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+
+  // UCAS Part D — the P&L-family statement(s) a society renders are CAPABILITY-driven (T-21), not a
+  // fixed "Income & Expenditure" for everyone: a trading society (inventory_sales) gets a Trading
+  // A/c + P&L; a service society gets Income & Expenditure. selectStatements owns that rule (no
+  // duplicate logic here); only these codes have a report route on this landing.
+  const STMT_META: Record<string, { path: string; description: string; descriptionHi: string }> = {
+    trading_ac:         { path: '/trading-account', description: 'Gross profit from trading — stock, purchases, sales', descriptionHi: 'व्यापार से सकल लाभ — स्टॉक, खरीद, बिक्री' },
+    profit_loss:        { path: '/profit-loss',     description: 'Net profit after trading — indirect income & expenses', descriptionHi: 'व्यापार के बाद शुद्ध लाभ — अप्रत्यक्ष आय-व्यय' },
+    income_expenditure: { path: '/profit-loss',     description: 'Income and expenditure statement', descriptionHi: 'आय व व्यय विवरण' },
+  };
+  const stmtCards: ReportCard[] = selectStatements({ capabilities, legalType: society.societyType as SocietyType })
+    .filter(s => STMT_META[s.code])
+    .map(s => ({
+      key: s.code,
+      title: s.label,
+      titleHi: s.labelHi,
+      description: STMT_META[s.code].description,
+      descriptionHi: STMT_META[s.code].descriptionHi,
+      icon: TrendingUp,
+      path: STMT_META[s.code].path,
+      color: 'text-card-profit bg-card-profit/10 border-card-profit/30',
+    }));
 
   const reportCards: ReportCard[] = [
     {
@@ -99,16 +125,7 @@ const Reports: React.FC = () => {
       path: '/trial-balance',
       color: 'text-info bg-info/10 border-info/30',
     },
-    {
-      key: 'profitLoss',
-      title: 'Income & Expenditure',
-      titleHi: 'आय-व्यय खाता',
-      description: 'Income and expenditure statement',
-      descriptionHi: 'आय व व्यय विवरण',
-      icon: TrendingUp,
-      path: '/profit-loss',
-      color: 'text-card-profit bg-card-profit/10 border-card-profit/30',
-    },
+    ...stmtCards,
     {
       key: 'receiptsPayments',
       title: 'Receipts & Payments',

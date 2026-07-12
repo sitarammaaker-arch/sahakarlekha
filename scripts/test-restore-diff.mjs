@@ -223,7 +223,7 @@ ok(blockedWhole.problems[0].startsWith('member: '), 'and the problem is prefixed
 const plan = planRestore(REGISTRY);
 ok(!plan.insert.some(e => e.key === 'voucher_entry'), 'the plan excludes voucher_entry (T-30)');
 const empty = diffRestore(plan.insert, {}, {}, 'merge');
-ok(empty.ok === true && empty.entities.length === 84, 'the full plan diffs against nothing without error');
+ok(empty.ok === true && empty.entities.length === 86, 'the full plan diffs against nothing without error');
 ok(empty.totals.insert === 0 && empty.totals.orphan === 0, 'and proposes no writes');
 ok(empty.entities.every(e => e.absentFromArchive), 'every entity is reported absent from an empty archive');
 ok(!empty.entities.some(e => e.key === 'voucher_entry'), 'voucher_entry never appears in a diff');

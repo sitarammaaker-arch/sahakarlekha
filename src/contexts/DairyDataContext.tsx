@@ -16,6 +16,7 @@
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
+import { useCapabilities } from '@/hooks/useCapabilities';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import * as storage from '@/lib/storage';
@@ -95,6 +96,7 @@ const DairyDataContext = createContext<DairyDataContextValue | null>(null);
 export function DairyProvider({ children }: { children: ReactNode }) {
   const { society, accounts, members, addAccount, addVoucher, cancelVoucher } = useData();
   const { user } = useAuth();
+  const { capabilities } = useCapabilities(); // T-14: raw set (no super-admin bypass) — seed by capability, not type
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
   const withSoc = <T extends object>(d: T) => ({ ...d, society_id: societyId });
@@ -196,7 +198,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   const seededRef = useRef(false);
   useEffect(() => {
     if (seededRef.current) return;
-    if (society?.societyType !== 'dairy') return;
+    if (!capabilities.has('dairy_collection')) return; // T-14 (ADR-0002): seed by capability, not type
     if (!accounts || accounts.length === 0) return;
     if (society.fyLocked) return; // seeding mutates the chart; retry on a later load when unlocked
     const needsProc = resolveMilkProcurementAccountId(accounts) === null;
@@ -221,7 +223,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (needsBonusPay) {
       addAccount({ name: 'Bonus Payable', nameHi: 'देय बोनस', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' });
     }
-  }, [society?.societyType, society?.fyLocked, accounts, addAccount]);
+  }, [capabilities, society?.fyLocked, accounts, addAccount]);
 
   const addRateChart = useCallback((data: Omit<DairyRateChart, 'id' | 'createdAt'>): DairyRateChart => {
     if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as DairyRateChart;

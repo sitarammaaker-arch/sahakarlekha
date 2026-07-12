@@ -992,32 +992,37 @@ alter table suppliers add column if not exists "notes"            text;
 
 -- ── STEP 17: get_all_societies() — SECURITY DEFINER bypasses RLS ─────────────
 -- Super admin calls this to see all societies regardless of society_id filter.
+-- Return shape MATCHES the deployed production definition (Item #4 drift reconcile,
+-- 2026-07-12): the tenant key is aliased society_id -> `id`, and registrationNo /
+-- societyType (camelCase columns on society_settings) -> registration_no /
+-- society_type; trial/expiry are returned as `date`. The client
+-- (SuperAdminDashboard) normalizes `id`/snake_case back. Keep this in lock-step
+-- with prod so a future create-or-replace does not 42P13 on a return-type change.
 create or replace function get_all_societies()
 returns table (
-  society_id        text,
+  id                text,
   name              text,
-  "nameHi"          text,
-  "registrationNo"  text,
+  registration_no   text,
+  society_type      text,
   district          text,
   state             text,
-  "societyType"     text,
-  "financialYear"   text,
   plan              text,
-  trial_ends_at     timestamptz,
-  plan_expires_at   timestamptz,
+  trial_ends_at     date,
+  plan_expires_at   date,
   is_locked         boolean,
   subscription_notes text,
   created_at        timestamptz
 )
 language sql
 security definer
+set search_path = public, extensions
 as $$
   select
-    society_id, name, "nameHi", "registrationNo", district, state,
-    "societyType", "financialYear", plan, trial_ends_at, plan_expires_at,
-    is_locked, subscription_notes, created_at
-  from society_settings
-  order by created_at desc;
+    ss.society_id, ss.name, ss."registrationNo", ss."societyType",
+    ss.district, ss.state, ss.plan, ss.trial_ends_at, ss.plan_expires_at,
+    ss.is_locked, ss.subscription_notes, ss.created_at
+  from society_settings ss
+  order by ss.created_at desc;
 $$;
 
 -- ── STEP 18: get_society_user_counts() — user count per society ───────────────
@@ -1025,6 +1030,7 @@ create or replace function get_society_user_counts()
 returns table (society_id text, user_count bigint)
 language sql
 security definer
+set search_path = public, extensions
 as $$
   select society_id, count(*) as user_count
   from society_users
@@ -1043,6 +1049,7 @@ create or replace function update_society_subscription(
 returns void
 language sql
 security definer
+set search_path = public, extensions
 as $$
   update society_settings set
     plan              = p_plan,
@@ -1080,6 +1087,7 @@ create or replace function issue_certificate(
 returns void
 language plpgsql
 security definer
+set search_path = public, extensions
 as $$
 begin
   insert into guide_certificates(cert_no, holder_name, email, society_name, parts_passed)
@@ -1104,6 +1112,7 @@ create or replace function verify_certificate(p_cert_no text, p_name text)
 returns table(holder_name text, issued_at timestamptz)
 language sql
 security definer
+set search_path = public, extensions
 as $$
   select holder_name, issued_at
   from guide_certificates
@@ -3151,3 +3160,158 @@ do $$ begin
   end if;
 end $$;
 create index if not exists idx_p7_entries_society on p7_entries(society_id);
+
+-- ── T-01 (ADR-0009 / Canonical CL-5, gap IRR-4): the jurisdiction key ────────────────
+-- Every financial row must carry (society_id, jurisdiction). society_id already exists (the
+-- tenant); jurisdiction is the residency / consolidation scope, resolved from the society's
+-- `state` by resolveJurisdiction() in src/lib/jurisdiction.ts — the SINGLE source of truth,
+-- deliberately NOT reimplemented in SQL, which is why the column is not value-backfilled
+-- here (an app routine that runs the same resolver backfills existing rows in the follow-on).
+--
+-- REQUIRED MIGRATION — run this in the Supabase SQL Editor. Purely additive (nullable), so
+-- nothing breaks before it runs. Per RULE 1, the app does NOT yet write this column — the
+-- write-path stamping ships only AFTER this migration is applied — so no upsert can fail on
+-- a missing column in the meantime. This block covers the canonical financial spine; the
+-- remaining domain tables (housing / dairy / marketing / consumer / procurement / deposits)
+-- get the column in the same additive way when their write paths are wired.
+alter table accounts         add column if not exists jurisdiction text;
+alter table vouchers         add column if not exists jurisdiction text;
+alter table voucher_entries  add column if not exists jurisdiction text;
+alter table members          add column if not exists jurisdiction text;
+alter table loans            add column if not exists jurisdiction text;
+alter table kcc_loans        add column if not exists jurisdiction text;
+alter table assets           add column if not exists jurisdiction text;
+alter table stock_items      add column if not exists jurisdiction text;
+alter table stock_movements  add column if not exists jurisdiction text;
+alter table sales            add column if not exists jurisdiction text;
+alter table purchases        add column if not exists jurisdiction text;
+alter table employees        add column if not exists jurisdiction text;
+alter table salary_records   add column if not exists jurisdiction text;
+alter table suppliers        add column if not exists jurisdiction text;
+alter table customers        add column if not exists jurisdiction text;
+alter table audit_objections add column if not exists jurisdiction text;
+alter table budgets          add column if not exists jurisdiction text;
+create index if not exists vouchers_jurisdiction_idx        on vouchers (society_id, jurisdiction);
+create index if not exists voucher_entries_jurisdiction_idx on voucher_entries (society_id, jurisdiction);
+create index if not exists members_jurisdiction_idx         on members (society_id, jurisdiction);
+
+-- T-01 (continued — write-path stamping): the app stamps (society_id, jurisdiction) on every
+-- write through ONE chokepoint (withSoc → stampTenant), which writes to EVERY tenant-scoped
+-- table. So every table that has `society_id` must also have `jurisdiction`, or those upserts
+-- would fail on a missing column (RULE 1). This dynamic block adds it to all of them at once,
+-- idempotently — a superset of the explicit list above, and self-maintaining as tables are
+-- added. REQUIRED before the withSoc change goes live.
+do $$
+declare r record;
+begin
+  for r in
+    select table_name from information_schema.columns
+    where table_schema = 'public' and column_name = 'society_id'
+  loop
+    execute format('alter table public.%I add column if not exists jurisdiction text', r.table_name);
+  end loop;
+end $$;
+
+-- ── T-03 (ADR-0005 / CA-03): server-authoritative gapless document numbering ─────────
+-- Statutory audit requires GAPLESS, non-duplicated numbers. Client-side numbering from
+-- in-memory/localStorage state gaps and collides across devices. The database issues the
+-- next number for a (society, book, financial-year) ATOMICALLY, so two concurrent tills can
+-- never mint the same number or leave a gap. The client calls next_document_number() and
+-- formats the result (src/lib/documentNumber.ts). Additive + idempotent; the RPC is unused
+-- until the save-path cutover (which assigns the number at durable append — pairs with T-06),
+-- so running this now changes nothing.
+create table if not exists document_sequences (
+  society_id  text not null,
+  book        text not null,          -- register/voucher-type key, e.g. 'receipt','payment','journal'
+  fy          text not null,          -- financial year, e.g. '2025-26'
+  last_number bigint not null default 0,
+  updated_at  timestamptz not null default now(),
+  primary key (society_id, book, fy)
+);
+alter table document_sequences enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='document_sequences' and policyname='allow_all') then
+    create policy "allow_all" on document_sequences for all using (true) with check (true);
+  end if;
+end $$;
+
+-- Atomic issue: increment and return the next number in ONE statement. `on conflict do
+-- update ... returning` takes the row lock and returns the post-increment value, so
+-- concurrent callers get consecutive numbers (1,2,3…) — never a duplicate, never a gap.
+create or replace function next_document_number(p_society_id text, p_book text, p_fy text)
+returns bigint
+language sql
+as $$
+  insert into document_sequences (society_id, book, fy, last_number, updated_at)
+  values (p_society_id, p_book, p_fy, 1, now())
+  on conflict (society_id, book, fy)
+  do update set last_number = document_sequences.last_number + 1, updated_at = now()
+  returning last_number;
+$$;
+
+-- ── T-10 (ADR-0003, gap BA-1): the Activities layer ──────────────────────────────────
+-- A society declares MANY business activities (a Multipurpose PACS runs credit + dairy + a
+-- fair-price shop at once). Each row is one declared activity; the catalog of what can be
+-- declared, and the activity→capability map, live in code (src/lib/navigation/activities.ts,
+-- activityCapabilities.ts). The resolver (T-11) unions these into capabilities WITHIN
+-- entitlement. Additive + dormant: nothing reads or writes this table until T-11/T-12, so
+-- running this migration changes nothing. `jurisdiction` mirrors T-01; `config` is edge
+-- config (rate-chart refs etc.), the one legitimate JSONB per the Canonical Model.
+create table if not exists society_activities (
+  id           text primary key,
+  society_id   text not null default 'SOC001',
+  jurisdiction text,
+  activity     text not null,                     -- Activity code (see activities.ts)
+  status       text not null default 'active',    -- active | paused | retired
+  enabled_at   timestamptz not null default now(),
+  disabled_at  timestamptz,
+  config       jsonb default '{}',
+  "isDeleted"  boolean default false,
+  unique (society_id, activity)
+);
+alter table society_activities enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='society_activities' and policyname='allow_all') then
+    create policy "allow_all" on society_activities for all using (true) with check (true);
+  end if;
+end $$;
+create index if not exists idx_society_activities_society on society_activities(society_id);
+
+-- ── T-06 (ADR-0001 / INV-1): the append-only EVENT JOURNAL — the system of record ────
+-- Financial truth is an append-only stream of immutable events; balances/registers/reports
+-- are PROJECTIONS derived by replay (src/lib/ledger/*). A correction is a NEW reversing event
+-- (reversal_of), never a mutation or a delete — which retires the RULE 1 divergence class.
+-- WORM like audit_log: INSERT + SELECT only, no UPDATE/DELETE. Additive + DORMANT — nothing
+-- writes or reads it until the dual-write cutover (T-06 live / T-09), so this changes nothing.
+create table if not exists ledger_events (
+  event_id       text primary key,
+  event_type     text not null,                      -- past-tense fact, e.g. 'voucher.posted'
+  schema_version int  not null default 1,
+  society_id     text not null default 'SOC001',     -- tenant
+  jurisdiction   text,
+  aggregate_type text not null,                       -- 'voucher' | 'member' | ...
+  aggregate_id   text not null,
+  sequence       bigint not null,                     -- per-(tenant, aggregate) ordering, 1-based
+  occurred_at    timestamptz not null default now(),
+  producer_kind  text not null default 'human',       -- human | agent | import | integration (AI-A)
+  producer_id    text,
+  on_behalf_of   text,
+  reversal_of    text,                                -- event_id this reverses (CL-2)
+  payload        jsonb not null,
+  created_at     timestamptz not null default now()
+);
+-- Gapless per-aggregate ordering: no two events share a (tenant, aggregate, sequence).
+create unique index if not exists ledger_events_aggregate_seq
+  on ledger_events (society_id, aggregate_type, aggregate_id, sequence);
+create index if not exists ledger_events_scope
+  on ledger_events (society_id, aggregate_type, aggregate_id, sequence);
+alter table ledger_events enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename='ledger_events' and policyname='ledger_events_insert') then
+    create policy "ledger_events_insert" on ledger_events for insert with check (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename='ledger_events' and policyname='ledger_events_select') then
+    create policy "ledger_events_select" on ledger_events for select using (true);
+  end if;
+  -- Intentionally NO update/delete policy ⇒ ledger_events is WORM (append-only, CL-2).
+end $$;

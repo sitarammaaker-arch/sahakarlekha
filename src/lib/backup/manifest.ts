@@ -27,8 +27,62 @@
 import type { EntityDescriptor, BackupPolicy } from '../export/registry.types';
 import { sha256Canonical, digestsEqual, type FileDigest } from './integrity';
 
-/** Bumped when the archive layout changes. Independent of the app version. */
+/** Bumped when the archive layout changes. Independent of the app version. Written by
+ *  this build; read subject to the negotiation policy below. */
 export const BACKUP_FORMAT_VERSION = '1.0';
+
+/**
+ * FORMAT-VERSION NEGOTIATION (T-04 / ADR-0004, IRR-6).
+ *
+ * The archive format is version-stamped so it can EVOLVE WITHOUT BREAKING PRIOR ARCHIVES —
+ * the whole point of a versioned contract. A reader therefore does NOT demand an exact
+ * match; it negotiates:
+ *
+ *   • same MAJOR, any minor  → accept. Within a major, changes are additive and tolerantly
+ *     read (unknown fields ignored) — ADR-0004 VER-2. So a 1.0 build reads a future 1.x
+ *     archive, and a future 1.x build still reads today's 1.0 archives (VER-4).
+ *   • NEWER major            → refuse, and say "update the app". A major bump is a breaking
+ *     change (VER-1); guessing at a layout we do not understand is how silent corruption
+ *     starts (the EXP-02 lesson). Refuse loudly, never quietly mis-read.
+ *   • OLDER major / malformed → refuse with a clear reason. (No major < 1 was ever written;
+ *     the policy leaves room to add dedicated old-major readers if that ever changes.)
+ *
+ * This build reads major SUPPORTED_FORMAT_MAJOR. The manifest hash and per-file digests are
+ * checked regardless of minor version, so acceptance here never weakens integrity.
+ */
+export const SUPPORTED_FORMAT_MAJOR = 1;
+
+export type FormatVersionVerdict =
+  | { ok: true; major: number; minor: number; reason?: undefined }
+  | { ok: false; kind: 'malformed' | 'too-old' | 'too-new'; reason: string };
+
+/** PURE — parse "major.minor" and classify it against what this build can read. */
+export function classifyFormatVersion(formatVersion: unknown): FormatVersionVerdict {
+  if (typeof formatVersion !== 'string' || formatVersion.trim().length === 0) {
+    return { ok: false, kind: 'malformed', reason: 'the archive carries no format version' };
+  }
+  const m = /^(\d+)\.(\d+)$/.exec(formatVersion.trim());
+  if (!m) {
+    return { ok: false, kind: 'malformed', reason: `archive format "${formatVersion}" is not a valid version` };
+  }
+  const major = Number(m[1]);
+  const minor = Number(m[2]);
+  if (major > SUPPORTED_FORMAT_MAJOR) {
+    return {
+      ok: false,
+      kind: 'too-new',
+      reason: `this archive (format ${formatVersion}) was written by a newer version of SahakarLekha — update the app to read it`,
+    };
+  }
+  if (major < SUPPORTED_FORMAT_MAJOR) {
+    return {
+      ok: false,
+      kind: 'too-old',
+      reason: `archive format ${formatVersion} is older than this build can read (needs ${SUPPORTED_FORMAT_MAJOR}.x)`,
+    };
+  }
+  return { ok: true, major, minor };
+}
 
 /** Why this archive exists. `pre-restore` is the snapshot a Replace restore takes first. */
 export type BackupTrigger = 'manual' | 'scheduled' | 'pre-restore' | 'pre-migration';
@@ -233,8 +287,9 @@ export async function verifyManifest(manifest: BackupManifest): Promise<Manifest
   if (!manifest || typeof manifest.manifestHash !== 'string' || manifest.manifestHash.length === 0) {
     return { ok: false, reason: 'manifest carries no hash' };
   }
-  if (manifest.formatVersion !== BACKUP_FORMAT_VERSION) {
-    return { ok: false, reason: `unsupported archive format ${manifest.formatVersion} (this build reads ${BACKUP_FORMAT_VERSION})` };
+  const fmt = classifyFormatVersion(manifest.formatVersion);
+  if (!fmt.ok) {
+    return { ok: false, reason: fmt.reason };
   }
 
   const expected = await computeManifestHash(manifest);
