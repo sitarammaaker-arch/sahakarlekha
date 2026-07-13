@@ -1047,7 +1047,8 @@ begin
   return query
     select
       ss.society_id, ss.name, ss."registrationNo", ss."societyType",
-      ss.district, ss.state, ss.plan, ss.trial_ends_at, ss.plan_expires_at,
+      ss.district, ss.state, ss.plan,
+      ss.trial_ends_at::date, ss.plan_expires_at::date,   -- cols are timestamptz; return type is date (021)
       ss.is_locked, ss.subscription_notes, ss.created_at
     from society_settings ss
     order by ss.created_at desc;
@@ -1066,7 +1067,7 @@ begin
     raise exception 'not authorized' using errcode = '42501';
   end if;
   return query
-    select su.society_id, count(*) as user_count
+    select su.society_id::text, count(*) as user_count   -- society_id is uuid; return type is text (021)
     from society_users su
     where su.is_active = true
     group by su.society_id;

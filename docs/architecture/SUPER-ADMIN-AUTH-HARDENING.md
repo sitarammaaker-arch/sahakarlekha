@@ -1,7 +1,8 @@
 # Super-Admin Auth Hardening — Design (audit P0-1 + P0-3)
 
-- **Status:** S0 verified · **S2 shipped** (migration 019 + client) · **S3 shipped** (migration 020 gates + revokes the RPCs; client path-2 removed). **S4 pending** (drop `verify_platform_admin` + the plaintext `platform_admins.password` column).
+- **Status:** ✅ COMPLETE. S0 verified · S2 (migration 019 + client) · S3 (migration 020 gates + revokes RPCs; client path-2 removed) · hotfix 021 (cast RPC result types after sql→plpgsql) · **S4 (migration 022 drops `verify_platform_admin` + the plaintext `platform_admins.password` column)**. P0-1 + P0-3 closed. Prod-verified: real admin logs in via JWT and sees data; anon/non-admin → 42501.
 - **Date:** 2026-07-13
+- **Ops note:** the sole platform admin's `auth.users` row was created via SQL and was malformed for gotrue (no `auth.identities` row; NULL token columns). Recovery recipe (set bcrypt password, insert email identity, blank the NULL token columns + aud/role/instance_id) is recorded in the memory `audit-p0-error-monitoring`.
 - **Fixes:** production-audit **P0-1** (unauthenticated cross-tenant super-admin RPCs) and **P0-3** (localStorage-trusted `isSuperAdmin`/role). They are the same root cause and must be fixed together.
 
 ## 1. The problem (confirmed from the repo)
