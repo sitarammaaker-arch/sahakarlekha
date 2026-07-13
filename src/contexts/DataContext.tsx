@@ -3816,37 +3816,48 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   //  • not a held PENDING voucher when the society has opted into approval-gating
   //    (society.approvalRequired = maker-checker). Approved / unmarked (undefined) vouchers
   //    always count, so behaviour is unchanged for every society that has NOT opted in.
-  const activeVouchers = vouchers.filter(v =>
+  // Memoised so its reference is stable across renders: it's the base list nearly every report
+  // reads, and an inline .filter() made a fresh array each render — needlessly re-running the
+  // report useCallbacks (and defeating any downstream memo) that depend on it. Same contents.
+  const activeVouchers = useMemo(() => vouchers.filter(v =>
     !v.isDeleted &&
     v.approvalStatus !== 'rejected' &&
     !(society.approvalRequired && v.approvalStatus === 'pending') &&
     // ECR-17: branch scope — 'all' (default) = consolidated (no filter). Legacy
     // unbranched vouchers map to the Head Office. Additive — no regression on 'all'.
     matchesBranch(v.branchId, activeBranchId, headOfficeBranchId)
-  );
+  ), [vouchers, society.approvalRequired, activeBranchId, headOfficeBranchId]);
 
   // ECR-17 Phase 4: shared predicate for branch-scoping non-voucher entities
   // (sales / purchases / members) in report pages. Same rule as activeVouchers.
   const matchesActiveBranch = useCallback((branchId?: string) =>
     matchesBranch(branchId, activeBranchId, headOfficeBranchId), [activeBranchId, headOfficeBranchId]);
 
-  const getAccountBalance = useCallback((accountId: string): number => {
-    const account = accounts.find(a => a.id === accountId);
-    if (!account) return 0;
-    // T-02: signed balance (opening + Dr − Cr legs) summed in exact integer paise, so it can't
-    // drift over many legs (RULE 2). Returns rupees, unchanged shape.
-    const opening = account.openingBalanceType === 'debit' ? (Number(account.openingBalance) || 0) : -(Number(account.openingBalance) || 0);
-    let balMinor = toMinor(opening);
+  // One-pass signed balance (opening + Σ Dr − Cr legs) per account, memoised on [accounts,
+  // activeVouchers]. getAccountBalance was O(vouchers×lines) PER CALL and is called in loops and
+  // even sort comparators (Customers/FundRegister reduce, LedgerHeads sort, asset/fund/share
+  // reconciliation) → O(N×vouchers×lines). Building every balance once makes each lookup O(1).
+  // T-02: summed in exact integer paise so it can't drift over many legs (RULE 2) — identical numbers.
+  const accountBalanceMinorMap = useMemo(() => {
+    const txn = new Map<string, Minor>();
     activeVouchers.forEach(v => {
       getVoucherLines(v).forEach(l => {
-        if (l.accountId === accountId) {
-          const legMinor = toMinor(Number(l.amount) || 0);
-          balMinor = addMinor(balMinor, l.type === 'Dr' ? legMinor : -legMinor);
-        }
+        const legMinor = toMinor(Number(l.amount) || 0);
+        txn.set(l.accountId, addMinor(txn.get(l.accountId) ?? 0, l.type === 'Dr' ? legMinor : -legMinor));
       });
     });
-    return toRupees(balMinor);
+    const bal = new Map<string, Minor>();
+    accounts.forEach(a => {
+      const opening = a.openingBalanceType === 'debit' ? (Number(a.openingBalance) || 0) : -(Number(a.openingBalance) || 0);
+      bal.set(a.id, addMinor(toMinor(opening), txn.get(a.id) ?? 0));
+    });
+    return bal;
   }, [accounts, activeVouchers]);
+
+  const getAccountBalance = useCallback((accountId: string): number => {
+    const m = accountBalanceMinorMap.get(accountId);   // undefined ⇒ unknown account (was `if (!account) return 0`)
+    return m === undefined ? 0 : toRupees(m);
+  }, [accountBalanceMinorMap]);
 
   // P0 #4 / ECR-05 (MS-03): detect drift between the member scalar (subsidiary) and the
   // Share-Capital ledger account (control). getAccountBalance returns a signed (Dr−Cr)
