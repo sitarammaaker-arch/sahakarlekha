@@ -1647,6 +1647,14 @@ create policy "society_rw" on public.procurement_settlements for all to authenti
   with check (society_id::text in (select public.current_user_society_ids()));
 create unique index if not exists procurement_settlements_ev_uniq on public.procurement_settlements ("engineVoucherId");
 create unique index if not exists procurement_settlements_no_uniq on public.procurement_settlements (society_id, "settlementNo");
+-- T-05: typed money columns (promote gross/netPayable/amountPaid JSONB → integer-paise + currency).
+-- The client dual-writes these alongside the JSONB; migration 017 backfills existing rows.
+alter table public.procurement_settlements add column if not exists "grossAmountMinor"      bigint;
+alter table public.procurement_settlements add column if not exists "grossCurrency"         text;
+alter table public.procurement_settlements add column if not exists "netPayableAmountMinor" bigint;
+alter table public.procurement_settlements add column if not exists "netPayableCurrency"    text;
+alter table public.procurement_settlements add column if not exists "amountPaidAmountMinor" bigint;
+alter table public.procurement_settlements add column if not exists "amountPaidCurrency"    text;
 
 -- Per-society settlement-number counter (row-locked inside the commit transaction → concurrency-safe;
 -- rolls back with the transaction). The client never generates STLnnnnnn.
