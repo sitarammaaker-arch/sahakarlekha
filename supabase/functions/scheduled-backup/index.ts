@@ -21,7 +21,11 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { buildArchive, archiveFileName, planArchive, REGISTRY, BACKUP_FORMAT_VERSION } from '../_shared/backup-core.mjs';
 
 const PAGE = 1000;
-const MAX_ROWS = 50_000;
+// Per-table row ceiling. A table above this makes buildArchive refuse (no partial backups),
+// which — before this slice — silently dropped the biggest societies from the weekly backup.
+// Env-overridable so the cap can be raised without a redeploy (Slice 2) and so the failure
+// path can be exercised on an ordinary society by setting it low (e.g. BACKUP_MAX_ROWS=10).
+const MAX_ROWS = Number(Deno.env.get('BACKUP_MAX_ROWS')) || 50_000;
 const BUCKET = 'backups';
 // How many tables to read at once. The free tier caps a request at 150s wall-clock, and
 // reading ~87 tables one-at-a-time blows past it. Reading in parallel batches turns ~87
@@ -139,6 +143,59 @@ async function backupSociety(supabase: any, societyId: string) {
   return { societyId, ok: true, filename, path, bytes: archive.length, entities: manifest.totals.entityCount, rows: manifest.totals.rowCount, recorded };
 }
 
+/**
+ * Record a backup FAILURE durably. Before this, a society whose biggest table outgrew MAX_ROWS
+ * (or any read/upload error) threw, was reported only in the HTTP 207 body — which the fire-and-
+ * forget cron never reads — and left NO durable trace, so the largest societies could stop being
+ * backed up and nobody would know. Now every failure lands in BOTH:
+ *   • audit_log  — the per-society WORM custody trail the Backup Health card already reads, so the
+ *                  gap is visible next to the successes.
+ *   • error_log  — the P0-2 error-monitoring sink, so it surfaces with every other operational
+ *                  failure.
+ * Best-effort and never throws: a failed record must not mask (or replace) the original failure.
+ * Returns whether the custody (audit_log) write succeeded.
+ */
+async function recordBackupFailure(supabase: any, societyId: string, err: unknown): Promise<boolean> {
+  const message = (err instanceof Error ? err.message : String(err)).slice(0, 2000);
+  const stack = err instanceof Error && err.stack ? err.stack.slice(0, 8000) : null;
+  const createdAt = new Date().toISOString();
+  let recorded = true;
+
+  try {
+    const { error } = await supabase.from('audit_log').insert({
+      society_id: societyId,
+      actor_name: 'scheduled-backup',
+      actor_email: null,
+      actor_role: 'system',
+      entity_type: 'backup',
+      entity_id: null,
+      action: 'export',
+      before: null,
+      after: { trigger: 'scheduled', status: 'failed', error: message },
+      reason: 'scheduled server backup FAILED',
+      source: 'edge-function',
+      created_at: createdAt,
+    });
+    if (error) recorded = false;
+  } catch { recorded = false; }
+
+  try {
+    await supabase.from('error_log').insert({
+      id: globalThis.crypto?.randomUUID?.() ?? `bkp-${createdAt}-${societyId}`,
+      society_id: societyId,
+      source: 'scheduled-backup',
+      message,
+      stack,
+      context: { societyId, trigger: 'scheduled' },
+      url: null,
+      actor_name: 'scheduled-backup',
+      created_at: createdAt,
+    });
+  } catch { /* swallow — the error sink must never mask the real failure */ }
+
+  return recorded;
+}
+
 Deno.serve(async (req) => {
   // Secret gate. Once BACKUP_CRON_SECRET is set (supabase secrets set …) the function
   // refuses any call whose `x-backup-secret` header does not match — so only the cron job
@@ -174,7 +231,9 @@ Deno.serve(async (req) => {
     try {
       results.push(await backupSociety(supabase, societyId));
     } catch (e) {
-      results.push({ societyId, ok: false, error: e instanceof Error ? e.message : String(e) });
+      // Durably record the failure (audit_log + error_log) — never silent again.
+      const recorded = await recordBackupFailure(supabase, societyId, e);
+      results.push({ societyId, ok: false, error: e instanceof Error ? e.message : String(e), recorded });
     }
   }
 
