@@ -167,7 +167,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const email = session?.user?.email;
-      if (!email) return;
+      if (!email) {
+        // P0-3 (localStorage-role): a restored app session with NO Supabase Auth JWT is unverified —
+        // its role/societyId came from client-editable localStorage and can't be trusted. Sign it out
+        // so a fresh login re-derives them from society_users. Skipped on localhost, where the DEV-only
+        // demo users log in without a JWT by design. A valid production user always has a JWT at this
+        // point, so they are unaffected; only a stale/forged app-session is cleared.
+        const onLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (!onLocalhost && getAuthSession()) doLogout();
+        return;
+      }
       try {
         const { data } = await supabase
           .from('society_users')
