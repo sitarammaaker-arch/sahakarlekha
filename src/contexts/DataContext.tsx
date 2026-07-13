@@ -3000,13 +3000,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: approved.shareCapital, narration: `Share Capital received from ${approved.name}`, memberId: approved.id, createdAt: new Date().toISOString(), createdBy: 'System' };
         vouchersRef.current = [...vouchersRef.current, v];
         setVouchersState(prev => [...prev, v]);
-        supabase.from('vouchers').upsert(withSoc(v)).then(({ error: vErr }) => { if (vErr) { console.error('DB sync error:', vErr.message); reportError('db-sync', vErr.message); toastRef.current({ title: 'Save failed', description: vErr.message, variant: 'destructive' }); } });
+        // RULE 1: persistVoucher rolls the optimistic voucher back if the cloud save fails, so an
+        // approved member's Share Capital / Admission Fee receipt can't silently exist local-only.
+        persistVoucher(v, { isUpdate: false, onBaseFail: () => {
+          vouchersRef.current = vouchersRef.current.filter(x => x.id !== v.id);
+          setVouchersState(prev => prev.filter(x => x.id !== v.id));
+        } });
       }
       if ((approved.admissionFee || 0) > 0) {
         const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: approved.admissionFee!, narration: `Admission Fee received from ${approved.name}`, memberId: approved.id, createdAt: new Date().toISOString(), createdBy: 'System' };
         vouchersRef.current = [...vouchersRef.current, v];
         setVouchersState(prev => [...prev, v]);
-        supabase.from('vouchers').upsert(withSoc(v)).then(({ error: vErr }) => { if (vErr) { console.error('DB sync error:', vErr.message); reportError('db-sync', vErr.message); toastRef.current({ title: 'Save failed', description: vErr.message, variant: 'destructive' }); } });
+        // RULE 1: persistVoucher rolls the optimistic voucher back if the cloud save fails, so an
+        // approved member's Share Capital / Admission Fee receipt can't silently exist local-only.
+        persistVoucher(v, { isUpdate: false, onBaseFail: () => {
+          vouchersRef.current = vouchersRef.current.filter(x => x.id !== v.id);
+          setVouchersState(prev => prev.filter(x => x.id !== v.id));
+        } });
       }
     });
     console.info(`[AUDIT] Member id=${id} approved by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
