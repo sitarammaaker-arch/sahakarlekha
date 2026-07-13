@@ -25,6 +25,7 @@ import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
+import { settlementTypedColumns } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
@@ -3558,7 +3559,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Settlement create error:', error.message);
         setProcurementSettlementsState(prev => { const r = prev.filter(x => x.id !== stl.id); storage.setProcurementSettlements(r); return r; });
         toastRef.current({ title: 'निपटान सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara banayein.`, variant: 'destructive', duration: 12000 });
+        return;
       }
+      // T-05 dual-write: mirror the money objects into typed columns (step-2, RULE 1 — the base
+      // row is already saved; this fails only until migration 017 adds the columns).
+      supabase.from('procurement_settlements').update(settlementTypedColumns(stl)).eq('id', stl.id)
+        .then(({ error: e2 }) => { if (e2) console.warn('Settlement typed-money columns (run migration 017):', e2.message); });
     });
     toastRef.current({ title: 'निपटान ड्राफ्ट बना', description: `${gross.currency} ${gross.amount}`, duration: 5000 });
     return stl;
@@ -3572,7 +3578,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Settlement update error:', error.message);
         setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === prevStl.id ? prevStl : x); storage.setProcurementSettlements(u); return u; });
         toastRef.current({ title: 'बदलाव सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga.`, variant: 'destructive', duration: 12000 });
+        return;
       }
+      // T-05 dual-write (step-2, RULE 1) — mirror the money objects into typed columns.
+      supabase.from('procurement_settlements').update(settlementTypedColumns(nextStl)).eq('id', nextStl.id)
+        .then(({ error: e2 }) => { if (e2) console.warn('Settlement typed-money columns (run migration 017):', e2.message); });
     });
   };
 
