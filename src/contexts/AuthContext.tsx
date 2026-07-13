@@ -486,7 +486,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       // Server verifies the code and stores the secret in the locked user_mfa
       // table (SECURITY DEFINER) — the client never writes the secret (ECR-12 s3).
-      const { data, error } = await supabase.rpc('app_mfa_enroll', { p_email: user.email, p_secret: secret, p_code: code });
+      // Platform admins (not in society_users) use the parallel is_platform_admin()-gated RPC.
+      const { data, error } = isSuperAdmin
+        ? await supabase.rpc('platform_admin_mfa_enroll', { p_secret: secret, p_code: code })
+        : await supabase.rpc('app_mfa_enroll', { p_email: user.email, p_secret: secret, p_code: code });
       if (error) return { ok: false, reason: 'save-failed' };
       if (data !== true) return { ok: false, reason: 'bad-code' };
     } catch {
@@ -494,12 +497,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     setUser(u => (u ? { ...u, mfaEnabled: true } : u));
     return { ok: true };
-  }, [user]);
+  }, [user, isSuperAdmin]);
 
   const disableMfa = useCallback(async (code: string): Promise<MfaResult> => {
     if (!user) return { ok: false, reason: 'save-failed' };
     try {
-      const { data, error } = await supabase.rpc('app_mfa_disable', { p_email: user.email, p_code: code });
+      const { data, error } = isSuperAdmin
+        ? await supabase.rpc('platform_admin_mfa_disable', { p_code: code })
+        : await supabase.rpc('app_mfa_disable', { p_email: user.email, p_code: code });
       if (error) return { ok: false, reason: 'save-failed' };
       if (data !== true) return { ok: false, reason: 'bad-code' };
     } catch {
@@ -507,7 +512,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     setUser(u => (u ? { ...u, mfaEnabled: false } : u));
     return { ok: true };
-  }, [user]);
+  }, [user, isSuperAdmin]);
 
   return (
     <AuthContext.Provider value={{ user, isAuthenticated: !!user, isSuperAdmin, login, verifyMfaCode, cancelMfa, logout, hasPermission, can, sendPasswordReset, enrollMfa, confirmMfa, disableMfa, adminResetMfa, generateRecoveryCodes, verifyRecoveryCode }}>
