@@ -46,11 +46,12 @@ const up = read('supabase/migrations/007_rls_tenant_isolation.sql');
 ok(/a\.attname = 'society_id'/.test(up), '007 discovers tenant tables dynamically by the society_id column (automatic coverage)');
 ok(/enable row level security/.test(up), '007 enables RLS on every discovered table');
 
-// (3) CRUD scoped via get_current_society_id()
-ok(/for select using \(society_id = get_current_society_id\(\)\)/.test(up), '007 scopes SELECT by get_current_society_id()');
-ok(/for insert with check \(society_id = get_current_society_id\(\)\)/.test(up), '007 scopes INSERT by get_current_society_id()');
-ok(/for update using \(society_id = get_current_society_id\(\)\) with check \(society_id = get_current_society_id\(\)\)/.test(up), '007 scopes UPDATE by get_current_society_id() (USING + WITH CHECK)');
-ok(/for delete using \(society_id = get_current_society_id\(\)\)/.test(up), '007 scopes DELETE by get_current_society_id()');
+// (3) CRUD scoped via get_current_society_id(). The column is cast ::text (society_id is mixed
+// uuid/text across tables, so 007 casts on both sides); the cast is optional in these patterns.
+ok(/for select using \(society_id(?:::text)? = get_current_society_id\(\)\)/.test(up), '007 scopes SELECT by get_current_society_id()');
+ok(/for insert with check \(society_id(?:::text)? = get_current_society_id\(\)\)/.test(up), '007 scopes INSERT by get_current_society_id()');
+ok(/for update using \(society_id(?:::text)? = get_current_society_id\(\)\) with check \(society_id(?:::text)? = get_current_society_id\(\)\)/.test(up), '007 scopes UPDATE by get_current_society_id() (USING + WITH CHECK)');
+ok(/for delete using \(society_id(?:::text)? = get_current_society_id\(\)\)/.test(up), '007 scopes DELETE by get_current_society_id()');
 
 // (6) removes permissive policies AND snapshots them first (W-3)
 ok(/coalesce\(qual, ?''\) = 'true' or coalesce\(with_check, ?''\) = 'true'/.test(up) && /drop policy/.test(up),
@@ -70,8 +71,8 @@ ok(/set search_path = ''/.test(up), 'helpers pin search_path = \'\' (W-6 hardeni
 ok(/from public\.society_users/.test(up), 'helpers schema-qualify public.society_users (W-6)');
 
 // societies scoped by id; no client insert/delete
-ok(/societies_tenant_select on public\.societies for select using \(id = get_current_society_id\(\)\)/.test(up), 'societies SELECT scoped by id');
-ok(/societies_tenant_update on public\.societies for update using \(id = get_current_society_id\(\)\)/.test(up), 'societies UPDATE scoped by id');
+ok(/societies_tenant_select on public\.societies for select using \(id(?:::text)? = get_current_society_id\(\)\)/.test(up), 'societies SELECT scoped by id');
+ok(/societies_tenant_update on public\.societies for update using \(id(?:::text)? = get_current_society_id\(\)\)/.test(up), 'societies UPDATE scoped by id');
 ok(!/create policy societies_tenant_(insert|delete)/.test(up), 'no client INSERT/DELETE policy on societies (provisioning via RPC only)');
 
 // (7)/(8) no permissive CREATE; transactional
