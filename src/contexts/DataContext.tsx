@@ -2257,13 +2257,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: newMember.shareCapital, narration: `Share Capital received from ${newMember.name}`, memberId: newMember.id, createdAt: new Date().toISOString(), createdBy: 'System' };
       vouchersRef.current = [...vouchersRef.current, v];
       setVouchersState(prev => { const updated = [...prev, v]; return updated; });
-      supabase.from('vouchers').upsert(withSoc(v)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+      // RULE 1: use persistVoucher so a failed cloud save ROLLS BACK the optimistic local voucher
+      // (these are real Share Capital / Admission Fee receipts — silently keeping them local-only,
+      // to vanish on F5, is exactly the divergence RULE 1 forbids). onBaseFail removes the row.
+      persistVoucher(v, { isUpdate: false, onBaseFail: () => {
+        vouchersRef.current = vouchersRef.current.filter(x => x.id !== v.id);
+        setVouchersState(prev => prev.filter(x => x.id !== v.id));
+      } });
     }
     if ((newMember.admissionFee || 0) > 0) {
       const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: newMember.admissionFee!, narration: `Admission Fee received from ${newMember.name}`, memberId: newMember.id, createdAt: new Date().toISOString(), createdBy: 'System' };
       vouchersRef.current = [...vouchersRef.current, v];
       setVouchersState(prev => { const updated = [...prev, v]; return updated; });
-      supabase.from('vouchers').upsert(withSoc(v)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+      // RULE 1: use persistVoucher so a failed cloud save ROLLS BACK the optimistic local voucher
+      // (these are real Share Capital / Admission Fee receipts — silently keeping them local-only,
+      // to vanish on F5, is exactly the divergence RULE 1 forbids). onBaseFail removes the row.
+      persistVoucher(v, { isUpdate: false, onBaseFail: () => {
+        vouchersRef.current = vouchersRef.current.filter(x => x.id !== v.id);
+        setVouchersState(prev => prev.filter(x => x.id !== v.id));
+      } });
     }
     return newMember;
   }, [society.financialYear]);
