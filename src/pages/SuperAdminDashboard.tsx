@@ -100,6 +100,12 @@ const SuperAdminDashboard: React.FC = () => {
   });
   const [saving, setSaving] = useState(false);
 
+  // ── Runtime error log (P0-2 in-app viewer) ──────────────────────────────────
+  type ErrorRow = { id: string; created_at: string; source: string; message: string; url: string | null; society_id: string | null; actor_name: string | null };
+  const [errors, setErrors] = useState<ErrorRow[]>([]);
+  const [errorsLoaded, setErrorsLoaded] = useState(false);
+  const [errorsLoading, setErrorsLoading] = useState(false);
+
   // ── Load all societies ─────────────────────────────────────────────────────
   const loadSocieties = useCallback(async () => {
     setLoading(true);
@@ -140,6 +146,23 @@ const SuperAdminDashboard: React.FC = () => {
   }, [toast]);
 
   useEffect(() => { loadSocieties(); }, [loadSocieties]);
+
+  // Lazy-loaded when the Errors tab is first opened (or via its Refresh button), so an ordinary
+  // dashboard visit doesn't hit the error_log RPC. Gated server-side by is_platform_admin().
+  const loadErrors = useCallback(async () => {
+    setErrorsLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('get_error_log', { p_limit: 100 });
+      if (error) throw error;
+      setErrors((data ?? []) as ErrorRow[]);
+      setErrorsLoaded(true);
+    } catch (err) {
+      console.error('Failed to load error log:', err);
+      toast({ title: 'Error loading error log', variant: 'destructive' });
+    } finally {
+      setErrorsLoading(false);
+    }
+  }, [toast]);
 
   // ── Stats ──────────────────────────────────────────────────────────────────
   const stats = {
@@ -259,7 +282,7 @@ const SuperAdminDashboard: React.FC = () => {
         ))}
       </div>
 
-      <Tabs defaultValue="societies">
+      <Tabs defaultValue="societies" onValueChange={(v) => { if (v === 'errors' && !errorsLoaded) loadErrors(); }}>
         <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="societies" className="gap-2">
             <Building2 className="h-4 w-4" /> All Societies
@@ -269,6 +292,9 @@ const SuperAdminDashboard: React.FC = () => {
           </TabsTrigger>
           <TabsTrigger value="stats" className="gap-2">
             <BarChart3 className="h-4 w-4" /> Stats
+          </TabsTrigger>
+          <TabsTrigger value="errors" className="gap-2">
+            <AlertTriangle className="h-4 w-4" /> Errors
           </TabsTrigger>
         </TabsList>
 
@@ -475,6 +501,49 @@ const SuperAdminDashboard: React.FC = () => {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+        {/* ── Errors Tab (P0-2 in-app viewer) ─────────────────────────────── */}
+        <TabsContent value="errors" className="mt-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm text-gray-500">
+              Recent runtime errors captured across all societies (newest first, max 100).
+            </p>
+            <Button size="sm" variant="outline" className="gap-2 h-8 shrink-0" onClick={loadErrors} disabled={errorsLoading}>
+              <RefreshCw className={`h-3.5 w-3.5 ${errorsLoading ? 'animate-spin' : ''}`} /> Refresh
+            </Button>
+          </div>
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="whitespace-nowrap">Time</TableHead>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Society</TableHead>
+                      <TableHead>Message</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {errors.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-sm text-gray-400 py-8">
+                          {errorsLoading ? 'Loading…' : errorsLoaded ? 'No errors logged 🎉' : 'Open this tab to load'}
+                        </TableCell>
+                      </TableRow>
+                    ) : errors.map(e => (
+                      <TableRow key={e.id}>
+                        <TableCell className="whitespace-nowrap text-xs text-gray-500">{new Date(e.created_at).toLocaleString()}</TableCell>
+                        <TableCell className="text-xs"><code className="px-1 py-0.5 bg-gray-100 rounded">{e.source}</code></TableCell>
+                        <TableCell className="text-xs text-gray-500">{e.society_id ?? '—'}</TableCell>
+                        <TableCell className="text-xs max-w-md truncate" title={e.message}>{e.message}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
