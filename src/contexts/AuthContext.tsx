@@ -351,8 +351,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     //    verified a PLAINTEXT password, and — having no JWT — the cross-tenant super-admin RPCs it
     //    unlocked ran as anon. Platform admins now sign in only via path 1 (real signInWithPassword
     //    → JWT), and checkSuperAdmin() derives from the verified session via is_platform_admin().
-    //    Migration 020 gates those RPCs + revokes the anon EXECUTE grant. Slice S4 drops the
-    //    verify_platform_admin RPC and the plaintext platform_admins.password column.
+    //    Migration 020 gates those RPCs + revokes the anon EXECUTE grant; migration 022 (S4) dropped
+    //    the verify_platform_admin RPC and the plaintext platform_admins.password column entirely.
     //    See docs/architecture/SUPER-ADMIN-AUTH-HARDENING.md.
 
     // 3. (RETIRED — P1-SEC-4) The legacy JWT-less app_login RPC path was removed.
