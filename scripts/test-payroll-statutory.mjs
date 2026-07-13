@@ -1,27 +1,39 @@
-// Payroll statutory engine (ECR-14 — PF/ESI/PT/TDS) — mirrors src/lib/payrollStatutory.ts.
+// Payroll statutory engine (ECR-14 — PF/ESI/PT/TDS).
+// Imports the REAL src/lib/payrollStatutory.ts (which imports @/lib/money) via an '@/'-resolving
+// loader — this test guards the actual engine, not a mirror copy of it.
 // Run: node scripts/test-payroll-statutory.mjs
 
-const r2 = (n) => Math.round(n * 100) / 100;
-const PF_CEILING = 15000, ESI_THRESHOLD = 21000;
-function computeStatutory(input) {
-  const pfCeiling = input.pfCeiling ?? PF_CEILING;
-  const esiThreshold = input.esiThreshold ?? ESI_THRESHOLD;
-  const basic = Math.max(0, input.basic || 0);
-  const allowances = Math.max(0, input.allowances || 0);
-  const gross = r2(basic + allowances);
-  const pfWage = Math.min(basic, pfCeiling);
-  const pfEmployee = input.pfApplicable ? r2(0.12 * pfWage) : 0;
-  const pfEmployer = input.pfApplicable ? r2(0.13 * pfWage) : 0;
-  const esiEligible = !!input.esiApplicable && gross > 0 && gross <= esiThreshold;
-  const esiEmployee = esiEligible ? r2(0.0075 * gross) : 0;
-  const esiEmployer = esiEligible ? r2(0.0325 * gross) : 0;
-  const pt = r2(Math.max(0, input.pt || 0));
-  const tds = r2(Math.max(0, input.tds || 0));
-  const totalEmployeeDeductions = r2(pfEmployee + esiEmployee + pt + tds);
-  const employerContributions = r2(pfEmployer + esiEmployer);
-  const netSalary = r2(gross - totalEmployeeDeductions);
-  return { gross, pfEmployee, pfEmployer, esiEligible, esiEmployee, esiEmployer, pt, tds, totalEmployeeDeductions, employerContributions, netSalary };
-}
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { computeStatutory } = await import(abs('../src/lib/payrollStatutory.ts'));
+const r2 = (n) => Math.round(n * 100) / 100; // for assertion comparisons only
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -58,6 +70,15 @@ ok(r2(d.gross + d.employerContributions) === r2(allCredits), 'accrual balances: 
 // 7. Guards: negative inputs clamped.
 const e = computeStatutory({ basic: -5000, allowances: -100, pfApplicable: true, esiApplicable: true });
 ok(e.gross === 0 && e.pfEmployee === 0 && e.netSalary === 0, 'negative inputs clamped to 0');
+
+// 8. T-02 born-exact: PF/ESI via applyPercent + minor-unit sums — deductions & net reconcile
+//    to the paisa (compared in integer paise to avoid float-equality noise).
+const p = (r) => Math.round(r * 100);
+const g = computeStatutory({ basic: 15007, allowances: 2000, pfApplicable: true, esiApplicable: true, pt: 200 });
+ok(g.esiEligible, 'ESI eligible (gross ₹17007 ≤ 21000)');
+ok(p(g.pfEmployee) + p(g.esiEmployee) + p(g.pt) + p(g.tds) === p(g.totalEmployeeDeductions), 'deductions = PF + ESI + PT + TDS exactly (integer paise)');
+ok(p(g.gross) - p(g.totalEmployeeDeductions) === p(g.netSalary), 'netSalary = gross − deductions to the paisa');
+ok(p(g.pfEmployer) + p(g.esiEmployer) === p(g.employerContributions), 'employer contributions sum exactly');
 
 console.log(`\nPayroll statutory (pure): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
