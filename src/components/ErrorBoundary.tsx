@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { reportError } from '@/lib/errorReporting';
 
 interface Props {
   children: React.ReactNode;
@@ -22,6 +23,8 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('Page crash caught by ErrorBoundary:', error, info.componentStack);
+    // Durable, off-device report so a page crash is visible to operators, not just in console.
+    reportError('error-boundary', error, { componentStack: info.componentStack, url: typeof window !== 'undefined' ? window.location?.href : undefined });
   }
 
   render() {
