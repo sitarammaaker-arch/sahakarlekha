@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import type {
@@ -6312,47 +6312,99 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return links;
   }, [stockMovements]); // eslint-disable-line
 
+  // Perf (audit P0): the context value used to be an inline object literal, so EVERY re-render of
+  // this provider — including ones where no data changed (navigation, theme toggle, a parent
+  // re-render) — built a fresh value and re-rendered all ~135 consumers for nothing. Memoize it.
+  // Every function in the value is already useCallback-stable and every data field is useState, so
+  // the memo only rebuilds when a real field changes. getLedgerEvents was the sole inline arrow —
+  // useCallback it so the memo can hold a stable identity. NOTE: this does NOT stop a genuine
+  // mutation from re-rendering consumers (one field changing ⇒ new value) — that needs a context
+  // split / selector, tracked separately. Deps mirror the value object exactly (exhaustive, so a
+  // changed field is never missed and the value can never go stale).
+  const getLedgerEvents = useCallback(() => [...ledgerEventsRef.current], []);
+
+  const contextValue = useMemo<DataContextType>(() => ({
+    branches, activeBranchId, setActiveBranch, addBranch, updateBranch, deleteBranch, transferBetweenBranches, matchesActiveBranch, isBranchRestricted,
+    godowns, activeGodownId, setActiveGodown, addGodown, updateGodown, deleteGodown,
+    vouchers, members, accounts, society, loans, assets, auditObjections,
+    depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,
+    markComplianceFiled, unmarkComplianceFiled, getComplianceFiledIds,
+    stockItems, stockMovements, sales, purchases, employees, salaryRecords,
+    suppliers, customers, kccLoans, societyCapabilities, setCapabilityHidden,
+    procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
+    procurementQualityTests, procurementMoistureRecords, recordQualityInspection,
+    procurementJForms, generateJForm,
+    procurementFinancialIntents, generateFinancialIntent,
+    procurementPostingRequests, generatePostingRequest,
+    procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
+    procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
+    recordFarmerPayment,
+    addVoucher, updateVoucher, cancelVoucher, reverseVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
+    addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
+    workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
+    musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
+    addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
+    addLoan, updateLoan, deleteLoan,
+    addAsset, updateAsset, disposeAsset, deleteAsset, postDepreciation,
+    addAuditObjection, updateAuditObjection, deleteAuditObjection,
+    recoverables, addRecoverable, updateRecoverable, deleteRecoverable,
+    kachiAaratEntries, addKachiAaratEntry, updateKachiAaratEntry, deleteKachiAaratEntry,
+    p7Entries, upsertP7Entry, deleteP7Entry,
+    addStockItem, updateStockItem, deleteStockItem, addStockMovement, transferStock,
+    addSale, updateSale, deleteSale, addBillReceipt, addBillPayment,
+    addPurchase, updatePurchase, deletePurchase,
+    addEmployee, updateEmployee, deleteEmployee,
+    addSalaryRecord, updateSalaryRecord, deleteSalaryRecord,
+    addSupplier, updateSupplier, deleteSupplier,
+    addCustomer, updateCustomer, deleteCustomer,
+    getAccountBalance, getShareCapitalReconciliation, getAssetRegisterReconciliation, getCashBookEntries, getBankBookEntries,
+    getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments, postClosingStock, recordFundUtilisation,
+    getLedgerEvents,
+    getEntityLinks,
+    isLoading,
+  }), [
+    branches, activeBranchId, setActiveBranch, addBranch, updateBranch, deleteBranch, transferBetweenBranches, matchesActiveBranch, isBranchRestricted,
+    godowns, activeGodownId, setActiveGodown, addGodown, updateGodown, deleteGodown,
+    vouchers, members, accounts, society, loans, assets, auditObjections,
+    depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,
+    markComplianceFiled, unmarkComplianceFiled, getComplianceFiledIds,
+    stockItems, stockMovements, sales, purchases, employees, salaryRecords,
+    suppliers, customers, kccLoans, societyCapabilities, setCapabilityHidden,
+    procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
+    procurementQualityTests, procurementMoistureRecords, recordQualityInspection,
+    procurementJForms, generateJForm,
+    procurementFinancialIntents, generateFinancialIntent,
+    procurementPostingRequests, generatePostingRequest,
+    procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
+    procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
+    recordFarmerPayment,
+    addVoucher, updateVoucher, cancelVoucher, reverseVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
+    addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
+    workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
+    musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
+    addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
+    addLoan, updateLoan, deleteLoan,
+    addAsset, updateAsset, disposeAsset, deleteAsset, postDepreciation,
+    addAuditObjection, updateAuditObjection, deleteAuditObjection,
+    recoverables, addRecoverable, updateRecoverable, deleteRecoverable,
+    kachiAaratEntries, addKachiAaratEntry, updateKachiAaratEntry, deleteKachiAaratEntry,
+    p7Entries, upsertP7Entry, deleteP7Entry,
+    addStockItem, updateStockItem, deleteStockItem, addStockMovement, transferStock,
+    addSale, updateSale, deleteSale, addBillReceipt, addBillPayment,
+    addPurchase, updatePurchase, deletePurchase,
+    addEmployee, updateEmployee, deleteEmployee,
+    addSalaryRecord, updateSalaryRecord, deleteSalaryRecord,
+    addSupplier, updateSupplier, deleteSupplier,
+    addCustomer, updateCustomer, deleteCustomer,
+    getAccountBalance, getShareCapitalReconciliation, getAssetRegisterReconciliation, getCashBookEntries, getBankBookEntries,
+    getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments, postClosingStock, recordFundUtilisation,
+    getLedgerEvents,
+    getEntityLinks,
+    isLoading,
+  ]);
+
   return (
-    <DataContext.Provider value={{
-      branches, activeBranchId, setActiveBranch, addBranch, updateBranch, deleteBranch, transferBetweenBranches, matchesActiveBranch, isBranchRestricted,
-      godowns, activeGodownId, setActiveGodown, addGodown, updateGodown, deleteGodown,
-      vouchers, members, accounts, society, loans, assets, auditObjections,
-      depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,
-      markComplianceFiled, unmarkComplianceFiled, getComplianceFiledIds,
-      stockItems, stockMovements, sales, purchases, employees, salaryRecords,
-      suppliers, customers, kccLoans, societyCapabilities, setCapabilityHidden,
-      procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
-      procurementQualityTests, procurementMoistureRecords, recordQualityInspection,
-      procurementJForms, generateJForm,
-      procurementFinancialIntents, generateFinancialIntent,
-      procurementPostingRequests, generatePostingRequest,
-      procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
-      procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
-      recordFarmerPayment,
-      addVoucher, updateVoucher, cancelVoucher, reverseVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
-      addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
-      workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
-      musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
-      addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
-      addLoan, updateLoan, deleteLoan,
-      addAsset, updateAsset, disposeAsset, deleteAsset, postDepreciation,
-      addAuditObjection, updateAuditObjection, deleteAuditObjection,
-      recoverables, addRecoverable, updateRecoverable, deleteRecoverable,
-      kachiAaratEntries, addKachiAaratEntry, updateKachiAaratEntry, deleteKachiAaratEntry,
-      p7Entries, upsertP7Entry, deleteP7Entry,
-      addStockItem, updateStockItem, deleteStockItem, addStockMovement, transferStock,
-      addSale, updateSale, deleteSale, addBillReceipt, addBillPayment,
-      addPurchase, updatePurchase, deletePurchase,
-      addEmployee, updateEmployee, deleteEmployee,
-      addSalaryRecord, updateSalaryRecord, deleteSalaryRecord,
-      addSupplier, updateSupplier, deleteSupplier,
-      addCustomer, updateCustomer, deleteCustomer,
-      getAccountBalance, getShareCapitalReconciliation, getAssetRegisterReconciliation, getCashBookEntries, getBankBookEntries,
-      getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments, postClosingStock, recordFundUtilisation,
-      getLedgerEvents: () => [...ledgerEventsRef.current],
-      getEntityLinks,
-      isLoading,
-    }}>
+    <DataContext.Provider value={contextValue}>
       {children}
     </DataContext.Provider>
   );
