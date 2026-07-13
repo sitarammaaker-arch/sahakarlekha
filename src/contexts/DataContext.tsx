@@ -4011,19 +4011,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // only this COMPUTE is minor-unit. Values return as rupees in the same shape — correct
     // data yields identical numbers, drifty data is now exact.
     const accountIds = new Set(accounts.filter(a => !a.isGroup).map(a => a.id));
+
+    // Single pass over vouchers×lines: accumulate Dr/Cr per accountId ONCE. This was
+    // O(accounts×vouchers×lines) — every account re-scanned the whole voucher set — and is now
+    // O(vouchers×lines + accounts). The sums are identical: addMinor is exact integer paise and
+    // order-independent, and both known and orphan legs land in the same map (split out below).
+    const txnByAccount = new Map<string, { dr: Minor; cr: Minor }>();
+    vouchersToUse.forEach(v => {
+      getVoucherLines(v).forEach(l => {
+        let bucket = txnByAccount.get(l.accountId);
+        if (!bucket) { bucket = { dr: 0, cr: 0 }; txnByAccount.set(l.accountId, bucket); }
+        if (l.type === 'Dr') bucket.dr = addMinor(bucket.dr, toMinor(Number(l.amount) || 0));
+        else bucket.cr = addMinor(bucket.cr, toMinor(Number(l.amount) || 0));
+      });
+    });
+
     const results = accounts.filter(a => !a.isGroup).map(account => {
       const openingDebitMinor = account.openingBalanceType === 'debit' ? toMinor(Number(account.openingBalance) || 0) : 0;
       const openingCreditMinor = account.openingBalanceType === 'credit' ? toMinor(Number(account.openingBalance) || 0) : 0;
-      let txnDebitMinor: Minor = 0;
-      let txnCreditMinor: Minor = 0;
-      vouchersToUse.forEach(v => {
-        getVoucherLines(v).forEach(l => {
-          if (l.accountId === account.id) {
-            if (l.type === 'Dr') txnDebitMinor = addMinor(txnDebitMinor, toMinor(Number(l.amount) || 0));
-            else txnCreditMinor = addMinor(txnCreditMinor, toMinor(Number(l.amount) || 0));
-          }
-        });
-      });
+      const txn = txnByAccount.get(account.id);
+      const txnDebitMinor: Minor = txn ? txn.dr : 0;
+      const txnCreditMinor: Minor = txn ? txn.cr : 0;
       const totalDebitMinor = addMinor(openingDebitMinor, txnDebitMinor);
       const totalCreditMinor = addMinor(openingCreditMinor, txnCreditMinor);
       return {
@@ -4038,16 +4046,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       };
     });
 
-    // Detect orphaned transactions (voucher lines referencing deleted/missing accounts)
+    // Orphaned transactions (legs referencing deleted/missing accounts) — read straight from the map.
     const orphanMap: Record<string, { dr: Minor; cr: Minor }> = {};
-    vouchersToUse.forEach(v => {
-      getVoucherLines(v).forEach(l => {
-        if (!accountIds.has(l.accountId)) {
-          if (!orphanMap[l.accountId]) orphanMap[l.accountId] = { dr: 0, cr: 0 };
-          if (l.type === 'Dr') orphanMap[l.accountId].dr = addMinor(orphanMap[l.accountId].dr, toMinor(Number(l.amount) || 0));
-          else orphanMap[l.accountId].cr = addMinor(orphanMap[l.accountId].cr, toMinor(Number(l.amount) || 0));
-        }
-      });
+    txnByAccount.forEach((bucket, id) => {
+      if (!accountIds.has(id)) orphanMap[id] = bucket;
     });
     // Add orphaned accounts as synthetic entries so TB can balance
     Object.entries(orphanMap).forEach(([id, { dr, cr }]) => {
