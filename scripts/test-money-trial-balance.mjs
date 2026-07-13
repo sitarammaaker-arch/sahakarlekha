@@ -109,5 +109,19 @@ const p_expenses = [{ amount: 1333.00 }];
 const np = toRupees(subMinor(sumItemsMinor(p_income), sumItemsMinor(p_expenses)));
 ok(np === 2000, `P&L Net Profit = exactly ₹2000.00 (got ${np})`);
 
+// ── 8. SIGNED ACCOUNT BALANCE (getAccountBalance / R&P closingFor) is drift-free ──
+// balance = opening + Σ(Dr − Cr), summed in paise. 1000 alternating ±₹0.01 legs net to 0.
+function signedBalMinor(openingRupees, legs) {
+  let b = toMinor(openingRupees);
+  for (const l of legs) { const m = toMinor(Number(l.amount) || 0); b = addMinor(b, l.type === 'Dr' ? m : -m); }
+  return b;
+}
+const alt = [];
+for (let i = 0; i < 1000; i++) { alt.push({ type: 'Dr', amount: 0.01 }); alt.push({ type: 'Cr', amount: 0.01 }); }
+ok(signedBalMinor(0, alt) === 0, 'signed balance: 1000×Dr₹0.01 + 1000×Cr₹0.01 net to EXACTLY 0 (float drifts)');
+ok(toRupees(signedBalMinor(500.50, [{ type: 'Dr', amount: 100.25 }, { type: 'Cr', amount: 50.75 }])) === 550, 'opening 500.50 + Dr 100.25 − Cr 50.75 = ₹550.00');
+// R&P per-account receipt/payment accumulation (sum in paise) is exact too.
+ok(toRupees(sumMinor([toMinor(33.33), toMinor(33.33), toMinor(33.34)])) === 100, 'R&P per-account receipt sum: three legs → exactly ₹100');
+
 console.log(`\nTrial-balance money precision: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

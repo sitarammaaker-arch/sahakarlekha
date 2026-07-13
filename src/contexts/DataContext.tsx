@@ -3757,13 +3757,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getAccountBalance = useCallback((accountId: string): number => {
     const account = accounts.find(a => a.id === accountId);
     if (!account) return 0;
-    let balance = account.openingBalanceType === 'debit' ? account.openingBalance : -account.openingBalance;
+    // T-02: signed balance (opening + Dr − Cr legs) summed in exact integer paise, so it can't
+    // drift over many legs (RULE 2). Returns rupees, unchanged shape.
+    const opening = account.openingBalanceType === 'debit' ? (Number(account.openingBalance) || 0) : -(Number(account.openingBalance) || 0);
+    let balMinor = toMinor(opening);
     activeVouchers.forEach(v => {
       getVoucherLines(v).forEach(l => {
-        if (l.accountId === accountId) balance += l.type === 'Dr' ? l.amount : -l.amount;
+        if (l.accountId === accountId) {
+          const legMinor = toMinor(Number(l.amount) || 0);
+          balMinor = addMinor(balMinor, l.type === 'Dr' ? legMinor : -legMinor);
+        }
       });
     });
-    return balance;
+    return toRupees(balMinor);
   }, [accounts, activeVouchers]);
 
   // P0 #4 / ECR-05 (MS-03): detect drift between the member scalar (subsidiary) and the
@@ -4338,8 +4344,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // a raw openingBalance showed an overdraft opening as a positive receipt (Audit #5).
     const signedOpening = (acc?: LedgerAccount) =>
       acc ? (acc.openingBalanceType === 'debit' ? acc.openingBalance : -acc.openingBalance) : 0;
-    const openingCash = signedOpening(cashAccount);
-    const openingBank = bankIds.reduce((sum, bid) => sum + signedOpening(accounts.find(a => a.id === bid)), 0);
+    // T-02: opening + every R&P sum in exact integer paise.
+    const openingCash = toRupees(toMinor(signedOpening(cashAccount)));
+    const openingBank = toRupees(bankIds.reduce((sum, bid) => addMinor(sum, toMinor(signedOpening(accounts.find(a => a.id === bid)))), 0));
 
     // ── Audit C-11/C-12: classify each R&P line by GL-head type and Capital/Revenue ──
     // NCDC Annexure VII: a Receipts & Payments Account must distinguish CAPITAL
@@ -4396,34 +4403,38 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const nameHi = otherAcc?.nameHi || name;
         if (l.type === 'Cr') {
           if (!receiptMap[l.accountId]) receiptMap[l.accountId] = { name, nameHi, amount: 0, nature: natureOf(l.accountId), glType: glTypeOf(l.accountId) };
-          receiptMap[l.accountId].amount += l.amount;
+          receiptMap[l.accountId].amount = addMinor(receiptMap[l.accountId].amount, toMinor(Number(l.amount) || 0)); // paise; → rupees at return
         } else {
           if (!paymentMap[l.accountId]) paymentMap[l.accountId] = { name, nameHi, amount: 0, nature: natureOf(l.accountId), glType: glTypeOf(l.accountId) };
-          paymentMap[l.accountId].amount += l.amount;
+          paymentMap[l.accountId].amount = addMinor(paymentMap[l.accountId].amount, toMinor(Number(l.amount) || 0)); // paise; → rupees at return
         }
       });
     });
 
     // M15: Compute closing balances honoring asOnDate (instead of always-current getAccountBalance).
-    const closingFor = (accId: string): number => {
+    const closingMinorFor = (accId: string): number => {
       const acc = accounts.find(a => a.id === accId);
       if (!acc) return 0;
-      let bal = acc.openingBalanceType === 'debit' ? acc.openingBalance : -acc.openingBalance;
+      const opening = acc.openingBalanceType === 'debit' ? (Number(acc.openingBalance) || 0) : -(Number(acc.openingBalance) || 0);
+      let balMinor = toMinor(opening);
       vouchersToUse.forEach(v => {
         getVoucherLines(v).forEach(l => {
-          if (l.accountId === accId) bal += l.type === 'Dr' ? l.amount : -l.amount;
+          if (l.accountId === accId) {
+            const legMinor = toMinor(Number(l.amount) || 0);
+            balMinor = addMinor(balMinor, l.type === 'Dr' ? legMinor : -legMinor);
+          }
         });
       });
-      return bal;
+      return balMinor;
     };
-    const closingCash = closingFor(ACCOUNT_IDS.CASH);
-    const closingBank = bankIds.reduce((sum, bid) => sum + closingFor(bid), 0);
+    const closingCash = toRupees(closingMinorFor(ACCOUNT_IDS.CASH));
+    const closingBank = toRupees(bankIds.reduce((sum, bid) => addMinor(sum, closingMinorFor(bid)), 0));
 
     return {
       openingCash,
       openingBank,
-      receipts: Object.entries(receiptMap).map(([id, v]) => ({ accountId: id, accountName: v.name, accountNameHi: v.nameHi || v.name, amount: v.amount, nature: v.nature, glType: v.glType })),
-      payments: Object.entries(paymentMap).map(([id, v]) => ({ accountId: id, accountName: v.name, accountNameHi: v.nameHi || v.name, amount: v.amount, nature: v.nature, glType: v.glType })),
+      receipts: Object.entries(receiptMap).map(([id, v]) => ({ accountId: id, accountName: v.name, accountNameHi: v.nameHi || v.name, amount: toRupees(v.amount), nature: v.nature, glType: v.glType })),
+      payments: Object.entries(paymentMap).map(([id, v]) => ({ accountId: id, accountName: v.name, accountNameHi: v.nameHi || v.name, amount: toRupees(v.amount), nature: v.nature, glType: v.glType })),
       closingCash,
       closingBank,
     };
