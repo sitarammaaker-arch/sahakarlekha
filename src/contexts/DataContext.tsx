@@ -3212,10 +3212,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, []);
 
+  // RULE-1: optimistic + rollback. society_settings writes are admin-only at the RLS layer
+  // (is_society_admin), so a non-admin's save is REJECTED by the DB — we must restore local
+  // state (not just toast) or the change would silently diverge and vanish on refresh.
   const updateSociety = useCallback((data: Partial<SocietySettings>) => {
     setSocietyState(prev => {
+      const rollback = prev;
       const updated = { ...prev, ...data };
-      supabase.from('society_settings').upsert({ id: societyIdRef.current, society_id: societyIdRef.current, ...updated }).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+      const failToast = (msg: string) => toastRef.current({ title: 'सेटिंग सेव नहीं हुई', description: `Cloud save fail — refresh par badlav nahi rahega. Society settings sirf admin badal sakta hai. (${msg})`, variant: 'destructive', duration: 12000 });
+      supabase.from('society_settings').upsert({ id: societyIdRef.current, society_id: societyIdRef.current, ...updated }).then(
+        ({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); setSocietyState(rollback); failToast(error.message); } },
+        () => { setSocietyState(rollback); failToast('network'); },
+      );
       return updated;
     });
   }, []);
