@@ -288,19 +288,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const generateRecoveryCodes = useCallback(async (code: string): Promise<string[] | null> => {
     if (!user) return null;
     try {
-      const { data, error } = await supabase.rpc('app_mfa_gen_recovery', { p_email: user.email, p_code: code });
+      const { data, error } = isSuperAdmin
+        ? await supabase.rpc('platform_admin_mfa_gen_recovery', { p_code: code })
+        : await supabase.rpc('app_mfa_gen_recovery', { p_email: user.email, p_code: code });
       if (error || !Array.isArray(data)) return null;
       return data as string[];
     } catch {
       return null;
     }
-  }, [user]);
+  }, [user, isSuperAdmin]);
 
   const verifyRecoveryCode = useCallback(async (code: string): Promise<boolean> => {
     const pending = pendingMfaRef.current;
     if (!pending) return false;
     try {
-      const { data, error } = await supabase.rpc('app_verify_recovery', { p_email: pending.user.email, p_code: code });
+      const { data, error } = pending.user.societyId === 'PLATFORM'
+        ? await supabase.rpc('platform_admin_verify_recovery', { p_code: code })
+        : await supabase.rpc('app_verify_recovery', { p_email: pending.user.email, p_code: code });
       if (error || data !== true) return false;
     } catch {
       return false;
