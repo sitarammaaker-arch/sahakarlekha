@@ -31,3 +31,34 @@ export function settlementTypedColumns(
     ...moneyColumns('amountPaid', stl.amountPaid),
   };
 }
+
+// ── Dual-read (T-05, slice 2): prefer the typed columns; fall back to the JSONB ──────
+
+export interface Money { amount: number; currency: string }
+
+/** Reconstruct a Money object, PREFERRING the typed column pair (integer paise → rupees) and
+ *  falling back to the retained JSONB object when the typed value is absent (e.g. a row that
+ *  predates the backfill). Behaviour-preserving: a backfilled/dual-written row yields the same
+ *  value, now sourced from the typed column. */
+export function moneyFromTyped(
+  amountMinor: number | null | undefined,
+  currency: string | null | undefined,
+  jsonbFallback: MoneyLike | null | undefined,
+): Money {
+  if (amountMinor !== null && amountMinor !== undefined) {
+    return { amount: (Number(amountMinor) || 0) / 100, currency: currency || 'INR' };
+  }
+  return { amount: Number(jsonbFallback?.amount) || 0, currency: jsonbFallback?.currency || 'INR' };
+}
+
+/** Hydrate a raw procurement_settlements DB row: gross / netPayable / amountPaid read from the
+ *  typed columns, JSONB as fallback. Returns the row with those three fields as Money objects. */
+export function hydrateSettlement<T extends Record<string, unknown>>(row: T): T {
+  const r = row as Record<string, unknown>;
+  return {
+    ...row,
+    gross: moneyFromTyped(r.grossAmountMinor as number, r.grossCurrency as string, r.gross as MoneyLike),
+    netPayable: moneyFromTyped(r.netPayableAmountMinor as number, r.netPayableCurrency as string, r.netPayable as MoneyLike),
+    amountPaid: moneyFromTyped(r.amountPaidAmountMinor as number, r.amountPaidCurrency as string, r.amountPaid as MoneyLike),
+  } as T;
+}

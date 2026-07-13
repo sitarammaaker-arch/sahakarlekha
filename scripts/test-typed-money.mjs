@@ -33,7 +33,7 @@ register(
     `),
 );
 
-const { moneyColumns, settlementTypedColumns } = await import(abs('../src/lib/typedMoney.ts'));
+const { moneyColumns, settlementTypedColumns, moneyFromTyped, hydrateSettlement } = await import(abs('../src/lib/typedMoney.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -58,6 +58,25 @@ ok(cols.grossCurrency === 'INR' && cols.netPayableCurrency === 'INR' && cols.amo
 ok(Object.keys(cols).length === 6, 'exactly 6 typed columns (3 money objects × amount+currency)');
 // A draft settlement with only gross set → the others degrade to 0/INR (never throw).
 ok(settlementTypedColumns({ gross: { amount: 500, currency: 'INR' } }).netPayableAmountMinor === 0, 'unset netPayable → 0 paise');
+
+// ── dual-read: prefer typed columns, fall back to JSONB (moneyFromTyped / hydrateSettlement) ──
+ok(eq(moneyFromTyped(123456, 'INR', null), { amount: 1234.56, currency: 'INR' }), 'typed 123456 paise → ₹1234.56');
+ok(eq(moneyFromTyped(null, null, { amount: 900, currency: 'INR' }), { amount: 900, currency: 'INR' }), 'no typed value → falls back to the JSONB object');
+ok(eq(moneyFromTyped(undefined, undefined, { amount: 50, currency: 'INR' }), { amount: 50, currency: 'INR' }), 'undefined typed → JSONB fallback');
+ok(eq(moneyFromTyped(0, 'INR', { amount: 999, currency: 'INR' }), { amount: 0, currency: 'INR' }), 'typed 0 is honoured (not treated as absent)');
+
+// hydrateSettlement PREFERS the typed columns over the stale JSONB.
+const hydrated = hydrateSettlement({
+  id: 's1', status: 'draft',
+  grossAmountMinor: 100000, grossCurrency: 'INR', gross: { amount: 999, currency: 'INR' },
+  netPayableAmountMinor: 90000, netPayableCurrency: 'INR', netPayable: { amount: 111, currency: 'INR' },
+  amountPaidAmountMinor: 10000, amountPaidCurrency: 'INR', amountPaid: { amount: 222, currency: 'INR' },
+});
+ok(hydrated.gross.amount === 1000 && hydrated.netPayable.amount === 900 && hydrated.amountPaid.amount === 100, 'hydrateSettlement reads the TYPED columns (₹1000/900/100), not the stale JSONB');
+ok(hydrated.id === 's1' && hydrated.status === 'draft', 'other fields pass through untouched');
+// A pre-backfill row (no typed columns) still reads from the JSONB.
+const legacy = hydrateSettlement({ id: 's2', gross: { amount: 777, currency: 'INR' }, netPayable: { amount: 700, currency: 'INR' }, amountPaid: { amount: 0, currency: 'INR' } });
+ok(legacy.gross.amount === 777 && legacy.amountPaid.amount === 0, 'legacy row (no typed cols) falls back to JSONB');
 
 console.log(`\nTyped money columns: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

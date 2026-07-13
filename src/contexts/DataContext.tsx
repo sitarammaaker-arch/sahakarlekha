@@ -25,7 +25,7 @@ import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
-import { settlementTypedColumns } from '@/lib/typedMoney';
+import { settlementTypedColumns, hydrateSettlement } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
@@ -829,7 +829,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           () => setProcurementPostingRuleResultsState(storage.getProcurementPostingRuleResults()),
         );
         supabase.from('procurement_settlements').select('*').eq('society_id', sid).then(
-          ({ data, error }) => setProcurementSettlementsState(error || !data ? storage.getProcurementSettlements() : (data as unknown as FarmerSettlement[])),
+          // T-05 dual-read: prefer the typed money columns, JSONB as fallback (hydrateSettlement).
+          ({ data, error }) => setProcurementSettlementsState(error || !data ? storage.getProcurementSettlements() : (data as Record<string, unknown>[]).map(hydrateSettlement) as unknown as FarmerSettlement[]),
           () => setProcurementSettlementsState(storage.getProcurementSettlements()),
         );
         supabase.from('work_orders').select('*').eq('society_id', sid).then(
