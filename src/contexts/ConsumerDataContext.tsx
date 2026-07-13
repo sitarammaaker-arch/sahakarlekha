@@ -103,7 +103,7 @@ interface ConsumerDataContextValue {
 const ConsumerDataContext = createContext<ConsumerDataContextValue | null>(null);
 
 export function ConsumerProvider({ children }: { children: ReactNode }) {
-  const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase, addStockMovement, purchases, suppliers, stockItems } = useData();
+  const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase, deletePurchase, addStockMovement, purchases, suppliers, stockItems } = useData();
   const { user, isSuperAdmin } = useAuth();
   const { capabilities } = useCapabilities(); // T-14: raw set — seed by capability, not type
   const { toast } = useToast();
@@ -472,14 +472,22 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         // ECR-21 Phase 3: record the audit trail when a variance was force-approved.
         ...(blocked ? { varianceStatus: 'approved' as const, varianceReason: data.varianceReason?.trim() || 'Variance approved at goods receipt', varianceApprovedBy: user?.name || 'admin' } : {}),
       };
-      commitPO(next, cur);
+      commitPO(next, cur, () => {
+        // RULE 1/3: the Purchase (invoice + stock + voucher) was already created above. If the PO
+        // status could not be durably saved, undo the whole receipt via the core cascade — else the
+        // invoice stays live while the PO reverts to 'approved', allowing a SECOND receipt (double
+        // purchase + double stock). deletePurchase soft-cancels the vouchers, reverses stock_items and
+        // deletes the stock_movements. (Admin fully cascades; the delete role-gate makes it a no-op for
+        // non-admins, i.e. no worse than before, and PO receipt is an admin/manager flow in practice.)
+        deletePurchase(purchase.id);
+      });
       toastRef.current({ title: `✅ माल प्राप्त — ${purchase.purchaseNo}`, description: blocked ? 'अंतर approve सहित दर्ज' : 'स्टॉक अपडेट + खरीद दर्ज' });
       return purchase;
     } catch (err) {
       toastRef.current({ title: 'माल प्राप्ति दर्ज नहीं हुई', description: err instanceof Error ? err.message : undefined, variant: 'destructive', duration: 10000 });
       return null;
     }
-  }, [purchaseOrders, guardFYLocked, commitPO, addPurchase, user]);
+  }, [purchaseOrders, guardFYLocked, commitPO, addPurchase, deletePurchase, user]);
 
   const cancelPurchaseOrder = useCallback((id: string) => {
     if (guardFYLocked()) return;
