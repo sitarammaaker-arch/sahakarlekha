@@ -10,7 +10,7 @@
  * Pure & deterministic → unit-tested by scripts/test-payroll-statutory.mjs.
  */
 
-const r2 = (n: number) => Math.round(n * 100) / 100;
+import { toMinor, toRupees, addMinor, subMinor, applyPercent } from '@/lib/money';
 
 export const PF_CEILING = 15000;      // EPF wage ceiling (₹/month)
 export const ESI_THRESHOLD = 21000;   // ESI applies when gross ≤ this (₹/month)
@@ -43,24 +43,39 @@ export interface StatutoryResult {
 export function computeStatutory(input: StatutoryInput): StatutoryResult {
   const pfCeiling = input.pfCeiling ?? PF_CEILING;
   const esiThreshold = input.esiThreshold ?? ESI_THRESHOLD;
-  const basic = Math.max(0, input.basic || 0);
-  const allowances = Math.max(0, input.allowances || 0);
-  const gross = r2(basic + allowances);
+  // T-02: every statutory figure born exact in integer paise — PF/ESI via money.applyPercent
+  // (disciplined half-up), sums via addMinor/subMinor. Ceilings, thresholds, eligibility and
+  // the interface are unchanged; only the rounding + accumulation moved to minor units.
+  const basicMinor = toMinor(Math.max(0, Number(input.basic) || 0));
+  const allowMinor = toMinor(Math.max(0, Number(input.allowances) || 0));
+  const grossMinor = addMinor(basicMinor, allowMinor);
 
-  const pfWage = Math.min(basic, pfCeiling);
-  const pfEmployee = input.pfApplicable ? r2(0.12 * pfWage) : 0;
-  const pfEmployer = input.pfApplicable ? r2(0.13 * pfWage) : 0;   // 12% + 1% admin/EDLI
+  const pfWageMinor = Math.min(basicMinor, toMinor(pfCeiling));
+  const pfEmployeeMinor = input.pfApplicable ? applyPercent(pfWageMinor, 12).minor : 0;
+  const pfEmployerMinor = input.pfApplicable ? applyPercent(pfWageMinor, 13).minor : 0;   // 12% + 1% admin/EDLI
 
-  const esiEligible = !!input.esiApplicable && gross > 0 && gross <= esiThreshold;
-  const esiEmployee = esiEligible ? r2(0.0075 * gross) : 0;
-  const esiEmployer = esiEligible ? r2(0.0325 * gross) : 0;
+  const esiEligible = !!input.esiApplicable && grossMinor > 0 && grossMinor <= toMinor(esiThreshold);
+  const esiEmployeeMinor = esiEligible ? applyPercent(grossMinor, 0.75).minor : 0;
+  const esiEmployerMinor = esiEligible ? applyPercent(grossMinor, 3.25).minor : 0;
 
-  const pt = r2(Math.max(0, input.pt || 0));
-  const tds = r2(Math.max(0, input.tds || 0));
+  const ptMinor = toMinor(Math.max(0, Number(input.pt) || 0));
+  const tdsMinor = toMinor(Math.max(0, Number(input.tds) || 0));
 
-  const totalEmployeeDeductions = r2(pfEmployee + esiEmployee + pt + tds);
-  const employerContributions = r2(pfEmployer + esiEmployer);
-  const netSalary = r2(gross - totalEmployeeDeductions);
+  const totalEmployeeDeductionsMinor = addMinor(pfEmployeeMinor, esiEmployeeMinor, ptMinor, tdsMinor);
+  const employerContributionsMinor = addMinor(pfEmployerMinor, esiEmployerMinor);
+  const netSalaryMinor = subMinor(grossMinor, totalEmployeeDeductionsMinor);
 
-  return { gross, pfEmployee, pfEmployer, esiEligible, esiEmployee, esiEmployer, pt, tds, totalEmployeeDeductions, employerContributions, netSalary };
+  return {
+    gross: toRupees(grossMinor),
+    pfEmployee: toRupees(pfEmployeeMinor),
+    pfEmployer: toRupees(pfEmployerMinor),
+    esiEligible,
+    esiEmployee: toRupees(esiEmployeeMinor),
+    esiEmployer: toRupees(esiEmployerMinor),
+    pt: toRupees(ptMinor),
+    tds: toRupees(tdsMinor),
+    totalEmployeeDeductions: toRupees(totalEmployeeDeductionsMinor),
+    employerContributions: toRupees(employerContributionsMinor),
+    netSalary: toRupees(netSalaryMinor),
+  };
 }
