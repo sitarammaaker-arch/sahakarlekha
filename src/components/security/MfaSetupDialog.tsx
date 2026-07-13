@@ -12,6 +12,10 @@ import { ShieldCheck, Copy, Check, KeyRound } from 'lucide-react';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Override the enrolled state (default: the current user's mfaEnabled). The platform-admin
+   *  card passes its own is-enrolled status here, since the platform admin's flag lives in
+   *  platform_admins, not on the society-user `user` object. */
+  enrolled?: boolean;
 }
 
 /**
@@ -20,7 +24,7 @@ interface Props {
  * shown here, then confirms one code. Login is not yet gated on 2FA, so enabling
  * this is safe and reversible.
  */
-export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
+export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange, enrolled: enrolledOverride }) => {
   const { user, enrollMfa, confirmMfa, disableMfa, generateRecoveryCodes } = useAuth();
   const { toast } = useToast();
   const [secret, setSecret] = useState('');
@@ -30,7 +34,7 @@ export const MfaSetupDialog: React.FC<Props> = ({ open, onOpenChange }) => {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
 
-  const enrolled = !!user?.mfaEnabled;
+  const enrolled = enrolledOverride ?? !!user?.mfaEnabled;
 
   // Generate a fresh secret each time the dialog opens for a not-yet-enrolled user.
   useEffect(() => {

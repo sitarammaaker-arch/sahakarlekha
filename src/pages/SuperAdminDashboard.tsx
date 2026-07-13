@@ -29,6 +29,7 @@ import {
   Building2, Shield, Users, CreditCard, RefreshCw, Lock, Unlock,
   AlertTriangle, CheckCircle2, Clock, Search, Edit2, BarChart3, Inbox,
 } from 'lucide-react';
+import { MfaSetupDialog } from '@/components/security/MfaSetupDialog';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -105,6 +106,14 @@ const SuperAdminDashboard: React.FC = () => {
   const [errors, setErrors] = useState<ErrorRow[]>([]);
   const [errorsLoaded, setErrorsLoaded] = useState(false);
   const [errorsLoading, setErrorsLoading] = useState(false);
+
+  // ── Platform-admin 2FA (audit H3, slice A: enroll only — not enforced at login yet) ──────
+  const [mfaEnrolled, setMfaEnrolled] = useState(false);
+  const [mfaOpen, setMfaOpen] = useState(false);
+  const refreshMfaStatus = useCallback(() => {
+    supabase.rpc('platform_admin_mfa_status').then(({ data }) => setMfaEnrolled(data === true), () => {});
+  }, []);
+  useEffect(() => { refreshMfaStatus(); }, [refreshMfaStatus]);
 
   // ── Load all societies ─────────────────────────────────────────────────────
   const loadSocieties = useCallback(async () => {
@@ -255,11 +264,20 @@ const SuperAdminDashboard: React.FC = () => {
               <Inbox className="h-3.5 w-3.5" /> Feedback Inbox
             </Button>
           </Link>
+          <Button variant={mfaEnrolled ? 'outline' : 'default'} size="sm" className="gap-2" onClick={() => setMfaOpen(true)}>
+            <Shield className="h-3.5 w-3.5" /> {mfaEnrolled ? '2FA ✓' : '2FA सेट करें'}
+          </Button>
           <Button variant="outline" size="sm" onClick={loadSocieties} className="gap-2">
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </Button>
         </div>
       </div>
+
+      <MfaSetupDialog
+        open={mfaOpen}
+        enrolled={mfaEnrolled}
+        onOpenChange={(o) => { setMfaOpen(o); if (!o) refreshMfaStatus(); }}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
