@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { fetchAllPaged } from '@/lib/supabasePaging';
 import * as storage from '@/lib/storage';
 import type { Worker, Department, DepartmentBill, DeptBillType, WorkerAdvance, PfEsiRun, LedgerAccount, Voucher } from '@/types';
 
@@ -96,23 +97,23 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setWorkersState([]); setDepartmentsState([]); setDepartmentBillsState([]); setWorkerAdvancesState([]); setPfEsiRunsState([]); return; }
-    supabase.from('workers').select('*').eq('society_id', sid).then(
+    fetchAllPaged<Worker>('workers', sid).then(
       ({ data, error }) => setWorkersState(error || !data ? storage.getWorkers() : (data as unknown as Worker[])),
       () => setWorkersState(storage.getWorkers()),
     );
-    supabase.from('departments').select('*').eq('society_id', sid).then(
+    fetchAllPaged<Department>('departments', sid).then(
       ({ data, error }) => setDepartmentsState(error || !data ? storage.getDepartments() : (data as unknown as Department[])),
       () => setDepartmentsState(storage.getDepartments()),
     );
-    supabase.from('department_bills').select('*').eq('society_id', sid).then(
+    fetchAllPaged<DepartmentBill>('department_bills', sid).then(
       ({ data, error }) => setDepartmentBillsState(error || !data ? storage.getDepartmentBills() : (data as unknown as DepartmentBill[])),
       () => setDepartmentBillsState(storage.getDepartmentBills()),
     );
-    supabase.from('worker_advances').select('*').eq('society_id', sid).then(
+    fetchAllPaged<WorkerAdvance>('worker_advances', sid).then(
       ({ data, error }) => setWorkerAdvancesState(error || !data ? storage.getWorkerAdvances() : (data as unknown as WorkerAdvance[])),
       () => setWorkerAdvancesState(storage.getWorkerAdvances()),
     );
-    supabase.from('pf_esi_runs').select('*').eq('society_id', sid).then(
+    fetchAllPaged<PfEsiRun>('pf_esi_runs', sid).then(
       ({ data, error }) => setPfEsiRunsState(error || !data ? storage.getPfEsiRuns() : (data as unknown as PfEsiRun[])),
       () => setPfEsiRunsState(storage.getPfEsiRuns()),
     );

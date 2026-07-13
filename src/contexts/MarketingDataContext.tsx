@@ -22,6 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { fetchAllPaged } from '@/lib/supabasePaging';
 import { reportError } from '@/lib/errorReporting';
 import * as storage from '@/lib/storage';
 import { pickEffectiveMspRate } from '@/lib/marketing/msp';
@@ -154,7 +155,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setCropsState([]); return; }
-    supabase.from('procurement_crops').select('*').eq('society_id', sid).then(
+    fetchAllPaged<Crop>('procurement_crops', sid).then(
       ({ data, error }) => setCropsState(error || !data ? storage.getProcurementCrops() : (data as Crop[])),
       () => setCropsState(storage.getProcurementCrops()),
     );
@@ -163,7 +164,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setVarietiesState([]); return; }
-    supabase.from('procurement_varieties').select('*').eq('society_id', sid).then(
+    fetchAllPaged<Variety>('procurement_varieties', sid).then(
       ({ data, error }) => setVarietiesState(error || !data ? storage.getProcurementVarieties() : (data as Variety[])),
       () => setVarietiesState(storage.getProcurementVarieties()),
     );
@@ -172,7 +173,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setSeasonsState([]); return; }
-    supabase.from('procurement_seasons').select('*').eq('society_id', sid).then(
+    fetchAllPaged<Season>('procurement_seasons', sid).then(
       ({ data, error }) => setSeasonsState(error || !data ? storage.getProcurementSeasons() : (data as Season[])),
       () => setSeasonsState(storage.getProcurementSeasons()),
     );
@@ -181,7 +182,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setAgenciesState([]); return; }
-    supabase.from('procurement_agencies').select('*').eq('society_id', sid).then(
+    fetchAllPaged<Agency>('procurement_agencies', sid).then(
       ({ data, error }) => setAgenciesState(error || !data ? storage.getProcurementAgencies() : (data as Agency[])),
       () => setAgenciesState(storage.getProcurementAgencies()),
     );
@@ -190,7 +191,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setCentresState([]); return; }
-    supabase.from('procurement_centres').select('*').eq('society_id', sid).then(
+    fetchAllPaged<ProcurementCentre>('procurement_centres', sid).then(
       ({ data, error }) => setCentresState(error || !data ? storage.getProcurementCentres() : (data as ProcurementCentre[])),
       () => setCentresState(storage.getProcurementCentres()),
     );
@@ -199,7 +200,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setMspRatesState([]); return; }
-    supabase.from('procurement_msp_rates').select('*').eq('society_id', sid).then(
+    fetchAllPaged<MSPRate>('procurement_msp_rates', sid).then(
       ({ data, error }) => setMspRatesState(error || !data ? storage.getProcurementMspRates() : (data as MSPRate[])),
       () => setMspRatesState(storage.getProcurementMspRates()),
     );
@@ -208,7 +209,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setDeductionRulesState([]); return; }
-    supabase.from('procurement_deduction_rules').select('*').eq('society_id', sid).then(
+    fetchAllPaged<DeductionRule>('procurement_deduction_rules', sid).then(
       ({ data, error }) => setDeductionRulesState(error || !data ? storage.getProcurementDeductionRules() : (data as DeductionRule[])),
       () => setDeductionRulesState(storage.getProcurementDeductionRules()),
     );
@@ -217,7 +218,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setQualitySpecsState([]); return; }
-    supabase.from('procurement_quality_specs').select('*').eq('society_id', sid).then(
+    fetchAllPaged<QualitySpec>('procurement_quality_specs', sid).then(
       ({ data, error }) => setQualitySpecsState(error || !data ? storage.getProcurementQualitySpecs() : (data as QualitySpec[])),
       () => setQualitySpecsState(storage.getProcurementQualitySpecs()),
     );
@@ -226,7 +227,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setBardanaTypesState([]); return; }
-    supabase.from('procurement_bardana_types').select('*').eq('society_id', sid).then(
+    fetchAllPaged<BardanaType>('procurement_bardana_types', sid).then(
       ({ data, error }) => setBardanaTypesState(error || !data ? storage.getProcurementBardanaTypes() : (data as BardanaType[])),
       () => setBardanaTypesState(storage.getProcurementBardanaTypes()),
     );
@@ -235,7 +236,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setTransportersState([]); return; }
-    supabase.from('marketing_transporters').select('*').eq('society_id', sid).then(
+    fetchAllPaged<Transporter>('marketing_transporters', sid).then(
       ({ data, error }) => setTransportersState(error || !data ? storage.getMarketingTransporters() : (data as Transporter[])),
       () => setTransportersState(storage.getMarketingTransporters()),
     );

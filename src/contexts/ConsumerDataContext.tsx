@@ -19,6 +19,7 @@ import { useData } from '@/contexts/DataContext';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { fetchAllPaged } from '@/lib/supabasePaging';
 import { reportError } from '@/lib/errorReporting';
 import * as storage from '@/lib/storage';
 import { resolveItemPrice } from '@/lib/consumer/pricing';
@@ -133,7 +134,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setPricesState([]); return; }
-    supabase.from('consumer_price_lists').select('*').eq('society_id', sid).then(
+    fetchAllPaged<ConsumerPrice>('consumer_price_lists', sid).then(
       ({ data, error }) => setPricesState(error || !data ? storage.getConsumerPrices() : (data as ConsumerPrice[])),
       () => setPricesState(storage.getConsumerPrices()),
     );
@@ -214,7 +215,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setSalesReturnsState([]); return; }
-    supabase.from('sales_returns').select('*').eq('society_id', sid).then(
+    fetchAllPaged<SalesReturn>('sales_returns', sid).then(
       ({ data, error }) => setSalesReturnsState(error || !data ? storage.getSalesReturns() : (data as SalesReturn[])),
       () => setSalesReturnsState(storage.getSalesReturns()),
     );
@@ -225,7 +226,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setPurchaseReturnsState([]); return; }
-    supabase.from('purchase_returns').select('*').eq('society_id', sid).then(
+    fetchAllPaged<PurchaseReturn>('purchase_returns', sid).then(
       ({ data, error }) => setPurchaseReturnsState(error || !data ? storage.getPurchaseReturns() : (data as PurchaseReturn[])),
       () => setPurchaseReturnsState(storage.getPurchaseReturns()),
     );
@@ -276,7 +277,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setPatronageRunsState([]); return; }
-    supabase.from('consumer_patronage_runs').select('*').eq('society_id', sid).then(
+    fetchAllPaged<PatronageRun>('consumer_patronage_runs', sid).then(
       ({ data, error }) => setPatronageRunsState(error || !data ? storage.getConsumerPatronageRuns() : (data as PatronageRun[])),
       () => setPatronageRunsState(storage.getConsumerPatronageRuns()),
     );
@@ -385,7 +386,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setPOState([]); return; }
-    supabase.from('consumer_purchase_orders').select('*').eq('society_id', sid).then(
+    fetchAllPaged<PurchaseOrder>('consumer_purchase_orders', sid).then(
       ({ data, error }) => setPOState(error || !data ? storage.getConsumerPurchaseOrders() : (data as PurchaseOrder[])),
       () => setPOState(storage.getConsumerPurchaseOrders()),
     );
