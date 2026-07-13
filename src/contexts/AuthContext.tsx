@@ -124,15 +124,17 @@ function restoreSession(): User | null {
   return null;
 }
 
-async function checkSuperAdmin(email: string): Promise<boolean> {
+/** Whether the CURRENTLY AUTHENTICATED caller is a platform super-admin.
+ *  Uses the SECURITY DEFINER `is_platform_admin()` RPC (migration 019), which reads
+ *  RLS-locked `platform_admins` authoritatively and keys on the caller's *verified JWT*
+ *  email — so a direct table read (blocked by RLS) can't make this silently return false,
+ *  and a client can't spoof the email. Requires a live Supabase Auth session (JWT); with
+ *  none, the RPC is unauthorised and this returns false. The legacy `email` argument is
+ *  accepted for call-site compatibility but ignored — the JWT is authoritative. */
+async function checkSuperAdmin(_email?: string): Promise<boolean> {
   try {
-    const { data } = await supabase
-      .from('platform_admins')
-      .select('email')
-      .eq('email', email)
-      .eq('is_active', true)
-      .maybeSingle();
-    return !!data;
+    const { data, error } = await supabase.rpc('is_platform_admin');
+    return !error && data === true;
   } catch {
     return false;
   }
@@ -164,24 +166,44 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Restore Supabase Auth session on mount
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user?.email) {
-        try {
-          const { data } = await supabase
-            .from('society_users')
-            .select('id, name, email, role, society_id, is_active, mfa_enabled, branch_id')
-            .eq('email', session.user.email)
-            .eq('is_active', true)
-            .maybeSingle();
+      const email = session?.user?.email;
+      if (!email) return;
+      try {
+        const { data } = await supabase
+          .from('society_users')
+          .select('id, name, email, role, society_id, is_active, mfa_enabled, branch_id')
+          .eq('email', email)
+          .eq('is_active', true)
+          .maybeSingle();
 
-          if (data) {
-            const u = buildUser(data);
-            setUser(u);
-            setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
-            checkSuperAdmin(u.email).then(setIsSuperAdmin);
-          }
-        } catch {
-          // Supabase unreachable — keep localStorage session
+        if (data) {
+          const u = buildUser(data);
+          setUser(u);
+          setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
+          checkSuperAdmin(u.email).then(setIsSuperAdmin);
+          return;
         }
+
+        // Not a society user — may be a platform super-admin. P0-3: derive this from the
+        // VERIFIED JWT session (is_platform_admin RPC), never from the restored localStorage
+        // flag. A stale/forged localStorage `societyId:'PLATFORM'` is corrected here.
+        const isSA = await checkSuperAdmin(email);
+        if (isSA) {
+          const u: User = {
+            id: session!.user.id,
+            name: session!.user.user_metadata?.name || email.split('@')[0],
+            email,
+            role: 'admin',
+            societyId: 'PLATFORM',
+          };
+          setUser(u);
+          setIsSuperAdmin(true);
+          setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
+        } else {
+          setIsSuperAdmin(false);
+        }
+      } catch {
+        // Supabase unreachable — keep localStorage session
       }
     });
 
@@ -324,7 +346,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Supabase unreachable — fall through
     }
 
-    // 2. Direct platform_admins password check (super admin login)
+    // 2. Direct platform_admins password check (super admin login).
+    //    ⚠️ INSECURE / TRANSITIONAL — this grants super-admin with NO Supabase Auth session
+    //    (JWT-less, localStorage only) and verify_platform_admin compares a PLAINTEXT password.
+    //    Retained for ONE release as a fallback while admins move to path-1 (real signInWithPassword)
+    //    login. Slice S3 removes this path and gates the cross-tenant RPCs; slice S4 drops the RPC +
+    //    the plaintext platform_admins.password column. See docs/architecture/SUPER-ADMIN-AUTH-HARDENING.md.
     try {
       const { data: adminData } = await supabase
         .rpc('verify_platform_admin', { p_email: email, p_password: password })
