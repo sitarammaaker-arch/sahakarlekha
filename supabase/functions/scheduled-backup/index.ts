@@ -25,7 +25,14 @@ const PAGE = 1000;
 // which — before this slice — silently dropped the biggest societies from the weekly backup.
 // Env-overridable so the cap can be raised without a redeploy (Slice 2) and so the failure
 // path can be exercised on an ordinary society by setting it low (e.g. BACKUP_MAX_ROWS=10).
-const MAX_ROWS = Number(Deno.env.get('BACKUP_MAX_ROWS')) || 50_000;
+const MAX_ROWS = Number(Deno.env.get('BACKUP_MAX_ROWS')) || 150_000;
+// Cumulative in-memory budget (raw ndjson bytes) for ONE society's backup. readAllRows holds every
+// table's rows at once and zipSync then assembles the archive in memory, so peak ≈ 2-3× the data.
+// An OOM (or the 150s timeout) crashes the whole Deno isolate and is NOT catchable by the per-society
+// try/catch, so this bounds a society's combined size: once exceeded it fails GRACEFULLY (recorded
+// via recordBackupFailure) instead of OOM-crashing the entire run. Env-tunable. The real fix for very
+// large societies is per-entity streaming (T-27); until then they fail loudly at this budget.
+const MAX_BYTES = Number(Deno.env.get('BACKUP_MAX_BYTES')) || 50 * 1024 * 1024;
 const BUCKET = 'backups';
 // How many tables to read at once. The free tier caps a request at 150s wall-clock, and
 // reading ~87 tables one-at-a-time blows past it. Reading in parallel batches turns ~87
@@ -64,14 +71,38 @@ async function readEntity(supabase: any, entity: any, societyId: string): Promis
   }
 }
 
-/** Read every backup-able table for one society, in parallel batches, into a cache. */
+/** Estimate an entity's in-memory footprint (~its ndjson byte size). The rows are already resident,
+ *  so this only measures them — cheap next to the DB reads — so a society can't silently OOM the run. */
+function estimateBytes(rows: any[]): number {
+  let n = 0;
+  for (const r of rows) n += JSON.stringify(r).length + 1;
+  return n;
+}
+
+/** Read every backup-able table for one society, in parallel batches, into a cache. Between batches it
+ *  tallies the cumulative bytes read and ABORTS once a society's combined data exceeds MAX_BYTES —
+ *  loud + graceful (the throw is recorded by recordBackupFailure) rather than letting the isolate OOM
+ *  and take the whole invocation (and every other society in it) down with no trace. */
 async function readAllRows(supabase: any, societyId: string, entities: any[]): Promise<Record<string, FetchResult>> {
   const cache: Record<string, FetchResult> = {};
+  let totalBytes = 0;
   for (let i = 0; i < entities.length; i += READ_CONCURRENCY) {
     const chunk = entities.slice(i, i + READ_CONCURRENCY);
     await Promise.all(chunk.map(async (entity) => {
       cache[entity.key] = await readEntity(supabase, entity, societyId);
     }));
+    for (const entity of chunk) {
+      const res = cache[entity.key];
+      if (res.error || res.truncated) continue; // these already abort buildArchive, loudly
+      totalBytes += estimateBytes(res.rows);
+    }
+    if (totalBytes > MAX_BYTES) {
+      throw new Error(
+        `society exceeds the in-memory backup budget ` +
+        `(${Math.round(totalBytes / 1048576)} MB > ${Math.round(MAX_BYTES / 1048576)} MB) — ` +
+        `too large for a single-pass server backup; needs per-entity streaming (T-27)`,
+      );
+    }
   }
   return cache;
 }
