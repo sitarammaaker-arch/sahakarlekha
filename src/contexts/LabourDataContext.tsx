@@ -149,6 +149,13 @@ export function LabourProvider({ children }: { children: ReactNode }) {
 
   const deleteWorker = useCallback((id: string) => {
     if (guardFYLocked()) return;
+    // RULE 3: don't hard-delete a worker who still has live advances — that would orphan the advance
+    // rows (and their recovery vouchers) against a gone workerId. Block and point at the dependents.
+    const liveAdvances = workerAdvances.filter(a => !a.isDeleted && a.workerId === id).length;
+    if (liveAdvances > 0) {
+      toastRef.current({ title: 'कर्मचारी डिलीट नहीं हो सकता', description: `इस कर्मचारी के ${liveAdvances} live advance(s) हैं — पहले Worker Advances में वे delete करें, फिर कर्मचारी हटाएँ।`, variant: 'destructive', duration: 10000 });
+      return;
+    }
     const old = workers.find(x => x.id === id);
     setWorkersState(prev => { const u = prev.filter(x => x.id !== id); storage.setWorkers(u); return u; });
     supabase.from('workers').delete().eq('id', id).then(({ error }) => {
@@ -158,7 +165,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
       }
     });
-  }, [workers, society, user]);
+  }, [workers, workerAdvances, society, user]);
 
   // ── Department / Principal-Employer master — debtor with auto sub-ledger (under 3303) ──
   // Reuses the core account engine via useData().addAccount/updateAccount/deleteAccount.
@@ -210,6 +217,14 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return;
     const old = departments.find(d => d.id === id);
     if (!old) return;
+    // RULE 3: don't hard-delete a department that still has live bills — that would orphan them against
+    // a gone departmentId while their receivable/collection vouchers stay live. Block and point at them,
+    // mirroring Housing's deleteHousingFlat.
+    const liveBills = departmentBills.filter(b => !b.isDeleted && b.departmentId === id).length;
+    if (liveBills > 0) {
+      toastRef.current({ title: 'विभाग डिलीट नहीं हो सकता', description: `इस विभाग के ${liveBills} live bill(s) हैं — पहले Department Billing में वे delete करें, फिर विभाग हटाएँ।`, variant: 'destructive', duration: 10000 });
+      return;
+    }
     setDepartmentsState(prev => { const u = prev.filter(d => d.id !== id); storage.setDepartments(u); return u; });
     supabase.from('departments').delete().eq('id', id).then(({ error }) => {
       if (error) {
@@ -223,7 +238,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (referenced) updateAccount(old.accountId, { name: `${old.name} [Department deleted]`, isSystem: false });
       else deleteAccount(old.accountId);
     });
-  }, [departments, society, user, vouchers, updateAccount, deleteAccount]);
+  }, [departments, departmentBills, society, user, vouchers, updateAccount, deleteAccount]);
 
   // ── Department Bills (income side) — compose the core voucher engine ──────────
   // Bill: Dr department receivable / Cr 4203 Labour Charges (income), tagged workOrderId.
