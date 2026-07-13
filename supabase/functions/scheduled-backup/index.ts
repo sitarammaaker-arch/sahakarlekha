@@ -228,12 +228,18 @@ async function recordBackupFailure(supabase: any, societyId: string, err: unknow
 }
 
 Deno.serve(async (req) => {
-  // Secret gate. Once BACKUP_CRON_SECRET is set (supabase secrets set …) the function
-  // refuses any call whose `x-backup-secret` header does not match — so only the cron job
-  // (which sends it) can trigger backups, not anyone who guesses the URL. Before the secret
-  // is configured the function is open, which is what let the deploy be tested first.
+  // Secret gate — FAIL-CLOSED (matches scheduled-rehearsal; closes audit finding P1-7). This
+  // service-role endpoint can back up EVERY society, so it must never be world-triggerable: when
+  // BACKUP_CRON_SECRET is unset we refuse every call, and when it is set we require the cron job's
+  // matching `x-backup-secret` header. (Previously it stayed OPEN while the secret was unset, which
+  // let anyone who guessed the URL trigger a full backup.)
+  // DEPLOY NOTE: set BACKUP_CRON_SECRET (supabase secrets set …) and have the cron send the header
+  // BEFORE shipping this, or the weekly backup 500s.
   const secret = Deno.env.get('BACKUP_CRON_SECRET') ?? '';
-  if (secret && req.headers.get('x-backup-secret') !== secret) {
+  if (!secret) {
+    return new Response(JSON.stringify({ ok: false, error: 'BACKUP_CRON_SECRET not configured' }), { status: 500, headers: { 'content-type': 'application/json' } });
+  }
+  if (req.headers.get('x-backup-secret') !== secret) {
     return new Response(JSON.stringify({ ok: false, error: 'unauthorized' }), { status: 401, headers: { 'content-type': 'application/json' } });
   }
 
