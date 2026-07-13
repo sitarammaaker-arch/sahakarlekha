@@ -1,6 +1,6 @@
 # Super-Admin Auth Hardening — Design (audit P0-1 + P0-3)
 
-- **Status:** Design / plan only. No code. Awaiting prod verification + approval before any slice.
+- **Status:** S0 verified · **S2 shipped** (migration 019 + client) · **S3 shipped** (migration 020 gates + revokes the RPCs; client path-2 removed). **S4 pending** (drop `verify_platform_admin` + the plaintext `platform_admins.password` column).
 - **Date:** 2026-07-13
 - **Fixes:** production-audit **P0-1** (unauthenticated cross-tenant super-admin RPCs) and **P0-3** (localStorage-trusted `isSuperAdmin`/role). They are the same root cause and must be fixed together.
 
