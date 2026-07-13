@@ -575,7 +575,12 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: voucher.id,
       createdBy: user?.name ?? 'admin', createdAt: new Date().toISOString(),
     };
-    commitSalesReturn(ret, null, () => cancelVoucher(voucher.id, 'Sales return rolled back (cloud save failed)', user?.name || 'System'));
+    commitSalesReturn(ret, null, () => {
+      cancelVoucher(voucher.id, 'Sales return rolled back (cloud save failed)', user?.name || 'System');
+      // RULE 1/2: also reverse the stock added back at creation (compensating negative adjustment),
+      // else a failed cloud save leaves phantom inventory with no return record — mirrors deleteSalesReturn.
+      items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: `${returnNo}/REV`, narration: `Sales return rolled back ${sale.saleNo}` }));
+    });
     toastRef.current({ title: `✅ वापसी दर्ज — ${returnNo}`, description: `स्टॉक वापस + ₹${grandTotal.toLocaleString('en-IN')}` });
     return ret;
   }, [sales, salesReturns, accounts, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitSalesReturn, user]);
@@ -677,7 +682,12 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: voucher.id,
       createdBy: user?.name ?? 'admin', createdAt: new Date().toISOString(),
     };
-    commitPurchaseReturn(ret, null, () => cancelVoucher(voucher.id, 'Purchase return rolled back (cloud save failed)', user?.name || 'System'));
+    commitPurchaseReturn(ret, null, () => {
+      cancelVoucher(voucher.id, 'Purchase return rolled back (cloud save failed)', user?.name || 'System');
+      // RULE 1/2: also restore the stock removed at creation (compensating positive adjustment),
+      // else a failed cloud save leaves inventory understated with no return record — mirrors deletePurchaseReturn.
+      items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: `${returnNo}/REV`, narration: `Purchase return rolled back ${purchase.purchaseNo}` }));
+    });
     toastRef.current({ title: `✅ खरीद वापसी दर्ज — ${returnNo}`, description: `स्टॉक कम + ₹${grandTotal.toLocaleString('en-IN')}` });
     return ret;
   }, [purchases, purchaseReturns, suppliers, stockItems, accounts, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitPurchaseReturn, user]);
