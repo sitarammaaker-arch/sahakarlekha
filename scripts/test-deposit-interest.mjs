@@ -1,13 +1,39 @@
-// Deposit interest calculators (Deposits module — SB/FD/RD) — mirrors src/lib/depositInterest.ts.
+// Deposit interest calculators (Deposits module — SB/FD/RD).
+// Imports the REAL src/lib/depositInterest.ts (which imports @/lib/money) via an
+// '@/'-resolving loader — the actual engine, not a mirror.
 // Run: node scripts/test-deposit-interest.mjs
 
-const r2 = (n) => Math.round(n * 100) / 100;
-const simpleInterest = (p, rate, days) => r2(p * (rate / 100) * (days / 365));
-const sbInterest = (bal, rate, days) => simpleInterest(bal, rate, days);
-const fdInterest = (p, rate, months) => r2(p * (rate / 100) * (months / 12));
-const fdMaturityValue = (p, rate, months) => r2(p + fdInterest(p, rate, months));
-const rdInterest = (inst, rate, months) => r2(inst * (rate / 100 / 12) * (months * (months + 1) / 2));
-const rdMaturityValue = (inst, rate, months) => r2(inst * months + rdInterest(inst, rate, months));
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { simpleInterest, sbInterest, fdInterest, fdMaturityValue, rdInterest, rdMaturityValue } = await import(abs('../src/lib/depositInterest.ts'));
+const r2 = (n) => Math.round(n * 100) / 100; // for expected-value comparisons only
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
