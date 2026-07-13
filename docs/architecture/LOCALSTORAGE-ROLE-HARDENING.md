@@ -96,6 +96,67 @@ select distinct role from society_users;
 - **Scope:** SB2 is genuinely large (per-table RLS). SA + SB1 close most of the practical exposure;
   SB2 can be staged.
 
+## 6a. S0 findings (2026-07-13, from prod)
+
+- **No auth hook configured** (`auth.hooks` doesn't exist; Dashboard → Auth → Hooks empty) → the
+  custom-access-token hook can be added cleanly, no conflict.
+- **society_users.role ∈ {`accountant`, `admin`}** in prod (the type also allows viewer/auditor).
+- **Role-blind mutation policies** exist on ~19 tables with explicit INSERT/UPDATE/DELETE policies
+  (branches, deposit_accounts/transactions, godowns, kachi_aarat_entries, p7_entries, recoverables,
+  compliance_filings, document_sequences, society_activities/capabilities, feedback, leads,
+  audit_log/ledger_events [WORM, insert-only], societies, society_users). **NOTE for SB2:** the core
+  financial tables (vouchers, members, accounts, sales, purchases, stock_*) did NOT appear in the
+  INSERT/UPDATE/DELETE list — they likely use `FOR ALL` policies (cmd = 'ALL'); re-query
+  `cmd = 'ALL'` before scoping them.
+
+## 6b. SB1 — the fail-safe hook (READY, do NOT enable alone)
+
+⚠️ **SB1 has no functional benefit until SB2 reads the claim, but carries the full auth-hook risk
+(a broken hook fails EVERY login). So do NOT enable it on its own — apply SB1 + the first SB2 tables
+together in a dedicated session, verify a login immediately, and keep the rollback (disable the hook
+in the Dashboard) at hand.** The function below is written FAIL-SAFE — it never raises and returns
+the claims unchanged on any miss — so the only ways it can break login are a wrong grant or the
+Dashboard pointing at the wrong function.
+
+```sql
+-- Adds society_users.role to the JWT as a signed, unspoofable `user_role` claim.
+create or replace function public.custom_access_token_hook(event jsonb)
+returns jsonb
+language plpgsql
+stable
+security definer          -- read society_users regardless of RLS
+set search_path = public
+as $$
+declare claims jsonb; em text; r text;
+begin
+  claims := coalesce(event -> 'claims', '{}'::jsonb);
+  begin
+    em := lower(nullif(event #>> '{claims,email}', ''));
+    if em is not null then
+      select role into r from public.society_users
+       where lower(email) = em and is_active = true
+       order by (role = 'admin') desc limit 1;    -- prefer admin if multiple rows
+      if r is not null then
+        claims := jsonb_set(claims, '{user_role}', to_jsonb(r));
+      end if;
+    end if;
+  exception when others then null;                -- NEVER block token issuance
+  end;
+  return jsonb_set(event, '{claims}', claims);
+end;
+$$;
+
+grant execute on function public.custom_access_token_hook(jsonb) to supabase_auth_admin;
+revoke execute on function public.custom_access_token_hook(jsonb) from authenticated, anon, public;
+```
+
+Then Dashboard → Authentication → Hooks → **Customize Access Token (JWT) Claims** → select
+`custom_access_token_hook`. **Immediately** log in on a test browser and confirm login works AND the
+issued JWT contains `user_role` (decode the access token). Rollback = un-select the hook.
+
+Client (small): once the claim is live, read `user_role` from the JWT rather than the extra
+society_users round-trip (optional; the mount effect already derives it).
+
 ## 7. Recommendation
 
 Do **SA** (client hardening) as a real, low-risk win whenever this is picked up. Treat **SB1 + SB2**
