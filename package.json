@@ -18,6 +18,7 @@
     "test:sale-split": "node scripts/test-sale-split.mjs",
     "test:invoice-totals": "node scripts/test-invoice-totals.mjs",
     "test:numbering": "node scripts/test-numbering.mjs",
+    "test:depreciation": "node scripts/test-depreciation.mjs",
     "test:document-number": "node scripts/test-document-number.mjs",
     "test:ledger-lines": "node scripts/test-ledger-lines.mjs",
     "test:activities": "node scripts/test-activities.mjs",
