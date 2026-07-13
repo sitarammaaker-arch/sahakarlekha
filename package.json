@@ -20,6 +20,7 @@
     "test:numbering": "node scripts/test-numbering.mjs",
     "test:depreciation": "node scripts/test-depreciation.mjs",
     "test:typed-money": "node scripts/test-typed-money.mjs",
+    "test:error-reporting": "node scripts/test-error-reporting.mjs",
     "test:document-number": "node scripts/test-document-number.mjs",
     "test:ledger-lines": "node scripts/test-ledger-lines.mjs",
     "test:activities": "node scripts/test-activities.mjs",

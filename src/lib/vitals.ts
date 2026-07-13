@@ -6,6 +6,7 @@
  */
 import { onLCP, onCLS, onINP, onTTFB, type Metric } from 'web-vitals';
 import { trackEvent } from '@/lib/analytics';
+import { reportError } from '@/lib/errorReporting';
 
 export function reportWebVitals() {
   const send = (m: Metric) =>
@@ -29,6 +30,8 @@ export function installErrorTracking() {
       source: (e.filename || '').split('/').pop(),
       page_path: window.location.pathname,
     });
+    // Durable, full-detail sink (message + stack) — the operator-visible error log.
+    reportError('window.error', e.error ?? e.message, { filename: e.filename, lineno: e.lineno, colno: e.colno });
   });
   window.addEventListener('unhandledrejection', (e) => {
     const reason = e.reason as { message?: string } | string | undefined;
@@ -37,5 +40,6 @@ export function installErrorTracking() {
       type: 'unhandledrejection',
       page_path: window.location.pathname,
     });
+    reportError('unhandledrejection', e.reason);
   });
 }

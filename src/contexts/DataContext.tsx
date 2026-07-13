@@ -25,6 +25,7 @@ import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
+import { reportError } from '@/lib/errorReporting';
 import { settlementTypedColumns, hydrateSettlement } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
@@ -505,7 +506,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const persistMovement = (mv: StockMovement) => {
     const { godownId, ...base } = mv;
     supabase.from('stock_movements').upsert(withSoc(base)).then(({ error }) => {
-      if (error) { console.error('DB sync error (movement):', error.message); return; }
+      if (error) { console.error('DB sync error (movement):', error.message); reportError('stock-movement-save', error.message, { movementId: mv.id, itemId: mv.itemId }); return; }
       if (godownId) supabase.from('stock_movements').update({ godownId }).eq('id', mv.id).then(({ error: gErr }) => { if (gErr) console.warn('Movement godown patch:', gErr.message); });
     });
   };
@@ -1303,6 +1304,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const handleBaseFailure = (msg: string) => {
       console.error(`Voucher ${opts.isUpdate ? 'update' : 'save'} failed (base):`, msg);
+      // audit P0-2: the RULE-1 divergence the operator must SEE — surface it off-device.
+      reportError('voucher-save', msg, { voucherId: v.id, voucherNo: (v as { voucherNo?: string }).voucherNo, isUpdate: !!opts.isUpdate });
       opts.onBaseFail();
       toastRef.current({
         title: '❌ Voucher cloud par save NAHI hua',
