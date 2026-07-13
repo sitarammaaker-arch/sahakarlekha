@@ -19,6 +19,7 @@ import { useData } from '@/contexts/DataContext';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/errorReporting';
 import * as storage from '@/lib/storage';
 import { priceMilk } from '@/lib/dairy/pricing';
 import { resolveMilkProcurementAccountId, resolveMilkBulkSalesAccountId, resolveMilkPayableAccountId, resolveUnionReceivableAccountId, resolveMemberInputReceivableAccountId, resolveBonusDistributionAccountId, resolveBonusPayableAccountId, resolveDividendDistributionAccountId, resolveDividendPayableAccountId } from '@/lib/dairy/accounts';
@@ -231,7 +232,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     setRateChartsState(prev => { const u = [...prev, chart]; storage.setDairyRateCharts(u); return u; });
     supabase.from('dairy_rate_charts').upsert(withSoc(chart)).then(({ error }) => {
       if (error) {
-        console.error('Rate chart save error:', error.message);
+        console.error('Rate chart save error:', error.message); reportError('dairy-save', error.message);
         setRateChartsState(prev => { const r = prev.filter(c => c.id !== chart.id); storage.setDairyRateCharts(r); return r; });
         toastRef.current({ title: 'रेट चार्ट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka dairy_rate_charts block chalayein.)`, variant: 'destructive', duration: 12000 });
       }
@@ -278,7 +279,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     setMilkEntriesState(prev => { const u = [...prev, entry]; storage.setMilkEntries(u); return u; });
     supabase.from('milk_entries').upsert(withSoc(entry)).then(({ error }) => {
       if (error) {
-        console.error('Milk entry save error:', error.message);
+        console.error('Milk entry save error:', error.message); reportError('dairy-save', error.message);
         setMilkEntriesState(prev => { const r = prev.filter(e => e.id !== entry.id); storage.setMilkEntries(r); return r; });
         toastRef.current({ title: 'एंट्री सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka milk_entries block chalayein.)`, variant: 'destructive', duration: 12000 });
       }
@@ -313,7 +314,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   const persistSettlement = useCallback((next: DairySettlement, revertTo: DairySettlement | null, onFail?: () => void) => {
     supabase.from('dairy_settlements').upsert(withSoc(next)).then(({ error }) => {
       if (error) {
-        console.error('Settlement save error:', error.message);
+        console.error('Settlement save error:', error.message); reportError('dairy-save', error.message);
         setSettlementsState(prev => { const u = revertTo ? prev.map(s => s.id === next.id ? revertTo : s) : prev.filter(s => s.id !== next.id); storage.setDairySettlements(u); return u; });
         onFail?.();
         toastRef.current({ title: 'सेटलमेंट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas. (Pehli baar: dairy_settlements block chalayein.)`, variant: 'destructive', duration: 12000 });
@@ -447,7 +448,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     setDispatchesState(prev => { const u = prev.some(d => d.id === next.id) ? prev.map(d => d.id === next.id ? next : d) : [...prev, next]; storage.setDairyDispatches(u); return u; });
     supabase.from('dairy_dispatches').upsert(withSoc(next)).then(({ error }) => {
       if (error) {
-        console.error('Dispatch save error:', error.message);
+        console.error('Dispatch save error:', error.message); reportError('dairy-save', error.message);
         setDispatchesState(prev => { const u = revertTo ? prev.map(d => d.id === next.id ? revertTo : d) : prev.filter(d => d.id !== next.id); storage.setDairyDispatches(u); return u; });
         onFail?.();
         toastRef.current({ title: 'डिस्पैच सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas. (Pehli baar: dairy_dispatches block chalayein.)`, variant: 'destructive', duration: 12000 });
@@ -523,7 +524,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     setInputIssuesState(prev => { const u = prev.some(i => i.id === next.id) ? prev.map(i => i.id === next.id ? next : i) : [...prev, next]; storage.setDairyInputIssues(u); return u; });
     supabase.from('dairy_input_issues').upsert(withSoc(next)).then(({ error }) => {
       if (error) {
-        console.error('Input issue save error:', error.message);
+        console.error('Input issue save error:', error.message); reportError('dairy-save', error.message);
         setInputIssuesState(prev => { const u = revertTo ? prev.map(i => i.id === next.id ? revertTo : i) : prev.filter(i => i.id !== next.id); storage.setDairyInputIssues(u); return u; });
         onFail?.();
         toastRef.current({ title: 'आदान सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas. (Pehli baar: dairy_input_issues block chalayein.)`, variant: 'destructive', duration: 12000 });
@@ -578,7 +579,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     setDistributionsState(prev => { const u = prev.some(d => d.id === next.id) ? prev.map(d => d.id === next.id ? next : d) : [...prev, next]; storage.setDairyDistributions(u); return u; });
     supabase.from('dairy_distributions').upsert(withSoc(next)).then(({ error }) => {
       if (error) {
-        console.error('Distribution save error:', error.message);
+        console.error('Distribution save error:', error.message); reportError('dairy-save', error.message);
         setDistributionsState(prev => { const u = revertTo ? prev.map(d => d.id === next.id ? revertTo : d) : prev.filter(d => d.id !== next.id); storage.setDairyDistributions(u); return u; });
         onFail?.();
         toastRef.current({ title: 'वितरण सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas. (Pehli baar: dairy_distributions block chalayein.)`, variant: 'destructive', duration: 12000 });
