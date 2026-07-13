@@ -5813,9 +5813,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             narration: `Salary paid: ${emp?.name || ''} - ${oldRecord.month}`,
           };
           setVouchersState(prev => prev.map(x => x.id === v.id ? updatedV : x));
-          supabase.from('vouchers').upsert(withSoc(updatedV)).then(({ error }) => {
-            if (error) console.error('Salary voucher resync:', error.message);
-            else syncEntries(updatedV);
+          // RULE 1: persistVoucher (isUpdate) restores the prior voucher if the cloud save fails, so a
+          // failed salary-amount/date edit can't leave local diverged from Supabase. persistVoucher
+          // skips syncEntries for updates, so re-sync the ledger lines only on a confirmed base save.
+          persistVoucher(updatedV, {
+            isUpdate: true,
+            onBaseSuccess: () => syncEntries(updatedV),
+            onBaseFail: () => setVouchersState(prev => prev.map(x => x.id === v.id ? v : x)),
           });
         }
       }
