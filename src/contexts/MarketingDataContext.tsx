@@ -22,6 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/errorReporting';
 import * as storage from '@/lib/storage';
 import { pickEffectiveMspRate } from '@/lib/marketing/msp';
 import { getVoucherLines } from '@/lib/voucherUtils';
@@ -249,7 +250,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     setCropsState(prev => { const u = [...prev, crop]; storage.setProcurementCrops(u); return u; });
     supabase.from('procurement_crops').upsert(withSoc(crop)).then(({ error }) => {
       if (error) {
-        console.error('Crop save error:', error.message);
+        console.error('Crop save error:', error.message); reportError('marketing-save', error.message);
         setCropsState(prev => { const r = prev.filter(c => c.id !== crop.id); storage.setProcurementCrops(r); return r; });
         toastRef.current({ title: 'फसल सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_crops block chalayein.)`, variant: 'destructive', duration: 12000 });
       }
@@ -304,7 +305,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     setCropsState(() => { storage.setProcurementCrops(seeded); return seeded; });
     supabase.from('procurement_crops').upsert(seeded.map(withSoc)).then(({ error }) => {
       if (error) {
-        console.error('Seed crops error:', error.message);
+        console.error('Seed crops error:', error.message); reportError('marketing-save', error.message);
         setCropsState(() => { storage.setProcurementCrops([]); return []; });
         toastRef.current({ title: 'फसलें सेव नहीं हुईं', description: `Cloud save fail — ${error.message}. (Pehli baar: supabase-tables.sql ka procurement_crops block chalayein.)`, variant: 'destructive', duration: 12000 });
       } else {
@@ -322,7 +323,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     setVarietiesState(prev => { const u = [...prev, variety]; storage.setProcurementVarieties(u); return u; });
     supabase.from('procurement_varieties').upsert(withSoc(variety)).then(({ error }) => {
       if (error) {
-        console.error('Variety save error:', error.message);
+        console.error('Variety save error:', error.message); reportError('marketing-save', error.message);
         setVarietiesState(prev => { const r = prev.filter(v => v.id !== variety.id); storage.setProcurementVarieties(r); return r; });
         toastRef.current({ title: 'किस्म सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_varieties block chalayein.)`, variant: 'destructive', duration: 12000 });
       }
@@ -373,7 +374,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     setSeasonsState(prev => { const u = [...prev, season]; storage.setProcurementSeasons(u); return u; });
     supabase.from('procurement_seasons').upsert(withSoc(season)).then(({ error }) => {
       if (error) {
-        console.error('Season save error:', error.message);
+        console.error('Season save error:', error.message); reportError('marketing-save', error.message);
         setSeasonsState(prev => { const r = prev.filter(s => s.id !== season.id); storage.setProcurementSeasons(r); return r; });
         toastRef.current({ title: 'सीज़न सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_seasons block chalayein.)`, variant: 'destructive', duration: 12000 });
       }
@@ -424,7 +425,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     setAgenciesState(prev => { const u = [...prev, agency]; storage.setProcurementAgencies(u); return u; });
     supabase.from('procurement_agencies').upsert(withSoc(agency)).then(({ error }) => {
       if (error) {
-        console.error('Agency save error:', error.message);
+        console.error('Agency save error:', error.message); reportError('marketing-save', error.message);
         setAgenciesState(prev => { const r = prev.filter(a => a.id !== agency.id); storage.setProcurementAgencies(r); return r; });
         toastRef.current({ title: 'एजेंसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_agencies block chalayein.)`, variant: 'destructive', duration: 12000 });
       }
@@ -475,7 +476,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     setCentresState(prev => { const u = [...prev, centre]; storage.setProcurementCentres(u); return u; });
     supabase.from('procurement_centres').upsert(withSoc(centre)).then(({ error }) => {
       if (error) {
-        console.error('Centre save error:', error.message);
+        console.error('Centre save error:', error.message); reportError('marketing-save', error.message);
         setCentresState(prev => { const r = prev.filter(c => c.id !== centre.id); storage.setProcurementCentres(r); return r; });
         toastRef.current({ title: 'केंद्र सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_centres block chalayein.)`, variant: 'destructive', duration: 12000 });
       }
@@ -525,7 +526,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     setMspRatesState(prev => { const u = [...prev, rec]; storage.setProcurementMspRates(u); return u; });
     supabase.from('procurement_msp_rates').upsert(withSoc(rec)).then(({ error }) => {
       if (error) {
-        console.error('MSP rate save error:', error.message);
+        console.error('MSP rate save error:', error.message); reportError('marketing-save', error.message);
         setMspRatesState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementMspRates(r); return r; });
         toastRef.current({ title: 'MSP दर सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_msp_rates block chalayein.)`, variant: 'destructive', duration: 12000 });
       }
@@ -560,7 +561,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     setDeductionRulesState(prev => { const u = [...prev, rec]; storage.setProcurementDeductionRules(u); return u; });
     supabase.from('procurement_deduction_rules').upsert(withSoc(rec)).then(({ error }) => {
       if (error) {
-        console.error('Deduction rule save error:', error.message);
+        console.error('Deduction rule save error:', error.message); reportError('marketing-save', error.message);
         setDeductionRulesState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementDeductionRules(r); return r; });
         toastRef.current({ title: 'कटौती नियम सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_deduction_rules block + RLS chalayein.)`, variant: 'destructive', duration: 12000 });
       }
@@ -606,7 +607,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     setQualitySpecsState(prev => { const u = [...prev, rec]; storage.setProcurementQualitySpecs(u); return u; });
     supabase.from('procurement_quality_specs').upsert(withSoc(rec)).then(({ error }) => {
       if (error) {
-        console.error('Quality spec save error:', error.message);
+        console.error('Quality spec save error:', error.message); reportError('marketing-save', error.message);
         setQualitySpecsState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementQualitySpecs(r); return r; });
         toastRef.current({ title: 'गुणवत्ता मानक सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_quality_specs block + RLS chalayein.)`, variant: 'destructive', duration: 12000 });
       }
@@ -635,7 +636,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     setBardanaTypesState(prev => { const u = [...prev, rec]; storage.setProcurementBardanaTypes(u); return u; });
     supabase.from('procurement_bardana_types').upsert(withSoc(rec)).then(({ error }) => {
       if (error) {
-        console.error('Bardana type save error:', error.message);
+        console.error('Bardana type save error:', error.message); reportError('marketing-save', error.message);
         setBardanaTypesState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementBardanaTypes(r); return r; });
         toastRef.current({ title: 'बारदाना सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_bardana_types block + RLS chalayein.)`, variant: 'destructive', duration: 12000 });
       }
@@ -664,7 +665,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     setTransportersState(prev => { const u = [...prev, rec]; storage.setMarketingTransporters(u); return u; });
     supabase.from('marketing_transporters').upsert(withSoc(rec)).then(({ error }) => {
       if (error) {
-        console.error('Transporter save error:', error.message);
+        console.error('Transporter save error:', error.message); reportError('marketing-save', error.message);
         setTransportersState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setMarketingTransporters(r); return r; });
         toastRef.current({ title: 'ट्रांसपोर्टर सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka marketing_transporters block + RLS chalayein.)`, variant: 'destructive', duration: 12000 });
       }
