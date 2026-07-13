@@ -346,34 +346,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Supabase unreachable — fall through
     }
 
-    // 2. Direct platform_admins password check (super admin login).
-    //    ⚠️ INSECURE / TRANSITIONAL — this grants super-admin with NO Supabase Auth session
-    //    (JWT-less, localStorage only) and verify_platform_admin compares a PLAINTEXT password.
-    //    Retained for ONE release as a fallback while admins move to path-1 (real signInWithPassword)
-    //    login. Slice S3 removes this path and gates the cross-tenant RPCs; slice S4 drops the RPC +
-    //    the plaintext platform_admins.password column. See docs/architecture/SUPER-ADMIN-AUTH-HARDENING.md.
-    try {
-      const { data: adminData } = await supabase
-        .rpc('verify_platform_admin', { p_email: email, p_password: password })
-        .maybeSingle();
-
-      if (adminData) {
-        const admin = adminData as { name?: string };
-        const u: User = {
-          id: email,
-          name: admin.name || email.split('@')[0],
-          email,
-          role: 'admin',
-          societyId: 'PLATFORM',
-        };
-        setUser(u);
-        setIsSuperAdmin(true);
-        setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
-        return { status: 'ok' };
-      }
-    } catch {
-      // Supabase unreachable — fall through
-    }
+    // 2. (RETIRED — audit P0-1/P0-3, slice S3) The JWT-less verify_platform_admin fallback was
+    //    removed. It granted super-admin with NO Supabase Auth session (localStorage only) and
+    //    verified a PLAINTEXT password, and — having no JWT — the cross-tenant super-admin RPCs it
+    //    unlocked ran as anon. Platform admins now sign in only via path 1 (real signInWithPassword
+    //    → JWT), and checkSuperAdmin() derives from the verified session via is_platform_admin().
+    //    Migration 020 gates those RPCs + revokes the anon EXECUTE grant. Slice S4 drops the
+    //    verify_platform_admin RPC and the plaintext platform_admins.password column.
+    //    See docs/architecture/SUPER-ADMIN-AUTH-HARDENING.md.
 
     // 3. (RETIRED — P1-SEC-4) The legacy JWT-less app_login RPC path was removed.
     //    It established no Supabase Auth session, so under tenant RLS (P1-SEC-1b) it

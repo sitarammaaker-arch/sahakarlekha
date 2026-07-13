@@ -998,6 +998,29 @@ alter table suppliers add column if not exists "notes"            text;
 -- society_type; trial/expiry are returned as `date`. The client
 -- (SuperAdminDashboard) normalizes `id`/snake_case back. Keep this in lock-step
 -- with prod so a future create-or-replace does not 42P13 on a return-type change.
+-- is_platform_admin() — authoritative super-admin predicate (migration 019). SECURITY DEFINER so
+-- it reads RLS-locked platform_admins, keyed on the caller's VERIFIED JWT email (unspoofable). The
+-- three cross-tenant RPCs below gate on it, and the client's checkSuperAdmin() uses it. EXECUTE is
+-- authenticated-only. Keep this definition in sync with prod — a re-run must NOT drop the gate.
+create or replace function is_platform_admin()
+returns boolean
+language sql
+security definer
+set search_path = public, extensions
+stable
+as $$
+  select exists (
+    select 1 from platform_admins
+    where lower(email) = lower(nullif(auth.jwt() ->> 'email', ''))
+      and is_active = true
+  );
+$$;
+revoke execute on function is_platform_admin() from public, anon;
+grant  execute on function is_platform_admin() to authenticated;
+
+-- Each of the three super-admin RPCs (migration 020) gates on is_platform_admin() and raises 42501
+-- for non-admins; EXECUTE is revoked from public/anon and granted to authenticated. Do NOT drop the
+-- gate or re-grant to public here — that re-opens P0-1 (any anon reading every tenant).
 create or replace function get_all_societies()
 returns table (
   id                text,
@@ -1013,29 +1036,41 @@ returns table (
   subscription_notes text,
   created_at        timestamptz
 )
-language sql
+language plpgsql
 security definer
 set search_path = public, extensions
 as $$
-  select
-    ss.society_id, ss.name, ss."registrationNo", ss."societyType",
-    ss.district, ss.state, ss.plan, ss.trial_ends_at, ss.plan_expires_at,
-    ss.is_locked, ss.subscription_notes, ss.created_at
-  from society_settings ss
-  order by ss.created_at desc;
+begin
+  if not is_platform_admin() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  return query
+    select
+      ss.society_id, ss.name, ss."registrationNo", ss."societyType",
+      ss.district, ss.state, ss.plan, ss.trial_ends_at, ss.plan_expires_at,
+      ss.is_locked, ss.subscription_notes, ss.created_at
+    from society_settings ss
+    order by ss.created_at desc;
+end;
 $$;
 
 -- ── STEP 18: get_society_user_counts() — user count per society ───────────────
 create or replace function get_society_user_counts()
 returns table (society_id text, user_count bigint)
-language sql
+language plpgsql
 security definer
 set search_path = public, extensions
 as $$
-  select society_id, count(*) as user_count
-  from society_users
-  where is_active = true
-  group by society_id;
+begin
+  if not is_platform_admin() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  return query
+    select su.society_id, count(*) as user_count
+    from society_users su
+    where su.is_active = true
+    group by su.society_id;
+end;
 $$;
 
 -- ── STEP 19: update_society_subscription() — super admin updates plan ─────────
@@ -1047,17 +1082,29 @@ create or replace function update_society_subscription(
   p_notes             text
 )
 returns void
-language sql
+language plpgsql
 security definer
 set search_path = public, extensions
 as $$
+begin
+  if not is_platform_admin() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
   update society_settings set
-    plan              = p_plan,
-    plan_expires_at   = p_plan_expires_at,
-    is_locked         = p_is_locked,
+    plan               = p_plan,
+    plan_expires_at    = p_plan_expires_at,
+    is_locked          = p_is_locked,
     subscription_notes = p_notes
   where society_id = p_society_id;
+end;
 $$;
+
+revoke execute on function get_all_societies()                                      from public, anon;
+revoke execute on function get_society_user_counts()                                from public, anon;
+revoke execute on function update_society_subscription(text, text, timestamptz, boolean, text) from public, anon;
+grant  execute on function get_all_societies()                                      to authenticated;
+grant  execute on function get_society_user_counts()                                to authenticated;
+grant  execute on function update_society_subscription(text, text, timestamptz, boolean, text) to authenticated;
 
 -- ── STEP 20: guide course completion certificates ────────────────────────────
 -- Lightweight, password-less learner records for the public /guide course.
