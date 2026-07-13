@@ -263,7 +263,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!pending) return false;
     try {
       // Server-side verify — the secret never reaches the client (ECR-12 s3).
-      const { data, error } = await supabase.rpc('app_verify_mfa', { p_email: pending.user.email, p_code: code });
+      const { data, error } = pending.user.societyId === 'PLATFORM'
+        ? await supabase.rpc('platform_admin_mfa_verify', { p_code: code })
+        : await supabase.rpc('app_verify_mfa', { p_email: pending.user.email, p_code: code });
       if (error || data !== true) return false;
     } catch {
       return false; // offline → cannot verify → fail closed.
@@ -340,6 +342,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             role: 'admin',
             societyId: 'PLATFORM',
           };
+          // H3 / slice B: if this platform admin has enrolled 2FA, require a TOTP (or recovery) code
+          // before completing login. signInWithPassword's JWT is already active, so the
+          // is_platform_admin()-gated verify RPCs work during the challenge. A status-check failure
+          // does NOT block login (fail-open) — availability over a rare RPC hiccup; the common
+          // enrolled path always challenges. Recovery codes (slice C) cover a lost authenticator.
+          const { data: mfaOn } = await supabase.rpc('platform_admin_mfa_status');
+          if (mfaOn === true) {
+            pendingMfaRef.current = { user: { ...u, mfaEnabled: true } };
+            return { status: 'mfa' };
+          }
           setUser(u);
           setIsSuperAdmin(true);
           setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
