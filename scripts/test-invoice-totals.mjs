@@ -70,7 +70,12 @@ ok(t5.grandTotal === 98.98, `grandTotal = 107 + 2.68 − 10.70 = 98.98 (got ${t5
 ok(computeInvoiceTotals({ items: [{ amount: 500 }], igstPct: 18 }).tdsAmount === 0, 'a sale (no tdsPct) has tds 0');
 
 // ── 6. Consumer GRN invoice delegates to the SAME born-exact rule (buildGrnInvoice) ──
-const { buildGrnInvoice } = await import(abs('../src/lib/consumer/purchaseOrder.ts'));
+const { buildGrnInvoice, lineAmount } = await import(abs('../src/lib/consumer/purchaseOrder.ts'));
+// T-02: per-item qty × rate born exact (shared by lineAmount + the sale/purchase item rows).
+ok(lineAmount(3, 100.5) === 301.5, 'lineAmount 3 × ₹100.50 = ₹301.50');
+ok(lineAmount(2.5, 10) === 25, 'lineAmount 2.5 × ₹10 = ₹25.00');
+ok(lineAmount(7, 14.35) === 100.45, 'lineAmount 7 × ₹14.35 = ₹100.45 (exact)');
+ok(lineAmount(0, 100) === 0 && lineAmount(3, 0) === 0, 'zero qty / rate → 0');
 const paise = (r) => Math.round(r * 100);
 const grn = buildGrnInvoice([{ itemId: 'i1', itemName: 'x', unit: 'pc', qty: 1, rate: 107 }], { gstPct: 5 });
 ok(grn.netAmount === 107, 'GRN net = billed ₹107');

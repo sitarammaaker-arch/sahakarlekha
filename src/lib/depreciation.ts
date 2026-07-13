@@ -1,4 +1,5 @@
 import type { Asset, AssetCategory } from '@/types';
+import { toMinor, toRupees, subMinor, roundMinor } from '@/lib/money';
 
 // Category → { debit: depreciation expense account, credit: accumulated depreciation account }
 export const DEP_ACCOUNTS: Partial<Record<AssetCategory, { expenseId: string; accumId: string }>> = {
@@ -44,9 +45,10 @@ export function calcSLMDepreciation(asset: Asset, fy: string): number {
   const daysUsed       = Math.round((fyEnd.getTime() - effectiveStart.getTime()) / 86_400_000) + 1;
   const fraction       = Math.min(daysUsed / 365, 1);
 
-  // ICAI AS-6: Depreciable amount = Cost - Residual Value
-  const depreciableAmount = asset.cost - (asset.residualValue || 0);
-  return Math.round(depreciableAmount * (asset.depreciationRate / 100) * fraction * 100) / 100;
+  // ICAI AS-6: Depreciable amount = Cost - Residual Value. T-02: exact base (subMinor) +
+  // disciplined paise rounding (roundMinor) instead of Math.round(float × 100)/100.
+  const depreciableMinor = subMinor(toMinor(Number(asset.cost) || 0), toMinor(Number(asset.residualValue) || 0));
+  return toRupees(roundMinor(depreciableMinor * (asset.depreciationRate / 100) * fraction));
 }
 
 /**
@@ -76,7 +78,8 @@ export function calcWDVDepreciation(asset: Asset, fy: string, priorAccumDep: num
   const daysUsed       = Math.round((fyEnd.getTime() - effectiveStart.getTime()) / 86_400_000) + 1;
   const fraction       = Math.min(daysUsed / 365, 1);
 
-  const dep = Math.round(bookValue * (asset.depreciationRate / 100) * fraction * 100) / 100;
+  // T-02: exact-paise depreciation (roundMinor) on the written-down book value.
+  const dep = toRupees(roundMinor(toMinor(bookValue) * (asset.depreciationRate / 100) * fraction));
   // Cap: don't let book value go below residual value
   return Math.min(dep, depreciableBook);
 }
