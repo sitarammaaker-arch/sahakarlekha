@@ -4,11 +4,13 @@
  */
 import type { PurchaseOrderItem, PurchaseItem } from '@/types';
 import { computeInvoiceTotals } from '@/lib/invoiceTotals';
+import { toMinor, toRupees, mulMinor } from '@/lib/money';
 
 const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
 
 /** Line amount from qty × rate (rounded). */
-export const lineAmount = (qty: number, rate: number): number => round2((qty || 0) * (rate || 0));
+// T-02: qty × rate born exact — rate in paise × qty, one disciplined rounding (mulMinor).
+export const lineAmount = (qty: number, rate: number): number => toRupees(mulMinor(toMinor(Number(rate) || 0), Number(qty) || 0).minor);
 
 /** Ordered total of a PO = Σ item.amount. */
 export const poTotal = (items: ReadonlyArray<PurchaseOrderItem>): number =>

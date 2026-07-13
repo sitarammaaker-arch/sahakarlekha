@@ -29,6 +29,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
 import { computeInvoiceTotals } from '@/lib/invoiceTotals';
+import { toMinor, toRupees, mulMinor } from '@/lib/money';
 import { useToast } from '@/hooks/use-toast';
 import type { SaleItem, PaymentMode } from '@/types';
 
@@ -147,7 +148,7 @@ const SaleManagement: React.FC = () => {
       const next = prev.map((item, i) => {
         if (i !== index) return item;
         const merged = { ...item, ...patch };
-        merged.amount = +(merged.qty * merged.rate).toFixed(2);
+        merged.amount = toRupees(mulMinor(toMinor(Number(merged.rate) || 0), Number(merged.qty) || 0).minor); // T-02: qty × rate born exact
         return merged;
       });
       return next;
