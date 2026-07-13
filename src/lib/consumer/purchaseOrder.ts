@@ -3,6 +3,7 @@
  * on goods receipt the received lines become a real Purchase (invoice) via addPurchase.
  */
 import type { PurchaseOrderItem, PurchaseItem } from '@/types';
+import { computeInvoiceTotals } from '@/lib/invoiceTotals';
 
 const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -67,16 +68,20 @@ export function buildGrnInvoice(
   opts: { billedRate?: Record<string, number>; gstPct?: number; interState?: boolean } = {},
 ): GrnInvoice {
   const invoiceItems = poToBilledItems(items, opts.billedRate);
-  const netAmount = round2(invoiceItems.reduce((s, i) => s + i.amount, 0));
   const gst = Math.max(0, opts.gstPct ?? 0);
   const interState = !!opts.interState;
-  const cgstPct = interState ? 0 : round2(gst / 2);
-  const sgstPct = interState ? 0 : round2(gst / 2);
+  const cgstPct = interState ? 0 : gst / 2;
+  const sgstPct = interState ? 0 : gst / 2;
   const igstPct = interState ? gst : 0;
-  const cgstAmount = round2(netAmount * cgstPct / 100);
-  const sgstAmount = round2(netAmount * sgstPct / 100);
-  const igstAmount = round2(netAmount * igstPct / 100);
-  const taxAmount = round2(cgstAmount + sgstAmount + igstAmount);
-  const grandTotal = round2(netAmount + taxAmount);
-  return { items: invoiceItems, netAmount, cgstPct, sgstPct, igstPct, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal };
+  // T-02: net / GST / grand born exact in integer paise via the shared computeInvoiceTotals —
+  // the SAME rule the sale/purchase forms use (one rounding policy everywhere). CGST and SGST
+  // are separate taxes each rounded on the billed net (add-on GST), which is correct.
+  const t = computeInvoiceTotals({ items: invoiceItems, cgstPct, sgstPct, igstPct });
+  return {
+    items: invoiceItems,
+    netAmount: t.netAmount,
+    cgstPct: round2(cgstPct), sgstPct: round2(sgstPct), igstPct,
+    cgstAmount: t.cgstAmount, sgstAmount: t.sgstAmount, igstAmount: t.igstAmount,
+    taxAmount: t.taxAmount, grandTotal: t.grandTotal,
+  };
 }

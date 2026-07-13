@@ -22,6 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { generate26QText, download26Q, validate26QData, getQuarterFromDate, getQuarterDueDate } from '@/lib/tds26q';
+import { applyPercent, toMinor, toRupees } from '@/lib/money';
 import type { TdsEntry, TdsChallan, TdsChallanLink, TdsSection, TdsDeducteeType, TdsQuarter } from '@/types';
 
 const fmt = (n: number) =>
@@ -191,7 +192,8 @@ const TdsRegister: React.FC = () => {
       id: crypto.randomUUID(),
       financialYear: fy,
       quarter: getQuarterFromDate(entryForm.date),
-      tdsAmount: +(entryForm.grossAmount * entryForm.tdsRate / 100).toFixed(2),
+      // T-02: TDS via money.applyPercent (disciplined half-up) — no `+(x).toFixed(2)` misround.
+      tdsAmount: toRupees(applyPercent(toMinor(Number(entryForm.grossAmount) || 0), Number(entryForm.tdsRate) || 0).minor),
       createdAt: new Date().toISOString(),
     };
     const prev = entries;

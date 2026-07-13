@@ -69,5 +69,15 @@ ok(t5.grandTotal === 98.98, `grandTotal = 107 + 2.68 − 10.70 = 98.98 (got ${t5
 // ── 5. tdsPct omitted (sale) ⇒ tds 0, unaffected ─────────────────────────────
 ok(computeInvoiceTotals({ items: [{ amount: 500 }], igstPct: 18 }).tdsAmount === 0, 'a sale (no tdsPct) has tds 0');
 
+// ── 6. Consumer GRN invoice delegates to the SAME born-exact rule (buildGrnInvoice) ──
+const { buildGrnInvoice } = await import(abs('../src/lib/consumer/purchaseOrder.ts'));
+const paise = (r) => Math.round(r * 100);
+const grn = buildGrnInvoice([{ itemId: 'i1', itemName: 'x', unit: 'pc', qty: 1, rate: 107 }], { gstPct: 5 });
+ok(grn.netAmount === 107, 'GRN net = billed ₹107');
+ok(paise(grn.cgstAmount) === 268 && paise(grn.sgstAmount) === 268, 'GRN CGST=SGST=2.5% of ₹107 = ₹2.68 (applyPercent half-up, not toFixed 2.67)');
+ok(paise(grn.cgstAmount) + paise(grn.sgstAmount) === paise(grn.taxAmount), 'GRN cgst + sgst === taxAmount');
+ok(paise(grn.netAmount) + paise(grn.taxAmount) === paise(grn.grandTotal), 'GRN net + tax === grandTotal exactly');
+// TdsRegister's tdsAmount now uses the same applyPercent half-up (the 2.675 → 2.68 fix, §1).
+
 console.log(`\nInvoice totals (born-exact): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
