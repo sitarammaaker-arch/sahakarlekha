@@ -18,6 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { fetchAllPaged } from '@/lib/supabasePaging';
 import { reportError } from '@/lib/errorReporting';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
@@ -129,47 +130,47 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setHousingFlatsState([]); setMaintenanceBillsState([]); setChargeHeadsState([]); setFundInvestmentsState([]); setComplaintsState([]); setParkingState([]); setTransfersState([]); setInsurancesState([]); setAmcsState([]); setDocumentsState([]); setBuildingsState([]); return; }
-    supabase.from('housing_flats').select('*').eq('society_id', sid).then(
+    fetchAllPaged<HousingFlat>('housing_flats', sid).then(
       ({ data, error }) => setHousingFlatsState(error || !data ? storage.getHousingFlats() : (data as unknown as HousingFlat[])),
       () => setHousingFlatsState(storage.getHousingFlats()),
     );
-    supabase.from('maintenance_bills').select('*').eq('society_id', sid).then(
+    fetchAllPaged<MaintenanceBill>('maintenance_bills', sid).then(
       ({ data, error }) => setMaintenanceBillsState(error || !data ? storage.getMaintenanceBills() : (data as unknown as MaintenanceBill[])),
       () => setMaintenanceBillsState(storage.getMaintenanceBills()),
     );
-    supabase.from('housing_charge_heads').select('*').eq('society_id', sid).then(
+    fetchAllPaged<HousingChargeHead>('housing_charge_heads', sid).then(
       ({ data, error }) => setChargeHeadsState(error || !data ? storage.getHousingChargeHeads() : (data as unknown as HousingChargeHead[])),
       () => setChargeHeadsState(storage.getHousingChargeHeads()),
     );
-    supabase.from('housing_fund_investments').select('*').eq('society_id', sid).then(
+    fetchAllPaged<HousingFundInvestment>('housing_fund_investments', sid).then(
       ({ data, error }) => setFundInvestmentsState(error || !data ? storage.getHousingFundInvestments() : (data as unknown as HousingFundInvestment[])),
       () => setFundInvestmentsState(storage.getHousingFundInvestments()),
     );
-    supabase.from('housing_complaints').select('*').eq('society_id', sid).then(
+    fetchAllPaged<HousingComplaint>('housing_complaints', sid).then(
       ({ data, error }) => setComplaintsState(error || !data ? storage.getHousingComplaints() : (data as unknown as HousingComplaint[])),
       () => setComplaintsState(storage.getHousingComplaints()),
     );
-    supabase.from('housing_parking').select('*').eq('society_id', sid).then(
+    fetchAllPaged<HousingParking>('housing_parking', sid).then(
       ({ data, error }) => setParkingState(error || !data ? storage.getHousingParking() : (data as unknown as HousingParking[])),
       () => setParkingState(storage.getHousingParking()),
     );
-    supabase.from('housing_transfers').select('*').eq('society_id', sid).then(
+    fetchAllPaged<HousingTransfer>('housing_transfers', sid).then(
       ({ data, error }) => setTransfersState(error || !data ? storage.getHousingTransfers() : (data as unknown as HousingTransfer[])),
       () => setTransfersState(storage.getHousingTransfers()),
     );
-    supabase.from('housing_insurance').select('*').eq('society_id', sid).then(
+    fetchAllPaged<HousingInsurance>('housing_insurance', sid).then(
       ({ data, error }) => setInsurancesState(error || !data ? storage.getHousingInsurance() : (data as unknown as HousingInsurance[])),
       () => setInsurancesState(storage.getHousingInsurance()),
     );
-    supabase.from('housing_amc').select('*').eq('society_id', sid).then(
+    fetchAllPaged<HousingAmc>('housing_amc', sid).then(
       ({ data, error }) => setAmcsState(error || !data ? storage.getHousingAmc() : (data as unknown as HousingAmc[])),
       () => setAmcsState(storage.getHousingAmc()),
     );
-    supabase.from('housing_documents').select('*').eq('society_id', sid).then(
+    fetchAllPaged<HousingDocument>('housing_documents', sid).then(
       ({ data, error }) => setDocumentsState(error || !data ? storage.getHousingDocuments() : (data as unknown as HousingDocument[])),
       () => setDocumentsState(storage.getHousingDocuments()),
     );
-    supabase.from('housing_buildings').select('*').eq('society_id', sid).then(
+    fetchAllPaged<HousingBuilding>('housing_buildings', sid).then(
       ({ data, error }) => setBuildingsState(error || !data ? storage.getHousingBuildings() : (data as unknown as HousingBuilding[])),
       () => setBuildingsState(storage.getHousingBuildings()),
     );

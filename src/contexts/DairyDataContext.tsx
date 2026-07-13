@@ -19,6 +19,7 @@ import { useData } from '@/contexts/DataContext';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { fetchAllPaged } from '@/lib/supabasePaging';
 import { reportError } from '@/lib/errorReporting';
 import * as storage from '@/lib/storage';
 import { priceMilk } from '@/lib/dairy/pricing';
@@ -130,7 +131,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setRateChartsState([]); return; }
-    supabase.from('dairy_rate_charts').select('*').eq('society_id', sid).then(
+    fetchAllPaged<DairyRateChart>('dairy_rate_charts', sid).then(
       ({ data, error }) => setRateChartsState(error || !data ? storage.getDairyRateCharts() : (data as DairyRateChart[])),
       () => setRateChartsState(storage.getDairyRateCharts()),
     );
@@ -153,7 +154,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       try { localStorage.removeItem(`sl_milk_entries_${sid}`); } catch { /* ignore */ }
       return merged;
     };
-    supabase.from('milk_entries').select('*').eq('society_id', sid).then(
+    fetchAllPaged<MilkEntry>('milk_entries', sid).then(
       ({ data, error }) => setMilkEntriesState(merge(error || !data ? storage.getMilkEntries() : (data as MilkEntry[]))),
       () => setMilkEntriesState(merge(storage.getMilkEntries())),
     );
@@ -162,7 +163,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setSettlementsState([]); return; }
-    supabase.from('dairy_settlements').select('*').eq('society_id', sid).then(
+    fetchAllPaged<DairySettlement>('dairy_settlements', sid).then(
       ({ data, error }) => setSettlementsState(error || !data ? storage.getDairySettlements() : (data as DairySettlement[])),
       () => setSettlementsState(storage.getDairySettlements()),
     );
@@ -171,7 +172,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setDispatchesState([]); return; }
-    supabase.from('dairy_dispatches').select('*').eq('society_id', sid).then(
+    fetchAllPaged<DairyDispatch>('dairy_dispatches', sid).then(
       ({ data, error }) => setDispatchesState(error || !data ? storage.getDairyDispatches() : (data as DairyDispatch[])),
       () => setDispatchesState(storage.getDairyDispatches()),
     );
@@ -180,7 +181,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setInputIssuesState([]); return; }
-    supabase.from('dairy_input_issues').select('*').eq('society_id', sid).then(
+    fetchAllPaged<DairyInputIssue>('dairy_input_issues', sid).then(
       ({ data, error }) => setInputIssuesState(error || !data ? storage.getDairyInputIssues() : (data as DairyInputIssue[])),
       () => setInputIssuesState(storage.getDairyInputIssues()),
     );
@@ -189,7 +190,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setDistributionsState([]); return; }
-    supabase.from('dairy_distributions').select('*').eq('society_id', sid).then(
+    fetchAllPaged<DairyDistribution>('dairy_distributions', sid).then(
       ({ data, error }) => setDistributionsState(error || !data ? storage.getDairyDistributions() : (data as DairyDistribution[])),
       () => setDistributionsState(storage.getDairyDistributions()),
     );
