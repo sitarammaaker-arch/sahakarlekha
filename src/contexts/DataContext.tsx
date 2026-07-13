@@ -3143,35 +3143,57 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return changed ? patched : v;
     });
     const touchedCount = changedIds.size;
+
+    // RULE 1/3 — ALL-OR-NOTHING. A partial merge (some vouchers/suppliers/customers re-pointed to
+    // keepId in the cloud, others not, and then the removeId account deleted) strands rows against a
+    // deleted account → orphans on F5. So: snapshot, apply the re-points optimistically, persist them
+    // ALL, and only delete the emptied account once every re-point is confirmed durable. Any failure
+    // rolls the whole thing back and leaves the account untouched.
+    const voucherSnapshot = vouchersRef.current;
+    const supplierSnapshot = suppliersRef.current;
+    const customerSnapshot = customersRef.current;
+
     vouchersRef.current = updated;
     setVouchersState(updated);
-    // RULE 3: re-point supplier/customer sub-ledger links that pointed at removeId.
     const reSup = suppliersRef.current.filter(s => s.accountId === removeId);
     if (reSup.length > 0) {
       suppliersRef.current = suppliersRef.current.map(s => s.accountId === removeId ? { ...s, accountId: keepId } : s);
-      setSuppliersState(prev => prev.map(s => s.accountId === removeId ? { ...s, accountId: keepId } : s));
-      reSup.forEach(s => supabase.from('suppliers').update({ accountId: keepId }).eq('id', s.id).then(({ error }) => { if (error) console.error('Supplier re-point sync:', error.message); }));
+      setSuppliersState(suppliersRef.current);
     }
     const reCus = customersRef.current.filter(c => c.accountId === removeId);
     if (reCus.length > 0) {
       customersRef.current = customersRef.current.map(c => c.accountId === removeId ? { ...c, accountId: keepId } : c);
-      setCustomersState(prev => prev.map(c => c.accountId === removeId ? { ...c, accountId: keepId } : c));
-      reCus.forEach(c => supabase.from('customers').update({ accountId: keepId }).eq('id', c.id).then(({ error }) => { if (error) console.error('Customer re-point sync:', error.message); }));
+      setCustomersState(customersRef.current);
     }
-    // H13: Persist only the changed vouchers (and re-sync their voucher_entries rows so SQL reports
-    // point at keepId, not removeId). Old filter logic was self-referential and broken.
-    updated.filter(v => changedIds.has(v.id)).forEach(v => {
-      const { editHistory: _eh, ...forDb } = v;
-      supabase.from('vouchers').upsert(withSoc(forDb)).then(({ error }) => {
-        if (error) console.error('Merge voucher save:', error.message);
-        else if (!v.isDeleted) syncEntries(v); // rebuild voucher_entries with the new accountId
+
+    // Persist every re-point first; each resolves to its error message (or null). The removeId
+    // account is NOT deleted until they all succeed.
+    const changedVouchers = updated.filter(v => changedIds.has(v.id));
+    const writes: Promise<string | null>[] = [
+      ...changedVouchers.map(v => { const { editHistory: _eh, ...forDb } = v; return supabase.from('vouchers').upsert(withSoc(forDb)).then(({ error }) => error?.message ?? null); }),
+      ...reSup.map(s => supabase.from('suppliers').update({ accountId: keepId }).eq('id', s.id).then(({ error }) => error?.message ?? null)),
+      ...reCus.map(c => supabase.from('customers').update({ accountId: keepId }).eq('id', c.id).then(({ error }) => error?.message ?? null)),
+    ];
+
+    const rollbackMerge = (msg: string) => {
+      vouchersRef.current = voucherSnapshot; setVouchersState(voucherSnapshot);
+      suppliersRef.current = supplierSnapshot; setSuppliersState(supplierSnapshot);
+      customersRef.current = customerSnapshot; setCustomersState(customerSnapshot);
+      reportError('merge-accounts', msg, { keepId, removeId });
+      toastRef.current({ title: '❌ खाता merge cloud par save NAHI hua', description: `${msg}. Local badlaav wapas le liye — refresh par data lose nahi hoga; khaata jyon-ka-tyon hai, dobara merge karein.`, variant: 'destructive', duration: 15000 });
+    };
+
+    Promise.all(writes).then((errs) => {
+      const firstErr = errs.find(e => e !== null);
+      if (firstErr) { rollbackMerge(firstErr); return; }
+      // All re-points durable — rebuild the moved voucher_entries, then delete the emptied account.
+      changedVouchers.forEach(v => { if (!v.isDeleted) syncEntries(v); });
+      setAccountsState(prev => prev.filter(a => a.id !== removeId));
+      supabase.from('accounts').delete().eq('id', removeId).then(({ error }) => {
+        if (error) reportError('merge-accounts', error.message, { keepId, removeId, phase: 'account-delete' });
       });
-    });
-    // Delete the removed account
-    setAccountsState(prev => prev.filter(a => a.id !== removeId));
-    supabase.from('accounts').delete().eq('id', removeId).then(({ error }) => {
-      if (error) console.error('Merge account delete:', error.message);
-    });
+    }, (rej: unknown) => rollbackMerge(rej instanceof Error ? rej.message : String(rej)));
+
     return touchedCount;
   }, []);
 
