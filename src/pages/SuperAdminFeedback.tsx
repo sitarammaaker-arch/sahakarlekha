@@ -85,21 +85,23 @@ const SuperAdminFeedback: React.FC = () => {
         p_password: password,
       });
       if (error) throw error;
-      sessionPw = password;
+      sessionPw = password || 'jwt';
       setAuthed(true);
       setRows((data as FeedbackRow[]) || []);
     } catch (e) {
       sessionPw = null;
       setAuthed(false);
-      setGateErr('लॉग-इन सत्यापित नहीं हुआ — पक्का करें कि यह आपके platform-admin का सही पासवर्ड है, और माइग्रेशन 003 चल चुका है।');
+      setGateErr('platform-admin पहुँच सत्यापित नहीं हुई — पक्का करें कि आप platform-admin खाते से लॉग-इन हैं (और migration 024 चल चुका है)।');
     } finally {
       setLoading(false);
     }
   }, [email]);
 
-  // Auto-load if we already verified earlier this session.
+  // Auth is the Supabase JWT now (S4: platform admins are real Auth users; the feedback RPCs gate
+  // server-side on is_platform_admin()). Auto-load on mount — no password prompt in the happy path.
+  // The password form below stays only as a manual-retry fallback; the value is ignored server-side.
   useEffect(() => {
-    if (sessionPw) load(sessionPw);
+    load(sessionPw ?? 'jwt');
   }, [load]);
 
   const setStatus = async (id: string, status: string) => {
