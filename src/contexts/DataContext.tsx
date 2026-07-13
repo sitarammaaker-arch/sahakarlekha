@@ -296,6 +296,16 @@ const MEMBER_STATUSES: MemberStatus[] = ['active', 'inactive', 'resigned', 'expe
 const canTransitionMember = (from: MemberStatus, to: MemberStatus): boolean =>
   from !== to && from !== 'deceased' && MEMBER_STATUSES.includes(to);
 
+/** Report a secondary / CASCADE Supabase write failure (audit P0-2). These are the RULE-3
+ *  ghost-data risks — a linked voucher left un-cancelled, a stock movement not deleted, a stock
+ *  or share or deposit balance left inconsistent — that previously died at a bare console.error
+ *  with no durable trace. Keeps the dev-console line AND records it in error_log. Never throws. */
+function reportCascade(label: string, err: { message: string } | string): void {
+  const msg = typeof err === 'string' ? err : err.message;
+  console.error(`${label}:`, msg);
+  reportError('cascade-sync', msg, { label });
+}
+
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -2377,7 +2387,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Member deleted' } : v;
       vouchersRef.current = vouchersRef.current.map(cancel);
       setVouchersState(prev => prev.map(cancel));
-      linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) console.error('Member voucher cancel sync:', error.message); else deleteEntries(vid); }));
+      linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) reportCascade('Member voucher cancel sync', error); else deleteEntries(vid); }));
     }
     emitAudit({ entityType: 'member', entityId: id, action: 'delete', reason: 'Member deleted' });
     console.info(`[AUDIT-DELETE] Member id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
@@ -2407,7 +2417,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
     supabase.from('members').upsert(withSoc(updated)).then(({ error }) => {
       if (error) {
-        console.error('Share refund member sync:', error.message);
+        reportCascade('Share refund member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
         toastRef.current({ title: 'शेयर वापसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
@@ -2448,7 +2458,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
     supabase.from('members').upsert(withSoc(updated)).then(({ error }) => {
       if (error) {
-        console.error('Share operation member sync:', error.message);
+        reportCascade('Share operation member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
         toastRef.current({ title: 'शेयर संचालन सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
@@ -2482,7 +2492,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
     supabase.from('members').upsert(withSoc(updated)).then(({ error }) => {
       if (error) {
-        console.error('Share purchase member sync:', error.message);
+        reportCascade('Share purchase member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
         toastRef.current({ title: 'अतिरिक्त शेयर सेव नहीं हुए', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
@@ -2551,9 +2561,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     applyBoth(updFrom, updTo);
     const rollback = () => { applyBoth(beforeFrom, beforeTo); toastRef.current({ title: 'शेयर स्थानांतरण सेव नहीं हुआ', description: 'Cloud save fail — transfer rolled back.', variant: 'destructive', duration: 12000 }); };
     supabase.from('members').upsert(withSoc(updFrom)).then(({ error }) => {
-      if (error) { console.error('Share transfer (from) sync:', error.message); rollback(); return; }
+      if (error) { reportCascade('Share transfer (from) sync', error); rollback(); return; }
       supabase.from('members').upsert(withSoc(updTo)).then(({ error: e2 }) => {
-        if (e2) { console.error('Share transfer (to) sync:', e2.message); rollback(); }
+        if (e2) { reportCascade('Share transfer (to) sync', e2); rollback(); }
         else toastRef.current({ title: '✅ शेयर स्थानांतरित', description: `₹${amt.toLocaleString('en-IN')} · ${from.name} → ${to.name}${prem > 0 ? ` (+ प्रीमियम ₹${prem.toLocaleString('en-IN')})` : ''}` });
       });
     });
@@ -2606,7 +2616,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setDepositAccountsState(prev => [...prev, acct]);
     const persist = (a: DepositAccount) => supabase.from('deposit_accounts').upsert(withSoc(a)).then(({ error }) => {
       if (error) {
-        console.error('Deposit account sync:', error.message);
+        reportCascade('Deposit account sync', error);
         depositAccountsRef.current = depositAccountsRef.current.filter(d => d.id !== a.id);
         setDepositAccountsState(prev => prev.filter(d => d.id !== a.id));   // RULE 1: roll back
         toastRef.current({ title: 'जमा खाता सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
@@ -2648,7 +2658,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setDepositAccountsState(prev => prev.map(d => d.id === accountId ? updated : d));
     supabase.from('deposit_accounts').upsert(withSoc(updated)).then(({ error }) => {
       if (error) {
-        console.error('Deposit txn balance sync:', error.message);
+        reportCascade('Deposit txn balance sync', error);
         depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
         setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
         toastRef.current({ title: 'लेनदेन सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
@@ -2684,7 +2694,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setDepositAccountsState(prev => prev.map(d => d.id === accountId ? updated : d));
     supabase.from('deposit_accounts').upsert(withSoc(updated)).then(({ error }) => {
       if (error) {
-        console.error('Deposit interest balance sync:', error.message);
+        reportCascade('Deposit interest balance sync', error);
         depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
         setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
         toastRef.current({ title: 'ब्याज सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
@@ -2721,7 +2731,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setDepositAccountsState(prev => prev.map(d => d.id === accountId ? updated : d));
     supabase.from('deposit_accounts').upsert(withSoc(updated)).then(({ error }) => {
       if (error) {
-        console.error('Deposit close sync:', error.message);
+        reportCascade('Deposit close sync', error);
         depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
         setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
         toastRef.current({ title: 'बंद करना सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
@@ -4163,7 +4173,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Loan deleted' } : v;
         vouchersRef.current = vouchersRef.current.map(cancel);
         setVouchersState(prev => prev.map(cancel));
-        linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) console.error('Loan voucher cancel sync:', error.message); else deleteEntries(vid); }));
+        linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) reportCascade('Loan voucher cancel sync', error); else deleteEntries(vid); }));
       }
     }
     console.info(`[AUDIT-DELETE] Loan id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
@@ -4250,7 +4260,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAssetsState(prev => prev.map(a => a.id === id ? updated : a));
     supabase.from('assets').upsert(withSoc(updated)).then(({ error }) => {
       if (error) {
-        console.error('Asset dispose sync:', error.message);
+        reportCascade('Asset dispose sync', error);
         assetsRef.current = assetsRef.current.map(a => a.id === id ? before : a);
         setAssetsState(prev => prev.map(a => a.id === id ? before : a));   // RULE 1: roll back
         toastRef.current({ title: 'Disposal सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
@@ -4286,7 +4296,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Asset deleted' } : v;
         vouchersRef.current = vouchersRef.current.map(cancel);
         setVouchersState(prev => prev.map(cancel));
-        linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) console.error('Asset voucher cancel sync:', error.message); else deleteEntries(vid); }));
+        linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) reportCascade('Asset voucher cancel sync', error); else deleteEntries(vid); }));
       }
     }
     emitAudit({ entityType: 'asset', entityId: id, action: 'delete', reason: 'Asset deleted' });
@@ -4883,7 +4893,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         else qty -= Math.abs(m.qty);
       }
       qty = Math.max(0, qty);
-      supabase.from('stock_items').update({ currentStock: qty }).eq('id', i.id).then(({ error }) => { if (error) { console.error('Stock currentStock sync error:', error.message); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } });
+      supabase.from('stock_items').update({ currentStock: qty }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } });
       return { ...i, currentStock: qty };
     }));
   }, []);
@@ -5006,7 +5016,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (i.id !== item.itemId) return i;
           const newStock = Math.max(0, i.currentStock - item.qty);
           supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id)
-            .then(({ error }) => { if (error) { console.error('Stock sync error:', error.message); toastRef.current({ title: 'Stock save failed', description: error.message, variant: 'destructive' }); } });
+            .then(({ error }) => { if (error) { reportCascade('Stock sync error', error); toastRef.current({ title: 'Stock save failed', description: error.message, variant: 'destructive' }); } });
           return { ...i, currentStock: newStock };
         });
         return updated;
@@ -5094,7 +5104,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Reverse stock deductions on stock_items.currentStock
         sale.items.forEach(item => {
           setStockItemsState(s => {
-            const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = i.currentStock + item.qty; supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { console.error('Stock currentStock sync error:', error.message); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } }); return { ...i, currentStock: newStock }; });
+            const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = i.currentStock + item.qty; supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } }); return { ...i, currentStock: newStock }; });
             return updated;
           });
         });
@@ -5104,7 +5114,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (_delSaleMovs.length) emitAudit({ entityType: 'stockMovement', entityId: sale.saleNo, action: 'delete', before: { count: _delSaleMovs.length, movements: snapshotDeletedMovements(_delSaleMovs) }, reason: `Sale ${sale.saleNo} deleted` });
         setStockMovementsState(s => s.filter(m => m.referenceNo !== sale.saleNo));
         supabase.from('stock_movements').delete().eq('referenceNo', sale.saleNo)
-          .then(({ error }) => { if (error) console.error('Movements cascade-delete sync:', error.message); });
+          .then(({ error }) => { if (error) reportCascade('Movements cascade-delete sync', error); });
       }
       const updated = prev.filter(s => s.id !== id);
       return updated;
@@ -5155,7 +5165,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (delta == null || delta === 0) return i;
       const newStock = Math.max(0, i.currentStock + delta);
       supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id)
-        .then(({ error }) => { if (error) console.error('Stock update sync:', error.message); });
+        .then(({ error }) => { if (error) reportCascade('Stock update sync', error); });
       return { ...i, currentStock: newStock };
     }));
 
@@ -5164,7 +5174,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (_delSaleEditMovs.length) emitAudit({ entityType: 'stockMovement', entityId: original.saleNo, action: 'delete', before: { count: _delSaleEditMovs.length, movements: snapshotDeletedMovements(_delSaleEditMovs) }, reason: `Sale ${original.saleNo} edited (movements replaced)` });
     setStockMovementsState(prev => prev.filter(m => m.referenceNo !== original.saleNo));
     supabase.from('stock_movements').delete().eq('referenceNo', original.saleNo)
-      .then(({ error }) => { if (error) console.error('Old movements delete sync:', error.message); });
+      .then(({ error }) => { if (error) reportCascade('Old movements delete sync', error); });
 
     // 2️⃣ Soft-cancel the original sale voucher(s) + drop voucher_entries
     const linkedIds = ([original.voucherId, ...(original.gstVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
@@ -5177,7 +5187,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         linkedIds.forEach(vid => {
           const cancelled = updated.find(x => x.id === vid);
           if (cancelled) supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', vid).then(({ error }) => {
-            if (error) console.error('Voucher cancel sync:', error.message);
+            if (error) reportCascade('Voucher cancel sync', error);
             else deleteEntries(vid);
           });
         });
@@ -5336,7 +5346,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (i.id !== item.itemId) return i;
           const newStock = i.currentStock + item.qty;
           supabase.from('stock_items').update({ currentStock: newStock, purchaseRate: item.rate }).eq('id', i.id)
-            .then(({ error }) => { if (error) { console.error('Stock sync error:', error.message); toastRef.current({ title: 'Stock save failed', description: error.message, variant: 'destructive' }); } });
+            .then(({ error }) => { if (error) { reportCascade('Stock sync error', error); toastRef.current({ title: 'Stock save failed', description: error.message, variant: 'destructive' }); } });
           return { ...i, currentStock: newStock, purchaseRate: item.rate };
         });
         return updated;
@@ -5420,7 +5430,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Reverse stock additions on stock_items.currentStock
         purchase.items.forEach(item => {
           setStockItemsState(s => {
-            const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = Math.max(0, i.currentStock - item.qty); supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { console.error('Stock currentStock sync error:', error.message); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } }); return { ...i, currentStock: newStock }; });
+            const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = Math.max(0, i.currentStock - item.qty); supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } }); return { ...i, currentStock: newStock }; });
             return updated;
           });
         });
@@ -5431,7 +5441,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (_delPurMovs.length) emitAudit({ entityType: 'stockMovement', entityId: purchase.purchaseNo, action: 'delete', before: { count: _delPurMovs.length, movements: snapshotDeletedMovements(_delPurMovs) }, reason: `Purchase ${purchase.purchaseNo} deleted` });
         setStockMovementsState(s => s.filter(m => m.referenceNo !== purchase.purchaseNo));
         supabase.from('stock_movements').delete().eq('referenceNo', purchase.purchaseNo)
-          .then(({ error }) => { if (error) console.error('Movements cascade-delete sync:', error.message); });
+          .then(({ error }) => { if (error) reportCascade('Movements cascade-delete sync', error); });
       }
       const updated = prev.filter(p => p.id !== id);
       return updated;
@@ -5485,7 +5495,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const newStock = Math.max(0, i.currentStock + (delta || 0));
       const newRate = newRateMap.get(i.id) ?? i.purchaseRate;
       supabase.from('stock_items').update({ currentStock: newStock, purchaseRate: newRate }).eq('id', i.id)
-        .then(({ error }) => { if (error) console.error('Stock update sync:', error.message); });
+        .then(({ error }) => { if (error) reportCascade('Stock update sync', error); });
       return { ...i, currentStock: newStock, purchaseRate: newRate };
     }));
 
@@ -5494,7 +5504,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (_delPurEditMovs.length) emitAudit({ entityType: 'stockMovement', entityId: original.purchaseNo, action: 'delete', before: { count: _delPurEditMovs.length, movements: snapshotDeletedMovements(_delPurEditMovs) }, reason: `Purchase ${original.purchaseNo} edited (movements replaced)` });
     setStockMovementsState(prev => prev.filter(m => m.referenceNo !== original.purchaseNo));
     supabase.from('stock_movements').delete().eq('referenceNo', original.purchaseNo)
-      .then(({ error }) => { if (error) console.error('Old movements delete sync:', error.message); });
+      .then(({ error }) => { if (error) reportCascade('Old movements delete sync', error); });
 
     // 2️⃣ Soft-delete the original purchase voucher(s)
     const linkedIds = ([original.voucherId, ...(original.taxVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
@@ -5507,7 +5517,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         linkedIds.forEach(vid => {
           const cancelled = updated.find(x => x.id === vid);
           if (cancelled) supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', vid).then(({ error }) => {
-            if (error) console.error('Voucher cancel sync:', error.message);
+            if (error) reportCascade('Voucher cancel sync', error);
             else deleteEntries(vid); // cascade: remove from voucher_entries
           });
         });
