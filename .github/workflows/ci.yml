@@ -40,12 +40,9 @@ jobs:
         # Run every test:* script EXCEPT the ones that need a prior build artifact (dist / esbuild
         # bundles) — those belong in the build job, not the pure-logic gate. Collect failures so one
         # broken test doesn't hide the others, then fail the job listing them.
-        # Excludes: dist/bundle (need a prior build artifact). rls-coverage is a STATIC test that
-        # parses the repo's *.sql for RLS policies; it's currently red because the live prod RLS
-        # (P1-SEC-1, 92 tables) isn't fully mirrored in the repo SQL files — a repo/prod drift, not a
-        # live security gap. Re-include it once that SQL is reconciled into the repo.
+        # Excludes only dist/bundle — they need a prior build artifact and belong in a build job.
         run: |
-          tests=$(node -e "const s=require('./package.json').scripts;console.log(Object.keys(s).filter(k=>k.startsWith('test:')&&!/dist|bundle|rls-coverage/.test(k)).join(' '))")
+          tests=$(node -e "const s=require('./package.json').scripts;console.log(Object.keys(s).filter(k=>k.startsWith('test:')&&!/dist|bundle/.test(k)).join(' '))")
           fails=""
           for t in $tests; do
             echo "::group::npm run $t"
