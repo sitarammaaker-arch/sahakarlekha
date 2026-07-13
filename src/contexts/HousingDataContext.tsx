@@ -250,6 +250,14 @@ export function HousingProvider({ children }: { children: ReactNode }) {
 
   const deleteHousingFlat = useCallback((id: string) => {
     if (guardFYLocked()) return;
+    // RULE 3: don't hard-delete a flat that still has live maintenance bills — that would orphan them
+    // against a gone flatId (reports/receivables tied to a flat that no longer exists). Block and
+    // point at the dependents, mirroring the main ledger's getEntityLinks blocking-delete.
+    const liveBills = maintenanceBills.filter(b => !b.isDeleted && b.flatId === id).length;
+    if (liveBills > 0) {
+      toastRef.current({ title: 'फ्लैट डिलीट नहीं हो सकता', description: `इस फ्लैट की ${liveBills} रखरखाव bill(s) हैं — पहले Maintenance Billing में वे delete करें, फिर flat हटाएँ।`, variant: 'destructive', duration: 10000 });
+      return;
+    }
     const old = housingFlats.find(f => f.id === id);
     setHousingFlatsState(prev => { const u = prev.filter(f => f.id !== id); storage.setHousingFlats(u); return u; });
     supabase.from('housing_flats').delete().eq('id', id).then(({ error }) => {
@@ -259,7 +267,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
       }
     });
-  }, [housingFlats]);
+  }, [housingFlats, maintenanceBills]);
 
   // ── Housing Maintenance Billing — one bill per flat per period; posts a receivable ──
   // voucher (Dr 3303 Maintenance Receivable / Cr 4101 Maintenance Charges) tagged to the
