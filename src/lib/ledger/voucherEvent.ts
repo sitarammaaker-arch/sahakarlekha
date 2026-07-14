@@ -26,3 +26,12 @@ export interface EventPostingLine {
 export function voucherPostingLines(voucher: Voucher): EventPostingLine[] {
   return getVoucherLines(voucher).map((l) => ({ accountId: l.accountId, drCr: l.type, amountMinor: toMinor(l.amount) }));
 }
+
+/**
+ * PURE — the REVERSING legs of a voucher: the posting legs with each Dr/Cr side flipped. Payload for
+ * a `voucher.cancelled` / `voucher.reversed` event, so replay nets the original's postings to zero
+ * WITHOUT the original ever leaving the log (CL-2). Same accounts and exact paise, sides swapped.
+ */
+export function voucherReversalLines(voucher: Voucher): EventPostingLine[] {
+  return voucherPostingLines(voucher).map((l) => ({ ...l, drCr: l.drCr === 'Dr' ? 'Cr' : 'Dr' }));
+}
