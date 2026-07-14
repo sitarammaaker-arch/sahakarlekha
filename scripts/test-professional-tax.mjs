@@ -1,33 +1,36 @@
-// Professional Tax by state (ECR-14) — mirrors src/lib/professionalTax.ts.
+// Professional Tax by state (ECR-14) — imports the REAL src/lib/professionalTax.ts (via the '@/'
+// loader) so this validates the actual code. (Was a self-contained mirror before.)
 // Run: node scripts/test-professional-tax.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-function resolveStateKey(state) {
-  const s = (state || '').toLowerCase().replace(/\s+/g, '');
-  const has = (...keys) => keys.some(k => s.includes(k));
-  if (has('maharashtra', 'महाराष्ट्र')) return 'maharashtra';
-  if (has('karnataka', 'कर्नाटक')) return 'karnataka';
-  if (has('westbengal', 'बंगाल')) return 'westbengal';
-  if (has('madhyapradesh', 'मध्यप्रदेश')) return 'madhyapradesh';
-  if (has('gujarat', 'गुजरात')) return 'gujarat';
-  if (has('telangana', 'तेलंगाना', 'तेलंगान')) return 'telangana';
-  if (has('andhra', 'आंध्र')) return 'andhra';
-  if (has('tamilnadu', 'तमिलनाडु')) return 'tamilnadu';
-  return 'none';
-}
-function professionalTax(gross, k) {
-  const g = Math.max(0, gross || 0);
-  switch (k) {
-    case 'maharashtra':   return g <= 7500 ? 0 : g <= 10000 ? 175 : 200;
-    case 'karnataka':     return g < 25000 ? 0 : 200;
-    case 'westbengal':    return g <= 10000 ? 0 : g <= 15000 ? 110 : g <= 25000 ? 130 : g <= 40000 ? 150 : 200;
-    case 'madhyapradesh': return g <= 18750 ? 0 : g <= 25000 ? 125 : g <= 33333 ? 167 : 208;
-    case 'gujarat':       return g < 12000 ? 0 : 200;
-    case 'andhra': case 'telangana': return g <= 15000 ? 0 : g <= 20000 ? 150 : 200;
-    case 'tamilnadu':     return g <= 21000 ? 0 : g <= 30000 ? 100 : g <= 45000 ? 235 : 500;
-    default:              return 0;
-  }
-}
-const professionalTaxForState = (g, state) => professionalTax(g, resolveStateKey(state));
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { resolveStateKey, professionalTax, professionalTaxForState } = await import(abs('../src/lib/professionalTax.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };

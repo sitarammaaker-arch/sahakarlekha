@@ -1,27 +1,36 @@
-// Storage-loss vs norm (ECR-20) — mirrors src/lib/storageLoss.ts.
+// Storage-loss vs norm (ECR-20) — imports the REAL src/lib/storageLoss.ts (via the '@/' loader)
+// so this validates the actual code. (Was a self-contained mirror before.)
 // Run: node scripts/test-storage-loss.mjs
-const r2 = (n) => Math.round(n * 100) / 100;
-const isTransfer = (ref) => (ref || '').startsWith('TRF/');
-function computeStorageLoss(movements, normPct) {
-  const norm = normPct > 0 ? normPct : 0;
-  const map = new Map();
-  for (const m of movements || []) {
-    if (m.isDeleted) continue;
-    if (isTransfer(m.referenceNo)) continue;
-    const qty = m.qty || 0;
-    const row = map.get(m.itemId) ?? { inwardQty: 0, lossQty: 0 };
-    if (m.type === 'purchase' || m.type === 'opening' || (m.type === 'adjustment' && qty > 0)) row.inwardQty += qty;
-    else if (m.type === 'adjustment' && qty < 0) row.lossQty += Math.abs(qty);
-    map.set(m.itemId, row);
-  }
-  const rows = [];
-  for (const [itemId, r] of map.entries()) {
-    if (r.inwardQty <= 0) continue;
-    const actualLossPct = r2((r.lossQty / r.inwardQty) * 100);
-    rows.push({ itemId, inwardQty: r2(r.inwardQty), lossQty: r2(r.lossQty), actualLossPct, normPct: norm, excessPct: r2(Math.max(0, actualLossPct - norm)), withinNorm: actualLossPct <= norm });
-  }
-  return rows;
-}
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { computeStorageLoss } = await import(abs('../src/lib/storageLoss.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
