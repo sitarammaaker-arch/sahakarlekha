@@ -37,10 +37,32 @@ begin
                else lower(trim(coalesce(ss.state, '')))
              end
         from public.society_settings ss
-       where t.society_id = ss.society_id
+       where t.society_id::text = ss.society_id::text   -- mixed uuid/text society_id across tables → cast both
          and t.jurisdiction is null
     $f$, r.table_name);
     get diagnostics n = row_count;
     if n > 0 then raise notice 'backfilled % row(s) in %', n, r.table_name; end if;
+  end loop;
+end $$;
+
+-- Orphan / ghost rows — a society_id with NO society_settings (e.g. the RLS-hidden ghost society
+-- 8fa05310, or legacy SOC001/PLATFORM seed data) — have no state to resolve from, so the join above
+-- leaves them null. resolveJurisdiction('') = '' (a valid, non-null key), so set them to '' to hold the
+-- zero-nulls acceptance without inventing a jurisdiction. Idempotent; safe to re-run.
+do $$
+declare r record; n bigint;
+begin
+  for r in
+    select c.table_name
+    from information_schema.columns c
+    where c.table_schema = 'public' and c.column_name = 'society_id'
+      and exists (
+        select 1 from information_schema.columns j
+        where j.table_schema = 'public' and j.table_name = c.table_name and j.column_name = 'jurisdiction'
+      )
+  loop
+    execute format('update public.%I set jurisdiction = '''' where jurisdiction is null', r.table_name);
+    get diagnostics n = row_count;
+    if n > 0 then raise notice 'defaulted % orphan row(s) to '''' in %', n, r.table_name; end if;
   end loop;
 end $$;
