@@ -45,7 +45,7 @@ import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { resolveJurisdiction, stampTenant } from '@/lib/jurisdiction';
 import { isPeriodLocked as isDateInLockedPeriod } from '@/lib/periodLock';
 import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
-import { voucherPostingLines } from '@/lib/ledger/voucherEvent';
+import { voucherPostingLines, voucherReversalLines } from '@/lib/ledger/voucherEvent';
 import { snapshotDeletedMovements } from '@/lib/movementArchive';
 import { isSelfApproval } from '@/lib/sod';
 import { requiresApproval } from '@/lib/approvalMatrix';
@@ -1902,6 +1902,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const cancelledVoucher = { ...current, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy, deletedReason: reason };
+    // T-06: shadow 'voucher.cancelled' event — REVERSING legs (Dr/Cr flipped) net the original's
+    // postings out of the journal, mirroring the isDeleted + deleteEntries that removes it from SQL
+    // reports. Best-effort and isolated; the original voucher.posted event stays in the log (CL-2).
+    let cancelEvent: LedgerEvent | null = null;
+    try {
+      cancelEvent = buildEvent({
+        eventType: 'voucher.cancelled',
+        tenantId: societyIdRef.current,
+        jurisdiction: jurisdictionRef.current,
+        aggregateType: 'voucher',
+        aggregateId: id,
+        sequence: 2,
+        producer: { kind: 'human', id: deletedBy ?? null },
+        payload: { lines: voucherReversalLines(current), voucherNo: current.voucherNo, reason },
+      }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
+      ledgerEventsRef.current = [...ledgerEventsRef.current, cancelEvent];
+    } catch { /* shadow ledger is best-effort — never touches the cancel path */ }
     emitAudit({ entityType: 'voucher', entityId: id, action: 'cancel', reason });
     setVouchersState(prev => {
       const updated = prev.map(v => v.id === id ? cancelledVoucher : v);
@@ -1912,8 +1929,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // late-added column the table lacks (RULE 1) — which silently left cancelled
     // vouchers un-synced (the "Save failed" on delete).
     supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelledVoucher.deletedAt, deletedBy, deletedReason: reason }).eq('id', id).then(({ error }) => {
-      if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
-      else deleteEntries(id); // remove from voucher_entries so cancelled voucher has no SQL-visible impact
+      if (error) {
+        console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' });
+        // Keep the shadow ledger consistent with the un-cancelled voucher.
+        if (cancelEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent!.eventId);
+      } else {
+        deleteEntries(id); // remove from voucher_entries so cancelled voucher has no SQL-visible impact
+        if (cancelEvent) persistLedgerEvent(cancelEvent); // durable append only after the cancel is confirmed
+      }
     });
     return true;
   }, []);

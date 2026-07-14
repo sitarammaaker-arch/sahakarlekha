@@ -31,7 +31,7 @@ register(
     `),
 );
 
-const { voucherPostingLines } = await import(abs('../src/lib/ledger/voucherEvent.ts'));
+const { voucherPostingLines, voucherReversalLines } = await import(abs('../src/lib/ledger/voucherEvent.ts'));
 const { buildEvent, reverseEvent } = await import(abs('../src/lib/ledger/event.ts'));
 const { projectTrialBalance } = await import(abs('../src/lib/ledger/projections.ts'));
 
@@ -75,6 +75,18 @@ const reversed = reverseEvent(posted, CTX('e-v1-2', '2025-04-02T00:00:00Z'), {
 });
 const tbNet = projectTrialBalance([posted, reversed]);
 ok(tbNet.totalDrMinor === tbNet.totalCrMinor && (tbNet.lines.find((l) => l.accountId === '1001')?.netMinor ?? 0) === 0, 'posted + reversed nets each account to zero (correction, not deletion)');
+
+// 6. voucherReversalLines — same accounts/amounts, Dr/Cr flipped (the cancel/reverse payload).
+const revLegs = voucherReversalLines({ id: 'v1', debitAccountId: '1001', creditAccountId: '4101', amount: 1000 });
+ok(revLegs.find((l) => l.accountId === '1001').drCr === 'Cr' && revLegs.find((l) => l.accountId === '4101').drCr === 'Dr', 'reversal legs flip each side');
+ok(sum(revLegs, 'Dr') === 100000 && sum(revLegs, 'Cr') === 100000, 'reversal legs preserve amounts (still balanced)');
+
+// 7. CANCELLATION replay — a voucher.cancelled event with the reversal legs nets the posted voucher
+//    to zero in the journal (mirrors isDeleted + deleteEntries removing it from SQL reports).
+const postedC = post('v1', 1, legs1);
+const cancelled = buildEvent({ eventType: 'voucher.cancelled', tenantId: 'SOC001', jurisdiction: 'hr', aggregateType: 'voucher', aggregateId: 'v1', sequence: 2, producer: HUMAN, payload: { lines: revLegs } }, CTX('e-v1-c', '2025-04-03T00:00:00Z'));
+const tbCancel = projectTrialBalance([postedC, cancelled]);
+ok((tbCancel.lines.find((l) => l.accountId === '1001')?.netMinor ?? 0) === 0 && (tbCancel.lines.find((l) => l.accountId === '4101')?.netMinor ?? 0) === 0, 'posted + cancelled nets every account to zero (journal matches the soft-delete)');
 
 console.log(`\nLedger voucher-event legs (T-06): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
