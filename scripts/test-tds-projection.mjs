@@ -1,31 +1,38 @@
-// TDS u/s 192 projection (ECR-14) — mirrors src/lib/tdsProjection.ts (FY 2024-25).
+// TDS u/s 192 projection (ECR-14, FY 2024-25). Imports the REAL src/lib/tdsProjection.ts via
+// the '@/' loader (was a self-contained mirror before).
 // Run: node scripts/test-tds-projection.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-const r0 = (n) => Math.round(n);
-function slabTax(taxable, slabs) {
-  let tax = 0, prev = 0;
-  for (const [limit, rate] of slabs) {
-    if (taxable <= prev) break;
-    tax += (Math.min(taxable, limit) - prev) * rate;
-    prev = limit;
-  }
-  return tax;
-}
-const NEW_SLABS = [[300000, 0], [700000, 0.05], [1000000, 0.10], [1200000, 0.15], [1500000, 0.20], [Infinity, 0.30]];
-const OLD_SLABS = [[250000, 0], [500000, 0.05], [1000000, 0.20], [Infinity, 0.30]];
-function annualIncomeTax(grossAnnual, regime, otherDeductions = 0) {
-  const gross = Math.max(0, grossAnnual || 0);
-  const std = regime === 'new' ? 75000 : 50000;
-  const deductions = regime === 'old' ? Math.max(0, otherDeductions || 0) : 0;
-  const taxable = Math.max(0, gross - std - deductions);
-  let tax = slabTax(taxable, regime === 'new' ? NEW_SLABS : OLD_SLABS);
-  const rebateLimit = regime === 'new' ? 700000 : 500000;
-  if (taxable <= rebateLimit) tax = 0;
-  return r0(tax * 1.04);
-}
-const monthlyTds = (annualTax, m = 12) => r0(Math.max(0, annualTax) / Math.max(1, m));
-const projectAnnualIncome = (mg) => Math.max(0, mg || 0) * 12;
-const suggestMonthlyTds = (mg, regime, d = 0, m = 12) => monthlyTds(annualIncomeTax(projectAnnualIncome(mg), regime, d), m);
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { annualIncomeTax, monthlyTds, suggestMonthlyTds } = await import(abs('../src/lib/tdsProjection.ts'));
+
+const r0 = (n) => Math.round(n); // fixture rounding for expected values
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };

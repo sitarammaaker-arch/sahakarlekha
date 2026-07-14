@@ -1,33 +1,36 @@
-// RD installment schedule (Deposits module) — mirrors src/lib/rdSchedule.ts.
+// RD installment schedule (Deposits module). Imports the REAL src/lib/rdSchedule.ts via the
+// '@/' loader (was a self-contained mirror before).
 // Run: node scripts/test-rd-schedule.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-function addMonths(iso, n) {
-  const [y, m, d] = iso.split('-').map(Number);
-  const total = y * 12 + (m - 1) + n;
-  const ny = Math.floor(total / 12);
-  const nm = (total % 12) + 1;
-  const lastDay = new Date(ny, nm, 0).getDate();
-  const nd = Math.min(d, lastDay);
-  return `${ny}-${String(nm).padStart(2, '0')}-${String(nd).padStart(2, '0')}`;
-}
-function monthsBetween(a, b) {
-  const [ay, am] = a.split('-').map(Number);
-  const [by, bm] = b.split('-').map(Number);
-  return (by * 12 + bm) - (ay * 12 + am);
-}
-function buildRdSchedule({ openDate, installmentAmount, maturityDate, totalPaid, asOf }) {
-  if (!maturityDate || !(installmentAmount > 0)) return [];
-  const n = Math.max(0, monthsBetween(openDate, maturityDate));
-  const paidCount = Math.floor((totalPaid || 0) / installmentAmount + 1e-9);
-  const rows = [];
-  for (let i = 1; i <= n; i++) {
-    const dueDate = addMonths(openDate, i - 1);
-    const status = i <= paidCount ? 'paid' : (dueDate < asOf ? 'missed' : 'due');
-    rows.push({ installmentNo: i, dueDate, amount: installmentAmount, status });
-  }
-  return rows;
-}
-const missedCount = (s) => s.filter(x => x.status === 'missed').length;
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { addMonths, monthsBetween, buildRdSchedule, missedCount } = await import(abs('../src/lib/rdSchedule.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };

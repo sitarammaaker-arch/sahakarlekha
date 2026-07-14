@@ -1,36 +1,40 @@
-// Godown-wise stock (ECR-17 Phase 3) — mirrors src/lib/godownStock.ts.
+// Godown-wise stock (ECR-17 Phase 3). Imports the REAL src/lib/godownStock.ts via the '@/'
+// loader (was a self-contained mirror before).
 // Run: node scripts/test-godown-stock.mjs
-const r2 = (n) => Math.round(n * 100) / 100;
-const UNASSIGNED_GODOWN = 'unassigned';
-function qtyDelta(type, qty) {
-  if (type === 'purchase' || type === 'opening' || (type === 'adjustment' && qty > 0)) return qty;
-  return -Math.abs(qty);
-}
-function computeGodownStock(movements, asOf) {
-  const map = new Map();
-  for (const m of movements) {
-    if (m.isDeleted) continue;
-    if (asOf && m.date && m.date > asOf) continue;
-    const godownId = m.godownId || UNASSIGNED_GODOWN;
-    const key = `${m.itemId}::${godownId}`;
-    const row = map.get(key) ?? { itemId: m.itemId, godownId, qty: 0, inQty: 0, inValue: 0 };
-    const delta = qtyDelta(m.type, m.qty || 0);
-    row.qty += delta;
-    if (delta > 0) { row.inQty += delta; row.inValue += delta * (m.rate || 0); }
-    map.set(key, row);
-  }
-  const rows = [];
-  for (const r of map.values()) {
-    const qty = r2(Math.max(0, r.qty));
-    const avg = r.inQty > 0 ? r.inValue / r.inQty : 0;
-    if (qty > 0.0001) rows.push({ itemId: r.itemId, godownId: r.godownId, qty, value: r2(qty * avg) });
-  }
-  return rows;
-}
-function godownTotals(rows) { const out = {}; for (const r of rows) out[r.godownId] = r2((out[r.godownId] || 0) + r.value); return out; }
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { UNASSIGNED_GODOWN, computeGodownStock, godownTotals } = await import(abs('../src/lib/godownStock.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
+const r2 = (n) => Math.round(n * 100) / 100; // fixture rounding for expected values
 const get = (rows, item, godown) => rows.find(r => r.itemId === item && r.godownId === godown);
 
 const mv = [

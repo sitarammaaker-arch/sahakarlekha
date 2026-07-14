@@ -1,22 +1,38 @@
-// Inter-godown transfer (ECR-20) — mirrors src/lib/godownTransfer.ts + the qtyDelta rule.
+// Inter-godown transfer (ECR-20). Imports the REAL src/lib/godownTransfer.ts (validateTransfer,
+// buildTransferLegs) + the REAL canonical qtyDelta from src/lib/godownStock.ts via the '@/'
+// loader (was a self-contained mirror before).
 // Run: node scripts/test-godown-transfer.mjs
-function validateTransfer(input) {
-  if (!input.fromGodownId || !input.toGodownId) return { ok: false, error: 'स्रोत और गंतव्य गोदाम चुनें।' };
-  if (input.fromGodownId === input.toGodownId) return { ok: false, error: 'स्रोत और गंतव्य गोदाम अलग होने चाहिए।' };
-  if (!(input.qty > 0)) return { ok: false, error: 'मात्रा 0 से अधिक होनी चाहिए।' };
-  if (input.qty > input.availableQty) return { ok: false, error: `स्रोत गोदाम में केवल ${input.availableQty} उपलब्ध है।` };
-  return { ok: true };
-}
-function buildTransferLegs(input) {
-  const q = Math.abs(input.qty);
-  const to = input.toLabel || input.toGodownId, from = input.fromLabel || input.fromGodownId;
-  const common = { date: input.date, itemId: input.itemId, type: 'adjustment', rate: input.rate, amount: q * input.rate, referenceNo: input.transferNo };
-  const out = { ...common, qty: -q, godownId: input.fromGodownId, narration: `गोदाम स्थानांतरण (जावक) → ${to}` };
-  const inn = { ...common, qty: q, godownId: input.toGodownId, narration: `गोदाम स्थानांतरण (आवक) ← ${from}` };
-  return [out, inn];
-}
-// Canonical stock delta (RULE-2) — proves the legs move the right way under the real formula.
-const qtyDelta = (type, qty) => (type === 'purchase' || type === 'opening' || (type === 'adjustment' && qty > 0)) ? qty : -Math.abs(qty);
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { validateTransfer, buildTransferLegs } = await import(abs('../src/lib/godownTransfer.ts'));
+const { qtyDelta } = await import(abs('../src/lib/godownStock.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
