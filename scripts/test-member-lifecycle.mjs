@@ -1,12 +1,36 @@
-// Member lifecycle (ECR-16 slice 1) — asserts the pure transition rule mirrored from
-// src/contexts/DataContext.tsx (canTransitionMember), the same way scripts/test-nav.mjs
-// mirrors navVisibility. Run: node scripts/test-member-lifecycle.mjs
+// Member lifecycle (ECR-16) — imports the REAL src/lib/memberLifecycle.ts (extracted from
+// DataContext) via the '@/' loader, so it validates the ACTUAL transition rule. Was a mirror.
+// Run: node scripts/test-member-lifecycle.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-// ── Mirror of the pure logic in DataContext ───────────────────────────────────
-const MEMBER_STATUSES = ['active', 'inactive', 'resigned', 'expelled', 'deceased'];
-const canTransitionMember = (from, to) => from !== to && from !== 'deceased' && MEMBER_STATUSES.includes(to);
-// Eligibility invariant used across reports (dividend / active count): only 'active' counts.
-const isMemberActive = (status) => status === 'active';
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { MEMBER_STATUSES, canTransitionMember, isMemberActive } = await import(abs('../src/lib/memberLifecycle.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
