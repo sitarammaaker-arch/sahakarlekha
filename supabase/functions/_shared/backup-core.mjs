@@ -3806,6 +3806,24 @@ function toNdjson(rows) {
   return rows.map((row) => canonicalize(row)).join("\n") + "\n";
 }
 
+// src/lib/export/contract.ts
+function keyOverrides(entity) {
+  return entity.columns.filter((c13) => c13.storageColumn && c13.storageColumn !== c13.key);
+}
+function toBackupRow(entity, storageRow) {
+  const overrides = keyOverrides(entity);
+  if (overrides.length === 0) return storageRow;
+  const out = { ...storageRow };
+  for (const col of overrides) {
+    const sc = col.storageColumn;
+    if (Object.prototype.hasOwnProperty.call(out, sc)) {
+      out[col.key] = out[sc];
+      delete out[sc];
+    }
+  }
+  return out;
+}
+
 // src/lib/backup/writer.ts
 var MANIFEST_PATH = "manifest.json";
 var ZIP_EPOCH = Date.UTC(1980, 0, 1);
@@ -3855,7 +3873,7 @@ async function buildArchive(input) {
     const { rows, truncated, error } = await input.fetchRows(entity, input.societyId);
     if (error) throw new BackupIncompleteError(entity.key, `could not be read (${error})`);
     if (truncated) throw new BackupIncompleteError(entity.key, "holds more rows than could be read in one pass");
-    const text = toNdjson(rows);
+    const text = toNdjson(rows.map((r) => toBackupRow(entity, r)));
     const bytes = strToU8(text);
     files[path] = bytes;
     entityManifests.push({

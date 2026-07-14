@@ -39,6 +39,7 @@ import {
   type BackupManifest, type EntityManifest, type ManifestInput,
 } from './manifest';
 import { toNdjson, type Row } from './ndjson';
+import { toBackupRow } from '../export/contract';
 
 /** Where the manifest lives inside the archive. Not itself hashed — it holds the hashes. */
 export const MANIFEST_PATH = 'manifest.json';
@@ -146,7 +147,10 @@ export async function buildArchive(input: ArchiveInput): Promise<ArchiveResult> 
     if (error) throw new BackupIncompleteError(entity.key, `could not be read (${error})`);
     if (truncated) throw new BackupIncompleteError(entity.key, 'holds more rows than could be read in one pass');
 
-    const text = toNdjson(rows);
+    // T-04: serialize through the export CONTRACT, not the raw table shape. toBackupRow is lossless
+    // (keeps every column) and identity until a storageColumn override exists, so today's archive is
+    // byte-identical — the seam is now in the pipeline for future storage/contract divergence.
+    const text = toNdjson(rows.map(r => toBackupRow(entity, r) as Row));
     const bytes = strToU8(text);
     files[path] = bytes;
 

@@ -76,6 +76,7 @@
     "test:xlsx": "node scripts/test-xlsx-compat.mjs",
     "test:ob": "node scripts/test-opening-balances.mjs",
     "test:export-registry": "node scripts/test-export-registry.mjs",
+    "test:export-contract": "node scripts/test-export-contract.mjs",
     "test:drift": "node scripts/test-schema-drift.mjs",
     "test:export-utils": "node scripts/test-export-utils.mjs",
     "test:export-generator": "node scripts/test-export-generator.mjs",
