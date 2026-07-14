@@ -3923,9 +3923,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const getCashBookEntries = useCallback((fromDate?: string, toDate?: string): CashBookEntry[] => {
     const cashAccount = accounts.find(a => a.id === ACCOUNT_IDS.CASH);
     if (!cashAccount) return [];
-    let runningBalance = cashAccount.openingBalanceType === 'debit'
+    // T-02: accumulate the running balance in exact integer paise (RULE 2), converting to rupees only
+    // at each emitted row — so a cash book over thousands of legs cannot drift in the last paisa.
+    let runningBalanceMinor = toMinor(cashAccount.openingBalanceType === 'debit'
       ? cashAccount.openingBalance
-      : -cashAccount.openingBalance;
+      : -cashAccount.openingBalance);
 
     const cashVouchers = activeVouchers
       .filter(v => getVoucherLines(v).some(l => l.accountId === ACCOUNT_IDS.CASH))
@@ -3934,7 +3936,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (fromDate) {
       cashVouchers.filter(v => v.date < fromDate).forEach(v => {
         getVoucherLines(v).filter(l => l.accountId === ACCOUNT_IDS.CASH).forEach(l => {
-          runningBalance += l.type === 'Dr' ? l.amount : -l.amount;
+          runningBalanceMinor = addMinor(runningBalanceMinor, l.type === 'Dr' ? toMinor(l.amount) : -toMinor(l.amount));
         });
       });
     }
@@ -3949,7 +3951,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .forEach(v => {
         const cashLines = getVoucherLines(v).filter(l => l.accountId === ACCOUNT_IDS.CASH);
         cashLines.forEach(l => {
-          runningBalance += l.type === 'Dr' ? l.amount : -l.amount;
+          runningBalanceMinor = addMinor(runningBalanceMinor, l.type === 'Dr' ? toMinor(l.amount) : -toMinor(l.amount));
           const otherLines = getVoucherLines(v).filter(ol => ol.accountId !== ACCOUNT_IDS.CASH);
           const otherAcc = accounts.find(a => a.id === otherLines[0]?.accountId);
           result.push({
@@ -3959,7 +3961,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             particulars: v.narration || otherAcc?.name || '',
             type: l.type === 'Dr' ? 'receipt' : 'payment',
             amount: l.amount,
-            runningBalance,
+            runningBalance: toRupees(runningBalanceMinor),
           });
         });
       });
@@ -3970,9 +3972,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const targetBankId = bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK;
     const bankAccount = accounts.find(a => a.id === targetBankId);
     if (!bankAccount) return [];
-    let runningBalance = bankAccount.openingBalanceType === 'debit'
+    // T-02: running balance in exact integer paise (RULE 2), rupees only at each emitted row.
+    let runningBalanceMinor = toMinor(bankAccount.openingBalanceType === 'debit'
       ? bankAccount.openingBalance
-      : -bankAccount.openingBalance;
+      : -bankAccount.openingBalance);
 
     const bankVouchers = activeVouchers
       .filter(v => getVoucherLines(v).some(l => l.accountId === targetBankId))
@@ -3981,7 +3984,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (fromDate) {
       bankVouchers.filter(v => v.date < fromDate).forEach(v => {
         getVoucherLines(v).filter(l => l.accountId === targetBankId).forEach(l => {
-          runningBalance += l.type === 'Dr' ? l.amount : -l.amount;
+          runningBalanceMinor = addMinor(runningBalanceMinor, l.type === 'Dr' ? toMinor(l.amount) : -toMinor(l.amount));
         });
       });
     }
@@ -3996,7 +3999,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .forEach(v => {
         const bankLines = getVoucherLines(v).filter(l => l.accountId === targetBankId);
         bankLines.forEach(l => {
-          runningBalance += l.type === 'Dr' ? l.amount : -l.amount;
+          runningBalanceMinor = addMinor(runningBalanceMinor, l.type === 'Dr' ? toMinor(l.amount) : -toMinor(l.amount));
           const otherLines = getVoucherLines(v).filter(ol => ol.accountId !== targetBankId);
           const otherAcc = accounts.find(a => a.id === otherLines[0]?.accountId);
           result.push({
@@ -4006,7 +4009,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             particulars: v.narration || otherAcc?.name || '',
             type: l.type === 'Dr' ? 'deposit' : 'withdrawal',
             amount: l.amount,
-            runningBalance,
+            runningBalance: toRupees(runningBalanceMinor),
           });
         });
       });
@@ -4089,7 +4092,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const hasShareCapVoucher = memberVouchers.some(v => v.creditAccountId === ACCOUNT_IDS.SHARE_CAP);
     // If a proper voucher exists, start at 0 (voucher covers it). Otherwise show OB row.
-    let balance = hasShareCapVoucher ? 0 : (member.shareCapital || 0);
+    // T-02: member ledger running balance in exact integer paise (RULE 2); rupees at each row.
+    let balanceMinor = toMinor(hasShareCapVoucher ? 0 : (member.shareCapital || 0));
     const result: MemberLedgerEntry[] = [];
 
     // Show Opening Balance row only if no proper voucher exists (backward compatibility)
@@ -4101,7 +4105,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         particulars: 'Opening Share Capital',
         credit: member.shareCapital,
         debit: 0,
-        balance,
+        balance: toRupees(balanceMinor),
       });
     }
 
@@ -4109,7 +4113,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const isCredit = v.creditAccountId === ACCOUNT_IDS.SHARE_CAP;
       const credit = isCredit ? v.amount : 0;
       const debit = !isCredit ? v.amount : 0;
-      balance = balance + credit - debit;
+      balanceMinor = addMinor(balanceMinor, toMinor(credit), -toMinor(debit));
       result.push({
         id: v.id,
         date: v.date,
@@ -4117,7 +4121,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         particulars: v.narration || (isCredit ? 'Share deposit received' : 'Share withdrawal'),
         credit,
         debit,
-        balance,
+        balance: toRupees(balanceMinor),
       });
     });
 
