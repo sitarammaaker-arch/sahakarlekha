@@ -32,8 +32,15 @@ export type ColumnType = 'string' | 'number' | 'currency' | 'date' | 'boolean' |
 export type PiiClass = 'none' | 'contact' | 'identity' | 'financial';
 
 export interface ColumnDescriptor {
-  /** Stable field key on the entity. Never renamed. */
+  /** Stable CONTRACT field key — the versioned wire-format name (ADR-0004). Never renamed. */
   key: string;
+  /**
+   * Storage column this field maps to, when it differs from `key`. Absent ⇒ identity (`key` is
+   * also the storage column). This is the T-04 decoupling seam: the contract key stays stable even
+   * if the underlying DB column is renamed — the mapping (lib/export/contract.ts) absorbs the diff,
+   * so no archive or API consumer breaks. See docs/architecture/EXPORT-CONTRACT-v1.md.
+   */
+  storageColumn?: string;
   header: string;
   headerHi: string;
   type: ColumnType;
