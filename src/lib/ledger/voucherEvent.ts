@@ -35,3 +35,21 @@ export function voucherPostingLines(voucher: Voucher): EventPostingLine[] {
 export function voucherReversalLines(voucher: Voucher): EventPostingLine[] {
   return voucherPostingLines(voucher).map((l) => ({ ...l, drCr: l.drCr === 'Dr' ? 'Cr' : 'Dr' }));
 }
+
+/** The non-leg metadata every voucher event payload carries. `narration` + `createdAt` are needed to
+ *  reproduce the ledgers faithfully (T-09): getCashBookEntries' particulars = narration||contra, and
+ *  same-date rows sort by createdAt (the running balance depends on that order). */
+export interface VoucherEventMeta {
+  voucherNo: string;
+  type: Voucher['type'];
+  amount: number;
+  date: string;
+  narration: string;
+  createdAt: string;
+}
+
+/** PURE — the shared voucher-event payload metadata (one shape, RULE 2). Spread alongside the legs at
+ *  every event site (post/reverse/cancel/edit/genesis) so the journal carries what the ledger reads need. */
+export function voucherEventMeta(v: Voucher): VoucherEventMeta {
+  return { voucherNo: v.voucherNo, type: v.type, amount: v.amount, date: v.date, narration: v.narration ?? '', createdAt: v.createdAt ?? '' };
+}

@@ -45,7 +45,7 @@ import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { resolveJurisdiction, stampTenant } from '@/lib/jurisdiction';
 import { isPeriodLocked as isDateInLockedPeriod } from '@/lib/periodLock';
 import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
-import { voucherPostingLines, voucherReversalLines } from '@/lib/ledger/voucherEvent';
+import { voucherPostingLines, voucherReversalLines, voucherEventMeta } from '@/lib/ledger/voucherEvent';
 import { ledgerTrialBalance } from '@/lib/ledger/trialBalance';
 import { ledgerParity, balancesFromJournal } from '@/lib/ledger/parity';
 import { snapshotDeletedMovements } from '@/lib/movementArchive';
@@ -1577,7 +1577,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           producer: { kind: 'human', id: userRef.current?.name ?? null },
           // T-06: carry the balanced posting LEGS (exact paise) so the journal is replay-faithful —
           // projectTrialBalance/replayBalances reconstruct balances from `lines`. Metadata kept alongside.
-          payload: { lines: voucherPostingLines(newVoucher), voucherNo: newVoucher.voucherNo, type: newVoucher.type, amount: newVoucher.amount, date: newVoucher.date },
+          payload: { lines: voucherPostingLines(newVoucher), ...voucherEventMeta(newVoucher) },
         }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
         ledgerEventsRef.current = [...ledgerEventsRef.current, shadowEvent];
       }
@@ -1830,8 +1830,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           aggregateType: 'voucher' as const, aggregateId: id,
           producer: { kind: 'human' as const, id: userRef.current?.name ?? null },
         };
-        const reversal = buildEvent({ ...base, eventType: 'voucher.reversed', sequence: 2, payload: { lines: voucherReversalLines(current), voucherNo: current.voucherNo, reason: 'edit' } }, { eventId: crypto.randomUUID(), occurredAt: at });
-        const repost = buildEvent({ ...base, eventType: 'voucher.reposted', sequence: 3, payload: { lines: newLegs, voucherNo: updatedVoucher.voucherNo } }, { eventId: crypto.randomUUID(), occurredAt: at });
+        const reversal = buildEvent({ ...base, eventType: 'voucher.reversed', sequence: 2, payload: { lines: voucherReversalLines(current), ...voucherEventMeta(current), reason: 'edit' } }, { eventId: crypto.randomUUID(), occurredAt: at });
+        const repost = buildEvent({ ...base, eventType: 'voucher.reposted', sequence: 3, payload: { lines: newLegs, ...voucherEventMeta(updatedVoucher) } }, { eventId: crypto.randomUUID(), occurredAt: at });
         editEvents = [reversal, repost];
         ledgerEventsRef.current = [...ledgerEventsRef.current, ...editEvents];
       }
@@ -1967,7 +1967,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         aggregateId: id,
         sequence: 2,
         producer: { kind: 'human', id: deletedBy ?? null },
-        payload: { lines: voucherReversalLines(current), voucherNo: current.voucherNo, reason },
+        payload: { lines: voucherReversalLines(current), ...voucherEventMeta(current), reason },
       }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
       ledgerEventsRef.current = [...ledgerEventsRef.current, cancelEvent];
     } catch { /* shadow ledger is best-effort — never touches the cancel path */ }

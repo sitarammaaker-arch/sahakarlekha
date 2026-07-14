@@ -12,7 +12,7 @@ import type { Voucher, LedgerAccount } from '@/types';
 import { toMinor } from '@/lib/money';
 import type { LedgerEvent, EventPrincipal } from './event';
 import { buildEvent } from './event';
-import { voucherPostingLines } from './voucherEvent';
+import { voucherPostingLines, voucherEventMeta } from './voucherEvent';
 
 /** One voucher plus its tenant scoping, as the ops script reads it from Supabase. */
 export interface GenesisInput {
@@ -62,7 +62,7 @@ export function planGenesisEvents(
           aggregateId: v.id,
           sequence: 1,
           producer,
-          payload: { lines, voucherNo: v.voucherNo, type: v.type, amount: v.amount, date: v.date, genesis: true },
+          payload: { lines, ...voucherEventMeta(v), genesis: true },
         },
         { eventId: genesisEventId(v.id), occurredAt: `${v.date}T00:00:00.000Z` },
       ),
