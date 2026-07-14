@@ -26,13 +26,14 @@ import { NotificationChannelsCard } from '@/components/settings/NotificationChan
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
 import { ucasReserveMinPct } from '@/lib/rules/ucas';
 import { SOCIETY_TEMPLATES } from '@/lib/storage';
+import { resolveCapabilities } from '@/lib/navigation';
 import type { SocietyType, VoucherType } from '@/types';
 
 const SocietySetup: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const { toast } = useToast();
-  const { society, updateSociety, accounts, vouchers, updateAccount, addAccount, deleteAccount, resetAccounts, getAccountBalance, getTrialBalance, getProfitLoss, getReceiptsPayments } = useData();
+  const { society, societyCapabilities, updateSociety, accounts, vouchers, updateAccount, addAccount, deleteAccount, resetAccounts, getAccountBalance, getTrialBalance, getProfitLoss, getReceiptsPayments } = useData();
 
   // ECR-07: period-lock date input (back-dating prevention)
   const [periodLockInput, setPeriodLockInput] = useState(society.periodLockDate || '');
@@ -105,6 +106,15 @@ const SocietySetup: React.FC = () => {
     tan: society.tan || '',
     entityPan: society.entityPan || '',
   });
+
+  // T-14 (ADR-0002): gate the maintenance-GST block on the `housing` CAPABILITY, not the type literal.
+  // Resolved from the FORM's (possibly unsaved) type so the block reacts to the dropdown as before —
+  // empty-diff for default templates (only 'housing' entitles 'housing'), but now correct if a
+  // society is ever granted housing without being typed 'housing'. Modules never branch on type.
+  const formDoesHousing = useMemo(
+    () => resolveCapabilities((form.societyType as SocietyType) || 'other', societyCapabilities).has('housing'),
+    [form.societyType, societyCapabilities],
+  );
 
   // Financial year form state
   const [fyForm, setFyForm] = useState({
@@ -561,7 +571,7 @@ const SocietySetup: React.FC = () => {
                     {language === 'hi' ? 'सुझाव: 25% (वैकल्पिक — आवंटन के समय बदला जा सकता है)' : 'Suggested 25% (optional — can be changed at appropriation time)'}
                   </p>
                 </div>
-                {form.societyType === 'housing' && (
+                {formDoesHousing && (
                   <>
                     <div className="space-y-2">
                       <Label>{language === 'hi' ? 'रखरखाव पर GST' : 'GST on Maintenance'}</Label>
