@@ -28,6 +28,7 @@ import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/l
 import { reportError } from '@/lib/errorReporting';
 import { settlementTypedColumns, hydrateSettlement } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
+import { canTransitionMember } from '@/lib/memberLifecycle';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
@@ -289,12 +290,9 @@ const reverseEntryLines = (lines: VoucherLine[]): VoucherLine[] =>
 const isEditLocked = (v: Pick<Voucher, 'reversedBy' | 'approvalStatus'>, approvalRequired: boolean): boolean =>
   !!v.reversedBy || (!!approvalRequired && v.approvalStatus === 'approved');
 
-// ── ECR-16 (member lifecycle) pure helpers ────────────────────────────────────
-const MEMBER_STATUSES: MemberStatus[] = ['active', 'inactive', 'resigned', 'expelled', 'deceased'];
-// Valid lifecycle transition? No self-transition; 'deceased' is terminal (shares pass to
-// a nominee via a separate flow). Every other move between distinct states is allowed.
-const canTransitionMember = (from: MemberStatus, to: MemberStatus): boolean =>
-  from !== to && from !== 'deceased' && MEMBER_STATUSES.includes(to);
+// ── ECR-16 (member lifecycle) — the pure status model now lives in @/lib/memberLifecycle
+//    (MEMBER_STATUSES / canTransitionMember / isMemberActive), imported above, so it is
+//    unit-testable in isolation. ──────────────────────────────────────────────────────────
 
 /** Report a secondary / CASCADE Supabase write failure (audit P0-2). These are the RULE-3
  *  ghost-data risks — a linked voucher left un-cancelled, a stock movement not deleted, a stock
