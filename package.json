@@ -38,6 +38,7 @@
     "test:ledger-genesis": "node scripts/test-ledger-genesis.mjs",
     "test:ledger-parity": "node scripts/test-ledger-parity.mjs",
     "test:ledger-split-tb": "node scripts/test-ledger-split-tb.mjs",
+    "test:ledger-trial-balance": "node scripts/test-ledger-trial-balance.mjs",
     "test:activities": "node scripts/test-activities.mjs",
     "test:activity-resolution": "node scripts/test-activity-resolution.mjs",
     "test:activity-inference": "node scripts/test-activity-inference.mjs",
