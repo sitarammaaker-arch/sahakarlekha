@@ -43,6 +43,7 @@ import { resolveCapabilities } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
 import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { resolveJurisdiction, stampTenant } from '@/lib/jurisdiction';
+import { isPeriodLocked as isDateInLockedPeriod } from '@/lib/periodLock';
 import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
 import { snapshotDeletedMovements } from '@/lib/movementArchive';
 import { isSelfApproval } from '@/lib/sod';
@@ -535,10 +536,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
   // ECR-07 (P1 #7): period lock / back-dating prevention. A voucher dated ON or BEFORE
   // society.periodLockDate is in a closed period. Pure predicate (mirrored in the test).
-  const isPeriodLocked = (entityDate?: string): boolean => {
-    const lock = societyRef.current?.periodLockDate;
-    return !!lock && !!entityDate && entityDate <= lock;
-  };
+  const isPeriodLocked = (entityDate?: string): boolean => isDateInLockedPeriod(entityDate, societyRef.current?.periodLockDate);
   // Returns true when BLOCKED (mirrors guardFYLocked). Checks any of the supplied dates
   // (add → new date; edit → existing AND incoming date) so you can neither edit within
   // nor back-date into a locked period.
