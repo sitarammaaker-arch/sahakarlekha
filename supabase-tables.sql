@@ -842,6 +842,11 @@ alter table society_settings add column if not exists "periodLockBy" text;
 -- AFTER an empty-diff backfill of society_activities. See migration 036.
 alter table society_settings add column if not exists "activitiesCutoverEnabled" boolean default false;
 
+-- T-09 (ADR-0001): per-tenant ledger read cut. true ⇒ getTrialBalance is served from the event
+-- journal, but ONLY when ledgerParity holds at runtime (else it falls back to the voucher-state
+-- compute), so a flip can never break a report. NULL/false ⇒ voucher-state (default). See migration 037.
+alter table society_settings add column if not exists "ledgerReadsEnabled" boolean default false;
+
 -- ECR-07 dual-control: FY unlock must be requested by one admin and approved by
 -- another. These hold the open request until a second admin finalises it.
 alter table society_settings add column if not exists "fyUnlockRequestedBy" text;

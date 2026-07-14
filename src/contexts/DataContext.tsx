@@ -46,6 +46,8 @@ import { resolveJurisdiction, stampTenant } from '@/lib/jurisdiction';
 import { isPeriodLocked as isDateInLockedPeriod } from '@/lib/periodLock';
 import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
 import { voucherPostingLines, voucherReversalLines } from '@/lib/ledger/voucherEvent';
+import { ledgerTrialBalance } from '@/lib/ledger/trialBalance';
+import { ledgerParity } from '@/lib/ledger/parity';
 import { snapshotDeletedMovements } from '@/lib/movementArchive';
 import { isSelfApproval } from '@/lib/sod';
 import { requiresApproval } from '@/lib/approvalMatrix';
@@ -4085,6 +4087,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // BUG-03 FIX: Accept optional asOnDate to filter vouchers up to that date.
   const getTrialBalance = useCallback((asOnDate?: string): AccountBalance[] => {
+    // T-09 (ADR-0001): the ledger read cut. When this tenant is cut over AND the journal reproduces
+    // the vouchers RIGHT NOW (ledgerParity — belt-and-suspenders), serve the trial balance from the
+    // event log. If parity fails (journal not fully loaded/seeded, or drifted) we fall through to the
+    // voucher-state compute below — so a flip can never break a report. Default flag off ⇒ today.
+    if (societyRef.current?.ledgerReadsEnabled
+      && ledgerParity(ledgerEventsRef.current, activeVouchers, accounts).matches) {
+      return ledgerTrialBalance(ledgerEventsRef.current, accounts, asOnDate);
+    }
+
     const vouchersToUse = asOnDate
       ? activeVouchers.filter(v => v.date <= asOnDate)
       : activeVouchers;
