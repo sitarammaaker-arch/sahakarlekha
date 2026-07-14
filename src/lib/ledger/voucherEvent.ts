@@ -36,9 +36,9 @@ export function voucherReversalLines(voucher: Voucher): EventPostingLine[] {
   return voucherPostingLines(voucher).map((l) => ({ ...l, drCr: l.drCr === 'Dr' ? 'Cr' : 'Dr' }));
 }
 
-/** The non-leg metadata every voucher event payload carries. `narration` + `createdAt` are needed to
- *  reproduce the ledgers faithfully (T-09): getCashBookEntries' particulars = narration||contra, and
- *  same-date rows sort by createdAt (the running balance depends on that order). */
+/** The non-leg metadata every voucher event payload carries, needed to reproduce the ledgers
+ *  faithfully (T-09): `narration` + contra → getCashBookEntries particulars; `createdAt` → the
+ *  same-date sort key the running balance depends on; `memberId` → getMemberLedger's per-member filter. */
 export interface VoucherEventMeta {
   voucherNo: string;
   type: Voucher['type'];
@@ -46,10 +46,12 @@ export interface VoucherEventMeta {
   date: string;
   narration: string;
   createdAt: string;
+  /** the member this voucher belongs to (member share-capital ledger); '' when not member-scoped. */
+  memberId: string;
 }
 
 /** PURE — the shared voucher-event payload metadata (one shape, RULE 2). Spread alongside the legs at
  *  every event site (post/reverse/cancel/edit/genesis) so the journal carries what the ledger reads need. */
 export function voucherEventMeta(v: Voucher): VoucherEventMeta {
-  return { voucherNo: v.voucherNo, type: v.type, amount: v.amount, date: v.date, narration: v.narration ?? '', createdAt: v.createdAt ?? '' };
+  return { voucherNo: v.voucherNo, type: v.type, amount: v.amount, date: v.date, narration: v.narration ?? '', createdAt: v.createdAt ?? '', memberId: v.memberId ?? '' };
 }
