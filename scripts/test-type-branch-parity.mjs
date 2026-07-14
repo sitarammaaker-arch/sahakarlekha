@@ -1,9 +1,10 @@
 // T-14 — retiring operational societyType branches is behaviour-preserving.
 //
-// T-14 replaces three operational `societyType === X` branches with CAPABILITY checks:
+// T-14 replaces operational `societyType === X` branches with CAPABILITY checks:
 //   • DataContext stock defaults:  `=== 'consumer'`  →  has('pos_billing')
 //   • DairyDataContext seed guard:  `!== 'dairy'`     →  has('dairy_collection')
 //   • ConsumerDataContext seed:     `!== 'consumer'`  →  has('pos_billing')
+//   • SocietySetup maint-GST block:  `=== 'housing'`   →  has('housing')
 //
 // The swap is safe ONLY IF, for the society types that could hold real data (the 8 original
 // types, pre-T-13), the capability is granted to EXACTLY that one type. This test enforces
@@ -75,9 +76,14 @@ const withDairy = typesWith('dairy_collection');
 ok(withDairy.length === 1 && withDairy[0] === 'dairy',
   `among original types, dairy_collection is granted to EXACTLY 'dairy' (got: ${withDairy.join(',') || 'none'}) — so has('dairy_collection') === (type === 'dairy')`);
 
+const withHousing = typesWith('housing');
+ok(withHousing.length === 1 && withHousing[0] === 'housing',
+  `among original types, housing is granted to EXACTLY 'housing' (got: ${withHousing.join(',') || 'none'}) — so has('housing') === (type === 'housing')`);
+
 // Sanity: the caps the swap depends on actually exist somewhere.
 ok(Object.values(CAPS).some((v) => v.includes('pos_billing')), 'pos_billing exists in the templates');
 ok(Object.values(CAPS).some((v) => v.includes('dairy_collection')), 'dairy_collection exists in the templates');
+ok(Object.values(CAPS).some((v) => v.includes('housing')), 'housing exists in the templates');
 
 console.log(`\nT-14 type-branch parity: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
