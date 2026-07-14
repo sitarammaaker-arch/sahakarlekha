@@ -23,6 +23,7 @@ import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabasePaging';
+import { resolveJurisdiction } from '@/lib/jurisdiction';
 import { reportError } from '@/lib/errorReporting';
 import * as storage from '@/lib/storage';
 import { pickEffectiveMspRate } from '@/lib/marketing/msp';
@@ -121,7 +122,9 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
-  const withSoc = <T extends object>(d: T) => ({ ...d, society_id: societyId });
+  // T-01: stamp BOTH tenancy keys (society_id + jurisdiction) — the value comes from the SSOT
+  // resolver so a domain row carries the same jurisdiction the main context writes (anti-IRR-4).
+  const withSoc = <T extends object>(d: T) => ({ ...d, society_id: societyId, jurisdiction: resolveJurisdiction(society?.state) });
 
   const societyRef = useRef(society);
   societyRef.current = society;
