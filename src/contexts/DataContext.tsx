@@ -28,6 +28,7 @@ import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/l
 import { reportError } from '@/lib/errorReporting';
 import { settlementTypedColumns, hydrateSettlement } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
+import { reverseEntryLines, isEditLocked } from '@/lib/voucherReversal';
 import { canTransitionMember } from '@/lib/memberLifecycle';
 import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
@@ -281,14 +282,8 @@ interface DataContextType {
   isLoading: boolean;
 }
 
-// ── ECR-08 (P1 #8): reversal-not-edit pure helpers ────────────────────────────
-// Flip Dr↔Cr for each line (amount unchanged) to build a contra reversal. Pure.
-const reverseEntryLines = (lines: VoucherLine[]): VoucherLine[] =>
-  lines.map(l => ({ ...l, type: (l.type === 'Dr' ? 'Cr' : 'Dr') as 'Dr' | 'Cr' }));
-// In-place edit forbidden (correct via reversal instead) when the voucher is already
-// reversed, or is posted-under-control (opt-in maker-checker regime + approved). Pure.
-const isEditLocked = (v: Pick<Voucher, 'reversedBy' | 'approvalStatus'>, approvalRequired: boolean): boolean =>
-  !!v.reversedBy || (!!approvalRequired && v.approvalStatus === 'approved');
+// ── ECR-08 (P1 #8): reversal-not-edit pure helpers — extracted to @/lib/voucherReversal
+//    (reverseEntryLines / isEditLocked), imported above, so they are unit-testable. ──────────
 
 // ── ECR-16 (member lifecycle) — the pure status model now lives in @/lib/memberLifecycle
 //    (MEMBER_STATUSES / canTransitionMember / isMemberActive), imported above, so it is
