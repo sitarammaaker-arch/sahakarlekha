@@ -72,6 +72,7 @@
     "test:soft-delete": "node scripts/test-soft-delete.mjs",
     "test:audit": "node scripts/test-audit-log.mjs",
     "test:share-recon": "node scripts/test-share-reconciliation.mjs",
+    "test:asset-reconciliation": "node scripts/test-asset-reconciliation.mjs",
     "test:persist": "node scripts/test-voucher-persistence.mjs",
     "test:xlsx": "node scripts/test-xlsx-compat.mjs",
     "test:ob": "node scripts/test-opening-balances.mjs",
