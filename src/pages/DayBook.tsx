@@ -21,7 +21,7 @@ import { fmtDate as fmtDateShort, fmtDateLong } from '@/lib/dateUtils';
 
 const DayBook: React.FC = () => {
   const { language } = useLanguage();
-  const { vouchers, accounts, society, updateVoucher } = useData();
+  const { vouchers, accounts, society, updateVoucher, matchesActiveBranch } = useData();
   const { toast } = useToast();
 
   // Edit dialog state
@@ -76,7 +76,9 @@ const DayBook: React.FC = () => {
     return language === 'hi' ? (acc?.nameHi || acc?.name || id) : (acc?.name || id);
   };
 
-  const activeVouchers = vouchers.filter(v => !v.isDeleted);
+  // ECR-17: honour the active branch — the Cash Book / Trial Balance are branch-scoped, so the
+  // Day Book must be too, or the same day shows different totals across reports.
+  const activeVouchers = vouchers.filter(v => !v.isDeleted && matchesActiveBranch(v.branchId));
 
   const entries = useMemo(() => {
     return activeVouchers
@@ -103,8 +105,11 @@ const DayBook: React.FC = () => {
 
   // Pre-period opening balance: account OB + all vouchers BEFORE the filter start
   const { cashOB, bankOB } = useMemo(() => {
-    const cashAccOB = accounts.find(a => a.id === ACCOUNT_IDS.CASH)?.openingBalance || 0;
-    const bankAccOB = getBankAccountIds(accounts).reduce((sum, bid) => {
+    // ECR-17: account openings belong to the Head Office scope (matchesActiveBranch(undefined)
+    // is exactly the unbranched-record rule) — same as the Cash Book / Trial Balance.
+    const obInScope = matchesActiveBranch(undefined);
+    const cashAccOB = obInScope ? (accounts.find(a => a.id === ACCOUNT_IDS.CASH)?.openingBalance || 0) : 0;
+    const bankAccOB = !obInScope ? 0 : getBankAccountIds(accounts).reduce((sum, bid) => {
       const a = accounts.find(x => x.id === bid);
       return sum + (a?.openingBalance || 0);
     }, 0);
@@ -122,7 +127,7 @@ const DayBook: React.FC = () => {
       });
     }
     return { cashOB: preCash, bankOB: preBank };
-  }, [accounts, activeVouchers, entries]);
+  }, [accounts, activeVouchers, entries, matchesActiveBranch]);
 
   const runningBalances = useMemo(() => {
     let cash = cashOB;

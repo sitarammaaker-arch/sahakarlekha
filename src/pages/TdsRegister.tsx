@@ -83,7 +83,9 @@ const EMPTY_CHALLAN = (): Omit<TdsChallan, 'id' | 'createdAt'> => ({
 const TdsRegister: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { purchases, suppliers, society } = useData();
+  const { purchases: allPurchases, suppliers, society, matchesActiveBranch } = useData();
+  // ECR-17: honour the active branch (same rule as GstSummary / the registers).
+  const purchases = useMemo(() => allPurchases.filter(p => matchesActiveBranch(p.branchId)), [allPurchases, matchesActiveBranch]);
   const { toast } = useToast();
   const hi = language === 'hi';
   const fy = society.financialYear;

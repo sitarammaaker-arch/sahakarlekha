@@ -18,7 +18,7 @@ import type {
   Branch,
   Godown,
 } from '@/types';
-import { matchesBranch, branchToStamp, resolveActiveBranch, ALL_BRANCHES } from '@/lib/branchScope';
+import { matchesBranch, branchToStamp, resolveActiveBranch, unbranchedInScope, ALL_BRANCHES } from '@/lib/branchScope';
 import { buildInterBranchTransfer, INTER_BRANCH_CONTROL_ID } from '@/lib/interBranch';
 import { getVoucherLines, buildVoucherEntries, splitNetByAccount } from '@/lib/voucherUtils';
 import { isFundAccount, buildFundStatement } from '@/lib/funds';
@@ -427,10 +427,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [restrictedBranchId, activeBranchId]);
 
   // Load branches for the society (best-effort; localStorage is the offline fallback).
+  // `data` non-null (even []) always overwrites: the localStorage cache is GLOBAL, so after a
+  // society switch it still holds the PREVIOUS society's branches — keeping them rendered a wrong
+  // branch selector. Only a query error (data null) falls back to the cache.
   useEffect(() => {
     supabase.from('branches').select('*').eq('society_id', societyIdRef.current)
-      .then(({ data }) => { if (data && data.length) { const bs = data as Branch[]; setBranchesState(bs); cacheBranches(bs); } });
+      .then(({ data }) => { if (data) { const bs = data as Branch[]; setBranchesState(bs); cacheBranches(bs); } });
   }, [user?.societyId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clamp a STALE active branch. `sahayata_active_branch` is a global key, so after a society
+  // switch it can hold a branch id that does not exist here — matchesBranch would then reject
+  // every voucher and all reports silently collapsed to just opening balances. Once the real
+  // branch list is loaded, an id that isn't in it resets to 'all'. (A restricted user's clamp
+  // above takes precedence — their branch always exists in their own society.)
+  useEffect(() => {
+    if (restrictedBranchId) return;
+    if (activeBranchId !== ALL_BRANCHES && !branches.some(b => b.id === activeBranchId)) {
+      setActiveBranchState(ALL_BRANCHES);
+      try { localStorage.setItem('sahayata_active_branch', ALL_BRANCHES); } catch { /* quota */ }
+    }
+  }, [branches, activeBranchId, restrictedBranchId]);
 
   const addBranch = useCallback((data: Omit<Branch, 'id' | 'createdAt'>): Branch => {
     if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as Branch;   // RULE 6: FY-lock guard
@@ -3950,6 +3966,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const matchesActiveBranch = useCallback((branchId?: string) =>
     matchesBranch(branchId, activeBranchId, headOfficeBranchId), [activeBranchId, headOfficeBranchId]);
 
+  // ECR-17: society-level (unbranched) values — account OPENING BALANCES, physical stock — belong
+  // to the Head Office, exactly like an unbranched voucher. Every balance formula below multiplies
+  // its opening by this flag; otherwise each branch's TB carried the full society openings and the
+  // branch Balance Sheets double-counted them against the consolidated one (silently — a TB built
+  // from self-balancing vouchers plus two-sided openings always still "balances").
+  const openingsInScope = unbranchedInScope(activeBranchId, headOfficeBranchId);
+
   // One-pass signed balance (opening + Σ Dr − Cr legs) per account, memoised on [accounts,
   // activeVouchers]. getAccountBalance was O(vouchers×lines) PER CALL and is called in loops and
   // even sort comparators (Customers/FundRegister reduce, LedgerHeads sort, asset/fund/share
@@ -3965,11 +3988,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     const bal = new Map<string, Minor>();
     accounts.forEach(a => {
-      const opening = a.openingBalanceType === 'debit' ? (Number(a.openingBalance) || 0) : -(Number(a.openingBalance) || 0);
+      const opening = openingsInScope
+        ? (a.openingBalanceType === 'debit' ? (Number(a.openingBalance) || 0) : -(Number(a.openingBalance) || 0))
+        : 0;
       bal.set(a.id, addMinor(toMinor(opening), txn.get(a.id) ?? 0));
     });
     return bal;
-  }, [accounts, activeVouchers]);
+  }, [accounts, activeVouchers, openingsInScope]);
 
   // T-09 (ADR-0001): the ledger-derived balance map — non-null ONLY when this tenant is cut over AND
   // the journal reproduces the vouchers (parity checked ONCE here, not per getAccountBalance call, so
@@ -3977,10 +4002,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // voucher-state map below (default). balancesFromJournal nets openings + postings per account (paise).
   const ledgerBalanceMinorMap = useMemo((): Map<string, Minor> | null => {
     if (!society?.ledgerReadsEnabled) return null;
+    // ECR-17 × T-09: the journal is society-wide — ledger balances serve only the consolidated view.
+    if (activeBranchId !== ALL_BRANCHES) return null;
     const journal = ledgerEventsRef.current;
     if (!ledgerParity(journal, activeVouchers, accounts).matches) return null;
     return new Map(Object.entries(balancesFromJournal(journal)));
-  }, [accounts, activeVouchers, society?.ledgerReadsEnabled]);
+  }, [accounts, activeVouchers, society?.ledgerReadsEnabled, activeBranchId]);
 
   const getAccountBalance = useCallback((accountId: string): number => {
     // When cut over (ledgerBalanceMinorMap present), read the balance from the journal; else the
@@ -4065,7 +4092,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     project: () => T,
     parity: (ledger: T, vouchers: T) => ReportParityResult,
   ): T => {
-    const cutOver = !!societyRef.current?.ledgerReadsEnabled;
+    // ECR-17 × T-09: the journal is society-wide, so ledger reads serve only the consolidated view —
+    // in a branch view the voucher compute is scoped and the projection is not, so they'd never match.
+    const cutOver = !!societyRef.current?.ledgerReadsEnabled && activeBranchIdRef.current === ALL_BRANCHES;
     if (!cutOver && !parityDiagnosticRef.current) return fromVouchers;
     try {
       const fromJournal = project();
@@ -4084,9 +4113,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!cashAccount) return [];
     // T-02: accumulate the running balance in exact integer paise (RULE 2), converting to rupees only
     // at each emitted row — so a cash book over thousands of legs cannot drift in the last paisa.
-    const openingMinor = toMinor(cashAccount.openingBalanceType === 'debit'
-      ? cashAccount.openingBalance
-      : -cashAccount.openingBalance);
+    // ECR-17: the account opening belongs to the Head Office scope (same rule as the trial balance).
+    const openingMinor = openingsInScope
+      ? toMinor(cashAccount.openingBalanceType === 'debit' ? cashAccount.openingBalance : -cashAccount.openingBalance)
+      : 0;
     let runningBalanceMinor = openingMinor;
 
     const cashVouchers = activeVouchers
@@ -4131,16 +4161,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       () => ledgerCashBookEntries(ledgerEventsRef.current, ACCOUNT_IDS.CASH, accounts, { openingMinor, fromDate, toDate }),
       cashBookParity,
     );
-  }, [accounts, activeVouchers, ledgerReport]);
+  }, [accounts, activeVouchers, ledgerReport, openingsInScope]);
 
   const getBankBookEntries = useCallback((fromDate?: string, toDate?: string, bankAccountId?: string): BankBookEntry[] => {
     const targetBankId = bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK;
     const bankAccount = accounts.find(a => a.id === targetBankId);
     if (!bankAccount) return [];
     // T-02: running balance in exact integer paise (RULE 2), rupees only at each emitted row.
-    const openingMinor = toMinor(bankAccount.openingBalanceType === 'debit'
-      ? bankAccount.openingBalance
-      : -bankAccount.openingBalance);
+    // ECR-17: the account opening belongs to the Head Office scope (same rule as the trial balance).
+    const openingMinor = openingsInScope
+      ? toMinor(bankAccount.openingBalanceType === 'debit' ? bankAccount.openingBalance : -bankAccount.openingBalance)
+      : 0;
     let runningBalanceMinor = openingMinor;
 
     const bankVouchers = activeVouchers
@@ -4185,7 +4216,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       () => ledgerBankBookEntries(ledgerEventsRef.current, targetBankId, accounts, { openingMinor, fromDate, toDate }),
       bankBookParity,
     );
-  }, [accounts, activeVouchers, ledgerReport]);
+  }, [accounts, activeVouchers, ledgerReport, openingsInScope]);
 
   // BUG-03 FIX: Accept optional asOnDate to filter vouchers up to that date.
   const getTrialBalance = useCallback((asOnDate?: string): AccountBalance[] => {
@@ -4193,7 +4224,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // the vouchers RIGHT NOW (ledgerParity — belt-and-suspenders), serve the trial balance from the
     // event log. If parity fails (journal not fully loaded/seeded, or drifted) we fall through to the
     // voucher-state compute below — so a flip can never break a report. Default flag off ⇒ today.
+    // ECR-17 × T-09: the journal is society-wide, so ledger reads serve ONLY the consolidated view.
+    // (Without this, a society whose vouchers all sit in one branch could pass parity in that
+    // branch's view and be served the full-openings ledger TB, contradicting openingsInScope.)
     if (societyRef.current?.ledgerReadsEnabled
+      && activeBranchIdRef.current === ALL_BRANCHES
       && ledgerParity(ledgerEventsRef.current, activeVouchers, accounts).matches) {
       return ledgerTrialBalance(ledgerEventsRef.current, accounts, asOnDate);
     }
@@ -4225,8 +4260,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     const results = accounts.filter(a => !a.isGroup).map(account => {
-      const openingDebitMinor = account.openingBalanceType === 'debit' ? toMinor(Number(account.openingBalance) || 0) : 0;
-      const openingCreditMinor = account.openingBalanceType === 'credit' ? toMinor(Number(account.openingBalance) || 0) : 0;
+      // ECR-17: openings belong to the Head Office scope (see openingsInScope above).
+      const openingDebitMinor = openingsInScope && account.openingBalanceType === 'debit' ? toMinor(Number(account.openingBalance) || 0) : 0;
+      const openingCreditMinor = openingsInScope && account.openingBalanceType === 'credit' ? toMinor(Number(account.openingBalance) || 0) : 0;
       const txn = txnByAccount.get(account.id);
       const txnDebitMinor: Minor = txn ? txn.dr : 0;
       const txnCreditMinor: Minor = txn ? txn.cr : 0;
@@ -4259,7 +4295,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     return results;
-  }, [accounts, activeVouchers]);
+  }, [accounts, activeVouchers, openingsInScope]);
 
   const getMemberLedger = useCallback((memberId: string): MemberLedgerEntry[] => {
     const member = members.find(m => m.id === memberId);
@@ -4638,8 +4674,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const bankIds = getBankAccountIds(accounts);
     // Sign the opening by balance type (Dr = +, Cr/overdraft = −), same as closingFor below —
     // a raw openingBalance showed an overdraft opening as a positive receipt (Audit #5).
+    // ECR-17: openings belong to the Head Office scope (same rule as the trial balance).
     const signedOpening = (acc?: LedgerAccount) =>
-      acc ? (acc.openingBalanceType === 'debit' ? acc.openingBalance : -acc.openingBalance) : 0;
+      acc && openingsInScope ? (acc.openingBalanceType === 'debit' ? acc.openingBalance : -acc.openingBalance) : 0;
     // T-02: opening + every R&P sum in exact integer paise.
     const openingCashMinor = toMinor(signedOpening(cashAccount));
     const openingBankMinor = bankIds.reduce((sum, bid) => addMinor(sum, toMinor(signedOpening(accounts.find(a => a.id === bid)))), 0);
@@ -4706,7 +4743,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const closingMinorFor = (accId: string): number => {
       const acc = accounts.find(a => a.id === accId);
       if (!acc) return 0;
-      const opening = acc.openingBalanceType === 'debit' ? (Number(acc.openingBalance) || 0) : -(Number(acc.openingBalance) || 0);
+      // ECR-17: same opening rule as signedOpening above — closing = (scoped) opening + scoped legs.
+      const opening = openingsInScope
+        ? (acc.openingBalanceType === 'debit' ? (Number(acc.openingBalance) || 0) : -(Number(acc.openingBalance) || 0))
+        : 0;
       let balMinor = toMinor(opening);
       vouchersToUse.forEach(v => {
         getVoucherLines(v).forEach(l => {
@@ -4739,7 +4779,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }),
       receiptsPaymentsParity,
     );
-  }, [accounts, vouchers, activeVouchers, ledgerReport]);
+  }, [accounts, vouchers, activeVouchers, ledgerReport, openingsInScope]);
 
   // T-09 PRE-FLIGHT (runbook §2c) — read-only. Before a tenant is flipped to `ledgerReadsEnabled`,
   // every read that has a ledger path must prove it reproduces the voucher-computed report exactly.
@@ -4768,11 +4808,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const reports: LedgerParityReport[] = [];
 
     // 1. Balances — the trial balance gate, which Trading A/c, P&L and getAccountBalance inherit.
+    // In a branch view the vouchers are scoped and the journal is not, so every check below would
+    // "fail" for the wrong reason — say so, rather than reporting a false drift.
+    const branchScoped = activeBranchId !== ALL_BRANCHES;
     const tb = ledgerParity(journal, activeVouchers, accounts);
     reports.push({
       report: 'trialBalance',
       matches: tb.matches,
-      detail: `${tb.accountsChecked} accounts checked`,
+      detail: `${tb.accountsChecked} accounts checked${branchScoped ? ' — ⚠ branch view active: switch to सभी शाखाएँ (consolidated) and re-check' : ''}`,
       diffs: tb.diffs.slice(0, 10).map(d => ({ field: `account ${d.accountId}`, ledger: toRupees(d.actual), vouchers: toRupees(d.expected) })),
     });
 
@@ -4814,7 +4857,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       reports,
       allMatch: reports.every(r => r.matches),
     };
-  }, [accounts, activeVouchers, members, society?.ledgerReadsEnabled, getCashBookEntries, getBankBookEntries, getReceiptsPayments, getMemberLedger]);
+  }, [accounts, activeVouchers, members, society?.ledgerReadsEnabled, activeBranchId, getCashBookEntries, getBankBookEntries, getReceiptsPayments, getMemberLedger]);
 
   const getTradingAccount = useCallback((asOnDate?: string) => {
     // BS-tie fix: when no date is given, bound to the FINANCIAL-YEAR END (not "all
@@ -4848,9 +4891,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const movementsToUse = stockMovements.filter(m => m.date <= effDate);
     // Value closing stock at weighted-average COST from movements (NOT the stale
     // purchaseRate field, which is 0 after some imports → silently zeroed closing stock).
-    const physicalClosingStock = toRupees(sumMinor(
+    // ECR-17: stock items/movements carry no branchId (they are godown-scoped), so physical stock
+    // is society-level → Head Office scope, like openings. Without this, the WHOLE society's stock
+    // landed on whichever single branch you viewed, overstating that branch's GP and Balance Sheet.
+    const physicalClosingStock = openingsInScope ? toRupees(sumMinor(
       stockItems.filter(s => s.isActive).map(s => toMinor(Number(computeStockValue(s, movementsToUse)) || 0)),
-    ));
+    )) : 0;
 
     // Check if the closing-stock journal has been posted for this FY.
     // Audit C-8: the NEW journal credits the dedicated 5150 (Purchases stay gross);
@@ -4988,7 +5034,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { salesItems, closingStockItems, openingStockItems, purchaseItems, directExpItems,
       totalSales, totalClosingStock, totalOpeningStock, totalPurchases, totalDirectExp, grossProfit,
       physicalClosingStock, closingStockPosted, activities, unallocated };
-  }, [getTrialBalance, stockItems, stockMovements, activeVouchers, society.financialYear]);
+  }, [getTrialBalance, stockItems, stockMovements, activeVouchers, society.financialYear, openingsInScope]);
 
   const postClosingStock = useCallback((fy?: string): { posted: boolean; amount: number; alreadyPosted: boolean } => {
     if (guardFYLocked()) return { posted: false, amount: 0, alreadyPosted: false };

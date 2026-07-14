@@ -29,7 +29,7 @@ register(
     `),
 );
 
-const { ALL_BRANCHES, matchesBranch, filterByBranch, branchToStamp, resolveActiveBranch } = await import(abs('../src/lib/branchScope.ts'));
+const { ALL_BRANCHES, matchesBranch, filterByBranch, branchToStamp, resolveActiveBranch, unbranchedInScope } = await import(abs('../src/lib/branchScope.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -69,6 +69,17 @@ ok(resolveActiveBranch('b2', 'b2') === 'b2', 'restricted user: request own branc
 ok(resolveActiveBranch(undefined, 'b2') === 'b2', 'unrestricted user: request honoured');
 ok(resolveActiveBranch(undefined, ALL_BRANCHES) === ALL_BRANCHES, 'unrestricted user: "all" honoured');
 ok(resolveActiveBranch('', HO) === HO, 'empty restriction = unrestricted → request honoured');
+
+// 7. Society-level (unbranched) values — account openings, physical stock — follow the
+//    unbranched-record rule: consolidated and Head Office views include them; another
+//    branch's view must NOT (each branch's TB carried 100% of the openings otherwise,
+//    double-counting them across branch Balance Sheets).
+ok(unbranchedInScope(ALL_BRANCHES, HO), 'openings in scope: consolidated view');
+ok(unbranchedInScope('', HO), 'openings in scope: empty active (no filter)');
+ok(unbranchedInScope(HO, HO), 'openings in scope: Head Office view');
+ok(!unbranchedInScope(B2, HO), 'openings NOT in scope: another branch view');
+ok(unbranchedInScope(ALL_BRANCHES, undefined), 'no HO known: consolidated still includes openings');
+ok(!unbranchedInScope(B2, undefined), 'no HO known: a specific branch excludes openings');
 
 console.log(`\nBranch scope (pure): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

@@ -33,7 +33,9 @@ interface TdsEntry {
 }
 
 export default function TdsForm16A() {
-  const { purchases, society } = useData();
+  const { purchases: allPurchases, society, matchesActiveBranch } = useData();
+  // ECR-17: honour the active branch (same rule as GstSummary / TdsRegister).
+  const purchases = useMemo(() => allPurchases.filter(p => matchesActiveBranch(p.branchId)), [allPurchases, matchesActiveBranch]);
   const { language } = useLanguage();
   const hi = language === 'hi';
 

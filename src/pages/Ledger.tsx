@@ -29,7 +29,7 @@ interface LedgerEntry {
 
 const Ledger: React.FC = () => {
   const { t, language } = useLanguage();
-  const { accounts, vouchers, society } = useData();
+  const { accounts, vouchers, society, matchesActiveBranch } = useData();
 
   const [searchParams] = useSearchParams();
   const urlAccountId = searchParams.get('account');
@@ -54,14 +54,18 @@ const Ledger: React.FC = () => {
     if (!selectedAccount) return [];
 
     const isDebitNature = selectedAccount.openingBalanceType === 'debit';
-    let runningBalance = isDebitNature
+    // ECR-17: the account OPENING belongs to the Head Office scope (matchesActiveBranch(undefined)
+    // is the unbranched-record rule) — the same formula the Trial Balance uses, so drilling into an
+    // account from a branch-scoped TB shows the same closing balance (RULE 2).
+    let runningBalance = !matchesActiveBranch(undefined) ? 0 : (isDebitNature
       ? selectedAccount.openingBalance
-      : -selectedAccount.openingBalance;
+      : -selectedAccount.openingBalance);
 
     // BUG-01 FIX: Use getVoucherLines() to support multi-line Expert Mode vouchers.
     // A voucher touches this account if ANY of its lines has this accountId.
+    // ECR-17: honour the active branch — this statement must tie to the branch-scoped TB.
     const accountVouchers = vouchers
-      .filter(v => !v.isDeleted && getVoucherLines(v).some(l => l.accountId === selectedAccountId))
+      .filter(v => !v.isDeleted && matchesActiveBranch(v.branchId) && getVoucherLines(v).some(l => l.accountId === selectedAccountId))
       .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
 
     if (fromDate) {
