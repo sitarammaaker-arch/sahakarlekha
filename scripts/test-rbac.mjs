@@ -4,32 +4,37 @@
 // this guards the matrix invariants + the legacy shim. Run: node scripts/test-rbac.mjs
 // (exit 1 on any failure).
 
-// ── Mirror of src/lib/rbac.ts (kept byte-identical in shape) ──────────────────
-const PERMISSION_MATRIX = {
-  superAdmin:        new Set(['create', 'read', 'update', 'delete', 'export', 'print', 'userMgmt', 'backup', 'config']),
-  societyAdmin:      new Set(['create', 'read', 'update', 'delete', 'approve', 'reject', 'export', 'print', 'lockPeriod', 'unlockPeriod', 'userMgmt', 'backup', 'config']),
-  manager:           new Set(['create', 'read', 'update', 'approve', 'reject', 'export', 'print', 'lockPeriod', 'config']),
-  accountant:        new Set(['create', 'read', 'update', 'export', 'print', 'lockPeriod']),
-  cashier:           new Set(['create', 'read', 'update', 'print']),
-  storeKeeper:       new Set(['create', 'read', 'update', 'export', 'print']),
-  procurementOfficer:new Set(['create', 'read', 'update', 'approve', 'export', 'print']),
-  salesOperator:     new Set(['create', 'read', 'update', 'print']),
-  auditor:           new Set(['create', 'read', 'export', 'print']),
-  internalAuditor:   new Set(['create', 'read', 'export', 'print']),
-  boardMember:       new Set(['read', 'approve', 'reject', 'export', 'print']),
-  chairman:          new Set(['read', 'approve', 'reject', 'export', 'print', 'lockPeriod', 'unlockPeriod', 'closeFY']),
-  secretary:         new Set(['create', 'read', 'update', 'delete', 'approve', 'reject', 'export', 'print', 'lockPeriod', 'closeFY', 'userMgmt', 'config']),
-  employee:          new Set(['create', 'read', 'update', 'print']),
-  dataEntry:         new Set(['create', 'read', 'update', 'print']),
-  readOnly:          new Set(['read', 'print']),
-  externalCA:        new Set(['create', 'read', 'export', 'print']),
-};
-const LEGACY_ROLE_MAP = { admin: 'societyAdmin', accountant: 'accountant', viewer: 'readOnly', auditor: 'auditor' };
-const mapLegacyRole = (role) => LEGACY_ROLE_MAP[role] ?? role;
-const can = (role, permission) => PERMISSION_MATRIX[mapLegacyRole(role)]?.has(permission) ?? false;
+// ── Import the REAL src/lib/rbac.ts via the '@/' loader ───────────────────────
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-const ROLES = Object.keys(PERMISSION_MATRIX);
-const PERMISSIONS = ['create','read','update','delete','approve','reject','export','print','lockPeriod','unlockPeriod','closeFY','userMgmt','backup','config'];
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { PERMISSION_MATRIX, mapLegacyRole, can, ROLES, PERMISSIONS } = await import(abs('../src/lib/rbac.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };

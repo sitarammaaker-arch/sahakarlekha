@@ -1,14 +1,36 @@
-// Asset-register ↔ ledger reconciliation (ECR-05, asset side) — mirrors src/lib/assetReconciliation.ts.
+// Asset-register ↔ ledger reconciliation (ECR-05, asset side) — imports the REAL
+// src/lib/assetReconciliation.ts (which imports @/lib/money) via the '@/' loader.
 // Run: node scripts/test-asset-reconciliation.mjs
-function sumActiveAssetCost(assets) {
-  return (assets || [])
-    .filter((a) => !a.isDeleted && !a.disposalDate)
-    .reduce((sum, a) => sum + (a.cost || 0), 0);
-}
-function reconcileAssetRegister(registerTotal, controlBalance) {
-  const difference = +(registerTotal - controlBalance).toFixed(2);
-  return { registerTotal: +registerTotal.toFixed(2), controlBalance: +controlBalance.toFixed(2), difference, reconciled: Math.abs(difference) < 1 };
-}
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { sumActiveAssetCost, reconcileAssetRegister } = await import(abs('../src/lib/assetReconciliation.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
