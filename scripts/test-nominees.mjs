@@ -1,20 +1,35 @@
-// Nominees (ECR-16 — multiple nominees) — asserts the pure helpers of src/lib/nomineeUtils.ts,
-// mirrored here as scripts/test-nav.mjs mirrors navVisibility. Run: node scripts/test-nominees.mjs
+// Nominees (ECR-16 — multiple nominees) — imports the REAL helpers from
+// src/lib/nomineeUtils.ts via the '@/' loader. Run: node scripts/test-nominees.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-// ── Mirror of the pure logic in src/lib/nomineeUtils.ts ───────────────────────
-function nomineeShareTotal(nominees) {
-  return +(nominees || []).reduce((sum, n) => sum + (n.sharePercent || 0), 0).toFixed(2);
-}
-function validateNominees(nominees) {
-  const list = nominees || [];
-  const total = nomineeShareTotal(list);
-  for (const n of list) {
-    if (!n.name?.trim() || !n.relation?.trim()) return { ok: false, error: 'name+relation', total };
-    if (!(n.sharePercent > 0)) return { ok: false, error: 'share>0', total };
-  }
-  if (total > 100) return { ok: false, error: 'exceeds', total };
-  return { ok: true, total };
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { nomineeShareTotal, validateNominees } = await import(abs('../src/lib/nomineeUtils.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };

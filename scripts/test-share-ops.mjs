@@ -1,24 +1,35 @@
-// Share operations (ECR-16 / MS-02) — asserts the pure posting map + validation mirrored
-// from src/lib/shareOps.ts. Run: node scripts/test-share-ops.mjs
+// Share operations (ECR-16 / MS-02) — imports the REAL posting map + validation from
+// src/lib/shareOps.ts via the '@/' loader. Run: node scripts/test-share-ops.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-// ── Mirror of the pure logic in src/lib/shareOps.ts ───────────────────────────
-function shareOpPosting(type, acc) {
-  switch (type) {
-    case 'bonus':     return { debitAccountId: acc.reserve,  creditAccountId: acc.shareCap, sign: 1,  usesCash: false };
-    case 'forfeit':   return { debitAccountId: acc.shareCap, creditAccountId: acc.reserve,  sign: -1, usesCash: false };
-    case 'redeem':    return { debitAccountId: acc.shareCap, creditAccountId: acc.payout,   sign: -1, usesCash: true };
-    case 'surrender': return { debitAccountId: acc.shareCap, creditAccountId: acc.payout,   sign: -1, usesCash: true };
-  }
-}
-function validateShareOp(type, amount, cap) {
-  if (!(amount > 0)) return { ok: false, error: 'amt' };
-  if (type !== 'bonus' && amount > cap) return { ok: false, error: 'overcap' };
-  return { ok: true };
-}
-function applyShareOp(type, cap, amount) {
-  const sign = type === 'bonus' ? 1 : -1;
-  return Math.round((cap + sign * amount) * 100) / 100;
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { shareOpPosting, validateShareOp, applyShareOp } = await import(abs('../src/lib/shareOps.ts'));
 
 const ACC = { shareCap: '1102', payout: '3301', reserve: '1201' };
 let pass = 0, fail = 0;

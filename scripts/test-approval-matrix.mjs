@@ -1,13 +1,36 @@
-// Approval matrix (ECR-11) — asserts the pure requiresApproval predicate mirrored from
-// src/lib/approvalMatrix.ts, plus the manual-only stamping rule. Run: node scripts/test-approval-matrix.mjs
+// Approval matrix (ECR-11) — imports the REAL requiresApproval predicate from
+// src/lib/approvalMatrix.ts via the '@/' loader, plus the manual-only stamping rule.
+// Run: node scripts/test-approval-matrix.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-// ── Mirror of the pure predicate in src/lib/approvalMatrix.ts ──────────────────
-const requiresApproval = (amount, type, opts) => {
-  if (opts.approvalRequired) return true;
-  if (opts.threshold && opts.threshold > 0 && (amount || 0) >= opts.threshold) return true;
-  if (type && opts.types && opts.types.includes(type)) return true;
-  return false;
-};
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { requiresApproval } = await import(abs('../src/lib/approvalMatrix.ts'));
 
 // Mirror of the addVoucher stamping guard: only origin==='manual' + no preset status.
 function stampedStatus(data, cfg) {
