@@ -19,6 +19,7 @@
  * regardless of how the activities were inferred.
  */
 import type { SocietyType } from '@/types';
+import { resolveJurisdiction } from '@/lib/jurisdiction';
 import type { Activity } from './activities';
 import type { SocietyCapabilityRow } from './capabilities';
 import { resolveCapabilities } from './capabilityResolver';
@@ -64,4 +65,74 @@ export function hasCutoverParity(
   const before = resolveCapabilities(societyType, rows, nowMs, state);              // today (empty activities)
   const after = resolveCapabilities(societyType, rows, nowMs, state, activities);   // activity-gated
   return before.size === after.size && [...before].every((c) => after.has(c));
+}
+
+// ── Backfill planning (T-12) ──────────────────────────────────────────────────────────────────────
+// Turning inferActivities + hasCutoverParity into the concrete society_activities rows to seed. PURE:
+// the ops script (scripts/backfill-activities.mjs) does the Supabase I/O; this decides WHAT to write.
+
+/** One society's current facts, as the backfill reads them from Supabase. */
+export interface SocietyBackfillInput {
+  societyId: string;
+  societyType: SocietyType;
+  state?: string;
+  /** its society_capabilities rows (entitlement is checked against these). */
+  rows?: SocietyCapabilityRow[];
+  /** activities it ALREADY declares (skip these — idempotent re-runs). */
+  existing?: readonly Activity[];
+}
+
+/** A society_activities row the backfill would insert (shape matches the table / export descriptor). */
+export interface ActivityBackfillRow {
+  id: string;
+  society_id: string;
+  jurisdiction: string;
+  activity: Activity;
+  status: 'active';
+}
+
+/** The decision for one society: what to write, or why nothing is written. */
+export interface SocietyBackfillPlan {
+  societyId: string;
+  societyType: SocietyType;
+  inferred: Activity[];
+  /** empty-diff parity of the inferred set against this society's real entitlement (MR-1 gate). */
+  parity: boolean;
+  rowsToInsert: ActivityBackfillRow[];
+  /** why rowsToInsert is empty (null ⇒ it isn't). */
+  skipped: 'no-parity' | 'already-declared' | null;
+}
+
+/** Deterministic society_activities id — matches unique(society_id, activity), so a re-run is idempotent. */
+export function backfillRowId(societyId: string, activity: Activity): string {
+  return `${societyId}:${activity}`;
+}
+
+/**
+ * PURE — plan the society_activities backfill for a set of societies. Per society: infer its
+ * activities from type, and ONLY if that reproduces its current entitlement exactly (hasCutoverParity
+ * — MR-1) emit rows for the not-yet-declared ones. A society whose inferred activities do NOT cover
+ * its entitlement (e.g. a license grant no activity maps to) is SKIPPED with `no-parity` for manual
+ * review — never silently backfilled into a module loss. Writing these rows is dormant regardless
+ * (the resolver ignores society_activities until that tenant's cutover flag is flipped).
+ */
+export function planActivityBackfill(inputs: SocietyBackfillInput[], nowMs?: number): SocietyBackfillPlan[] {
+  return (Array.isArray(inputs) ? inputs : []).map((s) => {
+    const inferred = inferActivities(s.societyType);
+    const parity = hasCutoverParity(s.societyType, s.rows ?? [], inferred, nowMs, s.state);
+    if (!parity) return { societyId: s.societyId, societyType: s.societyType, inferred, parity, rowsToInsert: [], skipped: 'no-parity' };
+    const have = new Set<Activity>(s.existing ?? []);
+    const jurisdiction = resolveJurisdiction(s.state);
+    const rowsToInsert: ActivityBackfillRow[] = inferred
+      .filter((a) => !have.has(a))
+      .map((activity) => ({ id: backfillRowId(s.societyId, activity), society_id: s.societyId, jurisdiction, activity, status: 'active' as const }));
+    return {
+      societyId: s.societyId,
+      societyType: s.societyType,
+      inferred,
+      parity,
+      rowsToInsert,
+      skipped: rowsToInsert.length === 0 ? 'already-declared' : null,
+    };
+  });
 }

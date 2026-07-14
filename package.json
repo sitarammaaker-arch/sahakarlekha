@@ -37,6 +37,7 @@
     "test:activities": "node scripts/test-activities.mjs",
     "test:activity-resolution": "node scripts/test-activity-resolution.mjs",
     "test:activity-inference": "node scripts/test-activity-inference.mjs",
+    "test:activity-backfill": "node scripts/test-activity-backfill.mjs",
     "test:type-branch-parity": "node scripts/test-type-branch-parity.mjs",
     "test:ledger-event": "node scripts/test-ledger-event.mjs",
     "test:ledger-events-persist": "node scripts/test-ledger-events-persist.mjs",
