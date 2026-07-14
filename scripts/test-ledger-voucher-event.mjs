@@ -31,7 +31,7 @@ register(
     `),
 );
 
-const { voucherPostingLines, voucherReversalLines } = await import(abs('../src/lib/ledger/voucherEvent.ts'));
+const { voucherPostingLines, voucherReversalLines, voucherEventMeta } = await import(abs('../src/lib/ledger/voucherEvent.ts'));
 const { buildEvent, reverseEvent } = await import(abs('../src/lib/ledger/event.ts'));
 const { projectTrialBalance } = await import(abs('../src/lib/ledger/projections.ts'));
 
@@ -100,6 +100,14 @@ const tbEdit = projectTrialBalance([
 ok((tbEdit.lines.find((l) => l.accountId === '1001')?.netMinor ?? 0) === 150000, 'after edit, 1001 nets to the NEW amount (150000 Dr)');
 ok((tbEdit.lines.find((l) => l.accountId === '4101')?.netMinor ?? 0) === -150000, 'after edit, 4101 nets to the NEW amount (150000 Cr)');
 ok(tbEdit.balanced, 'edited journal stays balanced');
+
+// 9. voucherEventMeta (T-09 prereq) — the event payload carries narration + createdAt (needed for the
+//    ledgers) plus the base metadata, from one shared shape (RULE 2).
+const meta = voucherEventMeta({ id: 'v9', voucherNo: 'JV-9', type: 'journal', amount: 250, date: '2025-07-01', narration: 'Rent paid', createdAt: '2025-07-01T10:30:00Z' });
+ok(meta.narration === 'Rent paid' && meta.createdAt === '2025-07-01T10:30:00Z', 'meta carries narration + createdAt (the ledger fields)');
+ok(meta.voucherNo === 'JV-9' && meta.type === 'journal' && meta.amount === 250 && meta.date === '2025-07-01', 'meta carries voucherNo/type/amount/date');
+const bare = voucherEventMeta({ id: 'v0', voucherNo: 'X', type: 'journal', amount: 0, date: '2025-07-01' });
+ok(bare.narration === '' && bare.createdAt === '', 'missing narration/createdAt default to empty strings (never undefined)');
 
 console.log(`\nLedger voucher-event legs (T-06): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
