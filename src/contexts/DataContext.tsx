@@ -1789,16 +1789,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     }
 
+    // T-06: an edit that changes the POSTINGS is journaled as reverse-old + repost-new (T-08) — the
+    // append-only log is never mutated in place, so history stays intact (CL-2). A postings-neutral
+    // edit (narration / member only) emits nothing. Best-effort and isolated from the save path.
+    let editEvents: LedgerEvent[] = [];
+    try {
+      const oldLegs = voucherPostingLines(current);
+      const newLegs = voucherPostingLines(updatedVoucher);
+      if (JSON.stringify(oldLegs) !== JSON.stringify(newLegs)) {
+        const at = new Date().toISOString();
+        const base = {
+          tenantId: societyIdRef.current, jurisdiction: jurisdictionRef.current,
+          aggregateType: 'voucher' as const, aggregateId: id,
+          producer: { kind: 'human' as const, id: userRef.current?.name ?? null },
+        };
+        const reversal = buildEvent({ ...base, eventType: 'voucher.reversed', sequence: 2, payload: { lines: voucherReversalLines(current), voucherNo: current.voucherNo, reason: 'edit' } }, { eventId: crypto.randomUUID(), occurredAt: at });
+        const repost = buildEvent({ ...base, eventType: 'voucher.reposted', sequence: 3, payload: { lines: newLegs, voucherNo: updatedVoucher.voucherNo } }, { eventId: crypto.randomUUID(), occurredAt: at });
+        editEvents = [reversal, repost];
+        ledgerEventsRef.current = [...ledgerEventsRef.current, ...editEvents];
+      }
+    } catch { /* shadow ledger is best-effort — never touches the edit save path */ }
+
     vouchersRef.current = vouchersRef.current.map(v => v.id === id ? updatedVoucher : v);
     setVouchersState(prev => prev.map(v => v.id === id ? updatedVoucher : v));
 
     // Two-step persist + rollback. Same pattern as addVoucher.
     persistVoucher(updatedVoucher, {
       isUpdate: true,
+      // The reverse-old + repost-new pair is durably appended only after the base row is confirmed.
+      onBaseSuccess: () => { for (const e of editEvents) persistLedgerEvent(e); },
       onBaseFail: () => {
         // Revert local state so UI matches what's actually in Supabase
         vouchersRef.current = vouchersRef.current.map(v => v.id === id ? current : v);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));
+        // Keep the shadow ledger consistent with the reverted edit.
+        if (editEvents.length) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => !editEvents.some(x => x.eventId === e.eventId));
       },
     });
     // syncEntries (which uses base columns only) is fired by persistVoucher only on add,
