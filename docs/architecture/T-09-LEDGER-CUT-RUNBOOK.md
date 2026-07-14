@@ -51,11 +51,26 @@ counterparty** once as a receipt/payment, classified **capital vs revenue** by a
 
 ### 2b. The ledgers (`getCashBookEntries` / `getBankBookEntries` / `getMemberLedger`)
 Running-balance khata for one account. `projectAccountLedger(events, accountId, asOf)` already gives
-`{eventId, occurredAt, drMinor, crMinor, runningMinor}`. The report rows also need **voucherNo** and
-**particulars** (the contra account name) — carry `voucherNo` in the payload (already present) and
-derive particulars from the event's other legs + the accounts list.
-- **Projection approach:** a thin mapper over `projectAccountLedger` that joins voucherNo/particulars.
-- **Risk:** lower than R&P (running balance is well-tested), but particulars formatting must match.
+`{eventId, occurredAt, drMinor, crMinor, runningMinor}`.
+
+> **⚠️ PREREQUISITE found 2026-07-14 — the event payload must be ENRICHED first (schema change + re-seed).**
+> Inspecting `getCashBookEntries` shows the current event payload (`{lines, voucherNo, type, amount,
+> date}`) is INSUFFICIENT to reproduce it faithfully — building the projection now would DIVERGE:
+> 1. **`particulars`** = `v.narration || contraAccount.name`, but the payload has **no `narration`** →
+>    wrong particulars on every row.
+> 2. **Ordering** — same-date vouchers are sorted by **`v.createdAt`**, and the running balance depends
+>    on that order; events have only `occurredAt` (genesis events are all dated `T00:00:00`), **no
+>    `createdAt`** → intra-day running balances diverge.
+>
+> **So step 0 for the ledgers:** add `narration` + `createdAt` (a stable tie-break key) to the voucher
+> event payloads — centralise a `voucherEventPayload(voucher)` in `voucherEvent.ts` and use it at the
+> addVoucher/cancel/reverse/edit sites AND in `planGenesisEvents`. Then **re-run genesis** so historical
+> events carry the new fields (bump a payload schema note; deterministic ids mean the re-seed upserts
+> in place — but the enrichment only lands if you delete + re-seed, or the genesis skip-if-journaled
+> logic will leave old payloads; plan a `--reseed` path). Only then is 2b faithful.
+- **Projection approach (after enrichment):** a mapper over `projectAccountLedger` that joins
+  `payload.voucherNo` + `payload.narration` (particulars) and sorts by `(occurredAt, payload.createdAt)`.
+- **Risk:** running balance itself is well-tested; the enrichment + re-seed is the real work.
 
 ### 2c. Per-report parity (the gap to close)
 Add, alongside `ledgerParity`, a `reportParity` per statement — e.g. compare
@@ -112,7 +127,9 @@ Keep this reversible behind the per-tenant flag until the removal is proven acro
 
 ## 5. Suggested slice order for the finale session
 
-1. `getCashBookEntries`/`getBankBookEntries` cut (lower risk; `projectAccountLedger` exists) + parity.
+0. **Payload enrichment (blocker for the ledgers, §2b)** — add `narration` + `createdAt` to the voucher
+   event payloads (centralise `voucherEventPayload` + genesis) and re-seed. Do this FIRST.
+1. `getCashBookEntries`/`getBankBookEntries` cut (`projectAccountLedger` + enriched payload) + parity.
 2. `getMemberLedger` cut + parity.
 3. `getReceiptsPayments` cut — extract the shared capital/revenue classifier first (RULE 2) + parity.
 4. Extend `check-ledger-parity.mjs` with the per-report parities (§2c).
