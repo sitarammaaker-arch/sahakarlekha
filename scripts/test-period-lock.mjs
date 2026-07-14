@@ -1,11 +1,36 @@
-// Period-lock / back-dating prevention (P1 #7 / ECR-07) — asserts the pure predicate
-// isPeriodLocked(entityDate, periodLockDate), mirrored from src/contexts/DataContext.tsx
-// the same way scripts/test-nav.mjs mirrors navVisibility. Run: node scripts/test-period-lock.mjs
+// Period-lock / back-dating prevention (P1 #7 / ECR-07) — imports the REAL src/lib/periodLock.ts
+// (extracted from DataContext) via the '@/' loader, so it validates the ACTUAL predicate. Was a mirror.
+// Run: node scripts/test-period-lock.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-// ── Mirror of the pure predicate in DataContext.isPeriodLocked ────────────────
-// A voucher dated ON or BEFORE the lock date is in a closed period. ISO YYYY-MM-DD
-// strings compare lexicographically, which is chronological for this format.
-const isPeriodLocked = (entityDate, lock) => !!lock && !!entityDate && entityDate <= lock;
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { isPeriodLocked } = await import(abs('../src/lib/periodLock.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
