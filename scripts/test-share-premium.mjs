@@ -1,17 +1,36 @@
-// Share-transfer premium cap (ECR-16 / MS-11) — asserts the pure cap logic mirrored from
-// DataContext.transferShareCapital + the ShareRegister UI. Run: node scripts/test-share-premium.mjs
+// Share-transfer premium cap (ECR-16 / MS-11) — imports the REAL src/lib/sharePremium.ts (extracted
+// from DataContext.transferShareCapital + the ShareRegister UI) via the '@/' loader, so it validates
+// the ACTUAL cap logic both sites now share. Was a mirror. Run: node scripts/test-share-premium.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-// ── Mirror of the pure cap logic ──────────────────────────────────────────────
-// premium is allowed only up to maxPct% of the face-value amount transferred.
-const premiumCap = (faceAmount, maxPct) => Math.round((faceAmount * (maxPct || 0) / 100) * 100) / 100;
-// The guard in transferShareCapital: a premium is accepted only when a cap is set (>0)
-// AND premium ≤ cap. premium === 0 always passes (plain face-value transfer).
-function premiumAllowed(premium, faceAmount, maxPct) {
-  const prem = Math.round(Math.max(0, premium || 0) * 100) / 100;
-  if (prem === 0) return true;
-  const cap = premiumCap(faceAmount, maxPct);
-  return (maxPct > 0) && prem <= cap;
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { premiumCap, premiumAllowed } = await import(abs('../src/lib/sharePremium.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
