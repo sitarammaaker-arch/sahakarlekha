@@ -45,6 +45,7 @@ import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { resolveJurisdiction, stampTenant } from '@/lib/jurisdiction';
 import { isPeriodLocked as isDateInLockedPeriod } from '@/lib/periodLock';
 import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
+import { voucherPostingLines } from '@/lib/ledger/voucherEvent';
 import { snapshotDeletedMovements } from '@/lib/movementArchive';
 import { isSelfApproval } from '@/lib/sod';
 import { requiresApproval } from '@/lib/approvalMatrix';
@@ -1547,7 +1548,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           aggregateId: newVoucher.id,
           sequence: 1,
           producer: { kind: 'human', id: userRef.current?.name ?? null },
-          payload: { voucherNo: newVoucher.voucherNo, type: newVoucher.type, amount: newVoucher.amount, date: newVoucher.date },
+          // T-06: carry the balanced posting LEGS (exact paise) so the journal is replay-faithful —
+          // projectTrialBalance/replayBalances reconstruct balances from `lines`. Metadata kept alongside.
+          payload: { lines: voucherPostingLines(newVoucher), voucherNo: newVoucher.voucherNo, type: newVoucher.type, amount: newVoucher.amount, date: newVoucher.date },
         }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
         ledgerEventsRef.current = [...ledgerEventsRef.current, shadowEvent];
       }
