@@ -12,6 +12,7 @@
  * scripts/test-asset-reconciliation.mjs.
  */
 import type { Asset } from '@/types';
+import { toMinor, toRupees, sumMinor } from '@/lib/money';
 
 /**
  * Σ gross cost of the assets actually carried in the fixed-asset ledger: live (not archived)
@@ -21,9 +22,9 @@ import type { Asset } from '@/types';
 export function sumActiveAssetCost(
   assets: Pick<Asset, 'cost' | 'isDeleted' | 'disposalDate'>[],
 ): number {
-  return (assets || [])
-    .filter((a) => !a.isDeleted && !a.disposalDate)
-    .reduce((sum, a) => sum + (a.cost || 0), 0);
+  // T-02: sum in exact integer paise (RULE 2).
+  const active = (assets || []).filter((a) => !a.isDeleted && !a.disposalDate);
+  return toRupees(sumMinor(active.map((a) => toMinor(a.cost || 0))));
 }
 
 export interface AssetReconciliation {

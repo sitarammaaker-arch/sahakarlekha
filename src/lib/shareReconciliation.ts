@@ -11,6 +11,7 @@
  * Pure & deterministic → unit-tested by scripts/test-share-reconciliation.mjs.
  */
 import type { Member } from '@/types';
+import { toMinor, toRupees, sumMinor } from '@/lib/money';
 
 /**
  * Σ share capital across members whose shares are actually posted to the ledger:
@@ -19,9 +20,9 @@ import type { Member } from '@/types';
 export function sumActiveMemberShareCapital(
   members: Pick<Member, 'shareCapital' | 'approvalStatus' | 'isDeleted'>[],
 ): number {
-  return (members || [])
-    .filter((m) => !m.isDeleted && (!m.approvalStatus || m.approvalStatus === 'approved'))
-    .reduce((sum, m) => sum + (m.shareCapital || 0), 0);
+  // T-02: sum in exact integer paise (RULE 2) so many members can't drift the subsidiary total.
+  const active = (members || []).filter((m) => !m.isDeleted && (!m.approvalStatus || m.approvalStatus === 'approved'));
+  return toRupees(sumMinor(active.map((m) => toMinor(m.shareCapital || 0))));
 }
 
 export interface ShareCapitalReconciliation {
