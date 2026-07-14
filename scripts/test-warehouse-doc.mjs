@@ -1,22 +1,35 @@
-// Warehouse documents (ECR-20) — mirrors src/lib/warehouseDoc.ts.
-// Run: node scripts/test-warehouse-doc.mjs
-function warehouseDocKind(movementType, qty) {
-  const inward = movementType === 'purchase' || movementType === 'opening' || (movementType === 'adjustment' && qty > 0);
-  return inward ? 'WHR' : 'GatePass';
-}
-function buildWarehouseDoc(input) {
-  const kind = warehouseDocKind(input.movementType, input.qty);
-  const qtyStr = `${Math.abs(input.qty)}${input.itemUnit ? ' ' + input.itemUnit : ''}`;
-  const common = [
-    { label: 'दिनांक (Date)', value: input.date || '' },
-    { label: 'वस्तु (Item)', value: input.itemName },
-    { label: 'मात्रा (Qty)', value: qtyStr },
-    { label: 'गोदाम (Godown)', value: input.godownName },
-    { label: 'संदर्भ (Ref)', value: input.referenceNo || '—' },
-  ];
-  if (kind === 'WHR') return { kind, title: 'गोदाम रसीद (Warehouse Receipt)', docNo: input.docNo, societyName: input.societyName, fields: common, manualFields: ['जमाकर्ता (Depositor)', 'श्रेणी/किस्म (Grade)', 'बोरे/पैकेट (Bags)', 'भंडारण शुल्क (Storage charge)', 'प्राप्तकर्ता के हस्ताक्षर (Received by)'] };
-  return { kind, title: 'निकासी पर्ची (Gate Pass)', docNo: input.docNo, societyName: input.societyName, fields: common, manualFields: ['प्राप्तकर्ता (Issued to)', 'वाहन संख्या (Vehicle no.)', 'गंतव्य (Destination)', 'चालक (Driver)', 'अधिकृत हस्ताक्षर (Authorised by)'] };
-}
+// Warehouse documents (ECR-20) — imports the REAL src/lib/warehouseDoc.ts via the
+// '@/' loader. Run: node scripts/test-warehouse-doc.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { warehouseDocKind, buildWarehouseDoc } = await import(abs('../src/lib/warehouseDoc.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };

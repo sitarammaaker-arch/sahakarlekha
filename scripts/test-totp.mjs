@@ -1,70 +1,40 @@
-// TOTP engine (ECR-12) — mirrors src/lib/totp.ts. Validates against the official
-// RFC 6238 Appendix-B test vectors (SHA1, seed "12345678901234567890").
-// Run: node scripts/test-totp.mjs
+// TOTP engine (ECR-12) — imports the REAL src/lib/totp.ts via the '@/' loader.
+// Validates against the official RFC 6238 Appendix-B test vectors (SHA1, seed
+// "12345678901234567890"). Run: node scripts/test-totp.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 import { webcrypto } from 'node:crypto';
-const subtle = webcrypto.subtle;
 
-const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-const STEP = 30, DIGITS = 6;
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
 
-function base32Encode(bytes) {
-  let bits = 0, value = 0, out = '';
-  for (let i = 0; i < bytes.length; i++) {
-    value = (value << 8) | bytes[i]; bits += 8;
-    while (bits >= 5) { out += B32[(value >>> (bits - 5)) & 31]; bits -= 5; }
-  }
-  if (bits > 0) out += B32[(value << (5 - bits)) & 31];
-  return out;
-}
-function base32Decode(s) {
-  const clean = s.toUpperCase().replace(/[^A-Z2-7]/g, '');
-  let bits = 0, value = 0; const out = [];
-  for (const ch of clean) {
-    value = (value << 5) | B32.indexOf(ch); bits += 5;
-    if (bits >= 8) { out.push((value >>> (bits - 8)) & 0xff); bits -= 8; }
-  }
-  return new Uint8Array(out);
-}
-function counterBytes(counter) {
-  const buf = new Uint8Array(8); let c = counter;
-  for (let i = 7; i >= 0; i--) { buf[i] = c & 0xff; c = Math.floor(c / 256); }
-  return buf;
-}
-async function hmacSha1(key, msg) {
-  const k = await subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
-  return new Uint8Array(await subtle.sign('HMAC', k, msg));
-}
-async function hotp(secretB32, counter, digits = DIGITS) {
-  const hs = await hmacSha1(base32Decode(secretB32), counterBytes(counter));
-  const offset = hs[hs.length - 1] & 0x0f;
-  const bin = ((hs[offset] & 0x7f) << 24) | ((hs[offset + 1] & 0xff) << 16)
-    | ((hs[offset + 2] & 0xff) << 8) | (hs[offset + 3] & 0xff);
-  return (bin % 10 ** digits).toString().padStart(digits, '0');
-}
-function totp(secretB32, atMs, step = STEP, digits = DIGITS) {
-  return hotp(secretB32, Math.floor(atMs / 1000 / step), digits);
-}
-function safeEqual(a, b) {
-  if (a.length !== b.length) return false;
-  let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return r === 0;
-}
-async function verifyTotp(secretB32, token, atMs, window = 1, step = STEP, digits = DIGITS) {
-  const t = (token || '').trim();
-  if (!secretB32 || !new RegExp(`^\\d{${digits}}$`).test(t)) return false;
-  const counter = Math.floor(atMs / 1000 / step);
-  for (let w = -window; w <= window; w++) {
-    const c = counter + w;
-    if (c < 0) continue;
-    if (safeEqual(await hotp(secretB32, c, digits), t)) return true;
-  }
-  return false;
-}
-function otpauthUri(secretB32, account, issuer = 'SahakarLekha') {
-  const label = encodeURIComponent(`${issuer}:${account}`);
-  const params = new URLSearchParams({ secret: secretB32, issuer, algorithm: 'SHA1', digits: String(DIGITS), period: String(STEP) });
-  return `otpauth://totp/${label}?${params.toString()}`;
-}
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { base32Encode, base32Decode, totp, verifyTotp, otpauthUri } = await import(abs('../src/lib/totp.ts'));
+
+// Fixture constant the assertions use (mirrors the engine's 30s step).
+const STEP = 30;
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };

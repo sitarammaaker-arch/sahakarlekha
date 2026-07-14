@@ -1,22 +1,37 @@
-// Stack card / bin card (ECR-20) — mirrors src/lib/stackCard.ts + qtyDelta from godownStock.ts.
+// Stack card / bin card (ECR-20) — imports the REAL src/lib/stackCard.ts (which imports
+// qtyDelta + UNASSIGNED_GODOWN from @/lib/godownStock) via the '@/' loader.
 // Run: node scripts/test-stack-card.mjs
-const UNASSIGNED_GODOWN = 'unassigned';
-const qtyDelta = (type, qty) => {
-  if (type === 'purchase' || type === 'opening' || (type === 'adjustment' && qty > 0)) return qty;
-  return -Math.abs(qty);
-};
-function buildStackCard(movements, itemId, godownId) {
-  const rows = (movements || [])
-    .filter(m => !m.isDeleted && m.itemId === itemId && (m.godownId || UNASSIGNED_GODOWN) === godownId)
-    .map((m, i) => ({ m, i }))
-    .sort((a, b) => { const da = a.m.date || '', db = b.m.date || ''; if (da !== db) return da < db ? -1 : 1; return a.i - b.i; });
-  let balance = 0;
-  return rows.map(({ m }) => {
-    const delta = qtyDelta(m.type, m.qty || 0);
-    balance += delta;
-    return { date: m.date, type: m.type, referenceNo: m.referenceNo, inQty: delta > 0 ? delta : 0, outQty: delta < 0 ? -delta : 0, balance: Math.round(balance * 100) / 100 };
-  });
-}
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { buildStackCard } = await import(abs('../src/lib/stackCard.ts'));
+const { UNASSIGNED_GODOWN } = await import(abs('../src/lib/godownStock.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };

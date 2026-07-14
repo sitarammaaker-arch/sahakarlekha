@@ -1,22 +1,41 @@
-// GST/TDS validation (ECR-22 slice C) — mirrors src/lib/gstTdsValidation.ts.
-// Run: node scripts/test-gst-tds-validation.mjs
-const r2 = (n) => Math.round(n * 100) / 100;
-const VALID_RATES = new Set([0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 18, 28]);
-const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
-const validateGSTIN = (g) => !!g && GSTIN_RE.test(g.trim().toUpperCase());
-const rateOf = (rec) => { const igst = rec.igstAmount || 0; return igst > 0 ? (rec.igstPct || 0) : r2((rec.cgstPct || 0) + (rec.sgstPct || 0)); };
-function validateGstRecord(rec) {
-  const issues = []; const ref = rec.ref || '?';
-  const taxable = rec.netAmount || 0, cgst = rec.cgstAmount || 0, sgst = rec.sgstAmount || 0, igst = rec.igstAmount || 0;
-  if ((cgst > 0 || sgst > 0) && igst > 0) issues.push({ ref, field: 'gst', severity: 'error', message: 'both' });
-  if (igst === 0 && Math.abs(cgst - sgst) > 0.5) issues.push({ ref, field: 'gst', severity: 'error', message: 'cgst!=sgst' });
-  const rate = rateOf(rec);
-  if (rate > 0 && taxable > 0) { const expected = r2((taxable * rate) / 100); const actual = r2(cgst + sgst + igst); if (Math.abs(expected - actual) > 1) issues.push({ ref, field: 'gst', severity: 'warn', message: 'taxmismatch' }); }
-  if (rate > 0 && !VALID_RATES.has(rate)) issues.push({ ref, field: 'rate', severity: 'warn', message: 'oddrate' });
-  if (rec.gstin && !validateGSTIN(rec.gstin)) issues.push({ ref, field: 'gstin', severity: 'error', message: 'badgstin' });
-  return issues;
-}
-function validateTds(rec) { const amount = rec.amount || 0, threshold = rec.threshold ?? 0; if (threshold > 0 && amount > threshold && (rec.tdsAmount || 0) <= 0) return [{ ref: rec.ref || '?', field: 'tds', severity: 'warn', message: 'notds' }]; return []; }
+// GST/TDS validation (ECR-22 slice C) — imports the REAL src/lib/gstTdsValidation.ts
+// via the '@/' loader. Run: node scripts/test-gst-tds-validation.mjs
+//
+// NOTE: the mirror asserted short message codes ('taxmismatch', 'both', …); the real
+// module emits human-readable sentences with the SAME detection logic. The two clean-
+// record / field-based (has(issues,field)) / severity assertions already match the real
+// structural signal unchanged; the one message-equality assertion (tax-vs-rate mismatch)
+// is re-keyed to the real structural signal (field:'gst', severity:'warn', message⊃'taxable').
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { validateGSTIN, validateGstRecord, validateTds } = await import(abs('../src/lib/gstTdsValidation.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -36,7 +55,7 @@ const r4 = validateGstRecord({ ref: 'S4', netAmount: 1000, cgstAmount: 90, sgstA
 ok(r4.some(i => i.severity === 'error' && i.field === 'gst'), 'CGST≠SGST flagged as error');
 
 // 5. Tax ≠ taxable × rate → warn.
-ok(validateGstRecord({ ref: 'S5', netAmount: 1000, cgstAmount: 50, sgstAmount: 50, igstAmount: 0, cgstPct: 9, sgstPct: 9 }).some(i => i.message === 'taxmismatch'), 'tax vs rate mismatch flagged');
+ok(validateGstRecord({ ref: 'S5', netAmount: 1000, cgstAmount: 50, sgstAmount: 50, igstAmount: 0, cgstPct: 9, sgstPct: 9 }).some(i => i.field === 'gst' && i.severity === 'warn' && i.message.includes('taxable')), 'tax vs rate mismatch flagged (re-keyed: field=gst, severity=warn, message⊃"taxable")');
 
 // 6. Odd rate → warn.
 ok(has(validateGstRecord({ ref: 'S6', netAmount: 1000, cgstAmount: 65, sgstAmount: 65, igstAmount: 0, cgstPct: 6.5, sgstPct: 6.5 }), 'rate'), 'unusual rate 13% flagged');

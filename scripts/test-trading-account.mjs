@@ -1,23 +1,38 @@
-// Trading Account procurement-tie fix — mirrors src/lib/tradingAccount.ts.
-// Run: node scripts/test-trading-account.mjs
-const r2 = (n) => Math.round(n * 100) / 100;
+// Trading Account procurement-tie fix — imports the REAL src/lib/tradingAccount.ts
+// via the '@/' loader. Run: node scripts/test-trading-account.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-function inventoryProcurementCost(vouchers, inventoryAcctIds, closingStockContraIds = new Set(['5150', '5101'])) {
-  let total = 0;
-  for (const v of vouchers) {
-    const lines = v.lines || [];
-    if (lines.some(l => l.type === 'Cr' && closingStockContraIds.has(l.accountId))) continue;
-    for (const l of lines) {
-      if (l.type === 'Dr' && inventoryAcctIds.has(l.accountId)) total += l.amount || 0;
-    }
-  }
-  return r2(total);
-}
-function tradingGrossProfit(i) {
-  const cr = (i.sales || 0) + (i.closingStock || 0);
-  const dr = (i.openingStock || 0) + (i.purchases || 0) + (i.directExp || 0);
-  return r2(cr - dr);
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { inventoryProcurementCost, tradingGrossProfit } = await import(abs('../src/lib/tradingAccount.ts'));
+
+// Pure fixture helper the assertions use for rounding.
+const r2 = (n) => Math.round(n * 100) / 100;
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
