@@ -4275,13 +4275,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     assetsRef.current = [...assetsRef.current, newAsset];
     setAssetsState(prev => { const updated = [...prev, newAsset]; return updated; });
-    supabase.from('assets').upsert(withSoc(newAsset)).then(({ error }) => {
-      if (error) {
-        console.error('DB sync error:', error.message); reportError('db-sync', error.message);
-        assetsRef.current = assetsRef.current.filter(a => a.id !== newAsset.id);
-        setAssetsState(prev => prev.filter(a => a.id !== newAsset.id));   // RULE 1: roll back
-        toastRef.current({ title: 'संपत्ति सेव नहीं हुई', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+    // T-03 (ADR-0005): official assetNo from the server sequence (book 'AST', FY-less) at persist;
+    // restamp local state. Falls back to the client-provisional number on offline/RPC failure.
+    issueOfficialNumber(nextDocNumber, societyIdRef.current, newAsset.assetNo).then((officialNo) => {
+      const toSave = (officialNo && officialNo !== newAsset.assetNo) ? { ...newAsset, assetNo: officialNo } : newAsset;
+      if (toSave !== newAsset) {
+        assetsRef.current = assetsRef.current.map(a => a.id === newAsset.id ? toSave : a);
+        setAssetsState(prev => prev.map(a => a.id === newAsset.id ? toSave : a));
       }
+      supabase.from('assets').upsert(withSoc(toSave)).then(({ error }) => {
+        if (error) {
+          console.error('DB sync error:', error.message); reportError('db-sync', error.message);
+          assetsRef.current = assetsRef.current.filter(a => a.id !== newAsset.id);
+          setAssetsState(prev => prev.filter(a => a.id !== newAsset.id));   // RULE 1: roll back
+          toastRef.current({ title: 'संपत्ति सेव नहीं हुई', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        }
+      });
     });
     return newAsset;
   }, [accounts, addVoucher]);
@@ -5684,13 +5693,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const emp: Employee = { ...data, id: crypto.randomUUID(), empNo };
     employeesRef.current = [...employeesRef.current, emp];
     setEmployeesState(prev => { const updated = [...prev, emp]; return updated; });
-    supabase.from('employees').upsert(withSoc(emp)).then(({ error }) => {
-      if (error) {
-        console.error('DB sync error:', error.message); reportError('db-sync', error.message);
-        employeesRef.current = employeesRef.current.filter(e => e.id !== emp.id);
-        setEmployeesState(prev => prev.filter(e => e.id !== emp.id));   // RULE 1: roll back
-        toastRef.current({ title: 'कर्मचारी सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+    // T-03 (ADR-0005): official empNo from the server sequence (book 'EMP', FY-less) at persist;
+    // restamp local state. Falls back to the client-provisional number on offline/RPC failure.
+    issueOfficialNumber(nextDocNumber, societyIdRef.current, emp.empNo).then((officialNo) => {
+      const toSave = (officialNo && officialNo !== emp.empNo) ? { ...emp, empNo: officialNo } : emp;
+      if (toSave !== emp) {
+        employeesRef.current = employeesRef.current.map(e => e.id === emp.id ? toSave : e);
+        setEmployeesState(prev => prev.map(e => e.id === emp.id ? toSave : e));
       }
+      supabase.from('employees').upsert(withSoc(toSave)).then(({ error }) => {
+        if (error) {
+          console.error('DB sync error:', error.message); reportError('db-sync', error.message);
+          employeesRef.current = employeesRef.current.filter(e => e.id !== emp.id);
+          setEmployeesState(prev => prev.filter(e => e.id !== emp.id));   // RULE 1: roll back
+          toastRef.current({ title: 'कर्मचारी सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        }
+      });
     });
     return emp;
   }, []);

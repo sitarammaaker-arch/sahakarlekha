@@ -12,7 +12,7 @@ import { dirname, resolve as pathResolve } from 'node:path';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
 
-const { parseDocNumber, formatDocNumber, issueOfficialNumber } = await import(abs('../src/lib/numbering.ts'));
+const { parseDocNumber, formatDocNumber, issueOfficialNumber, NO_FY } = await import(abs('../src/lib/numbering.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -53,6 +53,26 @@ ok((await issueOfficialNumber(async () => 0, 'SOC1', 'SL/2025-26/003')) === 'SL/
 let called = false;
 const spyRpc = async () => { called = true; return 5; };
 ok((await issueOfficialNumber(spyRpc, 'SOC1', 'not-a-number')) === 'not-a-number' && !called, 'malformed provisional → unchanged, rpc never called');
+
+// ── T-03 (2-part, FY-less): asset/employee/item BOOK/SEQ ────────────────────────────
+const a = parseDocNumber('AST/0001');
+ok(a && a.book === 'AST' && a.fy === null && a.seq === 1 && a.width === 4, 'parses FY-less BOOK/SEQ (fy null)');
+ok(parseDocNumber('EMP/001')?.width === 3 && parseDocNumber('EMP/001')?.fy === null, 'EMP/001 → width 3, fy null');
+ok(parseDocNumber('ITM/012')?.seq === 12, 'ITM/012 → seq 12');
+ok(parseDocNumber('F0001') === null, 'no-separator prefix (farmer F0001) is rejected — deliberately unsupported');
+ok(parseDocNumber('AST/') === null && parseDocNumber('/0001') === null, 'empty book or seq rejected in 2-part');
+
+ok(formatDocNumber('AST', null, 7, 4) === 'AST/0007', 'reformats FY-less as BOOK/SEQ');
+ok(formatDocNumber('EMP', null, 12, 3) === 'EMP/012', 'FY-less pads to width 3');
+const a2 = parseDocNumber('AST/0009');
+ok(a2 && formatDocNumber(a2.book, a2.fy, 10, a2.width) === 'AST/0010', 'FY-less parse→format round-trip');
+
+// issueOfficialNumber: FY-less number keys the rpc with the NO_FY sentinel, returns 2-part.
+let fyArg = null;
+const seqRpc = async (society, book, fy) => { fyArg = fy; return 5; };
+ok((await issueOfficialNumber(seqRpc, 'SOC1', 'AST/0001')) === 'AST/0005', 'issues FY-less server SEQ as BOOK/SEQ');
+ok(fyArg === NO_FY, 'FY-less number calls the rpc with the NO_FY sentinel');
+ok((await issueOfficialNumber(async () => null, 'SOC1', 'EMP/003')) === 'EMP/003', 'FY-less rpc null → provisional unchanged');
 
 console.log(`\nDocument numbering: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

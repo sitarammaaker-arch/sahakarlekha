@@ -52,6 +52,22 @@ from (
          (split_part("objectionNo", '/', 3))::bigint
   from audit_objections
   where "objectionNo" ~ '^[^/]+/[^/]+/[0-9]+$'
+  -- FY-less 2-part registers (BOOK/SEQ): asset, employee. fy = '-' (the client's NO_FY sentinel),
+  -- so each gets one gapless per-(society, book) sequence rather than per-year.
+  union all
+  select society_id,
+         split_part("assetNo", '/', 1),
+         '-',
+         (split_part("assetNo", '/', 2))::bigint
+  from assets
+  where "assetNo" ~ '^[^/]+/[0-9]+$'
+  union all
+  select society_id,
+         split_part("empNo", '/', 1),
+         '-',
+         (split_part("empNo", '/', 2))::bigint
+  from employees
+  where "empNo" ~ '^[^/]+/[0-9]+$'
 ) s
 group by s.society_id, s.book, s.fy
 on conflict (society_id, book, fy)
