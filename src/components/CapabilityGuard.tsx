@@ -17,11 +17,11 @@ import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { toast } from '@/hooks/use-toast';
-import { MODULE_CATALOG, isModuleVisible, navigationService, type NavContext } from '@/lib/navigation';
+import { MODULE_CATALOG, isModuleVisible, navigationService, declaredActivities, type NavContext } from '@/lib/navigation';
 
 export function CapabilityGuard({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const { society, societyCapabilities } = useData();
+  const { society, societyCapabilities, societyActivities } = useData();
   const { hasPermission, isSuperAdmin } = useAuth();
   const { language } = useLanguage();
   const societyType = society.societyType ?? 'other';
@@ -29,7 +29,8 @@ export function CapabilityGuard({ children }: { children: React.ReactNode }) {
   const module = MODULE_CATALOG.find((m) => m.route === location.pathname);
   const ctx: NavContext = {
     societyType,
-    capabilities: navigationService.resolveCapabilities(societyType, societyCapabilities, society.state),
+    // T-11: declared activities gate within entitlement, dormant behind the cutover flag (T-12).
+    capabilities: navigationService.resolveCapabilities(societyType, societyCapabilities, society.state, declaredActivities(societyActivities)),
     hasRole: hasPermission,
     superAdminShowAll: isSuperAdmin, // matches useNavigation — super-admin bypasses gates
   };

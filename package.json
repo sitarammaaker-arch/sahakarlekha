@@ -95,6 +95,7 @@
     "test:share-recon": "node scripts/test-share-reconciliation.mjs",
     "test:asset-reconciliation": "node scripts/test-asset-reconciliation.mjs",
     "test:approval-matrix": "node scripts/test-approval-matrix.mjs",
+    "test:activities-resolver": "node scripts/test-activities-resolver.mjs",
     "test:capability-consistency": "node scripts/test-capability-consistency.mjs",
     "test:deposit-interest": "node scripts/test-deposit-interest.mjs",
     "test:deposits": "node scripts/test-deposits.mjs",

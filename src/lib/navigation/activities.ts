@@ -79,3 +79,24 @@ export const ACTIVITY_CATALOG: readonly ActivityDef[] = [
 
 /** The set of valid activity codes, for validation and membership checks. */
 export const ACTIVITY_CODES: ReadonlySet<Activity> = new Set(ACTIVITY_CATALOG.map((a) => a.code));
+
+/** A declared-activity row as it lives in `society_activities` (the subset the resolver path reads). */
+export interface SocietyActivityRow {
+  activity: Activity;
+  status?: 'active' | 'paused' | 'retired';
+  isDeleted?: boolean;
+}
+
+/**
+ * PURE (T-11) — the DECLARED, live activities a society currently runs, from its `society_activities`
+ * rows: only `status === 'active'`, not soft-deleted, and a known catalog code. Order-independent,
+ * de-duplicated. This is the ONLY place the raw rows become the `Activity[]` the resolver consumes,
+ * so an unknown/paused/retired/deleted row can never light up a capability.
+ */
+export function declaredActivities(rows: readonly SocietyActivityRow[] = []): Activity[] {
+  const out = new Set<Activity>();
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (r && (r.status ?? 'active') === 'active' && !r.isDeleted && ACTIVITY_CODES.has(r.activity)) out.add(r.activity);
+  }
+  return [...out];
+}

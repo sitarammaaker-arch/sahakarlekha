@@ -20,11 +20,21 @@ export interface NavigationService {
   ) => ReturnType<typeof resolveCapabilities>;
 }
 
+/**
+ * ACTIVITIES cutover flag (T-11 → T-12). While FALSE the port IGNORES declared activities and
+ * resolves exactly as before (all entitled caps) — so the read-path wiring is dormant and provably
+ * non-breaking. T-12 flips this (ultimately per-tenant) ONLY AFTER `society_activities` is backfilled
+ * with empty-diff parity. Living at the single port means the High cutover is one switch and every
+ * consumer can pass its declared activities unconditionally today. See MASTER-IMPLEMENTATION-BLUEPRINT T-11/T-12.
+ */
+export const ACTIVITIES_CUTOVER_ENABLED = false;
+
 export const navigationService: NavigationService = {
   getCatalog: () => MODULE_CATALOG,
   // `state` enables jurisdiction packs (e.g. Haryana → haryana_compliance) without a server row.
-  // `activities` (T-11) gate entitled capabilities WITHIN entitlement; omitted → today's
-  // behaviour (all entitled caps). The live source (society_activities) is wired at the cutover (T-12).
+  // `activities` (T-11) gate entitled capabilities WITHIN entitlement, but ONLY once the cutover flag
+  // is on (T-12); until then they are ignored → today's behaviour (all entitled caps), whatever the
+  // caller passes. The live source (society_activities) is now wired through here (T-11).
   resolveCapabilities: (societyType, rows, state, activities) =>
-    resolveCapabilities(societyType, rows, undefined, state, activities),
+    resolveCapabilities(societyType, rows, undefined, state, ACTIVITIES_CUTOVER_ENABLED ? activities : []),
 };
