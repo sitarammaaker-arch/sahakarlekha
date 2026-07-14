@@ -4,17 +4,18 @@
  * unused heads, duplicate names, empty groups and blank names. No mutation — remediation
  * (delete / merge / rename) is done on the Ledger Heads page.
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '@/contexts/DataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Stethoscope, AlertTriangle, AlertOctagon, Trash2, Info, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Stethoscope, AlertTriangle, AlertOctagon, Trash2, Info, ArrowRight, CheckCircle2, BookCheck, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { analyzeLedgerHygiene, hygieneSummary, type HygieneCategory, type HygieneSeverity, type LedgerUsage } from '@/lib/ledgerHygiene';
+import type { LedgerParitySnapshot } from '@/lib/ledger/reportParity';
 
 const SEV_CLS: Record<HygieneSeverity, string> = {
   error: 'bg-red-100 text-red-800 border-red-300',
@@ -42,10 +43,25 @@ const SEV_ICON: Record<HygieneSeverity, React.ReactNode> = {
 };
 
 const LedgerHygiene: React.FC = () => {
-  const { accounts, vouchers, suppliers, customers, getAccountBalance } = useData();
+  const { accounts, vouchers, suppliers, customers, getAccountBalance, getLedgerReportParity, loadLedgerJournal } = useData();
   const { language } = useLanguage();
   const navigate = useNavigate();
   const hi = language === 'hi';
+
+  // T-09 pre-flight (on demand — it pages in the whole journal and walks every member's ledger, so it
+  // never runs on render). The journal load comes first: a society that is not cut over yet has no
+  // events in memory, and checking parity against an empty log would prove nothing.
+  const [parity, setParity] = useState<LedgerParitySnapshot | null>(null);
+  const [checking, setChecking] = useState(false);
+  const runParityCheck = async () => {
+    setChecking(true);
+    try {
+      await loadLedgerJournal();
+      setParity(getLedgerReportParity());
+    } finally {
+      setChecking(false);
+    }
+  };
 
   // Usage snapshot — voucher-line references (incl. legacy Dr/Cr via getVoucherLines),
   // balances, and party links. Structural sub-ledgers (parentId 2101/3303 — suppliers,
@@ -86,6 +102,65 @@ const LedgerHygiene: React.FC = () => {
         <Card><CardContent className="pt-5"><div className="text-xs text-muted-foreground flex items-center gap-1"><Trash2 className="h-3.5 w-3.5 text-blue-600" />{hi ? 'सफ़ाई' : 'Cleanup'}</div><div className="text-2xl font-bold text-blue-700">{summary.cleanups}</div></CardContent></Card>
         <Card><CardContent className="pt-5"><div className="text-xs text-muted-foreground flex items-center gap-1"><Info className="h-3.5 w-3.5 text-slate-500" />{hi ? 'सूचना' : 'Info'}</div><div className="text-2xl font-bold text-slate-600">{summary.infos}</div></CardContent></Card>
       </div>
+
+      {/* T-09 (ADR-0001) — journal parity. Does the event log reproduce, exactly, every report this
+          society reads? This is the pre-flight for making the journal the system of record. */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BookCheck className="h-4 w-4 text-primary" />
+            {hi ? 'जर्नल पैरिटी (इवेंट-लेजर)' : 'Journal parity (event ledger)'}
+            {parity && (
+              <Badge variant="outline" className={cn('text-[10px] ml-1', parity.allMatch ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300')}>
+                {parity.allMatch ? (hi ? 'सब मिल रहे हैं' : 'all match') : (hi ? 'अंतर मिला' : 'diffs found')}
+              </Badge>
+            )}
+          </CardTitle>
+          <p className="text-xs text-muted-foreground pl-6">
+            {hi
+              ? 'जाँचता है कि इवेंट-जर्नल हर रिपोर्ट को हूबहू दोहराता है या नहीं — ट्रायल बैलेंस, रोकड़/बैंक बही, सदस्य खाता और प्राप्ति-भुगतान। सब ✓ होने पर ही यह सोसाइटी ledger-reads पर स्विच की जा सकती है। सिर्फ़ जाँच — कोई बदलाव नहीं।'
+              : 'Checks whether the event journal reproduces every report exactly — trial balance, cash/bank book, member ledger and Receipts & Payments. Only when all are ✓ is this society safe to switch to ledger reads. Diagnostic only.'}
+          </p>
+        </CardHeader>
+        <CardContent className="pl-6 space-y-3">
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={runParityCheck} disabled={checking}>
+              {checking ? (hi ? 'जाँच रहे हैं…' : 'Checking…') : (hi ? 'पैरिटी जाँचें' : 'Check parity')}
+            </Button>
+            {parity && (
+              <span className="text-xs text-muted-foreground">
+                {hi ? `${parity.journalEvents} इवेंट · ` : `${parity.journalEvents} events · `}
+                {parity.cutOver ? (hi ? 'यह सोसाइटी जर्नल से पढ़ रही है' : 'this society reads from the journal') : (hi ? 'अभी वाउचर से पढ़ रही है' : 'still reading from vouchers')}
+              </span>
+            )}
+          </div>
+
+          {parity && parity.journalEvents === 0 && (
+            <p className="text-xs text-amber-700">
+              {hi ? 'इस सोसाइटी के लिए जर्नल में एक भी इवेंट नहीं है — पहले genesis backfill चलाएँ, तभी पैरिटी का कोई मतलब है।' : 'This society has no events in the journal — run the genesis backfill first; until then parity proves nothing.'}
+            </p>
+          )}
+
+          {parity?.reports.map(r => (
+            <div key={r.report} className="rounded-md border bg-muted/30 px-3 py-2">
+              <div className="flex items-center gap-2 text-xs">
+                {r.matches ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> : <XCircle className="h-3.5 w-3.5 text-red-600" />}
+                <span className="font-mono font-medium">{r.report}</span>
+                {r.detail && <span className="text-muted-foreground">· {r.detail}</span>}
+              </div>
+              {!r.matches && r.diffs.length > 0 && (
+                <ul className="mt-1.5 pl-5 space-y-0.5">
+                  {r.diffs.map((d, i) => (
+                    <li key={i} className="text-[11px] font-mono text-muted-foreground">
+                      {d.field}: {hi ? 'जर्नल' : 'journal'} {String(d.ledger)} ≠ {hi ? 'वाउचर' : 'vouchers'} {String(d.vouchers)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       {findings.length === 0 ? (
         <Card><CardContent className="pt-6 text-center text-muted-foreground">

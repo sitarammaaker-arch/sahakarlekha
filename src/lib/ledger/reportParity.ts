@@ -27,6 +27,26 @@ export interface ReportParityResult {
   diffs: ReportDiff[];
 }
 
+/** One line of the pre-flight: does the journal reproduce this report for the current tenant? */
+export interface LedgerParityReport {
+  /** 'trialBalance' | 'cashBook' | 'bankBook:<id>' | 'memberLedger' | 'receiptsPayments' */
+  report: string;
+  matches: boolean;
+  /** human context — e.g. '3 of 120 members differ', '412 accounts checked'. */
+  detail?: string;
+  diffs: ReportDiff[];
+}
+
+/** The T-09 pre-flight for one tenant: every read that has a ledger path, checked against the
+ *  vouchers. A tenant is only safe to flip (`ledgerReadsEnabled`) once `allMatch` is true. */
+export interface LedgerParitySnapshot {
+  journalEvents: number;
+  /** is this tenant already flipped? (the reads below are then served FROM the journal) */
+  cutOver: boolean;
+  reports: LedgerParityReport[];
+  allMatch: boolean;
+}
+
 /** Half a paisa — below any real difference, above float-display noise. */
 const EPS = 0.005;
 /** Diffs are a diagnostic, not a dump: enough to identify the break, cheap on a hot read path. */
