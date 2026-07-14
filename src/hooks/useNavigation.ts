@@ -20,7 +20,7 @@ export function useNavigation(): NavGroup[] {
   return useMemo(() => {
     // Declared activities (T-11) gate capabilities within entitlement, but only once the cutover
     // flag is on (T-12); until then the port ignores them and this stays identical to today.
-    const capabilities = navigationService.resolveCapabilities(societyType, societyCapabilities, society.state, declaredActivities(societyActivities));
+    const capabilities = navigationService.resolveCapabilities(societyType, societyCapabilities, society.state, declaredActivities(societyActivities), society.activitiesCutoverEnabled);
     const ctx: NavContext = {
       societyType,
       capabilities,
@@ -28,5 +28,5 @@ export function useNavigation(): NavGroup[] {
       superAdminShowAll: isSuperAdmin,   // C7: platform super-admin bypasses role + capability gates
     };
     return getVisibleGroups(ctx);
-  }, [societyType, society.state, societyCapabilities, societyActivities, hasPermission, isSuperAdmin]);
+  }, [societyType, society.state, society.activitiesCutoverEnabled, societyCapabilities, societyActivities, hasPermission, isSuperAdmin]);
 }

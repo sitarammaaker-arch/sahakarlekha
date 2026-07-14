@@ -836,6 +836,12 @@ alter table society_settings add column if not exists "maxSharePremiumPercent" n
 alter table society_settings add column if not exists "periodLockDate" text;
 alter table society_settings add column if not exists "periodLockBy" text;
 
+-- T-12 (ADR-0003): per-tenant Activities-layer cutover flag. true ⇒ this society resolves its
+-- capabilities from declared activities (within entitlement), gated by hasCutoverParity so it can
+-- never hide a module. NULL/false ⇒ type-template behaviour (default). Flipped per tenant only
+-- AFTER an empty-diff backfill of society_activities. See migration 036.
+alter table society_settings add column if not exists "activitiesCutoverEnabled" boolean default false;
+
 -- ECR-07 dual-control: FY unlock must be requested by one admin and approved by
 -- another. These hold the open request until a second admin finalises it.
 alter table society_settings add column if not exists "fyUnlockRequestedBy" text;

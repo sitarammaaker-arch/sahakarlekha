@@ -34,7 +34,8 @@ register(
 
 const { declaredActivities } = await import(abs('../src/lib/navigation/activities.ts'));
 const { resolveCapabilities } = await import(abs('../src/lib/navigation/capabilityResolver.ts'));
-const { navigationService, ACTIVITIES_CUTOVER_ENABLED } = await import(abs('../src/lib/navigation/navigationService.ts'));
+const { navigationService } = await import(abs('../src/lib/navigation/navigationService.ts'));
+const { inferActivities } = await import(abs('../src/lib/navigation/activityInference.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -59,16 +60,25 @@ ok(setEq(new Set(declaredActivities([
   { activity: 'consumer_retail', status: 'paused' },
 ])), new Set(['credit_short_term', 'milk_procurement'])), 'mixed rows → only the active, known ones');
 
-// ── 2. The cutover flag ships OFF (T-11 dormant; T-12 flips it after backfill) ────────────────────
-ok(ACTIVITIES_CUTOVER_ENABLED === false, 'ACTIVITIES_CUTOVER_ENABLED is false at rest (guard against an accidental cutover)');
+// ── 2/3. Port GATING (T-12, per-tenant `cutoverEnabled`) — the cutover NEVER hides a module ────────
+const today = resolveCapabilities('pacs', [], undefined, undefined);   // baseline (type template)
+const acts = ['credit_short_term']; // → 'lending' only; would narrow a PACS (no parity) if applied
 
-// ── 3. Port GATING — while the flag is off, declared activities are IGNORED: the port output equals
-//       today's full entitled set, whatever activities a society declares (empty-diff safety). ──────
-const acts = ['credit_short_term']; // → 'lending' only; would narrow a PACS if the flag were on
-const today = resolveCapabilities('pacs', [], undefined, undefined);            // baseline (no activities)
-const viaPort = navigationService.resolveCapabilities('pacs', [], undefined, acts); // through the gated port
-ok(setEq(viaPort, today), 'port ignores declared activities while the flag is off (identical to today)');
-ok(viaPort.has('inventory_sales') && viaPort.has('deposit_ledger'), 'a PACS keeps its non-credit modules at rest (nothing hidden by an activity)');
+// cutover OFF (omitted / false): declared activities ignored → identical to today, whatever passed.
+ok(setEq(navigationService.resolveCapabilities('pacs', [], undefined, acts), today), 'cutover omitted → port ignores activities (identical to today)');
+ok(setEq(navigationService.resolveCapabilities('pacs', [], undefined, acts, false), today), 'cutover=false → identical to today');
+const off = navigationService.resolveCapabilities('pacs', [], undefined, acts);
+ok(off.has('inventory_sales') && off.has('deposit_ledger'), 'a PACS keeps its non-credit modules at rest (nothing hidden by an activity)');
+
+// cutover ON + DEFICIENT activities (no parity) → safety fall-back to the template, NO module lost.
+ok(setEq(navigationService.resolveCapabilities('pacs', [], undefined, acts, true), today), 'cutover ON + deficient activities → parity fails → falls back to today (no module hidden)');
+
+// cutover ON + INFERRED activities (empty-diff parity) → source-of-truth switched, result identical.
+const inferred = inferActivities('pacs');
+ok(setEq(navigationService.resolveCapabilities('pacs', [], undefined, inferred, true), today), 'cutover ON + inferred activities → parity holds → identical to today (clean cutover)');
+
+// cutover ON but NO declared activities → nothing to gate on → today's behaviour.
+ok(setEq(navigationService.resolveCapabilities('pacs', [], undefined, [], true), today), 'cutover ON + no declared activities → identical to today');
 
 // ── 4. The pure resolver, WHEN activities are applied (flag-on path), narrows within entitlement, and
 //       an activity NEVER surfaces an unentitled capability (MR-4). ───────────────────────────────

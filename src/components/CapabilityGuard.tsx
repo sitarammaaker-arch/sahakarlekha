@@ -30,7 +30,7 @@ export function CapabilityGuard({ children }: { children: React.ReactNode }) {
   const ctx: NavContext = {
     societyType,
     // T-11: declared activities gate within entitlement, dormant behind the cutover flag (T-12).
-    capabilities: navigationService.resolveCapabilities(societyType, societyCapabilities, society.state, declaredActivities(societyActivities)),
+    capabilities: navigationService.resolveCapabilities(societyType, societyCapabilities, society.state, declaredActivities(societyActivities), society.activitiesCutoverEnabled),
     hasRole: hasPermission,
     superAdminShowAll: isSuperAdmin, // matches useNavigation — super-admin bypasses gates
   };

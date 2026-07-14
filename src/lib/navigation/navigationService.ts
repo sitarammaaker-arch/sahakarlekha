@@ -9,6 +9,7 @@ import type { SocietyCapabilityRow } from './capabilities';
 import type { Activity } from './activities';
 import { MODULE_CATALOG, type ModuleDefinition } from './moduleCatalog';
 import { resolveCapabilities } from './capabilityResolver';
+import { hasCutoverParity } from './activityInference';
 
 export interface NavigationService {
   getCatalog: () => ModuleDefinition[];
@@ -17,24 +18,29 @@ export interface NavigationService {
     rows?: SocietyCapabilityRow[],
     state?: string,
     activities?: readonly Activity[],
+    cutoverEnabled?: boolean,
   ) => ReturnType<typeof resolveCapabilities>;
 }
 
-/**
- * ACTIVITIES cutover flag (T-11 → T-12). While FALSE the port IGNORES declared activities and
- * resolves exactly as before (all entitled caps) — so the read-path wiring is dormant and provably
- * non-breaking. T-12 flips this (ultimately per-tenant) ONLY AFTER `society_activities` is backfilled
- * with empty-diff parity. Living at the single port means the High cutover is one switch and every
- * consumer can pass its declared activities unconditionally today. See MASTER-IMPLEMENTATION-BLUEPRINT T-11/T-12.
- */
-export const ACTIVITIES_CUTOVER_ENABLED = false;
-
 export const navigationService: NavigationService = {
   getCatalog: () => MODULE_CATALOG,
-  // `state` enables jurisdiction packs (e.g. Haryana → haryana_compliance) without a server row.
-  // `activities` (T-11) gate entitled capabilities WITHIN entitlement, but ONLY once the cutover flag
-  // is on (T-12); until then they are ignored → today's behaviour (all entitled caps), whatever the
-  // caller passes. The live source (society_activities) is now wired through here (T-11).
-  resolveCapabilities: (societyType, rows, state, activities) =>
-    resolveCapabilities(societyType, rows, undefined, state, ACTIVITIES_CUTOVER_ENABLED ? activities : []),
+  /**
+   * `state` enables jurisdiction packs (e.g. Haryana → haryana_compliance) without a server row.
+   *
+   * ACTIVITIES cutover (T-12, per-tenant via `cutoverEnabled` = society.activitiesCutoverEnabled):
+   * declared `activities` gate capabilities WITHIN entitlement ONLY when this society has been cut
+   * over AND the switch is empty-diff (hasCutoverParity — MR-1). Three cases:
+   *   • cutover OFF (default), or no declared activities → resolve from the type template (today).
+   *   • cutover ON + parity holds → gate on activities (identical result, source-of-truth switched).
+   *   • cutover ON + parity FAILS (mis-backfilled society_activities) → fall back to the template,
+   *     so an over-eager flip can NEVER hide a module. The safety net is at the read path, not just
+   *     the flip tool. (Intentional divergence — a society hiding an entitled module — is T-14.)
+   */
+  resolveCapabilities: (societyType, rows, state, activities, cutoverEnabled) => {
+    const apply =
+      !!cutoverEnabled &&
+      (activities?.length ?? 0) > 0 &&
+      hasCutoverParity(societyType, rows ?? [], activities, undefined, state);
+    return resolveCapabilities(societyType, rows, undefined, state, apply ? activities : []);
+  },
 };
