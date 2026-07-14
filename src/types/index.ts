@@ -1060,6 +1060,7 @@ export interface SocietySettings {
   periodLockDate?: string;     // ECR-07: ISO date (YYYY-MM-DD); vouchers dated ON/BEFORE this are in a locked period (back-dating prevention). Undefined/empty = no period lock.
   periodLockBy?: string;       // Name of user who set the period lock
   activitiesCutoverEnabled?: boolean;  // T-12 (ADR-0003): per-tenant Activities-layer cutover. true = resolve capabilities from declared activities (within entitlement), gated by hasCutoverParity so it can never hide a module. Undefined/false = type-template behaviour (default). Flipped per tenant AFTER an empty-diff backfill.
+  ledgerReadsEnabled?: boolean;        // T-09 (ADR-0001): per-tenant ledger read cut. true = serve financial reads (getTrialBalance) from the event journal, but ONLY when ledgerParity holds at runtime (else fall back to the voucher-state compute) — so a flip can never break a report. Undefined/false = voucher-state (default). Flipped per tenant AFTER the journal is loaded + parity ✓.
   fyUnlockRequestedBy?: string;  // ECR-07 dual-control: email of the admin who requested FY unlock (needs a different admin to approve)
   fyUnlockRequestedAt?: string;  // ISO date of the unlock request
   notificationChannels?: { email?: boolean; sms?: boolean; whatsapp?: boolean };  // ECR-13: which external alert channels the society has switched on (in-app is always on; actual sending needs a wired provider)
