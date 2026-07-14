@@ -1248,6 +1248,31 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // localStorage is only used as offline fallback (when Supabase is unreachable).
           setSocietyState(socData[0]);
           storage.setSociety(socData[0]);
+
+          // T-09 (ADR-0001): when this tenant is cut over to ledger reads, load the FULL event journal
+          // so getTrialBalance's parity gate has the whole log (session events alone never satisfy
+          // parity). GATED on the flag → for every other tenant this never runs (dormant, zero cost).
+          // Best-effort: a failure just leaves the journal short, so the parity gate falls back to the
+          // voucher-state compute — no harm. snake_case columns → the camelCase LedgerEvent shape.
+          if ((socData[0] as SocietySettings).ledgerReadsEnabled) {
+            try {
+              const { data: evData } = await fetchAllPaged<Record<string, unknown>>('ledger_events', sid, 'occurred_at');
+              ledgerEventsRef.current = (evData ?? []).map((r) => ({
+                eventId: r.event_id as string,
+                eventType: r.event_type as string,
+                schemaVersion: (r.schema_version as number) ?? 1,
+                tenantId: r.society_id as string,
+                jurisdiction: (r.jurisdiction as string | null) ?? '',
+                aggregateType: r.aggregate_type as string,
+                aggregateId: r.aggregate_id as string,
+                sequence: r.sequence as number,
+                occurredAt: r.occurred_at as string,
+                producer: { kind: r.producer_kind as LedgerEvent['producer']['kind'], id: (r.producer_id as string | null) ?? null, ...(r.on_behalf_of ? { onBehalfOf: r.on_behalf_of as string } : {}) },
+                ...(r.reversal_of ? { reversalOf: r.reversal_of as string } : {}),
+                payload: r.payload,
+              })) as LedgerEvent[];
+            } catch (e) { console.warn('T-09 journal load (best-effort) failed:', e); }
+          }
         }
       } catch (err) {
         console.warn('Supabase load failed, falling back to localStorage:', err);
