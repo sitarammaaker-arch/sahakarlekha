@@ -1,25 +1,38 @@
-// Appropriation waterfall (ECR-10) — mirrors src/lib/appropriation.ts.
+// Appropriation waterfall (ECR-10) — imports the REAL src/lib/appropriation.ts via the '@/' loader.
 // Run: node scripts/test-appropriation.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { appropriationWaterfall } = await import(abs('../src/lib/appropriation.ts'));
+
+// Pure fixture helper used by the assertions below (not the function under test).
 const r2 = (n) => Math.round(n * 100) / 100;
-const STATUTORY_RESERVE_MIN = 25;
-function appropriationWaterfall(netProfit, config = {}) {
-  const np = r2(Math.max(0, netProfit || 0));
-  const reservePct = config.reservePct ?? 25;
-  const educationPct = config.educationPct ?? 1;
-  const steps = [];
-  let order = 1;
-  const push = (accountId, label, labelHi, pct) => {
-    const p = Math.max(0, pct || 0);
-    const amount = r2(np * p / 100);
-    if (np > 0 && amount > 0) steps.push({ order: order++, accountId, label, labelHi, pct: p, amount });
-  };
-  push('1201', 'Statutory Reserve Fund', 'x', reservePct);
-  push('1203', 'Education Fund', 'x', educationPct);
-  for (const f of config.otherFunds ?? []) push(f.accountId, f.label, f.labelHi ?? f.label, f.pct);
-  const totalAppropriated = r2(steps.reduce((s, x) => s + x.amount, 0));
-  return { netProfit: np, steps, totalAppropriated, residual: r2(np - totalAppropriated), reserveBelowStatutory: reservePct < STATUTORY_RESERVE_MIN };
-}
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };

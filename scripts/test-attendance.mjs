@@ -1,19 +1,38 @@
-// Attendance pro-ration (ECR-14) — mirrors src/lib/attendance.ts.
+// Attendance pro-ration (ECR-14) — imports the REAL src/lib/attendance.ts via the '@/' loader.
 // Run: node scripts/test-attendance.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { daysInMonth, clampPaidDays, prorate } = await import(abs('../src/lib/attendance.ts'));
+
+// Pure fixture helper used by the assertions below (not the function under test).
 const r2 = (n) => Math.round(n * 100) / 100;
-function daysInMonth(yyyymm) {
-  const m = /^(\d{4})-(\d{2})$/.exec(yyyymm || '');
-  if (!m) return 30;
-  return new Date(Number(m[1]), Number(m[2]), 0).getDate();
-}
-const clampPaidDays = (paid, total) => Math.max(0, Math.min(total, Math.round(paid || 0)));
-function prorate(amount, paidDays, monthDays) {
-  if (!(monthDays > 0)) return r2(amount || 0);
-  const paid = clampPaidDays(paidDays, monthDays);
-  if (paid >= monthDays) return r2(amount || 0);
-  return r2((amount || 0) * paid / monthDays);
-}
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };

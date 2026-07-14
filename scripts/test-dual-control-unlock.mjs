@@ -1,15 +1,35 @@
-// Dual-control FY unlock (ECR-07) — mirrors src/lib/dualControlUnlock.ts.
+// Dual-control FY unlock (ECR-07) — imports the REAL src/lib/dualControlUnlock.ts via the '@/' loader.
 // Run: node scripts/test-dual-control-unlock.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-function unlockAction(state, currentUserId) {
-  if (!state.locked) return 'none';
-  if (!state.requestedBy) return 'request';
-  if (state.requestedBy === currentUserId) return 'awaiting';
-  return 'approve';
-}
-function canApproveUnlock(state, currentUserId) {
-  return unlockAction(state, currentUserId) === 'approve' && !!currentUserId && state.requestedBy !== currentUserId;
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { unlockAction, canApproveUnlock } = await import(abs('../src/lib/dualControlUnlock.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };

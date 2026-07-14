@@ -1,12 +1,35 @@
-// Fund backing-investment coverage (ECR-27) — mirrors src/lib/fundBacking.ts.
+// Fund backing-investment coverage (ECR-27) — imports the REAL src/lib/fundBacking.ts via the '@/' loader.
 // Run: node scripts/test-fund-backing.mjs
-const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
-function fundBackingCoverage(fundsTotal, investmentsTotal) {
-  const funds = round2(fundsTotal), investments = round2(investmentsTotal);
-  const coveragePct = funds < 0.005 ? 100 : round2((investments / funds) * 100);
-  const shortfall = round2(Math.max(0, funds - investments));
-  return { fundsTotal: funds, investmentsTotal: investments, coveragePct, shortfall, backed: investments >= funds - 1 };
-}
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { fundBackingCoverage } = await import(abs('../src/lib/fundBacking.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };

@@ -1,21 +1,35 @@
-// Multi-branch scoping (ECR-17 Phase 1) — mirrors src/lib/branchScope.ts.
+// Multi-branch scoping (ECR-17 Phase 1) — imports the REAL src/lib/branchScope.ts via the '@/' loader.
 // Run: node scripts/test-branch-scope.mjs
-const ALL_BRANCHES = 'all';
-function matchesBranch(branchId, activeBranchId, headOfficeId) {
-  if (!activeBranchId || activeBranchId === ALL_BRANCHES) return true;
-  const effective = branchId || headOfficeId || '';
-  return effective === activeBranchId;
-}
-function filterByBranch(records, activeBranchId, headOfficeId) {
-  if (!activeBranchId || activeBranchId === ALL_BRANCHES) return records;
-  return records.filter(r => matchesBranch(r.branchId, activeBranchId, headOfficeId));
-}
-function branchToStamp(activeBranchId, headOfficeId) {
-  return activeBranchId && activeBranchId !== ALL_BRANCHES ? activeBranchId : headOfficeId;
-}
-function resolveActiveBranch(restrictedBranchId, requestedId) {   // ECR-17 Phase 4b
-  return restrictedBranchId || requestedId;
-}
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { ALL_BRANCHES, matchesBranch, filterByBranch, branchToStamp, resolveActiveBranch } = await import(abs('../src/lib/branchScope.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };

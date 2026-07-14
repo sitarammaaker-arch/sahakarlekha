@@ -1,34 +1,35 @@
-// Form 24Q — quarterly salary TDS return (ECR-14) — mirrors src/lib/form24Q.ts.
+// Form 24Q — quarterly salary TDS return (ECR-14) — imports the REAL src/lib/form24Q.ts via the '@/' loader.
 // Run: node scripts/test-form24Q.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-const r2 = (n) => Math.round(n * 100) / 100;
-function quarterMonths(fy, q) {
-  const startYear = Number((fy || '').split('-')[0]) || 0;
-  const nextYear = startYear + 1;
-  const spec = {
-    Q1: [[startYear, 4], [startYear, 5], [startYear, 6]],
-    Q2: [[startYear, 7], [startYear, 8], [startYear, 9]],
-    Q3: [[startYear, 10], [startYear, 11], [startYear, 12]],
-    Q4: [[nextYear, 1], [nextYear, 2], [nextYear, 3]],
-  };
-  return spec[q].map(([y, m]) => `${y}-${String(m).padStart(2, '0')}`);
-}
-function build24Q(salaryRecords, employees, fy, q) {
-  const months = quarterMonths(fy, q);
-  const inQ = (salaryRecords || []).filter(rec => months.includes(rec.month));
-  const byEmp = new Map();
-  for (const rec of inQ) {
-    const cur = byEmp.get(rec.employeeId) || { grossSalary: 0, tds: 0 };
-    cur.grossSalary += (rec.basicSalary || 0) + (rec.allowances || 0);
-    cur.tds += rec.tds || 0;
-    byEmp.set(rec.employeeId, cur);
-  }
-  const rows = [...byEmp.entries()].map(([empId, v]) => {
-    const emp = (employees || []).find(e => e.id === empId);
-    return { empNo: emp?.empNo || '', name: emp?.name || '', pan: emp?.pan || '', grossSalary: r2(v.grossSalary), tds: r2(v.tds) };
-  }).sort((a, b) => a.empNo.localeCompare(b.empNo));
-  return { months, rows, totals: { grossSalary: r2(rows.reduce((s, r) => s + r.grossSalary, 0)), tds: r2(rows.reduce((s, r) => s + r.tds, 0)), deductees: rows.length } };
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { quarterMonths, build24Q } = await import(abs('../src/lib/form24Q.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };

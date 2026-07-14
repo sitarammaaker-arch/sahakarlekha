@@ -1,34 +1,38 @@
-// Asset disposal accounting (ECR-15) — mirrors src/lib/assetDisposal.ts.
+// Asset disposal accounting (ECR-15) — imports the REAL src/lib/assetDisposal.ts via the '@/' loader.
 // Run: node scripts/test-asset-disposal.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { assetDisposalPosting, assetAcquisitionPosting } = await import(abs('../src/lib/assetDisposal.ts'));
+
+// Pure fixture helper used by the assertions below (not the function under test).
 const r2 = (n) => Math.round(n * 100) / 100;
-const ASSET_ACCOUNTS = { Land: '3101', Building: '3102', Furniture: '3103', Vehicle: '3104', Equipment: '3105', Other: '3106', Computer: '3107' };
-const ACCUM_DEP_ACCOUNTS = { Building: '3108', Furniture: '3109', Vehicle: '3110', Equipment: '3111', Computer: '3112', Other: '3112' };
-const PROFIT_ON_SALE = '4410', LOSS_ON_SALE = '5406';
-function assetAcquisitionPosting(category, cost, cashBankAccount) {
-  const amount = r2(Math.max(0, cost || 0));
-  const assetAccount = ASSET_ACCOUNTS[category];
-  return { assetAccount, amount, lines: [
-    { accountId: assetAccount, type: 'Dr', amount },
-    { accountId: cashBankAccount, type: 'Cr', amount },
-  ] };
-}
-function assetDisposalPosting(input) {
-  const cost = r2(Math.max(0, input.cost || 0));
-  const accumDep = r2(Math.min(Math.max(0, input.accumDep || 0), cost));
-  const wdv = r2(cost - accumDep);
-  const proceeds = r2(Math.max(0, input.saleProceeds || 0));
-  const gainLoss = r2(proceeds - wdv);
-  const lines = [];
-  if (proceeds > 0) lines.push({ accountId: input.cashBankAccount, type: 'Dr', amount: proceeds });
-  const accumAcc = ACCUM_DEP_ACCOUNTS[input.category];
-  if (accumDep > 0 && accumAcc) lines.push({ accountId: accumAcc, type: 'Dr', amount: accumDep });
-  if (gainLoss < 0) lines.push({ accountId: LOSS_ON_SALE, type: 'Dr', amount: r2(-gainLoss) });
-  lines.push({ accountId: ASSET_ACCOUNTS[input.category], type: 'Cr', amount: cost });
-  if (gainLoss > 0) lines.push({ accountId: PROFIT_ON_SALE, type: 'Cr', amount: gainLoss });
-  const drTotal = r2(lines.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0));
-  return { cost, accumDep, wdv, gainLoss, drTotal, lines };
-}
 const sum = (lines, t) => r2(lines.filter(l => l.type === t).reduce((s, l) => s + l.amount, 0));
 
 let pass = 0, fail = 0;
