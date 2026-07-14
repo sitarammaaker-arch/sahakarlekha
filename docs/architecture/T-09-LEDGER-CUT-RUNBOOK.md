@@ -125,16 +125,39 @@ Keep this reversible behind the per-tenant flag until the removal is proven acro
 
 ---
 
-## 5. Suggested slice order for the finale session
+## 5. Slice order — where it stands (updated 2026-07-15)
 
-0. **Payload enrichment (blocker for the ledgers, §2b)** — add `narration` + `createdAt` to the voucher
-   event payloads (centralise `voucherEventPayload` + genesis) and re-seed. Do this FIRST.
-1. `getCashBookEntries`/`getBankBookEntries` cut (`projectAccountLedger` + enriched payload) + parity.
-2. `getMemberLedger` cut + parity.
-3. `getReceiptsPayments` cut — extract the shared capital/revenue classifier first (RULE 2) + parity.
-4. Extend `check-ledger-parity.mjs` with the per-report parities (§2c).
-5. Pilot flip → soak → rollout (§3).
-6. RULE-1 removal (§4).
+0. ✅ **Payload enrichment** — `voucherEventMeta` (narration + createdAt + memberId) at every event site.
+1. ✅ **Projections** — `projectCashBook`, `projectMemberLedger`, `projectReceiptsPayments` (+ the shared
+   R&P classifier and `resolveCurrentVouchers`, so the projections and the live computes cannot diverge).
+2. ✅ **The cut** — all four reads are wired behind `ledgerReadsEnabled`, each gated on its OWN
+   per-report parity (`reports.ts` + `reportParity.ts`): the journal-projected report is served only
+   when it equals the voucher-computed one, row for row. Anything else falls back silently.
+3. ✅ **Per-report parity (§2c)** — closed IN-APP rather than in `check-ledger-parity.mjs`: the
+   voucher-side computes live inside DataContext, and re-implementing them in an ops script would be
+   two formulas for one number (RULE 2 — exactly the divergence this arc exists to kill). Instead
+   `getLedgerReportParity()` runs the REAL getters with the gates recording, and Ledger Hygiene shows a
+   **Journal parity** card: ✓/✗ per report with the first diffs. `loadLedgerJournal()` pages the log in
+   on demand, so parity can be proven BEFORE a flip.
+4. ⬜ **Re-seed the payloads** (ops, user runs) — events written before the enrichment still carry thin
+   payloads, and seeding alone can never fix them (it only ADDS events for vouchers not yet journaled):
+   ```
+   node scripts/backfill-genesis-ledger.mjs --reseed            # dry-run: what would be refreshed
+   node scripts/backfill-genesis-ledger.mjs --reseed --commit   # refresh payloads in place
+   ```
+   Refreshes the payload on each aggregate's current effective event (same event_id / sequence /
+   occurred_at, legs untouched — a payload correction, not a rewrite of history). Events whose LEGS
+   drifted from their voucher are reported, never silently overwritten → `diagnose-ledger-parity.mjs`.
+   The same run also fixes genesis seeding, which was selecting the voucher WITHOUT narration /
+   createdAt / memberId — so existing genesis events all carry empty metadata.
+5. ⬜ **Pilot flip → soak → rollout** (§3). Pre-flight is now: Ledger Hygiene → *Check parity* → every
+   report ✓ (plus `check-ledger-parity.mjs` for the balance side across all tenants).
+6. ⬜ **RULE-1 removal** (§4) — only after every tenant is flipped and soaked.
 
-All prior pure pieces + TB/Trading/P&L/balance cuts are done and tested. See the `event-ledger-arc`
-memory for commit-level history.
+**Bug found while wiring this (fixed):** the cut-over journal load called the loader-local
+`fetchAllPaged(table, orderCol)` as `(table, sid, orderCol)`, so the society id landed in the
+order-column slot — the query errored and a flipped tenant loaded an EMPTY journal, failing parity and
+falling back forever. The flip would have looked clean and changed nothing. Also note the root
+`tsconfig.json` has `"files": []`: `tsc --noEmit` checks NOTHING. Use `tsc --noEmit -p tsconfig.app.json`.
+
+See the `event-ledger-arc` memory for commit-level history.

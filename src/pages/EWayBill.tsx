@@ -42,7 +42,10 @@ interface EWayEntry {
 const transportModes = ['Road', 'Rail', 'Air', 'Ship'];
 
 export default function EWayBill() {
-  const { sales, purchases, stockItems, customers, suppliers, society } = useData();
+  const { sales: allSales, purchases: allPurchases, stockItems, customers, suppliers, society, matchesActiveBranch } = useData();
+  // ECR-17: honour the active branch (same rule as GstSummary — GST documents must agree).
+  const sales = useMemo(() => allSales.filter(s => matchesActiveBranch(s.branchId)), [allSales, matchesActiveBranch]);
+  const purchases = useMemo(() => allPurchases.filter(p => matchesActiveBranch(p.branchId)), [allPurchases, matchesActiveBranch]);
   const { user } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();

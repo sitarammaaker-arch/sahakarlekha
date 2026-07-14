@@ -10,8 +10,10 @@
 //   • Writing rows is DORMANT: the journal is not authoritative until the T-09 cut. Never flips a flag.
 //
 // Env: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (preferred; reads every tenant) or SUPABASE_ANON_KEY.
-//   node scripts/backfill-genesis-ledger.mjs            # dry-run (report only)
-//   node scripts/backfill-genesis-ledger.mjs --commit   # write the events
+//   node scripts/backfill-genesis-ledger.mjs                     # dry-run (report only)
+//   node scripts/backfill-genesis-ledger.mjs --commit            # write the events
+//   node scripts/backfill-genesis-ledger.mjs --reseed            # + report stale payloads (dry-run)
+//   node scripts/backfill-genesis-ledger.mjs --reseed --commit   # + refresh stale payloads in place
 import { register } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve as pathResolve } from 'node:path';
@@ -42,6 +44,9 @@ register(
 );
 
 const COMMIT = process.argv.includes('--commit');
+// --reseed: also refresh STALE payloads on events that already exist (see reseedPayloads at the
+// bottom). Seeding alone can never fix them — it only adds events for vouchers not yet journaled.
+const RESEED = process.argv.includes('--reseed');
 const env = process.env;
 const URL = env.SUPABASE_URL;
 const KEY = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY;
@@ -53,6 +58,7 @@ const USING_SERVICE = !!env.SUPABASE_SERVICE_ROLE_KEY;
 
 const { planGenesisEvents, planOpeningEvents } = await import(abs('../src/lib/ledger/genesis.ts'));
 const { projectTrialBalance } = await import(abs('../src/lib/ledger/projections.ts'));
+const { voucherEventMeta, voucherPostingLines } = await import(abs('../src/lib/ledger/voucherEvent.ts'));
 const { createClient } = await import('@supabase/supabase-js');
 const db = createClient(URL, KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 const fail = (msg, err) => { console.error(`✗ ${msg}${err ? ': ' + (err.message || err) : ''}`); process.exit(1); };
@@ -70,7 +76,10 @@ async function readAll(table, cols) {
   return rows;
 }
 
-const vouchers = await readAll('vouchers', 'id, type, date, "debitAccountId", "creditAccountId", amount, lines, "isDeleted", "approvalStatus", "voucherNo", society_id, jurisdiction');
+// narration / createdAt / memberId are part of the event payload (voucherEventMeta) — the ledger
+// reads need them (cash-book particulars, the same-date sort key, the member ledger's filter). They
+// were missing from this select, so every genesis event was seeded with empty metadata.
+const vouchers = await readAll('vouchers', 'id, type, date, "debitAccountId", "creditAccountId", amount, lines, "isDeleted", "approvalStatus", "voucherNo", narration, "createdAt", "memberId", society_id, jurisdiction');
 const accounts = await readAll('accounts', 'id, "openingBalance", "openingBalanceType", society_id, jurisdiction');
 const existingEvents = await readAll('ledger_events', 'aggregate_id, event_type');
 
@@ -123,9 +132,10 @@ console.log(`  societies with unbalanced genesis TB: ${unbalanced}${unbalanced ?
 if (!COMMIT) {
   console.log('\nDRY-RUN — nothing written. Re-run with --commit to seed the events above.');
   console.log('Note: seeding is DORMANT — the journal is not authoritative until the T-09 cut.');
+  await reseedPayloads();
   process.exit(0);
 }
-if (plan.events.length === 0) { console.log('\nNothing to write.'); process.exit(0); }
+if (plan.events.length === 0) { console.log('\nNothing to seed.'); await reseedPayloads(); process.exit(0); }
 if (unbalanced > 0) { console.log('\n✗ Refusing to commit: some societies have an unbalanced genesis TB (see ⚠ above). Fix the data first.'); process.exit(1); }
 
 // Upsert in batches on the deterministic event_id (idempotent). Never touches any flag.
@@ -139,4 +149,77 @@ for (let i = 0; i < rows.length; i += BATCH) {
   written += chunk.length;
 }
 console.log(`\n✓ Seeded ${written} genesis events into ledger_events (dormant — journal not yet authoritative).`);
+await reseedPayloads();
 process.exit(0);
+
+// ── --reseed: refresh STALE event payloads in place ──────────────────────────────────────────────
+// Seeding only ever ADDS events for vouchers the journal has never seen, so an event written before
+// the payload was enriched (narration + createdAt + memberId — the fields the cash book, the running
+// balance's sort key and the member ledger need) keeps its old, thin payload forever. This refreshes
+// those payloads on the aggregate's CURRENT effective event (the latest repost, else the post),
+// leaving the posting legs and the event's identity untouched: same event_id, same sequence, same
+// occurred_at. It is a payload correction, not a rewrite of history — no event is ever deleted.
+//
+// Legs are NOT auto-fixed. If an event's legs no longer match its voucher (a voucher edited before
+// the lifecycle events existed), that is real drift the balances will disagree on — it is reported
+// here and belongs to scripts/diagnose-ledger-parity.mjs, not to a silent overwrite.
+//
+//   node scripts/backfill-genesis-ledger.mjs --reseed            # dry-run: what would be refreshed
+//   node scripts/backfill-genesis-ledger.mjs --reseed --commit   # write the refreshed payloads
+async function reseedPayloads() {
+  if (!RESEED) return;
+
+  const events = await readAll('ledger_events', '*');
+  const byAggregate = new Map();
+  for (const e of events) {
+    if (e.aggregate_type !== 'voucher') continue;
+    (byAggregate.get(e.aggregate_id) ?? byAggregate.set(e.aggregate_id, []).get(e.aggregate_id)).push(e);
+  }
+
+  const META_KEYS = ['voucherNo', 'type', 'amount', 'date', 'narration', 'createdAt', 'memberId'];
+  const sameLegs = (have, want) =>
+    Array.isArray(have) && have.length === want.length &&
+    want.every((l, i) => have[i]?.accountId === l.accountId && have[i]?.drCr === l.drCr && have[i]?.amountMinor === l.amountMinor);
+
+  const refreshed = [];
+  let drifted = 0, cancelled = 0, unjournaled = 0, fresh = 0;
+  for (const v of vouchers) {
+    if (v.isDeleted || v.approvalStatus === 'pending') continue;
+    const evs = byAggregate.get(v.id);
+    if (!evs) { unjournaled++; continue; }
+    if (evs.some((e) => e.event_type === 'voucher.cancelled')) { cancelled++; continue; }
+
+    // The aggregate's current effective event — what every transaction projection reads.
+    const reposts = evs.filter((e) => e.event_type === 'voucher.reposted').sort((a, b) => a.sequence - b.sequence);
+    const eff = reposts.length ? reposts[reposts.length - 1] : evs.find((e) => e.event_type === 'voucher.posted');
+    if (!eff) { unjournaled++; continue; }
+
+    const payload = eff.payload ?? {};
+    if (!sameLegs(payload.lines, voucherPostingLines(v))) { drifted++; continue; }
+
+    const meta = voucherEventMeta(v);
+    if (!META_KEYS.some((k) => (payload[k] ?? '') !== (meta[k] ?? ''))) { fresh++; continue; }
+    refreshed.push({ ...eff, payload: { ...payload, ...meta } });
+  }
+
+  console.log(`\nPayload re-seed ${COMMIT ? '(COMMIT)' : '(DRY-RUN)'}`);
+  console.log(`  events read:                 ${events.length}`);
+  console.log(`  payloads to refresh:         ${refreshed.length}`);
+  console.log(`  already current:             ${fresh}`);
+  console.log(`  cancelled (skip):            ${cancelled}`);
+  console.log(`  not journaled (skip):        ${unjournaled}`);
+  console.log(`  LEGS DRIFTED (not touched):  ${drifted}${drifted ? '  ⚠ balances disagree — run diagnose-ledger-parity.mjs' : '  ✓'}`);
+
+  if (!refreshed.length) { console.log('  nothing to refresh.'); return; }
+  if (!COMMIT) { console.log('\nDRY-RUN — no payload written. Re-run with --reseed --commit.'); return; }
+
+  const BATCH = 500;
+  let n = 0;
+  for (let i = 0; i < refreshed.length; i += BATCH) {
+    const chunk = refreshed.slice(i, i + BATCH);
+    const { error } = await db.from('ledger_events').upsert(chunk, { onConflict: 'event_id' });
+    if (error) fail(`refresh ledger_events payloads (batch @${i})`, error);
+    n += chunk.length;
+  }
+  console.log(`\n✓ Refreshed ${n} event payloads in place (same event_id / sequence / occurred_at — legs untouched).`);
+}

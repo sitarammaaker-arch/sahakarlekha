@@ -29,10 +29,15 @@ function fyBounds(fy: string): { from: string; to: string } {
 }
 
 const GSTR9: React.FC = () => {
-  const { sales, purchases, society } = useData();
+  const { sales: allSales, purchases: allPurchases, society, matchesActiveBranch } = useData();
   const { salesReturns, purchaseReturns } = useConsumerData();
   const { language } = useLanguage();
   const hi = language === 'hi';
+
+  // ECR-17: honour the active branch, same as GstSummary — otherwise the two GST reports
+  // showed different figures for the same period whenever a branch was selected.
+  const sales = useMemo(() => allSales.filter(s => matchesActiveBranch(s.branchId)), [allSales, matchesActiveBranch]);
+  const purchases = useMemo(() => allPurchases.filter(p => matchesActiveBranch(p.branchId)), [allPurchases, matchesActiveBranch]);
 
   const { from: defFrom, to: defTo } = fyBounds(society.financialYear);
   const [from, setFrom] = useState(defFrom);

@@ -44,6 +44,7 @@
     "test:ledger-receipts-payments": "node scripts/test-ledger-receipts-payments.mjs",
     "test:ledger-aggregate-state": "node scripts/test-ledger-aggregate-state.mjs",
     "test:ledger-rp-classify": "node scripts/test-ledger-rp-classify.mjs",
+    "test:ledger-report-parity": "node scripts/test-ledger-report-parity.mjs",
     "test:activities": "node scripts/test-activities.mjs",
     "test:activity-resolution": "node scripts/test-activity-resolution.mjs",
     "test:activity-inference": "node scripts/test-activity-inference.mjs",

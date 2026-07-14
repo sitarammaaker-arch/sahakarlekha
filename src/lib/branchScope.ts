@@ -29,6 +29,17 @@ export function branchToStamp(activeBranchId: string, headOfficeId?: string): st
 }
 
 /**
+ * Should SOCIETY-LEVEL (unbranched) values be included in the active scope? Account opening
+ * balances and physical stock carry no branchId, so they follow the same rule as an unbranched
+ * voucher: they belong to the Head Office. Without this, every branch's Trial Balance carried
+ * 100% of the society's openings — each branch "balanced" (openings are two-sided) yet the sum
+ * of the branch statements double-counted them against the consolidated one.
+ */
+export function unbranchedInScope(activeBranchId: string, headOfficeId?: string): boolean {
+  return matchesBranch(undefined, activeBranchId, headOfficeId);
+}
+
+/**
  * ECR-17 Phase 4b (RBAC): the active branch a user is allowed to view. A
  * branch-restricted user (restrictedBranchId set) can NEVER leave their home
  * branch — any requested switch collapses to it. Unrestricted → honour the request.

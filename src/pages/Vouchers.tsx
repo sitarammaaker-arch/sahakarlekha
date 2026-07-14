@@ -43,7 +43,7 @@ const Vouchers: React.FC = () => {
   const { t, language } = useLanguage();
   const { user, hasPermission } = useAuth();
   const canEdit = hasPermission(['admin', 'accountant']);
-  const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, reverseVoucher, restoreVoucher, getTrialBalance } = useData();
+  const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, reverseVoucher, restoreVoucher, getTrialBalance, matchesActiveBranch } = useData();
   const [submitForApproval, setSubmitForApproval] = useState(false);
   const { toast } = useToast();
 
@@ -388,11 +388,14 @@ const Vouchers: React.FC = () => {
     handleClearLines();
   };
 
-  const sortedVouchers = [...vouchers]
+  // ECR-17: honour the active branch — the Trial Balance / Day Book are branch-scoped, so the list
+  // you drill into must be too, or the numbers contradict each other ('all' = no filter, as ever).
+  const branchVouchers = vouchers.filter(v => matchesActiveBranch(v.branchId));
+  const sortedVouchers = branchVouchers
     .filter(v => showCancelled ? v.isDeleted : !v.isDeleted)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const activeCount = vouchers.filter(v => !v.isDeleted).length;
-  const cancelledCount = vouchers.filter(v => v.isDeleted).length;
+  const activeCount = branchVouchers.filter(v => !v.isDeleted).length;
+  const cancelledCount = branchVouchers.filter(v => v.isDeleted).length;
 
   // A sale/purchase voucher still actively referenced by its parent CANNOT be cancelled
   // here — it must be deleted from Sale/Purchase Management so stock + sub-ledger reverse.
@@ -421,7 +424,7 @@ const Vouchers: React.FC = () => {
     const getDr = (v: typeof vouchers[0]) => getVoucherLines(v).filter(l => l.type === 'Dr').map(l => getAccName(l.accountId)).join('; ');
     const getCr = (v: typeof vouchers[0]) => getVoucherLines(v).filter(l => l.type === 'Cr').map(l => getAccName(l.accountId)).join('; ');
     const headers = ['Voucher No', 'Date', 'Type', 'Debit Account', 'Credit Account', 'Amount', 'Narration'];
-    const allVouchers = vouchers.filter(v => !v.isDeleted);
+    const allVouchers = branchVouchers.filter(v => !v.isDeleted);
     const rows = allVouchers.map(v => [v.voucherNo || '', v.date, v.type, getDr(v), getCr(v), v.amount, v.narration || '']);
     downloadCSV(headers, rows, 'vouchers.csv');
   };
@@ -430,7 +433,7 @@ const Vouchers: React.FC = () => {
     const getDr = (v: typeof vouchers[0]) => getVoucherLines(v).filter(l => l.type === 'Dr').map(l => getAccName(l.accountId)).join('; ');
     const getCr = (v: typeof vouchers[0]) => getVoucherLines(v).filter(l => l.type === 'Cr').map(l => getAccName(l.accountId)).join('; ');
     const headers = ['Voucher No', 'Date', 'Type', 'Debit Account', 'Credit Account', 'Amount', 'Narration'];
-    const allVouchers = vouchers.filter(v => !v.isDeleted);
+    const allVouchers = branchVouchers.filter(v => !v.isDeleted);
     const rows = allVouchers.map(v => [v.voucherNo || '', v.date, v.type, getDr(v), getCr(v), v.amount, v.narration || '']);
     downloadExcelSingle(headers, rows, 'vouchers.xlsx', 'Vouchers');
   };
