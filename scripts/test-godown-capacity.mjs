@@ -1,11 +1,36 @@
-// Godown capacity utilisation (ECR-20) — mirrors src/lib/godownCapacity.ts.
+// Godown capacity utilisation (ECR-20). Imports the REAL src/lib/godownCapacity.ts via the
+// '@/' loader (was a self-contained mirror before).
 // Run: node scripts/test-godown-capacity.mjs
-const r1 = (n) => Math.round(n * 10) / 10;
-function capacityUtilisation(usedQty, capacityMT) {
-  const cap = capacityMT != null && capacityMT > 0 ? capacityMT : null;
-  const used = usedQty || 0;
-  return { capacityMT: cap, usedQty: used, utilisationPct: cap ? r1((used / cap) * 100) : null, overCapacity: cap != null && used > cap };
-}
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { capacityUtilisation } = await import(abs('../src/lib/godownCapacity.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };

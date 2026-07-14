@@ -1,28 +1,36 @@
-// Opening balances (ECR-09 carry-forward + T-04 import mapping) — mirrors src/lib/openingBalances.ts.
+// Opening balances (ECR-09 carry-forward + T-04 import mapping). Imports the REAL
+// src/lib/openingBalances.ts via the '@/' loader (was a self-contained mirror before).
 // Run: node scripts/test-opening-balances.mjs  (npm run test:ob)
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-function carryForwardOpenings(previousYearBalances) {
-  return Object.entries(previousYearBalances || {})
-    .filter(([, v]) => Math.abs(v || 0) > 0.005)
-    .map(([accountId, v]) => ({ accountId, amount: Math.round(Math.abs(v) * 100) / 100, type: v >= 0 ? 'debit' : 'credit' }))
-    .sort((a, b) => a.accountId.localeCompare(b.accountId));
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
 
-// T-04 mirror.
-const normName = (s) => (s || '').toLowerCase().trim();
-function mapImportedOpenings(rows, accounts) {
-  const byName = new Map(accounts.map(a => [normName(a.name), a.id]));
-  const resolved = new Map();
-  const unmatched = [];
-  for (const row of rows) {
-    const id = byName.get(normName(row.account_name));
-    if (!id) { unmatched.push(row.account_name); continue; }
-    const amount = Math.round((parseFloat(row.opening_balance) || 0) * 100) / 100;
-    const type = normName(row.balance_type) === 'credit' ? 'credit' : 'debit';
-    resolved.set(id, { accountId: id, amount, type });
-  }
-  return { entries: [...resolved.values()].sort((a, b) => a.accountId.localeCompare(b.accountId)), unmatched };
-}
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { carryForwardOpenings, mapImportedOpenings } = await import(abs('../src/lib/openingBalances.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };

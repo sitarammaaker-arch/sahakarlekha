@@ -1,32 +1,40 @@
-// Unified statutory reconciliation (ECR-14) — mirrors src/lib/statutoryReconciliation.ts.
+// Unified statutory reconciliation (ECR-14). Imports the REAL src/lib/statutoryReconciliation.ts
+// via the '@/' loader (was a self-contained mirror before).
 // Run: node scripts/test-statutory-reconciliation.mjs
-const r2 = (n) => Math.round(n * 100) / 100;
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-function reconcileStatutory(rows) {
-  const sum = (k) => r2(rows.reduce((s, r) => s + (r[k] || 0), 0));
-  const pfEmployee = sum('pfEmployee'), pfEmployer = sum('pfEmployer');
-  const esiEmployee = sum('esiEmployee'), esiEmployer = sum('esiEmployer');
-  return { rows, totals: {
-    gross: sum('gross'), pfEmployee, pfEmployer, esiEmployee, esiEmployer,
-    pfTotal: r2(pfEmployee + pfEmployer), esiTotal: r2(esiEmployee + esiEmployer),
-    count: rows.reduce((s, r) => s + (r.count || 0), 0),
-  } };
-}
-function salariedRow(records) {
-  const s = (f) => records.reduce((a, r) => a + (r[f] || 0), 0);
-  return { source: 'salaried', count: records.length,
-    gross: r2(records.reduce((a, r) => a + ((r.basicSalary || 0) + (r.allowances || 0)), 0)),
-    pfEmployee: r2(s('pfEmployee')), pfEmployer: r2(s('pfEmployer')),
-    esiEmployee: r2(s('esiEmployee')), esiEmployer: r2(s('esiEmployer')) };
-}
-function labourRow(comp, workerCount) {
-  return { source: 'labour', count: workerCount, gross: r2(comp.grossWages || 0),
-    pfEmployee: r2(comp.epfEmployee || 0), pfEmployer: r2(comp.epfEmployer || 0),
-    esiEmployee: r2(comp.esiEmployee || 0), esiEmployer: r2(comp.esiEmployer || 0) };
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { reconcileStatutory, salariedRow, labourRow } = await import(abs('../src/lib/statutoryReconciliation.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
+const r2 = (n) => Math.round(n * 100) / 100; // fixture rounding for expected values
 
 // Salaried: 2 employees.
 const sal = salariedRow([

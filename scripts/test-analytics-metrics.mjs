@@ -1,50 +1,36 @@
-// Analytics metrics (ECR-24) — mirrors src/lib/analyticsMetrics.ts.
+// Analytics metrics (ECR-24). Imports the REAL src/lib/analyticsMetrics.ts via the '@/'
+// loader (was a self-contained mirror before) — so this validates the actual code.
 // Run: node scripts/test-analytics-metrics.mjs
-const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
-const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-function fyMonths(fy) {
-  const startYear = parseInt((fy || '').split('-')[0], 10);
-  if (!startYear || Number.isNaN(startYear)) return [];
-  const months = [];
-  for (let i = 0; i < 12; i++) {
-    const month = ((3 + i) % 12) + 1;
-    const year = month >= 4 ? startYear : startYear + 1;
-    months.push({ key: `${year}-${String(month).padStart(2, '0')}`, label: MONTH_LABELS[month - 1], year, month });
-  }
-  return months;
-}
-function monthlySeries(fy, series) {
-  const months = fyMonths(fy);
-  const keyset = new Set(months.map(m => m.key));
-  const names = Object.keys(series);
-  const rows = months.map(m => { const row = { key: m.key, label: m.label }; for (const n of names) row[n] = 0; return row; });
-  const rowByKey = new Map(rows.map(r => [r.key, r]));
-  for (const name of names) for (const it of series[name]) {
-    const key = (it.date || '').slice(0, 7);
-    if (!keyset.has(key)) continue;
-    const row = rowByKey.get(key); row[name] = round2(row[name] + (it.amount || 0));
-  }
-  return rows;
-}
-function growthPct(current, previous) {
-  if (Math.abs(previous) < 0.005) return Math.abs(current) < 0.005 ? 0 : 100;
-  return round2(((current - previous) / Math.abs(previous)) * 100);
-}
-function momGrowth(rows, field) {
-  let lastIdx = -1;
-  for (let i = rows.length - 1; i >= 0; i--) if (Math.abs(Number(rows[i][field]) || 0) > 0.005) { lastIdx = i; break; }
-  if (lastIdx <= 0) return 0;
-  return growthPct(Number(rows[lastIdx][field]) || 0, Number(rows[lastIdx - 1][field]) || 0);
-}
-function topN(items, n) {
-  return [...items].filter(i => Math.abs(i.amount || 0) > 0.005).sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)).slice(0, Math.max(0, n));
-}
-function ratios(input) {
-  const { sales, grossProfit, totalIncome, totalExpenses } = input;
-  const pct = (num, den) => (Math.abs(den) < 0.005 ? 0 : round2((num / den) * 100));
-  return { grossMarginPct: pct(grossProfit, sales), surplusMarginPct: pct(totalIncome - totalExpenses, totalIncome), expenseRatioPct: pct(totalExpenses, totalIncome) };
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { fyMonths, monthlySeries, growthPct, momGrowth, topN, ratios, priorFy, fyRange, sumInRange, withCumulative } = await import(abs('../src/lib/analyticsMetrics.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -107,29 +93,6 @@ ok(growthPct(50, -100) === 150, 'negative base uses magnitude: (50−(−100))/1
   ok(r.expenseRatioPct === 75, 'expense ratio 900/1200 = 75%');
   const z = ratios({ sales: 0, grossProfit: 0, totalIncome: 0, totalExpenses: 0 });
   ok(z.grossMarginPct === 0 && z.surplusMarginPct === 0 && z.expenseRatioPct === 0, 'zero denominators → 0 (no NaN)');
-}
-
-// ── ECR-24 Phase 2 helpers ──
-function priorFy(fy) {
-  const startYear = parseInt((fy || '').split('-')[0], 10);
-  if (!startYear || Number.isNaN(startYear)) return '';
-  const p = startYear - 1;
-  return `${p}-${String((p + 1) % 100).padStart(2, '0')}`;
-}
-function fyRange(fy) {
-  const startYear = parseInt((fy || '').split('-')[0], 10);
-  if (!startYear || Number.isNaN(startYear)) return { start: '', end: '' };
-  return { start: `${startYear}-04-01`, end: `${startYear + 1}-03-31` };
-}
-function sumInRange(items, start, end) {
-  if (!start || !end) return 0;
-  let sum = 0;
-  for (const it of items) { const d = it.date || ''; if (d >= start && d <= end) sum += it.amount || 0; }
-  return round2(sum);
-}
-function withCumulative(rows, field, cumField, opening = 0) {
-  let running = opening;
-  return rows.map(r => { running = round2(running + (Number(r[field]) || 0)); return { ...r, [cumField]: running }; });
 }
 
 // 7. priorFy — year decrement + wrap.

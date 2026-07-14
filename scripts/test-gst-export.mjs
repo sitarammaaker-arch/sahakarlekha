@@ -1,19 +1,36 @@
-// GST export scaffold (ECR-22 slice D) — mirrors src/lib/gstExport.ts.
+// GST export scaffold (ECR-22 slice D). Imports the REAL src/lib/gstExport.ts via the '@/'
+// loader (was a self-contained mirror before).
 // Run: node scripts/test-gst-export.mjs
-function buildGstr9Export(g, gstin, fy) {
-  return {
-    doc: 'GSTR9-DRAFT',
-    gstin: (gstin || '').trim().toUpperCase(),
-    fp: fy,
-    outward_supplies: { taxable_value: g.outward.taxableValue, igst: g.outward.igst, cgst: g.outward.cgst, sgst: g.outward.sgst },
-    itc_availed: { igst: g.itcAvailed.igst, cgst: g.itcAvailed.cgst, sgst: g.itcAvailed.sgst },
-    itc_reversed: { igst: g.itcReversed.igst, cgst: g.itcReversed.cgst, sgst: g.itcReversed.sgst },
-    net_itc: { igst: g.netItc.igst, cgst: g.netItc.cgst, sgst: g.netItc.sgst },
-    tax_payable_cash: { igst: g.netLiability.igst, cgst: g.netLiability.cgst, sgst: g.netLiability.sgst, total: g.netLiability.total },
-    rate_wise: g.outwardByRate.map(r => ({ rate: r.rate, taxable_value: r.taxableValue, igst: r.igst, cgst: r.cgst, sgst: r.sgst })),
-    _disclaimer: 'Draft export for manual reconciliation on the GST portal. NOT a certified GSTN upload file. Verify every figure before filing.',
-  };
-}
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { buildGstr9Export } = await import(abs('../src/lib/gstExport.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };

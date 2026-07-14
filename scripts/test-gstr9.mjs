@@ -1,37 +1,36 @@
-// GSTR-9 annual return (ECR-22) — mirrors src/lib/gstr9.ts.
+// GSTR-9 annual return (ECR-22). Imports the REAL src/lib/gstr9.ts via the '@/' loader
+// (was a self-contained mirror before).
 // Run: node scripts/test-gstr9.mjs
-const r2 = (n) => Math.round(n * 100) / 100;
-const empty = () => ({ taxableValue: 0, cgst: 0, sgst: 0, igst: 0, tax: 0 });
-const inRange = (d, from, to) => !!d && d >= from && d <= to;
-function sumGst(records, from, to) {
-  const t = empty();
-  for (const rec of records) {
-    if (rec.isDeleted || !inRange(rec.date, from, to)) continue;
-    t.taxableValue += rec.netAmount || 0; t.cgst += rec.cgstAmount || 0; t.sgst += rec.sgstAmount || 0; t.igst += rec.igstAmount || 0;
-  }
-  t.taxableValue = r2(t.taxableValue); t.cgst = r2(t.cgst); t.sgst = r2(t.sgst); t.igst = r2(t.igst); t.tax = r2(t.cgst + t.sgst + t.igst);
-  return t;
-}
-function gstRateOf(rec) { const inter = rec.igstPct || 0; if (inter > 0) return inter; const cs = r2((rec.cgstPct || 0) + (rec.sgstPct || 0)); if (cs > 0) return cs; const taxable = rec.netAmount || 0; const tax = (rec.cgstAmount || 0) + (rec.sgstAmount || 0) + (rec.igstAmount || 0); return taxable > 0 ? r2((tax / taxable) * 100) : 0; }
-const netTotals = (a, b) => ({ taxableValue: r2(a.taxableValue - b.taxableValue), cgst: r2(a.cgst - b.cgst), sgst: r2(a.sgst - b.sgst), igst: r2(a.igst - b.igst), tax: r2(a.tax - b.tax) });
-function computeGSTR9(input) {
-  const { sales, purchases, salesReturns = [], purchaseReturns = [], from, to } = input;
-  const outward = netTotals(sumGst(sales, from, to), sumGst(salesReturns, from, to));
-  const itcAvailed = sumGst(purchases, from, to);
-  const itcReversed = sumGst(purchaseReturns, from, to);
-  const netItc = netTotals(itcAvailed, itcReversed);
-  const head = (o, i) => r2(Math.max(0, o - i));
-  const carry = (o, i) => r2(Math.max(0, i - o));
-  const netLiability = { cgst: head(outward.cgst, netItc.cgst), sgst: head(outward.sgst, netItc.sgst), igst: head(outward.igst, netItc.igst), total: 0 };
-  netLiability.total = r2(netLiability.cgst + netLiability.sgst + netLiability.igst);
-  const creditCarryForward = { cgst: carry(outward.cgst, netItc.cgst), sgst: carry(outward.sgst, netItc.sgst), igst: carry(outward.igst, netItc.igst), total: 0 };
-  creditCarryForward.total = r2(creditCarryForward.cgst + creditCarryForward.sgst + creditCarryForward.igst);
-  const byRate = new Map();
-  const addRate = (recs, sign) => { for (const rec of recs) { if (rec.isDeleted || !inRange(rec.date, from, to)) continue; const rate = gstRateOf(rec); const b = byRate.get(rate) ?? { rate, taxableValue: 0, cgst: 0, sgst: 0, igst: 0 }; b.taxableValue += sign * (rec.netAmount || 0); b.cgst += sign * (rec.cgstAmount || 0); b.sgst += sign * (rec.sgstAmount || 0); b.igst += sign * (rec.igstAmount || 0); byRate.set(rate, b); } };
-  addRate(sales, 1); addRate(salesReturns, -1);
-  const outwardByRate = [...byRate.values()].map(b => ({ rate: b.rate, taxableValue: r2(b.taxableValue), cgst: r2(b.cgst), sgst: r2(b.sgst), igst: r2(b.igst) })).filter(b => Math.abs(b.taxableValue) > 0.005).sort((a, b) => a.rate - b.rate);
-  return { period: { from, to }, outward, itcAvailed, itcReversed, netItc, netLiability, creditCarryForward, outwardByRate };
-}
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { computeGSTR9 } = await import(abs('../src/lib/gstr9.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
