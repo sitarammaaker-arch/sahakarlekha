@@ -88,5 +88,18 @@ const cancelled = buildEvent({ eventType: 'voucher.cancelled', tenantId: 'SOC001
 const tbCancel = projectTrialBalance([postedC, cancelled]);
 ok((tbCancel.lines.find((l) => l.accountId === '1001')?.netMinor ?? 0) === 0 && (tbCancel.lines.find((l) => l.accountId === '4101')?.netMinor ?? 0) === 0, 'posted + cancelled nets every account to zero (journal matches the soft-delete)');
 
+// 8. EDIT replay — reverse-old + repost-new nets the journal to the NEW voucher only (T-08). Edit
+//    ₹1000 → ₹1500: posted(old) + reversed(old flipped) + reposted(new) leaves only the new balance.
+const oldLegs = voucherPostingLines({ id: 'v1', debitAccountId: '1001', creditAccountId: '4101', amount: 1000 });
+const newLegs = voucherPostingLines({ id: 'v1', debitAccountId: '1001', creditAccountId: '4101', amount: 1500 });
+const tbEdit = projectTrialBalance([
+  post('v1', 1, oldLegs),
+  buildEvent({ eventType: 'voucher.reversed', tenantId: 'SOC001', jurisdiction: 'hr', aggregateType: 'voucher', aggregateId: 'v1', sequence: 2, producer: HUMAN, payload: { lines: voucherReversalLines({ id: 'v1', debitAccountId: '1001', creditAccountId: '4101', amount: 1000 }) } }, CTX('e-v1-r', '2025-04-04T00:00:00Z')),
+  buildEvent({ eventType: 'voucher.reposted', tenantId: 'SOC001', jurisdiction: 'hr', aggregateType: 'voucher', aggregateId: 'v1', sequence: 3, producer: HUMAN, payload: { lines: newLegs } }, CTX('e-v1-rp', '2025-04-04T00:00:01Z')),
+]);
+ok((tbEdit.lines.find((l) => l.accountId === '1001')?.netMinor ?? 0) === 150000, 'after edit, 1001 nets to the NEW amount (150000 Dr)');
+ok((tbEdit.lines.find((l) => l.accountId === '4101')?.netMinor ?? 0) === -150000, 'after edit, 4101 nets to the NEW amount (150000 Cr)');
+ok(tbEdit.balanced, 'edited journal stays balanced');
+
 console.log(`\nLedger voucher-event legs (T-06): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
