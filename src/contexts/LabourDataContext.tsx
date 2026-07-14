@@ -16,6 +16,7 @@ import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabasePaging';
+import { resolveJurisdiction } from '@/lib/jurisdiction';
 import * as storage from '@/lib/storage';
 import type { Worker, Department, DepartmentBill, DeptBillType, WorkerAdvance, PfEsiRun, LedgerAccount, Voucher } from '@/types';
 
@@ -77,7 +78,9 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   useEffect(() => { toastRef.current = toast; }, [toast]);
 
   const societyId = user?.societyId || 'SOC001';
-  const withSoc = <T extends object>(d: T) => ({ ...d, society_id: societyId });
+  // T-01: stamp BOTH tenancy keys (society_id + jurisdiction) — the value comes from the SSOT
+  // resolver so a domain row carries the same jurisdiction the main context writes (anti-IRR-4).
+  const withSoc = <T extends object>(d: T) => ({ ...d, society_id: societyId, jurisdiction: resolveJurisdiction(society?.state) });
 
   const guardFYLocked = (): boolean => {
     if (society?.fyLocked) {
