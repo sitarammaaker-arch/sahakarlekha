@@ -48,6 +48,8 @@ import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
 import { voucherPostingLines, voucherReversalLines, voucherEventMeta } from '@/lib/ledger/voucherEvent';
 import { ledgerTrialBalance } from '@/lib/ledger/trialBalance';
 import { ledgerParity, balancesFromJournal } from '@/lib/ledger/parity';
+import { ledgerCashBookEntries, ledgerBankBookEntries, ledgerMemberLedgerEntries, ledgerReceiptsPaymentsData } from '@/lib/ledger/reports';
+import { cashBookParity, bankBookParity, memberLedgerParity, receiptsPaymentsParity } from '@/lib/ledger/reportParity';
 import { accountNature, accountGlType } from '@/lib/ledger/receiptsPaymentsClassify';
 import { snapshotDeletedMovements } from '@/lib/movementArchive';
 import { isSelfApproval } from '@/lib/sod';
@@ -4029,14 +4031,36 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return v?.id ? v : null;
   }, [accounts, addVoucher, user]);
 
+  // T-09 (ADR-0001) — the read cut for the reports the TRIAL-BALANCE parity gate cannot vouch for
+  // (cash book, bank book, member ledger, R&P). Those are transaction LISTS: a projection bug moves
+  // rows, not net balances, so ledgerParity would let it through. So each one carries its OWN gate —
+  // project it from the journal and serve that ONLY when it is identical, row for row, to the report
+  // computed from the vouchers. Any difference (journal not seeded/loaded, a branch filter narrowing
+  // the vouchers, a projection gap) silently falls back to the voucher compute, so a flipped tenant
+  // can never be shown a number the vouchers disagree with. Flag off (default) ⇒ nothing runs.
+  const ledgerReport = useCallback(<T,>(
+    fromVouchers: T,
+    project: () => T,
+    parity: (ledger: T, vouchers: T) => { matches: boolean },
+  ): T => {
+    if (!societyRef.current?.ledgerReadsEnabled) return fromVouchers;
+    try {
+      const fromJournal = project();
+      return parity(fromJournal, fromVouchers).matches ? fromJournal : fromVouchers;
+    } catch {
+      return fromVouchers; // a report must never fail because of the shadow journal
+    }
+  }, []);
+
   const getCashBookEntries = useCallback((fromDate?: string, toDate?: string): CashBookEntry[] => {
     const cashAccount = accounts.find(a => a.id === ACCOUNT_IDS.CASH);
     if (!cashAccount) return [];
     // T-02: accumulate the running balance in exact integer paise (RULE 2), converting to rupees only
     // at each emitted row — so a cash book over thousands of legs cannot drift in the last paisa.
-    let runningBalanceMinor = toMinor(cashAccount.openingBalanceType === 'debit'
+    const openingMinor = toMinor(cashAccount.openingBalanceType === 'debit'
       ? cashAccount.openingBalance
       : -cashAccount.openingBalance);
+    let runningBalanceMinor = openingMinor;
 
     const cashVouchers = activeVouchers
       .filter(v => getVoucherLines(v).some(l => l.accountId === ACCOUNT_IDS.CASH))
@@ -4074,17 +4098,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           });
         });
       });
-    return result;
-  }, [accounts, activeVouchers]);
+    return ledgerReport(
+      result,
+      () => ledgerCashBookEntries(ledgerEventsRef.current, ACCOUNT_IDS.CASH, accounts, { openingMinor, fromDate, toDate }),
+      cashBookParity,
+    );
+  }, [accounts, activeVouchers, ledgerReport]);
 
   const getBankBookEntries = useCallback((fromDate?: string, toDate?: string, bankAccountId?: string): BankBookEntry[] => {
     const targetBankId = bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK;
     const bankAccount = accounts.find(a => a.id === targetBankId);
     if (!bankAccount) return [];
     // T-02: running balance in exact integer paise (RULE 2), rupees only at each emitted row.
-    let runningBalanceMinor = toMinor(bankAccount.openingBalanceType === 'debit'
+    const openingMinor = toMinor(bankAccount.openingBalanceType === 'debit'
       ? bankAccount.openingBalance
       : -bankAccount.openingBalance);
+    let runningBalanceMinor = openingMinor;
 
     const bankVouchers = activeVouchers
       .filter(v => getVoucherLines(v).some(l => l.accountId === targetBankId))
@@ -4122,8 +4151,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           });
         });
       });
-    return result;
-  }, [accounts, activeVouchers]);
+    return ledgerReport(
+      result,
+      () => ledgerBankBookEntries(ledgerEventsRef.current, targetBankId, accounts, { openingMinor, fromDate, toDate }),
+      bankBookParity,
+    );
+  }, [accounts, activeVouchers, ledgerReport]);
 
   // BUG-03 FIX: Accept optional asOnDate to filter vouchers up to that date.
   const getTrialBalance = useCallback((asOnDate?: string): AccountBalance[] => {
@@ -4243,8 +4276,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
     });
 
-    return result;
-  }, [members, activeVouchers]);
+    return ledgerReport(
+      result,
+      // The opening (member.shareCapital) and joinDate are MEMBER data, not journal data — the
+      // projection applies the same "OB row only when no share-capital voucher exists" rule.
+      () => ledgerMemberLedgerEntries(ledgerEventsRef.current, memberId, ACCOUNT_IDS.SHARE_CAP, {
+        openingMinor: toMinor(member.shareCapital || 0),
+        joinDate: member.joinDate,
+      }),
+      memberLedgerParity,
+    );
+  }, [members, activeVouchers, ledgerReport]);
 
   // ECR-16 / MS-03: per-member share reconciliation — the voucher-derived ledger balance
   // vs the member.shareCapital scalar (extends the global P0 #4 reconciliation to each member).
@@ -4569,8 +4611,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const signedOpening = (acc?: LedgerAccount) =>
       acc ? (acc.openingBalanceType === 'debit' ? acc.openingBalance : -acc.openingBalance) : 0;
     // T-02: opening + every R&P sum in exact integer paise.
-    const openingCash = toRupees(toMinor(signedOpening(cashAccount)));
-    const openingBank = toRupees(bankIds.reduce((sum, bid) => addMinor(sum, toMinor(signedOpening(accounts.find(a => a.id === bid)))), 0));
+    const openingCashMinor = toMinor(signedOpening(cashAccount));
+    const openingBankMinor = bankIds.reduce((sum, bid) => addMinor(sum, toMinor(signedOpening(accounts.find(a => a.id === bid)))), 0);
+    const openingCash = toRupees(openingCashMinor);
+    const openingBank = toRupees(openingBankMinor);
 
     // ── Audit C-11/C-12: classify each R&P line by GL-head type and Capital/Revenue ──
     // NCDC Annexure VII: a Receipts & Payments Account must distinguish CAPITAL
@@ -4647,7 +4691,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const closingCash = toRupees(closingMinorFor(ACCOUNT_IDS.CASH));
     const closingBank = toRupees(bankIds.reduce((sum, bid) => addMinor(sum, closingMinorFor(bid)), 0));
 
-    return {
+    const fromVouchers: ReceiptsPaymentsData = {
       openingCash,
       openingBank,
       receipts: Object.entries(receiptMap).map(([id, v]) => ({ accountId: id, accountName: v.name, accountNameHi: v.nameHi || v.name, amount: toRupees(v.amount), nature: v.nature, glType: v.glType })),
@@ -4655,7 +4699,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       closingCash,
       closingBank,
     };
-  }, [accounts, vouchers, activeVouchers]);
+    return ledgerReport(
+      fromVouchers,
+      // The cash/bank set the projection excludes from the R&P lines must be exactly the one
+      // `isCashBank` above uses (isBankAccount = the Bank head itself, or a non-group child of it).
+      () => ledgerReceiptsPaymentsData(ledgerEventsRef.current, accounts, ACCOUNT_IDS.CASH, new Set([ACCOUNT_IDS.BANK, ...bankIds]), {
+        openingCashMinor, openingBankMinor, asOf: asOnDate,
+      }),
+      receiptsPaymentsParity,
+    );
+  }, [accounts, vouchers, activeVouchers, ledgerReport]);
 
   const getTradingAccount = useCallback((asOnDate?: string) => {
     // BS-tie fix: when no date is given, bound to the FINANCIAL-YEAR END (not "all
