@@ -14,8 +14,7 @@
  */
 import type { LedgerAccount, Voucher } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
-
-const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
+import { toMinor, toRupees, addMinor, sumMinor, type Minor } from '@/lib/money';
 
 /** A fund is a non-group reserve account (sinking / repair / statutory / education / building funds). */
 export function isFundAccount(a: LedgerAccount): boolean {
@@ -44,9 +43,14 @@ export interface FundStatement {
 }
 
 export function buildFundStatement(fund: LedgerAccount, vouchers: Voucher[]): FundStatement {
-  const opening = fund.openingBalanceType === 'credit' ? round2(fund.openingBalance || 0) : round2(-(fund.openingBalance || 0));
+  // T-02 (RULE 2): accumulate the corpus in exact integer paise — this `closing` gates the
+  // fund-utilisation guard (spend ≤ corpus), so a last-paisa drift must not creep into that limit.
+  // Inputs are exact 2-dp rupee amounts, so toMinor is exact (no rounding boundary); rupees at emit.
+  const openingMinor: Minor = fund.openingBalanceType === 'credit'
+    ? toMinor(fund.openingBalance || 0)
+    : -toMinor(fund.openingBalance || 0);
 
-  const raw: Omit<FundStatementRow, 'balance'>[] = [];
+  const raw: { date: string; ref: string; kind: FundRowKind; particulars: string; creditMinor: Minor; debitMinor: Minor }[] = [];
   for (const v of vouchers) {
     if (v.isDeleted) continue;
     for (const l of getVoucherLines(v)) {
@@ -55,18 +59,31 @@ export function buildFundStatement(fund: LedgerAccount, vouchers: Voucher[]): Fu
       raw.push({
         date: v.date, ref: v.voucherNo, kind,
         particulars: v.narration || kind,
-        credit: l.type === 'Cr' ? round2(l.amount) : 0,
-        debit: l.type === 'Dr' ? round2(l.amount) : 0,
+        creditMinor: l.type === 'Cr' ? toMinor(l.amount) : 0,
+        debitMinor: l.type === 'Dr' ? toMinor(l.amount) : 0,
       });
     }
   }
   raw.sort((a, b) => a.date.localeCompare(b.date));
 
-  let bal = opening;
-  const rows: FundStatementRow[] = raw.map(r => { bal = round2(bal + r.credit - r.debit); return { ...r, balance: bal }; });
-  const contributions = round2(rows.filter(r => r.kind === 'contribution').reduce((s, r) => s + r.credit, 0));
-  const interest = round2(rows.filter(r => r.kind === 'interest').reduce((s, r) => s + r.credit, 0));
-  const utilisation = round2(rows.filter(r => r.kind === 'utilisation').reduce((s, r) => s + r.debit, 0));
-  const closing = round2(opening + contributions + interest - utilisation);
-  return { opening, contributions, interest, utilisation, closing, rows };
+  let balMinor: Minor = openingMinor;
+  const rows: FundStatementRow[] = raw.map(r => {
+    balMinor = addMinor(balMinor, r.creditMinor, -r.debitMinor);
+    return {
+      date: r.date, ref: r.ref, kind: r.kind, particulars: r.particulars,
+      credit: toRupees(r.creditMinor), debit: toRupees(r.debitMinor), balance: toRupees(balMinor),
+    };
+  });
+  const contributionsMinor = sumMinor(raw.filter(r => r.kind === 'contribution').map(r => r.creditMinor));
+  const interestMinor = sumMinor(raw.filter(r => r.kind === 'interest').map(r => r.creditMinor));
+  const utilisationMinor = sumMinor(raw.filter(r => r.kind === 'utilisation').map(r => r.debitMinor));
+  const closingMinor = addMinor(openingMinor, contributionsMinor, interestMinor, -utilisationMinor);
+  return {
+    opening: toRupees(openingMinor),
+    contributions: toRupees(contributionsMinor),
+    interest: toRupees(interestMinor),
+    utilisation: toRupees(utilisationMinor),
+    closing: toRupees(closingMinor),
+    rows,
+  };
 }
