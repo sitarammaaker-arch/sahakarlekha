@@ -37,7 +37,7 @@ begin
                else lower(trim(coalesce(ss.state, '')))
              end
         from public.society_settings ss
-       where t.society_id = ss.society_id
+       where t.society_id::text = ss.society_id::text   -- mixed uuid/text society_id across tables → cast both
          and t.jurisdiction is null
     $f$, r.table_name);
     get diagnostics n = row_count;
