@@ -35,6 +35,7 @@
     "test:document-number": "node scripts/test-document-number.mjs",
     "test:ledger-lines": "node scripts/test-ledger-lines.mjs",
     "test:ledger-voucher-event": "node scripts/test-ledger-voucher-event.mjs",
+    "test:ledger-genesis": "node scripts/test-ledger-genesis.mjs",
     "test:activities": "node scripts/test-activities.mjs",
     "test:activity-resolution": "node scripts/test-activity-resolution.mjs",
     "test:activity-inference": "node scripts/test-activity-inference.mjs",
