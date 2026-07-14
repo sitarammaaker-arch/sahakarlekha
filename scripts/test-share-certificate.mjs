@@ -1,18 +1,35 @@
-// Share certificate lifecycle (ECR-16) — asserts the pure validateCertificate mirrored
-// from src/lib/shareCertUtils.ts. Run: node scripts/test-share-certificate.mjs
+// Share certificate lifecycle (ECR-16) — imports the REAL validateCertificate from
+// src/lib/shareCertUtils.ts via the '@/' loader. Run: node scripts/test-share-certificate.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-// ── Mirror of the pure logic in src/lib/shareCertUtils.ts ─────────────────────
-function validateCertificate(input) {
-  const { status, certNo, count, reason } = input;
-  if (status === 'issued' || status === 'reissued') {
-    if (!certNo?.trim()) return { ok: false, error: 'certNo' };
-    if (!(Number(count) > 0)) return { ok: false, error: 'count' };
-  }
-  if ((status === 'reissued' || status === 'cancelled') && !reason?.trim()) {
-    return { ok: false, error: 'reason' };
-  }
-  return { ok: true };
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { validateCertificate } = await import(abs('../src/lib/shareCertUtils.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };

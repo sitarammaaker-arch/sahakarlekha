@@ -1,21 +1,35 @@
-// Member KYC (ECR-16) — asserts the pure helpers of src/lib/kycUtils.ts, mirrored here
-// as scripts/test-nav.mjs mirrors navVisibility. Run: node scripts/test-kyc.mjs
+// Member KYC (ECR-16) — imports the REAL helpers from src/lib/kycUtils.ts via the '@/'
+// loader. Run: node scripts/test-kyc.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-// ── Mirror of the pure logic in src/lib/kycUtils.ts ───────────────────────────
-const AADHAAR_RE = /^\d{12}$/;
-const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
-function validateKyc(aadhaar, pan) {
-  const a = (aadhaar || '').replace(/\s/g, '');
-  if (a && !AADHAAR_RE.test(a)) return { ok: false, error: 'aadhaar' };
-  const p = (pan || '').toUpperCase().trim();
-  if (p && !PAN_RE.test(p)) return { ok: false, error: 'pan' };
-  return { ok: true };
-}
-function maskId(value) {
-  const v = (value || '').trim();
-  if (v.length <= 4) return v;
-  return `${'X'.repeat(v.length - 4)}${v.slice(-4)}`;
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { validateKyc, maskId } = await import(abs('../src/lib/kycUtils.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };

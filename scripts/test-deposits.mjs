@@ -1,18 +1,35 @@
-// Deposits engine (Deposits module — SB/FD/RD/Pigmy) — asserts the pure helpers mirrored
-// from src/lib/depositEngine.ts. Run: node scripts/test-deposits.mjs
+// Deposits engine (Deposits module — SB/FD/RD/Pigmy) — imports the REAL helpers from
+// src/lib/depositEngine.ts via the '@/' loader. Run: node scripts/test-deposits.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-// ── Mirror of the pure logic in src/lib/depositEngine.ts ──────────────────────
-const depositLiabilityAccount = (type) => (type === 'FD' ? '2108' : '2107');
-function depositPosting(txnType, acc) {
-  if (txnType === 'withdraw' || txnType === 'closure') return { debitAccountId: acc.liability, creditAccountId: acc.cashBank, sign: -1 };
-  return { debitAccountId: acc.cashBank, creditAccountId: acc.liability, sign: 1 };
-}
-const applyDepositTxn = (balance, txnType, amount) => Math.round((balance + ((txnType === 'withdraw' || txnType === 'closure') ? -1 : 1) * amount) * 100) / 100;
-function validateDepositTxn(txnType, amount, balance) {
-  if (!(amount > 0)) return { ok: false, error: 'amt' };
-  if (txnType === 'withdraw' && amount > balance) return { ok: false, error: 'overbalance' };
-  return { ok: true };
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { depositLiabilityAccount, depositPosting, applyDepositTxn, validateDepositTxn } = await import(abs('../src/lib/depositEngine.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
