@@ -103,6 +103,61 @@ export function projectTrialBalance(events: readonly LedgerEvent[], asOf?: strin
   return { asOf: asOf ?? null, lines, totalDrMinor: totalDr, totalCrMinor: totalCr, balanced: totalDr === totalCr, eventCount: count };
 }
 
+export interface SplitTrialBalanceLine {
+  accountId: string;
+  openingDrMinor: number;
+  openingCrMinor: number;
+  txnDrMinor: number;
+  txnCrMinor: number;
+  totalDrMinor: number;
+  totalCrMinor: number;
+  /** total Dr − total Cr, in minor units. */
+  netMinor: number;
+}
+
+export interface SplitTrialBalance {
+  asOf: string | null;
+  lines: SplitTrialBalanceLine[];
+  totalDrMinor: number;
+  totalCrMinor: number;
+  balanced: boolean;
+  eventCount: number;
+}
+
+/**
+ * PURE (T-09) — the trial balance projected from the log WITH the opening/transaction split that
+ * getTrialBalance shows: `account.opening` events feed the OPENING columns, every other event feeds
+ * the TRANSACTION columns. This is the ledger-native equivalent of the app's getTrialBalance compute
+ * (opening balances + voucher postings), per account, in exact paise (T-02). The T-09 read cut maps
+ * these lines onto the AccountBalance shape (join account metadata + toRupees); the split logic lives
+ * here so it is unit-testable in isolation, before it is wired into the read path.
+ */
+export function projectSplitTrialBalance(events: readonly LedgerEvent[], asOf?: string): SplitTrialBalance {
+  const cutoff = asOfMillis(asOf);
+  const acc = new Map<string, { oDr: number; oCr: number; tDr: number; tCr: number }>();
+  let count = 0;
+  for (const e of events) {
+    if (!occurredBy(e, cutoff)) continue;
+    count++;
+    const isOpening = e.eventType === 'account.opening';
+    for (const l of legsOf(e.payload)) {
+      let b = acc.get(l.accountId);
+      if (!b) { b = { oDr: 0, oCr: 0, tDr: 0, tCr: 0 }; acc.set(l.accountId, b); }
+      if (isOpening) { if (l.drCr === 'Dr') b.oDr += l.amountMinor; else b.oCr += l.amountMinor; }
+      else { if (l.drCr === 'Dr') b.tDr += l.amountMinor; else b.tCr += l.amountMinor; }
+    }
+  }
+  const lines = [...acc.keys()].sort().map((accountId) => {
+    const b = acc.get(accountId)!;
+    const totalDrMinor = b.oDr + b.tDr;
+    const totalCrMinor = b.oCr + b.tCr;
+    return { accountId, openingDrMinor: b.oDr, openingCrMinor: b.oCr, txnDrMinor: b.tDr, txnCrMinor: b.tCr, totalDrMinor, totalCrMinor, netMinor: totalDrMinor - totalCrMinor };
+  });
+  const totalDrMinor = lines.reduce((s, l) => s + l.totalDrMinor, 0);
+  const totalCrMinor = lines.reduce((s, l) => s + l.totalCrMinor, 0);
+  return { asOf: asOf ?? null, lines, totalDrMinor, totalCrMinor, balanced: totalDrMinor === totalCrMinor, eventCount: count };
+}
+
 export interface LedgerEntry {
   eventId: string;
   occurredAt: string;
