@@ -730,7 +730,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         storage.setAccounts(baseAccts);
         // Only INSERT truly new accounts (don't delete+reinsert — preserves user customizations)
         if (acctsMigrated && newlyAdded.length > 0) {
-          const rows = newlyAdded.map(a => ({ ...a, society_id: sid }));
+          const rows = newlyAdded.map(a => ({ ...a, society_id: sid, jurisdiction: jurisdictionRef.current }));
           supabase.from('accounts').upsert(rows).then(({ error }) => {
             if (error) console.warn('Account migration sync error:', error.message);
           });
@@ -757,7 +757,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setVouchersState(allVouchers);
             storage.setVouchers(allVouchers);
             for (const v of autoVouchers) {
-              supabase.from('vouchers').upsert({ ...v, society_id: sid }).then(({ error }) => { if (error) console.error('Auto member voucher sync error:', error.message); });
+              supabase.from('vouchers').upsert({ ...v, society_id: sid, jurisdiction: jurisdictionRef.current }).then(({ error }) => { if (error) console.error('Auto member voucher sync error:', error.message); });
             }
           }
         } catch (migErr) {
@@ -1138,7 +1138,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Persist NEW repair vouchers
             for (const v of newRepairVouchers) {
               const { lines: vlines, refType, refId, ...base } = v;
-              supabase.from('vouchers').upsert({ ...base, society_id: sid }).then(({ error }) => {
+              supabase.from('vouchers').upsert({ ...base, society_id: sid, jurisdiction: jurisdictionRef.current }).then(({ error }) => {
                 if (error) { console.error('Repair voucher save error:', error.message); return; }
                 supabase.from('vouchers').update({ lines: vlines, refType, refId }).eq('id', v.id)
                   .then(({ error: e2 }) => { if (e2) console.warn('Repair lines patch:', e2.message); });
@@ -1147,7 +1147,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Persist UPDATED auto-repair vouchers (in-place re-route)
             updatedVouchers.forEach((v) => {
               const { lines: vlines, refType, refId, ...base } = v;
-              supabase.from('vouchers').upsert({ ...base, society_id: sid }).then(({ error }) => {
+              supabase.from('vouchers').upsert({ ...base, society_id: sid, jurisdiction: jurisdictionRef.current }).then(({ error }) => {
                 if (error) { console.error('Repair voucher update error:', error.message); return; }
                 supabase.from('vouchers').update({ lines: vlines, refType, refId }).eq('id', v.id)
                   .then(({ error: e2 }) => { if (e2) console.warn('Re-route lines patch:', e2.message); });
@@ -1206,6 +1206,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 cr: l.type === 'Cr' ? l.amount : 0,
                 narration: l.narration,
                 society_id: sid,
+                jurisdiction: jurisdictionRef.current,   // T-01: residency key (replay ignores it)
               }))
             );
             // Batch upsert in chunks of 500 to avoid payload limits
@@ -1273,7 +1274,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Write (upsert) entries for a voucher — fire-and-forget, non-blocking.
   const syncEntries = (v: Voucher) => {
     const sid = societyIdRef.current;
-    const rows = buildVoucherEntries(v, sid).map(e => ({ ...e, society_id: sid }));
+    // T-01: stamp jurisdiction alongside society_id. voucher_entries is replay-derived, and
+    // REPLAY_FIELDS deliberately excludes tenant/storage columns (society_id, jurisdiction), so the
+    // T-33 replay comparison is unaffected — the row just carries the residency key like every other.
+    const rows = buildVoucherEntries(v, sid).map(e => ({ ...e, society_id: sid, jurisdiction: jurisdictionRef.current }));
     if (rows.length === 0) return;
     supabase.from('voucher_entries').upsert(rows).then(({ error }) => {
       if (error) console.warn('voucher_entries sync error:', error.message);
@@ -3204,7 +3208,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('accounts').delete().eq('society_id', sid).then(() => {
       const BATCH = 50;
       for (let i = 0; i < templateAccounts.length; i += BATCH) {
-        const batch = templateAccounts.slice(i, i + BATCH).map(a => ({ ...a, society_id: sid }));
+        const batch = templateAccounts.slice(i, i + BATCH).map(a => ({ ...a, society_id: sid, jurisdiction: jurisdictionRef.current }));
         supabase.from('accounts').insert(batch).then(({ error }) => {
           if (error) console.error('Reset COA batch error:', error.message);
         });
