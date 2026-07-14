@@ -1,37 +1,37 @@
-// Cooperative fund statement (ECR-27) — mirrors src/lib/funds.ts.
+// Cooperative fund statement (ECR-27). Imports the REAL src/lib/funds.ts (which imports
+// @/lib/voucherUtils + @/lib/money) via the '@/' loader — so this validates the actual code,
+// including T-02's exact-paise buildFundStatement. (Was a self-contained mirror before.)
 // Run: node scripts/test-funds.mjs
-const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-// Mirror of getVoucherLines: explicit lines[] if present, else legacy Dr/Cr.
-function getVoucherLines(v) {
-  if (v.lines && v.lines.length) return v.lines;
-  return [
-    { accountId: v.debitAccountId, type: 'Dr', amount: v.amount },
-    { accountId: v.creditAccountId, type: 'Cr', amount: v.amount },
-  ];
-}
-function isFundAccount(a) { return !a.isGroup && a.subtype === 'reserve'; }
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
 
-function buildFundStatement(fund, vouchers) {
-  const opening = fund.openingBalanceType === 'credit' ? round2(fund.openingBalance || 0) : round2(-(fund.openingBalance || 0));
-  const raw = [];
-  for (const v of vouchers) {
-    if (v.isDeleted) continue;
-    for (const l of getVoucherLines(v)) {
-      if (l.accountId !== fund.id) continue;
-      const kind = l.type === 'Dr' ? 'utilisation' : (v.refType === 'fund.interest' ? 'interest' : 'contribution');
-      raw.push({ date: v.date, ref: v.voucherNo, kind, particulars: v.narration || kind, credit: l.type === 'Cr' ? round2(l.amount) : 0, debit: l.type === 'Dr' ? round2(l.amount) : 0 });
-    }
-  }
-  raw.sort((a, b) => a.date.localeCompare(b.date));
-  let bal = opening;
-  const rows = raw.map(r => { bal = round2(bal + r.credit - r.debit); return { ...r, balance: bal }; });
-  const contributions = round2(rows.filter(r => r.kind === 'contribution').reduce((s, r) => s + r.credit, 0));
-  const interest = round2(rows.filter(r => r.kind === 'interest').reduce((s, r) => s + r.credit, 0));
-  const utilisation = round2(rows.filter(r => r.kind === 'utilisation').reduce((s, r) => s + r.debit, 0));
-  const closing = round2(opening + contributions + interest - utilisation);
-  return { opening, contributions, interest, utilisation, closing, rows };
-}
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { isFundAccount, buildFundStatement } = await import(abs('../src/lib/funds.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };

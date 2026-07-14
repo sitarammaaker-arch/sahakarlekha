@@ -14,6 +14,7 @@
     "test:nav": "node scripts/test-nav.mjs",
     "test:jurisdiction": "node scripts/test-jurisdiction.mjs",
     "test:money": "node scripts/test-money.mjs",
+    "test:funds": "node scripts/test-funds.mjs",
     "test:money-tb": "node scripts/test-money-trial-balance.mjs",
     "test:sale-split": "node scripts/test-sale-split.mjs",
     "test:invoice-totals": "node scripts/test-invoice-totals.mjs",
