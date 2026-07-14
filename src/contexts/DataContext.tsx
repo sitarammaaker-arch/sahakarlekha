@@ -38,8 +38,8 @@ import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } f
 import { isUniqueViolation, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
-import type { SocietyCapabilityRow, Capability } from '@/lib/navigation';
-import { resolveCapabilities } from '@/lib/navigation';
+import type { SocietyCapabilityRow, Capability, SocietyActivityRow } from '@/lib/navigation';
+import { navigationService, declaredActivities } from '@/lib/navigation';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
 import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { resolveJurisdiction, stampTenant } from '@/lib/jurisdiction';
@@ -83,6 +83,7 @@ interface DataContextType {
   accounts: LedgerAccount[];
   society: SocietySettings;
   societyCapabilities: SocietyCapabilityRow[];   // C3: capability grant/revoke rows
+  societyActivities: SocietyActivityRow[];        // T-11 (ADR-0003): the society's declared business activities
   setCapabilityHidden: (capability: Capability, hidden: boolean, meta?: { reason?: string; by?: string }) => void;  // C6
   procurementFarmers: Farmer[];
   procurementLots: ProcurementLot[];
@@ -568,11 +569,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [societyCapabilities, setSocietyCapabilitiesState] = useState<SocietyCapabilityRow[]>([]);
   const societyCapabilitiesRef = useRef(societyCapabilities);
   useEffect(() => { societyCapabilitiesRef.current = societyCapabilities; }, [societyCapabilities]);
+  // T-11 (ADR-0003): the society's DECLARED activities (society_activities). Dormant until the
+  // cutover flag (T-12) — the resolver port ignores them while it is off, so this changes nothing today.
+  const [societyActivities, setSocietyActivitiesState] = useState<SocietyActivityRow[]>([]);
+  const societyActivitiesRef = useRef(societyActivities);
+  useEffect(() => { societyActivitiesRef.current = societyActivities; }, [societyActivities]);
   // T-14 (ADR-0002): bind behaviour to CAPABILITIES, not the society TYPE. Resolved from the
   // current refs so it is correct inside []-dep callbacks. NO super-admin bypass — a data
-  // default must reflect what the SOCIETY does, not who is viewing it.
+  // default must reflect what the SOCIETY does, not who is viewing it. Declared activities feed the
+  // resolver WITHIN entitlement (T-11), gated by the cutover flag inside navigationService.
   const hasCap = (c: Capability): boolean =>
-    resolveCapabilities(societyRef.current?.societyType ?? 'other', societyCapabilitiesRef.current, undefined, societyRef.current?.state).has(c);
+    navigationService.resolveCapabilities(societyRef.current?.societyType ?? 'other', societyCapabilitiesRef.current, societyRef.current?.state, declaredActivities(societyActivitiesRef.current)).has(c);
   const [procurementFarmers, setProcurementFarmersState] = useState<Farmer[]>(() => storage.getProcurementFarmers());
   const [procurementLots, setProcurementLotsState] = useState<ProcurementLot[]>(() => storage.getProcurementLots());
   const [procurementEvents, setProcurementEventsState] = useState<ProcurementEvent[]>(() => storage.getProcurementEvents());
@@ -642,7 +649,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
 
     // Reset all state to empty before loading new society's data
-    setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]);
+    setVouchersState([]); setMembersState([]); setLoansState([]); setSocietyCapabilitiesState([]); setSocietyActivitiesState([]);
     setDepositAccountsState([]); setDepositTransactionsState([]); setComplianceFilingsState([]);
     setProcurementFarmersState([]); setProcurementLotsState([]); setProcurementEventsState([]);
     setProcurementQualityTestsState([]); setProcurementMoistureRecordsState([]); setProcurementJFormsState([]); setProcurementFinancialIntentsState([]); setProcurementPostingRequestsState([]); setProcurementPostingRuleResultsState([]); setProcurementSettlementsState([]); setWorkOrdersState([]); setMusterEntriesState([]);
@@ -775,6 +782,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             })));
           },
           () => setSocietyCapabilitiesState([]),
+        );
+
+        // T-11 (ADR-0003): load declared activities independently (NOT in the Promise.all) so a
+        // missing table (pre-migration) NEVER breaks the main data load. Only active, non-deleted
+        // rows matter to the resolver; declaredActivities() re-filters, but we drop deleted rows here
+        // to keep state lean. Dormant until the cutover flag (T-12) — this changes nothing today.
+        supabase.from('society_activities').select('*').eq('society_id', sid).then(
+          ({ data: actData, error: actErr }) => {
+            if (actErr || !actData) { setSocietyActivitiesState([]); return; }
+            setSocietyActivitiesState((actData as Record<string, unknown>[])
+              .filter((r) => !r.isDeleted)
+              .map((r) => ({
+                activity: r.activity as SocietyActivityRow['activity'],
+                status: r.status as SocietyActivityRow['status'],
+                isDeleted: (r.isDeleted as boolean | undefined) ?? false,
+              })));
+          },
+          () => setSocietyActivitiesState([]),
         );
 
         // Deposits module — independent, error-tolerant load (a missing table pre-migration
@@ -1236,6 +1261,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSocietyState(storage.getSociety());
         setLoansState(storage.getLoans());
         setSocietyCapabilitiesState([]);   // C3: offline fallback → empty (all modules visible, as today)
+        setSocietyActivitiesState([]);     // T-11: offline fallback → no declared activities
         setProcurementFarmersState(storage.getProcurementFarmers());
         setProcurementLotsState(storage.getProcurementLots());
         setProcurementEventsState(storage.getProcurementEvents());
@@ -4755,7 +4781,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // societies (those entitled to inventory_sales). Service societies (housing, labour,
     // …) have no trading — their 4100/5100 heads are ordinary income/expense and must
     // appear DIRECTLY in Income & Expenditure (no Trading A/c, no Gross-Profit bridge).
-    const hasTrading = resolveCapabilities(society.societyType ?? 'other', societyCapabilities).has('inventory_sales');
+    const hasTrading = navigationService.resolveCapabilities(society.societyType ?? 'other', societyCapabilities, society.state, declaredActivities(societyActivities)).has('inventory_sales');
 
     // ── Audit C-9: NCDC two-statement structure (Trading A/c → P&L/I&E) ──────
     // Per NCDC Annexure II + III, trading heads (Sales, Purchases, direct expenses,
@@ -6426,7 +6452,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,
     markComplianceFiled, unmarkComplianceFiled, getComplianceFiledIds,
     stockItems, stockMovements, sales, purchases, employees, salaryRecords,
-    suppliers, customers, kccLoans, societyCapabilities, setCapabilityHidden,
+    suppliers, customers, kccLoans, societyCapabilities, societyActivities, setCapabilityHidden,
     procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
     procurementQualityTests, procurementMoistureRecords, recordQualityInspection,
     procurementJForms, generateJForm,
@@ -6465,7 +6491,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,
     markComplianceFiled, unmarkComplianceFiled, getComplianceFiledIds,
     stockItems, stockMovements, sales, purchases, employees, salaryRecords,
-    suppliers, customers, kccLoans, societyCapabilities, setCapabilityHidden,
+    suppliers, customers, kccLoans, societyCapabilities, societyActivities, setCapabilityHidden,
     procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
     procurementQualityTests, procurementMoistureRecords, recordQualityInspection,
     procurementJForms, generateJForm,

@@ -7,7 +7,7 @@
 import { useMemo } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { navigationService, type Capability } from '@/lib/navigation';
+import { navigationService, declaredActivities, type Capability } from '@/lib/navigation';
 
 export interface CapabilityState {
   capabilities: Set<Capability>;
@@ -16,13 +16,15 @@ export interface CapabilityState {
 }
 
 export function useCapabilities(): CapabilityState {
-  const { society, societyCapabilities } = useData();
+  const { society, societyCapabilities, societyActivities } = useData();
   const { isSuperAdmin } = useAuth();
   const societyType = society.societyType ?? 'other';
 
   return useMemo(() => {
-    const capabilities = navigationService.resolveCapabilities(societyType, societyCapabilities);
+    // T-11: pass declared activities (dormant behind the cutover flag). State stays unset here to
+    // preserve this hook's exact prior resolution (it never applied jurisdiction packs).
+    const capabilities = navigationService.resolveCapabilities(societyType, societyCapabilities, undefined, declaredActivities(societyActivities));
     const has = (capability: Capability) => isSuperAdmin || capabilities.has(capability);
     return { capabilities, has };
-  }, [societyType, societyCapabilities, isSuperAdmin]);
+  }, [societyType, societyCapabilities, societyActivities, isSuperAdmin]);
 }
