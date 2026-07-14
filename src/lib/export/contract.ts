@@ -64,3 +64,46 @@ export function fromContractRow(entity: EntityDescriptor, contractRow: Record<st
   }
   return out;
 }
+
+// ─── Backup (fidelity) mapping ────────────────────────────────────────────────────────
+//
+// The CURATED mapping above (toContractRow) is for the human EXPORT surface (CSV/XLSX/API), where
+// only the registry-declared columns should appear. A BACKUP is different: it must be LOSSLESS, so
+// it carries EVERY storage column — declared or not — or a restore would silently drop data (e.g.
+// voucher.editHistory, billAllocations: real columns the export picker never lists). The backup
+// mapping therefore preserves all columns and only RE-KEYS the declared columns whose storage name
+// differs from their contract key (a `storageColumn` override). With no overrides it is the identity
+// — so the `.slbak` stays byte-identical to a pre-contract archive (R4 empty-diff parity).
+
+/** Declared columns whose storage name differs from their contract key — the only keys re-mapped. */
+function keyOverrides(entity: EntityDescriptor): ColumnDescriptor[] {
+  return entity.columns.filter(c => c.storageColumn && c.storageColumn !== c.key);
+}
+
+/**
+ * Storage row → backup row. Lossless: every column is kept; a declared column with a `storageColumn`
+ * override is moved from its storage name to its stable contract `key`. Identity (returns the row
+ * unchanged) when there are no overrides — the current state, so archives are byte-identical.
+ */
+export function toBackupRow(entity: EntityDescriptor, storageRow: Record<string, unknown>): Record<string, unknown> {
+  const overrides = keyOverrides(entity);
+  if (overrides.length === 0) return storageRow;
+  const out: Record<string, unknown> = { ...storageRow };
+  for (const col of overrides) {
+    const sc = col.storageColumn as string;
+    if (Object.prototype.hasOwnProperty.call(out, sc)) { out[col.key] = out[sc]; delete out[sc]; }
+  }
+  return out;
+}
+
+/** Backup row → storage row. Exact inverse of toBackupRow; lossless; identity when no overrides. */
+export function fromBackupRow(entity: EntityDescriptor, backupRow: Record<string, unknown>): Record<string, unknown> {
+  const overrides = keyOverrides(entity);
+  if (overrides.length === 0) return backupRow;
+  const out: Record<string, unknown> = { ...backupRow };
+  for (const col of overrides) {
+    const sc = col.storageColumn as string;
+    if (Object.prototype.hasOwnProperty.call(out, col.key)) { out[sc] = out[col.key]; delete out[col.key]; }
+  }
+  return out;
+}

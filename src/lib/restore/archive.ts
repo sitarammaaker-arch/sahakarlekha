@@ -34,6 +34,7 @@ import type { EntityDescriptor } from '../export/registry.types';
 import { verifyArchive, type VerifyReport } from '../backup/verify';
 import { entityPath } from '../backup/manifest';
 import { parseNdjson } from '../backup/ndjson';
+import { fromBackupRow } from '../export/contract';
 import type { Row } from './naturalKeys';
 
 export interface LoadedArchive {
@@ -94,7 +95,10 @@ export async function loadArchive(
     }
 
     try {
-      rows[listed.key] = parseNdjson(strFromU8(file));
+      // T-04: read the archive through the export CONTRACT (inverse of the writer's toBackupRow).
+      // Lossless and identity until a storageColumn override exists — so pre-contract archives read
+      // back unchanged.
+      rows[listed.key] = parseNdjson(strFromU8(file)).map(r => fromBackupRow(entity, r) as Row);
     } catch (e) {
       problems.push(`${listed.key}: ${e instanceof Error ? e.message : String(e)}`);
       continue;

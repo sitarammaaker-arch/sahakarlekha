@@ -16,7 +16,7 @@ try {
   console.error('\nFAIL    Could not import the contract module.\n', e);
   process.exit(1);
 }
-const { toContractRow, fromContractRow, contractShape, storageKey, EXPORT_CONTRACT_VERSION } = C;
+const { toContractRow, fromContractRow, contractShape, storageKey, EXPORT_CONTRACT_VERSION, toBackupRow, fromBackupRow } = C;
 
 let pass = 0, fail = 0;
 const ok = (name, cond) => { if (cond) pass++; else { fail++; console.error('  ✗', name); } };
@@ -85,6 +85,31 @@ ok('storageKey: override wins', storageKey({ key: 'a', storageColumn: 'db_a' }) 
 
 // 8. Contract carries its own version.
 ok('EXPORT_CONTRACT_VERSION is a non-empty string', typeof EXPORT_CONTRACT_VERSION === 'string' && EXPORT_CONTRACT_VERSION.length > 0);
+
+// ── Backup (fidelity) mapping — LOSSLESS, identity today ──────────────────────────────
+// The backup mapper must NEVER drop a column: a table has internal columns the export picker
+// never lists (voucher.editHistory, billAllocations, taxVoucherIds…). Dropping them = restore
+// data loss. These tests guard exactly that, plus byte-identity (identity when no override).
+
+// 9. Identity today: no storageColumn override ⇒ toBackupRow returns the SAME object (byte-identical
+//    archive) and keeps every column, declared or not.
+{
+  const row = { a: 1, b: 2, editHistory: [{ at: 't' }], billAllocations: { x: 1 }, society_id: 'S1' };
+  const backup = toBackupRow(identity, row);   // identity has cols a,b,c — but a,b,c only 3 declared
+  ok('backup: identity returns the same object ref (byte-identical)', backup === row);
+  ok('backup: undeclared columns preserved (no drop)', 'editHistory' in backup && 'billAllocations' in backup && 'society_id' in backup);
+  ok('backup: lossless round-trip keeps everything', deepEqual(fromBackupRow(identity, toBackupRow(identity, row)), row));
+}
+
+// 10. With a storageColumn override: only that column is re-keyed; all others (incl. undeclared) kept.
+{
+  const storageRow = { memberId: 'M1', name: 'राम', join_date: '2026-01-01', editHistory: [1, 2], internal_flag: true };
+  const backup = toBackupRow(mapped, storageRow);
+  ok('backup: overridden column re-keyed to contract key', backup.displayName === 'राम' && backup.joinedOn === '2026-01-01');
+  ok('backup: storage names of overridden cols removed', !('name' in backup) && !('join_date' in backup));
+  ok('backup: non-overridden + undeclared columns preserved', backup.memberId === 'M1' && deepEqual(backup.editHistory, [1, 2]) && backup.internal_flag === true);
+  ok('backup: lossless round-trip restores exact storage shape', deepEqual(fromBackupRow(mapped, backup), storageRow));
+}
 
 console.log(`\nExport contract v1 (storage↔contract mapping): ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

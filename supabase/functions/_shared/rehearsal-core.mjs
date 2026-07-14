@@ -3697,6 +3697,24 @@ function parseNdjson(text) {
   return rows;
 }
 
+// src/lib/export/contract.ts
+function keyOverrides(entity) {
+  return entity.columns.filter((c13) => c13.storageColumn && c13.storageColumn !== c13.key);
+}
+function fromBackupRow(entity, backupRow) {
+  const overrides = keyOverrides(entity);
+  if (overrides.length === 0) return backupRow;
+  const out = { ...backupRow };
+  for (const col of overrides) {
+    const sc = col.storageColumn;
+    if (Object.prototype.hasOwnProperty.call(out, col.key)) {
+      out[sc] = out[col.key];
+      delete out[col.key];
+    }
+  }
+  return out;
+}
+
 // src/lib/backup/writer.ts
 var MANIFEST_PATH = "manifest.json";
 var ZIP_EPOCH = Date.UTC(1980, 0, 1);
@@ -3819,7 +3837,7 @@ async function loadArchive(bytes, entities) {
       continue;
     }
     try {
-      rows[listed.key] = parseNdjson(strFromU8(file));
+      rows[listed.key] = parseNdjson(strFromU8(file)).map((r) => fromBackupRow(entity, r));
     } catch (e) {
       problems.push(`${listed.key}: ${e instanceof Error ? e.message : String(e)}`);
       continue;
