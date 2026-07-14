@@ -1,35 +1,35 @@
-// Compliance calendar due-date engine (ECR-13) — mirrors src/lib/complianceCalendar.ts.
+// Compliance calendar due-date engine (ECR-13) — imports the REAL src/lib/complianceCalendar.ts via the '@/' loader.
 // Run: node scripts/test-compliance-calendar.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-const pad = (n) => String(n).padStart(2, '0');
-const iso = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
-function addMonthsYM(y, m, delta) { const t = y * 12 + (m - 1) + delta; return [Math.floor(t / 12), (t % 12) + 1]; }
-const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
-const statusOf = (dl) => dl < 0 ? 'overdue' : dl <= 7 ? 'due-soon' : 'upcoming';
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
 
-function buildComplianceCalendar(asOf, app, opts = {}) {
-  const back = opts.monthsBack ?? 2, fwd = opts.monthsForward ?? 3;
-  const winBack = opts.windowBackDays ?? 45, winFwd = opts.windowFwdDays ?? 150;
-  const [ay, am] = asOf.split('-').map(Number);
-  const filed = new Set(opts.filedIds ?? []);
-  const items = [];
-  const push = (id, title, category, dueDate, period) => { const dl = daysBetween(asOf, dueDate); items.push({ id, title, category, dueDate, period, daysLeft: dl, status: filed.has(id) ? 'filed' : statusOf(dl) }); };
-  for (let k = -back; k <= fwd; k++) {
-    const [ly, lm] = addMonthsYM(ay, am, k);
-    const [dy, dm] = addMonthsYM(ly, lm, 1);
-    const period = `${lm} ${ly}`;
-    if (app.hasEmployees) { push(`pf-${ly}-${pad(lm)}`, 'EPF payment', 'PF', iso(dy, dm, 15), period); push(`esi-${ly}-${pad(lm)}`, 'ESI payment', 'ESI', iso(dy, dm, 15), period); }
-    if (app.tan) push(`tds-${ly}-${pad(lm)}`, 'TDS deposit', 'TDS', lm === 3 ? iso(dy, dm, 30) : iso(dy, dm, 7), period);
-    if (app.gstin) { push(`gstr1-${ly}-${pad(lm)}`, 'GSTR-1', 'GST', iso(dy, dm, 11), period); push(`gstr3b-${ly}-${pad(lm)}`, 'GSTR-3B', 'GST', iso(dy, dm, 20), period); }
-  }
-  const fyStart = am >= 4 ? ay : ay - 1;
-  if (app.tan) for (const fy of [fyStart - 1, fyStart, fyStart + 1]) {
-    push(`24q-q1-${fy}`, '24Q Q1', 'TDS', iso(fy, 7, 31), 'q1'); push(`24q-q2-${fy}`, '24Q Q2', 'TDS', iso(fy, 10, 31), 'q2');
-    push(`24q-q3-${fy}`, '24Q Q3', 'TDS', iso(fy + 1, 1, 31), 'q3'); push(`24q-q4-${fy}`, '24Q Q4', 'TDS', iso(fy + 1, 5, 31), 'q4');
-  }
-  for (const fy of [fyStart - 1, fyStart]) { push(`itr-${fy}`, 'ITR', 'IncomeTax', iso(fy + 1, 10, 31), 'y'); push(`audit-${fy}`, 'Audit', 'Audit', iso(fy + 1, 9, 30), 'y'); }
-  return items.filter(it => it.daysLeft >= -winBack && it.daysLeft <= winFwd).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.category.localeCompare(b.category));
-}
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { buildComplianceCalendar, complianceNotifications } = await import(abs('../src/lib/complianceCalendar.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -79,7 +79,6 @@ ok(find(withFiled, i => i.id === 'gstr3b-2024-04').status !== 'filed', 'other it
 ok(withFiled.filter(i => i.status === 'overdue').length < full.filter(i => i.status === 'overdue').length, 'filing reduces overdue count');
 
 // 10. complianceNotifications = overdue + due-soon only (filed/upcoming excluded).
-const complianceNotifications = (items) => items.filter(i => i.status === 'overdue' || i.status === 'due-soon');
 const alerts = complianceNotifications(full);
 ok(alerts.length > 0 && alerts.every(a => a.status === 'overdue' || a.status === 'due-soon'), 'notifications are overdue/due-soon only');
 ok(complianceNotifications(withFiled).length < alerts.length, 'filing reduces notifications');
