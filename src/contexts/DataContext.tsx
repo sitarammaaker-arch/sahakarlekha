@@ -50,6 +50,7 @@ import { isSelfApproval } from '@/lib/sod';
 import { requiresApproval } from '@/lib/approvalMatrix';
 import { canApprovalTransition } from '@/lib/approvalTransition';
 import { sumActiveMemberShareCapital, reconcileShareCapital, type ShareCapitalReconciliation } from '@/lib/shareReconciliation';
+import { premiumCap as sharePremiumCap, premiumAllowed as isSharePremiumAllowed } from '@/lib/sharePremium';
 import { sumActiveAssetCost, reconcileAssetRegister, type AssetReconciliation } from '@/lib/assetReconciliation';
 import { can as rbacCan, type Permission } from '@/lib/rbac';
 import { splitVoucherExtras, extrasFailureToast } from '@/lib/voucherPersistence';
@@ -2524,19 +2525,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!(amt > 0)) { toastRef.current({ title: 'Invalid amount', description: 'Amount must be > 0 and ≤ the sender\'s share capital.', variant: 'destructive' }); return; }
     // ECR-16 (MS-11): enforce the share-transfer premium cap (% of face value) BEFORE posting.
     const prem = Math.round((Math.max(0, premium || 0)) * 100) / 100;
-    if (prem > 0) {
-      const capPct = societyRef.current?.maxSharePremiumPercent ?? 0;
-      const cap = Math.round((amt * capPct / 100) * 100) / 100;
-      if (!(capPct > 0) || prem > cap) {
-        toastRef.current({
-          title: 'प्रीमियम सीमा से अधिक / Premium over cap',
-          description: capPct > 0
-            ? `प्रीमियम ₹${prem.toLocaleString('en-IN')} अधिकतम ₹${cap.toLocaleString('en-IN')} (${capPct}% of ₹${amt.toLocaleString('en-IN')}) से ज़्यादा है।`
-            : 'इस समिति में शेयर-ट्रांसफर प्रीमियम की अनुमति नहीं है (cap 0%)। पहले "Max transfer premium %" सेट करें।',
-          variant: 'destructive', duration: 10000,
-        });
-        return;
-      }
+    const capPct = societyRef.current?.maxSharePremiumPercent ?? 0;
+    if (!isSharePremiumAllowed(prem, amt, capPct)) {
+      const cap = sharePremiumCap(amt, capPct);
+      toastRef.current({
+        title: 'प्रीमियम सीमा से अधिक / Premium over cap',
+        description: capPct > 0
+          ? `प्रीमियम ₹${prem.toLocaleString('en-IN')} अधिकतम ₹${cap.toLocaleString('en-IN')} (${capPct}% of ₹${amt.toLocaleString('en-IN')}) से ज़्यादा है।`
+          : 'इस समिति में शेयर-ट्रांसफर प्रीमियम की अनुमति नहीं है (cap 0%)। पहले "Max transfer premium %" सेट करें।',
+        variant: 'destructive', duration: 10000,
+      });
+      return;
     }
     const SUSPENSE = '9999';
     addVoucher({

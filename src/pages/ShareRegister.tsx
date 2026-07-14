@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { generateShareRegisterPDF } from '@/lib/pdf';
 import type { Member } from '@/types';
 import type { ShareOpType } from '@/lib/shareOps';
+import { premiumCap as sharePremiumCap, premiumAllowed as isSharePremiumAllowed } from '@/lib/sharePremium';
 
 const ShareRegister: React.FC = () => {
   const { language } = useLanguage();
@@ -524,8 +525,8 @@ function TransferShareButton({ member, members, hi, maxPremiumPct, onTransfer }:
   const val = Number(amt) || 0;
   const prem = Number(premium) || 0;
   const cap = member.shareCapital || 0;
-  const premiumCap = Math.round((val * (maxPremiumPct || 0) / 100) * 100) / 100;   // ECR-16 MS-11
-  const overPremium = prem > premiumCap;
+  const premiumCap = sharePremiumCap(val, maxPremiumPct);   // ECR-16 MS-11
+  const overPremium = !isSharePremiumAllowed(prem, val, maxPremiumPct);
   const recipients = members.filter(m => m.id !== member.id);
   const fmtC = (n: number) => n.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' });
 
