@@ -1,17 +1,36 @@
-// Depreciation rate master (ECR-15) — mirrors src/lib/depreciationRateMaster.ts.
+// Depreciation rate master (ECR-15). Imports the REAL src/lib/depreciationRateMaster.ts
+// via the '@/' loader — so this validates the actual code. (Was a self-contained mirror before.)
 // Run: node scripts/test-depreciation-rate-master.mjs
-const DEPRECIATION_RATE_MASTER = { Land: 0, Building: 10, Furniture: 10, Equipment: 15, Vehicle: 15, Computer: 40, Other: 15 };
-const standardDepreciationRate = (category) => DEPRECIATION_RATE_MASTER[category] ?? 0;
-function assetRateDeviations(assets) {
-  const out = [];
-  for (const a of assets || []) {
-    if (a.isDeleted || a.disposalDate || a.category === 'Land') continue;
-    const standard = standardDepreciationRate(a.category);
-    const rate = a.depreciationRate || 0;
-    if (Math.abs(rate - standard) > 0.005) out.push({ id: a.id, name: a.name, category: a.category, rate, standard });
-  }
-  return out;
-}
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { standardDepreciationRate, assetRateDeviations } = await import(abs('../src/lib/depreciationRateMaster.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };

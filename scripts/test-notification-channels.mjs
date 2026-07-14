@@ -1,28 +1,36 @@
-// Notification channel scaffold (ECR-13) — mirrors src/lib/notificationChannels.ts.
+// Notification channel scaffold (ECR-13). Imports the REAL src/lib/notificationChannels.ts
+// via the '@/' loader — so this validates the actual code. (Was a self-contained mirror before.)
 // Run: node scripts/test-notification-channels.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-const CHANNELS = ['inApp', 'email', 'sms', 'whatsapp'];
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
 
-function planDelivery(_msg, prefs, providers) {
-  return CHANNELS.map(channel => {
-    if (channel === 'inApp') return { channel, status: 'queued', reason: 'in-app centre' };
-    if (!prefs.enabled?.[channel]) return { channel, status: 'skipped-disabled', reason: 'channel off' };
-    if (!providers?.[channel]) return { channel, status: 'skipped-no-provider', reason: 'no provider configured' };
-    return { channel, status: 'queued', reason: 'ready to send' };
-  });
-}
-async function dispatch(msg, prefs, providers, senders = {}) {
-  const log = [];
-  for (const item of planDelivery(msg, prefs, providers)) {
-    if (item.channel === 'inApp') { log.push({ channel: 'inApp', delivered: true, note: 'shown in-app' }); continue; }
-    if (item.status !== 'queued') { log.push({ channel: item.channel, delivered: false, note: item.reason }); continue; }
-    const sender = senders[item.channel];
-    if (!sender) { log.push({ channel: item.channel, delivered: false, note: 'no sender wired' }); continue; }
-    try { const r = await sender(item.channel, msg); log.push({ channel: item.channel, delivered: r.ok, note: r.detail || (r.ok ? 'sent' : 'failed') }); }
-    catch { log.push({ channel: item.channel, delivered: false, note: 'sender error' }); }
-  }
-  return log;
-}
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { planDelivery, dispatch } = await import(abs('../src/lib/notificationChannels.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
