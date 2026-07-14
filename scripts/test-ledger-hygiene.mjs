@@ -1,77 +1,36 @@
-// Ledger Hygiene (ECR-28) — mirrors src/lib/ledgerHygiene.ts.
+// Ledger Hygiene (ECR-28). Imports the REAL src/lib/ledgerHygiene.ts via the '@/' loader —
+// so this validates the actual code. (Was a self-contained mirror before.)
 // Run: node scripts/test-ledger-hygiene.mjs
-const DELETED_MARKERS = ['[Supplier deleted]', '[Customer deleted]', '[Department deleted]', '[Deleted]', '[हटाया'];
-const ZERO = 0.005;
-const norm = (s) => (s || '').trim().toLowerCase();
-const hasDeletedMarker = (...names) => names.some(n => DELETED_MARKERS.some(m => (n || '').includes(m)));
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-function analyzeLedgerHygiene(accounts, usage) {
-  const findings = [];
-  const accountIds = new Set(accounts.map(a => a.id));
-  const refCount = (id) => usage.voucherRefCount[id] || 0;
-  const bal = (id) => Math.abs(usage.balance[id] || 0);
-  const linked = (id) => usage.linkedParty[id];
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
 
-  const dangling = Object.keys(usage.voucherRefCount).filter(id => refCount(id) > 0 && !accountIds.has(id))
-    .map(id => ({ id, name: `[Deleted] ${id.slice(0, 8)}…`, detail: `${refCount(id)} voucher ref(s)` }));
-  if (dangling.length) findings.push({ category: 'dangling-reference', severity: 'error', accounts: dangling });
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
 
-  const removable = [], retained = [];
-  for (const a of accounts) {
-    if (!hasDeletedMarker(a.name, a.nameHi)) continue;
-    if (refCount(a.id) === 0 && bal(a.id) < ZERO) removable.push({ id: a.id, name: a.name });
-    else retained.push({ id: a.id, name: a.name, detail: refCount(a.id) > 0 ? `${refCount(a.id)} voucher ref(s)` : 'non-zero balance' });
-  }
-  if (removable.length) findings.push({ category: 'deleted-removable', severity: 'cleanup', accounts: removable });
-  if (retained.length) findings.push({ category: 'deleted-retained', severity: 'info', accounts: retained });
-
-  const unused = [];
-  for (const a of accounts) {
-    if (a.isGroup || a.isSystem) continue;
-    if (hasDeletedMarker(a.name, a.nameHi)) continue;
-    if (linked(a.id)) continue;
-    const openingZero = Math.abs(a.openingBalance || 0) < ZERO;
-    if (refCount(a.id) === 0 && bal(a.id) < ZERO && openingZero) unused.push({ id: a.id, name: a.name });
-  }
-  if (unused.length) findings.push({ category: 'unused-head', severity: 'warning', accounts: unused });
-
-  const byName = new Map();
-  for (const a of accounts) {
-    if (hasDeletedMarker(a.name, a.nameHi)) continue;
-    const key = norm(a.name); if (!key) continue;
-    const g = byName.get(key); if (g) g.push(a); else byName.set(key, [a]);
-  }
-  const dupes = [];
-  for (const group of byName.values()) if (group.length > 1) for (const a of group) dupes.push({ id: a.id, name: a.name, detail: `${group.length}× "${a.name}"` });
-  if (dupes.length) findings.push({ category: 'duplicate-name', severity: 'warning', accounts: dupes });
-
-  const parentIds = new Set(accounts.map(a => a.parentId).filter(Boolean));
-  const emptyGroups = accounts.filter(a => a.isGroup && !parentIds.has(a.id)).map(a => ({ id: a.id, name: a.name }));
-  if (emptyGroups.length) findings.push({ category: 'empty-group', severity: 'info', accounts: emptyGroups });
-
-  const blanks = accounts.filter(a => !norm(a.name) || !norm(a.nameHi)).map(a => ({ id: a.id, name: a.name || a.nameHi || a.id, detail: 'missing name' }));
-  if (blanks.length) findings.push({ category: 'blank-name', severity: 'warning', accounts: blanks });
-
-  const abnormal = [];
-  for (const a of accounts) {
-    if (a.isGroup || a.subtype === 'surplus') continue;
-    const b = usage.balance[a.id] || 0;
-    if (Math.abs(b) < ZERO) continue;
-    const naturalDebit = a.type === 'asset' || a.type === 'expense';
-    const balIsDebit = b > 0;
-    if (naturalDebit === balIsDebit) continue;
-    if (naturalDebit && a.openingBalanceType === 'credit') continue;
-    if (!naturalDebit && a.openingBalanceType === 'debit') continue;
-    abnormal.push({ id: a.id, name: a.name, detail: `${Math.abs(b).toLocaleString('en-IN')} ${balIsDebit ? 'Dr' : 'Cr'} · expected ${naturalDebit ? 'Dr' : 'Cr'}` });
-  }
-  if (abnormal.length) findings.push({ category: 'abnormal-balance', severity: 'error', accounts: abnormal });
-
-  return findings;
-}
-const hygieneSummary = (findings) => {
-  const bySev = (s) => findings.filter(f => f.severity === s).reduce((n, f) => n + f.accounts.length, 0);
-  return { total: findings.reduce((n, f) => n + f.accounts.length, 0), errors: bySev('error'), warnings: bySev('warning'), cleanups: bySev('cleanup'), infos: bySev('info') };
-};
+const { analyzeLedgerHygiene, hygieneSummary } = await import(abs('../src/lib/ledgerHygiene.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };

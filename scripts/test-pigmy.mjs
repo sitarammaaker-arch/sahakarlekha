@@ -1,20 +1,36 @@
-// Pigmy daily collection (Deposits module) — mirrors src/lib/pigmy.ts.
+// Pigmy daily collection (Deposits module). Imports the REAL src/lib/pigmy.ts via the '@/'
+// loader — so this validates the actual code. (Was a self-contained mirror before.)
 // Run: node scripts/test-pigmy.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-function pigmyAgents(accounts) {
-  const set = new Set();
-  for (const a of accounts || []) {
-    if (a.depositType === 'PIGMY' && a.status === 'active' && a.agent?.trim()) set.add(a.agent.trim());
-  }
-  return [...set].sort();
-}
-function pigmyAccountsForAgent(accounts, agent) {
-  return (accounts || []).filter(a => a.depositType === 'PIGMY' && a.status === 'active' && (a.agent ?? '').trim() === agent);
-}
-function collectionTotal(amounts) {
-  const sum = (amounts || []).reduce((s, a) => { const n = Number(a) || 0; return s + (n > 0 ? n : 0); }, 0);
-  return Math.round(sum * 100) / 100;
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { pigmyAgents, pigmyAccountsForAgent, collectionTotal } = await import(abs('../src/lib/pigmy.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };

@@ -1,24 +1,38 @@
-// Report comparatives (ECR-19) — mirrors src/lib/reportComparative.ts.
+// Report comparatives (ECR-19). Imports the REAL src/lib/reportComparative.ts via the '@/'
+// loader — so this validates the actual code. (Was a self-contained mirror before.)
 // Run: node scripts/test-report-comparative.mjs
-const r2 = (n) => Math.round(n * 100) / 100;
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-function comparative(current, prior) {
-  const c = current || 0, p = prior || 0;
-  const variance = r2(c - p);
-  let variancePct;
-  if (p === 0) variancePct = c === 0 ? 0 : null;
-  else variancePct = r2((variance / Math.abs(p)) * 100);
-  return { current: r2(c), prior: r2(p), variance, variancePct };
-}
-function buildComparativeMap(current, prior) {
-  const keys = new Set([...Object.keys(current || {}), ...Object.keys(prior || {})]);
-  const out = {};
-  for (const k of keys) out[k] = comparative(current?.[k] || 0, prior?.[k] || 0);
-  return out;
-}
-function isEmptyPeriod(map) {
-  return !map || Object.values(map).every(v => !v || Math.abs(v) < 0.005);
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { comparative, buildComparativeMap, isEmptyPeriod, deltaProfitLoss, isEmptyPL } = await import(abs('../src/lib/reportComparative.ts'));
+
+const r2 = (n) => Math.round(n * 100) / 100; // test-only fixture helper (used by an assertion)
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -64,25 +78,6 @@ ok((!isEmptyPeriod(priorComputed) ? priorComputed : snapshot) === priorComputed,
 ok((!isEmptyPeriod({ '3301': 0, '1102': 0 }) ? { x: 1 } : snapshot) === snapshot, 'empty computed prior → snapshot fallback');
 
 // ── deltaProfitLoss: prior-FY P&L = cumulative(end) − cumulative(start) ──────
-function deltaProfitLoss(end, start) {
-  const sub = (a, b) => {
-    const bMap = new Map(b.map(i => [i.name, i]));
-    const names = new Set([...a.map(i => i.name), ...b.map(i => i.name)]);
-    const out = [];
-    for (const name of names) {
-      const ai = a.find(i => i.name === name);
-      const bi = bMap.get(name);
-      const amount = r2((ai?.amount || 0) - (bi?.amount || 0));
-      if (Math.abs(amount) < 0.005) continue;
-      out.push({ name, nameHi: ai?.nameHi || bi?.nameHi || name, amount });
-    }
-    return out;
-  };
-  const totalIncome = r2(end.totalIncome - start.totalIncome);
-  const totalExpenses = r2(end.totalExpenses - start.totalExpenses);
-  return { incomeItems: sub(end.incomeItems, start.incomeItems), expenseItems: sub(end.expenseItems, start.expenseItems), totalIncome, totalExpenses, netProfit: r2(totalIncome - totalExpenses) };
-}
-function isEmptyPL(pl) { return !pl || (Math.abs(pl.totalIncome) < 0.005 && Math.abs(pl.totalExpenses) < 0.005); }
 
 // 10. Prior-FY P&L isolated as the delta of two cumulative statements.
 const plEnd   = { incomeItems: [{ name: 'Sales', nameHi: 'बिक्री', amount: 100 }, { name: 'Interest', nameHi: 'ब्याज', amount: 20 }], expenseItems: [{ name: 'Rent', nameHi: 'किराया', amount: 30 }], totalIncome: 120, totalExpenses: 30, netProfit: 90 };

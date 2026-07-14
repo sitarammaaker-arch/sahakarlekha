@@ -1,24 +1,39 @@
-// Inter-branch accounting (ECR-17 Phase 2) — mirrors src/lib/interBranch.ts.
+// Inter-branch accounting (ECR-17 Phase 2). Imports the REAL src/lib/interBranch.ts via
+// the '@/' loader — so this validates the actual code. (Was a self-contained mirror before.)
 // Run: node scripts/test-inter-branch.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { buildInterBranchTransfer, legsBalanced, controlNet } = await import(abs('../src/lib/interBranch.ts'));
+
 const r2 = (n) => Math.round(n * 100) / 100;
-const INTER_BRANCH_CONTROL_ID = '2110';
-function buildInterBranchTransfer(input) {
-  const amt = r2(Math.max(0, input.amount || 0));
-  const control = input.controlAccountId || INTER_BRANCH_CONTROL_ID;
-  return {
-    from: { branchId: input.fromBranchId, lines: [ { accountId: control, type: 'Dr', amount: amt }, { accountId: input.fromAccountId, type: 'Cr', amount: amt } ] },
-    to: { branchId: input.toBranchId, lines: [ { accountId: input.toAccountId, type: 'Dr', amount: amt }, { accountId: control, type: 'Cr', amount: amt } ] },
-  };
-}
-const legDr = (leg) => r2(leg.lines.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0));
-const legCr = (leg) => r2(leg.lines.filter(l => l.type === 'Cr').reduce((s, l) => s + l.amount, 0));
-const legsBalanced = (t) => legDr(t.from) === legCr(t.from) && legDr(t.to) === legCr(t.to);
-function controlNet(t, control = INTER_BRANCH_CONTROL_ID) {
-  let net = 0;
-  for (const leg of [t.from, t.to]) for (const l of leg.lines) if (l.accountId === control) net += l.type === 'Dr' ? l.amount : -l.amount;
-  return r2(net);
-}
-// Net movement of a cash/bank account across both legs.
+// Net movement of a cash/bank account across both legs (test-only fixture helper).
 function acctNet(t, id) { let net = 0; for (const leg of [t.from, t.to]) for (const l of leg.lines) if (l.accountId === id) net += l.type === 'Dr' ? l.amount : -l.amount; return r2(net); }
 
 let pass = 0, fail = 0;

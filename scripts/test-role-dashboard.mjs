@@ -1,30 +1,43 @@
-// Role dashboard widget registry (ECR-18) — mirrors src/lib/roleDashboard.ts + the rbac
-// legacy-role mapping. Run: node scripts/test-role-dashboard.mjs
+// Role dashboard widget registry (ECR-18). Imports the REAL src/lib/roleDashboard.ts (which
+// imports @/lib/rbac.mapLegacyRole) via the '@/' loader — so this validates the actual code.
+// (Was a self-contained mirror before.) Run: node scripts/test-role-dashboard.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-const LEGACY_ROLE_MAP = { admin: 'societyAdmin', accountant: 'accountant', viewer: 'readOnly', auditor: 'auditor' };
-const mapLegacyRole = (role) => LEGACY_ROLE_MAP[role] ?? role;
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
 
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { roleWidgets } = await import(abs('../src/lib/roleDashboard.ts'));
+
+// Expected-value fixtures the assertions compare against (mirror the module's internal sets).
 const ADMIN = ['netProfit', 'bsStatus', 'members', 'loanPortfolio', 'pendingApprovals', 'complianceDue'];
 const ACCOUNTANT = ['netProfit', 'trialBalance', 'cashBank', 'pendingApprovals', 'complianceDue', 'shareReconciliation'];
 const AUDITOR = ['auditObjections', 'shareReconciliation', 'unapprovedVouchers', 'periodLock', 'complianceDue', 'bsStatus'];
 const READ_ONLY = ['netProfit', 'members', 'loanPortfolio'];
-const CHAIRMAN = ['netProfit', 'bsStatus', 'members', 'loanPortfolio', 'pendingApprovals', 'auditObjections', 'complianceDue'];
-const MANAGER = ['netProfit', 'bsStatus', 'pendingApprovals', 'loanPortfolio', 'purchasesCount', 'complianceDue'];
-const PROCUREMENT = ['purchasesCount', 'stockValue', 'pendingApprovals', 'complianceDue'];
-const INVENTORY = ['stockValue', 'outOfStock', 'purchasesCount'];
-const COMPLIANCE = ['complianceDue', 'auditObjections', 'unapprovedVouchers', 'periodLock', 'bsStatus'];
-const ROLE_WIDGETS = {
-  superAdmin: ADMIN, societyAdmin: ADMIN, secretary: COMPLIANCE, manager: MANAGER,
-  accountant: ACCOUNTANT, cashier: ['cashBank', 'netProfit', 'complianceDue'],
-  storeKeeper: INVENTORY, procurementOfficer: PROCUREMENT,
-  auditor: AUDITOR, internalAuditor: AUDITOR, externalCA: AUDITOR,
-  chairman: CHAIRMAN, boardMember: CHAIRMAN, readOnly: READ_ONLY,
-};
 const DEFAULT_WIDGETS = ['netProfit', 'members', 'loanPortfolio', 'complianceDue'];
-function roleWidgets(role) {
-  if (!role) return DEFAULT_WIDGETS;
-  return ROLE_WIDGETS[mapLegacyRole(role)] ?? DEFAULT_WIDGETS;
-}
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };

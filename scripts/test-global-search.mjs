@@ -1,32 +1,36 @@
-// Global search ranking (ECR-25) — mirrors src/lib/globalSearch.ts.
+// Global search ranking (ECR-25). Imports the REAL src/lib/globalSearch.ts via the '@/'
+// loader — so this validates the actual code. (Was a self-contained mirror before.)
 // Run: node scripts/test-global-search.mjs
-function matchScore(query, fields) {
-  const q = (query || '').trim().toLowerCase();
-  if (!q) return 0;
-  let best = 0;
-  for (const raw of fields) {
-    const f = (raw || '').toLowerCase();
-    if (!f) continue;
-    const idx = f.indexOf(q);
-    if (idx < 0) continue;
-    let s;
-    if (f === q) s = 100;
-    else if (idx === 0) s = 80;
-    else if (f[idx - 1] === ' ') s = 60;
-    else s = 40;
-    s -= Math.min(idx, 20) * 0.5;
-    if (s > best) best = s;
-  }
-  return best;
-}
-function rankItems(query, items, getFields, limit, minLen = 2) {
-  const q = (query || '').trim();
-  if (q.length < minLen) return [];
-  const scored = [];
-  items.forEach((item, idx) => { const score = matchScore(q, getFields(item)); if (score > 0) scored.push({ item, score, idx }); });
-  scored.sort((a, b) => (b.score - a.score) || (a.idx - b.idx));
-  return scored.slice(0, Math.max(0, limit)).map(r => r.item);
-}
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { matchScore, rankItems } = await import(abs('../src/lib/globalSearch.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
