@@ -1059,6 +1059,7 @@ export interface SocietySettings {
   fyLockedBy?: string;         // Name of user who locked the FY
   periodLockDate?: string;     // ECR-07: ISO date (YYYY-MM-DD); vouchers dated ON/BEFORE this are in a locked period (back-dating prevention). Undefined/empty = no period lock.
   periodLockBy?: string;       // Name of user who set the period lock
+  activitiesCutoverEnabled?: boolean;  // T-12 (ADR-0003): per-tenant Activities-layer cutover. true = resolve capabilities from declared activities (within entitlement), gated by hasCutoverParity so it can never hide a module. Undefined/false = type-template behaviour (default). Flipped per tenant AFTER an empty-diff backfill.
   fyUnlockRequestedBy?: string;  // ECR-07 dual-control: email of the admin who requested FY unlock (needs a different admin to approve)
   fyUnlockRequestedAt?: string;  // ISO date of the unlock request
   notificationChannels?: { email?: boolean; sms?: boolean; whatsapp?: boolean };  // ECR-13: which external alert channels the society has switched on (in-app is always on; actual sending needs a wired provider)

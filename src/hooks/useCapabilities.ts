@@ -23,8 +23,8 @@ export function useCapabilities(): CapabilityState {
   return useMemo(() => {
     // T-11: pass declared activities (dormant behind the cutover flag). State stays unset here to
     // preserve this hook's exact prior resolution (it never applied jurisdiction packs).
-    const capabilities = navigationService.resolveCapabilities(societyType, societyCapabilities, undefined, declaredActivities(societyActivities));
+    const capabilities = navigationService.resolveCapabilities(societyType, societyCapabilities, undefined, declaredActivities(societyActivities), society.activitiesCutoverEnabled);
     const has = (capability: Capability) => isSuperAdmin || capabilities.has(capability);
     return { capabilities, has };
-  }, [societyType, societyCapabilities, societyActivities, isSuperAdmin]);
+  }, [societyType, societyCapabilities, societyActivities, society.activitiesCutoverEnabled, isSuperAdmin]);
 }

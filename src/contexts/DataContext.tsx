@@ -580,7 +580,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // default must reflect what the SOCIETY does, not who is viewing it. Declared activities feed the
   // resolver WITHIN entitlement (T-11), gated by the cutover flag inside navigationService.
   const hasCap = (c: Capability): boolean =>
-    navigationService.resolveCapabilities(societyRef.current?.societyType ?? 'other', societyCapabilitiesRef.current, societyRef.current?.state, declaredActivities(societyActivitiesRef.current)).has(c);
+    navigationService.resolveCapabilities(societyRef.current?.societyType ?? 'other', societyCapabilitiesRef.current, societyRef.current?.state, declaredActivities(societyActivitiesRef.current), societyRef.current?.activitiesCutoverEnabled).has(c);
   const [procurementFarmers, setProcurementFarmersState] = useState<Farmer[]>(() => storage.getProcurementFarmers());
   const [procurementLots, setProcurementLotsState] = useState<ProcurementLot[]>(() => storage.getProcurementLots());
   const [procurementEvents, setProcurementEventsState] = useState<ProcurementEvent[]>(() => storage.getProcurementEvents());
@@ -4780,7 +4780,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // societies (those entitled to inventory_sales). Service societies (housing, labour,
     // …) have no trading — their 4100/5100 heads are ordinary income/expense and must
     // appear DIRECTLY in Income & Expenditure (no Trading A/c, no Gross-Profit bridge).
-    const hasTrading = navigationService.resolveCapabilities(society.societyType ?? 'other', societyCapabilities, society.state, declaredActivities(societyActivities)).has('inventory_sales');
+    const hasTrading = navigationService.resolveCapabilities(society.societyType ?? 'other', societyCapabilities, society.state, declaredActivities(societyActivities), society.activitiesCutoverEnabled).has('inventory_sales');
 
     // ── Audit C-9: NCDC two-statement structure (Trading A/c → P&L/I&E) ──────
     // Per NCDC Annexure II + III, trading heads (Sales, Purchases, direct expenses,
