@@ -62,6 +62,7 @@ async function readAll(table, cols) {
 }
 
 const vouchers = await readAll('vouchers', 'id, type, date, "debitAccountId", "creditAccountId", amount, lines, "isDeleted", "approvalStatus", "voucherNo", society_id');
+const accounts = await readAll('accounts', 'id, "openingBalance", "openingBalanceType", society_id');
 const eventRows = await readAll('ledger_events', 'event_type, aggregate_type, aggregate_id, sequence, occurred_at, society_id, payload, producer_kind, producer_id');
 
 // Reconstruct the LedgerEvent shape the projection needs, from the ledger_events columns.
@@ -73,6 +74,7 @@ const toEvent = (r) => ({
 
 const groupBy = (rows, key) => { const m = new Map(); for (const r of rows) { const k = r[key]; (m.get(k) ?? m.set(k, []).get(k)).push(r); } return m; };
 const vBySoc = groupBy(vouchers, 'society_id');
+const aBySoc = groupBy(accounts, 'society_id');
 const eBySoc = groupBy(eventRows, 'society_id');
 const societies = new Set([...vBySoc.keys(), ...eBySoc.keys()]);
 
@@ -83,7 +85,7 @@ let okCount = 0, mismatchCount = 0;
 for (const sid of [...societies].sort()) {
   const evs = (eBySoc.get(sid) ?? []).map(toEvent);
   const vs = vBySoc.get(sid) ?? [];
-  const p = ledgerParity(evs, vs);
+  const p = ledgerParity(evs, vs, aBySoc.get(sid) ?? []);
   if (p.matches) { okCount++; console.log(`  ✓ ${sid}  — ${p.accountsChecked} accounts agree`); }
   else {
     mismatchCount++;

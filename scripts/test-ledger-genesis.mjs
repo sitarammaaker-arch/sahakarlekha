@@ -31,7 +31,7 @@ register(
     `),
 );
 
-const { planGenesisEvents, genesisEventId } = await import(abs('../src/lib/ledger/genesis.ts'));
+const { planGenesisEvents, genesisEventId, planOpeningEvents, openingEventId } = await import(abs('../src/lib/ledger/genesis.ts'));
 const { projectTrialBalance } = await import(abs('../src/lib/ledger/projections.ts'));
 
 let pass = 0, fail = 0;
@@ -79,6 +79,27 @@ const ml = planGenesisEvents([inp(v('m', { lines: [
 ], debitAccountId: undefined, creditAccountId: undefined, amount: 100 }))]);
 const tbM = projectTrialBalance(ml.events);
 ok(tbM.balanced && tbM.totalDrMinor === 10000, 'multi-line voucher seeds a balanced 3-leg event');
+
+// 6. Opening-balance events — one account.opening per account with a non-zero balance, correct side.
+const openings = planOpeningEvents(
+  [
+    { id: '1001', openingBalance: 5000, openingBalanceType: 'debit' },
+    { id: '2001', openingBalance: 5000, openingBalanceType: 'credit' },
+    { id: '3001', openingBalance: 0, openingBalanceType: 'debit' },   // zero → skipped
+  ],
+  'SOC001',
+  { openingDate: '2000-01-01', jurisdiction: 'hr' },
+);
+ok(openings.length === 2, 'one opening event per account with a non-zero balance (zero skipped)');
+ok(openings[0].eventType === 'account.opening' && openings[0].aggregateType === 'account' && openings[0].eventId === openingEventId('1001'), 'account.opening event, deterministic id');
+ok(openings[0].payload.lines[0].drCr === 'Dr' && openings[0].payload.lines[0].amountMinor === 500000, 'debit opening → Dr leg in paise');
+ok(openings[1].payload.lines[0].drCr === 'Cr', 'credit opening → Cr leg');
+ok(openings[0].occurredAt === '2000-01-01T00:00:00.000Z', 'opening dated before all vouchers');
+
+// 7. Openings + a voucher replay into the FULL trial balance (opening + posting).
+const tbFull = projectTrialBalance([...openings, planGenesisEvents([inp(v('a'))]).events[0]]);
+ok(tbFull.balanced, 'openings + voucher journal is balanced');
+ok(tbFull.lines.find((l) => l.accountId === '1001').drMinor === 500000 + 100000, 'account 1001 = opening 5000 + voucher 1000 (Dr 600000)');
 
 console.log(`\nGenesis backfill planner (T-06): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

@@ -67,8 +67,10 @@ const activeIds = new Set(vouchers.filter((v) => !v.isDeleted && v.approvalStatu
 console.log(`\nDiagnose ${SID}\n  vouchers: ${vouchers.length} (active ${activeIds.size})   journal events: ${eventRows.length}\n`);
 
 // 1. STALE journal aggregates — an event whose voucher is deleted or missing (over-counts the journal).
+// Only voucher-aggregate events matter here; account.opening events are per-account, not vouchers.
+const voucherEventRows = eventRows.filter((e) => e.event_type !== 'account.opening');
 const eventsByAgg = new Map();
-for (const e of eventRows) { (eventsByAgg.get(e.aggregate_id) ?? eventsByAgg.set(e.aggregate_id, []).get(e.aggregate_id)).push(e); }
+for (const e of voucherEventRows) { (eventsByAgg.get(e.aggregate_id) ?? eventsByAgg.set(e.aggregate_id, []).get(e.aggregate_id)).push(e); }
 const stale = [];
 for (const [aggId, evs] of eventsByAgg) {
   if (activeIds.has(aggId)) continue;               // backed by an active voucher — fine

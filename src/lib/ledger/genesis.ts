@@ -8,7 +8,8 @@
  * voucher already nets to zero, so leaving it out is equivalent and cleaner); pending (unapproved)
  * vouchers are omitted to match the live post path and the reports, which don't count them.
  */
-import type { Voucher } from '@/types';
+import type { Voucher, LedgerAccount } from '@/types';
+import { toMinor } from '@/lib/money';
 import type { LedgerEvent, EventPrincipal } from './event';
 import { buildEvent } from './event';
 import { voucherPostingLines } from './voucherEvent';
@@ -68,4 +69,46 @@ export function planGenesisEvents(
     );
   }
   return { events, seeded: events.length, skippedDeleted, skippedPending, skippedEmpty };
+}
+
+/** Deterministic id for an account's opening-balance event (idempotent under upsert). */
+export function openingEventId(accountId: string): string {
+  return `opening-${accountId}`;
+}
+
+/**
+ * PURE — genesis events for the accounts' OPENING BALANCES (T-06). getTrialBalance = opening balances
+ * (account.openingBalance/Type) + voucher postings, so the journal must carry the openings too or a
+ * ledger-derived trial balance is short by them. One `account.opening` event per account with a
+ * non-zero opening balance: a single leg (Dr if openingBalanceType is 'debit', else Cr), dated at
+ * `openingDate` so it sorts before every voucher. Deterministic ids → idempotent.
+ */
+export function planOpeningEvents(
+  accounts: readonly LedgerAccount[],
+  tenantId: string,
+  opts: { openingDate: string; jurisdiction?: string; producer?: EventPrincipal },
+): LedgerEvent[] {
+  const producer = opts.producer ?? { kind: 'import', id: 'genesis-opening' };
+  const events: LedgerEvent[] = [];
+  for (const a of Array.isArray(accounts) ? accounts : []) {
+    const amountMinor = toMinor(Number(a.openingBalance) || 0);
+    if (amountMinor === 0 || !tenantId) continue;
+    const drCr: 'Dr' | 'Cr' = a.openingBalanceType === 'debit' ? 'Dr' : 'Cr';
+    events.push(
+      buildEvent(
+        {
+          eventType: 'account.opening',
+          tenantId,
+          jurisdiction: opts.jurisdiction,
+          aggregateType: 'account',
+          aggregateId: a.id,
+          sequence: 1,
+          producer,
+          payload: { lines: [{ accountId: a.id, drCr, amountMinor }], opening: true },
+        },
+        { eventId: openingEventId(a.id), occurredAt: `${opts.openingDate}T00:00:00.000Z` },
+      ),
+    );
+  }
+  return events;
 }

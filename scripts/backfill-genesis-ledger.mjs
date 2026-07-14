@@ -51,7 +51,7 @@ if (!URL || !KEY) {
 }
 const USING_SERVICE = !!env.SUPABASE_SERVICE_ROLE_KEY;
 
-const { planGenesisEvents } = await import(abs('../src/lib/ledger/genesis.ts'));
+const { planGenesisEvents, planOpeningEvents } = await import(abs('../src/lib/ledger/genesis.ts'));
 const { projectTrialBalance } = await import(abs('../src/lib/ledger/projections.ts'));
 const { createClient } = await import('@supabase/supabase-js');
 const db = createClient(URL, KEY, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -71,6 +71,7 @@ async function readAll(table, cols) {
 }
 
 const vouchers = await readAll('vouchers', 'id, type, date, "debitAccountId", "creditAccountId", amount, lines, "isDeleted", "approvalStatus", "voucherNo", society_id, jurisdiction');
+const accounts = await readAll('accounts', 'id, "openingBalance", "openingBalanceType", society_id, jurisdiction');
 const existingEvents = await readAll('ledger_events', 'aggregate_id, event_type');
 
 // Skip aggregates that already have a posted event (live-path) — genesis fills only the gap.
@@ -80,6 +81,19 @@ const inputs = vouchers
   .map((v) => ({ voucher: v, tenantId: v.society_id, jurisdiction: v.jurisdiction ?? undefined }));
 
 const plan = planGenesisEvents(inputs);
+
+// Opening-balance events (T-06): getTrialBalance = openings + voucher postings, so the journal needs
+// the openings too. One account.opening event per account with a non-zero opening balance, dated
+// before all vouchers. Skip accounts that already have one (idempotent). Grouped by society.
+const alreadyOpened = new Set(existingEvents.filter((e) => e.event_type === 'account.opening').map((e) => e.aggregate_id));
+const acctsBySoc = new Map();
+for (const a of accounts) { if (alreadyOpened.has(a.id)) continue; (acctsBySoc.get(a.society_id) ?? acctsBySoc.set(a.society_id, []).get(a.society_id)).push(a); }
+const openingEvents = [];
+for (const [sid, accts] of acctsBySoc) {
+  if (!sid) continue;
+  openingEvents.push(...planOpeningEvents(accts, sid, { openingDate: '2000-01-01', jurisdiction: accts[0]?.jurisdiction ?? undefined }));
+}
+plan.events.push(...openingEvents);
 
 // Map a LedgerEvent onto the ledger_events columns (identical to DataContext.persistLedgerEvent).
 const toRow = (e) => ({
@@ -99,7 +113,8 @@ for (const [sid, evs] of bySociety) { const tb = projectTrialBalance(evs); if (!
 console.log(`\nGenesis ledger backfill ${COMMIT ? '(COMMIT)' : '(DRY-RUN)'} — key: ${USING_SERVICE ? 'service-role' : 'anon'}`);
 console.log(`  vouchers read:              ${vouchers.length}`);
 console.log(`  already journaled (skip):   ${vouchers.length - inputs.length}`);
-console.log(`  to seed:                    ${plan.seeded}  across ${bySociety.size} societ${bySociety.size === 1 ? 'y' : 'ies'}`);
+console.log(`  to seed (voucher events):   ${plan.seeded}  across ${bySociety.size} societ${bySociety.size === 1 ? 'y' : 'ies'}`);
+console.log(`  to seed (opening events):   ${openingEvents.length}`);
 console.log(`  skipped deleted:            ${plan.skippedDeleted}`);
 console.log(`  skipped pending:            ${plan.skippedPending}`);
 console.log(`  skipped empty (no legs):    ${plan.skippedEmpty}`);
