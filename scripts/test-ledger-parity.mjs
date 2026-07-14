@@ -31,8 +31,8 @@ register(
     `),
 );
 
-const { ledgerParity, balancesFromVouchers } = await import(abs('../src/lib/ledger/parity.ts'));
-const { planGenesisEvents } = await import(abs('../src/lib/ledger/genesis.ts'));
+const { ledgerParity, balancesFromVouchers, openingBalances } = await import(abs('../src/lib/ledger/parity.ts'));
+const { planGenesisEvents, planOpeningEvents } = await import(abs('../src/lib/ledger/genesis.ts'));
 const { buildEvent } = await import(abs('../src/lib/ledger/event.ts'));
 const { voucherPostingLines, voucherReversalLines } = await import(abs('../src/lib/ledger/voucherEvent.ts'));
 
@@ -84,6 +84,24 @@ ok(!p5.matches && p5.diffs.length === 2, 'journal event with no live voucher →
 // 6. balancesFromVouchers skips deleted + pending (matches the seeded population).
 const bal = balancesFromVouchers([v('a'), v('x', { isDeleted: true }), v('y', { approvalStatus: 'pending' })]);
 ok(bal['1001'] === 100000 && Object.keys(bal).length === 2, 'balancesFromVouchers counts only active, approved vouchers');
+
+// 7. OPENING BALANCES — parity includes account openings on both sides. Journal = opening events +
+//    voucher events; expected = vouchers + accounts' opening balances. They agree.
+const accounts = [{ id: '1001', openingBalance: 5000, openingBalanceType: 'debit' }, { id: '4101', openingBalance: 5000, openingBalanceType: 'credit' }];
+const journalWithOpenings = [
+  ...planOpeningEvents(accounts, 'SOC001', { openingDate: '2000-01-01' }),
+  ...planGenesisEvents([inp(v('a'))]).events,
+];
+ok(ledgerParity(journalWithOpenings, [v('a')], accounts).matches, 'journal with opening events matches vouchers + account openings');
+
+// 8. A journal MISSING the opening events (openings exist on accounts) → parity fails (the gap T-06
+//    opening backfill closes; the pre-opening journal would be short by the openings).
+const p8 = ledgerParity(planGenesisEvents([inp(v('a'))]).events, [v('a')], accounts);
+ok(!p8.matches && p8.diffs.length === 2, 'journal without opening events → parity fails on the opening accounts');
+
+// 9. openingBalances — net per account (debit +, credit −), zero skipped.
+const ob = openingBalances([...accounts, { id: '9', openingBalance: 0, openingBalanceType: 'debit' }]);
+ok(ob['1001'] === 500000 && ob['4101'] === -500000 && ob['9'] === undefined, 'openingBalances: debit +, credit −, zero skipped');
 
 console.log(`\nLedger parity (T-07): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
