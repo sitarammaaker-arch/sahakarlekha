@@ -1,6 +1,6 @@
 # SahakarLekha — Export Contract v1
 
-- **Status:** In force (mapping layer) — being wired through the writer/restore path in a later slice.
+- **Status:** In force — wired into the live `.slbak` writer & restore (T-04 slices 1–2, ADR-0004 Accepted).
 - **Task:** T-04 · **Ratifies:** [ADR-0004](../adr/0004-export-contract.md) · **Guards:** IRR-6 (lock-in / portability).
 - **Scope of this document:** the *contract layer* — how the on-the-wire export shape is defined, versioned, and decoupled from the database. It does **not** describe the archive container (encryption, manifest, chunking); that is [`lib/backup/manifest.ts`](../../src/lib/backup/manifest.ts).
 
@@ -46,10 +46,13 @@ Two independent versions, deliberately separate:
 
 The blueprint's migration note ("existing `.slbak` archives readable as v0; new exports are v1") describes a case that **does not exist**: the manifest-based `.slbak` format was *born* carrying `formatVersion = "1.0"` (no major `< 1` was ever written — see `manifest.ts`). `classifyFormatVersion` therefore refuses a no-version / `0.x` archive as malformed/too-old, and that is correct: there are no real v0 archives to read. This document records that reconciliation so the note and the code agree; no v0 reader is needed.
 
-## 6. What remains (later slices)
+## 6. Status of the work
 
-1. **Wire the writer & restore through the mapping** — `writer.ts` emits `toContractRow(...)` instead of raw rows; `rowWriter.ts` restores via `fromContractRow(...)`. Additive behind the format version, re-proving the T-35 round-trip end-to-end before any flip (R2/R4/R6).
-2. **Apply `storageColumn` where storage and contract genuinely diverge** (e.g. after a T-05 column split), entity by entity.
-3. **Flip [ADR-0004](../adr/0004-export-contract.md) `Status` to `Accepted`** once the wire path is live.
+**Done (slices 1–2):**
 
-Until then the live writer/restore path is **unchanged** — this slice builds and proves the contract layer in isolation, so the certified recovery path (T-35) carries zero risk.
+- The mapping layer (`contract.ts`) is built and **wired into the live path** — `writer.ts` serializes through `toBackupRow`, `restore/archive.ts` reads through `fromBackupRow`. The backup mappers are LOSSLESS (they keep every column, declared or not — a curated `toContractRow` would drop internal columns like `voucher.editHistory` and lose them on restore) and are the identity until a `storageColumn` override exists, so the archive stayed **byte-identical** and the T-35-certified recovery path was re-proven unchanged end-to-end (R4 empty-diff parity). Server bundles (`_shared/backup-core.mjs`, `rehearsal-core.mjs`) carry the same mapping.
+- [ADR-0004](../adr/0004-export-contract.md) is **Accepted — in force**; the v0 note is reconciled (§5).
+
+**Remaining (incremental, no further recovery-path risk):**
+
+1. **Apply `storageColumn` where storage and contract genuinely diverge** (e.g. after a T-05 JSONB→typed split), entity by entity — the seam already absorbs it.
