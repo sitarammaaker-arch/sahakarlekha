@@ -47,7 +47,7 @@ import { isPeriodLocked as isDateInLockedPeriod } from '@/lib/periodLock';
 import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
 import { voucherPostingLines, voucherReversalLines } from '@/lib/ledger/voucherEvent';
 import { ledgerTrialBalance } from '@/lib/ledger/trialBalance';
-import { ledgerParity } from '@/lib/ledger/parity';
+import { ledgerParity, balancesFromJournal } from '@/lib/ledger/parity';
 import { snapshotDeletedMovements } from '@/lib/movementArchive';
 import { isSelfApproval } from '@/lib/sod';
 import { requiresApproval } from '@/lib/approvalMatrix';
@@ -3952,10 +3952,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return bal;
   }, [accounts, activeVouchers]);
 
+  // T-09 (ADR-0001): the ledger-derived balance map — non-null ONLY when this tenant is cut over AND
+  // the journal reproduces the vouchers (parity checked ONCE here, not per getAccountBalance call, so
+  // the O(1) primitive stays O(1)). Null ⇒ dormant / parity failed ⇒ getAccountBalance uses the
+  // voucher-state map below (default). balancesFromJournal nets openings + postings per account (paise).
+  const ledgerBalanceMinorMap = useMemo((): Map<string, Minor> | null => {
+    if (!society?.ledgerReadsEnabled) return null;
+    const journal = ledgerEventsRef.current;
+    if (!ledgerParity(journal, activeVouchers, accounts).matches) return null;
+    return new Map(Object.entries(balancesFromJournal(journal)));
+  }, [accounts, activeVouchers, society?.ledgerReadsEnabled]);
+
   const getAccountBalance = useCallback((accountId: string): number => {
-    const m = accountBalanceMinorMap.get(accountId);   // undefined ⇒ unknown account (was `if (!account) return 0`)
+    // When cut over (ledgerBalanceMinorMap present), read the balance from the journal; else the
+    // voucher-state map. An account absent from either map has a zero balance.
+    const src = ledgerBalanceMinorMap ?? accountBalanceMinorMap;
+    const m = src.get(accountId);   // undefined ⇒ unknown account (was `if (!account) return 0`)
     return m === undefined ? 0 : toRupees(m);
-  }, [accountBalanceMinorMap]);
+  }, [accountBalanceMinorMap, ledgerBalanceMinorMap]);
 
   // P0 #4 / ECR-05 (MS-03): detect drift between the member scalar (subsidiary) and the
   // Share-Capital ledger account (control). getAccountBalance returns a signed (Dr−Cr)
