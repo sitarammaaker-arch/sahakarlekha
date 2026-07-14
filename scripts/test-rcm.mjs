@@ -1,24 +1,36 @@
-// RCM auto-compute (ECR-22 slice B) — mirrors src/lib/rcm.ts.
+// RCM auto-compute (ECR-22 slice B) — imports the REAL src/lib/rcm.ts (via the '@/' loader)
+// so this validates the actual code. (Was a self-contained mirror before.)
 // Run: node scripts/test-rcm.mjs
-const r2 = (n) => Math.round(n * 100) / 100;
-function computeRCM(purchases, from, to) {
-  const s = { count: 0, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, total: 0 };
-  for (const p of purchases) {
-    if (!p.rcmApplicable || p.isDeleted || !p.date || p.date < from || p.date > to) continue;
-    s.count++;
-    const taxable = p.netAmount || 0;
-    let cgst = p.cgstAmount || 0, sgst = p.sgstAmount || 0, igst = p.igstAmount || 0;
-    if (cgst === 0 && sgst === 0 && igst === 0) {
-      const inter = p.igstPct || 0;
-      if (inter > 0) igst = r2((taxable * inter) / 100);
-      else { cgst = r2((taxable * (p.cgstPct || 0)) / 100); sgst = r2((taxable * (p.sgstPct || 0)) / 100); }
-    }
-    s.taxableValue = r2(s.taxableValue + taxable);
-    s.cgst = r2(s.cgst + cgst); s.sgst = r2(s.sgst + sgst); s.igst = r2(s.igst + igst);
-  }
-  s.total = r2(s.cgst + s.sgst + s.igst);
-  return s;
-}
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { computeRCM } = await import(abs('../src/lib/rcm.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };

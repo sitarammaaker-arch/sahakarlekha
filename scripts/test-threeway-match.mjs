@@ -1,83 +1,39 @@
-// Procurement 3-way match (ECR-21 Phase 1) — mirrors src/lib/consumer/threeWayMatch.ts.
+// Procurement 3-way match (ECR-21 Phase 1) — imports the REAL src/lib/consumer/threeWayMatch.ts
+// (via the '@/' loader, since it imports @/types) so this validates the actual code.
+// (Was a self-contained mirror before.)
 // Run: node scripts/test-threeway-match.mjs
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { threeWayMatch, hasBlockingVariance, blockingReasons } = await import(abs('../src/lib/consumer/threeWayMatch.ts'));
+
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
-const EPS = 0.005;
-const isZero = (n) => Math.abs(n) <= EPS;
-const withinTol = (variance, base, tol) => {
-  const v = Math.abs(variance);
-  if (v <= EPS) return true;
-  return v <= Math.max(Math.abs(base) * (tol.pct / 100), tol.abs);
-};
-
-function threeWayMatch(poItems, purchaseItems, tolerance = {}) {
-  const tol = { pct: tolerance.pct ?? 2, abs: tolerance.abs ?? 1 };
-  const billedByItem = new Map();
-  for (const b of purchaseItems) billedByItem.set(b.itemId, b);
-  const lines = [];
-
-  for (const p of poItems) {
-    const orderedQty = p.qty || 0;
-    const receivedQty = p.receivedQty ?? p.qty ?? 0;
-    const poRate = p.rate || 0;
-    const bill = billedByItem.get(p.itemId);
-    billedByItem.delete(p.itemId);
-    const billedQty = bill?.qty || 0;
-    const billedRate = bill?.rate || 0;
-    const orderedAmount = round2(orderedQty * poRate);
-    const receivedAmount = round2(receivedQty * poRate);
-    const billedAmount = bill ? (bill.amount || round2(billedQty * billedRate)) : 0;
-    const qtyVarOrderedReceived = round2(receivedQty - orderedQty);
-    const qtyVarReceivedBilled = round2(billedQty - receivedQty);
-    const priceVar = round2(billedRate - poRate);
-    const amountVar = round2(billedAmount - receivedAmount);
-
-    const reasons = [];
-    if (qtyVarOrderedReceived < -EPS) reasons.push('short-delivery');
-    if (qtyVarOrderedReceived > EPS) reasons.push('over-delivery');
-    if (!bill) { if (receivedQty > EPS) reasons.push('unbilled'); }
-    else {
-      if (qtyVarReceivedBilled > EPS) reasons.push('over-billed-qty');
-      if (qtyVarReceivedBilled < -EPS) reasons.push('under-billed-qty');
-      if (!isZero(priceVar)) reasons.push('price-variance');
-    }
-
-    let status, paymentClean, paymentWithinTol;
-    if (!bill) { paymentClean = receivedQty <= EPS; paymentWithinTol = paymentClean; }
-    else {
-      paymentClean = isZero(qtyVarReceivedBilled) && isZero(priceVar) && isZero(amountVar);
-      paymentWithinTol = withinTol(qtyVarReceivedBilled, receivedQty, tol)
-        && withinTol(priceVar, poRate, tol) && withinTol(amountVar, receivedAmount, tol);
-    }
-    const deliveryClean = isZero(qtyVarOrderedReceived);
-    if (!bill && receivedQty > EPS) status = 'exception';
-    else if (!paymentWithinTol) status = 'exception';
-    else if (paymentClean && deliveryClean) status = 'matched';
-    else status = 'within-tolerance';
-
-    lines.push({ itemId: p.itemId, orderedQty, receivedQty, billedQty, poRate, billedRate,
-      orderedAmount, receivedAmount, billedAmount, qtyVarOrderedReceived, qtyVarReceivedBilled,
-      priceVar, amountVar, status, reasons });
-  }
-  for (const bill of billedByItem.values()) {
-    const billedQty = bill.qty || 0, billedRate = bill.rate || 0;
-    const billedAmount = bill.amount || round2(billedQty * billedRate);
-    lines.push({ itemId: bill.itemId, orderedQty: 0, receivedQty: 0, billedQty, poRate: 0, billedRate,
-      orderedAmount: 0, receivedAmount: 0, billedAmount, qtyVarOrderedReceived: 0,
-      qtyVarReceivedBilled: round2(billedQty), priceVar: 0, amountVar: round2(billedAmount),
-      status: 'exception', reasons: ['extra-invoice-line'] });
-  }
-  const matched = lines.filter(l => l.status === 'matched').length;
-  const withinToleranceCount = lines.filter(l => l.status === 'within-tolerance').length;
-  const exceptions = lines.filter(l => l.status === 'exception').length;
-  const orderedTotal = round2(lines.reduce((s, l) => s + l.orderedAmount, 0));
-  const receivedTotal = round2(lines.reduce((s, l) => s + l.receivedAmount, 0));
-  const billedTotal = round2(lines.reduce((s, l) => s + l.billedAmount, 0));
-  return { lines, summary: {
-    status: exceptions > 0 ? 'exception' : withinToleranceCount > 0 ? 'within-tolerance' : 'matched',
-    lineCount: lines.length, matched, withinTolerance: withinToleranceCount, exceptions,
-    orderedTotal, receivedTotal, billedTotal, amountVarianceTotal: round2(billedTotal - receivedTotal),
-  } };
-}
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -143,9 +99,7 @@ r = threeWayMatch([po('A', 10, 100, 10), po('B', 5, 20, 5)], [inv('A', 10, 100),
 ok(r.summary.orderedTotal === 1100 && r.summary.receivedTotal === 1100 && r.summary.billedTotal === 1100, 'totals roll up (1100 each)');
 ok(r.summary.status === 'matched', 'clean multi-line → matched');
 
-// ECR-21 Phase 3 — blocking-variance gate.
-const hasBlockingVariance = (res) => res.summary.exceptions > 0;
-const blockingReasons = (res) => { const s = new Set(); for (const l of res.lines) if (l.status === 'exception') for (const rr of l.reasons) s.add(rr); return [...s]; };
+// ECR-21 Phase 3 — blocking-variance gate (hasBlockingVariance / blockingReasons imported above).
 
 // 11. Clean / within-tolerance → NOT blocked; exception → blocked.
 ok(!hasBlockingVariance(threeWayMatch([po('A', 10, 100, 10)], [inv('A', 10, 100)])), 'perfect match: not blocked');
