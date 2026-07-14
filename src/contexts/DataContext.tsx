@@ -48,6 +48,7 @@ import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
 import { voucherPostingLines, voucherReversalLines, voucherEventMeta } from '@/lib/ledger/voucherEvent';
 import { ledgerTrialBalance } from '@/lib/ledger/trialBalance';
 import { ledgerParity, balancesFromJournal } from '@/lib/ledger/parity';
+import { accountNature, accountGlType } from '@/lib/ledger/receiptsPaymentsClassify';
 import { snapshotDeletedMovements } from '@/lib/movementArchive';
 import { isSelfApproval } from '@/lib/sod';
 import { requiresApproval } from '@/lib/approvalMatrix';
@@ -4576,17 +4577,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // receipts/payments (share capital, reserves, long-term loans, fixed assets,
     // investments, deposits) from REVENUE ones (trading, income, operating expenses,
     // trade debtors/creditors). Everything else defaults to Revenue.
-    const CAPITAL_PARENTS = new Set(['1100', '1200', '2300', '3100', '3200']);
-    const CAPITAL_SUBTYPES = new Set(['fixed_asset', 'investment', 'long_term_loan', 'deposit', 'accumulated_dep', 'reserve', 'surplus', 'share_capital']);
-    const natureOf = (accId: string): 'capital' | 'revenue' => {
-      const acc = accounts.find(a => a.id === accId);
-      if (!acc) return 'revenue';
-      if (acc.type === 'equity') return 'capital';
-      if (acc.subtype && CAPITAL_SUBTYPES.has(acc.subtype)) return 'capital';
-      if (acc.parentId && CAPITAL_PARENTS.has(acc.parentId)) return 'capital';
-      return 'revenue';
-    };
-    const glTypeOf = (accId: string): string => accounts.find(a => a.id === accId)?.type || 'asset';
+    // Capital/Revenue + GL-head classification (NCDC Annexure VII) — extracted to a pure lib so this
+    // compute and the ledger projection (projectReceiptsPayments, T-09) can never diverge (RULE 2).
+    const natureOf = (accId: string): 'capital' | 'revenue' => accountNature(accounts.find(a => a.id === accId));
+    const glTypeOf = (accId: string): string => accountGlType(accounts.find(a => a.id === accId));
 
     type RPEntry = { name: string; nameHi: string; amount: number; nature: 'capital' | 'revenue'; glType: string };
     const receiptMap: Record<string, RPEntry> = {};
