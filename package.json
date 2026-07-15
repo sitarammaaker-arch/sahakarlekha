@@ -13,6 +13,7 @@
     "validate:glossary": "node scripts/validate-glossary.mjs",
     "test:backup-retention": "node scripts/test-backup-retention.mjs",
     "test:jwt-role-helpers": "node scripts/test-jwt-role-helpers.mjs",
+    "test:role-access": "node scripts/test-role-access.mjs",
     "test:calc": "node scripts/test-calculators.mjs",
     "test:nav": "node scripts/test-nav.mjs",
     "test:jurisdiction": "node scripts/test-jurisdiction.mjs",
