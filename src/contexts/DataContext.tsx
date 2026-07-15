@@ -2093,6 +2093,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       narration: `Reversal of ${current.voucherNo}${reason ? ' — ' + reason : ''}`,
       memberId: current.memberId,
       lines: revLines,
+      createdBy: user?.name ?? 'System', // every other addVoucher call sets this; the reversal was left without a creator
     });
     if (!reversal?.id) return null; // addVoucher blocked (FY-lock / unbalanced / etc.)
 
@@ -3376,7 +3377,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Persist every re-point first; each resolves to its error message (or null). The removeId
     // account is NOT deleted until they all succeed.
     const changedVouchers = updated.filter(v => changedIds.has(v.id));
-    const writes: Promise<string | null>[] = [
+    // PostgrestBuilder is a PromiseLike (thenable), not a full Promise — Promise.all accepts it, so
+    // type the array as PromiseLike to match what supabase's .then() returns.
+    const writes: PromiseLike<string | null>[] = [
       ...changedVouchers.map(v => { const { editHistory: _eh, ...forDb } = v; return supabase.from('vouchers').upsert(withSoc(forDb)).then(({ error }) => error?.message ?? null); }),
       ...reSup.map(s => supabase.from('suppliers').update({ accountId: keepId }).eq('id', s.id).then(({ error }) => error?.message ?? null)),
       ...reCus.map(c => supabase.from('customers').update({ accountId: keepId }).eq('id', c.id).then(({ error }) => error?.message ?? null)),
