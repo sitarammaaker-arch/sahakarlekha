@@ -33,7 +33,7 @@ register(
     `),
 );
 
-const { moneyColumns, settlementTypedColumns, moneyFromTyped, hydrateSettlement } = await import(abs('../src/lib/typedMoney.ts'));
+const { moneyColumns, settlementTypedColumns, moneyFromTyped, hydrateSettlement, hydrateJForm } = await import(abs('../src/lib/typedMoney.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -77,6 +77,21 @@ ok(hydrated.id === 's1' && hydrated.status === 'draft', 'other fields pass throu
 // A pre-backfill row (no typed columns) still reads from the JSONB.
 const legacy = hydrateSettlement({ id: 's2', gross: { amount: 777, currency: 'INR' }, netPayable: { amount: 700, currency: 'INR' }, amountPaid: { amount: 0, currency: 'INR' } });
 ok(legacy.gross.amount === 777 && legacy.amountPaid.amount === 0, 'legacy row (no typed cols) falls back to JSONB');
+
+// ── hydrateJForm (T-05 J-Form slice): typed columns preferred, JSONB fallback ──
+const jf = hydrateJForm({
+  id: 'j1', documentNo: 'J0001',
+  grossAmountMinor: 250000, grossCurrency: 'INR', gross: { amount: 999, currency: 'INR' },
+  deductionsAmountMinor: 5000, deductionsCurrency: 'INR', deductions: { amount: 111, currency: 'INR' },
+  netAmountMinor: 245000, netCurrency: 'INR', net: { amount: 222, currency: 'INR' },
+});
+ok(jf.gross.amount === 2500 && jf.deductions.amount === 50 && jf.net.amount === 2450, 'hydrateJForm reads the TYPED columns (₹2500/50/2450), not the stale JSONB');
+ok(jf.id === 'j1' && jf.documentNo === 'J0001', 'jform passthrough fields untouched');
+// A pre-042 row (no typed columns) still reads from the JSONB.
+const legacyJf = hydrateJForm({ id: 'j2', gross: { amount: 1200, currency: 'INR' }, deductions: { amount: 200, currency: 'INR' }, net: { amount: 1000, currency: 'INR' } });
+ok(legacyJf.gross.amount === 1200 && legacyJf.net.amount === 1000, 'legacy jform (no typed cols) falls back to JSONB');
+// Typed 0 deduction is honoured (not treated as absent).
+ok(hydrateJForm({ deductionsAmountMinor: 0, deductionsCurrency: 'INR', deductions: { amount: 55, currency: 'INR' } }).deductions.amount === 0, 'typed 0 deductions honoured over JSONB 55');
 
 console.log(`\nTyped money columns: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
