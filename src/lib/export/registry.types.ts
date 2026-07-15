@@ -120,6 +120,7 @@ export type ExportRegistry = readonly EntityDescriptor[];
  */
 export const ROLE_RANK: Record<Role, number> = {
   viewer: 0,
+  auditor: 0,   // read-only assurance access — same rank as viewer for export gating
   accountant: 1,
   admin: 2,
 };

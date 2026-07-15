@@ -76,16 +76,20 @@ export function withCumulative<T extends Record<string, number | string>>(
  * Roll a set of named series into one row per FY month, ready for a recharts dataset.
  * Each row is { key, label, <seriesName>: total, … }. Items outside the FY are ignored.
  */
-export function monthlySeries(
+export function monthlySeries<K extends string>(
   fy: string,
-  series: Record<string, ReadonlyArray<Dated>>,
-): Array<{ key: string; label: string } & Record<string, number>> {
+  series: Record<K, ReadonlyArray<Dated>>,
+): Array<{ key: string; label: string } & Record<K, number>> {
   const months = fyMonths(fy);
   const keyset = new Set(months.map(m => m.key));
-  const names = Object.keys(series);
+  const names = Object.keys(series) as K[];
   const rows = months.map(m => {
-    const row: { key: string; label: string } & Record<string, number> = { key: m.key, label: m.label };
-    for (const n of names) row[n] = 0;
+    // Seeded with the fixed columns; the series columns (K) are filled in by the loop below, so the
+    // literal shape is asserted here — every name in `names` is assigned before the row is used.
+    const row = { key: m.key, label: m.label } as { key: string; label: string } & Record<K, number>;
+    // Write the series columns through a Record view — TS can't narrow a generic-keyed write on the
+    // intersection type, but every `n` is a K and the value is a number, so this is sound.
+    for (const n of names) (row as Record<K, number>)[n] = 0;
     return row;
   });
   const rowByKey = new Map(rows.map(r => [r.key, r]));
@@ -93,7 +97,7 @@ export function monthlySeries(
     for (const it of series[name]) {
       const key = (it.date || '').slice(0, 7);
       if (!keyset.has(key)) continue;
-      const row = rowByKey.get(key)!;
+      const row = rowByKey.get(key)! as Record<K, number>;
       row[name] = round2((row[name] as number) + (it.amount || 0));
     }
   }

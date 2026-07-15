@@ -23,7 +23,7 @@ export function pigmyAccountsForAgent<T extends Pick<DepositAccount, 'depositTyp
 
 /** Total of a collection batch (ignores blank / non-positive entries). */
 export function collectionTotal(amounts: (number | string | undefined)[]): number {
-  const sum = (amounts || []).reduce((s, a) => {
+  const sum = (amounts || []).reduce<number>((s, a) => {
     const n = Number(a) || 0;
     return s + (n > 0 ? n : 0);
   }, 0);
