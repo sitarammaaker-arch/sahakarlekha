@@ -19,6 +19,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { buildArchive, archiveFileName, planArchive, REGISTRY, BACKUP_FORMAT_VERSION } from '../_shared/backup-core.mjs';
+import { planRetention } from '../_shared/retention-plan.mjs';
 
 const PAGE = 1000;
 // Per-table row ceiling. A table above this makes buildArchive refuse (no partial backups),
@@ -34,6 +35,14 @@ const MAX_ROWS = Number(Deno.env.get('BACKUP_MAX_ROWS')) || 150_000;
 // large societies is per-entity streaming (T-27); until then they fail loudly at this budget.
 const MAX_BYTES = Number(Deno.env.get('BACKUP_MAX_BYTES')) || 50 * 1024 * 1024;
 const BUCKET = 'backups';
+// Retention (opt-in destructive): the bucket otherwise grows ~1 file/society/week forever.
+// Policy is computed by the CI-tested pure planner (_shared/retention-plan.mjs): keep the
+// newest BACKUP_KEEP_RECENT files (default 12) + the newest file of each calendar month for
+// BACKUP_KEEP_MONTHS months (default 12). DRY-RUN by default — files are actually removed
+// ONLY when BACKUP_RETENTION=delete, and only ever AFTER that society's fresh backup succeeded.
+const RETENTION_MODE = (Deno.env.get('BACKUP_RETENTION') ?? 'dry-run').toLowerCase();
+const KEEP_RECENT = Number(Deno.env.get('BACKUP_KEEP_RECENT')) || 12;
+const KEEP_MONTHS = Number(Deno.env.get('BACKUP_KEEP_MONTHS')) || 12;
 // How many tables to read at once. The free tier caps a request at 150s wall-clock, and
 // reading ~87 tables one-at-a-time blows past it. Reading in parallel batches turns ~87
 // sequential round-trips into ~11, without overwhelming the connection pool.
@@ -175,6 +184,66 @@ async function backupSociety(supabase: any, societyId: string) {
 }
 
 /**
+ * Prune old backups per the retention policy — called ONLY after this society's fresh backup
+ * succeeded, so retention can never reduce protection below the just-written archive. NEVER
+ * throws: a retention hiccup must not turn a successful backup into a reported failure.
+ *
+ * DRY-RUN by default (reports what WOULD be deleted in the HTTP result); set
+ * BACKUP_RETENTION=delete to actually remove files. Deletions are recorded in audit_log
+ * (WORM custody, same trail the Backup Health card reads).
+ */
+async function applyRetention(supabase: any, societyId: string, justUploaded: string) {
+  try {
+    const { data: listing, error } = await supabase.storage
+      .from(BUCKET)
+      .list(societyId, { limit: 1000, sortBy: { column: 'created_at', order: 'desc' } });
+    if (error) return { mode: RETENTION_MODE, skipped: `list failed: ${error.message}` };
+    const files = (listing ?? []).filter((f: any) => f?.name && !f.name.endsWith('/'));
+    // Sanity: if the archive we JUST uploaded is not visible in the listing, the listing is
+    // not trustworthy — do nothing rather than delete against a stale/partial view.
+    if (!files.some((f: any) => f.name === justUploaded)) {
+      return { mode: RETENTION_MODE, skipped: 'fresh upload not visible in listing' };
+    }
+
+    const plan = planRetention(
+      files.map((f: any) => ({ name: f.name, createdAt: f.created_at ?? f.updated_at ?? null })),
+      { keepRecent: KEEP_RECENT, keepMonths: KEEP_MONTHS },
+    );
+    if (plan.del.length === 0) return { mode: RETENTION_MODE, kept: plan.keep.length, deleted: 0 };
+
+    if (RETENTION_MODE !== 'delete') {
+      // Dry-run: report the plan, touch nothing. Enable with BACKUP_RETENTION=delete.
+      return { mode: 'dry-run', kept: plan.keep.length, wouldDelete: plan.del.length, files: plan.del.slice(0, 20) };
+    }
+
+    const paths = plan.del.map((name) => `${societyId}/${name}`);
+    const { error: rmErr } = await supabase.storage.from(BUCKET).remove(paths);
+    if (rmErr) return { mode: 'delete', kept: plan.keep.length, deleted: 0, error: rmErr.message };
+
+    try {
+      await supabase.from('audit_log').insert({
+        society_id: societyId,
+        actor_name: 'scheduled-backup',
+        actor_email: null,
+        actor_role: 'system',
+        entity_type: 'backup',
+        entity_id: null,
+        action: 'export',
+        before: null,
+        after: { trigger: 'retention', kept: plan.keep.length, deleted: plan.del.length, files: plan.del.slice(0, 50), keepRecent: KEEP_RECENT, keepMonths: KEEP_MONTHS },
+        reason: 'backup retention pruning',
+        source: 'edge-function',
+        created_at: new Date().toISOString(),
+      });
+    } catch { /* best-effort — the prune already happened */ }
+
+    return { mode: 'delete', kept: plan.keep.length, deleted: plan.del.length };
+  } catch (e) {
+    return { mode: RETENTION_MODE, skipped: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
  * Record a backup FAILURE durably. Before this, a society whose biggest table outgrew MAX_ROWS
  * (or any read/upload error) threw, was reported only in the HTTP 207 body — which the fire-and-
  * forget cron never reads — and left NO durable trace, so the largest societies could stop being
@@ -266,7 +335,10 @@ Deno.serve(async (req) => {
   const results: any[] = [];
   for (const societyId of societyIds) {
     try {
-      results.push(await backupSociety(supabase, societyId));
+      const result = await backupSociety(supabase, societyId);
+      // Retention runs ONLY on the success path — a failed backup must never trigger pruning.
+      const retention = await applyRetention(supabase, societyId, result.filename);
+      results.push({ ...result, retention });
     } catch (e) {
       // Durably record the failure (audit_log + error_log) — never silent again.
       const recorded = await recordBackupFailure(supabase, societyId, e);
