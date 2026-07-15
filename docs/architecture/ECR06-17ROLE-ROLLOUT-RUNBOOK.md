@@ -60,20 +60,23 @@ with a `test-nav`-style suite (one assertion per new role: exact visible-module 
 
 ## 3. Slice order (each its own PR; strictly in this order)
 
-### S1 · Server RLS helpers learn the matrix (migration 045) — DO THIS FIRST
-Extend the two helpers (idempotent `create or replace`, no policy changes needed — 029–032 policies
-call the helpers):
-- `jwt_can_write()` → null OR role in **(matrix roles holding create|update)**:
+### S1 · Server RLS helpers learn the matrix (migration 045) — ✅ SHIPPED 2026-07-15
+Migration `045_jwt_role_helpers_17roles.sql` (+`_down` restoring the 029 bodies verbatim), with the
+derivation LOCKED by `scripts/test-jwt-role-helpers.mjs` (parses the SQL, compares to
+`PERMISSION_MATRIX`; in CI):
+- `jwt_can_write()` → null OR role in **(matrix roles with UPDATE or APPROVE, − superAdmin, + legacy)**:
   `admin, accountant, societyAdmin, manager, cashier, storeKeeper, procurementOfficer, salesOperator,
-  secretary, employee, dataEntry` (+ auditor/internalAuditor/externalCA hold scoped *create* only —
-  include them; their write surface is bounded client-side to audit objections, and R-side SELECT
-  policies still apply).
-- `jwt_can_delete()` → null OR role in `admin, societyAdmin, secretary` (matrix D ✓/◐; superAdmin
-  has no society JWT).
-- Keep legacy names in the lists forever (existing users' claims carry them).
-- `_down` restores the 029 bodies verbatim.
-- **Verify:** existing admin/accountant sessions unaffected (lists are supersets); no new role exists
-  yet, so nothing else changes. Zero-risk to ship immediately.
+  secretary, employee, dataEntry, boardMember, chairman`.
+  - **APPROVE counts as write** — approve/reject is an UPDATE on the vouchers row; excluding
+    boardMember/chairman would server-refuse their approvals.
+  - **auditor / internalAuditor / externalCA deliberately EXCLUDED** (fact-checked): their scoped
+    CREATE targets audit tables, which are NOT under the 030/031 role-gated policies
+    (030 = godowns/deposits/kachi-aarat/p7/recoverables/compliance; 031 = vouchers/members/accounts/
+    sales/purchases/stock) — adding them would only widen their raw-API surface on financial tables.
+- `jwt_can_delete()` → null OR role in `admin, societyAdmin, secretary`.
+- Legacy names stay in the lists forever (existing users' claims carry them).
+- **Deploy:** run 045 in the SQL Editor any time — pure superset, no new role exists yet, zero
+  observable change; existing sessions unaffected.
 
 ### S2 · Client navigation map (pure client)
 `ROLE_MODULE_ACCESS` + `isModuleVisible` extension per §2. Tests: (a) empty-diff for the 4 legacy
