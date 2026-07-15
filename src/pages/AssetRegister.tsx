@@ -359,6 +359,10 @@ const AssetRegister: React.FC = () => {
       status: a.status,
       disposalDate: a.disposalDate || '',
       saleProceeds: a.saleProceeds ? String(a.saleProceeds) : '',
+      // Editing an existing asset never re-posts an acquisition voucher (that is for new purchases),
+      // so these stay at their off defaults — also completes the form shape (EMPTY_FORM parity).
+      capitalize: false,
+      capitalizeMode: 'cash' as 'cash' | 'bank',
     });
   };
 

@@ -87,7 +87,7 @@ interface ConsumerDataContextValue {
   createPurchaseOrder: (data: { supplierId?: string; supplierName: string; supplierPhone?: string; date: string; expectedDate?: string; items: PurchaseOrderItem[]; notes?: string }) => PurchaseOrder | null;
   approvePurchaseOrder: (id: string, data: { resolutionNo?: string }) => PurchaseOrder | null;
   /** Goods receipt (GRN): create the Purchase invoice for received qty, mark PO received. */
-  receivePurchaseOrder: (id: string, data: { receivedQty?: Record<string, number>; paymentMode: 'cash' | 'bank' | 'credit'; bankAccountId?: string; date: string }) => Purchase | null;
+  receivePurchaseOrder: (id: string, data: { receivedQty?: Record<string, number>; billedRate?: Record<string, number>; gstPct?: number; interState?: boolean; varianceApproved?: boolean; varianceReason?: string; paymentMode: 'cash' | 'bank' | 'credit'; bankAccountId?: string; date: string }) => Purchase | null;
   cancelPurchaseOrder: (id: string) => void;
   deletePurchaseOrder: (id: string) => void;
 

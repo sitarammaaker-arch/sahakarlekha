@@ -6,7 +6,9 @@
  */
 import type { SocietyType } from '@/types';
 
-export type Role = 'admin' | 'accountant' | 'viewer';
+// Nav-gate roles. 'auditor' is read-only assurance access — the module catalog grants it the same
+// reports an accountant sees. (The full 17-role roster lives in @/lib/rbac; this is the nav subset.)
+export type Role = 'admin' | 'accountant' | 'viewer' | 'auditor';
 
 /** Capabilities a module can require. Extensible — new ones never edit existing modules. */
 export type Capability =

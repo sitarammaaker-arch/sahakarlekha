@@ -112,3 +112,53 @@ export function planOpeningEvents(
   }
   return events;
 }
+
+/** The business-effective date of every opening event — before all vouchers, so any as-of window
+ *  includes it (matches planOpeningEvents' genesis convention). */
+export const OPENING_EVENT_DATE = '2000-01-01';
+
+/**
+ * PURE — the LIVE-path counterpart of planOpeningEvents (T-09 auto-cutover). ledger_events is WORM
+ * (insert-only from the client), so when an account's opening balance CHANGES the journal cannot
+ * rewrite `opening-<id>` — it appends a DELTA `account.opening` event whose single leg is the signed
+ * difference (new − previous). Summing all of an account's opening events then always equals the
+ * current opening, so ledger parity holds without any ops re-seed. Same eventType as genesis so the
+ * split trial balance books it in the OPENING columns; dated at OPENING_EVENT_DATE so every as-of
+ * window sees it. Returns null when nothing changed (no event to append).
+ *
+ * `prevSignedMinor` is the opening the journal currently sums to for this account (Dr-positive):
+ * 0 for a brand-new account, or the account's previous signed opening on an edit. On DELETE pass the
+ * account's current signed opening as prev and a zeroed account — the delta nets the journal to zero.
+ */
+export function planOpeningDelta(
+  account: Pick<LedgerAccount, 'id' | 'openingBalance' | 'openingBalanceType'>,
+  prevSignedMinor: number,
+  sequence: number,
+  tenantId: string,
+  opts: { jurisdiction?: string; producer?: EventPrincipal } = {},
+): LedgerEvent | null {
+  if (!tenantId || !account?.id) return null;
+  const amt = toMinor(Number(account.openingBalance) || 0);
+  const newSignedMinor = account.openingBalanceType === 'debit' ? amt : -amt;
+  const deltaMinor = newSignedMinor - prevSignedMinor;
+  if (deltaMinor === 0) return null;
+  return buildEvent(
+    {
+      eventType: 'account.opening',
+      tenantId,
+      jurisdiction: opts.jurisdiction,
+      aggregateType: 'account',
+      aggregateId: account.id,
+      sequence,
+      producer: opts.producer ?? { kind: 'human', id: null },
+      payload: {
+        lines: [{ accountId: account.id, drCr: deltaMinor > 0 ? 'Dr' : 'Cr', amountMinor: Math.abs(deltaMinor) }],
+        opening: true,
+        adjustment: true,
+        prevSignedMinor,
+        newSignedMinor,
+      },
+    },
+    { eventId: `${openingEventId(account.id)}-${sequence}`, occurredAt: `${OPENING_EVENT_DATE}T00:00:00.000Z` },
+  );
+}

@@ -89,5 +89,18 @@ const windowed = book([
 ok(windowed.length === 1 && windowed[0].id === 'in', 'only in-range rows appear');
 ok(windowed[0].runningBalanceMinor === 600000, 'pre-fromDate movement folded into the opening running balance (100000 + 500000)');
 
+// 8. Deterministic tie-break — two vouchers on the SAME date with the SAME createdAt (the Share
+// Capital + Admission Fee pair booked in one member-add) must order by voucherNo, then id, the SAME
+// way regardless of the events' array order. Without it, the journal (loaded by occurred_at) and the
+// voucher state (createdAt order) sorted this pair differently and the running balance diverged —
+// the real cash-book parity failure this fixes. Feed the events in REVERSE and expect voucherNo order.
+const tieMeta = { date: '2025-06-01', createdAt: '2025-06-01T10:00:00.000Z' };
+const tie = book([
+  receipt('vB', 500, { ...tieMeta, voucherNo: 'RV/2026/27/410' }),  // fed first…
+  receipt('vA', 25000, { ...tieMeta, voucherNo: 'RV/2026/27/409' }), // …but this sorts before it
+]);
+ok(tie[0].voucherNo === 'RV/2026/27/409' && tie[1].voucherNo === 'RV/2026/27/410', 'same date+createdAt → ordered by voucherNo, not array order');
+ok(tie[0].runningBalanceMinor === 25000 && tie[1].runningBalanceMinor === 25500, 'running balance follows the deterministic order');
+
 console.log(`\nCash book projection (T-09): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
