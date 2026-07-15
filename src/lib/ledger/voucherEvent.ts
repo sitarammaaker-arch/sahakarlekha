@@ -48,10 +48,21 @@ export interface VoucherEventMeta {
   createdAt: string;
   /** the member this voucher belongs to (member share-capital ledger); '' when not member-scoped. */
   memberId: string;
+  /** ECR-17 branch ('' = Head Office / unbranched). Journal-first-write slice 1: carried so the
+   *  vouchers-table row is fully rebuildable from the journal (the row becomes a projection). */
+  branchId: string;
+  /** who created the voucher — the last vouchers-table field the journal did not carry. */
+  createdBy: string;
 }
 
 /** PURE — the shared voucher-event payload metadata (one shape, RULE 2). Spread alongside the legs at
- *  every event site (post/reverse/cancel/edit/genesis) so the journal carries what the ledger reads need. */
+ *  every event site (post/reverse/cancel/edit/genesis) so the journal carries what the ledger reads need.
+ *  Journal-first-write (T-09 acceptance) slice 1: enriched with branchId + createdBy so the ENTIRE
+ *  vouchers-table row is reconstructible from the journal — the prerequisite for making the table a
+ *  best-effort projection (a table-write failure recoverable) instead of the authoritative save.
+ *  Additive/dormant: the payload carries more; no read consumes branchId/createdBy from the journal
+ *  yet (the rebuild engine + write inversion are the next slices). Historical events gain the fields
+ *  only after a re-seed (backfill-genesis-ledger --reseed), exactly like the earlier meta enrichment. */
 export function voucherEventMeta(v: Voucher): VoucherEventMeta {
-  return { voucherNo: v.voucherNo, type: v.type, amount: v.amount, date: v.date, narration: v.narration ?? '', createdAt: v.createdAt ?? '', memberId: v.memberId ?? '' };
+  return { voucherNo: v.voucherNo, type: v.type, amount: v.amount, date: v.date, narration: v.narration ?? '', createdAt: v.createdAt ?? '', memberId: v.memberId ?? '', branchId: v.branchId ?? '', createdBy: v.createdBy ?? '' };
 }
