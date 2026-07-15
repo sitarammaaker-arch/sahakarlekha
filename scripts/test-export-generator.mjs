@@ -132,8 +132,15 @@ ok(authorizeExport(godown, admin, 'csv').ok, 'godowns are allowed with the wareh
 // auditor is a RECOGNISED export role since #160 (ROLE_RANK auditor: 0 — viewer-level assurance access).
 ok(authorizeExport(member, { role: 'auditor', capabilities: [] }, 'csv').ok, 'auditor may export members as CSV (viewer rank)');
 ok(!authorizeExport(supplier, { role: 'auditor', capabilities: [] }, 'csv').ok, 'auditor stays viewer-rank — no accountant-gated exports');
+// ECR-06 S3 ranks: manager exports at accountant level; secretary at admin level;
+// export-✗ roles (cashier etc.) stay unranked → denied (fail-closed).
+ok(authorizeExport(supplier, { role: 'manager', capabilities: [] }, 'csv').ok, 'manager can export accountant-gated suppliers');
+ok(authorizeExport(godown, { role: 'secretary', capabilities: ['warehousing'] }, 'csv').ok, 'secretary exports at admin level');
+ok(authorizeExport(member, { role: 'boardMember', capabilities: [] }, 'csv').ok, 'boardMember may export viewer-level members');
+ok(!authorizeExport(supplier, { role: 'storeKeeper', capabilities: [] }, 'csv').ok, 'storeKeeper stays viewer-rank — no accountant-gated exports');
+ok(!authorizeExport(member, { role: 'cashier', capabilities: [] }, 'csv').ok, 'cashier (matrix Export ✗) is denied every export');
 // Fail-closed on an unknown role (the ECR-06 17-role migration must not open a hole).
-ok(!authorizeExport(member, { role: 'boardMember', capabilities: [] }, 'csv').ok, 'an unrecognised role is denied');
+ok(!authorizeExport(member, { role: 'nonsenseRole', capabilities: [] }, 'csv').ok, 'an unrecognised role is denied');
 
 // ── 2. Column selection per mode ─────────────────────────────────────────────
 const std = selectColumns(member, 'standard');

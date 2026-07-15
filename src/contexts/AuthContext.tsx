@@ -6,7 +6,10 @@ import { generateSecret, otpauthUri } from '@/lib/totp';
 
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes of inactivity
 
-export type UserRole = 'admin' | 'accountant' | 'viewer' | 'auditor';
+// ECR-06 S3: single SSOT for the assignable role union — re-exported from types so the
+// AuthContext and UserManagement unions can never drift apart again.
+export type { UserRole } from '@/types';
+import type { UserRole } from '@/types';
 
 interface User {
   id: string;

@@ -118,11 +118,22 @@ export type ExportRegistry = readonly EntityDescriptor[];
  * The ONLY place role ordering is encoded. ECR-06 (17-role model) edits this map and
  * nothing else in the export subsystem. Do not compare `minRole` with `===` anywhere.
  */
-export const ROLE_RANK: Record<Role, number> = {
+export const ROLE_RANK: Record<Role, number> & Partial<Record<string, number>> = {
   viewer: 0,
   auditor: 0,   // read-only assurance access — same rank as viewer for export gating
   accountant: 1,
   admin: 2,
+  // ECR-06 S3 — export-capable new roles, ranked per PERMISSION_MATRIX's Export column.
+  // Roles whose matrix Export is ✗ (cashier, salesOperator, employee, dataEntry) are
+  // deliberately UNRANKED → roleAtLeast fail-closes and every export is denied to them.
+  internalAuditor: 0,
+  externalCA: 0,
+  boardMember: 0,
+  chairman: 0,
+  storeKeeper: 0,        // Export ◐ — viewer-level entities only
+  procurementOfficer: 0, // Export ◐ — viewer-level entities only
+  manager: 1,            // accountant-level export surface
+  secretary: 2,          // admin-level (statutory custodian)
 };
 
 /** PURE — does `actual` meet or exceed `required`? Unknown roles are denied, never allowed. */
