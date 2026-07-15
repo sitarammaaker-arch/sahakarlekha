@@ -96,7 +96,11 @@ const empty: Omit<AppUser, 'id' | 'createdAt' | 'society_id'> = {
 };
 
 export default function UserManagement() {
-  const { user: currentUser, adminResetMfa } = useAuth();
+  const { user: currentUser, adminResetMfa, can } = useAuth();
+  // ECR-06 S7: user-management is delegated to admin + secretary (matrix `userMgmt`).
+  // A non-admin manager (secretary) may NOT create or edit admin users — mirrors the
+  // server guards (mig 047: is_society_user_manager + the role<>'admin' RLS/RPC checks).
+  const isFullAdmin = currentUser?.role === 'admin';
   const { language } = useLanguage();
   const { branches } = useData();
   const { toast } = useToast();
@@ -150,11 +154,11 @@ export default function UserManagement() {
 
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
-  if (currentUser?.role !== 'admin') {
+  if (!can('userMgmt')) {
     return (
       <div className="p-8 text-center text-muted-foreground">
         <ShieldCheck className="h-12 w-12 mx-auto mb-3 opacity-30" />
-        <p>{hi ? 'केवल व्यवस्थापक के लिए' : 'Admin access required'}</p>
+        <p>{hi ? 'केवल व्यवस्थापक / सचिव के लिए' : 'Admin or Secretary access required'}</p>
       </div>
     );
   }
@@ -427,9 +431,12 @@ export default function UserManagement() {
                             </Button>
                           </>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => openEdit(u)}>
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
+                        {/* S7: a secretary cannot edit an admin user (server RLS blocks it too). */}
+                        {(isFullAdmin || u.role !== 'admin') && (
+                          <Button size="sm" variant="ghost" onClick={() => openEdit(u)}>
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -491,8 +498,11 @@ export default function UserManagement() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {/* ECR-06 S3: all 16 assignable roles, grouped. Server (mig 045) and
-                      navigation (roleAccess.ts) already understand every name here. */}
-                  {ROLE_GROUPS.map(g => (
+                      navigation (roleAccess.ts) already understand every name here.
+                      S7: a non-admin manager (secretary) cannot assign 'admin' — the RPC/RLS
+                      reject it server-side, so hide it from the dropdown to match. */}
+                  {ROLE_GROUPS.map(g => ({ ...g, roles: g.roles.filter(r => isFullAdmin || r !== 'admin') }))
+                    .filter(g => g.roles.length > 0).map(g => (
                     <SelectGroup key={g.en}>
                       <SelectLabel>{hi ? g.hi : g.en}</SelectLabel>
                       {g.roles.map(r => (

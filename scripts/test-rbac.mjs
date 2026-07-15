@@ -61,6 +61,11 @@ ok(can('societyAdmin', 'unlockPeriod') && can('chairman', 'unlockPeriod'), 'admi
 ok(!can('accountant', 'unlockPeriod'), 'accountant cannot unlock');
 ok(can('superAdmin', 'userMgmt') && can('societyAdmin', 'userMgmt'), 'admins manage users');
 ok(!can('manager', 'userMgmt'), 'manager cannot manage users');
+// ECR-06 S7: user-management is delegated to secretary (matrix userMgmt); the mig-047 escalation
+// guards (RLS role<>'admin' + RPC admin-only-creates-admin) keep it from being a privilege hole.
+ok(can('secretary', 'userMgmt'), 'secretary can manage users (S7 delegation)');
+ok(!can('cashier', 'userMgmt') && !can('accountant', 'userMgmt') && !can('auditor', 'userMgmt') && !can('boardMember', 'userMgmt'), 'no other role can manage users');
+ok(can('admin', 'userMgmt'), 'legacy admin manages users (→societyAdmin) — gate byte-identical');
 ok(can('accountant', 'create') && can('accountant', 'update') && !can('accountant', 'approve'), 'accountant: create/update but not approve (segregation)');
 
 // 4. Legacy shim parity — the four legacy roles behave sensibly under the new model.
