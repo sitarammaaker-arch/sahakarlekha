@@ -1631,6 +1631,10 @@ create policy "society_rw" on public.procurement_financial_intents for all to au
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
 create unique index if not exists procurement_financial_intents_jform_uniq on public.procurement_financial_intents ("jformId");
+-- T-05: typed money columns (amount JSONB → integer-paise + currency), derived SERVER-SIDE by
+-- procurement_commit_transaction; migration 043 backfills existing rows.
+alter table public.procurement_financial_intents add column if not exists "amountAmountMinor" bigint;
+alter table public.procurement_financial_intents add column if not exists "amountCurrency"    text;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement Phase 3.1 — Posting Request (a business OBJECT only; NOT posting / ledger /
@@ -1655,6 +1659,10 @@ create policy "society_rw" on public.procurement_posting_requests for all to aut
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
 create unique index if not exists procurement_posting_requests_intent_uniq on public.procurement_posting_requests ("financialIntentId");
+-- T-05: typed money columns (amount JSONB → integer-paise + currency), derived SERVER-SIDE by
+-- procurement_commit_transaction; migration 043 backfills existing rows.
+alter table public.procurement_posting_requests add column if not exists "amountAmountMinor" bigint;
+alter table public.procurement_posting_requests add column if not exists "amountCurrency"    text;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement Phase 3.2 — Posting Rule Result (a business OBJECT only; NOT posting / ledger /
@@ -2262,14 +2270,22 @@ begin
   end if;
   if p_payload ? 'financialIntents' then
     for rec in select value from jsonb_array_elements(p_payload->'financialIntents') loop
-      insert into procurement_financial_intents (id, society_id, "lotId", "jformId", "intentType", amount, "createdAt", "updatedAt")
-      values (rec->>'id', rec->>'society_id', rec->>'lotId', rec->>'jformId', rec->>'intentType', rec->'amount', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
+      insert into procurement_financial_intents (id, society_id, "lotId", "jformId", "intentType", amount,
+        "amountAmountMinor", "amountCurrency", "createdAt", "updatedAt")
+      values (rec->>'id', rec->>'society_id', rec->>'lotId', rec->>'jformId', rec->>'intentType', rec->'amount',
+        -- T-05 dual-write, derived server-side from the SAME payload (NULL-safe).
+        (round(((rec->'amount'->>'amount')::numeric) * 100))::bigint, case when rec ? 'amount' then coalesce(rec->'amount'->>'currency', 'INR') end,
+        (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
     end loop;
   end if;
   if p_payload ? 'postingRequests' then
     for rec in select value from jsonb_array_elements(p_payload->'postingRequests') loop
-      insert into procurement_posting_requests (id, society_id, "lotId", "jformId", "financialIntentId", "requestType", amount, "createdAt", "updatedAt")
-      values (rec->>'id', rec->>'society_id', rec->>'lotId', rec->>'jformId', rec->>'financialIntentId', rec->>'requestType', rec->'amount', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
+      insert into procurement_posting_requests (id, society_id, "lotId", "jformId", "financialIntentId", "requestType", amount,
+        "amountAmountMinor", "amountCurrency", "createdAt", "updatedAt")
+      values (rec->>'id', rec->>'society_id', rec->>'lotId', rec->>'jformId', rec->>'financialIntentId', rec->>'requestType', rec->'amount',
+        -- T-05 dual-write, derived server-side from the SAME payload (NULL-safe).
+        (round(((rec->'amount'->>'amount')::numeric) * 100))::bigint, case when rec ? 'amount' then coalesce(rec->'amount'->>'currency', 'INR') end,
+        (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
     end loop;
   end if;
   if p_payload ? 'postingRuleResults' then
