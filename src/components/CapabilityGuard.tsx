@@ -22,7 +22,7 @@ import { MODULE_CATALOG, isModuleVisible, navigationService, declaredActivities,
 export function CapabilityGuard({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { society, societyCapabilities, societyActivities } = useData();
-  const { hasPermission, isSuperAdmin } = useAuth();
+  const { hasPermission, isSuperAdmin, user } = useAuth();
   const { language } = useLanguage();
   const societyType = society.societyType ?? 'other';
 
@@ -32,6 +32,7 @@ export function CapabilityGuard({ children }: { children: React.ReactNode }) {
     // T-11: declared activities gate within entitlement, dormant behind the cutover flag (T-12).
     capabilities: navigationService.resolveCapabilities(societyType, societyCapabilities, society.state, declaredActivities(societyActivities), society.activitiesCutoverEnabled),
     hasRole: hasPermission,
+    userRole: user?.role, // ECR-06 S2: mapped 17-role names use ROLE_MODULE_ACCESS
     superAdminShowAll: isSuperAdmin, // matches useNavigation — super-admin bypasses gates
   };
   const blocked = !!module && !isModuleVisible(module, ctx);

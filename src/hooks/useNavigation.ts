@@ -14,7 +14,7 @@ import { navigationService, declaredActivities, getVisibleGroups, type NavContex
 
 export function useNavigation(): NavGroup[] {
   const { society, societyCapabilities, societyActivities } = useData();
-  const { hasPermission, isSuperAdmin } = useAuth();
+  const { hasPermission, isSuperAdmin, user } = useAuth();
   const societyType = society.societyType ?? 'other';
 
   return useMemo(() => {
@@ -25,8 +25,9 @@ export function useNavigation(): NavGroup[] {
       societyType,
       capabilities,
       hasRole: hasPermission,
+      userRole: user?.role,              // ECR-06 S2: mapped 17-role names use ROLE_MODULE_ACCESS
       superAdminShowAll: isSuperAdmin,   // C7: platform super-admin bypasses role + capability gates
     };
     return getVisibleGroups(ctx);
-  }, [societyType, society.state, society.activitiesCutoverEnabled, societyCapabilities, societyActivities, hasPermission, isSuperAdmin]);
+  }, [societyType, society.state, society.activitiesCutoverEnabled, societyCapabilities, societyActivities, hasPermission, isSuperAdmin, user?.role]);
 }
