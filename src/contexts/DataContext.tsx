@@ -1581,12 +1581,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (lines && lines.length > 0) {
       let bal = voucherLinesBalance(lines);
       if (!bal.balanced && bal.diff < 1) {
-        const residual = +(bal.drTotal - bal.crTotal).toFixed(2); // >0 ⇒ Dr-heavy
+        const residual = toRupees(subMinor(toMinor(bal.drTotal), toMinor(bal.crTotal))); // >0 ⇒ Dr-heavy
         const side: 'Dr' | 'Cr' = residual > 0 ? 'Cr' : 'Dr';     // add to deficient side
         let idx = -1, max = -Infinity;
         lines.forEach((l, i) => { if (l.type === side && l.amount > max) { max = l.amount; idx = i; } });
         if (idx >= 0) {
-          lines = lines.map((l, i) => i === idx ? { ...l, amount: +(l.amount + Math.abs(residual)).toFixed(2) } : l);
+          lines = lines.map((l, i) => i === idx ? { ...l, amount: toRupees(addMinor(toMinor(l.amount), toMinor(Math.abs(residual)))) } : l);
           bal = voucherLinesBalance(lines);
         }
       }
@@ -1679,7 +1679,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // control account and the cash-bank net to zero.
   const transferBetweenBranches = useCallback((input: { fromBranchId: string; toBranchId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; narration?: string }) => {
     if (guardFYLocked()) return;
-    const amt = Math.round(Math.max(0, input.amount || 0) * 100) / 100;
+    const amt = toRupees(toMinor(Math.max(0, input.amount || 0)));
     if (amt <= 0 || input.fromBranchId === input.toBranchId) {
       toastRef.current({ title: 'अमान्य ट्रांसफर', description: 'From/To शाखा अलग हों और राशि > 0 हो।', variant: 'destructive' });
       return;
@@ -1719,7 +1719,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const allocs = data.allocations.filter(a => a.amount > 0);
     const adv = Math.max(0, +(data.advance || 0));
     const onAcc = Math.max(0, +(data.onAccount || 0));
-    const total = +(allocs.reduce((s, a) => s + a.amount, 0) + adv + onAcc).toFixed(2);
+    const total = toRupees(addMinor(sumMinor(allocs.map(a => toMinor(a.amount))), toMinor(adv), toMinor(onAcc)));
     if (total <= 0) {
       toastRef.current({ title: 'राशि डालें', description: 'कम से कम एक बिल के विरुद्ध (या अग्रिम) राशि भरें।', variant: 'destructive' });
       return null;
@@ -1730,10 +1730,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const billAllocations: BillAllocation[] = [
       ...allocs.map(a => {
         const sale = salesRef.current.find(s => s.id === a.saleId);
-        return { billId: a.saleId, billNo: sale?.saleNo || '', saleId: a.saleId, saleNo: sale?.saleNo || '', amount: +a.amount.toFixed(2), method: 'against' as const };
+        return { billId: a.saleId, billNo: sale?.saleNo || '', saleId: a.saleId, saleNo: sale?.saleNo || '', amount: toRupees(toMinor(a.amount)), method: 'against' as const };
       }),
-      ...(adv > 0 ? [{ amount: +adv.toFixed(2), method: 'advance' as const }] : []),
-      ...(onAcc > 0 ? [{ amount: +onAcc.toFixed(2), method: 'on-account' as const }] : []),
+      ...(adv > 0 ? [{ amount: toRupees(toMinor(adv)), method: 'advance' as const }] : []),
+      ...(onAcc > 0 ? [{ amount: toRupees(toMinor(onAcc)), method: 'on-account' as const }] : []),
     ];
     const billList = billAllocations.filter(b => b.method === 'against').map(b => b.billNo).filter(Boolean).join(', ');
     const tag = billList ? `बिल ${billList} के विरुद्ध` : (adv > 0 ? 'अग्रिम राशि' : 'On Account');
@@ -1777,7 +1777,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const allocs = data.allocations.filter(a => a.amount > 0);
     const adv = Math.max(0, +(data.advance || 0));
     const onAcc = Math.max(0, +(data.onAccount || 0));
-    const total = +(allocs.reduce((s, a) => s + a.amount, 0) + adv + onAcc).toFixed(2);
+    const total = toRupees(addMinor(sumMinor(allocs.map(a => toMinor(a.amount))), toMinor(adv), toMinor(onAcc)));
     if (total <= 0) {
       toastRef.current({ title: 'राशि डालें', description: 'कम से कम एक बिल के विरुद्ध (या अग्रिम) राशि भरें।', variant: 'destructive' });
       return null;
@@ -1788,10 +1788,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const billAllocations: BillAllocation[] = [
       ...allocs.map(a => {
         const p = purchasesRef.current.find(x => x.id === a.purchaseId);
-        return { billId: a.purchaseId, billNo: p?.purchaseNo || '', amount: +a.amount.toFixed(2), method: 'against' as const };
+        return { billId: a.purchaseId, billNo: p?.purchaseNo || '', amount: toRupees(toMinor(a.amount)), method: 'against' as const };
       }),
-      ...(adv > 0 ? [{ amount: +adv.toFixed(2), method: 'advance' as const }] : []),
-      ...(onAcc > 0 ? [{ amount: +onAcc.toFixed(2), method: 'on-account' as const }] : []),
+      ...(adv > 0 ? [{ amount: toRupees(toMinor(adv)), method: 'advance' as const }] : []),
+      ...(onAcc > 0 ? [{ amount: toRupees(toMinor(onAcc)), method: 'on-account' as const }] : []),
     ];
     const billList = billAllocations.filter(b => b.method === 'against').map(b => b.billNo).filter(Boolean).join(', ');
     const tag = billList ? `बिल ${billList} के विरुद्ध` : (adv > 0 ? 'अग्रिम भुगतान' : 'On Account');
@@ -2599,7 +2599,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     const member = membersRef.current.find(m => m.id === memberId);
     if (!member) return;
-    const refund = Math.round((Math.max(0, Math.min(amount, member.shareCapital || 0))) * 100) / 100;
+    const refund = toRupees(toMinor(Math.max(0, Math.min(amount, member.shareCapital || 0))));
     if (!(refund > 0)) { toastRef.current({ title: 'Invalid amount', description: 'Refund must be > 0 and ≤ current share capital.', variant: 'destructive' }); return; }
     const creditAcc = mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     addVoucher({
@@ -2609,7 +2609,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       createdBy: user?.name ?? 'System', memberId,
     });
     const before = member;
-    const updated = { ...member, shareCapital: Math.round(((member.shareCapital || 0) - refund) * 100) / 100 };
+    const updated = { ...member, shareCapital: toRupees(subMinor(toMinor(member.shareCapital || 0), toMinor(refund))) };
     membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
     supabase.from('members').upsert(withSoc(updated)).then(({ error }) => {
@@ -2633,7 +2633,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return false;
     const member = membersRef.current.find(m => m.id === memberId);
     if (!member) return false;
-    const amt = Math.round(amount * 100) / 100;
+    const amt = toRupees(toMinor(amount));
     const v = validateShareOp(type, amt, member.shareCapital || 0);
     if (!v.ok) { toastRef.current({ title: 'अमान्य शेयर संचालन', description: v.error, variant: 'destructive', duration: 9000 }); return false; }
     const date = opts?.date || new Date().toISOString().split('T')[0];
@@ -2674,7 +2674,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     const member = membersRef.current.find(m => m.id === memberId);
     if (!member) return;
-    const buy = Math.round((Math.max(0, amount)) * 100) / 100;
+    const buy = toRupees(toMinor(Math.max(0, amount)));
     if (!(buy > 0)) { toastRef.current({ title: 'Invalid amount', description: 'Amount must be > 0.', variant: 'destructive' }); return; }
     const debitAcc = mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     addVoucher({
@@ -2684,7 +2684,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       createdBy: user?.name ?? 'System', memberId,
     });
     const before = member;
-    const updated = { ...member, shareCapital: Math.round(((member.shareCapital || 0) + buy) * 100) / 100 };
+    const updated = { ...member, shareCapital: toRupees(addMinor(toMinor(member.shareCapital || 0), toMinor(buy))) };
     membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
     supabase.from('members').upsert(withSoc(updated)).then(({ error }) => {
@@ -2710,10 +2710,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const from = membersRef.current.find(m => m.id === fromMemberId);
     const to = membersRef.current.find(m => m.id === toMemberId);
     if (!from || !to) return;
-    const amt = Math.round((Math.max(0, Math.min(amount, from.shareCapital || 0))) * 100) / 100;
+    const amt = toRupees(toMinor(Math.max(0, Math.min(amount, from.shareCapital || 0))));
     if (!(amt > 0)) { toastRef.current({ title: 'Invalid amount', description: 'Amount must be > 0 and ≤ the sender\'s share capital.', variant: 'destructive' }); return; }
     // ECR-16 (MS-11): enforce the share-transfer premium cap (% of face value) BEFORE posting.
-    const prem = Math.round((Math.max(0, premium || 0)) * 100) / 100;
+    const prem = toRupees(toMinor(Math.max(0, premium || 0)));
     const capPct = societyRef.current?.maxSharePremiumPercent ?? 0;
     if (!isSharePremiumAllowed(prem, amt, capPct)) {
       const cap = sharePremiumCap(amt, capPct);
@@ -2747,8 +2747,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
     }
     const beforeFrom = from, beforeTo = to;
-    const updFrom = { ...from, shareCapital: Math.round(((from.shareCapital || 0) - amt) * 100) / 100 };
-    const updTo = { ...to, shareCapital: Math.round(((to.shareCapital || 0) + amt) * 100) / 100 };
+    const updFrom = { ...from, shareCapital: toRupees(subMinor(toMinor(from.shareCapital || 0), toMinor(amt))) };
+    const updTo = { ...to, shareCapital: toRupees(addMinor(toMinor(to.shareCapital || 0), toMinor(amt))) };
     const applyBoth = (a: Member, b: Member) => {
       membersRef.current = membersRef.current.map(m => m.id === a.id ? a : m.id === b.id ? b : m);
       setMembersState(prev => prev.map(m => m.id === a.id ? a : m.id === b.id ? b : m));
@@ -2818,7 +2818,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
     // Opening deposit (if any) posts a voucher + first transaction, then re-persist with the balance.
-    const opening = Math.round(Math.max(0, openingAmount) * 100) / 100;
+    const opening = toRupees(toMinor(Math.max(0, openingAmount)));
     if (opening > 0) {
       const newBal = postDepositLeg(acct, 'open', opening, mode, acct.openDate);
       if (newBal !== null) {
@@ -2842,7 +2842,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const acct = depositAccountsRef.current.find(d => d.id === accountId);
     if (!acct) return false;
     if (acct.status !== 'active') { toastRef.current({ title: 'खाता सक्रिय नहीं', description: 'Only active deposit accounts can transact.', variant: 'destructive' }); return false; }
-    const amt = Math.round(amount * 100) / 100;
+    const amt = toRupees(toMinor(amount));
     const v = validateDepositTxn(txnType, amt, acct.balance);
     if (!v.ok) { toastRef.current({ title: 'अमान्य लेनदेन', description: v.error, variant: 'destructive', duration: 9000 }); return false; }
     const before = acct;
@@ -2872,7 +2872,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const acct = depositAccountsRef.current.find(d => d.id === accountId);
     if (!acct) return false;
     if (acct.status !== 'active') { toastRef.current({ title: 'खाता सक्रिय नहीं', description: 'Only active deposit accounts can accrue interest.', variant: 'destructive' }); return false; }
-    const amt = Math.round(amount * 100) / 100;
+    const amt = toRupees(toMinor(amount));
     if (!(amt > 0)) { toastRef.current({ title: 'अमान्य राशि', description: 'Interest must be greater than 0.', variant: 'destructive' }); return false; }
     const liability = depositLiabilityAccount(acct.depositType);
     const member = membersRef.current.find(m => m.id === acct.memberId);
@@ -3113,17 +3113,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const sentinel = { id: '', voucherNo: '', type: 'payment', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
     const wageOf = (m: MusterEntry) => (m.daysWorked || 0) * (m.dailyWage || 0);
-    const outstandingOf = (m: MusterEntry) => +(wageOf(m) - (m.paidAmount || 0)).toFixed(2);
+    const outstandingOf = (m: MusterEntry) => toRupees(subMinor(toMinor(wageOf(m)), toMinor(m.paidAmount || 0)));
     // Resolve + validate allocations against live entries.
     const allocs = (data.allocations || [])
-      .map(a => ({ entry: musterEntries.find(m => m.id === a.entryId && !m.isDeleted && !m.paid), amount: +(+a.amount).toFixed(2) }))
+      .map(a => ({ entry: musterEntries.find(m => m.id === a.entryId && !m.isDeleted && !m.paid), amount: toRupees(toMinor(+a.amount)) }))
       .filter((a): a is { entry: MusterEntry; amount: number } => !!a.entry && a.amount > 0);
     if (allocs.length === 0) { toastRef.current({ title: 'कोई श्रमिक/राशि चुनी नहीं', description: 'कम-से-कम एक श्रमिक की भुगतान-राशि चुनें।', variant: 'destructive', duration: 8000 }); return sentinel; }
     const over = allocs.find(a => a.amount > outstandingOf(a.entry) + 0.005);
     if (over) { toastRef.current({ title: 'राशि बकाया से अधिक', description: `एक श्रमिक की भुगतान-राशि उसकी बकाया मज़दूरी ₹${outstandingOf(over.entry)} से अधिक नहीं हो सकती।`, variant: 'destructive', duration: 9000 }); return sentinel; }
-    const total = +allocs.reduce((s, a) => s + a.amount, 0).toFixed(2);
-    const accruedPortion = +allocs.filter(a => a.entry.accrued).reduce((s, a) => s + a.amount, 0).toFixed(2);
-    const directPortion = +(total - accruedPortion).toFixed(2);
+    const total = toRupees(sumMinor(allocs.map(a => toMinor(a.amount))));
+    const accruedPortion = toRupees(sumMinor(allocs.filter(a => a.entry.accrued).map(a => toMinor(a.amount))));
+    const directPortion = toRupees(subMinor(toMinor(total), toMinor(accruedPortion)));
     const wo = workOrders.find(w => w.id === data.workOrderId);
     const creditAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
@@ -3146,7 +3146,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const amtById = new Map(allocs.map(a => [a.entry.id, a.amount]));
     const applyPay = (m: MusterEntry): MusterEntry => {
       const add = amtById.get(m.id); if (add == null) return m;
-      const newPaid = +((m.paidAmount || 0) + add).toFixed(2);
+      const newPaid = toRupees(addMinor(toMinor(m.paidAmount || 0), toMinor(add)));
       return { ...m, paidAmount: newPaid, paid: newPaid >= wageOf(m) - 0.005, paymentVoucherId: voucher.id };
     };
     const snapshot = new Map(allocs.map(a => [a.entry.id, a.entry]));   // for rollback
@@ -3882,11 +3882,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (stl.status !== 'draft') { toastRef.current({ title: 'स्वीकृत निपटान', description: 'स्वीकृत निपटान में कटौती नहीं जोड़ सकते। (Cannot edit an approved settlement)', variant: 'destructive', duration: 9000 }); return; }
     if (!data.accountId || !accounts.some(a => a.id === data.accountId)) { toastRef.current({ title: 'खाता चुनें', description: 'कटौती के लिए एक खाता चुनें। (Select a deduction account)', variant: 'destructive', duration: 8000 }); return; }
     if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'कटौती राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return; }
-    const line: SettlementDeductionLine = { id: crypto.randomUUID(), deductionType: data.deductionType, accountId: data.accountId, amount: { amount: +data.amount.toFixed(2), currency: stl.gross.currency }, reference: data.reference?.trim() || undefined, remarks: data.remarks?.trim() || undefined };
+    const line: SettlementDeductionLine = { id: crypto.randomUUID(), deductionType: data.deductionType, accountId: data.accountId, amount: { amount: toRupees(toMinor(data.amount)), currency: stl.gross.currency }, reference: data.reference?.trim() || undefined, remarks: data.remarks?.trim() || undefined };
     const lines = [...stl.deductionLines, line];
-    const totalDed = +lines.reduce((s, l) => s + l.amount.amount, 0).toFixed(2);
+    const totalDed = toRupees(sumMinor(lines.map(l => toMinor(l.amount.amount))));
     if (totalDed > stl.gross.amount) { toastRef.current({ title: 'कटौती सकल से अधिक', description: `कुल कटौती ₹${totalDed} सकल ₹${stl.gross.amount} से अधिक नहीं हो सकती।`, variant: 'destructive', duration: 9000 }); return; }
-    const next: FarmerSettlement = { ...stl, deductionLines: lines, netPayable: { amount: +(stl.gross.amount - totalDed).toFixed(2), currency: stl.gross.currency }, updatedAt: new Date().toISOString() };
+    const next: FarmerSettlement = { ...stl, deductionLines: lines, netPayable: { amount: toRupees(subMinor(toMinor(stl.gross.amount), toMinor(totalDed))), currency: stl.gross.currency }, updatedAt: new Date().toISOString() };
     persistDraftSettlement(stl, next);
     toastRef.current({ title: 'कटौती जोड़ी', description: `${data.deductionType} · ₹${line.amount.amount}`, duration: 5000 });
   }, [accounts, procurementSettlements]);
@@ -3897,8 +3897,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const stl = procurementSettlements.find(s => s.id === data.settlementId && !s.isDeleted);
     if (!stl || stl.status !== 'draft') { toastRef.current({ title: 'संभव नहीं', description: 'केवल ड्राफ्ट निपटान संपादित कर सकते हैं।', variant: 'destructive', duration: 8000 }); return; }
     const lines = stl.deductionLines.filter(l => l.id !== data.lineId);
-    const totalDed = +lines.reduce((s, l) => s + l.amount.amount, 0).toFixed(2);
-    const next: FarmerSettlement = { ...stl, deductionLines: lines, netPayable: { amount: +(stl.gross.amount - totalDed).toFixed(2), currency: stl.gross.currency }, updatedAt: new Date().toISOString() };
+    const totalDed = toRupees(sumMinor(lines.map(l => toMinor(l.amount.amount))));
+    const next: FarmerSettlement = { ...stl, deductionLines: lines, netPayable: { amount: toRupees(subMinor(toMinor(stl.gross.amount), toMinor(totalDed))), currency: stl.gross.currency }, updatedAt: new Date().toISOString() };
     persistDraftSettlement(stl, next);
   }, [procurementSettlements]);
 
@@ -3915,8 +3915,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (stl.status !== 'draft') { toastRef.current({ title: 'पहले से स्वीकृत', description: 'यह निपटान पहले ही स्वीकृत है। (Already approved)', variant: 'destructive', duration: 8000 }); return blank; }
     const ev = vouchersRef.current.find(v => v.id === stl.engineVoucherId && !v.isDeleted && isEngineVoucher(v));
     if (!ev) { toastRef.current({ title: 'Engine Voucher नहीं मिला', description: 'Post the engine voucher first', variant: 'destructive', duration: 8000 }); return blank; }
-    const totalDed = +stl.deductionLines.reduce((s, l) => s + l.amount.amount, 0).toFixed(2);
-    const netPayable: Money = { amount: +(stl.gross.amount - totalDed).toFixed(2), currency: stl.gross.currency };
+    const totalDed = toRupees(sumMinor(stl.deductionLines.map(l => toMinor(l.amount.amount))));
+    const netPayable: Money = { amount: toRupees(subMinor(toMinor(stl.gross.amount), toMinor(totalDed))), currency: stl.gross.currency };
     const payableAcc = ev.lines?.find(l => l.type === 'Cr')?.accountId || ev.creditAccountId;
     const now = new Date().toISOString();
 
@@ -3981,7 +3981,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'पहले निपटान स्वीकृत करें', description: 'भुगतान से पहले निपटान बनाकर स्वीकृत करें। (Approve the settlement before paying)', variant: 'destructive', duration: 9000 });
       return sentinel;
     }
-    const outstanding = +(stl.netPayable.amount - stl.amountPaid.amount).toFixed(2);
+    const outstanding = toRupees(subMinor(toMinor(stl.netPayable.amount), toMinor(stl.amountPaid.amount)));
     if (!(data.amount > 0)) {
       toastRef.current({ title: 'राशि डालें', description: 'भुगतान राशि 0 से अधिक होनी चाहिए। (Amount must be greater than 0)', variant: 'destructive', duration: 8000 });
       return sentinel;
@@ -4020,7 +4020,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!voucher.id) return sentinel;
     // Extra: advance the settlement's stored payment progress (amountPaid). Reconcilable from payment
     // vouchers, so a cloud-save miss here is a MILD warning (no rollback of the saved payment).
-    const next: FarmerSettlement = { ...stl, amountPaid: { amount: +(stl.amountPaid.amount + data.amount).toFixed(2), currency: stl.netPayable.currency }, updatedAt: new Date().toISOString() };
+    const next: FarmerSettlement = { ...stl, amountPaid: { amount: toRupees(addMinor(toMinor(stl.amountPaid.amount), toMinor(data.amount))), currency: stl.netPayable.currency }, updatedAt: new Date().toISOString() };
     setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? next : x); storage.setProcurementSettlements(u); return u; });
     supabase.from('procurement_settlements').upsert(withSoc(next)).then(({ error }) => {
       if (error) {
@@ -5321,7 +5321,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // post a ₹0 write-off and leave its closing-stock asset on the books forever.
       const costRate = item ? computeStockCostRate(item, stockMovementsRef.current) : 0;
       if (item && item.isActive && realQty > 0) {
-        const amount = Math.round(realQty * costRate * 100) / 100;
+        const amount = toRupees(toMinor(realQty * costRate));
         if (amount > 0) {
           // Dr 5101 (Purchases/Write-off expense) / Cr 3403 (Closing Stock asset) — reverses closing stock asset
           addVoucher({
@@ -6175,7 +6175,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ? new Date(Number(base.month.slice(0, 4)), Number(base.month.slice(5, 7)), 0).toISOString().split('T')[0]
         : base.createdAt.split('T')[0];
       const lid = () => crypto.randomUUID();
-      const r2 = (n: number) => Math.round(n * 100) / 100;
+      const r2 = (n: number) => toRupees(toMinor(n));
       // ECR-14: when a statutory breakdown is present, book gross + employer contributions
       // to Salary Expense and split the employee dues + employer contributions to their
       // payable heads (EPF 2203 / ESI 2204 / PT 2207 / TDS 2202). Otherwise keep the legacy
