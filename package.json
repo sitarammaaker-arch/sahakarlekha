@@ -57,6 +57,7 @@
     "test:type-branch-parity": "node scripts/test-type-branch-parity.mjs",
     "test:ledger-event": "node scripts/test-ledger-event.mjs",
     "test:ledger-events-persist": "node scripts/test-ledger-events-persist.mjs",
+    "test:ledger-persist": "node scripts/test-ledger-persist.mjs",
     "test:ledger-projections": "node scripts/test-ledger-projections.mjs",
     "test:ledger-correction": "node scripts/test-ledger-correction.mjs",
     "test:ledger-cutover": "node scripts/test-ledger-cutover.mjs",
