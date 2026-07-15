@@ -40,7 +40,12 @@ export function projectCashBook(
 
   // Current transactions, in the getCashBookEntries order (date, then createdAt).
   const current = resolveCurrentVouchers(events);
-  current.sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+  // Deterministic tie-break: two vouchers on the same date with the SAME createdAt (e.g. the Share
+  // Capital + Admission Fee pair booked in one member-add) would otherwise fall to stable-sort order,
+  // which differs between the journal (loaded by occurred_at) and the voucher state (createdAt order)
+  // — so the running balance diverged and cash-book parity failed. voucherNo then id settles it the
+  // SAME way on both sides (getCashBookEntries uses the identical key). RULE 2.
+  current.sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || '').localeCompare(b.voucherNo || '') || a.id.localeCompare(b.id));
 
   // Accumulate the running balance; pre-fromDate folds into opening, post-toDate is excluded.
   let running = opts.openingMinor;

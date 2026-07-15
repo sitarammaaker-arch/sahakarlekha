@@ -4198,7 +4198,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const cashVouchers = activeVouchers
       .filter(v => getVoucherLines(v).some(l => l.accountId === ACCOUNT_IDS.CASH))
-      .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+      // Deterministic tie-break so same-date + same-createdAt vouchers sort the SAME way here as in the
+      // ledger projection (projectCashBook), else the running balance — and cash-book parity — diverge.
+      .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || '').localeCompare(b.voucherNo || '') || a.id.localeCompare(b.id));
 
     if (fromDate) {
       cashVouchers.filter(v => v.date < fromDate).forEach(v => {
@@ -4253,7 +4255,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const bankVouchers = activeVouchers
       .filter(v => getVoucherLines(v).some(l => l.accountId === targetBankId))
-      .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+      // Deterministic tie-break — same key as projectCashBook (which serves the bank book too).
+      .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || '').localeCompare(b.voucherNo || '') || a.id.localeCompare(b.id));
 
     if (fromDate) {
       bankVouchers.filter(v => v.date < fromDate).forEach(v => {
@@ -4381,7 +4384,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Only show Share Capital related vouchers (exclude ADM_FEE and others)
     const memberVouchers = activeVouchers
       .filter(v => v.memberId === memberId && (v.creditAccountId === ACCOUNT_IDS.SHARE_CAP || v.debitAccountId === ACCOUNT_IDS.SHARE_CAP))
-      .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+      // Deterministic tie-break — same key as projectMemberLedger.
+      .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || '').localeCompare(b.voucherNo || '') || a.id.localeCompare(b.id));
 
     const hasShareCapVoucher = memberVouchers.some(v => v.creditAccountId === ACCOUNT_IDS.SHARE_CAP);
     // If a proper voucher exists, start at 0 (voucher covers it). Otherwise show OB row.

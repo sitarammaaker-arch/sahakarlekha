@@ -39,7 +39,9 @@ export function projectMemberLedger(
   // This member's share-capital vouchers (current state), in the getMemberLedger order.
   const current = resolveCurrentVouchers(events)
     .filter((c) => c.memberId === memberId && c.legs.some((l) => l.accountId === shareCapAccountId))
-    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+    // Deterministic tie-break (same as the cash book): same-date + same-createdAt vouchers must sort
+    // identically here and in getMemberLedger, else the running balance diverges and parity fails.
+    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || '').localeCompare(b.voucherNo || '') || a.id.localeCompare(b.id));
 
   // OB row only when there is no Cr-to-share-capital voucher (a "proper" share-capital voucher).
   const scLegOf = (c: (typeof current)[number]) => c.legs.find((l) => l.accountId === shareCapAccountId)!;
