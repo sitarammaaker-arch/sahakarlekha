@@ -19,6 +19,7 @@ import { resolveJurisdiction } from '@/lib/jurisdiction';
 import type { Capability, CapabilitySource, SocietyCapabilityRow } from './capabilities';
 import { CORE_CAPABILITIES } from './capabilities';
 import { SOCIETY_TYPE_CAPABILITIES } from './societyTypeCapabilities';
+import { resolveJurisdictionPacks } from './jurisdictionPacks';
 import type { Activity } from './activities';
 import { ACTIVITY_CAPABILITY_MAP } from './activityCapabilities';
 
@@ -30,16 +31,15 @@ function activeRows(rows: SocietyCapabilityRow[], now: number): SocietyCapabilit
 
 /**
  * JURISDICTION grants — capabilities auto-entitled by the society's STATE (a `state`-source grant,
- * per C6.2), computed here from society.state so no server row is needed. State-specific statutory
- * packs live behind these so the national core never carries one state's format.
- *   • Haryana (`hr`) marketing/processing → 'haryana_compliance' (HAFED annual-review proformas).
- * Add other states' packs here (e.g. Punjab → 'punjab_compliance') — the core stays untouched.
+ * per C6.2), computed from society.state so no server row is needed.
+ *
+ * CA-11 / ADR-0008: the state packs are now EFFECTIVE-DATED DATA (jurisdictionPacks.ts), not a
+ * hardcoded branch here — adding a state is a data row, and a historical period reproduces its
+ * era's packs. This function just normalizes the state to a jurisdiction code (T-01, ONE place,
+ * so 'HR'/'Haryana'/'हरियाणा' all resolve alike) and resolves the packs.
  */
 export function jurisdictionCapabilities(societyType: SocietyType, state?: string): Capability[] {
-  // Jurisdiction normalization lives in ONE place — resolveJurisdiction (T-01) — so 'HR',
-  // 'Haryana' and 'हरियाणा' all resolve to the same code here and on every financial row.
-  if (societyType === 'marketing_processing' && resolveJurisdiction(state) === 'hr') return ['haryana_compliance'];
-  return [];
+  return resolveJurisdictionPacks(resolveJurisdiction(state), societyType);
 }
 
 /**
