@@ -47,6 +47,7 @@ import { isPeriodLocked as isDateInLockedPeriod } from '@/lib/periodLock';
 import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
 import { planOpeningDelta } from '@/lib/ledger/genesis';
 import { voucherPostingLines, voucherReversalLines, voucherEventMeta } from '@/lib/ledger/voucherEvent';
+import { currentPostingEventId } from '@/lib/ledger/aggregateState';
 import { ledgerTrialBalance } from '@/lib/ledger/trialBalance';
 import { ledgerParity, balancesFromJournal } from '@/lib/ledger/parity';
 import { ledgerCashBookEntries, ledgerBankBookEntries, ledgerMemberLedgerEntries, ledgerReceiptsPaymentsData } from '@/lib/ledger/reports';
@@ -1899,7 +1900,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // means a SECOND edit of the same voucher would collide and its events would be silently
         // dropped, leaving the journal on the first edit's legs (permanent parity break).
         const seq = nextEventSeq('voucher', id);
-        const reversal = buildEvent({ ...base, eventType: 'voucher.reversed', sequence: seq, payload: { lines: voucherReversalLines(current), ...voucherEventMeta(current), reason: 'edit' } }, { eventId: crypto.randomUUID(), occurredAt: at });
+        // CL-2 lineage: the reversed half points at the posting it reverses — the current effective
+        // event (latest repost, else posted), resolved BEFORE these new events are appended.
+        const reversedTarget = currentPostingEventId(ledgerEventsRef.current, id);
+        const reversal = buildEvent({ ...base, eventType: 'voucher.reversed', sequence: seq, reversalOf: reversedTarget, payload: { lines: voucherReversalLines(current), ...voucherEventMeta(current), reason: 'edit' } }, { eventId: crypto.randomUUID(), occurredAt: at });
         const repost = buildEvent({ ...base, eventType: 'voucher.reposted', sequence: seq + 1, payload: { lines: newLegs, ...voucherEventMeta(updatedVoucher) } }, { eventId: crypto.randomUUID(), occurredAt: at });
         editEvents = [reversal, repost];
         ledgerEventsRef.current = [...ledgerEventsRef.current, ...editEvents];
@@ -2038,6 +2042,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // sequences 1..3) would collide on the unique index and the cancel event would be silently
         // dropped: the journal would keep counting a cancelled voucher, permanent parity break.
         sequence: nextEventSeq('voucher', id),
+        // CL-2 lineage: the cancellation points at the posting it reverses (latest repost, else posted).
+        reversalOf: currentPostingEventId(ledgerEventsRef.current, id),
         producer: { kind: 'human', id: deletedBy ?? null },
         payload: { lines: voucherReversalLines(current), ...voucherEventMeta(current), reason },
       }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
