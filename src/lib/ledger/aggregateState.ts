@@ -22,6 +22,10 @@ export interface CurrentVoucher {
   /** voucher amount in RUPEES (payload.amount) — some reports use it directly (e.g. member ledger). */
   amount: number;
   legs: CurrentLeg[];
+  /** journal-first-write (slice 1/2): the remaining vouchers-table fields, so the row is rebuildable. */
+  type: string;
+  branchId: string;
+  createdBy: string;
 }
 
 function legsOf(payload: unknown): CurrentLeg[] {
@@ -66,7 +70,7 @@ export function resolveCurrentVouchers(events: readonly LedgerEvent[]): CurrentV
     const ev = reposted.length ? reposted[reposted.length - 1] : evs.find((e) => e.eventType === 'voucher.posted');
     if (!ev) continue;
     const p = ev.payload;
-    out.push({ id, date: str(p, 'date') || ev.occurredAt.slice(0, 10), voucherNo: str(p, 'voucherNo'), narration: str(p, 'narration'), createdAt: str(p, 'createdAt'), memberId: str(p, 'memberId'), amount: num(p, 'amount'), legs: legsOf(p) });
+    out.push({ id, date: str(p, 'date') || ev.occurredAt.slice(0, 10), voucherNo: str(p, 'voucherNo'), narration: str(p, 'narration'), createdAt: str(p, 'createdAt'), memberId: str(p, 'memberId'), amount: num(p, 'amount'), legs: legsOf(p), type: str(p, 'type'), branchId: str(p, 'branchId'), createdBy: str(p, 'createdBy') });
   }
   return out;
 }
