@@ -86,5 +86,22 @@ for (const perm of ['approve', 'reject']) {
 ok(can('manager', 'approve') && can('boardMember', 'approve') && can('chairman', 'approve'), 'manager/board/chairman can approve');
 ok(!can('cashier', 'approve') && !can('dataEntry', 'approve') && !can('salesOperator', 'approve'), 'operational roles cannot approve');
 
+// 6. Page-affordance gate (ECR-06 17-role): the 7 financial pages replaced
+//    hasPermission(['admin','accountant']) with `can('update')` (edit affordances) and
+//    `can('delete')` (delete affordances). `update` — NOT `create` — is the gate because the
+//    auditor family's `create` is scoped to audit objections; using it would wrongly show
+//    edit buttons to auditors on financial pages. Lock the truth table so a matrix change
+//    can't silently reopen or close a page action.
+const canEdit = (r) => can(r, 'update');
+// Byte-identical to the old hardcoded gate for the 4 legacy roles.
+ok(canEdit('admin') && canEdit('accountant'), 'canEdit: admin + accountant retain edit affordances (was hardcoded)');
+ok(!canEdit('viewer') && !canEdit('auditor'), 'canEdit: viewer + auditor stay read-only on financial pages (auditor create is audit-scoped)');
+// Operational new roles gain edit affordances; pure-governance/assurance roles do not.
+ok(canEdit('cashier') && canEdit('manager') && canEdit('secretary') && canEdit('storeKeeper') && canEdit('salesOperator') && canEdit('dataEntry'), 'canEdit: operational roles can now enter/edit');
+ok(!canEdit('boardMember') && !canEdit('chairman') && !canEdit('internalAuditor') && !canEdit('externalCA') && !canEdit('readOnly'), 'canEdit: governance/assurance/read-only roles stay read-only');
+// Delete affordance is narrower — only admin-tier roles.
+ok(can('admin', 'delete') && can('societyAdmin', 'delete') && can('secretary', 'delete'), 'canDelete: admin/societyAdmin/secretary only');
+ok(!can('accountant', 'delete') && !can('cashier', 'delete') && !can('manager', 'delete'), 'canDelete: accountant/cashier/manager cannot delete (fail-closes at the data layer too)');
+
 console.log(`\nRBAC model: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

@@ -35,9 +35,13 @@ const STATUS_META: Record<ComplianceStatus, { hi: string; en: string; cls: strin
 const ComplianceCalendar: React.FC = () => {
   const { language } = useLanguage();
   const { society, employees, getComplianceFiledIds, markComplianceFiled, unmarkComplianceFiled } = useData();
-  const { hasPermission } = useAuth();
+  const { can } = useAuth();
   const hi = language === 'hi';
-  const canEdit = hasPermission(['admin', 'accountant']);
+  // ECR-06 17-role: RBAC permission gate, not a hardcoded legacy list. `update` (not `create`)
+  // keeps the auditor family — whose `create` is audit-objection-scoped — read-only here;
+  // byte-identical for the 4 legacy roles, opens edit to operational roles (delete fail-closes
+  // at the data layer).
+  const canEdit = can('update');
   const filedIds = getComplianceFiledIds();
 
   const items = useMemo(() => {

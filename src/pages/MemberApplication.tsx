@@ -33,10 +33,14 @@ const EMPTY_FORM = {
 const MemberApplication: React.FC = () => {
   const { language } = useLanguage();
   const { members, addMember, society } = useData();
-  const { hasPermission } = useAuth();
+  const { can } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const canEdit = hasPermission(['admin', 'accountant']);
+  // ECR-06 17-role: RBAC permission gate, not a hardcoded legacy list. `update` (not `create`)
+  // keeps the auditor family — whose `create` is audit-objection-scoped — read-only here;
+  // byte-identical for the 4 legacy roles, opens edit to operational roles (delete fail-closes
+  // at the data layer).
+  const canEdit = can('update');
 
   const [form, setForm] = useState(EMPTY_FORM);
 

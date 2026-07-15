@@ -41,8 +41,14 @@ type EntryMode = 'aasan' | 'expert';
 // Searchable account combobox — type account name/id to filter
 const Vouchers: React.FC = () => {
   const { t, language } = useLanguage();
-  const { user, hasPermission } = useAuth();
-  const canEdit = hasPermission(['admin', 'accountant']);
+  const { user, can } = useAuth();
+  // ECR-06 17-role: gate affordances on the RBAC permission model, not a hardcoded legacy
+  // role list — so operational roles (cashier, manager, …) can enter/edit vouchers while
+  // viewer/boardMember stay read-only. Uses `update` (not `create`): the auditor family's
+  // `create` is scoped to audit objections, so `update` keeps them read-only on financial
+  // pages — byte-identical to the old hardcoded gate for all 4 legacy roles.
+  const canEdit = can('update');    // create + edit + reverse (correction)
+  const canDelete = can('delete');  // cancel / restore — admin/societyAdmin/secretary only
   const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, reverseVoucher, restoreVoucher, getTrialBalance, matchesActiveBranch } = useData();
   const [submitForApproval, setSubmitForApproval] = useState(false);
   const { toast } = useToast();
@@ -1124,7 +1130,7 @@ const Vouchers: React.FC = () => {
                                   <ArrowLeftRight className="h-4 w-4" />
                                 </Button>
                               )}
-                              {canEdit && (cancelled ? (
+                              {canDelete && (cancelled ? (
                                 <Button variant="ghost" size="icon" className="h-9 w-9 text-blue-600 hover:text-blue-700" title={language === 'hi' ? 'पुनर्स्थापित करें' : 'Restore'}
                                   onClick={() => restoreVoucher(v.id)}>
                                   <RotateCcw className="h-4 w-4" />
