@@ -17,6 +17,7 @@
     "test:calc": "node scripts/test-calculators.mjs",
     "test:nav": "node scripts/test-nav.mjs",
     "test:jurisdiction": "node scripts/test-jurisdiction.mjs",
+    "test:jurisdiction-packs": "node scripts/test-jurisdiction-packs.mjs",
     "test:money": "node scripts/test-money.mjs",
     "test:funds": "node scripts/test-funds.mjs",
     "test:appropriation": "node scripts/test-appropriation.mjs",

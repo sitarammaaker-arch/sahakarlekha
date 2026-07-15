@@ -130,7 +130,7 @@ Recorded so the gaps are read against a real baseline. These **pass**:
 - **Tracked by:** T-05. **Severity: S2** — cannot retro-constrain historical blobs.
 
 **CA-11 · Jurisdiction/compliance logic hardcoded in code, not effective-dated rule data**
-- **Evidence:** Haryana pack hardcoded — `capabilityResolver.ts:37` (`societyType === 'marketing_processing' && isHaryana → 'haryana_compliance'`); appropriation/tax constants in code, not a versioned rule store.
+- **Evidence:** ~~Haryana pack hardcoded — `capabilityResolver.ts:37`~~ ✅ CLOSED (2026-07-15): jurisdiction packs are now effective-dated DATA (`jurisdictionPacks.ts`, `JURISDICTION_CAPABILITY_PACKS` + `resolveJurisdictionPacks`); the resolver just normalizes+looks up. Appropriation rates ✅ already rule-data via the T-15/16 engine (`ucas.ts` `UCAS_RULES`, effective-dated + jurisdiction-scoped) consumed by `appropriation.ts`. **RESIDUAL:** tax constants (GST/TDS rates) are still in code, not the rule store — the remaining CA-11 slice.
 - **Architecture violated:** INV-3.
 - **ADR violated:** **ADR-0008** (rules as effective-dated, jurisdiction-scoped data).
 - **UCAS violated:** UCAS CM rates/formats meant to be rule-data (`[NV per state]`).
