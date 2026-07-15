@@ -152,7 +152,6 @@ export default function UserManagement() {
           is_active: form.isActive,
           branch_id: form.branchId || null,   // ECR-17 Phase 4b: '' = society-wide (unrestricted)
         };
-        if (form.password) updateData.password = form.password;
 
         const { error } = await supabase
           .from('society_users')
@@ -163,11 +162,29 @@ export default function UserManagement() {
 
         const updated = users.map(u =>
           u.id === editing.id
-            ? { ...u, name: form.name, email: form.email, role: form.role, isActive: form.isActive, branchId: form.branchId || '', ...(form.password ? { password: form.password } : {}) }
+            ? { ...u, name: form.name, email: form.email, role: form.role, isActive: form.isActive, branchId: form.branchId || '' }
             : u
         );
         setUsers(updated);
         cacheUsers(updated);
+
+        // P1-SEC-5: real logins live in Supabase Auth, not society_users.password
+        // (a dead column that 012's trigger force-blanks). Reset via the SECURITY
+        // DEFINER RPC so the new password actually works at the login screen.
+        if (form.password) {
+          const { error: pwErr } = await supabase.rpc('app_reset_society_user_password', {
+            p_su_id: editing.id,
+            p_password: form.password,
+          });
+          if (pwErr) {
+            // Profile fields saved above; only the password reset failed. Keep the
+            // dialog open so the admin can retry — don't pretend it worked.
+            setSaveError(hi
+              ? `प्रोफ़ाइल सेव हो गई, लेकिन पासवर्ड reset नहीं हुआ: ${pwErr.message}`
+              : `Profile saved, but password reset failed: ${pwErr.message}`);
+            return;
+          }
+        }
       } else {
         // Create new user — atomically creates a CONFIRMED Supabase Auth login
         // (with identity) AND the society_users row, server-side via RPC. This
@@ -196,7 +213,7 @@ export default function UserManagement() {
           id: (newSuId as string) || form.email,
           name: form.name,
           email: form.email,
-          password: form.password,
+          password: '', // P1-SEC-5: never cache a plain-text password (localStorage)
           role: form.role,
           isActive: form.isActive,
           society_id: societyId,
@@ -213,6 +230,9 @@ export default function UserManagement() {
         title: editing
           ? (hi ? 'उपयोगकर्ता अपडेट हुआ' : 'User updated')
           : (hi ? 'उपयोगकर्ता जोड़ा गया' : 'User added'),
+        description: editing && form.password
+          ? (hi ? 'नया पासवर्ड तुरंत लागू हो गया — अगला login नए पासवर्ड से होगा.' : 'New password is live — the next login uses it.')
+          : undefined,
       });
     } catch (err: unknown) {
       const e = err as { message?: string; details?: string; hint?: string; code?: string };
