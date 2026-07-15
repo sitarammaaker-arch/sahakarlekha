@@ -30,7 +30,7 @@ register(
     `),
 );
 
-const { resolveCurrentVouchers } = await import(abs('../src/lib/ledger/aggregateState.ts'));
+const { resolveCurrentVouchers, currentPostingEventId } = await import(abs('../src/lib/ledger/aggregateState.ts'));
 const { buildEvent } = await import(abs('../src/lib/ledger/event.ts'));
 
 let pass = 0, fail = 0;
@@ -62,6 +62,20 @@ ok(resolveCurrentVouchers([ev('1001', 'account.opening', [leg('1001', 'Dr', 5000
 
 // 5. Multiple independent vouchers all resolve.
 ok(resolveCurrentVouchers([ev('a', 'voucher.posted', [leg('1', 'Dr', 1)]), ev('b', 'voucher.posted', [leg('2', 'Dr', 2)])]).length === 2, 'independent vouchers each resolve');
+
+// 6. currentPostingEventId — the reversalOf target a cancel/edit-reversed event should point at.
+// ev builds ids as `e-<id>-<seq>-<eventType>`.
+ok(currentPostingEventId([ev('p', 'voucher.posted', [leg('1', 'Dr', 1)])], 'p') === 'e-p-1-voucher.posted',
+   'plain posted → its posted eventId (what a cancel reverses)');
+const edited = [
+  ev('e', 'voucher.posted', [leg('1', 'Dr', 1)]),
+  ev('e', 'voucher.reversed', [leg('1', 'Cr', 1)], {}, 2),
+  ev('e', 'voucher.reposted', [leg('1', 'Dr', 2)], {}, 3),
+];
+ok(currentPostingEventId(edited, 'e') === 'e-e-3-voucher.reposted',
+   'edited → the LATEST reposted eventId (not the original posted)');
+ok(currentPostingEventId([], 'x') === undefined && currentPostingEventId([ev('p', 'voucher.posted', [leg('1','Dr',1)])], 'other') === undefined,
+   'unknown aggregate → undefined');
 
 console.log(`\nCurrent-voucher resolution (T-09): ${pass} passed, ${fail} failed`);
 // Set exitCode + let node drain naturally — an immediate process.exit() on this very light script

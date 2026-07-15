@@ -70,3 +70,21 @@ export function resolveCurrentVouchers(events: readonly LedgerEvent[]): CurrentV
   }
   return out;
 }
+
+/**
+ * PURE — the eventId of a voucher aggregate's CURRENT effective posting: its latest `voucher.reposted`
+ * (an edited voucher), else its `voucher.posted`. This is the event a NEW reversing event
+ * (voucher.cancelled, or the reversed half of an edit) should point its `reversalOf` at (CL-2 lineage)
+ * — computed BEFORE the reversing event is appended, so the not-yet-added cancel/reversed isn't seen.
+ */
+export function currentPostingEventId(events: readonly LedgerEvent[], aggregateId: string): string | undefined {
+  let postedId: string | undefined;
+  let repostId: string | undefined;
+  let repostSeq = -1;
+  for (const e of Array.isArray(events) ? events : []) {
+    if (e.aggregateType !== 'voucher' || e.aggregateId !== aggregateId) continue;
+    if (e.eventType === 'voucher.posted') postedId = e.eventId;
+    else if (e.eventType === 'voucher.reposted' && e.sequence > repostSeq) { repostSeq = e.sequence; repostId = e.eventId; }
+  }
+  return repostId ?? postedId;
+}
