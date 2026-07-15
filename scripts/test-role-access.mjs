@@ -105,5 +105,24 @@ ok(MODULE_CATALOG.every((m) => isModuleVisible(m, { societyType: 'multi_purpose'
 // superAdmin is not society-mappable.
 ok(ROLE_MODULE_ACCESS.superAdmin === undefined, 'superAdmin has no society map entry');
 
+// ── operations domain = "doing" surface, hidden from read-only LEGACY roles ──
+// (ECR-06: transaction-entry + trade masters carry requiredRoles ['admin','accountant'];
+//  read-only auditor/viewer audit via the reports/registers instead.)
+const OPS_ENTRY = ['ledgerHeads', 'inventory', 'suppliers', 'customers', 'sales', 'purchases', 'salary', 'receivePayment', 'makePayment'];
+const ALL = new Set(MODULE_CATALOG.flatMap((m) => m.requiredCapabilities));
+for (const legacy of ['auditor', 'viewer']) {
+  const seen = new Set(visibleIds(legacy, ALL));
+  ok(OPS_ENTRY.every((id) => !seen.has(id)), `${legacy} sees NO operations entry page (sales/purchases/inventory/…)`);
+  // …but still audits via the read-only registers.
+  ok(seen.has('saleRegister') && seen.has('purchaseRegister') && seen.has('trialBalance'), `${legacy} still sees the reports/registers (audits there)`);
+}
+for (const worker of ['admin', 'accountant']) {
+  const seen = new Set(visibleIds(worker, ALL));
+  ok(OPS_ENTRY.every((id) => seen.has(id)), `${worker} keeps every operations entry page (byte-identical)`);
+}
+// New operational roles reach their pages via ROLE_MODULE_ACCESS, unaffected by requiredRoles.
+ok(new Set(visibleIds('salesOperator', ALL)).has('sales'), 'salesOperator still sees Sales (map governs, requiredRoles ignored)');
+ok(new Set(visibleIds('storeKeeper', ALL)).has('inventory'), 'storeKeeper still sees Inventory (map governs)');
+
 console.log(`Role→module access (S2): ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
