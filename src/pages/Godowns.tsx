@@ -24,11 +24,16 @@ import { buildWarehouseDoc } from '@/lib/warehouseDoc';
 
 const Godowns: React.FC = () => {
   const { godowns, addGodown, updateGodown, deleteGodown, branches, stockMovements, stockItems, transferStock, society } = useData();
-  const { user } = useAuth();
+  const { can } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
-  const isAdmin = user?.role === 'admin';
+  // ECR-06 17-role: godown master is a store-keeper responsibility (matrix: inventory/godown),
+  // so gate on the permission model, not role==='admin'. `update` opens create/edit to
+  // storeKeeper/manager/secretary (server jwt_can_write already permits them); delete stays
+  // admin-tier via `delete` (server jwt_can_delete enforces the same). Byte-identical for admin.
+  const canEdit = can('update');
+  const canDelete = can('delete');
   const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 
   const [open, setOpen] = useState(false);
@@ -130,7 +135,7 @@ const Godowns: React.FC = () => {
           {stockItems.length > 0 && godowns.length > 0 && (
             <Button variant="outline" onClick={openTransfer} className="gap-2"><ArrowLeftRight className="h-4 w-4" />{hi ? 'स्थानांतरण' : 'Transfer'}</Button>
           )}
-          {isAdmin && <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" />{hi ? 'नया गोदाम' : 'New Godown'}</Button>}
+          {canEdit && <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" />{hi ? 'नया गोदाम' : 'New Godown'}</Button>}
         </div>
       </div>
 
@@ -160,10 +165,10 @@ const Godowns: React.FC = () => {
                     {util.utilisationPct == null ? '—' : `${util.utilisationPct}%${util.overCapacity ? (hi ? ' (क्षमता से अधिक)' : ' (over)') : ''}`}
                   </TableCell>
                   <TableCell className="text-right">{fmt(totals[g.id] || 0)}</TableCell>
-                  <TableCell>{isAdmin && (
+                  <TableCell>{(canEdit || canDelete) && (
                     <div className="flex justify-end gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => openEdit(g)}><Edit2 className="h-4 w-4" /></Button>
-                      <Button size="sm" variant="ghost" onClick={() => remove(g)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      {canEdit && <Button size="sm" variant="ghost" onClick={() => openEdit(g)}><Edit2 className="h-4 w-4" /></Button>}
+                      {canDelete && <Button size="sm" variant="ghost" onClick={() => remove(g)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
                     </div>
                   )}</TableCell>
                 </TableRow>

@@ -50,15 +50,20 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'memberApplication',  titleKey: 'memberApplication',  icon: ClipboardList,   route: '/member-application', domain: 'core', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 10 },
 
   // ── operations (was operationsNavItems) ──
-  { id: 'ledgerHeads',    titleKey: 'ledgerHeads',    icon: ListTree,        route: '/ledger-heads',    domain: 'operations', requiredCapabilities: U, order: 0 },
-  { id: 'inventory',      titleKey: 'inventory',      icon: Boxes,           route: '/inventory',       domain: 'operations', requiredCapabilities: ['inventory_sales'], order: 1 },
-  { id: 'suppliers',      titleKey: 'suppliers',      icon: Truck,           route: '/suppliers',       domain: 'operations', requiredCapabilities: U, order: 2 },
-  { id: 'customers',      titleKey: 'customers',      icon: UserCheck,       route: '/customers',       domain: 'operations', requiredCapabilities: ['inventory_sales'], order: 3 },
-  { id: 'sales',          titleKey: 'sales',          icon: ShoppingCart,    route: '/sales',           domain: 'operations', requiredCapabilities: ['inventory_sales'], order: 4 },
+  // ECR-06: the operations domain is the "doing" surface — transaction entry + trade masters.
+  // requiredRoles ['admin','accountant'] hides these from the read-only LEGACY roles (viewer,
+  // auditor→viewer) who audit via the reports/registers instead; it does NOT affect the mapped
+  // 17-role names (storeKeeper/salesOperator/procurementOfficer/manager use ROLE_MODULE_ACCESS,
+  // which ignores requiredRoles). Mirrors the existing receivePayment/makePayment gate.
+  { id: 'ledgerHeads',    titleKey: 'ledgerHeads',    icon: ListTree,        route: '/ledger-heads',    domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 0 },
+  { id: 'inventory',      titleKey: 'inventory',      icon: Boxes,           route: '/inventory',       domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant'], order: 1 },
+  { id: 'suppliers',      titleKey: 'suppliers',      icon: Truck,           route: '/suppliers',       domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 2 },
+  { id: 'customers',      titleKey: 'customers',      icon: UserCheck,       route: '/customers',       domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant'], order: 3 },
+  { id: 'sales',          titleKey: 'sales',          icon: ShoppingCart,    route: '/sales',           domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant'], order: 4 },
   { id: 'receivePayment', titleKey: 'receivePayment', icon: HandCoins,       route: '/receive-payment', domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 5 },
-  { id: 'purchases',      titleKey: 'purchases',      icon: PackagePlus,     route: '/purchases',       domain: 'operations', requiredCapabilities: U, order: 6 },
+  { id: 'purchases',      titleKey: 'purchases',      icon: PackagePlus,     route: '/purchases',       domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 6 },
   { id: 'makePayment',    titleKey: 'makePayment',    icon: Banknote,        route: '/make-payment',    domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 7 },
-  { id: 'salary',         titleKey: 'salary',         icon: BadgeDollarSign, route: '/salary',          domain: 'operations', requiredCapabilities: U, order: 8 },
+  { id: 'salary',         titleKey: 'salary',         icon: BadgeDollarSign, route: '/salary',          domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 8 },
   { id: 'milkCollection', titleKey: 'milkCollection', icon: Milk,            route: '/milk-collection', domain: 'dairy', requiredCapabilities: ['dairy_collection'], order: 0 },  // C4: dairy-only
   { id: 'dairyRateCharts', titleKey: 'dairyRateCharts', icon: Table2,        route: '/dairy-rate-charts', domain: 'dairy', requiredCapabilities: ['dairy_collection'], requiredRoles: ['admin', 'accountant'], order: 1 },
   { id: 'farmerSettlement', titleKey: 'farmerSettlement', icon: HandCoins,   route: '/farmer-settlement', domain: 'dairy', requiredCapabilities: ['dairy_collection'], requiredRoles: ['admin', 'accountant'], order: 2 },

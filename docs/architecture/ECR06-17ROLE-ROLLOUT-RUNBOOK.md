@@ -100,7 +100,29 @@ Per-user module assignment (employee/dataEntry "assigned modules"), time-boxed a
 approval amount-limits (financial authorization matrix), FY-close dual-control wiring — separate
 features, do not smuggle them in.
 
-### S6 · Audit-domain create carve-out — ✅ DONE (2026-07-15)
+### S5 · Residual hardcoded role-gate audit (2026-07-15)
+Beyond the 7 canEdit pages (fixed PR #177), a sweep found more page-level `role === 'admin'` /
+`hasPermission([...])` affordance gates. Split by whether the SERVER already permits the new role:
+
+**Fixed (pure client, server already permits, new role reaches page via nav):**
+- `Godowns.tsx` — `isAdmin` → `canEdit = can('update')` (+ delete on `can('delete')`). storeKeeper
+  owns godown master (matrix inventory/godown) and `jwt_can_write()` (mig 045) already allows it.
+- `BudgetModule.tsx` — `admin||accountant` → `can('update')`; opens budget editing to manager/
+  secretary who reach Reports; budget writes aren't role-scoped at the RLS layer.
+
+**Deliberately LEFT admin-only — need a coordinated `is_society_admin` change first (sensitive):**
+`UserManagement.tsx` (secretary has matrix `userMgmt`) and `SocietySetup.tsx` (config) are gated
+server-side by `is_society_admin()` which checks `role='admin'` (supabase-security.sql) and also
+backs the `app_add_society_user` RPC + societies/society_settings/society_users RLS. Opening the UI
+for secretary/societyAdmin WITHOUT first widening `is_society_admin` to those roles would just cause
+server rejections. That's a tenant-admin-boundary change → its own careful slice (**S7**), not a client tweak.
+
+**Correctly admin-only, leave as-is:** `Features.tsx` (feature flags/config), `MultiSocietyConsolidation.tsx`
+(federation), `OpeningBalances.tsx` (books' starting point — sensitive), `ElectionModule.tsx` /
+`FundRegister.tsx` (widening would change a LEGACY role's access, not just add new roles — needs a
+product decision, not a mechanical fix).
+
+### S6 · Audit-domain create carve-out — ✅ DONE (2026-07-15, PR #180)
 The auditor family's matrix `create` was consumed only by `addVoucher`'s `guardPermission('create')`
 (letting an auditor attempt a financial create — client-side; the server RLS mig 045 already blocked
 the write), while `addAuditObjection` didn't gate on it at all. Fixed with a dedicated **`auditNote`**
@@ -108,6 +130,11 @@ permission (15th): granted to auditor/internalAuditor/externalCA + societyAdmin/
 `create` removed from the auditor family. `addAuditObjection`/`updateAuditObjection` now gate on
 `auditNote`; `addVoucher`'s `create` guard therefore correctly excludes auditors. Client now matches
 the server. test:rbac +13.
+
+### S7 · Tenant-admin-boundary (open) — secretary user-mgmt/config
+Widen `is_society_admin()` (supabase-security.sql) to accept `societyAdmin`/`secretary`, then open
+`UserManagement.tsx` / `SocietySetup.tsx` for them (see S5). Coordinated client+server+RLS change;
+product + auth decision, not scheduled.
 
 ---
 
