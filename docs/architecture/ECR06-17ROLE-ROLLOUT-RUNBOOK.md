@@ -131,10 +131,21 @@ permission (15th): granted to auditor/internalAuditor/externalCA + societyAdmin/
 `auditNote`; `addVoucher`'s `create` guard therefore correctly excludes auditors. Client now matches
 the server. test:rbac +13.
 
-### S7 · Tenant-admin-boundary (open) — secretary user-mgmt/config
-Widen `is_society_admin()` (supabase-security.sql) to accept `societyAdmin`/`secretary`, then open
-`UserManagement.tsx` / `SocietySetup.tsx` for them (see S5). Coordinated client+server+RLS change;
-product + auth decision, not scheduled.
+### S7 · Secretary user-management — ✅ DONE (2026-07-15, PR #182, mig 047)
+**The naive plan (widen `is_society_admin()`) was UNSAFE** and was rejected: `is_society_admin` backs
+the `society_users` FOR ALL policy, so widening it would let a secretary `update society_users set
+role='admin'` (self-escalation) or deactivate the admin (lock-out) via the raw API. Instead:
+- **`is_society_admin` stays admin-only.** New narrow gate `is_society_user_manager` (admin + secretary).
+- **RLS:** a `society_users_secretary` FOR ALL policy allows a secretary to write society_users rows
+  ONLY where `role <> 'admin'` (both USING and WITH CHECK) — no editing admin rows, no promoting
+  anyone (incl. self) to admin.
+- **RPC:** `app_add_society_user` now allows secretary (is_society_user_manager) but a non-admin
+  caller cannot pass `p_role='admin'` (in-body guard, since SECURITY DEFINER bypasses RLS).
+- **Client:** UserManagement gates on `can('userMgmt')`; the `admin` option is hidden from the role
+  dropdown and the edit button is hidden on admin rows for a non-admin (secretary) caller.
+- **Left admin-only (deliberate):** password reset (`app_reset_society_user_password`), `is_society_admin`
+  (society_settings/societies), and `SocietySetup` COA-reset. Secretary manages non-admin users only.
+- User runs migration 047 after merge.
 
 ---
 

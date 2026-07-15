@@ -41,10 +41,14 @@ declare
   v_uid    uuid;
   v_su_id  uuid;
 begin
-  -- 1. Authorization: caller must be an active admin of this society.
-  --    (v_caller is null only in trusted service/SQL context — allowed.)
-  if v_caller is not null and not public.is_society_admin(p_society_id) then
-    raise exception 'Only an admin of this society can add users';
+  -- 1. Authorization: caller must be an active admin OR secretary of this society (ECR-06 S7,
+  --    mig 047). (v_caller is null only in trusted service/SQL context — allowed.)
+  if v_caller is not null and not public.is_society_user_manager(p_society_id) then
+    raise exception 'Only an admin or secretary of this society can add users';
+  end if;
+  -- S7 escalation guard: only a full admin may create another admin.
+  if p_role = 'admin' and v_caller is not null and not public.is_society_admin(p_society_id) then
+    raise exception 'Only an admin can create an admin user';
   end if;
 
   -- 2. Validation
