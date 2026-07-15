@@ -1528,6 +1528,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }): Voucher => {
+    // ECR-06: role gate at the voucher choke point — every composite flow (sale/purchase/salary/
+    // loan/reversal) and page funnels through here, so one guard covers every voucher birth.
+    if (guardPermission('create', 'वाउचर बनाने')) {
+      return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    }
     // P2-1: Block new vouchers when the FY is audit-locked
     if (society.fyLocked) {
       toastRef.current({
@@ -1812,6 +1817,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [suppliers, accounts, addVoucher, user?.name]);
 
   const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => {
+    if (guardPermission('update', 'वाउचर बदलने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return;
