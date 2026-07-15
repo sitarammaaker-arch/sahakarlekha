@@ -24,7 +24,7 @@ import { buildWarehouseDoc } from '@/lib/warehouseDoc';
 
 const Godowns: React.FC = () => {
   const { godowns, addGodown, updateGodown, deleteGodown, branches, stockMovements, stockItems, transferStock, society } = useData();
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -40,7 +40,10 @@ const Godowns: React.FC = () => {
   const [editing, setEditing] = useState<Godown | null>(null);
   const [form, setForm] = useState({ name: '', code: '', branchId: '', address: '', capacityMT: '' });
 
-  const openNew = () => { setEditing(null); setForm({ name: '', code: '', branchId: branches.find(b => b.isHeadOffice)?.id || '', address: '', capacityMT: '' }); setOpen(true); };
+  // ECR-17 (mig 048): a branch-restricted user's NEW godown must default to THEIR branch — else the
+  // branch-scoped insert RLS (jwt_branch_ok) rejects it. Unrestricted users default to Head Office.
+  const defaultBranchId = user?.branchId || branches.find(b => b.isHeadOffice)?.id || '';
+  const openNew = () => { setEditing(null); setForm({ name: '', code: '', branchId: defaultBranchId, address: '', capacityMT: '' }); setOpen(true); };
   const openEdit = (g: Godown) => { setEditing(g); setForm({ name: g.name, code: g.code || '', branchId: g.branchId || '', address: g.address || '', capacityMT: g.capacityMT != null ? String(g.capacityMT) : '' }); setOpen(true); };
   const save = () => {
     if (!form.name.trim()) { toast({ title: hi ? 'नाम ज़रूरी' : 'Name required', variant: 'destructive' }); return; }
