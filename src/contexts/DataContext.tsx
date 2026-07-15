@@ -1923,9 +1923,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // CL-2 lineage: the reversed half points at the posting it reverses — the current effective
         // event (latest repost, else posted), resolved BEFORE these new events are appended.
         const reversedTarget = currentPostingEventId(ledgerEventsRef.current, id);
-        const reversal = buildEvent({ ...base, eventType: 'voucher.reversed', sequence: seq, reversalOf: reversedTarget, payload: { lines: voucherReversalLines(current), ...voucherEventMeta(current), reason: 'edit' } }, { eventId: crypto.randomUUID(), occurredAt: at });
-        const repost = buildEvent({ ...base, eventType: 'voucher.reposted', sequence: seq + 1, payload: { lines: newLegs, ...voucherEventMeta(updatedVoucher) } }, { eventId: crypto.randomUUID(), occurredAt: at });
-        editEvents = [reversal, repost];
+        if (reversedTarget) {
+          const reversal = buildEvent({ ...base, eventType: 'voucher.reversed', sequence: seq, reversalOf: reversedTarget, payload: { lines: voucherReversalLines(current), ...voucherEventMeta(current), reason: 'edit' } }, { eventId: crypto.randomUUID(), occurredAt: at });
+          const repost = buildEvent({ ...base, eventType: 'voucher.reposted', sequence: seq + 1, payload: { lines: newLegs, ...voucherEventMeta(updatedVoucher) } }, { eventId: crypto.randomUUID(), occurredAt: at });
+          editEvents = [reversal, repost];
+        } else {
+          // No posting in the journal to reverse (a pre-T-06 voucher edited after go-live). A
+          // reversed(old)+reposted(new) pair would leave the journal short by the OLD legs — active-voucher
+          // drift (journal = new − old, but its current legs = new). Seed the CURRENT legs as a single
+          // voucher.posted instead: a late genesis of the edited voucher, so the journal equals its legs.
+          const posted = buildEvent({ ...base, eventType: 'voucher.posted', sequence: seq, payload: { lines: newLegs, ...voucherEventMeta(updatedVoucher) } }, { eventId: crypto.randomUUID(), occurredAt: at });
+          editEvents = [posted];
+        }
         ledgerEventsRef.current = [...ledgerEventsRef.current, ...editEvents];
       }
     } catch { /* shadow ledger is best-effort — never touches the edit save path */ }
@@ -2052,22 +2061,31 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // reports. Best-effort and isolated; the original voucher.posted event stays in the log (CL-2).
     let cancelEvent: LedgerEvent | null = null;
     try {
-      cancelEvent = buildEvent({
-        eventType: 'voucher.cancelled',
-        tenantId: societyIdRef.current,
-        jurisdiction: jurisdictionRef.current,
-        aggregateType: 'voucher',
-        aggregateId: id,
-        // From the journal, not hardcoded 2 — cancelling an already-EDITED voucher (which holds
-        // sequences 1..3) would collide on the unique index and the cancel event would be silently
-        // dropped: the journal would keep counting a cancelled voucher, permanent parity break.
-        sequence: nextEventSeq('voucher', id),
-        // CL-2 lineage: the cancellation points at the posting it reverses (latest repost, else posted).
-        reversalOf: currentPostingEventId(ledgerEventsRef.current, id),
-        producer: { kind: 'human', id: deletedBy ?? null },
-        payload: { lines: voucherReversalLines(current), ...voucherEventMeta(current), reason },
-      }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
-      ledgerEventsRef.current = [...ledgerEventsRef.current, cancelEvent];
+      // Only reverse a posting the journal ACTUALLY HOLDS. currentPostingEventId is undefined when there
+      // is no voucher.posted/reposted for this voucher — it was posted before the shadow journal existed
+      // (pre-T-06) and genesis skips deleted vouchers, so its posting was never seeded. Appending a
+      // voucher.cancelled then leaves an ORPHAN reversal whose legs have nothing to cancel — a permanent
+      // trial-balance parity break (the CV/2026/27/320 & /329 class, historically reconciled by
+      // scripts/reconcile-cancelled-ledger.mjs). With no posting the voucher already contributes nothing,
+      // so the correct cancellation appends nothing.
+      const postingToReverse = currentPostingEventId(ledgerEventsRef.current, id);
+      if (postingToReverse) {
+        cancelEvent = buildEvent({
+          eventType: 'voucher.cancelled',
+          tenantId: societyIdRef.current,
+          jurisdiction: jurisdictionRef.current,
+          aggregateType: 'voucher',
+          aggregateId: id,
+          // From the journal, not hardcoded 2 — cancelling an already-EDITED voucher (which holds
+          // sequences 1..3) would collide on the unique index and the cancel event would be silently
+          // dropped: the journal would keep counting a cancelled voucher, permanent parity break.
+          sequence: nextEventSeq('voucher', id),
+          reversalOf: postingToReverse,   // CL-2 lineage: points at the posting it reverses (latest repost, else posted)
+          producer: { kind: 'human', id: deletedBy ?? null },
+          payload: { lines: voucherReversalLines(current), ...voucherEventMeta(current), reason },
+        }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
+        ledgerEventsRef.current = [...ledgerEventsRef.current, cancelEvent];
+      }
     } catch { /* shadow ledger is best-effort — never touches the cancel path */ }
     emitAudit({ entityType: 'voucher', entityId: id, action: 'cancel', reason });
     setVouchersState(prev => {
