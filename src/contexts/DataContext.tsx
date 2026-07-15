@@ -35,7 +35,7 @@ import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } from '@/lib/storage';
-import { isUniqueViolation, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
+import { isUniqueViolation, isMissingBranchColumn, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability, SocietyActivityRow } from '@/lib/navigation';
@@ -1423,10 +1423,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const persistVoucher = (v: Voucher, opts: { onBaseFail: () => void; onBaseSuccess?: () => void; isUpdate?: boolean }) => {
-    // Strip out everything that may live in late-added columns
+    // Strip out everything that may live in late-added columns. branchId is the exception
+    // (ECR-17 Phase 5): it stays IN the base upsert because the branch-scoped RLS SELECT
+    // policies (migration 039) must see it on the row from birth — otherwise a branch-
+    // restricted user's fresh voucher is invisible to its own verify-read below and would
+    // be falsely rolled back. attemptBase retries without it on a stale schema cache.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { lines, refType, refId, billAllocations, isCleared, clearedDate, editHistory, groupId,
-            approvalStatus, approvalRemarks, approvedBy, approvedAt, workOrderId, costCentreId, branchId, ...baseCols } = v;
+            approvalStatus, approvalRemarks, approvedBy, approvedAt, workOrderId, costCentreId, ...baseCols } = v;
 
     const handleBaseFailure = (msg: string) => {
       console.error(`Voucher ${opts.isUpdate ? 'update' : 'save'} failed (base):`, msg);
@@ -1456,6 +1460,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const attemptBase = (cols: typeof baseCols, tries: number) => {
     supabase.from('vouchers').upsert(withSoc(cols)).then(({ error }) => {
       if (error) {
+        if (isMissingBranchColumn(error) && 'branchId' in cols) {
+          // Stale schema cache without "branchId" → retry the base save without it (the
+          // step-2 extras patch still tries to stamp it, and warns loudly if it can't).
+          const { branchId: _b, ...noBranch } = cols as typeof cols & { branchId?: string };
+          attemptBase(noBranch, tries);
+          return;
+        }
         if (isUniqueViolation(error) && !opts.isUpdate && tries < MAX_RENUMBER_RETRIES) {
           const newNo = renumberVoucher((cols as { voucherNo?: string }).voucherNo);
           vouchersRef.current = vouchersRef.current.map(x => x.id === v.id ? { ...x, voucherNo: newNo } : x);
@@ -2423,23 +2434,33 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = [...prev, newMember];
       return updated;
     });
-    // ECR-17 Phase 4: branchId is a late-added column — keep it out of the base
-    // upsert (schema-cache safe) and patch it in step-2 so RULE-1 rollback still fires.
-    const { branchId: mBranch, ...memberBase } = newMember;
-    supabase.from('members').upsert(withSoc(memberBase)).then(({ error }) => {
-      if (error) {
-        console.error('DB sync error:', error.message); reportError('db-sync', error.message);
-        setMembersState(prev => prev.filter(m => m.id !== newMember.id));   // RULE 1: roll back local state
-        toastRef.current({ title: 'सदस्य सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
-        return;
-      }
-      if (mBranch) supabase.from('members').update({ branchId: mBranch }).eq('id', newMember.id).then(({ error: bErr }) => { if (bErr) console.warn('Member branch patch:', bErr.message); });
-    });
+    // ECR-17 Phase 5: branchId rides IN the base upsert — the branch-scoped RLS SELECT
+    // policies (migration 039) must see it on the row from birth, or a branch-restricted
+    // user's own new member vanishes from their next load. On a stale schema cache that
+    // doesn't know "branchId" yet, retry once without it so the base save never fails
+    // because of the branch column (RULE 1).
+    const attemptMemberSave = (payload: Member) => {
+      supabase.from('members').upsert(withSoc(payload)).then(({ error }) => {
+        if (error) {
+          if (isMissingBranchColumn(error) && 'branchId' in payload) {
+            const { branchId: _b, ...noBranch } = payload;
+            attemptMemberSave(noBranch as Member);
+            return;
+          }
+          console.error('DB sync error:', error.message); reportError('db-sync', error.message);
+          setMembersState(prev => prev.filter(m => m.id !== newMember.id));   // RULE 1: roll back local state
+          toastRef.current({ title: 'सदस्य सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        }
+      });
+    };
+    attemptMemberSave(newMember);
     // Skip auto-vouchers for pending applications (created on approval)
     if (newMember.approvalStatus === 'pending') return newMember;
     // Auto-create Receipt vouchers for Share Capital and Admission Fee
     if ((newMember.shareCapital || 0) > 0) {
-      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: newMember.shareCapital, narration: `Share Capital received from ${newMember.name}`, memberId: newMember.id, createdAt: new Date().toISOString(), createdBy: 'System' };
+      // ECR-17 Phase 5: stamp the member's branch (this construction bypasses addVoucher's stamp;
+      // an unbranched voucher would be invisible to a branch-restricted creator's verify-read).
+      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: newMember.shareCapital, narration: `Share Capital received from ${newMember.name}`, memberId: newMember.id, branchId: newMember.branchId, createdAt: new Date().toISOString(), createdBy: 'System' };
       vouchersRef.current = [...vouchersRef.current, v];
       setVouchersState(prev => { const updated = [...prev, v]; return updated; });
       // RULE 1: use persistVoucher so a failed cloud save ROLLS BACK the optimistic local voucher
@@ -2451,7 +2472,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } });
     }
     if ((newMember.admissionFee || 0) > 0) {
-      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: newMember.admissionFee!, narration: `Admission Fee received from ${newMember.name}`, memberId: newMember.id, createdAt: new Date().toISOString(), createdBy: 'System' };
+      // ECR-17 Phase 5: stamp the member's branch (see the Share Capital voucher above).
+      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: newMember.admissionFee!, narration: `Admission Fee received from ${newMember.name}`, memberId: newMember.id, branchId: newMember.branchId, createdAt: new Date().toISOString(), createdBy: 'System' };
       vouchersRef.current = [...vouchersRef.current, v];
       setVouchersState(prev => { const updated = [...prev, v]; return updated; });
       // RULE 1: use persistVoucher so a failed cloud save ROLLS BACK the optimistic local voucher
@@ -2474,16 +2496,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = prev.map(m => m.id === id ? updatedMember : m);
       return updated;
     });
-    const { branchId: umBranch, ...updatedMemberBase } = updatedMember;   // ECR-17 Phase 4: branchId patched in step-2 (schema-cache safe)
-    supabase.from('members').upsert(withSoc(updatedMemberBase)).then(({ error }) => {
-      if (error) {
-        console.error('DB sync error:', error.message); reportError('db-sync', error.message);
-        setMembersState(prev => prev.map(m => m.id === id ? oldMember : m));   // RULE 1: roll back to prior state
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
-        return;
-      }
-      if (umBranch) supabase.from('members').update({ branchId: umBranch }).eq('id', id).then(({ error: bErr }) => { if (bErr) console.warn('Member branch patch:', bErr.message); });
-    });
+    // ECR-17 Phase 5: branchId rides IN the base upsert (see addMember); stale-schema-cache
+    // fallback keeps RULE 1 intact.
+    const attemptMemberUpdate = (payload: Member) => {
+      supabase.from('members').upsert(withSoc(payload)).then(({ error }) => {
+        if (error) {
+          if (isMissingBranchColumn(error) && 'branchId' in payload) {
+            const { branchId: _b, ...noBranch } = payload;
+            attemptMemberUpdate(noBranch as Member);
+            return;
+          }
+          console.error('DB sync error:', error.message); reportError('db-sync', error.message);
+          setMembersState(prev => prev.map(m => m.id === id ? oldMember : m));   // RULE 1: roll back to prior state
+          toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        }
+      });
+    };
+    attemptMemberUpdate(updatedMember);
     // Helper: re-sync a member's auto-voucher (Share Capital / Admission Fee).
     // Updates amount + narration + lines AND syncs voucher_entries so SQL reports match.
     // If the voucher was cancelled earlier, warn the user instead of silently no-op.
@@ -3180,7 +3209,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Member approval is durable — ONLY now create the auto-vouchers (never before, so a
       // failed approve can never leave orphan share-capital / admission-fee vouchers).
       if ((approved.shareCapital || 0) > 0) {
-        const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: approved.shareCapital, narration: `Share Capital received from ${approved.name}`, memberId: approved.id, createdAt: new Date().toISOString(), createdBy: 'System' };
+        // ECR-17 Phase 5: stamp the member's branch (falling back to the approver's active branch)
+        // — this construction bypasses addVoucher's stamp, and an unbranched voucher would be
+        // invisible to a branch-restricted approver's verify-read.
+        const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: approved.shareCapital, narration: `Share Capital received from ${approved.name}`, memberId: approved.id, branchId: approved.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current), createdAt: new Date().toISOString(), createdBy: 'System' };
         vouchersRef.current = [...vouchersRef.current, v];
         setVouchersState(prev => [...prev, v]);
         // RULE 1: persistVoucher rolls the optimistic voucher back if the cloud save fails, so an
@@ -3191,7 +3223,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } });
       }
       if ((approved.admissionFee || 0) > 0) {
-        const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: approved.admissionFee!, narration: `Admission Fee received from ${approved.name}`, memberId: approved.id, createdAt: new Date().toISOString(), createdBy: 'System' };
+        // ECR-17 Phase 5: stamp the member's branch (see the Share Capital voucher above).
+        const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: approved.admissionFee!, narration: `Admission Fee received from ${approved.name}`, memberId: approved.id, branchId: approved.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current), createdAt: new Date().toISOString(), createdBy: 'System' };
         vouchersRef.current = [...vouchersRef.current, v];
         setVouchersState(prev => [...prev, v]);
         // RULE 1: persistVoucher rolls the optimistic voucher back if the cloud save fails, so an
@@ -5528,16 +5561,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Two-step save — same pattern as purchases fix:
     // Step 1: upsert base columns only (schema cache always knows these)
     // Step 2: update GST columns separately (ALTER TABLE columns — schema cache may lag)
-    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember, branchId: sBranch, gstVoucherIds: _gv, ...saleBase } = sale;
+    // ECR-17 Phase 5: branchId stays IN saleBase — the branch-scoped RLS SELECT policies
+    // (migration 039) must see it on the row from birth, or a branch-restricted user's own
+    // sale vanishes from their next load. Stale-schema-cache fallback below (RULE 1).
+    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember, gstVoucherIds: _gv, ...saleBase } = sale;
     // Feature 6: a duplicate saleNo (another till) makes the base upsert fail with 23505 —
     // bump to the next number, restamp local state, and retry (only saleNo changes).
     const attemptSaleSave = (base: typeof saleBase, tries: number) => {
       supabase.from('sales').upsert(withSoc(base)).then(({ error }) => {
         if (!error) {
           // Step 2: GST columns update (only Sale GST fields — no TDS for sales)
-          supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember, branchId: sBranch })
+          supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember })
             .eq('id', sale.id)
             .then(({ error: gstErr }) => { if (gstErr) console.warn('Sale GST/extra fields update:', gstErr.message); });
+          return;
+        }
+        if (isMissingBranchColumn(error) && 'branchId' in base) {
+          const { branchId: _b, ...noBranch } = base;
+          attemptSaleSave(noBranch as typeof saleBase, tries);
           return;
         }
         if (isUniqueViolation(error) && tries < MAX_RENUMBER_RETRIES) {
@@ -5740,21 +5781,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     salesRef.current = salesRef.current.map(s => s.id === id ? updated : s);
     setSalesState(prev => prev.map(s => s.id === id ? updated : s));
 
-    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, branchId: sBranch, gstVoucherIds: _gv, ...saleBase } = updated;
-    supabase.from('sales').upsert(withSoc(saleBase)).then(({ error }) => {
-      if (error) {
-        console.error('Sale update failed:', error.message);
-        // A sale edit is a multi-write cascade (stock + vouchers already posted); only the
-        // sale ROW failed here, and the cascade can't be cleanly undone from the client. Per
-        // RULE 1 we make the failure impossible to miss and tell the user to refresh and
-        // re-verify. (A fully atomic sale-edit is a separate, larger redesign.)
-        toastRef.current({ title: 'बिक्री edit cloud-save fail', description: `Sale row cloud save fail — ${error.message}. Refresh karke sale dobara check karein; zaroorat ho to phir se edit karein.`, variant: 'destructive', duration: 15000 });
-      } else {
-        supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, branchId: sBranch })
-          .eq('id', id)
-          .then(({ error: gstErr }) => { if (gstErr) console.warn('Sale GST fields update:', gstErr.message); });
-      }
-    });
+    // ECR-17 Phase 5: branchId stays IN saleBase (see addSale); stale-schema-cache fallback (RULE 1).
+    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, gstVoucherIds: _gv, ...saleBase } = updated;
+    const attemptSaleUpdate = (payload: typeof saleBase) => {
+      supabase.from('sales').upsert(withSoc(payload)).then(({ error }) => {
+        if (error) {
+          if (isMissingBranchColumn(error) && 'branchId' in payload) {
+            const { branchId: _b, ...noBranch } = payload;
+            attemptSaleUpdate(noBranch as typeof saleBase);
+            return;
+          }
+          console.error('Sale update failed:', error.message);
+          // A sale edit is a multi-write cascade (stock + vouchers already posted); only the
+          // sale ROW failed here, and the cascade can't be cleanly undone from the client. Per
+          // RULE 1 we make the failure impossible to miss and tell the user to refresh and
+          // re-verify. (A fully atomic sale-edit is a separate, larger redesign.)
+          toastRef.current({ title: 'बिक्री edit cloud-save fail', description: `Sale row cloud save fail — ${error.message}. Refresh karke sale dobara check karein; zaroorat ho to phir se edit karein.`, variant: 'destructive', duration: 15000 });
+        } else {
+          supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId })
+            .eq('id', id)
+            .then(({ error: gstErr }) => { if (gstErr) console.warn('Sale GST fields update:', gstErr.message); });
+        }
+      });
+    };
+    attemptSaleUpdate(saleBase);
 
     console.info(`[AUDIT-EDIT] Sale id=${id} edited by ${data.createdBy || 'unknown'} at ${now}`);
     return updated;
@@ -5855,15 +5905,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Two-step save — same pattern as editHistory fix for vouchers:
     // Step 1: upsert ONLY the original-table base columns (schema cache always knows these → never fails)
     // Step 2: update GST/TDS columns separately (added via ALTER TABLE — schema cache may lag)
-    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, branchId: pBranch, taxVoucherIds: _tv, ...purchaseBase } = purchase;
+    // ECR-17 Phase 5: branchId stays IN purchaseBase — the branch-scoped RLS SELECT policies
+    // (migration 039) must see it on the row from birth, or a branch-restricted user's own
+    // purchase vanishes from their next load. Stale-schema-cache fallback below (RULE 1).
+    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, taxVoucherIds: _tv, ...purchaseBase } = purchase;
     // Feature 6: duplicate purchaseNo (another till) → 23505; bump + retry (only purchaseNo changes).
     const attemptPurchaseSave = (base: typeof purchaseBase, tries: number) => {
       supabase.from('purchases').upsert(withSoc(base)).then(({ error }) => {
         if (!error) {
           // Step 2: GST/TDS columns update (safe — if this fails, base record is already saved)
-          supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, branchId: pBranch })
+          supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false })
             .eq('id', purchase.id)
             .then(({ error: gstErr }) => { if (gstErr) console.warn('Purchase GST fields update:', gstErr.message); });
+          return;
+        }
+        if (isMissingBranchColumn(error) && 'branchId' in base) {
+          const { branchId: _b, ...noBranch } = base;
+          attemptPurchaseSave(noBranch as typeof purchaseBase, tries);
           return;
         }
         if (isUniqueViolation(error) && tries < MAX_RENUMBER_RETRIES) {
@@ -6077,17 +6135,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     purchasesRef.current = purchasesRef.current.map(p => p.id === id ? updated : p);
     setPurchasesState(prev => prev.map(p => p.id === id ? updated : p));
 
-    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, branchId: pBranch, taxVoucherIds: _tv, ...purchaseBase } = updated;
-    supabase.from('purchases').upsert(withSoc(purchaseBase)).then(({ error }) => {
-      if (error) {
-        console.error('Purchase update failed:', error.message);
-        toastRef.current({ title: 'Purchase update nahi hua', description: error.message, variant: 'destructive' });
-      } else {
-        supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, branchId: pBranch })
-          .eq('id', id)
-          .then(({ error: gstErr }) => { if (gstErr) console.warn('Purchase GST fields update:', gstErr.message); });
-      }
-    });
+    // ECR-17 Phase 5: branchId stays IN purchaseBase (see addPurchase); stale-schema-cache fallback (RULE 1).
+    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, taxVoucherIds: _tv, ...purchaseBase } = updated;
+    const attemptPurchaseUpdate = (payload: typeof purchaseBase) => {
+      supabase.from('purchases').upsert(withSoc(payload)).then(({ error }) => {
+        if (error) {
+          if (isMissingBranchColumn(error) && 'branchId' in payload) {
+            const { branchId: _b, ...noBranch } = payload;
+            attemptPurchaseUpdate(noBranch as typeof purchaseBase);
+            return;
+          }
+          console.error('Purchase update failed:', error.message);
+          toastRef.current({ title: 'Purchase update nahi hua', description: error.message, variant: 'destructive' });
+        } else {
+          supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false })
+            .eq('id', id)
+            .then(({ error: gstErr }) => { if (gstErr) console.warn('Purchase GST fields update:', gstErr.message); });
+        }
+      });
+    };
+    attemptPurchaseUpdate(purchaseBase);
 
     console.info(`[AUDIT-EDIT] Purchase id=${id} edited by ${data.createdBy || 'unknown'} at ${now}`);
     return updated;

@@ -18,6 +18,21 @@ export function isUniqueViolation(error: { code?: string; message?: string } | n
 }
 
 /**
+ * ECR-17 Phase 5: `branchId` rides in the step-1 base upsert — the branch-scoped RLS
+ * SELECT policies (migration 039) need it on the row from birth, or a branch-restricted
+ * user's own fresh row is invisible to its verify-read. True when the failure is
+ * PostgREST's stale-schema-cache "column not found" for exactly that column; the caller
+ * retries once without it, so the base save NEVER fails because of the branch column
+ * (RULE 1: the base upsert must always succeed on a pre-migration database).
+ */
+export function isMissingBranchColumn(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  const m = error.message || '';
+  if (!m.includes('branchId')) return false;
+  return error.code === 'PGRST204' || /schema cache|could not find/i.test(m);
+}
+
+/**
  * Next sequence number for a `PREFIX/<fy>/<NNN>` document series, from the rows
  * already known locally. Mirrors the inline max+1 used across the save paths so
  * a renumber-retry lands on a fresh candidate.
