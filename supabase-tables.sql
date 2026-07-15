@@ -64,7 +64,14 @@ create table if not exists society_users (
   name text not null,
   email text unique not null,
   password text not null,
-  role text not null check (role in ('admin', 'accountant', 'viewer')),
+  -- ECR-06 S4 (migration 046): the CHECK mirrors the UserRole union (types/index.ts) — all 16
+  -- assignable names. The original 3-name list didn't even include 'auditor'.
+  role text not null check (role in (
+    'admin', 'accountant', 'viewer', 'auditor',
+    'manager', 'secretary', 'cashier', 'storeKeeper', 'procurementOfficer',
+    'salesOperator', 'internalAuditor', 'externalCA', 'boardMember', 'chairman',
+    'employee', 'dataEntry'
+  )),
   is_active boolean default true,
   created_at timestamp default now()
 );
