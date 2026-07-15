@@ -34,7 +34,10 @@ jobs:
         run: npm ci
 
       - name: Typecheck
-        run: npx tsc --noEmit
+        # The ROOT tsconfig.json has "files": [] (it only references the app/node projects), so a bare
+        # `tsc --noEmit` checks NOTHING and passed while 12 real type errors sat in the app for months.
+        # Point at the app project so this actually gates types. (`npm run typecheck` = the same.)
+        run: npx tsc --noEmit -p tsconfig.app.json
 
       - name: Tests
         # Run every test:* script EXCEPT the ones that need a prior build artifact (dist / esbuild

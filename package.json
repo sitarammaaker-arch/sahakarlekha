@@ -8,6 +8,7 @@
     "build": "node scripts/test-schema-drift.mjs && vite build && node scripts/prerender-guide.mjs",
     "build:dev": "vite build --mode development && node scripts/prerender-guide.mjs",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "preview": "vite preview",
     "validate:glossary": "node scripts/validate-glossary.mjs",
     "test:calc": "node scripts/test-calculators.mjs",
