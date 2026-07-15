@@ -30,7 +30,7 @@ function variance(actual: number, budget: number) {
 
 export default function BudgetModule() {
   const { accounts, vouchers, society } = useData();
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -173,7 +173,10 @@ export default function BudgetModule() {
             <Button variant="outline" onClick={handleExcel}><FileSpreadsheet className="h-4 w-4 mr-2" />Excel</Button>
             <Button variant="outline" onClick={handleCSV}><FileSpreadsheet className="h-4 w-4 mr-2" />CSV</Button>
           </div>
-          {(user?.role === 'admin' || user?.role === 'accountant') && (
+          {/* ECR-06 17-role: budget editing follows the permission model. `update` is
+              byte-identical to admin||accountant for legacy roles and opens it to manager/
+              secretary (who reach Reports); budget writes aren't role-scoped at the RLS layer. */}
+          {can('update') && (
             <Button onClick={() => { setEditingBudget(currentBudget || null); setShowEditor(true); }}>
               <Plus className="h-4 w-4 mr-2" />
               {currentBudget ? (hi ? 'बजट संपादित करें' : 'Edit Budget') : (hi ? 'बजट बनाएं' : 'Create Budget')}
