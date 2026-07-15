@@ -26,7 +26,7 @@ import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode'
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
 import { reportError } from '@/lib/errorReporting';
-import { settlementTypedColumns, hydrateSettlement, hydrateJForm } from '@/lib/typedMoney';
+import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
 import { reverseEntryLines, isEditLocked } from '@/lib/voucherReversal';
 import { canTransitionMember } from '@/lib/memberLifecycle';
@@ -923,11 +923,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           () => setProcurementJFormsState(storage.getProcurementJForms()),
         );
         supabase.from('procurement_financial_intents').select('*').eq('society_id', sid).then(
-          ({ data, error }) => setProcurementFinancialIntentsState(error || !data ? storage.getProcurementFinancialIntents() : (data as unknown as FinancialIntentRecord[])),
+          // T-05 dual-read: prefer the typed money columns, JSONB as fallback (hydrateAmount).
+          ({ data, error }) => setProcurementFinancialIntentsState(error || !data ? storage.getProcurementFinancialIntents() : (data as Record<string, unknown>[]).map(hydrateAmount) as unknown as FinancialIntentRecord[]),
           () => setProcurementFinancialIntentsState(storage.getProcurementFinancialIntents()),
         );
         supabase.from('procurement_posting_requests').select('*').eq('society_id', sid).then(
-          ({ data, error }) => setProcurementPostingRequestsState(error || !data ? storage.getProcurementPostingRequests() : (data as unknown as PostingRequest[])),
+          // T-05 dual-read: prefer the typed money columns, JSONB as fallback (hydrateAmount).
+          ({ data, error }) => setProcurementPostingRequestsState(error || !data ? storage.getProcurementPostingRequests() : (data as Record<string, unknown>[]).map(hydrateAmount) as unknown as PostingRequest[]),
           () => setProcurementPostingRequestsState(storage.getProcurementPostingRequests()),
         );
         supabase.from('procurement_posting_rule_results').select('*').eq('society_id', sid).then(

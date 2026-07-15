@@ -76,3 +76,15 @@ export function hydrateJForm<T extends Record<string, unknown>>(row: T): T {
     net: moneyFromTyped(r.netAmountMinor as number, r.netCurrency as string, r.net as MoneyLike),
   } as T;
 }
+
+/** Hydrate a row whose single money field is `amount` (financial intents, posting requests —
+ *  both written only by procurement_commit_transaction; typed columns derived server-side,
+ *  migration 043). Follows the `<field>AmountMinor` convention, so field 'amount' →
+ *  amountAmountMinor / amountCurrency. */
+export function hydrateAmount<T extends Record<string, unknown>>(row: T): T {
+  const r = row as Record<string, unknown>;
+  return {
+    ...row,
+    amount: moneyFromTyped(r.amountAmountMinor as number, r.amountCurrency as string, r.amount as MoneyLike),
+  } as T;
+}

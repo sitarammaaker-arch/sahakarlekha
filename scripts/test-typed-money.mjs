@@ -33,7 +33,7 @@ register(
     `),
 );
 
-const { moneyColumns, settlementTypedColumns, moneyFromTyped, hydrateSettlement, hydrateJForm } = await import(abs('../src/lib/typedMoney.ts'));
+const { moneyColumns, settlementTypedColumns, moneyFromTyped, hydrateSettlement, hydrateJForm, hydrateAmount } = await import(abs('../src/lib/typedMoney.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -92,6 +92,14 @@ const legacyJf = hydrateJForm({ id: 'j2', gross: { amount: 1200, currency: 'INR'
 ok(legacyJf.gross.amount === 1200 && legacyJf.net.amount === 1000, 'legacy jform (no typed cols) falls back to JSONB');
 // Typed 0 deduction is honoured (not treated as absent).
 ok(hydrateJForm({ deductionsAmountMinor: 0, deductionsCurrency: 'INR', deductions: { amount: 55, currency: 'INR' } }).deductions.amount === 0, 'typed 0 deductions honoured over JSONB 55');
+
+// ── hydrateAmount (T-05 intents/posting-requests slice): typed preferred, JSONB fallback ──
+const intent = hydrateAmount({ id: 'fi1', intentType: 'farmer.payable', amountAmountMinor: 517000000, amountCurrency: 'INR', amount: { amount: 1, currency: 'INR' } });
+ok(intent.amount.amount === 5170000 && intent.amount.currency === 'INR', 'hydrateAmount reads the TYPED column (₹51,70,000), not the stale JSONB');
+ok(intent.id === 'fi1' && intent.intentType === 'farmer.payable', 'intent passthrough fields untouched');
+const legacyIntent = hydrateAmount({ id: 'fi2', amount: { amount: 850.25, currency: 'INR' } });
+ok(legacyIntent.amount.amount === 850.25, 'legacy intent (no typed cols) falls back to JSONB');
+ok(hydrateAmount({ amountAmountMinor: 0, amountCurrency: 'INR', amount: { amount: 44, currency: 'INR' } }).amount.amount === 0, 'typed 0 amount honoured over JSONB 44');
 
 console.log(`\nTyped money columns: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
