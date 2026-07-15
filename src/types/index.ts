@@ -7,7 +7,14 @@ export interface VoucherLine {
   amount: number;
   narration?: string;
 }
-export type UserRole = 'admin' | 'accountant' | 'viewer';
+// ECR-06 S3: the assignable society roles — the 4 legacy names plus the 12 mapped 17-role
+// names (Blueprint TASK3.3). superAdmin is platform-only and readOnly is assigned as the
+// legacy 'viewer' string (see roleAccess.ts) — neither appears here.
+export type UserRole =
+  | 'admin' | 'accountant' | 'viewer' | 'auditor'
+  | 'manager' | 'secretary' | 'cashier' | 'storeKeeper' | 'procurementOfficer'
+  | 'salesOperator' | 'internalAuditor' | 'externalCA' | 'boardMember' | 'chairman'
+  | 'employee' | 'dataEntry';
 export type AccountType = 'asset' | 'liability' | 'income' | 'expense' | 'equity';
 // ECR-16: member lifecycle. 'active'/'inactive' kept for backward-compat; resigned/
 // expelled/deceased are the exit states (all !== 'active' ⇒ auto-excluded from dividend

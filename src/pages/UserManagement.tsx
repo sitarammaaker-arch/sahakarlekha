@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
@@ -47,6 +47,19 @@ const roleColor: Record<string, string> = {
   accountant: 'bg-blue-100 text-blue-800',
   viewer: 'bg-gray-100 text-gray-700',
   auditor: 'bg-purple-100 text-purple-800',
+  // ECR-06 S3 — the 12 new assignable roles, coloured by family.
+  secretary: 'bg-red-100 text-red-800',
+  manager: 'bg-orange-100 text-orange-800',
+  cashier: 'bg-blue-100 text-blue-800',
+  storeKeeper: 'bg-green-100 text-green-800',
+  procurementOfficer: 'bg-green-100 text-green-800',
+  salesOperator: 'bg-green-100 text-green-800',
+  employee: 'bg-gray-100 text-gray-700',
+  dataEntry: 'bg-gray-100 text-gray-700',
+  boardMember: 'bg-amber-100 text-amber-800',
+  chairman: 'bg-amber-100 text-amber-800',
+  internalAuditor: 'bg-purple-100 text-purple-800',
+  externalCA: 'bg-purple-100 text-purple-800',
 };
 
 const roleLabel: Record<string, { hi: string; en: string }> = {
@@ -54,7 +67,29 @@ const roleLabel: Record<string, { hi: string; en: string }> = {
   accountant: { hi: 'लेखाकार', en: 'Accountant' },
   viewer: { hi: 'दर्शक', en: 'Viewer' },
   auditor: { hi: 'CA / लेखा परीक्षक', en: 'CA / Auditor' },
+  // ECR-06 S3 — the 12 new assignable roles (Blueprint TASK3.3 Table 1).
+  secretary: { hi: 'सचिव', en: 'Secretary' },
+  manager: { hi: 'प्रबंधक', en: 'Manager' },
+  cashier: { hi: 'खजांची (कैशियर)', en: 'Cashier' },
+  storeKeeper: { hi: 'स्टोर कीपर', en: 'Store Keeper' },
+  procurementOfficer: { hi: 'ख़रीद अधिकारी', en: 'Procurement Officer' },
+  salesOperator: { hi: 'बिक्री ऑपरेटर', en: 'Sales Operator' },
+  employee: { hi: 'कर्मचारी', en: 'Employee' },
+  dataEntry: { hi: 'डेटा एंट्री ऑपरेटर', en: 'Data Entry Operator' },
+  boardMember: { hi: 'संचालक मंडल सदस्य', en: 'Board Member' },
+  chairman: { hi: 'अध्यक्ष', en: 'Chairman' },
+  internalAuditor: { hi: 'आंतरिक लेखा परीक्षक', en: 'Internal Auditor' },
+  externalCA: { hi: 'बाहरी CA / सलाहकार', en: 'External CA' },
 };
+
+// Dropdown grouping (RULE 7: Hindi-first headings). Order = most-assigned first.
+const ROLE_GROUPS: Array<{ hi: string; en: string; roles: UserRole[] }> = [
+  { hi: 'प्रशासन', en: 'Administration', roles: ['admin', 'secretary', 'manager'] },
+  { hi: 'लेखा व नक़दी', en: 'Accounts & Cash', roles: ['accountant', 'cashier'] },
+  { hi: 'संचालन', en: 'Operations', roles: ['storeKeeper', 'procurementOfficer', 'salesOperator', 'employee', 'dataEntry'] },
+  { hi: 'शासन (बोर्ड)', en: 'Governance', roles: ['chairman', 'boardMember'] },
+  { hi: 'ऑडिट व केवल-देखना', en: 'Audit & Read-only', roles: ['auditor', 'internalAuditor', 'externalCA', 'viewer'] },
+];
 
 const empty: Omit<AppUser, 'id' | 'createdAt' | 'society_id'> = {
   name: '', email: '', password: '', role: 'viewer', isActive: true, branchId: '',
@@ -455,10 +490,16 @@ export default function UserManagement() {
               <Select value={form.role} onValueChange={v => setForm(p => ({ ...p, role: v as UserRole }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">{hi ? 'व्यवस्थापक' : 'Admin'}</SelectItem>
-                  <SelectItem value="accountant">{hi ? 'लेखाकार' : 'Accountant'}</SelectItem>
-                  <SelectItem value="viewer">{hi ? 'दर्शक' : 'Viewer'}</SelectItem>
-                  <SelectItem value="auditor">{hi ? 'CA / लेखा परीक्षक' : 'CA / Auditor'}</SelectItem>
+                  {/* ECR-06 S3: all 16 assignable roles, grouped. Server (mig 045) and
+                      navigation (roleAccess.ts) already understand every name here. */}
+                  {ROLE_GROUPS.map(g => (
+                    <SelectGroup key={g.en}>
+                      <SelectLabel>{hi ? g.hi : g.en}</SelectLabel>
+                      {g.roles.map(r => (
+                        <SelectItem key={r} value={r}>{hi ? roleLabel[r].hi : roleLabel[r].en}</SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
