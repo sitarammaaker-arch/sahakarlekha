@@ -50,7 +50,10 @@ export type Permission =
   | 'closeFY'
   | 'userMgmt'
   | 'backup'
-  | 'config';
+  | 'config'
+  // ECR-06: audit objections/notes — the auditor family's SCOPED write. Distinct from `create`
+  // (financial entry) so an auditor can file objections but can NOT create vouchers/sales.
+  | 'auditNote';
 
 export const ROLES: readonly Role[] = [
   'superAdmin', 'societyAdmin', 'manager', 'accountant', 'cashier', 'storeKeeper',
@@ -60,7 +63,7 @@ export const ROLES: readonly Role[] = [
 
 export const PERMISSIONS: readonly Permission[] = [
   'create', 'read', 'update', 'delete', 'approve', 'reject', 'export', 'print',
-  'lockPeriod', 'unlockPeriod', 'closeFY', 'userMgmt', 'backup', 'config',
+  'lockPeriod', 'unlockPeriod', 'closeFY', 'userMgmt', 'backup', 'config', 'auditNote',
 ] as const;
 
 /**
@@ -70,22 +73,22 @@ export const PERMISSIONS: readonly Permission[] = [
 export const PERMISSION_MATRIX: Record<Role, ReadonlySet<Permission>> = {
   // ✓C ✓R ◐U ◐D  Ex Pr           UM BK Cfg  (no Ap/Rj/Lk/Un/CFY — platform, not society finance)
   superAdmin:        new Set(['create', 'read', 'update', 'delete', 'export', 'print', 'userMgmt', 'backup', 'config']),
-  societyAdmin:      new Set(['create', 'read', 'update', 'delete', 'approve', 'reject', 'export', 'print', 'lockPeriod', 'unlockPeriod', 'userMgmt', 'backup', 'config']),
+  societyAdmin:      new Set(['create', 'read', 'update', 'delete', 'approve', 'reject', 'export', 'print', 'lockPeriod', 'unlockPeriod', 'userMgmt', 'backup', 'config', 'auditNote']),
   manager:           new Set(['create', 'read', 'update', 'approve', 'reject', 'export', 'print', 'lockPeriod', 'config']),
   accountant:        new Set(['create', 'read', 'update', 'export', 'print', 'lockPeriod']),
   cashier:           new Set(['create', 'read', 'update', 'print']),
   storeKeeper:       new Set(['create', 'read', 'update', 'export', 'print']),
   procurementOfficer:new Set(['create', 'read', 'update', 'approve', 'export', 'print']),
   salesOperator:     new Set(['create', 'read', 'update', 'print']),
-  auditor:           new Set(['create', 'read', 'export', 'print']), // create = audit notes/objections only (scoped)
-  internalAuditor:   new Set(['create', 'read', 'export', 'print']),
+  auditor:           new Set(['read', 'export', 'print', 'auditNote']), // auditNote = file objections; NO financial create
+  internalAuditor:   new Set(['read', 'export', 'print', 'auditNote']),
   boardMember:       new Set(['read', 'approve', 'reject', 'export', 'print']),
   chairman:          new Set(['read', 'approve', 'reject', 'export', 'print', 'lockPeriod', 'unlockPeriod', 'closeFY']),
-  secretary:         new Set(['create', 'read', 'update', 'delete', 'approve', 'reject', 'export', 'print', 'lockPeriod', 'closeFY', 'userMgmt', 'config']),
+  secretary:         new Set(['create', 'read', 'update', 'delete', 'approve', 'reject', 'export', 'print', 'lockPeriod', 'closeFY', 'userMgmt', 'config', 'auditNote']),
   employee:          new Set(['create', 'read', 'update', 'print']),
   dataEntry:         new Set(['create', 'read', 'update', 'print']),
   readOnly:          new Set(['read', 'print']),
-  externalCA:        new Set(['create', 'read', 'export', 'print']),
+  externalCA:        new Set(['read', 'export', 'print', 'auditNote']),
 };
 
 /**

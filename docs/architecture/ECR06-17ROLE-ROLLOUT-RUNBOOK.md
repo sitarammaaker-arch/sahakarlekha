@@ -100,6 +100,15 @@ Per-user module assignment (employee/dataEntry "assigned modules"), time-boxed a
 approval amount-limits (financial authorization matrix), FY-close dual-control wiring — separate
 features, do not smuggle them in.
 
+### S6 · Audit-domain create carve-out — ✅ DONE (2026-07-15)
+The auditor family's matrix `create` was consumed only by `addVoucher`'s `guardPermission('create')`
+(letting an auditor attempt a financial create — client-side; the server RLS mig 045 already blocked
+the write), while `addAuditObjection` didn't gate on it at all. Fixed with a dedicated **`auditNote`**
+permission (15th): granted to auditor/internalAuditor/externalCA + societyAdmin/secretary; plain
+`create` removed from the auditor family. `addAuditObjection`/`updateAuditObjection` now gate on
+`auditNote`; `addVoucher`'s `create` guard therefore correctly excludes auditors. Client now matches
+the server. test:rbac +13.
+
 ---
 
 ## 4. Rollback
