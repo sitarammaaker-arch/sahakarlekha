@@ -2274,6 +2274,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.fyLocked]);
 
   const addAuditObjection = useCallback((data: Omit<AuditObjection, 'id' | 'objectionNo' | 'createdAt'>): AuditObjection => {
+    // ECR-06: audit objections are the auditor's SCOPED write (auditNote) — distinct from the
+    // financial `create` guard on addVoucher, so an auditor files objections but can't post
+    // vouchers, and a cashier/viewer reaching /audit-register can't file objections.
+    if (guardPermission('auditNote', 'ऑडिट आपत्ति दर्ज करने')) return { ...data, id: '' } as unknown as AuditObjection;
     if (guardFYLocked()) return { ...data, id: '' } as unknown as AuditObjection;
     const maxNum = auditObjectionsRef.current.filter(o => o.objectionNo?.includes(data.auditYear)).reduce((max, o) => {
       const m = o.objectionNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
@@ -2303,6 +2307,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateAuditObjection = useCallback((id: string, data: Partial<AuditObjection>) => {
+    if (guardPermission('auditNote', 'ऑडिट आपत्ति बदलने')) return;   // ECR-06: auditor-family scoped write
     if (guardFYLocked()) return;
     const before = auditObjectionsRef.current.find(o => o.id === id);
     if (!before) return;

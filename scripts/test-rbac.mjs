@@ -95,7 +95,18 @@ ok(!can('cashier', 'approve') && !can('dataEntry', 'approve') && !can('salesOper
 const canEdit = (r) => can(r, 'update');
 // Byte-identical to the old hardcoded gate for the 4 legacy roles.
 ok(canEdit('admin') && canEdit('accountant'), 'canEdit: admin + accountant retain edit affordances (was hardcoded)');
-ok(!canEdit('viewer') && !canEdit('auditor'), 'canEdit: viewer + auditor stay read-only on financial pages (auditor create is audit-scoped)');
+ok(!canEdit('viewer') && !canEdit('auditor'), 'canEdit: viewer + auditor stay read-only on financial pages');
+
+// 6b. Audit-note carve-out (ECR-06): the auditor family files objections via `auditNote`, a
+//     SCOPED write distinct from financial `create` — so they cannot post vouchers/sales.
+for (const a of ['auditor', 'internalAuditor', 'externalCA']) {
+  ok(can(a, 'auditNote'), `${a} can file audit objections (auditNote)`);
+  ok(!can(a, 'create'), `${a} CANNOT financial-create (addVoucher's guardPermission('create') blocks it)`);
+  ok(!can(a, 'update') && !can(a, 'delete'), `${a} has no financial write at all`);
+}
+// The audit register's managers keep auditNote; operational/read-only roles do not.
+ok(can('societyAdmin', 'auditNote') && can('secretary', 'auditNote'), 'admin/secretary can manage the audit register');
+ok(!can('cashier', 'auditNote') && !can('viewer', 'auditNote') && !can('manager', 'auditNote'), 'operational/read-only roles cannot file audit objections');
 // Operational new roles gain edit affordances; pure-governance/assurance roles do not.
 ok(canEdit('cashier') && canEdit('manager') && canEdit('secretary') && canEdit('storeKeeper') && canEdit('salesOperator') && canEdit('dataEntry'), 'canEdit: operational roles can now enter/edit');
 ok(!canEdit('boardMember') && !canEdit('chairman') && !canEdit('internalAuditor') && !canEdit('externalCA') && !canEdit('readOnly'), 'canEdit: governance/assurance/read-only roles stay read-only');
