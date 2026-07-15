@@ -319,11 +319,15 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
 
 const Members: React.FC = () => {
   const { t, language } = useLanguage();
-  const { hasPermission } = useAuth();
+  const { can } = useAuth();
   const { members: allMembers, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks, matchesActiveBranch } = useData();
   // ECR-17 Phase 4: scope the member list to the active branch ('all' → every member).
   const members = allMembers.filter(m => matchesActiveBranch(m.branchId));
-  const canEdit = hasPermission(['admin', 'accountant']);
+  // ECR-06 17-role: RBAC permission gate, not a hardcoded legacy list. `update` (not `create`)
+  // keeps the auditor family — whose `create` is audit-objection-scoped — read-only here;
+  // byte-identical for the 4 legacy roles, opens edit to operational roles (delete fail-closes
+  // at the data layer).
+  const canEdit = can('update');
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();

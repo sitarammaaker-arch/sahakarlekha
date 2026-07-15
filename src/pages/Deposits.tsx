@@ -37,11 +37,15 @@ const today = () => new Date().toISOString().split('T')[0];
 
 const Deposits: React.FC = () => {
   const { language } = useLanguage();
-  const { hasPermission } = useAuth();
+  const { can } = useAuth();
   const { members, depositAccounts, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
-  const canEdit = hasPermission(['admin', 'accountant']);
+  // ECR-06 17-role: RBAC permission gate, not a hardcoded legacy list. `update` (not `create`)
+  // keeps the auditor family — whose `create` is audit-objection-scoped — read-only here;
+  // byte-identical for the 4 legacy roles, opens edit to operational roles (delete fail-closes
+  // at the data layer).
+  const canEdit = can('update');
   const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
   const approvedMembers = useMemo(() => members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved'), [members]);
