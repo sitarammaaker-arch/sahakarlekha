@@ -37,10 +37,18 @@ export const ROLE_MODULE_ACCESS: Partial<Record<RbacRole, RoleAccess>> = {
   // Operational head — everything except administration (Table 1: "No user/backup/config").
   manager: { domains: ALL_BUSINESS_DOMAINS },
 
-  // Statutory executive — everything a societyAdmin sees minus the backup center (BK = ◐).
+  // Statutory executive — all business domains, and from `administration` ONLY what a secretary
+  // can actually operate: user management (S7) + godowns (S5). The rest of administration stays
+  // admin/founder/platform level (society setup, branches, opening balances, feature flags,
+  // federation, bulk importer, backup center) — showing them would promise access those pages'
+  // own admin gates then deny, so they are removed from the secretary's nav.
   secretary: {
     domains: [...ALL_BUSINESS_DOMAINS, 'administration'],
-    remove: ['backupRestore', 'exportCenter', 'restoreCenter'],
+    remove: [
+      'backupRestore', 'exportCenter', 'restoreCenter',   // backup center (BK)
+      'societySetup', 'branches', 'openingBalances',       // society founder-level config
+      'features', 'multiSocietyConsolidation', 'universalImporter', // admin/platform tools
+    ],
   },
 
   // Cash & Bank only.

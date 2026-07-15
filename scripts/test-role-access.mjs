@@ -77,7 +77,14 @@ const eq = (role, expected, label) => {
 };
 
 eq('manager', idsWhere((m) => m.domain !== 'administration'), 'everything except administration');
-eq('secretary', idsWhere((m) => !['backupRestore', 'exportCenter', 'restoreCenter'].includes(m.id)), 'everything minus the backup center');
+const SECRETARY_ADMIN_REMOVED = ['backupRestore', 'exportCenter', 'restoreCenter', 'societySetup', 'branches', 'openingBalances', 'features', 'multiSocietyConsolidation', 'universalImporter'];
+eq('secretary', idsWhere((m) => !SECRETARY_ADMIN_REMOVED.includes(m.id)), 'all business + admin minus founder/platform admin tools');
+// The concrete guard the user hit: secretary must NOT see these admin-only modules.
+for (const id of ['societySetup', 'branches', 'openingBalances', 'features', 'multiSocietyConsolidation', 'universalImporter']) {
+  ok(!new Set(visibleIds('secretary', ALL_CAPS)).has(id), `secretary does NOT see admin-only ${id}`);
+}
+// …but keeps the two it can operate.
+ok(new Set(visibleIds('secretary', ALL_CAPS)).has('userManagement') && new Set(visibleIds('secretary', ALL_CAPS)).has('godowns'), 'secretary keeps userManagement + godowns');
 eq('cashier', ['dashboard', 'myDashboard', 'cashBook', 'bankBook', 'receivePayment', 'makePayment', 'vouchers', 'dayBook'], 'cash & bank only');
 eq('storeKeeper', ['dashboard', 'myDashboard', 'inventory', 'godowns', 'stockValuation', 'closingStockReport'], 'stock + godown + stock reports');
 eq('procurementOfficer', [...idsWhere((m) => m.domain === 'marketing'), 'dashboard', 'myDashboard', 'purchaseOrders', 'purchaseReturn', 'suppliers', 'purchases', 'procurementMatch'], 'procurement surfaces, no payment release');
