@@ -129,8 +129,11 @@ const noCap = authorizeExport(godown, accountant, 'csv');
 ok(!noCap.ok && /warehousing/.test(noCap.reason), 'godowns are refused without the warehousing capability');
 ok(authorizeExport(godown, admin, 'csv').ok, 'godowns are allowed with the warehousing capability');
 
+// auditor is a RECOGNISED export role since #160 (ROLE_RANK auditor: 0 — viewer-level assurance access).
+ok(authorizeExport(member, { role: 'auditor', capabilities: [] }, 'csv').ok, 'auditor may export members as CSV (viewer rank)');
+ok(!authorizeExport(supplier, { role: 'auditor', capabilities: [] }, 'csv').ok, 'auditor stays viewer-rank — no accountant-gated exports');
 // Fail-closed on an unknown role (the ECR-06 17-role migration must not open a hole).
-ok(!authorizeExport(member, { role: 'auditor', capabilities: [] }, 'csv').ok, 'an unrecognised role is denied');
+ok(!authorizeExport(member, { role: 'boardMember', capabilities: [] }, 'csv').ok, 'an unrecognised role is denied');
 
 // ── 2. Column selection per mode ─────────────────────────────────────────────
 const std = selectColumns(member, 'standard');
