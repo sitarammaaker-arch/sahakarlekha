@@ -45,6 +45,7 @@ import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { resolveJurisdiction, stampTenant } from '@/lib/jurisdiction';
 import { isPeriodLocked as isDateInLockedPeriod } from '@/lib/periodLock';
 import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
+import { planOpeningDelta } from '@/lib/ledger/genesis';
 import { voucherPostingLines, voucherReversalLines, voucherEventMeta } from '@/lib/ledger/voucherEvent';
 import { ledgerTrialBalance } from '@/lib/ledger/trialBalance';
 import { ledgerParity, balancesFromJournal } from '@/lib/ledger/parity';
@@ -387,6 +388,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // no read path consumes it (reporting still derives from vouchers), so it changes no behavior;
   // the ledger cutover that flips reports to the projection is T-09. In-memory this session.
   const ledgerEventsRef = useRef<LedgerEvent[]>([]);
+  // True once the FULL journal has been paged into the ref (society load for a cut-over tenant, or
+  // the on-demand diagnostic load). Until then the ref holds only this session's events, so a
+  // sequence derived from it would be too low and collide with a not-yet-loaded genesis event on the
+  // WORM unique index — so live opening-delta events are held back until this is true.
+  const journalLoadedRef = useRef(false);
+  // The next per-aggregate sequence, from the in-session journal (the FULL log for a cut-over
+  // tenant; session events otherwise). ledger_events has a unique (tenant, aggregate, sequence)
+  // index, so a hardcoded sequence collides the SECOND time an aggregate is touched — e.g. a
+  // voucher edited twice, or cancelled after an edit — and the event is silently dropped, breaking
+  // parity for good. Every lifecycle emitter below asks this instead of hardcoding.
+  const nextEventSeq = (aggregateType: string, aggregateId: string): number => {
+    let max = 0;
+    for (const e of ledgerEventsRef.current) {
+      if (e.aggregateType === aggregateType && e.aggregateId === aggregateId && e.sequence > max) max = e.sequence;
+    }
+    return max + 1;
+  };
+  // T-09 auto-cutover · the journal's CURRENT signed opening (Dr − Cr, paise) for one account —
+  // the `prevSignedMinor` a live opening-delta event must be computed against.
+  const journalOpeningSignedMinor = (accountId: string): number => {
+    let net = 0;
+    for (const e of ledgerEventsRef.current) {
+      if (e.aggregateType !== 'account' || e.aggregateId !== accountId || e.eventType !== 'account.opening') continue;
+      const lines = (e.payload as { lines?: { drCr: 'Dr' | 'Cr'; amountMinor: number }[] })?.lines ?? [];
+      for (const l of lines) net += l.drCr === 'Dr' ? l.amountMinor : -l.amountMinor;
+    }
+    return net;
+  };
   const emitAudit = (input: AuditInput) => logAudit(input, {
     societyId: societyIdRef.current,
     actor: { name: userRef.current?.name, email: userRef.current?.email, role: userRef.current?.role },
@@ -1306,6 +1335,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               // EMPTY journal — every ledger read then failed parity and silently fell back forever.
               const { data: evData } = await fetchAllPaged<Record<string, unknown>>('ledger_events', 'occurred_at');
               ledgerEventsRef.current = mapLedgerEventRows(evData ?? []);
+              journalLoadedRef.current = true; // safe to derive per-aggregate sequences from the ref
             } catch (e) { console.warn('T-09 journal load (best-effort) failed:', e); }
           }
         }
@@ -1865,8 +1895,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           aggregateType: 'voucher' as const, aggregateId: id,
           producer: { kind: 'human' as const, id: userRef.current?.name ?? null },
         };
-        const reversal = buildEvent({ ...base, eventType: 'voucher.reversed', sequence: 2, payload: { lines: voucherReversalLines(current), ...voucherEventMeta(current), reason: 'edit' } }, { eventId: crypto.randomUUID(), occurredAt: at });
-        const repost = buildEvent({ ...base, eventType: 'voucher.reposted', sequence: 3, payload: { lines: newLegs, ...voucherEventMeta(updatedVoucher) } }, { eventId: crypto.randomUUID(), occurredAt: at });
+        // Sequence from the journal, NOT hardcoded 2/3 — the unique (aggregate, sequence) index
+        // means a SECOND edit of the same voucher would collide and its events would be silently
+        // dropped, leaving the journal on the first edit's legs (permanent parity break).
+        const seq = nextEventSeq('voucher', id);
+        const reversal = buildEvent({ ...base, eventType: 'voucher.reversed', sequence: seq, payload: { lines: voucherReversalLines(current), ...voucherEventMeta(current), reason: 'edit' } }, { eventId: crypto.randomUUID(), occurredAt: at });
+        const repost = buildEvent({ ...base, eventType: 'voucher.reposted', sequence: seq + 1, payload: { lines: newLegs, ...voucherEventMeta(updatedVoucher) } }, { eventId: crypto.randomUUID(), occurredAt: at });
         editEvents = [reversal, repost];
         ledgerEventsRef.current = [...ledgerEventsRef.current, ...editEvents];
       }
@@ -2000,7 +2034,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         jurisdiction: jurisdictionRef.current,
         aggregateType: 'voucher',
         aggregateId: id,
-        sequence: 2,
+        // From the journal, not hardcoded 2 — cancelling an already-EDITED voucher (which holds
+        // sequences 1..3) would collide on the unique index and the cancel event would be silently
+        // dropped: the journal would keep counting a cancelled voucher, permanent parity break.
+        sequence: nextEventSeq('voucher', id),
         producer: { kind: 'human', id: deletedBy ?? null },
         payload: { lines: voucherReversalLines(current), ...voucherEventMeta(current), reason },
       }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
@@ -3171,16 +3208,40 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.info(`[AUDIT] Member id=${id} rejected by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
+  // T-09 auto-cutover · keep the JOURNAL's opening in step with an account mutation. ledger_events
+  // is WORM, so a change appends a signed DELTA `account.opening` event (planOpeningDelta) — the
+  // account's opening events then always sum to the current opening and ledger parity holds with no
+  // ops re-seed. Shadow-pattern like the voucher events: append to the ref now, persist only after
+  // the account row is durable, drop from the ref if the account save rolls back.
+  const buildOpeningDelta = (account: LedgerAccount): LedgerEvent | null => {
+    // Only when the full journal is in memory can we derive a collision-free sequence. If it isn't
+    // (a non-cut-over tenant, or a load still in flight), skip — the account row still saves, and the
+    // parity gate keeps reads correct (voucher-state) until a later load + genesis re-seed reconciles.
+    if (!journalLoadedRef.current) return null;
+    try {
+      return planOpeningDelta(
+        account,
+        journalOpeningSignedMinor(account.id),
+        nextEventSeq('account', account.id),
+        societyIdRef.current,
+        { jurisdiction: jurisdictionRef.current, producer: { kind: 'human', id: userRef.current?.name ?? null } },
+      );
+    } catch { return null; } // best-effort — never affects the account save
+  };
+
   const addAccount = useCallback((data: Omit<LedgerAccount, 'id'>): LedgerAccount => {
     if (guardFYLocked()) return { ...data, id: '' } as LedgerAccount;
     const newAccount: LedgerAccount = { ...data, id: crypto.randomUUID() };
     setAccountsState(prev => [...prev, newAccount]);
+    const openingEvent = buildOpeningDelta(newAccount);
+    if (openingEvent) ledgerEventsRef.current = [...ledgerEventsRef.current, openingEvent];
     supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => {
       if (error) {   // RULE 1: roll back so a failed cloud save can't silently diverge on F5
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setAccountsState(prev => prev.filter(a => a.id !== newAccount.id));
+        if (openingEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== openingEvent.eventId);
         toastRef.current({ title: 'खाता सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
-      }
+      } else if (openingEvent) persistLedgerEvent(openingEvent);
     });
     return newAccount;
   }, []);
@@ -3191,12 +3252,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const before = prev.find(a => a.id === id);
       const updated = prev.map(a => a.id === id ? { ...a, ...data } : a);
       const updatedAccount = updated.find(a => a.id === id);
+      const openingEvent = updatedAccount && before ? buildOpeningDelta(updatedAccount) : null;
+      if (openingEvent) ledgerEventsRef.current = [...ledgerEventsRef.current, openingEvent];
       if (updatedAccount && before) supabase.from('accounts').upsert(withSoc(updatedAccount)).then(({ error }) => {
         if (error) {
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           setAccountsState(p => p.map(a => a.id === id ? before : a));   // RULE 1: roll back to prior state
+          if (openingEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== openingEvent.eventId);
           toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
-        }
+        } else if (openingEvent) persistLedgerEvent(openingEvent);
       });
       return updated;
     });
@@ -3236,7 +3300,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     setAccountsState(prev => prev.filter(a => a.id !== id));
-    supabase.from('accounts').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // T-09: net the account's journal opening to zero — a deleted account's opening events would
+    // otherwise keep its old balance in the journal and break parity permanently.
+    const zeroEvent = buildOpeningDelta({ ...account, openingBalance: 0 });
+    if (zeroEvent) ledgerEventsRef.current = [...ledgerEventsRef.current, zeroEvent];
+    supabase.from('accounts').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message); reportError('db-sync', error.message);
+        if (zeroEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== zeroEvent.eventId);
+        toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' });
+      } else if (zeroEvent) persistLedgerEvent(zeroEvent);
+    });
     console.info(`[AUDIT-DELETE] Account id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, [accounts, society.fyLocked]);
 
@@ -4797,6 +4871,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const { data } = await fetchAllPagedFor<Record<string, unknown>>('ledger_events', sid, 'occurred_at');
       ledgerEventsRef.current = mapLedgerEventRows(data ?? []);
+      journalLoadedRef.current = true; // full log in memory — sequences are now collision-free
     } catch (e) {
       console.warn('T-09 journal load (on demand) failed:', e);
     }
