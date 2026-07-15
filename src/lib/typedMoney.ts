@@ -62,3 +62,17 @@ export function hydrateSettlement<T extends Record<string, unknown>>(row: T): T 
     amountPaid: moneyFromTyped(r.amountPaidAmountMinor as number, r.amountPaidCurrency as string, r.amountPaid as MoneyLike),
   } as T;
 }
+
+/** Hydrate a raw procurement_jforms DB row: gross / deductions / net read from the typed
+ *  columns, JSONB as fallback (T-05 J-Form slice). Unlike settlements, the typed columns are
+ *  written SERVER-SIDE by procurement_commit_transaction (migration 042) — the J-Form insert
+ *  is atomic/RPC-only, so the client only ever dual-READS. */
+export function hydrateJForm<T extends Record<string, unknown>>(row: T): T {
+  const r = row as Record<string, unknown>;
+  return {
+    ...row,
+    gross: moneyFromTyped(r.grossAmountMinor as number, r.grossCurrency as string, r.gross as MoneyLike),
+    deductions: moneyFromTyped(r.deductionsAmountMinor as number, r.deductionsCurrency as string, r.deductions as MoneyLike),
+    net: moneyFromTyped(r.netAmountMinor as number, r.netCurrency as string, r.net as MoneyLike),
+  } as T;
+}

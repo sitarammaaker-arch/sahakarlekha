@@ -26,7 +26,7 @@ import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode'
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
 import { reportError } from '@/lib/errorReporting';
-import { settlementTypedColumns, hydrateSettlement } from '@/lib/typedMoney';
+import { settlementTypedColumns, hydrateSettlement, hydrateJForm } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
 import { reverseEntryLines, isEditLocked } from '@/lib/voucherReversal';
 import { canTransitionMember } from '@/lib/memberLifecycle';
@@ -918,7 +918,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           () => setProcurementMoistureRecordsState(storage.getProcurementMoistureRecords()),
         );
         supabase.from('procurement_jforms').select('*').eq('society_id', sid).then(
-          ({ data, error }) => setProcurementJFormsState(error || !data ? storage.getProcurementJForms() : (data as unknown as JForm[])),
+          // T-05 dual-read: prefer the typed money columns, JSONB as fallback (hydrateJForm).
+          ({ data, error }) => setProcurementJFormsState(error || !data ? storage.getProcurementJForms() : (data as Record<string, unknown>[]).map(hydrateJForm) as unknown as JForm[]),
           () => setProcurementJFormsState(storage.getProcurementJForms()),
         );
         supabase.from('procurement_financial_intents').select('*').eq('society_id', sid).then(

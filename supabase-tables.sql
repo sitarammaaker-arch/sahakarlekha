@@ -1599,6 +1599,15 @@ create policy "society_rw" on public.procurement_jform_counters for all to authe
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
 create unique index if not exists procurement_jforms_docno_uniq on public.procurement_jforms (society_id, "documentNo");
+-- T-05: typed money columns (promote J-Form gross/deductions/net JSONB → integer-paise + currency).
+-- Unlike settlements, J-Form rows are written ONLY by procurement_commit_transaction, so the
+-- typed columns are derived SERVER-SIDE inside that function; migration 042 backfills existing rows.
+alter table public.procurement_jforms add column if not exists "grossAmountMinor"      bigint;
+alter table public.procurement_jforms add column if not exists "grossCurrency"         text;
+alter table public.procurement_jforms add column if not exists "deductionsAmountMinor" bigint;
+alter table public.procurement_jforms add column if not exists "deductionsCurrency"    text;
+alter table public.procurement_jforms add column if not exists "netAmountMinor"        bigint;
+alter table public.procurement_jforms add column if not exists "netCurrency"           text;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Procurement Phase 3.0 — Financial Intent (a business OBJECT only; NOT accounting — no posting /
@@ -2237,8 +2246,16 @@ begin
         on conflict (society_id) do update set last_no = procurement_jform_counters.last_no + 1
         returning last_no into v_no;
       v_doc := 'J' || lpad(v_no::text, 4, '0');
-      insert into procurement_jforms (id, society_id, "lotId", "documentNo", gross, deductions, net, "createdAt", "updatedAt")
-      values (rec->>'id', v_sid, rec->>'lotId', v_doc, rec->'gross', rec->'deductions', rec->'net', (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
+      insert into procurement_jforms (id, society_id, "lotId", "documentNo", gross, deductions, net,
+        "grossAmountMinor", "grossCurrency", "deductionsAmountMinor", "deductionsCurrency", "netAmountMinor", "netCurrency",
+        "createdAt", "updatedAt")
+      values (rec->>'id', v_sid, rec->>'lotId', v_doc, rec->'gross', rec->'deductions', rec->'net',
+        -- T-05 dual-write, derived server-side from the SAME payload (NULL-safe: absent money
+        -- object → NULL typed columns → the client dual-read falls back to the JSONB).
+        (round(((rec->'gross'->>'amount')::numeric)      * 100))::bigint, case when rec ? 'gross'      then coalesce(rec->'gross'->>'currency', 'INR')      end,
+        (round(((rec->'deductions'->>'amount')::numeric) * 100))::bigint, case when rec ? 'deductions' then coalesce(rec->'deductions'->>'currency', 'INR') end,
+        (round(((rec->'net'->>'amount')::numeric)        * 100))::bigint, case when rec ? 'net'        then coalesce(rec->'net'->>'currency', 'INR')        end,
+        (rec->>'createdAt')::timestamptz, (rec->>'updatedAt')::timestamptz);
       v_docmap := v_docmap || jsonb_build_object(rec->>'id', v_doc);
       v_result := v_result || jsonb_build_object('id', rec->>'id', 'lotId', rec->>'lotId', 'documentNo', v_doc);
     end loop;
