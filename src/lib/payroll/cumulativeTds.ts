@@ -31,8 +31,21 @@ export interface CumulativeTdsInput {
   ytdDeducted: number;
   /** Months left to deduct in, INCLUDING the one being processed. Never < 1. */
   monthsRemaining: number;
-  /** The date whose law applies. Defaults to today inside annualIncomeTax. */
-  asOf?: string;
+  /**
+   * The date whose law applies — REQUIRED, deliberately.
+   *
+   * It was optional for about an hour, and in that hour the very first caller forgot it
+   * and silently got today's law for a payslip from another year — the exact defect this
+   * module was written to clean up (tdsProjection applying FY 2024-25 slabs in FY 2026-27),
+   * reintroduced one layer up by the same hand, the same day.
+   *
+   * A defaulted date is a defect generator in a system of statutory record: the caller
+   * always HAS the month — `monthsRemaining` is already derived from it — so letting the
+   * law come from somewhere else guarantees the two eventually disagree. Required makes
+   * that mistake a compile error instead of a wrong number on someone's payslip. Pass
+   * the month being processed, never `new Date()`.
+   */
+  asOf: string;
 }
 
 export interface CumulativeTdsResult {

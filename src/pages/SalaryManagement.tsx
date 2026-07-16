@@ -383,6 +383,13 @@ const SalaryManagement: React.FC = () => {
       regime,
       ytdDeducted,
       monthsRemaining: monthsLeftInFy(processingMonth),
+      // asOf comes from the MONTH BEING PROCESSED, never from today. Re-running a
+      // March-2025 payslip must apply FY 2024-25 law, not this year's. Omitting this
+      // defaults to today — which is the exact defect this whole file spent the day
+      // fixing (tdsProjection applying FY 2024-25 slabs in FY 2026-27), reintroduced
+      // one layer up. monthsRemaining already derives from processingMonth; the law
+      // has to come from the same place or the two disagree.
+      asOf: `${processingMonth}-01`,
     });
   };
 

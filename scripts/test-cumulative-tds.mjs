@@ -92,12 +92,23 @@ console.log('\n  Cumulative salary TDS — the year, not the month\n');
   ok('guard: no salary ⇒ no TDS, no excess', g.tds === 0 && g.excess === 0);
 }
 
-/* 6 · asOf IS LOAD-BEARING — the same salary, two years' law. */
+/* 6 · asOf IS LOAD-BEARING — the same salary, two years' law.
+   asOf is a REQUIRED field, not an optional one with a today-shaped default. It was
+   optional for about an hour and the first caller (SalaryManagement) forgot it, so a
+   March-2025 payslip would have been computed on FY 2026-27 law — the very defect this
+   module cleans up, reintroduced one layer up. Required makes that a compile error;
+   these assertions prove the field actually decides the answer. */
 {
   const now = cumulativeMonthlyTds({ annualGross: 1000000, regime: 'new', ytdDeducted: 0, monthsRemaining: 12, asOf: FY26 });
   const then = cumulativeMonthlyTds({ annualGross: 1000000, regime: 'new', ytdDeducted: 0, monthsRemaining: 12, asOf: '2024-06-01' });
   ok('asOf: ₹10L owes ₹0 today', now.annualTax === 0);
   ok('asOf: the SAME salary owed ₹44,200 under FY 2024-25 law', then.annualTax === 44200);
+
+  // The wiring bug, pinned: a payslip re-run for an old month must use THAT month's law.
+  // SalaryManagement now passes `${processingMonth}-01`; this is what that must produce.
+  const oldRun = cumulativeMonthlyTds({ annualGross: 1000000, regime: 'new', ytdDeducted: 0, monthsRemaining: 1, asOf: '2025-03-01' });
+  ok('asOf: a March-2025 re-run gets FY 2024-25 law, not this year\'s', oldRun.annualTax === 44200 && oldRun.tds === 44200);
+  ok('asOf: and the current year is genuinely different', now.annualTax !== oldRun.annualTax);
 }
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
