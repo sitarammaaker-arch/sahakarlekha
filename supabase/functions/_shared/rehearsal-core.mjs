@@ -4040,6 +4040,11 @@ function backupHealth(inputs) {
   } else {
     proven = true;
   }
+  if (!inputs.placement) {
+    reasons.push("the copy placement has never been evaluated \u2014 3-2-1 is unproven");
+  } else if (!inputs.placement.ok) {
+    for (const d of inputs.placement.deficiencies) reasons.push(`placement: ${d}`);
+  }
   let status;
   if (reasons.length === 0) status = "green";
   else if (red) status = "red";

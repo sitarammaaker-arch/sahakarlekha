@@ -15,5 +15,12 @@ export { buildArchive, archiveFileName, planArchive } from '../../../src/lib/bac
 export { BACKUP_FORMAT_VERSION } from '../../../src/lib/backup/manifest';
 export { encryptArchive } from '../../../src/lib/backup/crypto';
 export { sha256Bytes } from '../../../src/lib/backup/integrity';
+// T-36 / DP-P4: the SAME 3-2-1 policy the client's Backup Health grades, so the server records a
+// verdict the client can trust — one policy, never a server-side second opinion.
+export { evaluate321 } from '../../../src/lib/backup/placement';
+export type { CopyPlacement, Placement321Verdict } from '../../../src/lib/backup/placement';
+// T-01: resolve the tenant's residency jurisdiction from its state in the ONE place the app uses,
+// so the server never invents a second normalisation ('HR' / 'Haryana' / 'हरियाणा' → 'hr').
+export { resolveJurisdiction } from '../../../src/lib/jurisdiction';
 export type { EntityDescriptor } from '../../../src/lib/export/registry.types';
 export type { Row } from '../../../src/lib/backup/ndjson';

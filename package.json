@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "validate:glossary": "node scripts/validate-glossary.mjs",
     "test:backup-retention": "node scripts/test-backup-retention.mjs",
+    "test:backup-placement-config": "node scripts/test-backup-placement-config.mjs",
     "test:jwt-role-helpers": "node scripts/test-jwt-role-helpers.mjs",
     "test:role-access": "node scripts/test-role-access.mjs",
     "test:calc": "node scripts/test-calculators.mjs",

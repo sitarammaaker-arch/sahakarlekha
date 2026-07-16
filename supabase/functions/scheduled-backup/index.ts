@@ -18,8 +18,10 @@
  * society is reported failed rather than getting a half-archive that looks complete.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { buildArchive, archiveFileName, planArchive, REGISTRY, BACKUP_FORMAT_VERSION } from '../_shared/backup-core.mjs';
+import { AwsClient } from 'npm:aws4fetch@1.0.20';
+import { buildArchive, archiveFileName, planArchive, REGISTRY, BACKUP_FORMAT_VERSION, evaluate321, resolveJurisdiction } from '../_shared/backup-core.mjs';
 import { planRetention } from '../_shared/retention-plan.mjs';
+import { resolvePlacements } from '../_shared/placement-config.mjs';
 
 const PAGE = 1000;
 // Per-table row ceiling. A table above this makes buildArchive refuse (no partial backups),
@@ -35,6 +37,46 @@ const MAX_ROWS = Number(Deno.env.get('BACKUP_MAX_ROWS')) || 150_000;
 // large societies is per-entity streaming (T-27); until then they fail loudly at this budget.
 const MAX_BYTES = Number(Deno.env.get('BACKUP_MAX_BYTES')) || 50 * 1024 * 1024;
 const BUCKET = 'backups';
+// ── T-36 · the off-vendor copy (DP-P4 / BK-3) ────────────────────────────────────────────────
+// A backup whose every copy sits with ONE vendor is one outage — or one ransomware event, or one
+// vendor's bankruptcy — from total loss. So the archive is replicated to a SECOND, independent
+// provider. Cloudflare R2 / AWS S3 / Backblaze B2 all speak the S3 API, so WHICH vendor is
+// configuration, not code. Unset ⇒ no second copy and Backup Health honestly reports the
+// single-vendor placement (it cannot go green — see src/lib/backup/health.ts).
+const S3_ENDPOINT = Deno.env.get('BACKUP_S3_ENDPOINT') ?? '';
+const S3_BUCKET = Deno.env.get('BACKUP_S3_BUCKET') ?? '';
+const S3_REGION = Deno.env.get('BACKUP_S3_REGION') ?? 'auto';
+const S3_KEY_ID = Deno.env.get('BACKUP_S3_ACCESS_KEY_ID') ?? '';
+const S3_SECRET = Deno.env.get('BACKUP_S3_SECRET_ACCESS_KEY') ?? '';
+const S3_PROVIDER = Deno.env.get('BACKUP_S3_PROVIDER') ?? '';        // label for the placement, e.g. 'cloudflare-r2'
+const S3_JURISDICTION = Deno.env.get('BACKUP_S3_JURISDICTION') ?? ''; // where that bucket physically is
+const S3_ENABLED = !!(S3_ENDPOINT && S3_BUCKET && S3_KEY_ID && S3_SECRET);
+// Where the PRIMARY (Supabase) copy physically lives. Only the operator knows this — it is never
+// guessed (see _shared/placement-config.mjs). Unset ⇒ the placement is reported UNEVALUATED rather
+// than claiming a residency we cannot prove.
+const PRIMARY_PROVIDER = Deno.env.get('BACKUP_PRIMARY_PROVIDER') ?? '';
+const PRIMARY_REGION = Deno.env.get('BACKUP_PRIMARY_REGION') ?? '';
+const PRIMARY_JURISDICTION = Deno.env.get('BACKUP_PRIMARY_JURISDICTION') ?? '';
+
+/**
+ * Replicate the archive to the off-vendor, S3-compatible store. Returns ok/error — it NEVER throws,
+ * because a replication failure must not fail the backup: the primary bytes are already safe, and
+ * the missing copy shows up honestly in the placement verdict instead.
+ */
+async function replicateOffVendor(path: string, bytes: Uint8Array): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const client = new AwsClient({ accessKeyId: S3_KEY_ID, secretAccessKey: S3_SECRET, service: 's3', region: S3_REGION });
+    const url = `${S3_ENDPOINT.replace(/\/+$/, '')}/${S3_BUCKET}/${path}`;
+    const res = await client.fetch(url, { method: 'PUT', body: bytes, headers: { 'content-type': 'application/zip' } });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      return { ok: false, error: `${res.status} ${detail}`.trim().slice(0, 300) };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
 // Retention (opt-in destructive): the bucket otherwise grows ~1 file/society/week forever.
 // Policy is computed by the CI-tested pure planner (_shared/retention-plan.mjs): keep the
 // newest BACKUP_KEEP_RECENT files (default 12) + the newest file of each calendar month for
@@ -155,6 +197,35 @@ async function backupSociety(supabase: any, societyId: string) {
     .upload(path, archive, { contentType: 'application/zip', upsert: false });
   if (upErr) throw new Error(`storage upload failed: ${upErr.message}`);
 
+  // ── T-36 · the second, off-vendor copy ─────────────────────────────────────
+  // Best effort by design: the primary bytes are already safe, so a replication failure is recorded
+  // and surfaced in the placement verdict — it never fails the backup.
+  let secondaryLanded: { provider: string; region: string; jurisdiction: string } | null = null;
+  let offVendor = 'not configured';
+  if (S3_ENABLED) {
+    const rep = await replicateOffVendor(path, archive);
+    if (rep.ok) { secondaryLanded = { provider: S3_PROVIDER, region: S3_REGION, jurisdiction: S3_JURISDICTION }; offVendor = 'landed'; }
+    else { offVendor = `failed: ${rep.error}`; }
+  }
+
+  // Grade the placement with the SAME policy the client's Backup Health uses (evaluate321) — one
+  // policy, never a server-side second opinion. A copy whose location the operator has not declared,
+  // or a society whose jurisdiction does not resolve, leaves the placement UNEVALUATED (honest) —
+  // we never fabricate a region/jurisdiction, because a guessed one would silently suppress a real
+  // residency deficiency (ADR-0009) and turn the card green on nothing.
+  const placementCfg = resolvePlacements({
+    primary: { provider: PRIMARY_PROVIDER, region: PRIMARY_REGION, jurisdiction: PRIMARY_JURISDICTION },
+    secondary: secondaryLanded,
+  });
+  const tenantJurisdiction = resolveJurisdiction(soc?.state);
+  const unevaluatedReasons = [
+    ...placementCfg.reasons,
+    ...(tenantJurisdiction ? [] : ['the society has no resolvable jurisdiction (state unset) — residency cannot be checked']),
+  ];
+  const placement = placementCfg.evaluable && tenantJurisdiction
+    ? evaluate321(placementCfg.copies, tenantJurisdiction)
+    : null;
+
   // Record it — WORM custody, best effort. The bytes are already safe in Storage; a failed
   // audit write must not be reported as a failed backup.
   let recorded = true;
@@ -172,6 +243,10 @@ async function backupSociety(supabase: any, societyId: string) {
         trigger: 'scheduled', filename, path, byteSize: archive.length,
         entityCount: manifest.totals.entityCount, rowCount: manifest.totals.rowCount,
         manifestHash: manifest.manifestHash,
+        // T-36: where the copies actually landed, and how that placement grades (DP-P4).
+        offVendor,
+        placement,                                                        // null ⇒ unevaluated
+        placementUnevaluated: placement ? null : unevaluatedReasons,      // …and exactly why
       },
       reason: 'scheduled server backup',
       source: 'edge-function',
