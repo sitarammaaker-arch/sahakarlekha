@@ -1,5 +1,10 @@
-// TDS u/s 192 projection (ECR-14, FY 2024-25). Imports the REAL src/lib/tdsProjection.ts via
+// TDS u/s 192 projection (ECR-14). Imports the REAL src/lib/tdsProjection.ts via
 // the '@/' loader (was a self-contained mirror before).
+//
+// The first 11 assertions are the ORIGINAL figures, kept byte-identical on purpose:
+// moving the slabs out to rules/incomeTax.ts must not shift a single number, and these
+// are the proof. The rest assert the thing that was missing — that a projection now
+// knows which year's law it used, and says so when that law does not fit the date.
 // Run: node scripts/test-tds-projection.mjs
 import { register } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -64,5 +69,31 @@ ok(suggestMonthlyTds(30000, 'new') === 0, 'monthly 30k (annual 3.6L) → nil TDS
 // 3–7L @5% = 20000; 7–8L @10% = 10000; tax 30000; +cess = 31200.
 ok(annualIncomeTax(875000, 'new') === r0(30000 * 1.04), 'new: 8.75L gross → ₹31,200 (taxable 8L, no rebate)');
 
-console.log(`\nTDS projection (pure): ${pass} passed, ${fail} failed`);
+/* ── Slab provenance (rules/incomeTax.ts) ──────────────────────────────────────
+   The defect: this file applied FY 2024-25 law with no date parameter, so in
+   FY 2026-27 it silently computed on the wrong year. The figures are unchanged
+   (asserted above); what is new is that the wrongness is now REPORTABLE. */
+const { resolveTaxBasis, describeBasis, SLAB_SETS } = await import(abs('../src/lib/rules/incomeTax.ts'));
+const { annualIncomeTaxWithBasis, tdsBasisNote } = await import(abs('../src/lib/tdsProjection.ts'));
+
+ok(SLAB_SETS.length === 1 && SLAB_SETS[0].fy === 'FY 2024-25', 'catalog: the one slab set is FY 2024-25');
+ok(SLAB_SETS[0].verified === false, 'catalog: it is marked UNVERIFIED — not a settled figure');
+
+const inYear = resolveTaxBasis('2024-06-01');
+ok(!inYear.stale && inYear.set.fy === 'FY 2024-25', 'basis: a date inside FY 2024-25 is not stale');
+
+// THE BUG, now visible: today is FY 2026-27 and no slab set covers it.
+const now = resolveTaxBasis('2026-07-16');
+ok(now.stale === true, 'basis: FY 2026-27 has NO slab set ⇒ flagged stale, not silently wrong');
+ok(describeBasis(now).includes('⚠️'), 'basis: the stale note warns the user');
+ok(describeBasis(inYear).includes('सत्यापित नहीं'), 'basis: even in-year says it is unverified');
+
+// The figure still computes (payroll must not stop) — but it carries its provenance.
+const w = annualIncomeTaxWithBasis(1000000, 'new', 0, '2026-07-16');
+ok(w.tax === r0(42500 * 1.04), 'stale: still computes — a payroll run that halts is worse');
+ok(w.basis.stale === true, 'stale: but the caller is TOLD the law does not fit the date');
+ok(tdsBasisNote('2026-07-16').includes('⚠️'), 'ui: the salary screen gets a warning line');
+
+console.log(`
+TDS projection (pure): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
