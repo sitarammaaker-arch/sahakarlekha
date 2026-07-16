@@ -24,6 +24,7 @@ import { fmtDate } from '@/lib/dateUtils';
 import { generate26QText, download26Q, validate26QData, getQuarterFromDate, getQuarterDueDate } from '@/lib/tds26q';
 import { applyPercent, toMinor, toRupees } from '@/lib/money';
 import type { TdsEntry, TdsChallan, TdsChallanLink, TdsSection, TdsDeducteeType, TdsQuarter } from '@/types';
+import { resolveSectionRef, describeSectionRef, isAct2025 } from '@/lib/rules/tdsSections';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -269,7 +270,22 @@ const TdsRegister: React.FC = () => {
       financialYear: fy,
     });
     download26Q(text, society, selectedQuarter, fy);
-    toast({ title: hi ? '26Q फ़ाइल डाउनलोड हो गई' : '26Q file downloaded' });
+    // The file carries 1961 section numbers, and for FY 2026-27 onwards those sections
+    // are repealed (Income-tax Act 2025, in force 1-4-2026). We do NOT silently rewrite
+    // them: our 2025 mapping is CA-confirmed but single-sourced, and a wrong statutory
+    // reference on a government return is worse than a stale one — it looks checked.
+    // So we say it, at the exact moment it matters: the download.
+    if (isAct2025(`${fy.slice(0, 4)}-07-01`)) {
+      toast({
+        title: hi ? '26Q डाउनलोड — पर पहले जाँच लें' : '26Q downloaded — check before filing',
+        description: hi
+          ? 'फ़ाइल में धाराएँ 1961 अधिनियम की हैं (194C आदि)। आयकर अधिनियम 2025 (1-4-2026 से) ने इन्हें बदल दिया है। दाख़िल करने से पहले अपने CA से पुष्टि करें।'
+          : 'The file uses 1961-Act sections (194C etc.). The Income-tax Act 2025 (in force 1-4-2026) renumbered them. Confirm with your CA before filing.',
+        duration: 14000,
+      });
+    } else {
+      toast({ title: hi ? '26Q फ़ाइल डाउनलोड हो गई' : '26Q file downloaded' });
+    }
   };
 
   // CSV/Excel export
@@ -436,7 +452,29 @@ const TdsRegister: React.FC = () => {
                             <p className="text-xs font-mono text-muted-foreground">{entry.deducteePan || '—'}</p>
                           </div>
                         </TableCell>
-                        <TableCell><Badge variant="outline" className="text-xs">{entry.section}</Badge></TableCell>
+                        {/* The stored key is 1961 numbering and never changes (it IS the
+                            key). What it means depends on the entry's own date: the
+                            Income-tax Act 2025 came into force 1-4-2026 and renumbered
+                            everything. So we show what applies TO THIS ENTRY, and say
+                            plainly that the new mapping is not yet verified — see
+                            lib/rules/tdsSections.ts. The EXPORT deliberately still
+                            prints the stored key: an unverified reference on a
+                            government return would be worse than an obviously stale
+                            one, because it looks checked. */}
+                        <TableCell>
+                          {(() => {
+                            const ref = resolveSectionRef(entry.section, entry.date);
+                            return (
+                              <Badge
+                                variant="outline"
+                                className={`text-xs ${ref.act === '2025' && !ref.verified ? 'border-amber-500/60 text-amber-700 dark:text-amber-500' : ''}`}
+                                title={ref.act === '2025' ? `${describeSectionRef(ref)} · संग्रहीत: ${entry.section}` : ref.cite}
+                              >
+                                {ref.label}{ref.act === '2025' && !ref.verified ? ' ⚠️' : ''}
+                              </Badge>
+                            );
+                          })()}
+                        </TableCell>
                         <TableCell className="text-sm max-w-32 truncate">{entry.natureOfPayment}</TableCell>
                         <TableCell className="text-right font-medium">{fmt(entry.grossAmount)}</TableCell>
                         <TableCell className="text-right">{entry.tdsRate}%</TableCell>
