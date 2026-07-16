@@ -79,5 +79,82 @@ for (const forbidden of ['supabase', 'fetch(', 'localStorage', 'document.', 'Dat
   ok(!code.includes(forbidden), `rules/engine.ts is pure & deterministic (no "${forbidden}")`);
 }
 
+/* ── Attribute conditions (`when` / `attrs`) ───────────────────────────────────
+   Statute varies a figure by more than place and date: TDS is 1% for an
+   Individual/HUF payee and 2% for others; 10% for professional services but 2% for
+   technical. Without this the catalog held one number per section, so those sections
+   had to be omitted rather than encoded as half the law (rules/tax.ts).
+   Most-specific-wins, mirroring the jurisdiction chain (`hr` beats `''` regardless
+   of date). Every assertion above still passes untouched — the extension is additive,
+   and that is the proof. */
+const CONDITIONED = {
+  key: 'tds.194c.rate_pct',
+  byJurisdiction: {
+    '': [
+      { value: 2, effectiveFrom: '2020-04-01', version: 1 },                                  // default: everyone else
+      { value: 1, effectiveFrom: '2020-04-01', version: 1, when: { payeeType: 'individual' } },
+    ],
+  },
+};
+
+ok(resolveRule(CONDITIONED, { asOf: '2026-07-16', attrs: { payeeType: 'individual' } }).value === 1,
+  'when: an Individual/HUF payee gets the specific rate');
+ok(resolveRule(CONDITIONED, { asOf: '2026-07-16', attrs: { payeeType: 'company' } }).value === 2,
+  'when: any other payee falls back to the default');
+ok(resolveRule(CONDITIONED, { asOf: '2026-07-16' }).value === 2,
+  'when: no attrs at all ⇒ the unconditioned default, never the specific one');
+ok(resolveRule(CONDITIONED, { asOf: '2026-07-16', attrs: { unrelated: 'x' } }).value === 2,
+  'when: an irrelevant attr does not accidentally match a condition');
+
+/* THE GUARD THAT MATTERS: a rule with ONLY conditioned values and no default must
+   return null when nothing matches — the caller then refuses. Silently picking the
+   first row would put an unasked-for rate on a voucher (AI-N8). */
+const NO_DEFAULT = {
+  key: 'tds.194j.rate_pct',
+  byJurisdiction: {
+    '': [
+      { value: 10, effectiveFrom: '2020-04-01', when: { serviceType: 'professional' } },
+      { value: 2, effectiveFrom: '2020-04-01', when: { serviceType: 'technical' } },
+    ],
+  },
+};
+ok(resolveRule(NO_DEFAULT, { asOf: '2026-07-16', attrs: { serviceType: 'technical' } }).value === 2,
+  'no-default: a matching attr resolves');
+ok(resolveRule(NO_DEFAULT, { asOf: '2026-07-16' }) === null,
+  'no-default: a MISSING attr resolves to null — refuse, never guess');
+ok(resolveRule(NO_DEFAULT, { asOf: '2026-07-16', attrs: { serviceType: 'other' } }) === null,
+  'no-default: an unknown attr value resolves to null, not the first row');
+
+/* Effective-dating still governs WITHIN a condition group. */
+const AMENDED = {
+  key: 'x',
+  byJurisdiction: {
+    '': [
+      { value: 1, effectiveFrom: '2020-04-01', when: { payeeType: 'individual' } },
+      { value: 3, effectiveFrom: '2026-04-01', when: { payeeType: 'individual' } },
+    ],
+  },
+};
+ok(resolveRule(AMENDED, { asOf: '2024-06-01', attrs: { payeeType: 'individual' } }).value === 1,
+  'when + date: a 2024 case gets the rate in force then');
+ok(resolveRule(AMENDED, { asOf: '2026-07-16', attrs: { payeeType: 'individual' } }).value === 3,
+  'when + date: a 2026 case gets the amended rate');
+
+/* Specificity beats recency — a specific provision governs even if the general one was
+   amended later, which is how statute reads and how `hr` already beats `''` here. */
+const SPECIFIC_VS_NEW = {
+  key: 'y',
+  byJurisdiction: {
+    '': [
+      { value: 5, effectiveFrom: '2020-04-01', when: { payeeType: 'individual' } },
+      { value: 9, effectiveFrom: '2026-04-01' }, // newer, but general
+    ],
+  },
+};
+ok(resolveRule(SPECIFIC_VS_NEW, { asOf: '2026-07-16', attrs: { payeeType: 'individual' } }).value === 5,
+  'specificity beats recency — the specific provision governs');
+ok(resolveRule(SPECIFIC_VS_NEW, { asOf: '2026-07-16', attrs: { payeeType: 'company' } }).value === 9,
+  '...but everyone else still gets the newer general one');
+
 console.log(`\nRules engine (effective-dated, jurisdiction-scoped): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
