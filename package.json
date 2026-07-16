@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "preview": "vite preview",
     "validate:glossary": "node scripts/validate-glossary.mjs",
+    "eval:ask": "node scripts/eval-ask.mjs",
+    "build:search-index": "node scripts/build-search-index.mjs",
     "test:backup-retention": "node scripts/test-backup-retention.mjs",
     "test:backup-placement-config": "node scripts/test-backup-placement-config.mjs",
     "test:jwt-role-helpers": "node scripts/test-jwt-role-helpers.mjs",
