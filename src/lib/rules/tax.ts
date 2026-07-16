@@ -119,38 +119,38 @@ export const TDS_RULES: RuleCatalog = {
      merely unverified, it was contradicted. The rule KEY stays '194q' — it is an
      identifier, not a label; lib/rules/tdsSections.ts resolves what to PRINT by date,
      the same way TdsEntry.section does. */
-  /* ⚠️ CONTESTED — DO NOT RE-VERIFY WITHOUT AN AUTHORITATIVE SOURCE. ⚠️
-     Two statements from the same founder+CA channel contradict each other:
-        2026-07-16 (list) : ₹10,00,000   ← this was flipped to verified:true
-        2026-07-16 (later): ₹50,00,000   ← with a worked example: ₹80L purchase
-                                           → ₹30L taxable → ₹3,000
-     ₹50,00,000 also matches this file's ORIGINAL seed, which was marked unverified
-     precisely because it came from model memory and could not be asserted.
+  /* ✅ SETTLED BY THE ACT'S OWN TEXT — and the history is worth keeping, because it is
+     the strongest evidence in this file for how it is meant to work.
 
-     Both cannot be right, and 5× is not a rounding difference. When sources conflict the
-     answer is NOT "take the newer one" — that is the same error in the other direction.
-     It is: we do not know, so the system says nothing. Back to unverified.
+        model memory (my seed)  : ₹50,00,000  → marked UNVERIFIED; I refused to assert it
+        CA-reviewed list        : ₹10,00,000  → this got flipped to verified: true ❌
+        founder, with example   : ₹50,00,000  → contradiction surfaced; back to unverified
+        THE SECTION TEXT        : ₹50,00,000  ✅
 
-     RESOLVING THIS NEEDS A SOURCE, NOT A MESSAGE: the section text on indiacode.nic.in
-     or the ITD portal, or a circular number. Not a summary, not a table, not a recollection.
+     s.393(1) Table Sl. No. 8(ii): "Any sum exceeding fifty lakh rupees for purchase of
+     any goods." Read from incometaxindia.gov.in/w/section-393-5 — the Act, on the
+     department's own site.
 
-     THE HARDER PROBLEM IS BELOW — see `tds.194q.applies_if.buyer_turnover_min`. Even the
-     right threshold is useless while the applicability gate is missing. */
-  // NOTE the cite carries NO figure. It reaches the user inside the hedge, and a number
-  // in a refusal reads as an answer — a secretary would take ₹50,00,000 and use it. The
-  // two contested values live in the comment above, where a developer or CA reads them.
-  'tds.194q.threshold': tds(
+     The seed was right and the human review was wrong, and NEITHER of those is the
+     lesson. The lesson is that "verified" tracked whoever spoke last until a SOURCE
+     settled it. A statement — mine, an AI list's, a CA's — is a claim. Only the text is
+     the text. That is what the cite field is for, and why it now names the URL rather
+     than a person.
+
+     STILL MISSING: "Threshold limit: As per Note 1" — Note 1 is where the buyer's
+     ₹10 crore turnover gate lives. See `applies_if.buyer_turnover_min` below: the
+     threshold is settled, applicability is not. */
+  'tds.194q.threshold': verified(
     'tds.194q.threshold', 5000000,
-    'Income-tax Act 2025 s.393(1) Table 8 Sl.(ii) [1961: s.194Q] — threshold CONTESTED between two ' +
-      'sources (see rules/tax.ts). UNVERIFIED until an authoritative source settles it: the section ' +
-      'text on indiacode.nic.in / the ITD portal, or a circular number.',
+    'Income-tax Act 2025 s.393(1) Table Sl. No. 8(ii) [1961: s.194Q] — "Any sum exceeding fifty lakh ' +
+      'rupees for purchase of any goods", payer "Any person, being a buyer". SOURCE: the section text ' +
+      'itself, incometaxindia.gov.in/w/section-393-5. Not a summary, not a recollection.',
     TY2627,
   ),
-  'tds.194q.rate_pct': tds(
+  'tds.194q.rate_pct': verified(
     'tds.194q.rate_pct', 0.1,
-    'Rate 0.1% is NOT contested (both statements agree) — but it stays unverified because it is ' +
-      'meaningless without a settled threshold and the buyer-turnover gate. ' +
-      'Income-tax Act 2025 s.393(1) Table 8 Sl.(ii) [1961: s.194Q].',
+    'Income-tax Act 2025 s.393(1) Table Sl. No. 8(ii) [1961: s.194Q] — "Rate: 0.1%". SOURCE: the ' +
+      'section text itself, incometaxindia.gov.in/w/section-393-5.',
     TY2627,
   ),
 
@@ -170,8 +170,10 @@ export const TDS_RULES: RuleCatalog = {
      behaviour for this section. UNVERIFIED like everything else on this list. */
   'tds.194q.applies_if.buyer_turnover_min': tds(
     'tds.194q.applies_if.buyer_turnover_min', 100000000,
-    'GATE: 194Q applies only if the BUYER\'s preceding-FY turnover exceeded ₹10 crore (founder, 2026-07-16). ' +
-      'Most cooperative societies fall below this and owe NO 194Q at all. Not yet enforced by computeTds. UNVERIFIED.',
+    'GATE: 194Q applies only if the BUYER\'s preceding-year turnover exceeded ₹10 crore (founder, 2026-07-16). ' +
+      'The Act\'s Table Sl. No. 8(ii) says "Threshold limit: As per Note 1" — Note 1 is where this lives and it ' +
+      'has NOT been read yet. UNVERIFIED, and not enforced by computeTds. Most cooperative societies fall below ' +
+      'this and owe NO 194Q at all.',
     TY2627,
   ),
 

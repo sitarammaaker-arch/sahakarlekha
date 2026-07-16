@@ -43,19 +43,29 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
      — and matching this file's original model-memory seed). Both cannot be right.
      When sources conflict the answer is NOT "take the newer one" — that is the same
      error in the other direction. It is: we do not know, so the system says nothing. */
+  /* SETTLED BY THE ACT'S OWN TEXT — s.393(1) Table Sl. No. 8(ii): "Any sum exceeding
+     fifty lakh rupees for purchase of any goods", Rate 0.1%. Read from
+     incometaxindia.gov.in/w/section-393-5.
+
+     The history is the point: my model-memory seed said ₹50,00,000 and was marked
+     unverified; a CA-reviewed list said ₹10,00,000 and got flipped to verified: true;
+     the founder then contradicted it; the Act settled it at ₹50,00,000. The seed was
+     right and the human review was wrong — and NEITHER is the lesson. The lesson is that
+     "verified" tracked whoever spoke last until a SOURCE settled it. A statement is a
+     claim; only the text is the text. */
   const thr = tax.resolveTaxRule('tds.194q.threshold', CTX);
-  ok('194Q: back to UNVERIFIED — two sources contradict each other', thr.verified === false);
-  ok('194Q: the cite records the CONTRADICTION, not just one side', thr.cite.includes('CONTESTED'));
-  // The cite reaches the USER inside the hedge, so it must carry no figure: a number in
-  // a refusal reads as an answer. The two contested values live in the source comment,
-  // for the developer and the CA — the people who can actually settle it.
-  ok('194Q: the cite leaks NEITHER figure — a number in a refusal reads as an answer',
-    !thr.cite.match(/50,00,000|10,00,000/));
-  ok('194Q: and it names what would settle it', thr.cite.includes('indiacode') || thr.cite.includes('circular'));
-  ok('194Q: verifiedValue withholds it', tax.verifiedValue('tds.194q.threshold', CTX) === null);
-  ok('194Q: F-lane refuses again', answerFact('194Q की सीमा कितनी है', CTX) === null);
-  ok('194Q: compute refuses again', isRefusal(computeTds({ section: '194q', aggregateMinor: 900000000, ctx: CTX })));
-  ok('194Q: but says the rule EXISTS and is unchecked', !!unverifiedHint('194Q की सीमा कितनी है', CTX));
+  ok('194Q: ₹50,00,000 — per the section text itself', thr.value === 5000000);
+  ok('194Q: verified', thr.verified === true);
+  ok('194Q: the cite names the SOURCE, not a person', thr.cite.includes('section-393-5'));
+  ok('194Q: quotes the Act verbatim', thr.cite.includes('exceeding fifty lakh rupees'));
+  ok('194Q: rate 0.1%, same source', tax.verifiedValue('tds.194q.rate_pct', CTX).value === 0.1);
+  ok('194Q: F-lane answers', !!answerFact('194Q की सीमा कितनी है', CTX));
+
+  // ₹80,00,000 purchase → excess over ₹50,00,000 = ₹30,00,000 → 0.1% = ₹3,000.
+  // The founder's own worked example, now reproduced by the engine.
+  const wk = computeTds({ section: '194q', aggregateMinor: 800000000, ctx: CTX });
+  ok('194Q: ₹80L purchase → ₹3,000 — the founder\'s worked example reproduces exactly',
+    wk.taxableMinor === 300000000 && wk.tdsMinor === 300000);
 
   /* THE GATE THAT WAS MISSING ENTIRELY — and matters more than the threshold.
      194Q applies only if the BUYER's preceding-FY turnover exceeded ₹10 crore. Most
