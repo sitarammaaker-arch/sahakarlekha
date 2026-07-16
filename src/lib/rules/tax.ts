@@ -76,6 +76,36 @@ function verified(key: string, value: number, cite: string, effectiveFrom: strin
   return { key, byJurisdiction: { '': [v] } };
 }
 
+/**
+ * A rule whose value depends on an attribute of the case (engine `when`, T-15).
+ *
+ * Pass rows most-general-last is NOT required — the engine picks most-specific-wins. A
+ * row with no `when` is the default for everyone else; OMIT it deliberately where statute
+ * has no default, so an unstated attribute resolves to null and the caller refuses rather
+ * than picks a rate nobody asked for (AI-N8).
+ */
+function conditioned(
+  key: string,
+  rows: { value: number; when?: Record<string, string> }[],
+  cite: string,
+  effectiveFrom: string,
+): Rule<number> {
+  return {
+    key,
+    byJurisdiction: {
+      '': rows.map((r) => ({
+        value: r.value,
+        when: r.when,
+        effectiveFrom,
+        version: 2,
+        verified: true,
+        cite,
+        note: cite,
+      } as TaxRuleValue)),
+    },
+  };
+}
+
 /** Tax Year 2026-27 — the Income-tax Act 2025 came into force 1-4-2026 (1961 Act repealed). */
 const TY2627 = '2026-04-01';
 
@@ -113,6 +143,88 @@ export const TDS_RULES: RuleCatalog = {
     TY2627,
   ),
 
+  /* Contractor. TWO thresholds of different KINDS — either breach attracts TDS, so they
+     are separate keys, not a condition. And the RATE turns on who is paid: the 2025 Act
+     splits this across Table 6 Sl.(i)/(ii), which is very likely the same distinction the
+     `when` below expresses. */
+  'tds.194c.threshold.per_payment': verified(
+    'tds.194c.threshold.per_payment', 30000,
+    `Income-tax Act 2025 s.393(1) Table 6 Sl.(i)/(ii) [1961: s.194C] — single payment. ${CA_CHAIN}`,
+    TY2627,
+  ),
+  'tds.194c.threshold.annual': verified(
+    'tds.194c.threshold.annual', 100000,
+    `Income-tax Act 2025 s.393(1) Table 6 Sl.(i)/(ii) [1961: s.194C] — aggregate in a tax year. ${CA_CHAIN}`,
+    TY2627,
+  ),
+  'tds.194c.rate_pct': conditioned(
+    'tds.194c.rate_pct',
+    [
+      { value: 1, when: { payeeType: 'individual' } },   // Individual / HUF
+      { value: 2 },                                       // everyone else — the default
+    ],
+    `Income-tax Act 2025 s.393(1) Table 6 Sl.(i)/(ii) [1961: s.194C] — 1% Individual/HUF, 2% others. ${CA_CHAIN}`,
+    TY2627,
+  ),
+
+  /* Professional / technical. NO DEFAULT, deliberately: statute gives no "other" rate
+     here, so an unstated serviceType must REFUSE. 10% vs 2% is a 5× difference — exactly
+     the kind of gap where guessing is worst. */
+  'tds.194j.threshold': verified(
+    'tds.194j.threshold', 50000,
+    `Income-tax Act 2025 s.393(1) Table 6 Sl.(iii) [1961: s.194J]. ${CA_CHAIN}`,
+    TY2627,
+  ),
+  'tds.194j.rate_pct': conditioned(
+    'tds.194j.rate_pct',
+    [
+      { value: 10, when: { serviceType: 'professional' } },
+      { value: 2, when: { serviceType: 'technical' } },
+      // no default — see above
+    ],
+    `Income-tax Act 2025 s.393(1) Table 6 Sl.(iii) [1961: s.194J] — 10% professional, 2% technical. ${CA_CHAIN}`,
+    TY2627,
+  ),
+
+  /* Interest. The threshold doubles for a senior citizen — the 2025 Act's Table 5
+     Sl.(ii)/(iii) split likely carries this same distinction. */
+  'tds.194a.threshold': conditioned(
+    'tds.194a.threshold',
+    [
+      { value: 100000, when: { payeeAge: 'senior' } },
+      { value: 50000 },                                   // everyone else — the default
+    ],
+    `Income-tax Act 2025 s.393(1) Table 5 Sl.(ii)/(iii) [1961: s.194A] — ₹50,000; ₹1,00,000 for senior citizens (bank/post office). ${CA_CHAIN}`,
+    TY2627,
+  ),
+  'tds.194a.rate_pct': verified(
+    'tds.194a.rate_pct', 10,
+    `Income-tax Act 2025 s.393(1) Table 5 Sl.(ii)/(iii) [1961: s.194A]. ${CA_CHAIN}`,
+    TY2627,
+  ),
+
+  /* Rent. Threshold is PER MONTH — a different kind again, hence its own key name; a
+     caller must not compare an annual figure to it. NO DEFAULT rate: the asset decides.
+     ⚠️ The CA's answer arrived with this row's columns run together and carried the
+     caveat "(नए reporting framework में)" on the threshold. The values are legible and
+     recorded, but this row is the least certain on the list — re-confirm before it drives
+     a posting. */
+  'tds.194i.threshold.per_month': verified(
+    'tds.194i.threshold.per_month', 50000,
+    `Income-tax Act 2025 s.393(1) Table 2 [1961: s.194I] — PER MONTH. CA noted "नए reporting framework में" — least certain row; re-confirm. ${CA_CHAIN}`,
+    TY2627,
+  ),
+  'tds.194i.rate_pct': conditioned(
+    'tds.194i.rate_pct',
+    [
+      { value: 2, when: { assetType: 'plant_machinery' } },
+      { value: 10, when: { assetType: 'land_building' } },  // incl. furniture
+      // no default — rent of what?
+    ],
+    `Income-tax Act 2025 s.393(1) Table 2 [1961: s.194I] — 2% plant & machinery, 10% land/building/furniture. ${CA_CHAIN}`,
+    TY2627,
+  ),
+
   /* Historical: the pre-2026 194Q figure, kept so a FY 2024-25 or 2025-26 purchase still
      resolves ITS OWN law. Never delete an old value — the 2025 Act's transitional
      provisions require exactly this, and it is what `asOf` is for. Still unverified: the
@@ -125,21 +237,28 @@ export const TDS_RULES: RuleCatalog = {
 };
 
 /* ─────────────────────────────────────────────────────────────────────────────────
- * WHY 194A / 194C / 194I / 194J ARE ABSENT — a limit of this catalog, not an oversight.
+ * THE ATTRIBUTES CALLERS MUST SUPPLY — and what happens when they don't.
  *
- * The CA confirmed them, but this shape (`<section>.threshold` = one number,
- * `.rate_pct` = one number) cannot hold what they actually say:
+ * Half the law here is not a number, it is a QUESTION. Passing no attribute is not the
+ * same as the attribute being irrelevant:
  *
- *   194A  ₹50,000 — but ₹1,00,000 for senior citizens      → TWO thresholds (payee age)
- *   194C  ₹30,000 per payment OR ₹1,00,000 in the year,
- *         1% for Individual/HUF, 2% for others             → TWO thresholds AND TWO rates
- *   194J  ₹50,000, 10% professional but 2% technical       → TWO rates (service type)
- *   194I  the CA's rate column came through garbled         → ambiguous; do not guess
+ *   payeeType    'individual' (Individual/HUF) | anything else   → 194C rate. HAS a
+ *                default (2%), so an unstated payee still resolves.
+ *   serviceType  'professional' | 'technical'                    → 194J rate. NO default:
+ *                unstated ⇒ resolves to null ⇒ the caller MUST refuse. 10% vs 2% is 5×.
+ *   payeeAge     'senior' | anything else                        → 194A threshold. Has a
+ *                default (₹50,000).
+ *   assetType    'plant_machinery' | 'land_building'             → 194I rate. NO default:
+ *                rent of what? Unstated ⇒ refuse.
  *
- * Encoding 194C as "₹30,000, 1%" would silently drop the annual limit and the company
- * rate — a wrong answer wearing a citation, which is worse than no answer (AI-N8). The
- * fix is a richer rule shape (conditions on payee type / service type / periodicity),
- * not a flatter truth. Until then the F-lane correctly says it has no rule for them.
+ * A missing attribute on a no-default rule must produce "I can't say", never a rate
+ * nobody asked for (AI-N8). That refusal is the feature; see engine.ts `when`.
+ *
+ * THRESHOLDS COME IN KINDS, and comparing the wrong figure to the wrong kind is silent:
+ *   194C  .threshold.per_payment (₹30,000)  AND  .threshold.annual (₹1,00,000)
+ *         — EITHER breach attracts TDS. Two keys, not a condition.
+ *   194I  .threshold.per_month (₹50,000)    — per MONTH, not per year.
+ *   194J/194A/194Q/194H  .threshold          — aggregate in the tax year.
  * ───────────────────────────────────────────────────────────────────────────────── */
 
 export interface TaxContext {
@@ -147,6 +266,12 @@ export interface TaxContext {
   asOf: string;
   /** Central law — present for symmetry with the engine, effectively always national. */
   jurisdiction?: string;
+  /**
+   * Facts about the case — `payeeType` / `serviceType` / `payeeAge` / `assetType`.
+   * See the attribute note above. Omitting one where the rule has no default is not a
+   * bug: it resolves to null and the caller refuses, which is the intended behaviour.
+   */
+  attrs?: Record<string, string>;
 }
 
 export interface ResolvedTaxRule {
@@ -167,7 +292,7 @@ export interface ResolvedTaxRule {
 export function resolveTaxRule(key: string, ctx: TaxContext): ResolvedTaxRule | null {
   const rule = TDS_RULES[key] as Rule<number> | undefined;
   if (!rule) return null;
-  const rv = resolveRule(rule, { asOf: ctx.asOf, jurisdiction: ctx.jurisdiction }) as TaxRuleValue | null;
+  const rv = resolveRule(rule, { asOf: ctx.asOf, jurisdiction: ctx.jurisdiction, attrs: ctx.attrs }) as TaxRuleValue | null;
   if (!rv) return null;
   return {
     value: rv.value,

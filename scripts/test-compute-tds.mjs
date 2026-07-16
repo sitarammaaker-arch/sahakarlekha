@@ -52,19 +52,51 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
   ok('history: and stays unverified — the CA was asked about THIS year', legacy.verified === false);
 }
 
-/* 2 · THE SHAPE'S LIMIT, asserted so it cannot be quietly forgotten. The CA confirmed
-   194A / 194C / 194J too, but this catalog holds ONE threshold and ONE rate per section
-   and those do not fit: 194C is ₹30,000 per payment OR ₹1,00,000 annual, at 1% or 2% by
-   payee type. Encoding it flat would drop half the law — a wrong answer wearing a
-   citation, which is worse than none (AI-N8). Their absence is a design statement. */
+/* 2 · CONDITIONED RULES — the sections that could not be encoded until the engine
+   learned `when`. Half the law here is a QUESTION, not a number, and the tests exist to
+   pin which questions have a default answer and which must refuse. */
 {
-  for (const s of ['194a', '194c', '194i', '194j']) {
-    const S = s.toUpperCase();
-    ok(`shape: ${S} absent — it needs conditions this catalog lacks`,
-      tax.resolveTaxRule(`tds.${s}.threshold`, CTX) === null);
-    ok(`shape: ...so compute refuses rather than half-answering (${S})`,
-      isRefusal(computeTds({ section: s, aggregateMinor: 900000000, ctx: CTX })));
-  }
+  // 194C — the rate turns on who is paid, and there IS a default (2%, everyone else).
+  const ind = { ...CTX, attrs: { payeeType: 'individual' } };
+  const co = { ...CTX, attrs: { payeeType: 'company' } };
+  ok('194C: Individual/HUF → 1%', tax.verifiedValue('tds.194c.rate_pct', ind).value === 1);
+  ok('194C: anyone else → 2%', tax.verifiedValue('tds.194c.rate_pct', co).value === 2);
+  ok('194C: unstated payee → the default 2%, not a refusal', tax.verifiedValue('tds.194c.rate_pct', CTX).value === 2);
+
+  // 194C's two threshold KINDS — either breach attracts TDS, so they are separate keys.
+  ok('194C: per-payment threshold ₹30,000', tax.verifiedValue('tds.194c.threshold.per_payment', CTX).value === 30000);
+  ok('194C: annual threshold ₹1,00,000 — a different KIND, not a condition',
+    tax.verifiedValue('tds.194c.threshold.annual', CTX).value === 100000);
+
+  // 194J — NO default. 10% vs 2% is 5×; an unstated service type MUST refuse.
+  ok('194J: professional → 10%',
+    tax.verifiedValue('tds.194j.rate_pct', { ...CTX, attrs: { serviceType: 'professional' } }).value === 10);
+  ok('194J: technical → 2%',
+    tax.verifiedValue('tds.194j.rate_pct', { ...CTX, attrs: { serviceType: 'technical' } }).value === 2);
+  ok('194J: unstated service type → NULL, never a guess', tax.verifiedValue('tds.194j.rate_pct', CTX) === null);
+  const j = computeTds({ section: '194j', aggregateMinor: 900000000, ctx: CTX });
+  ok('194J: compute refuses when the caller did not say which rate applies', isRefusal(j));
+  ok('194J: ...and blames the QUESTION, not the catalog', isRefusal(j) && j.reason.includes('निर्भर'));
+  ok('194J: told the service type, it computes',
+    !isRefusal(computeTds({ section: '194j', aggregateMinor: 900000000, ctx: { ...CTX, attrs: { serviceType: 'technical' } } })));
+
+  // 194A — the threshold doubles for a senior citizen; there IS a default.
+  ok('194A: senior citizen → ₹1,00,000',
+    tax.verifiedValue('tds.194a.threshold', { ...CTX, attrs: { payeeAge: 'senior' } }).value === 100000);
+  ok('194A: everyone else → ₹50,000', tax.verifiedValue('tds.194a.threshold', CTX).value === 50000);
+
+  // 194I — per-MONTH threshold, and no default rate: rent of what?
+  ok('194I: threshold is PER MONTH, under its own key',
+    tax.verifiedValue('tds.194i.threshold.per_month', CTX).value === 50000);
+  ok('194I: plant & machinery → 2%',
+    tax.verifiedValue('tds.194i.rate_pct', { ...CTX, attrs: { assetType: 'plant_machinery' } }).value === 2);
+  ok('194I: land/building/furniture → 10%',
+    tax.verifiedValue('tds.194i.rate_pct', { ...CTX, attrs: { assetType: 'land_building' } }).value === 10);
+  ok('194I: unstated asset → NULL', tax.verifiedValue('tds.194i.rate_pct', CTX) === null);
+
+  // An genuinely unseeded section still refuses — the catalog did not become permissive.
+  ok('unseeded: 194ZZ refuses, never improvises',
+    isRefusal(computeTds({ section: '194zz', aggregateMinor: 900000000, ctx: CTX })));
 }
 
 /* 3 · The arithmetic, and the F-lane finally ANSWERING — the hedge became a fact. */
@@ -100,8 +132,7 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
   const old = computeTds({ section: '194q', aggregateMinor: 900000000, ctx: { asOf: '2020-01-01' } });
   ok('compute: a 2020 bill gets 2020\'s law (none) — not today\'s', isRefusal(old));
 
-  const unknown = computeTds({ section: '194c', aggregateMinor: 900000000, ctx: CTX });
-  ok('compute: an unseeded section refuses, never improvises', isRefusal(unknown));
+  // (the unseeded-section guard now lives in §2, asserted with 194ZZ — 194C is encoded)
 }
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
