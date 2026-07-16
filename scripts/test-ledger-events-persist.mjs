@@ -56,11 +56,15 @@ for (const line of body.split('\n')) {
 ok(columns.has('event_id') && columns.has('payload') && columns.has('sequence'), 'parsed the ledger_events columns from supabase-tables.sql');
 
 // ── Parse the actual insert keys from DataContext ────────────────────────────
+// The LedgerEvent → ledger_events column mapping lives in ONE named helper (toLedgerEventRow),
+// shared by the best-effort shadow append and the journal-first authoritative append (RULE 2).
+// Parse that object literal — it is the single source of the persisted column set.
 const dc = readFileSync(pathResolve(ROOT, 'src', 'contexts', 'DataContext.tsx'), 'utf8');
-const insIdx = dc.indexOf(".from('ledger_events').insert({");
-ok(insIdx > -1, 'DataContext persists to ledger_events via an insert');
-const insBlock = dc.slice(insIdx, dc.indexOf('})', insIdx));
-const insertKeys = [...insBlock.matchAll(/(\w+):/g)].map((m) => m[1]).filter((k) => k !== 'from' && k !== 'insert');
+ok(dc.includes(".from('ledger_events').insert(toLedgerEventRow("), 'DataContext persists to ledger_events via the toLedgerEventRow mapping');
+const mapIdx = dc.indexOf('toLedgerEventRow = (ev: LedgerEvent) => ({');
+ok(mapIdx > -1, 'the toLedgerEventRow column mapping exists');
+const insBlock = dc.slice(mapIdx, dc.indexOf('});', mapIdx));
+const insertKeys = [...insBlock.matchAll(/^\s*(\w+):/gm)].map((m) => m[1]);
 
 // ── 1. Every inserted key is a real column (no typo / drift) ──────────────────
 for (const k of insertKeys) {
