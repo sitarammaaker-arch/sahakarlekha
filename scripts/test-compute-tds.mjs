@@ -154,29 +154,30 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
   ok('F-lane: a 2024 question prints the 1961 number',
     (answerFact('194C की दर क्या है', { asOf: '2024-06-01' }) || { text: '' }).text.includes('194C') || true);
   ok('F-lane: carries the citation', a.cite.includes('194H'));
-  ok('F-lane: rate query answers the RATE, not the threshold', answerFact('194Q की दर क्या है', CTX).text.includes('0.1%'));
+  // 194H, not 194Q — 194Q's threshold is contested and the whole section is silent (§1).
+  ok('F-lane: rate query answers the RATE, not the threshold', answerFact('194H की दर क्या है', CTX).text.includes('2%'));
 
-  // ₹90,00,000 aggregate → excess over ₹10,00,000 is ₹80,00,000 → 0.1% = ₹8,000.
-  const r = computeTds({ section: '194q', aggregateMinor: 900000000, ctx: CTX });
+  /* The arithmetic runs on 194H — 194Q's threshold is contested, so that whole section
+     correctly refuses (§1) and cannot exercise the maths. The rules are DATA; which
+     section demonstrates the engine is incidental, and pinning these to a contested one
+     would mean the maths goes untested for as long as the dispute lasts. */
+  // ₹90,00,000 aggregate → excess over ₹20,000 is ₹89,80,000 → 2% = ₹1,79,600.
+  const r = computeTds({ section: '194h', aggregateMinor: 900000000, ctx: CTX });
   ok('compute: applicable above the threshold', r.applicable === true);
-  ok('compute: taxes only the EXCESS, not the whole value', r.taxableMinor === 800000000);
-  ok('compute: ₹8,000 exactly, in paise', r.tdsMinor === 800000);
+  ok('compute: taxes only the EXCESS, not the whole value', r.taxableMinor === 898000000);
+  ok('compute: ₹1,79,600 exactly, in paise', r.tdsMinor === 17960000);
   ok('compute: records the rule version that produced it', r.basis.length === 2 && r.basis[0].version === 2);
   ok('compute: explains in Hindi', r.explain.includes('TDS'));
 
-  const below = computeTds({ section: '194q', aggregateMinor: 50000000, ctx: CTX });
+  const below = computeTds({ section: '194h', aggregateMinor: 1000000, ctx: CTX });
   ok('compute: below threshold ⇒ zero, not a refusal', below.applicable === false && below.tdsMinor === 0);
 
   // At exactly the threshold — the boundary everyone gets wrong. The law says "exceeding".
-  const at = computeTds({ section: '194q', aggregateMinor: 100000000, ctx: CTX });
+  const at = computeTds({ section: '194h', aggregateMinor: 2000000, ctx: CTX });
   ok('compute: AT the threshold ⇒ no TDS ("exceeding", not "at or above")', at.tdsMinor === 0);
 
-  // THE 5× CHANGE, made concrete: ₹40L attracted NOTHING at the old ₹50L threshold.
-  const mid = computeTds({ section: '194q', aggregateMinor: 400000000, ctx: CTX });
-  ok('impact: ₹40L NOW attracts TDS — it did not under the ₹50,00,000 seed', mid.applicable === true);
-
   // asOf is not decoration: before the rule existed, there is no rule.
-  const old = computeTds({ section: '194q', aggregateMinor: 900000000, ctx: { asOf: '2020-01-01' } });
+  const old = computeTds({ section: '194h', aggregateMinor: 900000000, ctx: { asOf: '2020-01-01' } });
   ok('compute: a 2020 bill gets 2020\'s law (none) — not today\'s', isRefusal(old));
 
   // (the unseeded-section guard now lives in §2, asserted with 194ZZ — 194C is encoded)
