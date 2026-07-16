@@ -42,6 +42,7 @@
     "test:ledger-voucher-event": "node scripts/test-ledger-voucher-event.mjs",
     "test:ledger-voucher-rebuild": "node scripts/test-ledger-voucher-rebuild.mjs",
     "test:ledger-rebuild-parity": "node scripts/test-ledger-rebuild-parity.mjs",
+    "test:society-appropriation": "node scripts/test-society-appropriation.mjs",
     "test:ledger-genesis": "node scripts/test-ledger-genesis.mjs",
     "test:ledger-parity": "node scripts/test-ledger-parity.mjs",
     "test:ledger-split-tb": "node scripts/test-ledger-split-tb.mjs",
