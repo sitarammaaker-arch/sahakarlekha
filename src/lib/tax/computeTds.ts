@@ -17,7 +17,7 @@
  * is a legal event, not a UX bug.
  */
 import { applyPercent, isValidMinor, type Minor } from '../money';
-import { verifiedValue, type TaxContext } from '../rules/tax';
+import { verifiedValue, resolveTaxRule, TDS_RULES, type TaxContext } from '../rules/tax';
 
 export interface TdsInput {
   /** The section, e.g. '194q'. Lower-case; it is a rule-key fragment, not a display string. */
@@ -70,19 +70,35 @@ export function computeTds(input: TdsInput): TdsOutcome {
     return { applicable: false, refused: true, reason: 'राशि पैसे (integer) में चाहिए', missing: ['aggregateMinor'] };
   }
 
-  const thr = verifiedValue(`tds.${s}.threshold`, input.ctx);
+  // Thresholds come in KINDS. Most sections have one aggregate figure; 194C has a
+  // per-payment AND an annual limit (either breach attracts TDS), 194I is per month.
+  // Try the plain key first, then the kinds — never compare an aggregate to a per-month.
+  const thr =
+    verifiedValue(`tds.${s}.threshold`, input.ctx) ??
+    verifiedValue(`tds.${s}.threshold.annual`, input.ctx) ??
+    verifiedValue(`tds.${s}.threshold.per_month`, input.ctx);
   const rate = verifiedValue(`tds.${s}.rate_pct`, input.ctx);
   if (!thr) missing.push(`tds.${s}.threshold`);
+  // A rate can be missing because the RULE is absent, or because the caller did not say
+  // which rate applies (194J without serviceType). The second is far more common and the
+  // message must not blame the catalog for the caller's silence.
   if (!rate) missing.push(`tds.${s}.rate_pct`);
 
   // No verified rule ⇒ no figure. Not a default, not a best guess, not "probably 0.1%".
   if (!thr || !rate) {
+    // Distinguish "we have no rule" from "you didn't tell us which one applies" — the
+    // second is actionable by the caller, and telling them the catalog is empty when it
+    // is actually waiting on THEM sends them to fix the wrong thing.
+    const unconditioned = resolveTaxRule(`tds.${s}.rate_pct`, { ...input.ctx, attrs: undefined });
+    const needsAttr = !rate && !!TDS_RULES[`tds.${s}.rate_pct`] && !unconditioned;
     return {
       applicable: false,
       refused: true,
-      reason:
-        `धारा ${s.toUpperCase()} के लिए मेरे पास प्रमाणित, तिथि-सहित नियम नहीं है — इसलिए मैं गणना नहीं करूँगा। ` +
-        `नियम जोड़ें/सत्यापित करें: src/lib/rules/tax.ts`,
+      reason: needsAttr
+        ? `धारा ${s.toUpperCase()} की दर इस पर निर्भर करती है कि भुगतान किस प्रकार का है — ` +
+          `बिना यह जाने मैं गणना नहीं करूँगा। (जैसे 194J: professional या technical?)`
+        : `धारा ${s.toUpperCase()} के लिए मेरे पास प्रमाणित, तिथि-सहित नियम नहीं है — इसलिए मैं गणना नहीं करूँगा। ` +
+          `नियम जोड़ें/सत्यापित करें: src/lib/rules/tax.ts`,
       missing,
     };
   }
