@@ -22,6 +22,7 @@ import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFil
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { StatutoryAppropriationPanel } from '@/components/StatutoryAppropriationPanel';
 
 // ── Account IDs ─────────────────────────────────────────────────────────────
 const ACC_NET_SURPLUS   = '1208';
@@ -361,6 +362,9 @@ const ProfitDistribution: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* T-20: statutory appropriation (UCAS) — renders only when the per-tenant flag is on (additive) */}
+      <StatutoryAppropriationPanel />
 
       {/* ECR-05: block dividend distribution until share capital ties to the control ledger */}
       {!shareRecon.reconciled && (
