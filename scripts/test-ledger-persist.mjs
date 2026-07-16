@@ -25,7 +25,7 @@ register(
     `),
 );
 
-const { persistEventAuthoritative } = await import(abs('../src/lib/ledger/persist.ts'));
+const { persistEventAuthoritative, persistEventsAuthoritative } = await import(abs('../src/lib/ledger/persist.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -37,14 +37,15 @@ const io = (opts = {}) => {
   return {
     calls,
     insert: async () => { calls.push('insert'); if (opts.insertThrow) throw new Error('boom-insert'); return { error: opts.insertError ?? null }; },
-    verify: async () => { calls.push('verify'); if (opts.verifyThrow) throw new Error('boom-verify'); return { found: opts.found ?? true, error: opts.verifyError ?? null }; },
+    verify: async (eventId) => { calls.push('verify:' + eventId); if (opts.verifyThrow) throw new Error('boom-verify'); const found = opts.missing ? !opts.missing.includes(eventId) : (opts.found ?? true); return { found, error: opts.verifyError ?? null }; },
+    insertMany: async () => { calls.push('insertMany'); if (opts.insertManyThrow) throw new Error('boom-insertMany'); return { error: opts.insertManyError ?? null }; },
   };
 };
 
 // 1. Happy path — insert ok + verify found ⇒ ok, both steps ran in order.
 { const x = io(); const r = await persistEventAuthoritative(EV, x);
   ok(r.ok === true && r.error === undefined, 'insert ok + verify found ⇒ ok:true');
-  ok(x.calls.join(',') === 'insert,verify', 'runs insert THEN verify'); }
+  ok(x.calls.join(',') === 'insert,verify:e1', 'runs insert THEN verify'); }
 
 // 2. Insert error ⇒ fail, verify never runs (the append never happened).
 { const x = io({ insertError: 'duplicate key' }); const r = await persistEventAuthoritative(EV, x);
@@ -67,5 +68,39 @@ const io = (opts = {}) => {
 { const r = await persistEventAuthoritative(EV, io({ verifyThrow: true }));
   ok(r.ok === false && /boom-verify/.test(r.error), 'verify rejection is caught ⇒ ok:false'); }
 
-console.log(`\nAuthoritative event append (journal-first-write slice 3): ${pass} passed, ${fail} failed`);
+// ── persistEventsAuthoritative (batch — slice 5: the edit reverse+repost PAIR) ────────────────────
+const EV2 = [{ eventId: 'e1' }, { eventId: 'e2' }];
+
+// 7. Zero events ⇒ ok:true, no IO (a postings-neutral edit appends nothing).
+{ const x = io(); const r = await persistEventsAuthoritative([], x);
+  ok(r.ok === true && x.calls.length === 0, 'empty batch ⇒ ok:true with no IO'); }
+
+// 8. Single event ⇒ delegates to the single primitive (insert+verify, NOT insertMany).
+{ const x = io(); const r = await persistEventsAuthoritative([EV], x);
+  ok(r.ok === true, 'single-event batch ⇒ ok:true');
+  ok(x.calls.join(',') === 'insert,verify:e1', 'single-event batch uses insert+verify, not insertMany'); }
+
+// 9. Pair — insertMany ok + both verify found ⇒ ok, batch inserted THEN each row verified.
+{ const x = io(); const r = await persistEventsAuthoritative(EV2, x);
+  ok(r.ok === true && r.error === undefined, 'pair: insertMany ok + all rows found ⇒ ok:true');
+  ok(x.calls.join(',') === 'insertMany,verify:e1,verify:e2', 'pair runs insertMany THEN verifies every eventId'); }
+
+// 10. Pair — insertMany error ⇒ fail, nothing verified (atomic insert wrote nothing).
+{ const x = io({ insertManyError: 'batch conflict' }); const r = await persistEventsAuthoritative(EV2, x);
+  ok(r.ok === false && r.error === 'batch conflict', 'pair: insertMany error ⇒ ok:false with the message');
+  ok(x.calls.join(',') === 'insertMany', 'no verify after an insertMany error'); }
+
+// 11. Pair — one row missing on verify ⇒ fail (the half-written-pair parity break the verify guards).
+{ const x = io({ missing: ['e2'] }); const r = await persistEventsAuthoritative(EV2, x);
+  ok(r.ok === false && /e2 not found/.test(r.error), 'pair: a single missing row ⇒ ok:false (never a half-written pair)'); }
+
+// 12. Pair — insertMany throws ⇒ caught, ok:false, never throws to the caller.
+{ let threw = false, r; try { r = await persistEventsAuthoritative(EV2, io({ insertManyThrow: true })); } catch { threw = true; }
+  ok(!threw && r.ok === false && /boom-insertMany/.test(r.error), 'pair: insertMany rejection is caught ⇒ ok:false'); }
+
+// 13. Pair — no insertMany IO provided ⇒ fail (a multi-event append REQUIRES atomic batch insert).
+{ const single = io(); delete single.insertMany; const r = await persistEventsAuthoritative(EV2, single);
+  ok(r.ok === false && /requires an insertMany/.test(r.error), 'pair without insertMany IO ⇒ ok:false'); }
+
+console.log(`\nAuthoritative event append (journal-first-write slice 3+5): ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

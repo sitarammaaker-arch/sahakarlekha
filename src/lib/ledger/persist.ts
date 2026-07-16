@@ -24,6 +24,12 @@ export interface AuthoritativeAppendIO {
   insert: (event: LedgerEvent) => Promise<{ error: string | null }>;
   /** Read the row back by eventId to confirm it persisted. `found=false` ⇒ the insert did not stick. */
   verify: (eventId: string) => Promise<{ found: boolean; error: string | null }>;
+  /**
+   * Durably insert MANY event rows in ONE atomic statement (all rows or none) — required for a
+   * multi-event append (an edit journals a reverse+repost PAIR). Resolve `{ error }`, never throw.
+   * Only needed by persistEventsAuthoritative when appending ≥2 events; single appends never call it.
+   */
+  insertMany?: (events: LedgerEvent[]) => Promise<{ error: string | null }>;
 }
 
 export interface AppendResult {
@@ -54,5 +60,45 @@ export async function persistEventAuthoritative(event: LedgerEvent, io: Authorit
   }
   if (ver.error) return { ok: false, error: ver.error };
   if (!ver.found) return { ok: false, error: 'event not found after insert — the append did not persist' };
+  return { ok: true };
+}
+
+/**
+ * PURE — append MANY events authoritatively as one unit. An edit journals a reverse+repost PAIR; a
+ * WORM log cannot un-append, so a half-written pair (reversal stuck, repost lost) is a permanent
+ * parity break. This inserts the whole batch in ONE atomic statement, then verifies EVERY row stuck
+ * — `ok:true` only when all are confirmed durable, so the caller treats the edit as saved or rolls
+ * the whole thing back (RULE 1), never half.
+ *
+ *   • 0 events  → ok:true (a postings-neutral edit appends nothing — vacuously durable);
+ *   • 1 event   → delegates to persistEventAuthoritative (no batch IO needed);
+ *   • ≥2 events → requires io.insertMany (atomic); any insert error, verify error, or a single
+ *                 missing row ⇒ ok:false with the reason.
+ */
+export async function persistEventsAuthoritative(events: LedgerEvent[], io: AuthoritativeAppendIO): Promise<AppendResult> {
+  if (events.length === 0) return { ok: true };
+  if (events.length === 1) return persistEventAuthoritative(events[0], io);
+  if (!io.insertMany) return { ok: false, error: 'multi-event append requires an insertMany IO' };
+
+  let ins: { error: string | null };
+  try {
+    ins = await io.insertMany(events);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+  if (ins.error) return { ok: false, error: ins.error };
+
+  // Verify EVERY event stuck — an atomic insert is all-or-nothing, but the same RLS/cache edge that
+  // can drop a single row can drop the batch, so confirm each before calling the edit saved.
+  for (const ev of events) {
+    let ver: { found: boolean; error: string | null };
+    try {
+      ver = await io.verify(ev.eventId);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+    if (ver.error) return { ok: false, error: ver.error };
+    if (!ver.found) return { ok: false, error: `event ${ev.eventId} not found after batch insert — the append did not persist` };
+  }
   return { ok: true };
 }
