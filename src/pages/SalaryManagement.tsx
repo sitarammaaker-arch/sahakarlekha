@@ -6,6 +6,7 @@ import { computeStatutory } from '@/lib/payrollStatutory';
 import { tdsBasisNote, type TaxRegime } from '@/lib/tdsProjection';
 import { resolveTaxBasis } from '@/lib/rules/incomeTax';
 import { cumulativeMonthlyTds, monthsLeftInFy, fyBounds, isInFy } from '@/lib/payroll/cumulativeTds';
+import { isPeriodLocked } from '@/lib/periodLock';
 import { professionalTaxForState } from '@/lib/professionalTax';
 import { build24Q, type Quarter } from '@/lib/form24Q';
 import { daysInMonth, prorate } from '@/lib/attendance';
@@ -233,6 +234,19 @@ const SalaryManagement: React.FC = () => {
   // record either way, so both earn the amber.
   const tdsBasis = resolveTaxBasis(new Date().toISOString().slice(0, 10));
   const tdsStale = tdsBasis.stale || !tdsBasis.set.verified;
+
+  /**
+   * Is the month being processed inside a CLOSED period? (ECR-07 / RULE 6)
+   *
+   * `addSalaryRecord` already honours the whole-FY audit lock (`guardFYLocked`), but not
+   * the date-based period lock — so a clerk could set processingMonth to a closed month
+   * and the cumulative TDS recompute would happily re-derive it. A closed period must not
+   * be silently recomputed: per the CA (docs/CA-VERIFICATION-2026-07.md follow-up), a
+   * settled year is corrected by a TDS **correction statement**, not by a quiet re-run.
+   * The month's LAST day is what matters — a period locked mid-month still closes it.
+   */
+  const monthEnd = `${processingMonth}-${String(daysInMonth(processingMonth)).padStart(2, '0')}`;
+  const periodClosed = isPeriodLocked(monthEnd, society.periodLockDate);
   // Employees already over-deducted this FY — surfaced below the TDS note, never hidden.
   const excessRows = processRows.filter(r => !r.processed && r.tdsExcess > 0);
   const totalExcess = excessRows.reduce((s, r) => s + r.tdsExcess, 0);
@@ -372,6 +386,10 @@ const SalaryManagement: React.FC = () => {
    * not do: it passed neither the months left nor the year-to-date.
    */
   const tdsFor = (emp: Employee, allowances = 0, regime: TaxRegime = taxRegime) => {
+    // A closed period is not recomputed — at all. The banner explains; this enforces.
+    // Returning the recomputed figure "just for display" would be the trap: a clerk sees
+    // an authoritative-looking number for a settled month and edits toward it.
+    if (periodClosed) return { tds: 0, annualTax: 0, ytdDeducted: 0, balance: 0, excess: 0 };
     const fy = fyBounds(processingMonth);
     // Prior runs only — exclude the month being processed, or a re-run would count its
     // own deduction as already-paid and drive the balance to zero.
@@ -725,6 +743,18 @@ const SalaryManagement: React.FC = () => {
                   auto-filled figure that says nothing is taken as settled — that is how
                   FY 2024-25 slabs quietly computed FY 2026-27 salaries. The projection is
                   editable, so the clerk can act on this; they just have to be told. */}
+              {/* A CLOSED period must not be silently recomputed (ECR-07 / RULE 6). The
+                  cumulative TDS engine would happily re-derive an old month, and the
+                  figures would look authoritative — but that year is settled with the
+                  department. Per the CA: correct it with a TDS correction statement, not
+                  a quiet re-run. Say why, and say the way out. */}
+              {periodClosed && (
+                <p className="text-[11px] mt-1 text-destructive font-medium">
+                  {hi
+                    ? `🔒 ${processingMonth} एक बंद अवधि में है (${society.periodLockDate} तक लॉक)। इस महीने का वेतन/TDS दोबारा नहीं गिना जाएगा — बंद वर्ष का सुधार TDS correction statement से होता है, चुपचाप दोबारा गणना से नहीं।`
+                    : `🔒 ${processingMonth} falls in a closed period (locked through ${society.periodLockDate}). Salary/TDS will not be recomputed — a settled year is corrected by a TDS correction statement, not a quiet re-run.`}
+                </p>
+              )}
               <p className={`text-[11px] mt-1 ${tdsStale ? 'text-amber-600 dark:text-amber-500 font-medium' : 'text-muted-foreground'}`}>
                 {tdsBasisNote()}
               </p>
