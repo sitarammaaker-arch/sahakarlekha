@@ -20,16 +20,75 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { ask, CORPUS, resolveAiFlags, classify, mapLedgerEventRows } from '../_shared/ask-core.mjs';
 
-const CORS = {
-  'access-control-allow-origin': '*',
-  'access-control-allow-headers': 'authorization, content-type, apikey',
-  'access-control-allow-methods': 'POST, OPTIONS',
-};
+/* CORS — and the bug that made this seam unreachable from a browser for a day.
+   The allow-list used to be a hand-written 'authorization, content-type, apikey'. But
+   supabase-js sets X-Client-Info on EVERY request (DEFAULT_HEADERS, supabase-js/dist/
+   index.mjs) and may add x-region. A preflight asking for a header the response does not
+   allow FAILS — and a failed preflight means the browser never sends the POST at all.
+   The symptom is silent and deeply misleading: Invocations showed a wall of OPTIONS 200
+   with not one POST, /ask quietly fell back to local search (client.ts), and no audit row
+   was ever written — so the trail said "anonymous", which sent us hunting an auth bug
+   that did not exist.
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { ...CORS, 'content-type': 'application/json' } });
+   So do not hand-maintain a list of the SDK's headers: echo what the preflight asks for.
+   The next header the SDK adds must not take the assistant down again.
+
+   Safe here: allow-origin is '*', so the browser sends no cookies and this grants a
+   caller nothing. CORS is not this seam's security boundary — the verified JWT is
+   (#218), and it is enforced below regardless of who was allowed to ask. */
+const corsFor = (req: Request) => ({
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers':
+    req.headers.get('access-control-request-headers') ??
+    'authorization, x-client-info, apikey, content-type',
+  'access-control-allow-methods': 'POST, OPTIONS',
+  // Without this Chrome re-flies the preflight every few seconds — a needless round
+  // trip on a rural connection, for every keystroke-triggered ask.
+  'access-control-max-age': '86400',
+});
+
+/* READ THE WHOLE BOOK OR REFUSE — never answer money from a partial journal.
+   PostgREST caps every select at db.max-rows (1000 on Supabase by default) and says
+   NOTHING about it: you get 1000 rows and a 200. The seam's first real D-lane read came
+   back `events: 1000` for a society whose own migration log says 1212 vouchers — and
+   because the query orders oldest-first, the rows silently dropped were the NEWEST ones.
+   A cash balance computed from that is not a rounding error; it is a confident wrong
+   number about someone's money, and that is worse than no answer at all (AI-N8, RULE 2).
+
+   Paging needs a TOTAL order or rows repeat and skip across page boundaries. occurred_at
+   is not unique, so every caller must tie-break on a unique column. */
+const PAGE = 1000;
+/** Above this, refuse rather than load: an isolate that dies mid-answer is not a better
+    failure than an honest "बही लोड नहीं हुई". */
+const MAX_ROWS = 50_000;
+
+async function fetchAllRows(
+  // deno-lint-ignore no-explicit-any
+  db: any,
+  table: string,
+  columns: string,
+  societyId: string,
+  orderBy: string[],
+): Promise<Record<string, unknown>[]> {
+  const out: Record<string, unknown>[] = [];
+  for (let from = 0; from < MAX_ROWS; from += PAGE) {
+    let q = db.from(table).select(columns).eq('society_id', societyId);
+    for (const col of orderBy) q = q.order(col, { ascending: true });
+    const { data, error } = await q.range(from, from + PAGE - 1);
+    if (error) throw new Error(`${table}: ${error.message}`);
+    const rows = (data ?? []) as Record<string, unknown>[];
+    out.push(...rows);
+    // A short page is the only end-of-data signal PostgREST gives us.
+    if (rows.length < PAGE) return out;
+  }
+  throw new Error(`${table}: more than ${MAX_ROWS} rows — refusing to answer from a partial book`);
+}
 
 Deno.serve(async (req: Request) => {
+  const CORS = corsFor(req);
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { ...CORS, 'content-type': 'application/json' } });
+
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
 
@@ -65,13 +124,37 @@ Deno.serve(async (req: Request) => {
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
+  /* WHY IDENTITY RESOLUTION ENDED WHERE IT DID — recorded on the audit row.
+     A logged-in founder was landing here as `anonymous` and the trail could not say
+     which of the four branches below dropped him: no bearer, the anon key, a rejected
+     token, or no society_users row. "Anonymous" is a conclusion; this is the reason.
+     Booleans and error messages only — a token or a key must never reach a log. */
+  const authTrace: Record<string, unknown> = {
+    bearer: !bearer ? 'none' : bearer === anonKey ? 'anon-key' : 'user-jwt',
+    env: { url: !!supaUrl, anon: !!anonKey, svc: !!svcKey },
+    step: 'skipped',
+  };
+
   // The anon key is itself a JWT and is what an anonymous /ask visitor sends. Treat it
   // as no user at all — otherwise every public visitor would look authenticated.
   if (bearer && bearer !== anonKey && supaUrl && anonKey) {
     try {
+      authTrace.step = 'getUser';
+      /* VERIFY THE TOKEN WE WERE HANDED — explicitly, by value.
+         This used to call getUser() with no argument and lean on the Authorization
+         header, which routes through auth-js's _useSession: the client's OWN stored
+         session. A server has no business having one. Edge isolates are reused across
+         requests, so that ambient state made identity INTERMITTENT — the same founder,
+         the same code, the same valid token: verified at 19:30, "Auth session missing!"
+         at 19:32. An identity that works four times out of six is not an identity.
+         getUser(jwt) takes the by-value path: one network check of exactly this token,
+         no storage, no locks, no isolate memory. Stateless, as a seam must be. */
       const { data, error } = await createClient(supaUrl, anonKey, {
-        global: { headers: { Authorization: `Bearer ${bearer}` } },
-      }).auth.getUser();
+        // Belt and braces: never let a server client persist or refresh a session.
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      }).auth.getUser(bearer);
+      if (error) authTrace.getUserError = error.message;
+      else if (!data?.user?.email) authTrace.getUserError = 'verified but no email on user';
       if (!error && data?.user?.email) {
         userEmail = data.user.email.toLowerCase();
         // The branch claim the auth hook stamps (mig 038). Read from the VERIFIED user,
@@ -80,19 +163,27 @@ Deno.serve(async (req: Request) => {
         const bid = (data.user.user_metadata?.user_branch_id ?? claims.user_branch_id) as string | undefined;
         userBranchId = typeof bid === 'string' && bid ? bid : undefined;
         if (svcKey) {
-          const { data: row } = await createClient(supaUrl, svcKey)
+          authTrace.step = 'societyLookup';
+          const { data: row, error: sErr } = await createClient(supaUrl, svcKey)
             .from('society_users')
             .select('society_id')
             .eq('email', userEmail)
             .eq('is_active', true)
             .maybeSingle();
+          if (sErr) authTrace.societyError = sErr.message;
+          // The lookup is case-sensitive and filtered on is_active: a real user whose row
+          // is stored `Foo@x.com`, or deactivated, resolves to no society and answers as
+          // a stranger. Silent today; named here.
+          else if (!row) authTrace.societyError = 'no active society_users row for this email';
           societyId = (row as { society_id?: string } | null)?.society_id ?? undefined;
         }
       }
-    } catch {
+      authTrace.step = 'done';
+    } catch (e) {
       // A token we cannot verify is a token we do not honour: stay anonymous. Never fall
       // back to the body — that is the whole hole this closes.
       societyId = undefined;
+      authTrace.threw = e instanceof Error ? e.message : String(e);
     }
   }
 
@@ -106,31 +197,36 @@ Deno.serve(async (req: Request) => {
      here IS the tenant boundary. That is the one line in this function that, if wrong,
      shows one society another's cash. */
   let society: Parameters<typeof ask>[5];
+  /** Why the books were not loaded, when they were not. A refusal must be able to say why. */
+  let ledgerError: string | undefined;
   if (societyId && svcKey && supaUrl) {
     const probe = classify(text, true);
     if (probe.lane === 'D') {
       try {
         const db = createClient(supaUrl, svcKey);
-        const [evRes, acctRes, brRes] = await Promise.all([
-          // Ordered the way the projection expects to read them; the deterministic
-          // tie-break lives inside projectCashBook, so this only needs to be stable.
-          db.from('ledger_events').select('*').eq('society_id', societyId).order('occurred_at', { ascending: true }),
-          db.from('accounts').select('*').eq('society_id', societyId),
-          db.from('branches').select('id, isHeadOffice').eq('society_id', societyId),
+        const [events, accounts, branches] = await Promise.all([
+          // occurred_at is not unique — event_id (the primary key) makes the order total,
+          // which is what makes paging sound. projectCashBook still applies its own
+          // deterministic tie-break; this only has to be stable and complete.
+          fetchAllRows(db, 'ledger_events', '*', societyId, ['occurred_at', 'event_id']),
+          fetchAllRows(db, 'accounts', '*', societyId, ['id']),
+          fetchAllRows(db, 'branches', 'id, isHeadOffice', societyId, ['id']),
         ]);
-        if (!evRes.error && !acctRes.error) {
-          society = {
-            events: mapLedgerEventRows(evRes.data ?? []),
-            accounts: (acctRes.data ?? []) as never,
-            // Branch comes from the VERIFIED token, never the body (AI-P2). Absent claim
-            // ⇒ consolidated, which is what a society with no branches sees anyway.
-            activeBranchId: userBranchId ?? '',
-            headOfficeBranchId: (brRes.data ?? []).find((b: { isHeadOffice?: boolean }) => b.isHeadOffice)?.id,
-          };
-        }
-      } catch {
+        society = {
+          events: mapLedgerEventRows(events),
+          accounts: accounts as never,
+          // Branch comes from the VERIFIED token, never the body (AI-P2). Absent claim
+          // ⇒ consolidated, which is what a society with no branches sees anyway.
+          activeBranchId: userBranchId ?? '',
+          headOfficeBranchId: (branches as { id?: string; isHeadOffice?: boolean }[])
+            .find((b) => b.isHeadOffice)?.id,
+        };
+      } catch (e) {
         // Leave `society` undefined: the D-lane then refuses with "बही लोड नहीं हुई",
-        // which is true. Never let a failed load fall through to a document answer.
+        // which is true. Never let a failed load fall through to a document answer, and
+        // never let a PARTIAL one through as a number.
+        society = undefined;
+        ledgerError = e instanceof Error ? e.message : String(e);
       }
     }
   }
@@ -202,6 +298,11 @@ Deno.serve(async (req: Request) => {
           ledgerRead: society
             ? { events: society.events.length, accounts: society.accounts.length, branch: society.activeBranchId || 'consolidated' }
             : null,
+          // WHY the identity above is what it is. `society_id: 'anonymous'` on its own is
+          // unfalsifiable — this makes it explain itself (AI-A5).
+          authTrace,
+          // And why the books were not read, when they were not.
+          ledgerError: ledgerError ?? null,
           latencyMs,
           // model/tokens/cost land here when stage 6 does. Their absence is itself the
           // record: this answer cost nothing and no model saw it.
