@@ -50,6 +50,7 @@ import { voucherPostingLines, voucherReversalLines, voucherEventMeta } from '@/l
 import { currentPostingEventId } from '@/lib/ledger/aggregateState';
 import { persistEventAuthoritative, persistEventsAuthoritative } from '@/lib/ledger/persist';
 import { planSocietyAppropriation, appropriationVoucherContent } from '@/lib/rules/societyAppropriation';
+import { authorizeFinalization, type AuthorityAttestation } from '@/lib/governance/authority';
 import { ledgerTrialBalance } from '@/lib/ledger/trialBalance';
 import { ledgerParity, balancesFromJournal } from '@/lib/ledger/parity';
 import { ledgerCashBookEntries, ledgerBankBookEntries, ledgerMemberLedgerEntries, ledgerReceiptsPaymentsData } from '@/lib/ledger/reports';
@@ -160,7 +161,7 @@ interface DataContextType {
   /** T-20: post the year-end statutory appropriation of net surplus as ONE balanced voucher through
    *  the canonical engine (effective-dated UCAS rates). Flag-gated (society.statutoryAppropriation).
    *  Returns the posted voucher, or null when blocked/refused (a toast explains why). */
-  addStatutoryAppropriation: (opts: { date: string; narration?: string; discretionary?: { dividend?: number } }) => Voucher | null;
+  addStatutoryAppropriation: (opts: { date: string; narration?: string; discretionary?: { dividend?: number }; attestation: AuthorityAttestation }) => Voucher | null;
   restoreVoucher: (id: string) => void;
   clearVoucher: (id: string, clearedDate?: string) => void;
   unclearVoucher: (id: string) => void;
@@ -5425,7 +5426,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // (ReserveFund / ProfitDistribution) is untouched until the flip. Posts through addVoucher, so it
   // inherits the ledger append, journal-first write path, RULE-1 rollback, numbering and FY guards —
   // no persistence is re-implemented here. A refused/invalid plan is surfaced, never posted (RULE 1).
-  const addStatutoryAppropriation = useCallback((opts: { date: string; narration?: string; discretionary?: { dividend?: number } }): Voucher | null => {
+  const addStatutoryAppropriation = useCallback((opts: { date: string; narration?: string; discretionary?: { dividend?: number }; attestation: AuthorityAttestation }): Voucher | null => {
     const soc = societyRef.current;
     if (!soc?.statutoryAppropriation) {
       toastRef.current({ title: 'सुविधा सक्रिय नहीं', description: 'इस समिति के लिए वैधानिक लाभ-विनियोजन अभी सक्षम नहीं है। (Statutory Appropriation is not enabled for this society.)', variant: 'destructive', duration: 9000 });
@@ -5434,6 +5435,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return null;                                        // RULE 6
     if (guardPermission('create', 'लाभ-विनियोजन पोस्ट करने')) return null;     // ECR-06
     if (guardPeriodLock(opts.date)) return null;                             // ECR-07: no posting into a closed period
+
+    // T-23 (UCAS CM-2, CL-7): a statutory appropriation is a FINALIZATION — its legality derives from
+    // a recorded governance act (the AGM adopting the appropriation). Require + validate that authority
+    // (correct kind, referenced, dated, authorizer, and SoD: authorizer ≠ preparer) BEFORE posting, and
+    // stamp the attestation on the voucher so the figure ties to the governance act that authorized it.
+    const authority = authorizeFinalization({ act: 'appropriation', preparedBy: userRef.current?.name ?? '', attestation: opts.attestation });
+    if (!authority.ok || !authority.recorded) {
+      toastRef.current({ title: '🏛️ प्राधिकार आवश्यक', description: `${authority.problems.join('; ')} — AGM संकल्प के बिना विनियोजन पोस्ट नहीं होगा। (Appropriation needs recorded AGM authority.)`, variant: 'destructive', duration: 12000 });
+      return null;
+    }
 
     const netSurplus = getProfitLoss().netProfit;
     const shareCapital = getShareCapitalReconciliation().controlBalance;      // ECR-05: the control-ledger paid-up base
@@ -5454,8 +5465,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'कुछ विनियोजित नहीं हुआ', description: 'कोई शुद्ध अधिशेष नहीं — पोस्ट करने को कुछ नहीं। (No net surplus to appropriate.)', variant: 'destructive', duration: 9000 });
       return null;
     }
-    const v = addVoucher({ ...content, date: opts.date, createdBy: userRef.current?.name ?? '' });
-    toastRef.current({ title: '✅ वैधानिक लाभ-विनियोजन पोस्ट', description: `कुल ₹${content.amount.toFixed(2)} — ${content.lines.length - 1} निधियों में। वाउचर ${v.voucherNo}.`, duration: 8000 });
+    // Stamp the governance authority on the voucher narration — the auditable link from the figure to
+    // the AGM act that authorized it (CL-7). It flows into the ledger event payload (narration) too.
+    const rec = authority.recorded;
+    const authLabel = rec.kind === 'agm_adoption' ? 'AGM' : rec.kind;
+    const narration = `${content.narration} · ${authLabel} ${rec.reference} (${rec.date}), अधिकृत: ${rec.authorizedBy}`;
+    const v = addVoucher({ ...content, narration, date: opts.date, createdBy: userRef.current?.name ?? '' });
+    toastRef.current({ title: '✅ वैधानिक लाभ-विनियोजन पोस्ट', description: `कुल ₹${content.amount.toFixed(2)} — ${content.lines.length - 1} निधियों में। ${authLabel} ${rec.reference}. वाउचर ${v.voucherNo}.`, duration: 8000 });
     return v;
   }, [getProfitLoss, getShareCapitalReconciliation, addVoucher, guardFYLocked, guardPermission, guardPeriodLock]);
 
