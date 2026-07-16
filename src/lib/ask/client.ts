@@ -39,14 +39,17 @@ function localOnly(q: string): AskOutcome {
 /**
  * Ask the seam; fall back to local retrieval on anything at all.
  *
- * `societyId` is passed for lane selection and kill-switch scoping only — the seam
- * reads no society data yet (no D-lane tools until Slice 4). Before the first tool
- * lands, the function must take identity from the verified JWT rather than the body:
- * a client-asserted societyId is a claim, not an identity (AI-P2).
+ * NOTE THERE IS NO `societyId` PARAMETER, and that is the design. The seam derives
+ * identity from the verified JWT on the Authorization header — a client-asserted
+ * societyId is a claim, not an identity (AI-P2), and the function ignores it. Passing
+ * one here would only invite a caller to believe it meant something.
+ *
+ * `state` is still passed: it selects a jurisdiction for PUBLIC rule lookups, and no
+ * society data sits behind it. It moves to the society row when D-lane tools land.
  */
 export async function askSeam(
   q: string,
-  ctx: { societyId?: string; userId?: string; state?: string } = {},
+  ctx: { state?: string } = {},
 ): Promise<AskOutcome> {
   const query = q.trim();
   if (!query) return { answer: null, local: [], source: 'local' };

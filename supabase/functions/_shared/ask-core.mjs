@@ -404,13 +404,25 @@ function classify(text, hasSociety) {
 }
 
 // src/lib/rules/engine.ts
-function latestOnOrBefore(values, asOfMs) {
+function matches(v, attrs) {
+  if (!v.when) return true;
+  for (const k of Object.keys(v.when)) {
+    if (!attrs || attrs[k] !== v.when[k]) return false;
+  }
+  return true;
+}
+var specificity = (v) => v.when ? Object.keys(v.when).length : 0;
+function bestFor(values, asOfMs, attrs) {
   let best = null;
+  let bestScore = -Infinity;
   let bestMs = -Infinity;
   for (const v of values) {
     const t = Date.parse(v.effectiveFrom);
     if (Number.isNaN(t) || t > asOfMs) continue;
-    if (t > bestMs) {
+    if (!matches(v, attrs)) continue;
+    const s = specificity(v);
+    if (s > bestScore || s === bestScore && t > bestMs) {
+      bestScore = s;
       bestMs = t;
       best = v;
     }
@@ -425,7 +437,7 @@ function resolveRule(rule, opts) {
   for (const j of chain) {
     const values = rule.byJurisdiction[j];
     if (values && values.length) {
-      const v = latestOnOrBefore(values, asOfMs);
+      const v = bestFor(values, asOfMs, opts.attrs);
       if (v) return v;
     }
   }
@@ -438,15 +450,234 @@ function tds(key, value, cite2, effectiveFrom) {
   const v = { value, effectiveFrom, version: 1, verified: false, cite: cite2, note: `UNVERIFIED \u2014 check ${cite2}` };
   return { key, byJurisdiction: { "": [v] } };
 }
+var CA_CHAIN = "Confirmed by the society's CA against docs/CA-VERIFICATION-2026-07.md on 2026-07-16. Chain: AI draft \u2192 CA review \u2192 founder's accountability. NOT independently corroborated.";
+function verified(key, value, cite2, effectiveFrom) {
+  const v = { value, effectiveFrom, version: 2, verified: true, cite: cite2, note: cite2 };
+  return { key, byJurisdiction: { "": [v] } };
+}
+function conditioned(key, rows, cite2, effectiveFrom) {
+  return {
+    key,
+    byJurisdiction: {
+      "": rows.map((r) => ({
+        value: r.value,
+        when: r.when,
+        effectiveFrom,
+        version: 2,
+        verified: true,
+        cite: cite2,
+        note: cite2
+      }))
+    }
+  };
+}
+var TY2627 = "2026-04-01";
 var TDS_RULES = {
-  // Purchase of goods above the threshold — the section behind the procurement dispute.
-  "tds.194q.threshold": tds("tds.194q.threshold", 5e6, "Income-tax Act s.194Q (Finance Act 2021) \u2014 aggregate purchase value in a FY", FA21),
-  "tds.194q.rate_pct": tds("tds.194q.rate_pct", 0.1, "Income-tax Act s.194Q \u2014 rate on value exceeding the threshold", FA21)
+  /* Purchase of goods — the section behind the founder's own procurement dispute, and
+     the reason this file exists. The CA moved BOTH the threshold and the Act:
+       old seed:  ₹50,00,000 under 1961 s.194Q (Finance Act 2021)
+       confirmed: ₹10,00,000 under 2025 Act s.393(1) Table 8 Sl.(ii)
+     A 5× drop — far more purchases now attract TDS. That is exactly the figure I refused
+     to write from my own memory, and exactly why the refusal mattered: the seed was not
+     merely unverified, it was contradicted. The rule KEY stays '194q' — it is an
+     identifier, not a label; lib/rules/tdsSections.ts resolves what to PRINT by date,
+     the same way TdsEntry.section does. */
+  /* ✅ SETTLED BY THE ACT'S OWN TEXT — and the history is worth keeping, because it is
+       the strongest evidence in this file for how it is meant to work.
+  
+          model memory (my seed)  : ₹50,00,000  → marked UNVERIFIED; I refused to assert it
+          CA-reviewed list        : ₹10,00,000  → this got flipped to verified: true ❌
+          founder, with example   : ₹50,00,000  → contradiction surfaced; back to unverified
+          THE SECTION TEXT        : ₹50,00,000  ✅
+  
+       s.393(1) Table Sl. No. 8(ii): "Any sum exceeding fifty lakh rupees for purchase of
+       any goods." Read from incometaxindia.gov.in/w/section-393-5 — the Act, on the
+       department's own site.
+  
+       The seed was right and the human review was wrong, and NEITHER of those is the
+       lesson. The lesson is that "verified" tracked whoever spoke last until a SOURCE
+       settled it. A statement — mine, an AI list's, a CA's — is a claim. Only the text is
+       the text. That is what the cite field is for, and why it now names the URL rather
+       than a person.
+  
+       STILL MISSING: "Threshold limit: As per Note 1" — Note 1 is where the buyer's
+       ₹10 crore turnover gate lives. See `applies_if.buyer_turnover_min` below: the
+       threshold is settled, applicability is not. */
+  "tds.194q.threshold": verified(
+    "tds.194q.threshold",
+    5e6,
+    'Income-tax Act 2025 s.393(1) Table Sl. No. 8(ii) [1961: s.194Q] \u2014 "Any sum exceeding fifty lakh rupees for purchase of any goods", payer "Any person, being a buyer". SOURCE: the section text itself, incometaxindia.gov.in/w/section-393-5. Not a summary, not a recollection.',
+    TY2627
+  ),
+  "tds.194q.rate_pct": verified(
+    "tds.194q.rate_pct",
+    0.1,
+    'Income-tax Act 2025 s.393(1) Table Sl. No. 8(ii) [1961: s.194Q] \u2014 "Rate: 0.1%". SOURCE: the section text itself, incometaxindia.gov.in/w/section-393-5.',
+    TY2627
+  ),
+  /* 🚨 THE GATE THAT WAS MISSING ENTIRELY, and it matters more than the threshold.
+       Per the founder (2026-07-16): 194Q applies ONLY IF THE BUYER's turnover in the
+       PRECEDING financial year exceeded ₹10 crore.
+  
+       Most cooperative societies are nowhere near ₹10 crore — so for most of this product's
+       users **194Q does not apply at all**. Without this gate, computeTds would return a
+       TDS figure for a society that owes none. That is not a wrong number; it is an
+       unlawful deduction from a farmer or an arhtiya.
+  
+       It is recorded but NOT wired: it is a condition on the BUYER (a fact about the
+       society), not a variant of the rate, so `when` cannot express it — computeTds would
+       have to take the society's prior-year turnover as an input and gate on it. That is
+       the next slice here, and until it exists computeTds's refusal is the only correct
+       behaviour for this section. UNVERIFIED like everything else on this list. */
+  /* NOTE 1 HAS NOW BEEN READ, and it does NOT say what we expected. Verbatim:
+         "Note 1.-(a) The deduction of tax under serial number 8(ii) shall not apply to a
+          transaction on which tax is deductible or collectible under any of the provisions
+          of the Act.
+          (b) The tax shall be deducted on the sum exceeding fifty lakh rupees."
+  
+       So Note 1 confirms ₹50,00,000 and "on the sum exceeding" — and contains **no
+       ₹10-crore buyer-turnover condition at all**. That gate came from a statement, not a
+       source. It may live in the definition of "buyer" elsewhere in s.393, or it may be a
+       1961-Act memory that did not survive the rewrite. NOT READ ⇒ NOT KNOWN.
+  
+       It stays recorded and unverified rather than deleted, because "we looked and did not
+       find it" is a different state from "it does not exist", and the difference matters:
+       if the gate is real and we drop it, the software tells small societies to deduct when
+       they must not. Someone must read the definition of "buyer" in s.393 and settle it. */
+  "tds.194q.applies_if.buyer_turnover_min": tds(
+    "tds.194q.applies_if.buyer_turnover_min",
+    1e8,
+    `CLAIMED GATE, NOT FOUND IN THE TEXT: "194Q applies only if the buyer's preceding-year turnover exceeded \u20B910 crore" (founder, 2026-07-16). Note 1 to s.393(1) Table Sl. No. 8(ii) has now been read and contains NO such condition \u2014 only "tax shall be deducted on the sum exceeding fifty lakh rupees" plus a carve-out where the transaction is already taxed under another provision. The gate may sit in the definition of "buyer" in s.393, unread. UNVERIFIED and unenforced. If real, most cooperative societies owe NO 194Q at all.`,
+    TY2627
+  ),
+  /* Note 1(a) — a real carve-out, from the text, that computeTds does NOT yet honour:
+     8(ii) does not apply where the SAME transaction already attracts TDS/TCS under any
+     other provision. Recorded as a flag rather than a number because it is a condition on
+     the transaction, not a threshold; wiring it needs computeTds to know what else applies
+     to the same sum. Until then computeTds can over-deduct on a doubly-covered
+     transaction — named here so it is not mistaken for handled. */
+  "tds.194q.excluded_if.taxed_under_other_provision": verified(
+    "tds.194q.excluded_if.taxed_under_other_provision",
+    1,
+    'Income-tax Act 2025 s.393(1) Table Sl. No. 8(ii), Note 1(a) \u2014 "shall not apply to a transaction on which tax is deductible or collectible under any of the provisions of the Act". SOURCE: incometaxindia.gov.in/w/section-393-5. RECORDED BUT NOT ENFORCED by computeTds.',
+    TY2627
+  ),
+  /* Commission / brokerage — the only other section on the CA's list whose shape this
+     catalog can hold honestly (one threshold, one rate). */
+  "tds.194h.threshold": verified(
+    "tds.194h.threshold",
+    2e4,
+    `Income-tax Act 2025 s.393(1) Table 1 Sl.(ii) [1961: s.194H] \u2014 commission/brokerage in a tax year. ${CA_CHAIN}`,
+    TY2627
+  ),
+  "tds.194h.rate_pct": verified(
+    "tds.194h.rate_pct",
+    2,
+    `Income-tax Act 2025 s.393(1) Table 1 Sl.(ii) [1961: s.194H] \u2014 rate. ${CA_CHAIN}`,
+    TY2627
+  ),
+  /* Contractor. TWO thresholds of different KINDS — either breach attracts TDS, so they
+     are separate keys, not a condition. And the RATE turns on who is paid: the 2025 Act
+     splits this across Table 6 Sl.(i)/(ii), which is very likely the same distinction the
+     `when` below expresses. */
+  "tds.194c.threshold.per_payment": verified(
+    "tds.194c.threshold.per_payment",
+    3e4,
+    `Income-tax Act 2025 s.393(1) Table 6 Sl.(i)/(ii) [1961: s.194C] \u2014 single payment. ${CA_CHAIN}`,
+    TY2627
+  ),
+  "tds.194c.threshold.annual": verified(
+    "tds.194c.threshold.annual",
+    1e5,
+    `Income-tax Act 2025 s.393(1) Table 6 Sl.(i)/(ii) [1961: s.194C] \u2014 aggregate in a tax year. ${CA_CHAIN}`,
+    TY2627
+  ),
+  "tds.194c.rate_pct": conditioned(
+    "tds.194c.rate_pct",
+    [
+      { value: 1, when: { payeeType: "individual" } },
+      // Individual / HUF
+      { value: 2 }
+      // everyone else — the default
+    ],
+    `Income-tax Act 2025 s.393(1) Table 6 Sl.(i)/(ii) [1961: s.194C] \u2014 1% Individual/HUF, 2% others. ${CA_CHAIN}`,
+    TY2627
+  ),
+  /* Professional / technical. NO DEFAULT, deliberately: statute gives no "other" rate
+     here, so an unstated serviceType must REFUSE. 10% vs 2% is a 5× difference — exactly
+     the kind of gap where guessing is worst. */
+  "tds.194j.threshold": verified(
+    "tds.194j.threshold",
+    5e4,
+    `Income-tax Act 2025 s.393(1) Table 6 Sl.(iii) [1961: s.194J]. ${CA_CHAIN}`,
+    TY2627
+  ),
+  "tds.194j.rate_pct": conditioned(
+    "tds.194j.rate_pct",
+    [
+      { value: 10, when: { serviceType: "professional" } },
+      { value: 2, when: { serviceType: "technical" } }
+      // no default — see above
+    ],
+    `Income-tax Act 2025 s.393(1) Table 6 Sl.(iii) [1961: s.194J] \u2014 10% professional, 2% technical. ${CA_CHAIN}`,
+    TY2627
+  ),
+  /* Interest. The threshold doubles for a senior citizen — the 2025 Act's Table 5
+     Sl.(ii)/(iii) split likely carries this same distinction. */
+  "tds.194a.threshold": conditioned(
+    "tds.194a.threshold",
+    [
+      { value: 1e5, when: { payeeAge: "senior" } },
+      { value: 5e4 }
+      // everyone else — the default
+    ],
+    `Income-tax Act 2025 s.393(1) Table 5 Sl.(ii)/(iii) [1961: s.194A] \u2014 \u20B950,000; \u20B91,00,000 for senior citizens (bank/post office). ${CA_CHAIN}`,
+    TY2627
+  ),
+  "tds.194a.rate_pct": verified(
+    "tds.194a.rate_pct",
+    10,
+    `Income-tax Act 2025 s.393(1) Table 5 Sl.(ii)/(iii) [1961: s.194A]. ${CA_CHAIN}`,
+    TY2627
+  ),
+  /* Rent. Threshold is PER MONTH — a different kind again, hence its own key name; a
+     caller must not compare an annual figure to it. NO DEFAULT rate: the asset decides.
+     ⚠️ The CA's answer arrived with this row's columns run together and carried the
+     caveat "(नए reporting framework में)" on the threshold. The values are legible and
+     recorded, but this row is the least certain on the list — re-confirm before it drives
+     a posting. */
+  "tds.194i.threshold.per_month": verified(
+    "tds.194i.threshold.per_month",
+    5e4,
+    `Income-tax Act 2025 s.393(1) Table 2 [1961: s.194I] \u2014 PER MONTH. CA noted "\u0928\u090F reporting framework \u092E\u0947\u0902" \u2014 least certain row; re-confirm. ${CA_CHAIN}`,
+    TY2627
+  ),
+  "tds.194i.rate_pct": conditioned(
+    "tds.194i.rate_pct",
+    [
+      { value: 2, when: { assetType: "plant_machinery" } },
+      { value: 10, when: { assetType: "land_building" } }
+      // incl. furniture
+      // no default — rent of what?
+    ],
+    `Income-tax Act 2025 s.393(1) Table 2 [1961: s.194I] \u2014 2% plant & machinery, 10% land/building/furniture. ${CA_CHAIN}`,
+    TY2627
+  ),
+  /* Historical: the pre-2026 194Q figure, kept so a FY 2024-25 or 2025-26 purchase still
+     resolves ITS OWN law. Never delete an old value — the 2025 Act's transitional
+     provisions require exactly this, and it is what `asOf` is for. Still unverified: the
+     CA was asked about the current year, not this one. */
+  "tds.194q.threshold.legacy": tds(
+    "tds.194q.threshold.legacy",
+    5e6,
+    "Income-tax Act 1961 s.194Q (Finance Act 2021) \u2014 applies to tax years before 2026-27",
+    FA21
+  )
 };
 function resolveTaxRule(key, ctx) {
   const rule = TDS_RULES[key];
   if (!rule) return null;
-  const rv = resolveRule(rule, { asOf: ctx.asOf, jurisdiction: ctx.jurisdiction });
+  const rv = resolveRule(rule, { asOf: ctx.asOf, jurisdiction: ctx.jurisdiction, attrs: ctx.attrs });
   if (!rv) return null;
   return {
     value: rv.value,
@@ -461,15 +692,100 @@ function verifiedValue(key, ctx) {
   return r && r.verified ? r : null;
 }
 
+// src/lib/rules/tdsSections.ts
+var ACT_2025_FROM = "2026-04-01";
+var NATURE = {
+  "192": "Salary",
+  "194A": "Interest",
+  "194C": "Contractor",
+  "194H": "Commission / brokerage",
+  "194I": "Rent",
+  "194J": "Professional / technical",
+  "194Q": "Purchase of goods",
+  "195": "Payment to non-resident"
+};
+var MAP_2025 = {
+  "192": { label: "392", section: "392" },
+  "194A": { label: "393(1) Table 5 Sl.(ii)", section: "393", subSection: "1", table: "5", serial: "ii" },
+  "194C": { label: "393(1) Table 6 Sl.(i)", section: "393", subSection: "1", table: "6", serial: "i" },
+  "194H": { label: "393(1) Table 1 Sl.(ii)", section: "393", subSection: "1", table: "1", serial: "ii" },
+  "194I": { label: "393(1) Table 2", section: "393", subSection: "1", table: "2" },
+  "194J": { label: "393(1) Table 6 Sl.(iii)", section: "393", subSection: "1", table: "6", serial: "iii" },
+  "194Q": { label: "393(1) Table 8 Sl.(ii)", section: "393", subSection: "1", table: "8", serial: "ii" },
+  "195": { label: "393(2)", section: "393", subSection: "2" }
+};
+var CITE_2025 = "Income-tax Act 2025 (in force 1-4-2026; 1961 Act repealed). Mapping confirmed by the society's CA against docs/CA-VERIFICATION-2026-07.md on 2026-07-16 \u2014 NOT independently corroborated. VERIFY before filing.";
+function resolveSectionRef(stored, asOf) {
+  const key = String(stored || "").toUpperCase().replace(/^SEC(TION)?\s*/, "").trim();
+  const nature = NATURE[key] || key;
+  const old = {
+    act: "1961",
+    label: key,
+    section: key,
+    nature,
+    verified: true,
+    // the 1961 numbering is not in doubt; only its successor is
+    cite: "Income-tax Act 1961 \u2014 applies to tax years before 2026-27 (2025 Act transitional provisions)"
+  };
+  const t = Date.parse(asOf);
+  if (Number.isNaN(t) || t < Date.parse(ACT_2025_FROM)) return old;
+  const m = MAP_2025[key];
+  if (!m) return old;
+  return { act: "2025", ...m, nature, verified: false, cite: CITE_2025 };
+}
+
 // src/lib/ask/fact.ts
 var SECTIONS = [
-  [/194\s*-?\s*q/i, "194q"]
+  [/194\s*-?\s*q|393.*table\s*8|माल.*खरीद.*tds/i, "194q"],
+  [/194\s*-?\s*h|393.*table\s*1|कमीशन.*tds|दलाली/i, "194h"],
+  [/194\s*-?\s*c|393.*table\s*6.*\(i\)|ठेकेदार|ठेका/i, "194c"],
+  [/194\s*-?\s*j|393.*table\s*6.*iii|पेशेवर|व्यावसायिक.*सेवा|professional.*tds/i, "194j"],
+  [/194\s*-?\s*a|393.*table\s*5|ब्याज.*tds|interest.*tds/i, "194a"],
+  [/194\s*-?\s*i\b|393.*table\s*2|किराय[ाे].*tds|rent.*tds/i, "194i"]
 ];
 var ASPECTS = [
   [["\u0938\u0940\u092E\u093E", "limit", "threshold", "seema", "\u0915\u092C \u0915\u093E\u091F\u0928\u093E", "\u0915\u092C \u0915\u091F\u0947\u0917\u093E", "\u0915\u093F\u0924\u0928\u0947 \u0938\u0947"], "threshold"],
   [["\u0926\u0930", "\u0930\u0947\u091F", "rate", "\u092A\u094D\u0930\u0924\u093F\u0936\u0924", "\u0915\u093F\u0924\u0928\u093E \u0915\u091F\u0947\u0917\u093E", "\u0915\u093F\u0924\u0928\u093E \u0915\u093E\u091F\u0947\u0902", "percent"], "rate_pct"]
 ];
-var inr = (rupees) => "\u20B9" + rupees.toLocaleString("en-IN");
+var ATTR_HINTS = [
+  [/व्यक्ति|individual|huf|एचयूएफ|हिंदू अविभाजित/i, "payeeType", "individual"],
+  [/कंपनी|company|firm|फर्म|संस्था/i, "payeeType", "company"],
+  [/professional|पेशेवर|व्यावसायिक/i, "serviceType", "professional"],
+  [/technical|तकनीकी/i, "serviceType", "technical"],
+  [/वरिष्ठ|senior/i, "payeeAge", "senior"],
+  [/मशीन|machinery|plant|संयंत्र|उपकरण/i, "assetType", "plant_machinery"],
+  [/भूमि|भवन|land|building|फर्नीचर|furniture/i, "assetType", "land_building"]
+];
+var ATTR_LABEL = {
+  individual: "\u0935\u094D\u092F\u0915\u094D\u0924\u093F / HUF \u0915\u094B \u092D\u0941\u0917\u0924\u093E\u0928 \u092A\u0930",
+  company: "\u0905\u0928\u094D\u092F (\u0915\u0902\u092A\u0928\u0940 \u0906\u0926\u093F) \u0915\u094B \u092D\u0941\u0917\u0924\u093E\u0928 \u092A\u0930",
+  professional: "\u092A\u0947\u0936\u0947\u0935\u0930 (professional) \u0938\u0947\u0935\u093E \u092A\u0930",
+  technical: "\u0924\u0915\u0928\u0940\u0915\u0940 (technical) \u0938\u0947\u0935\u093E \u092A\u0930",
+  senior: "\u0935\u0930\u093F\u0937\u094D\u0920 \u0928\u093E\u0917\u0930\u093F\u0915 \u0915\u0947 \u0932\u093F\u090F",
+  plant_machinery: "\u0938\u0902\u092F\u0902\u0924\u094D\u0930 \u0935 \u092E\u0936\u0940\u0928\u0930\u0940 \u092A\u0930",
+  land_building: "\u092D\u0942\u092E\u093F / \u092D\u0935\u0928 / \u092B\u0930\u094D\u0928\u0940\u091A\u0930 \u092A\u0930"
+};
+var VARIANTS = {
+  "tds.194c.rate_pct": { attr: "payeeType", values: ["individual", "company"] },
+  "tds.194j.rate_pct": { attr: "serviceType", values: ["professional", "technical"] },
+  "tds.194i.rate_pct": { attr: "assetType", values: ["plant_machinery", "land_building"] },
+  "tds.194a.threshold": { attr: "payeeAge", values: ["senior", "other"] }
+};
+var THRESHOLD_KINDS = {
+  "194c": [
+    { key: "tds.194c.threshold.per_payment", label: "\u090F\u0915 \u092D\u0941\u0917\u0924\u093E\u0928 \u092A\u0930" },
+    { key: "tds.194c.threshold.annual", label: "\u092A\u0942\u0930\u0947 \u0935\u0930\u094D\u0937 \u092E\u0947\u0902 \u0915\u0941\u0932" }
+  ],
+  "194i": [{ key: "tds.194i.threshold.per_month", label: "\u092A\u094D\u0930\u0924\u093F \u092E\u093E\u0939" }]
+};
+var inr = (n) => "\u20B9" + n.toLocaleString("en-IN");
+var pct = (n) => `${n}%`;
+function parseAttrs(q) {
+  const attrs = {};
+  for (const [rx, k, v] of ATTR_HINTS) if (!attrs[k] && rx.test(q)) attrs[k] = v;
+  return attrs;
+}
+var label = (section, ctx) => resolveSectionRef(section.toUpperCase(), ctx.asOf).label;
 function answerFact(query, ctx) {
   const q = query.toLowerCase();
   let section = null;
@@ -484,11 +800,54 @@ function answerFact(query, ctx) {
     break;
   }
   if (!aspect) return null;
+  const stated = parseAttrs(q);
+  const sec = label(section, ctx);
+  if (aspect === "threshold" && THRESHOLD_KINDS[section]) {
+    const parts = [];
+    let first = null;
+    for (const k of THRESHOLD_KINDS[section]) {
+      const r = verifiedValue(k.key, ctx);
+      if (!r) continue;
+      first = first || r;
+      parts.push(`${k.label} ${inr(r.value)}`);
+    }
+    if (!first) return null;
+    const conj = section === "194c" ? " \u2014 \u0907\u0928\u092E\u0947\u0902 \u0938\u0947 \u0915\u094B\u0908 \u092D\u0940 \u0938\u0940\u092E\u093E \u092A\u093E\u0930 \u0939\u094B \u0924\u094B TDS \u0932\u093E\u0917\u0942\u0964" : "";
+    return {
+      text: `\u0927\u093E\u0930\u093E ${sec} \u0915\u0940 \u0938\u0940\u092E\u093E: ${parts.join(", ")}${conj} (${first.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940)`,
+      cite: first.cite,
+      effectiveFrom: first.effectiveFrom,
+      version: first.version,
+      ruleKey: THRESHOLD_KINDS[section][0].key
+    };
+  }
   const key = `tds.${section}.${aspect}`;
-  const rule = verifiedValue(key, ctx);
+  if (!TDS_RULES[key]) return null;
+  const variants = VARIANTS[key];
+  if (variants && !stated[variants.attr]) {
+    const parts = [];
+    let first = null;
+    for (const v of variants.values) {
+      const r = verifiedValue(key, { ...ctx, attrs: { [variants.attr]: v } });
+      if (!r) continue;
+      first = first || r;
+      const l = ATTR_LABEL[v] || (v === "other" ? "\u0905\u0928\u094D\u092F \u0915\u0947 \u0932\u093F\u090F" : v);
+      parts.push(`${l} ${aspect === "rate_pct" ? pct(r.value) : inr(r.value)}`);
+    }
+    if (!first || parts.length < 2) return null;
+    const what = aspect === "rate_pct" ? "\u0926\u0930" : "\u0938\u0940\u092E\u093E";
+    return {
+      text: `\u0927\u093E\u0930\u093E ${sec} \u0915\u0940 ${what}: ${parts.join("; ")}\u0964 (${first.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940)`,
+      cite: first.cite,
+      effectiveFrom: first.effectiveFrom,
+      version: first.version,
+      ruleKey: key
+    };
+  }
+  const rule = verifiedValue(key, { ...ctx, attrs: stated });
   if (!rule) return null;
-  const label = section.toUpperCase();
-  const text = aspect === "threshold" ? `\u0927\u093E\u0930\u093E ${label} \u0915\u0940 \u0938\u0940\u092E\u093E ${inr(rule.value)} \u0939\u0948 \u2014 ${rule.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940\u0964 \u0907\u0938\u0938\u0947 \u0905\u0927\u093F\u0915 \u092E\u0942\u0932\u094D\u092F \u092A\u0930 \u0939\u0940 TDS \u0932\u093E\u0917\u0942 \u0939\u094B\u0924\u093E \u0939\u0948\u0964` : `\u0927\u093E\u0930\u093E ${label} \u0915\u0940 \u0926\u0930 ${rule.value}% \u0939\u0948 \u2014 ${rule.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940\u0964 \u092F\u0939 \u0938\u0940\u092E\u093E \u0938\u0947 \u0905\u0927\u093F\u0915 \u0935\u093E\u0932\u0940 \u0930\u093E\u0936\u093F \u092A\u0930 \u0932\u0917\u0924\u0940 \u0939\u0948\u0964`;
+  const qualifier = variants && stated[variants.attr] ? ` (${ATTR_LABEL[stated[variants.attr]] || ""})` : "";
+  const text = aspect === "threshold" ? `\u0927\u093E\u0930\u093E ${sec} \u0915\u0940 \u0938\u0940\u092E\u093E ${inr(rule.value)} \u0939\u0948${qualifier} \u2014 ${rule.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940\u0964 \u0907\u0938\u0938\u0947 \u0905\u0927\u093F\u0915 \u092E\u0942\u0932\u094D\u092F \u092A\u0930 \u0939\u0940 TDS \u0932\u093E\u0917\u0942 \u0939\u094B\u0924\u093E \u0939\u0948\u0964` : `\u0927\u093E\u0930\u093E ${sec} \u0915\u0940 \u0926\u0930 ${pct(rule.value)} \u0939\u0948${qualifier} \u2014 ${rule.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940\u0964`;
   return { text, cite: rule.cite, effectiveFrom: rule.effectiveFrom, version: rule.version, ruleKey: key };
 }
 function unverifiedHint(query, ctx) {
@@ -499,8 +858,8 @@ function unverifiedHint(query, ctx) {
     break;
   }
   if (!section) return null;
-  for (const [, aspect] of ASPECTS) {
-    const r = resolveTaxRule(`tds.${section}.${aspect}`, ctx);
+  for (const suffix of ["threshold", "rate_pct", "threshold.annual", "threshold.per_month", "threshold.per_payment"]) {
+    const r = resolveTaxRule(`tds.${section}.${suffix}`, ctx);
     if (r && !r.verified) return r.cite;
   }
   return null;
@@ -656,10 +1015,10 @@ function roundMinor(value, mode = DEFAULT_ROUNDING) {
       return value >= 0 ? Math.round(value) : -Math.round(-value);
   }
 }
-function applyPercent(baseMinor, pct, mode = DEFAULT_ROUNDING) {
+function applyPercent(baseMinor, pct2, mode = DEFAULT_ROUNDING) {
   assertMinor(baseMinor, "applyPercent");
-  assertFinite(pct, "applyPercent");
-  return { minor: roundMinor(baseMinor * pct / 100, mode), mode };
+  assertFinite(pct2, "applyPercent");
+  return { minor: roundMinor(baseMinor * pct2 / 100, mode), mode };
 }
 
 // src/lib/tax/computeTds.ts
@@ -671,15 +1030,17 @@ function computeTds(input) {
   if (!isValidMinor(input.aggregateMinor)) {
     return { applicable: false, refused: true, reason: "\u0930\u093E\u0936\u093F \u092A\u0948\u0938\u0947 (integer) \u092E\u0947\u0902 \u091A\u093E\u0939\u093F\u090F", missing: ["aggregateMinor"] };
   }
-  const thr = verifiedValue(`tds.${s}.threshold`, input.ctx);
+  const thr = verifiedValue(`tds.${s}.threshold`, input.ctx) ?? verifiedValue(`tds.${s}.threshold.annual`, input.ctx) ?? verifiedValue(`tds.${s}.threshold.per_month`, input.ctx);
   const rate = verifiedValue(`tds.${s}.rate_pct`, input.ctx);
   if (!thr) missing.push(`tds.${s}.threshold`);
   if (!rate) missing.push(`tds.${s}.rate_pct`);
   if (!thr || !rate) {
+    const unconditioned = resolveTaxRule(`tds.${s}.rate_pct`, { ...input.ctx, attrs: void 0 });
+    const needsAttr = !rate && !!TDS_RULES[`tds.${s}.rate_pct`] && !unconditioned;
     return {
       applicable: false,
       refused: true,
-      reason: `\u0927\u093E\u0930\u093E ${s.toUpperCase()} \u0915\u0947 \u0932\u093F\u090F \u092E\u0947\u0930\u0947 \u092A\u093E\u0938 \u092A\u094D\u0930\u092E\u093E\u0923\u093F\u0924, \u0924\u093F\u0925\u093F-\u0938\u0939\u093F\u0924 \u0928\u093F\u092F\u092E \u0928\u0939\u0940\u0902 \u0939\u0948 \u2014 \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u0917\u0923\u0928\u093E \u0928\u0939\u0940\u0902 \u0915\u0930\u0942\u0901\u0917\u093E\u0964 \u0928\u093F\u092F\u092E \u091C\u094B\u0921\u093C\u0947\u0902/\u0938\u0924\u094D\u092F\u093E\u092A\u093F\u0924 \u0915\u0930\u0947\u0902: src/lib/rules/tax.ts`,
+      reason: needsAttr ? `\u0927\u093E\u0930\u093E ${s.toUpperCase()} \u0915\u0940 \u0926\u0930 \u0907\u0938 \u092A\u0930 \u0928\u093F\u0930\u094D\u092D\u0930 \u0915\u0930\u0924\u0940 \u0939\u0948 \u0915\u093F \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u093F\u0938 \u092A\u094D\u0930\u0915\u093E\u0930 \u0915\u093E \u0939\u0948 \u2014 \u092C\u093F\u0928\u093E \u092F\u0939 \u091C\u093E\u0928\u0947 \u092E\u0948\u0902 \u0917\u0923\u0928\u093E \u0928\u0939\u0940\u0902 \u0915\u0930\u0942\u0901\u0917\u093E\u0964 (\u091C\u0948\u0938\u0947 194J: professional \u092F\u093E technical?)` : `\u0927\u093E\u0930\u093E ${s.toUpperCase()} \u0915\u0947 \u0932\u093F\u090F \u092E\u0947\u0930\u0947 \u092A\u093E\u0938 \u092A\u094D\u0930\u092E\u093E\u0923\u093F\u0924, \u0924\u093F\u0925\u093F-\u0938\u0939\u093F\u0924 \u0928\u093F\u092F\u092E \u0928\u0939\u0940\u0902 \u0939\u0948 \u2014 \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u0917\u0923\u0928\u093E \u0928\u0939\u0940\u0902 \u0915\u0930\u0942\u0901\u0917\u093E\u0964 \u0928\u093F\u092F\u092E \u091C\u094B\u0921\u093C\u0947\u0902/\u0938\u0924\u094D\u092F\u093E\u092A\u093F\u0924 \u0915\u0930\u0947\u0902: src/lib/rules/tax.ts`,
       missing
     };
   }

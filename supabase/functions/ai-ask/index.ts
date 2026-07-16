@@ -48,17 +48,59 @@ Deno.serve(async (req: Request) => {
   // an auditor can find the exact row (AI-A2).
   const answerId = crypto.randomUUID();
 
+  /* IDENTITY COMES FROM THE VERIFIED TOKEN — NEVER FROM THE BODY (AI-P2).
+     A client-asserted societyId is a claim, not an identity: anyone could POST
+     {"societyId":"SOC001"} and, once D-lane tools exist (Slice 4), read another
+     society's ledger. Nothing here reads society data yet, which is exactly why this
+     lands NOW — the day a tool arrives, the hole would already be load-bearing.
+     Note the JWT carries user_role and user_branch_id (migrations 028/038) but NOT
+     society_id, so it is resolved from society_users, keyed on the verified email. */
+  let societyId: string | undefined;
+  let userEmail: string | undefined;
+  const authHeader = req.headers.get('Authorization') ?? '';
+  const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  const supaUrl = Deno.env.get('SUPABASE_URL') ?? '';
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+  const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+  // The anon key is itself a JWT and is what an anonymous /ask visitor sends. Treat it
+  // as no user at all — otherwise every public visitor would look authenticated.
+  if (bearer && bearer !== anonKey && supaUrl && anonKey) {
+    try {
+      const { data, error } = await createClient(supaUrl, anonKey, {
+        global: { headers: { Authorization: `Bearer ${bearer}` } },
+      }).auth.getUser();
+      if (!error && data?.user?.email) {
+        userEmail = data.user.email.toLowerCase();
+        if (svcKey) {
+          const { data: row } = await createClient(supaUrl, svcKey)
+            .from('society_users')
+            .select('society_id')
+            .eq('email', userEmail)
+            .eq('is_active', true)
+            .maybeSingle();
+          societyId = (row as { society_id?: string } | null)?.society_id ?? undefined;
+        }
+      }
+    } catch {
+      // A token we cannot verify is a token we do not honour: stay anonymous. Never fall
+      // back to the body — that is the whole hole this closes.
+      societyId = undefined;
+    }
+  }
+
   const answer = ask(
     {
       text,
       channel: (body.channel as string) === 'whatsapp' ? 'whatsapp' : (body.channel as string) === 'app' ? 'app' : 'web',
-      // societyId/userId come from the CALLER for now. They are used only to pick a
-      // lane and to scope the kill switch — never to read society data, because no
-      // D-lane tool exists yet (Slice 4). Before the first tool lands, these MUST be
-      // derived from the verified JWT, not the body: a client-asserted societyId is
-      // a claim, not an identity (AI-P2).
-      societyId: typeof body.societyId === 'string' ? body.societyId : undefined,
-      userId: typeof body.userId === 'string' ? body.userId : undefined,
+      // From the VERIFIED token only — see above. `body.societyId` / `body.userId` are
+      // deliberately ignored: they are claims, not identity (AI-P2). Absent/invalid
+      // token ⇒ anonymous, which is a first-class context (§4.3), not a degraded one.
+      societyId,
+      userId: userEmail,
+      // `state` still comes from the body. It is safe today because it only selects a
+      // jurisdiction for PUBLIC rule lookups — no society data is behind it. Once
+      // D-lane tools land it must come from the society row, not the caller.
       state: typeof body.state === 'string' ? body.state : undefined,
       asOf: typeof body.asOf === 'string' ? body.asOf : undefined,
       sessionId: typeof body.sessionId === 'string' ? body.sessionId : undefined,
@@ -84,8 +126,10 @@ Deno.serve(async (req: Request) => {
     const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     if (url && key) {
       await createClient(url, key).from('audit_log').insert({
-        society_id: (body.societyId as string) || 'anonymous',
-        actor_name: (body.userId as string) || null,
+        // The VERIFIED identity, not the body's claim. An audit row that records what the
+        // caller said it was would be worse than none: it would look like evidence.
+        society_id: societyId || 'anonymous',
+        actor_name: userEmail || null,
         actor_role: 'ai_agent',
         entity_type: 'ai_answer',
         entity_id: answerId,
