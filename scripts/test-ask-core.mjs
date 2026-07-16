@@ -76,15 +76,22 @@ console.log('\n  ask-core — the mechanism, with no model\n');
   // The whole point: search DOES find GST docs. The lane refuses anyway.
   ok('F-lane: refuses even though docs exist', r.trace.retrieved.length > 0 && r.answer === null);
 
-  /* Slice 2 — the F-lane now distinguishes two different truths. "मुझे नहीं पता"
-     (no rule at all, e.g. GST) is NOT the same as "the rule is in the catalog but no
-     human has verified it" (194Q). The second tells the user what would fix it, and
-     an unverified rule must still never be stated as fact. */
-  const u = run('194Q की सीमा कितनी है');
-  ok('F-lane: 194Q — seeded but UNVERIFIED ⇒ still no figure', u.answer === null);
-  ok('F-lane: says the rule exists but is unchecked', u.trace.guard.includes('unverified'));
-  ok('F-lane: names the section to check', (u.unanswered || '').includes('194Q'));
-  ok('F-lane: never leaks the unverified number', !(u.unanswered || '').includes('50,00,000'));
+  /* THE PAYOFF, and the whole reason Slice 2 preceded the model: a CA-verified rule
+     turns the hedge into a fact. 194Q was seeded ₹50,00,000 and hedged; the CA said
+     ₹10,00,000 (under the 2025 Act, where s.194Q no longer exists). Now it answers.
+     Every rule a human confirms converts one refusal — and nothing else does. */
+  const q = run('194Q की सीमा कितनी है');
+  ok('F-lane: 194Q now ANSWERS — the hedge became a fact', !!q.answer);
+  ok('F-lane: states the CA-confirmed ₹10,00,000, not the ₹50,00,000 seed', q.answer.includes('10,00,000'));
+  ok('F-lane: states the effective date', q.answer.includes('2026-04-01'));
+  ok('F-lane: no guard fired — it had a verified rule', q.trace.guard === null);
+  ok('F-lane: cites the section to check', q.cites.some(c => c.title.includes('393(1) Table 8')));
+  ok('F-lane: high confidence — only a verified rule earns it', q.confidence === 'high');
+
+  /* And the discipline still holds for everything unverified. GST has no rule at all;
+     194C has one the CA gave but this catalog's shape cannot hold honestly (two
+     thresholds, two rates). Both must still refuse. */
+  ok('F-lane: 194C still refuses — the catalog cannot hold its shape', run('194C की दर क्या है').answer === null);
 }
 
 /* 5 · SCOPE (AI-N5 / CAIOS-K8) — anonymous cannot reach society data. */
