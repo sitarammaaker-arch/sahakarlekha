@@ -27,7 +27,7 @@ register(
     `),
 );
 
-const { planSocietyAppropriation, DEFAULT_APPROPRIATION_ACCOUNTS } = await import(abs('../src/lib/rules/societyAppropriation.ts'));
+const { planSocietyAppropriation, DEFAULT_APPROPRIATION_ACCOUNTS, appropriationVoucherContent, DEFAULT_APPROPRIATION_NARRATION } = await import(abs('../src/lib/rules/societyAppropriation.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -87,5 +87,31 @@ const sum = (legs, drCr) => legs.filter((l) => l.drCr === drCr).reduce((s, l) =>
 { ok(DEFAULT_APPROPRIATION_ACCOUNTS.appropriation === '1208' && DEFAULT_APPROPRIATION_ACCOUNTS.reserve_fund === '1201' && DEFAULT_APPROPRIATION_ACCOUNTS.education_fund === '1203',
     'default heads: Net Surplus 1208, Reserve 1201, Education 1203'); }
 
-console.log(`\nSociety appropriation adapter (T-20 wiring slice 1): ${pass} passed, ${fail} failed`);
+// ── appropriationVoucherContent (slice 2 — legs → a balanced journal voucher's content) ──────────
+const rupeeSum = (lines, drCr) => lines.filter((l) => l.type === drCr).reduce((s, l) => s + l.amount, 0);
+
+// ── 9. Content of a clean appropriation — Dr Net Surplus / Cr each fund, balanced in rupees ──
+{ const appr = planSocietyAppropriation({ netSurplus: 100000, shareCapital: 0, asOf: '2026-03-31' });
+  const c = appropriationVoucherContent(appr);
+  ok(c && c.type === 'journal', 'content is a journal voucher');
+  ok(c.debitAccountId === '1208', 'debit head = Net Surplus (1208)');
+  ok(c.amount === 30000, 'voucher amount = total appropriated ₹30,000');
+  ok(c.lines.length === 3 && rupeeSum(c.lines, 'Dr') === rupeeSum(c.lines, 'Cr'), '3 lines, balanced in rupees (ΣDr === ΣCr)');
+  ok(c.lines.find((l) => l.accountId === '1201' && l.type === 'Cr').amount === 25000, 'reserve line Cr ₹25,000');
+  ok(c.lines.find((l) => l.accountId === '1208' && l.type === 'Dr').amount === 30000, 'Net Surplus line Dr ₹30,000');
+  ok(['1201', '1203'].includes(c.creditAccountId), 'legacy creditAccountId is the first fund credited');
+  ok(c.narration === DEFAULT_APPROPRIATION_NARRATION, 'default narration (Hindi-first) applied'); }
+
+// ── 10. Custom narration passes through ───────────────────────────────────────
+{ const appr = planSocietyAppropriation({ netSurplus: 50000, shareCapital: 0, asOf: '2026-03-31' });
+  const c = appropriationVoucherContent(appr, 'FY 2025-26 विनियोजन');
+  ok(c.narration === 'FY 2025-26 विनियोजन', 'custom narration used when supplied'); }
+
+// ── 11. A refused / empty appropriation ⇒ null (post nothing, never an empty voucher) ──
+{ const refused = planSocietyAppropriation({ netSurplus: 200000, shareCapital: 100000, asOf: '2026-03-31', discretionary: { dividend: 20000 } });
+  ok(appropriationVoucherContent(refused) === null, 'a refused appropriation (cap breach) ⇒ null content');
+  const zero = planSocietyAppropriation({ netSurplus: 0, shareCapital: 0, asOf: '2026-03-31' });
+  ok(appropriationVoucherContent(zero) === null, 'a zero-surplus appropriation ⇒ null content'); }
+
+console.log(`\nSociety appropriation adapter (T-20 wiring slice 1+2): ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
