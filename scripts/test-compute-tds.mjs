@@ -72,10 +72,24 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
      cooperative societies are far below it and owe NO 194Q at all. Recorded, unverified,
      and NOT yet enforced — a condition on the buyer is not a rate variant, so `when`
      cannot express it. Until computeTds gates on it, refusal is the only safe answer. */
+  /* NOTE 1 HAS BEEN READ, and it does not say what we were told. Verbatim:
+       "(a) ...shall not apply to a transaction on which tax is deductible or collectible
+        under any of the provisions of the Act. (b) The tax shall be deducted on the sum
+        exceeding fifty lakh rupees."
+     No ₹10-crore buyer-turnover condition anywhere in it. That gate came from a
+     statement, not a source — the exact distinction this section keeps re-teaching. */
   const gate = tax.resolveTaxRule('tds.194q.applies_if.buyer_turnover_min', CTX);
-  ok('194Q gate: the ₹10 crore buyer-turnover condition is recorded', gate.value === 100000000);
-  ok('194Q gate: it says most societies owe no 194Q at all', gate.cite.includes('below'));
-  ok('194Q gate: unverified like everything else unconfirmed', gate.verified === false);
+  ok('194Q gate: the CLAIMED ₹10 crore condition is still recorded, not deleted', gate.value === 100000000);
+  ok('194Q gate: the cite says it was NOT FOUND in the text', gate.cite.includes('NOT FOUND'));
+  ok('194Q gate: unverified — "we looked and did not find it" ≠ "it does not exist"', gate.verified === false);
+  ok('194Q gate: never enforced, so it cannot silently gate a computation',
+    computeTds({ section: '194q', aggregateMinor: 800000000, ctx: CTX }).applicable === true);
+
+  /* Note 1(a) — a REAL carve-out from the text that computeTds does not yet honour. */
+  const carve = tax.resolveTaxRule('tds.194q.excluded_if.taxed_under_other_provision', CTX);
+  ok('194Q: Note 1(a)\'s carve-out is recorded from the text', carve.verified === true);
+  ok('194Q: ...cited to the section, and flagged as NOT enforced',
+    carve.cite.includes('section-393-5') && carve.cite.includes('NOT ENFORCED'));
 
   // The old figure is KEPT — a FY 2024-25 purchase must still resolve its own law.
   const legacy = tax.resolveTaxRule('tds.194q.threshold.legacy', CTX);
