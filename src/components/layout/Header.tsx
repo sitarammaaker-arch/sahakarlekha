@@ -14,7 +14,7 @@ import {
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Languages, Bell, User, Settings, HelpCircle, Menu, LogOut, Search, Landmark, ShieldAlert, XCircle, Lock, CalendarClock, ShieldCheck, Warehouse } from 'lucide-react';
+import { Languages, Bell, User, Settings, HelpCircle, Menu, LogOut, Search, Landmark, ShieldAlert, XCircle, Lock, CalendarClock, ShieldCheck, Warehouse, Sparkles } from 'lucide-react';
 import { buildComplianceCalendar, complianceNotifications } from '@/lib/complianceCalendar';
 import { cn } from '@/lib/utils';
 import { GlobalSearch } from '@/components/GlobalSearch';
@@ -117,6 +117,32 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
 
           {/* Right side */}
           <div className="flex items-center gap-1 md:gap-2 pr-1 md:pr-0">
+            {/* Ask — the ONLY way a logged-in user reaches /ask.
+                It is a public route in PublicLayout and appears in no app nav, so the
+                D-lane — which answers ONLY for a logged-in user, from their own ledger —
+                was reachable solely by typing the URL. Built, deployed, security-tested,
+                and behind no door. Sits beside Search because that is the same instinct:
+                "I have a question about this software / about my books." */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 hidden sm:flex text-muted-foreground"
+              onClick={() => navigate('/ask')}
+              title={language === 'hi' ? 'सवाल पूछें — अपनी बही या लेखांकन के बारे में' : 'Ask a question — about your books or accounting'}
+            >
+              <Sparkles className="h-4 w-4" />
+              <span className="text-xs">{language === 'hi' ? 'पूछें' : 'Ask'}</span>
+            </Button>
+            {/* Mobile: icon only — the label is the first thing to go on a narrow header. */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="sm:hidden"
+              onClick={() => navigate('/ask')}
+              aria-label={language === 'hi' ? 'पूछें' : 'Ask'}
+            >
+              <Sparkles className="h-4 w-4" />
+            </Button>
             {/* Search Button */}
             <Button
               variant="outline"
