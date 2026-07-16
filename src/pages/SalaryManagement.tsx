@@ -3,8 +3,9 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { computeStatutory } from '@/lib/payrollStatutory';
-import { suggestMonthlyTds, tdsBasisNote, type TaxRegime } from '@/lib/tdsProjection';
+import { tdsBasisNote, type TaxRegime } from '@/lib/tdsProjection';
 import { resolveTaxBasis } from '@/lib/rules/incomeTax';
+import { cumulativeMonthlyTds, monthsLeftInFy, fyBounds, isInFy } from '@/lib/payroll/cumulativeTds';
 import { professionalTaxForState } from '@/lib/professionalTax';
 import { build24Q, type Quarter } from '@/lib/form24Q';
 import { daysInMonth, prorate } from '@/lib/attendance';
@@ -69,7 +70,11 @@ interface ProcessRow {
   allowances: number;
   deductions: number;
   pt: number;        // ECR-14: professional tax
-  tds: number;       // ECR-14: TDS u/s 192
+  tds: number;       // ECR-14: TDS u/s 192 — cumulative (see tdsFor)
+  /** > 0 ⇒ MORE was deducted earlier this FY than the year owes. Payroll cannot refund
+   *  it, so it must be shown: the employee only gets it back by filing their ITR (or,
+   *  if it was never challan-deposited, by the society simply returning it). */
+  tdsExcess: number;
   paidDays: number;  // ECR-14: attendance (paid days this month)
   paymentMode: PaymentMode;
   processed: boolean;
@@ -228,6 +233,9 @@ const SalaryManagement: React.FC = () => {
   // record either way, so both earn the amber.
   const tdsBasis = resolveTaxBasis(new Date().toISOString().slice(0, 10));
   const tdsStale = tdsBasis.stale || !tdsBasis.set.verified;
+  // Employees already over-deducted this FY — surfaced below the TDS note, never hidden.
+  const excessRows = processRows.filter(r => !r.processed && r.tdsExcess > 0);
+  const totalExcess = excessRows.reduce((s, r) => s + r.tdsExcess, 0);
 
   // ── Tab 3 – Salary History state ────────────────────────────────────────
   // ECR-14: Form 24Q dialog
@@ -355,6 +363,29 @@ const SalaryManagement: React.FC = () => {
     return salaryRecords.some(r => r.month === processingMonth);
   }, [salaryRecords, processingMonth]);
 
+  /**
+   * Salary TDS is CUMULATIVE, not annual÷12 (rules: lib/payroll/cumulativeTds.ts).
+   * Each run re-estimates the year, subtracts what was ACTUALLY deducted so far this FY,
+   * and spreads only the balance over the months that remain — so an over- or
+   * under-deduction in an earlier month is absorbed here rather than left for the
+   * employee's ITR. This is what the old `suggestMonthlyTds(gross, regime)` call could
+   * not do: it passed neither the months left nor the year-to-date.
+   */
+  const tdsFor = (emp: Employee, allowances = 0, regime: TaxRegime = taxRegime) => {
+    const fy = fyBounds(processingMonth);
+    // Prior runs only — exclude the month being processed, or a re-run would count its
+    // own deduction as already-paid and drive the balance to zero.
+    const ytdDeducted = salaryRecords
+      .filter(r => r.employeeId === emp.id && r.month !== processingMonth && isInFy(r.month, fy))
+      .reduce((sum, r) => sum + (r.tds || 0), 0);
+    return cumulativeMonthlyTds({
+      annualGross: (emp.basicSalary + allowances) * 12,
+      regime,
+      ytdDeducted,
+      monthsRemaining: monthsLeftInFy(processingMonth),
+    });
+  };
+
   const loadEmployees = () => {
     const active = employees.filter(e => e.status === 'active');
     setProcessRows(
@@ -363,7 +394,8 @@ const SalaryManagement: React.FC = () => {
         allowances: 0,
         deductions: 0,
         pt: professionalTaxForState(emp.basicSalary, society.state),   // ECR-14: auto PT by state (editable)
-        tds: suggestMonthlyTds(emp.basicSalary, taxRegime),   // ECR-14: auto TDS-192 projection (editable)
+        tds: tdsFor(emp).tds,          // ECR-14: TDS-192, cumulative (editable)
+        tdsExcess: tdsFor(emp).excess,
         paidDays: daysInMonth(processingMonth),   // ECR-14: full month by default
         paymentMode: 'bank' as PaymentMode,
         processed: salaryRecords.some(r => r.employeeId === emp.id && r.month === processingMonth),
@@ -372,10 +404,14 @@ const SalaryManagement: React.FC = () => {
     setRowsLoaded(true);
   };
 
-  // Re-project monthly TDS for unprocessed rows (basic + allowances × 12) when the regime changes.
+  // Re-project TDS for unprocessed rows when the regime changes — cumulative, as above.
   const reprojectTds = (regime: TaxRegime) => {
     setTaxRegime(regime);
-    setProcessRows(rows => rows.map(r => r.processed ? r : { ...r, tds: suggestMonthlyTds(r.employee.basicSalary + r.allowances, regime) }));
+    setProcessRows(rows => rows.map(r => {
+      if (r.processed) return r;
+      const t = tdsFor(r.employee, r.allowances, regime);
+      return { ...r, tds: t.tds, tdsExcess: t.excess };
+    }));
   };
 
   const updateRow = (empId: string, field: keyof Pick<ProcessRow, 'allowances' | 'deductions' | 'pt' | 'tds' | 'paidDays' | 'paymentMode'>, value: number | PaymentMode) => {
@@ -685,6 +721,18 @@ const SalaryManagement: React.FC = () => {
               <p className={`text-[11px] mt-1 ${tdsStale ? 'text-amber-600 dark:text-amber-500 font-medium' : 'text-muted-foreground'}`}>
                 {tdsBasisNote()}
               </p>
+              {/* An over-deduction MUST be said out loud. Payroll cannot refund it — the
+                  remaining months simply go to ₹0 — so if nobody tells the clerk, the
+                  employee never learns they are owed money and quietly loses it. A silent
+                  zero here would be the same class of defect as the FY 2024-25 slabs:
+                  correct-looking, and wrong for the person. */}
+              {excessRows.length > 0 && (
+                <p className="text-[11px] mt-1 text-amber-600 dark:text-amber-500 font-medium">
+                  {hi
+                    ? `⚠️ ${excessRows.length} कर्मचारी से इस वर्ष ₹${totalExcess.toLocaleString('en-IN')} अधिक TDS कट चुका है। आगे के महीनों में ₹0 कटेगा। पहले से कटी राशि वेतन से वापस नहीं होती — यदि चालान से जमा हो चुकी है तो कर्मचारी को ITR से refund मिलेगा; यदि जमा नहीं हुई तो समिति सीधे लौटा सकती है।`
+                    : `⚠️ ${excessRows.length} employee(s) have had ₹${totalExcess.toLocaleString('en-IN')} over-deducted this FY. Remaining months are ₹0. Payroll cannot refund it — if already deposited by challan the employee claims it via ITR; if not yet deposited, the society can return it directly.`}
+                </p>
+              )}
               {rowsLoaded && alreadyProcessedForMonth && (
                 <div className="mt-3 flex items-center gap-2 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md px-3 py-2 text-sm">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
