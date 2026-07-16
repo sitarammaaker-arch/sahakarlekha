@@ -22,11 +22,16 @@ export { classify } from '../../../src/lib/ask/classify';
 export { answerFact, unverifiedHint } from '../../../src/lib/ask/fact';
 export { TDS_RULES, resolveTaxRule, verifiedValue } from '../../../src/lib/rules/tax';
 export { computeTds, isRefusal } from '../../../src/lib/tax/computeTds';
-// D-lane (Slice 4) groundwork: the SAME journal mapper + cash-book projector the Cash
-// Book page runs. The server must never compute a balance its own way — the day it
-// drifted, the assistant and the page would disagree in front of a user, and the
-// assistant would be the one nobody could explain (RULE 2).
+/* D-lane (Slice 4). THE decision, and why this exact function:
+   `ledgerCashBookEntries` is what the Cash Book page's parity-gated selector actually
+   calls (DataContext.tsx:4465 — `ledgerReport('cashBook', stateResult, () =>
+   ledgerCashBookEntries(...), cashBookParity)`). Both paths run there, parity is checked
+   at runtime, and the JOURNAL is what wins (T-09 cutover). So the assistant agrees with
+   the screen by construction, not by luck.
+   The state path is not an option: getCashBookEntries reads React state, which an Edge
+   Function cannot run — and re-implementing it server-side is the drift RULE 2 forbids. */
 export { mapLedgerEventRows } from '../../../src/lib/ledger/rows';
+export { ledgerCashBookEntries, ledgerBankBookEntries } from '../../../src/lib/ledger/reports';
 export { projectCashBook } from '../../../src/lib/ledger/cashBook';
 export type { LedgerCashRow } from '../../../src/lib/ledger/cashBook';
 export { resolveAiFlags, AI_OFF } from '../../../src/lib/ai/flags';

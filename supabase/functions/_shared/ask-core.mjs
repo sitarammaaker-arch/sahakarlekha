@@ -1015,6 +1015,10 @@ function roundMinor(value, mode = DEFAULT_ROUNDING) {
       return value >= 0 ? Math.round(value) : -Math.round(-value);
   }
 }
+function toRupees(minor) {
+  assertMinor(minor, "toRupees");
+  return minor / 100;
+}
 function applyPercent(baseMinor, pct2, mode = DEFAULT_ROUNDING) {
   assertMinor(baseMinor, "applyPercent");
   assertFinite(pct2, "applyPercent");
@@ -1150,6 +1154,30 @@ function projectCashBook(events, accountId, accounts, opts) {
   return rows;
 }
 
+// src/lib/ledger/reports.ts
+function ledgerCashBookEntries(events, cashAccountId, accounts, opts) {
+  return projectCashBook(events, cashAccountId, accounts, opts).map((r) => ({
+    id: r.id,
+    date: r.date,
+    voucherNo: r.voucherNo,
+    particulars: r.particulars,
+    type: r.type,
+    amount: toRupees(r.amountMinor),
+    runningBalance: toRupees(r.runningBalanceMinor)
+  }));
+}
+function ledgerBankBookEntries(events, bankAccountId, accounts, opts) {
+  return projectCashBook(events, bankAccountId, accounts, opts).map((r) => ({
+    id: r.id,
+    date: r.date,
+    voucherNo: r.voucherNo,
+    particulars: r.particulars,
+    type: r.type === "receipt" ? "deposit" : "withdrawal",
+    amount: toRupees(r.amountMinor),
+    runningBalance: toRupees(r.runningBalanceMinor)
+  }));
+}
+
 // src/lib/ai/flags.ts
 function killList(raw) {
   const ids = (raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -1181,6 +1209,8 @@ export {
   computeTds,
   isAiEnabled,
   isRefusal,
+  ledgerBankBookEntries,
+  ledgerCashBookEntries,
   mapLedgerEventRows,
   projectCashBook,
   resolveAiFlags,
