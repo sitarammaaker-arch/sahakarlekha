@@ -48,6 +48,7 @@ import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
 import { planOpeningDelta } from '@/lib/ledger/genesis';
 import { voucherPostingLines, voucherReversalLines, voucherEventMeta } from '@/lib/ledger/voucherEvent';
 import { currentPostingEventId } from '@/lib/ledger/aggregateState';
+import { persistEventAuthoritative } from '@/lib/ledger/persist';
 import { ledgerTrialBalance } from '@/lib/ledger/trialBalance';
 import { ledgerParity, balancesFromJournal } from '@/lib/ledger/parity';
 import { ledgerCashBookEntries, ledgerBankBookEntries, ledgerMemberLedgerEntries, ledgerReceiptsPaymentsData } from '@/lib/ledger/reports';
@@ -359,25 +360,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // forget: the voucher save is authoritative and this never blocks or affects it; a failed insert
   // is logged and dropped (the in-memory event remains for the session). Maps the LedgerEvent
   // (built by buildEvent) onto the existing ledger_events columns — no new schema.
+  // The LedgerEvent → ledger_events row mapping, in ONE place (RULE 2). Used by the best-effort shadow
+  // append (persistLedgerEvent) and the journal-first AUTHORITATIVE append (persistEventAuthoritative).
+  const toLedgerEventRow = (ev: LedgerEvent) => ({
+    event_id: ev.eventId,
+    event_type: ev.eventType,
+    schema_version: ev.schemaVersion,
+    society_id: ev.tenantId,
+    jurisdiction: ev.jurisdiction || null,
+    aggregate_type: ev.aggregateType,
+    aggregate_id: ev.aggregateId,
+    sequence: ev.sequence,
+    occurred_at: ev.occurredAt,
+    producer_kind: ev.producer.kind,
+    producer_id: ev.producer.id ?? null,
+    on_behalf_of: ev.producer.onBehalfOf ?? null,
+    reversal_of: ev.reversalOf ?? null,
+    payload: ev.payload,
+  });
   const persistLedgerEvent = (ev: LedgerEvent) => {
     try {
-      supabase.from('ledger_events').insert({
-        event_id: ev.eventId,
-        event_type: ev.eventType,
-        schema_version: ev.schemaVersion,
-        society_id: ev.tenantId,
-        jurisdiction: ev.jurisdiction || null,
-        aggregate_type: ev.aggregateType,
-        aggregate_id: ev.aggregateId,
-        sequence: ev.sequence,
-        occurred_at: ev.occurredAt,
-        producer_kind: ev.producer.kind,
-        producer_id: ev.producer.id ?? null,
-        on_behalf_of: ev.producer.onBehalfOf ?? null,
-        reversal_of: ev.reversalOf ?? null,
-        payload: ev.payload,
-      }).then(({ error }) => { if (error) console.warn('ledger_events append (best-effort):', error.message); });
+      supabase.from('ledger_events').insert(toLedgerEventRow(ev))
+        .then(({ error }) => { if (error) console.warn('ledger_events append (best-effort):', error.message); });
     } catch { /* best-effort — never affects the voucher save */ }
+  };
+  // journal-first-write (slice 4): the AUTHORITATIVE append IO — insert + verify the event persisted.
+  // Passed to persistEventAuthoritative so a voucher's save is a durable, confirmed journal write.
+  const ledgerAppendIO = {
+    insert: async (ev: LedgerEvent): Promise<{ error: string | null }> => {
+      const { error } = await supabase.from('ledger_events').insert(toLedgerEventRow(ev));
+      return { error: error?.message ?? null };
+    },
+    verify: async (eventId: string): Promise<{ found: boolean; error: string | null }> => {
+      const { data, error } = await supabase.from('ledger_events').select('event_id').eq('event_id', eventId).limit(1);
+      return { found: !!data && data.length > 0, error: error?.message ?? null };
+    },
   };
   // P0 #3: append-only audit. Actor is read from a ref so it is never stale inside the
   // delete/approve useCallbacks; emitAudit is fire-and-forget and never blocks the write.
@@ -1425,7 +1442,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return error || data == null ? null : (typeof data === 'number' ? data : Number(data));
   };
 
-  const persistVoucher = (v: Voucher, opts: { onBaseFail: () => void; onBaseSuccess?: () => void; isUpdate?: boolean }) => {
+  const persistVoucher = (v: Voucher, opts: { onBaseFail: () => void; onBaseSuccess?: () => void; isUpdate?: boolean; journalFirst?: boolean }) => {
+    // journal-first-write (slice 4): when true, the voucher is ALREADY durably saved as a journal
+    // event (the number was issued + the event verified before this call). This table write is now a
+    // best-effort PROJECTION: skip re-issuing the number (the event's number is authoritative) and skip
+    // the dup renumber-retry (renumbering would make the table diverge from the event). A base failure
+    // therefore just runs opts.onBaseFail (log-only from the caller — NO rollback, the journal is truth).
     // Strip out everything that may live in late-added columns. branchId is the exception
     // (ECR-17 Phase 5): it stays IN the base upsert because the branch-scoped RLS SELECT
     // policies (migration 039) must see it on the row from birth — otherwise a branch-
@@ -1470,7 +1492,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           attemptBase(noBranch, tries);
           return;
         }
-        if (isUniqueViolation(error) && !opts.isUpdate && tries < MAX_RENUMBER_RETRIES) {
+        if (isUniqueViolation(error) && !opts.isUpdate && !opts.journalFirst && tries < MAX_RENUMBER_RETRIES) {
           const newNo = renumberVoucher((cols as { voucherNo?: string }).voucherNo);
           vouchersRef.current = vouchersRef.current.map(x => x.id === v.id ? { ...x, voucherNo: newNo } : x);
           setVouchersState(prev => prev.map(x => x.id === v.id ? { ...x, voucherNo: newNo } : x));
@@ -1528,7 +1550,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // offline/RPC failure; the 23505 collision-retry above stays the safety net, so this is safe
     // even BEFORE the document_sequences backfill (migration 016) runs. Updates keep their number.
     const provisionalNo = (baseCols as { voucherNo?: string }).voucherNo;
-    if (opts.isUpdate) {
+    if (opts.isUpdate || opts.journalFirst) {
+      // journalFirst: the official number was issued BEFORE the authoritative event append, so the
+      // voucher already carries it — don't re-issue (would mint a second, gapful number).
       attemptBase(baseCols, 0);
     } else {
       issueOfficialNumber(nextDocNumber, societyIdRef.current, provisionalNo).then((officialNo) => {
@@ -1668,21 +1692,67 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     } catch { /* shadow ledger is best-effort — never touches the voucher save path */ }
 
-    // Persist with two-step + rollback. If base save fails, REMOVE the voucher
-    // from local state so the UI reflects what's actually in Supabase — F5 won't
-    // silently delete the user's work because the work was never optimistically
+    // Roll back the optimistic voucher + its shadow event (shared by both save paths on failure).
+    const rollbackOptimistic = () => {
+      vouchersRef.current = vouchersRef.current.filter(v => v.id !== newVoucher.id);
+      setVouchersState(prev => prev.filter(v => v.id !== newVoucher.id));
+      if (shadowEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== shadowEvent!.eventId);
+    };
+
+    // ── journal-first-write (slice 4) — DORMANT, per-tenant flag, default OFF ────────────────────
+    // When journalFirstWrites is on AND this voucher is journaled (posted, has a shadow event), the
+    // SAVE is a durable, VERIFIED journal append; the vouchers table is then a best-effort projection.
+    // So a table-write failure is recoverable (the journal is the truth) — the RULE-1 rollback retires
+    // for the voucher path. Flag OFF (default) → the exact table-first path below, byte-identical.
+    if (societyRef.current?.journalFirstWrites && shadowEvent) {
+      const provisionalNo = newVoucher.voucherNo;
+      // Number FIRST — so the authoritative event carries the official (gapless) number.
+      issueOfficialNumber(nextDocNumber, societyIdRef.current, provisionalNo).then((officialNo) => {
+        const finalNo = officialNo ?? provisionalNo;
+        const finalVoucher: Voucher = finalNo === provisionalNo ? newVoucher : { ...newVoucher, voucherNo: finalNo };
+        if (finalNo !== provisionalNo) {
+          vouchersRef.current = vouchersRef.current.map(x => x.id === newVoucher.id ? finalVoucher : x);
+          setVouchersState(prev => prev.map(x => x.id === newVoucher.id ? finalVoucher : x));
+        }
+        // Rebuild the event with the FINAL number and swap it for the optimistic one in the ref.
+        const finalEvent = buildEvent({
+          eventType: 'voucher.posted', tenantId: societyIdRef.current, jurisdiction: jurisdictionRef.current,
+          aggregateType: 'voucher', aggregateId: finalVoucher.id, sequence: 1,
+          producer: { kind: 'human', id: userRef.current?.name ?? null },
+          payload: { lines: voucherPostingLines(finalVoucher), ...voucherEventMeta(finalVoucher) },
+        }, { eventId: shadowEvent!.eventId, occurredAt: shadowEvent!.occurredAt });
+        ledgerEventsRef.current = ledgerEventsRef.current.map(e => e.eventId === shadowEvent!.eventId ? finalEvent : e);
+
+        // THE SAVE: a durable, verified journal append.
+        persistEventAuthoritative(finalEvent, ledgerAppendIO).then((res) => {
+          if (!res.ok) {
+            // The append is the save — its failure IS a failed save (RULE 1). Roll back + surface loudly.
+            reportError('voucher-journal-append', res.error ?? 'append failed', { voucherId: finalVoucher.id, voucherNo: finalNo });
+            rollbackOptimistic();
+            toastRef.current({ title: '❌ Voucher cloud par save NAHI hua', description: `${res.error ?? 'journal append failed'}. Local state se entry hata di gayi — refresh karne par data lose nahi hoga.`, variant: 'destructive', duration: 15000 });
+            return;
+          }
+          // Saved (journal). Project into the vouchers table best-effort — a table failure is now
+          // RECOVERABLE (rebuildable from the journal), so onBaseFail LOGS, never rolls back.
+          persistVoucher(finalVoucher, {
+            isUpdate: false, journalFirst: true,
+            onBaseFail: () => reportError('voucher-table-projection', 'table write failed after durable journal append (recoverable)', { voucherId: finalVoucher.id, voucherNo: finalNo }),
+          });
+        });
+      });
+      return newVoucher;
+    }
+
+    // ── Default (flag OFF): table-first save with two-step + rollback (RULE 1). BYTE-IDENTICAL. ──
+    // If base save fails, REMOVE the voucher from local state so the UI reflects what's actually in
+    // Supabase — F5 won't silently delete the user's work because the work was never optimistically
     // shown as "saved" once the failure was confirmed.
     persistVoucher(newVoucher, {
       isUpdate: false,
       // The voucher save is authoritative; the ledger event is durably appended ONLY after the base
       // row is confirmed (WORM-safe — a rolled-back voucher never orphans an event).
       onBaseSuccess: () => { if (shadowEvent) persistLedgerEvent(shadowEvent); },
-      onBaseFail: () => {
-        vouchersRef.current = vouchersRef.current.filter(v => v.id !== newVoucher.id);
-        setVouchersState(prev => prev.filter(v => v.id !== newVoucher.id));
-        // Keep the shadow ledger consistent with the rolled-back voucher.
-        if (shadowEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== shadowEvent!.eventId);
-      },
+      onBaseFail: rollbackOptimistic,
     });
     return newVoucher;
   }, [society.financialYear, society.fyLocked, society.fyLockedBy, society.financialYearStart]);
