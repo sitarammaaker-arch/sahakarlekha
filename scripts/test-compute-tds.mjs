@@ -38,13 +38,34 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
    longer exists. Had the flag been flipped on a guess, every procurement voucher would
    have been wrong AND would have looked checked. */
 {
+  /* 194Q IS CONTESTED. Two statements from the same founder+CA channel disagree 5×:
+     ₹10,00,000 (the CA-reviewed list) vs ₹50,00,000 (the founder, with a worked example
+     — and matching this file's original model-memory seed). Both cannot be right.
+     When sources conflict the answer is NOT "take the newer one" — that is the same
+     error in the other direction. It is: we do not know, so the system says nothing. */
   const thr = tax.resolveTaxRule('tds.194q.threshold', CTX);
-  ok('194Q: the CA-confirmed threshold is ₹10,00,000, NOT the ₹50,00,000 seed', thr.value === 1000000);
-  ok('194Q: verified — a named human owns it', thr.verified === true);
-  ok('194Q: the cite carries the CHAIN, not just a source', thr.cite.includes('CA') && thr.cite.includes('founder'));
-  ok('194Q: names the 2025 section AND the 1961 one it replaced',
-    thr.cite.includes('393(1) Table 8') && thr.cite.includes('194Q'));
-  ok('194Q: effective from the 2025 Act commencement', thr.effectiveFrom === '2026-04-01');
+  ok('194Q: back to UNVERIFIED — two sources contradict each other', thr.verified === false);
+  ok('194Q: the cite records the CONTRADICTION, not just one side', thr.cite.includes('CONTESTED'));
+  // The cite reaches the USER inside the hedge, so it must carry no figure: a number in
+  // a refusal reads as an answer. The two contested values live in the source comment,
+  // for the developer and the CA — the people who can actually settle it.
+  ok('194Q: the cite leaks NEITHER figure — a number in a refusal reads as an answer',
+    !thr.cite.match(/50,00,000|10,00,000/));
+  ok('194Q: and it names what would settle it', thr.cite.includes('indiacode') || thr.cite.includes('circular'));
+  ok('194Q: verifiedValue withholds it', tax.verifiedValue('tds.194q.threshold', CTX) === null);
+  ok('194Q: F-lane refuses again', answerFact('194Q की सीमा कितनी है', CTX) === null);
+  ok('194Q: compute refuses again', isRefusal(computeTds({ section: '194q', aggregateMinor: 900000000, ctx: CTX })));
+  ok('194Q: but says the rule EXISTS and is unchecked', !!unverifiedHint('194Q की सीमा कितनी है', CTX));
+
+  /* THE GATE THAT WAS MISSING ENTIRELY — and matters more than the threshold.
+     194Q applies only if the BUYER's preceding-FY turnover exceeded ₹10 crore. Most
+     cooperative societies are far below it and owe NO 194Q at all. Recorded, unverified,
+     and NOT yet enforced — a condition on the buyer is not a rate variant, so `when`
+     cannot express it. Until computeTds gates on it, refusal is the only safe answer. */
+  const gate = tax.resolveTaxRule('tds.194q.applies_if.buyer_turnover_min', CTX);
+  ok('194Q gate: the ₹10 crore buyer-turnover condition is recorded', gate.value === 100000000);
+  ok('194Q gate: it says most societies owe no 194Q at all', gate.cite.includes('below'));
+  ok('194Q gate: unverified like everything else unconfirmed', gate.verified === false);
 
   // The old figure is KEPT — a FY 2024-25 purchase must still resolve its own law.
   const legacy = tax.resolveTaxRule('tds.194q.threshold.legacy', CTX);
@@ -101,10 +122,10 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
 
 /* 3 · The arithmetic, and the F-lane finally ANSWERING — the hedge became a fact. */
 {
-  ok('F-lane: 194Q now answers', !!answerFact('194Q की सीमा कितनी है', CTX));
-  const a = answerFact('194Q की सीमा कितनी है', CTX);
+  // 194H, not 194Q: 194Q is contested and correctly silent (§1). 194H is uncontested.
+  ok('F-lane: 194H answers', !!answerFact('194H की सीमा कितनी है', CTX));
+  const a = answerFact('194H की सीमा कितनी है', CTX);
   ok('F-lane: states the effective date, not just a number', a.text.includes('2026-04-01'));
-  ok('F-lane: 194H answers too', !!answerFact('194H की दर क्या है', CTX));
 
   /* A/4 — a conditional rule, asked WITHOUT the condition. The tempting design was to
      ask back ("which service?"). For a KNOWLEDGE question, stating every variant is
@@ -132,7 +153,7 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
   ok('F-lane: prints the date-correct section reference', c.text.includes('393(1)'));
   ok('F-lane: a 2024 question prints the 1961 number',
     (answerFact('194C की दर क्या है', { asOf: '2024-06-01' }) || { text: '' }).text.includes('194C') || true);
-  ok('F-lane: carries the citation', a.cite.includes('194Q'));
+  ok('F-lane: carries the citation', a.cite.includes('194H'));
   ok('F-lane: rate query answers the RATE, not the threshold', answerFact('194Q की दर क्या है', CTX).text.includes('0.1%'));
 
   // ₹90,00,000 aggregate → excess over ₹10,00,000 is ₹80,00,000 → 0.1% = ₹8,000.

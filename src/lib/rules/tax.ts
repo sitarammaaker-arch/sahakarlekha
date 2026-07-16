@@ -119,14 +119,59 @@ export const TDS_RULES: RuleCatalog = {
      merely unverified, it was contradicted. The rule KEY stays '194q' — it is an
      identifier, not a label; lib/rules/tdsSections.ts resolves what to PRINT by date,
      the same way TdsEntry.section does. */
-  'tds.194q.threshold': verified(
-    'tds.194q.threshold', 1000000,
-    `Income-tax Act 2025 s.393(1) Table 8 Sl.(ii) [1961: s.194Q] — aggregate purchase value in a tax year. ${CA_CHAIN}`,
+  /* ⚠️ CONTESTED — DO NOT RE-VERIFY WITHOUT AN AUTHORITATIVE SOURCE. ⚠️
+     Two statements from the same founder+CA channel contradict each other:
+        2026-07-16 (list) : ₹10,00,000   ← this was flipped to verified:true
+        2026-07-16 (later): ₹50,00,000   ← with a worked example: ₹80L purchase
+                                           → ₹30L taxable → ₹3,000
+     ₹50,00,000 also matches this file's ORIGINAL seed, which was marked unverified
+     precisely because it came from model memory and could not be asserted.
+
+     Both cannot be right, and 5× is not a rounding difference. When sources conflict the
+     answer is NOT "take the newer one" — that is the same error in the other direction.
+     It is: we do not know, so the system says nothing. Back to unverified.
+
+     RESOLVING THIS NEEDS A SOURCE, NOT A MESSAGE: the section text on indiacode.nic.in
+     or the ITD portal, or a circular number. Not a summary, not a table, not a recollection.
+
+     THE HARDER PROBLEM IS BELOW — see `tds.194q.applies_if.buyer_turnover_min`. Even the
+     right threshold is useless while the applicability gate is missing. */
+  // NOTE the cite carries NO figure. It reaches the user inside the hedge, and a number
+  // in a refusal reads as an answer — a secretary would take ₹50,00,000 and use it. The
+  // two contested values live in the comment above, where a developer or CA reads them.
+  'tds.194q.threshold': tds(
+    'tds.194q.threshold', 5000000,
+    'Income-tax Act 2025 s.393(1) Table 8 Sl.(ii) [1961: s.194Q] — threshold CONTESTED between two ' +
+      'sources (see rules/tax.ts). UNVERIFIED until an authoritative source settles it: the section ' +
+      'text on indiacode.nic.in / the ITD portal, or a circular number.',
     TY2627,
   ),
-  'tds.194q.rate_pct': verified(
+  'tds.194q.rate_pct': tds(
     'tds.194q.rate_pct', 0.1,
-    `Income-tax Act 2025 s.393(1) Table 8 Sl.(ii) [1961: s.194Q] — rate on value EXCEEDING the threshold. ${CA_CHAIN}`,
+    'Rate 0.1% is NOT contested (both statements agree) — but it stays unverified because it is ' +
+      'meaningless without a settled threshold and the buyer-turnover gate. ' +
+      'Income-tax Act 2025 s.393(1) Table 8 Sl.(ii) [1961: s.194Q].',
+    TY2627,
+  ),
+
+  /* 🚨 THE GATE THAT WAS MISSING ENTIRELY, and it matters more than the threshold.
+     Per the founder (2026-07-16): 194Q applies ONLY IF THE BUYER's turnover in the
+     PRECEDING financial year exceeded ₹10 crore.
+
+     Most cooperative societies are nowhere near ₹10 crore — so for most of this product's
+     users **194Q does not apply at all**. Without this gate, computeTds would return a
+     TDS figure for a society that owes none. That is not a wrong number; it is an
+     unlawful deduction from a farmer or an arhtiya.
+
+     It is recorded but NOT wired: it is a condition on the BUYER (a fact about the
+     society), not a variant of the rate, so `when` cannot express it — computeTds would
+     have to take the society's prior-year turnover as an input and gate on it. That is
+     the next slice here, and until it exists computeTds's refusal is the only correct
+     behaviour for this section. UNVERIFIED like everything else on this list. */
+  'tds.194q.applies_if.buyer_turnover_min': tds(
+    'tds.194q.applies_if.buyer_turnover_min', 100000000,
+    'GATE: 194Q applies only if the BUYER\'s preceding-FY turnover exceeded ₹10 crore (founder, 2026-07-16). ' +
+      'Most cooperative societies fall below this and owe NO 194Q at all. Not yet enforced by computeTds. UNVERIFIED.',
     TY2627,
   ),
 
