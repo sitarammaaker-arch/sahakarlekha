@@ -144,7 +144,12 @@ console.log('\n  ask-core — the mechanism, with no model\n');
 
   ok('seam: never passes body.societyId into ask()', !/societyId:\s*typeof body\.societyId/.test(seam));
   ok('seam: never passes body.userId into ask()', !/userId:\s*typeof body\.userId/.test(seam));
-  ok('seam: verifies the bearer token', /auth\.getUser\(\)/.test(seam));
+  // BY VALUE, explicitly. The argless getUser() reads auth-js's _useSession — the client's own
+  // stored session, which a server has no business having; reused Edge isolates made identity
+  // intermittent. So the bare form is now the REGRESSION, not the guarantee: assert the token
+  // goes in as an argument AND that nobody reintroduces the ambient-session call.
+  ok('seam: verifies the bearer token by value, not from ambient session state',
+    /auth\.getUser\(bearer\)/.test(seam) && !/auth\.getUser\(\s*\)/.test(seam));
   ok('seam: resolves the society from society_users, not the request',
     /from\('society_users'\)/.test(seam) && /select\('society_id'\)/.test(seam));
   ok('seam: treats the anon key as NO user — a public visitor is not authenticated',
@@ -160,11 +165,23 @@ console.log('\n  ask-core — the mechanism, with no model\n');
   /* THE FETCH (Slice 4). The service-role client BYPASSES RLS, so the `.eq('society_id')`
      is not a belt-and-braces filter — it IS the tenant boundary. It is the one line in
      this function that, if wrong, shows one society another's cash. Asserted by reading
-     the source: no unit test of ask() can see it, because ask() is handed the books. */
-  const evFetch = /from\('ledger_events'\)[\s\S]{0,80}\.eq\('society_id', societyId\)/.test(seam);
-  const acFetch = /from\('accounts'\)[\s\S]{0,80}\.eq\('society_id', societyId\)/.test(seam);
-  ok('fetch: ledger_events is scoped to the VERIFIED societyId', evFetch);
-  ok('fetch: accounts is scoped to the VERIFIED societyId', acFetch);
+     the source: no unit test of ask() can see it, because ask() is handed the books.
+
+     That line no longer sits next to `from('ledger_events')`: the paging fix funnelled every
+     read through fetchAllRows, so the boundary is now ONE choke point shared by both tables.
+     Assert it where it actually lives — the helper scopes, and each call site hands it the
+     VERIFIED societyId — rather than expecting the two adjacent on one line. */
+  const helperScopes = /\.select\(columns\)\s*\.eq\('society_id', societyId\)/.test(seam);
+  ok('fetch: the one paging helper scopes EVERY read to a society — the service-role client bypasses RLS',
+    helperScopes);
+  ok('fetch: ledger_events is scoped to the VERIFIED societyId',
+    helperScopes && /fetchAllRows\(\s*db,\s*'ledger_events',\s*'\*',\s*societyId,/.test(seam));
+  ok('fetch: accounts is scoped to the VERIFIED societyId',
+    helperScopes && /fetchAllRows\(\s*db,\s*'accounts',\s*'\*',\s*societyId,/.test(seam));
+  // The books are paged to exhaustion in a TOTAL order — occurred_at ties on event_id, or rows
+  // repeat and vanish across pages and the assistant states a confidently wrong balance.
+  ok('fetch: the journal pages in a total order (occurred_at ties broken on the event_id PK)',
+    /fetchAllRows\(\s*db,\s*'ledger_events',\s*'\*',\s*societyId,\s*\['occurred_at',\s*'event_id'\]\)/.test(seam));
   ok('fetch: never scoped to body.societyId', !/eq\('society_id', body\./.test(seam));
   ok('fetch: branch comes from the JWT claim, not the body',
     /user_branch_id/.test(seam) && !/activeBranchId: body\./.test(seam));
