@@ -45,6 +45,7 @@ import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { resolveJurisdiction, stampTenant } from '@/lib/jurisdiction';
 import { isPeriodLocked as isDateInLockedPeriod } from '@/lib/periodLock';
 import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
+import { mapLedgerEventRows } from '@/lib/ledger/rows';
 import { planOpeningDelta } from '@/lib/ledger/genesis';
 import { voucherPostingLines, voucherReversalLines, voucherEventMeta } from '@/lib/ledger/voucherEvent';
 import { currentPostingEventId } from '@/lib/ledger/aggregateState';
@@ -73,23 +74,9 @@ import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, ne
 import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS } from '@/lib/assetDisposal';
 import { fetchAllPaged as fetchAllPagedFor } from '@/lib/supabasePaging';
 
-/** T-09 — a `ledger_events` row (snake_case) in the camelCase LedgerEvent shape the projections read.
- *  One mapper, shared by the society-load journal fetch and the on-demand diagnostic load (RULE 2). */
-const mapLedgerEventRows = (rows: readonly Record<string, unknown>[]): LedgerEvent[] =>
-  rows.map((r) => ({
-    eventId: r.event_id as string,
-    eventType: r.event_type as string,
-    schemaVersion: (r.schema_version as number) ?? 1,
-    tenantId: r.society_id as string,
-    jurisdiction: (r.jurisdiction as string | null) ?? '',
-    aggregateType: r.aggregate_type as string,
-    aggregateId: r.aggregate_id as string,
-    sequence: r.sequence as number,
-    occurredAt: r.occurred_at as string,
-    producer: { kind: r.producer_kind as LedgerEvent['producer']['kind'], id: (r.producer_id as string | null) ?? null, ...(r.on_behalf_of ? { onBehalfOf: r.on_behalf_of as string } : {}) },
-    ...(r.reversal_of ? { reversalOf: r.reversal_of as string } : {}),
-    payload: r.payload,
-  })) as LedgerEvent[];
+/* T-09 — the `ledger_events` row → LedgerEvent mapper now lives in lib/ledger/rows.ts.
+   It moved because the CAIOS D-lane must read the SAME journal from the Edge Function,
+   and a local const cannot be imported there. One mapper, three readers (RULE 2). */
 
 interface DataContextType {
   vouchers: Voucher[];

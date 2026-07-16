@@ -1073,6 +1073,83 @@ function computeTds(input) {
   };
 }
 
+// src/lib/ledger/rows.ts
+var mapLedgerEventRows = (rows) => rows.map((r) => ({
+  eventId: r.event_id,
+  eventType: r.event_type,
+  schemaVersion: r.schema_version ?? 1,
+  tenantId: r.society_id,
+  jurisdiction: r.jurisdiction ?? "",
+  aggregateType: r.aggregate_type,
+  aggregateId: r.aggregate_id,
+  sequence: r.sequence,
+  occurredAt: r.occurred_at,
+  producer: { kind: r.producer_kind, id: r.producer_id ?? null, ...r.on_behalf_of ? { onBehalfOf: r.on_behalf_of } : {} },
+  ...r.reversal_of ? { reversalOf: r.reversal_of } : {},
+  payload: r.payload
+}));
+
+// src/lib/ledger/aggregateState.ts
+function legsOf(payload) {
+  if (!payload || typeof payload !== "object") return [];
+  const arr = payload.lines;
+  if (!Array.isArray(arr)) return [];
+  const out = [];
+  for (const l of arr) {
+    if (l && typeof l === "object" && typeof l.accountId === "string" && (l.drCr === "Dr" || l.drCr === "Cr") && isValidMinor(l.amountMinor)) {
+      out.push({ accountId: l.accountId, drCr: l.drCr, amountMinor: l.amountMinor });
+    }
+  }
+  return out;
+}
+var str = (p, k) => {
+  const v = p && typeof p === "object" ? p[k] : void 0;
+  return typeof v === "string" ? v : "";
+};
+var num = (p, k) => {
+  const v = p && typeof p === "object" ? p[k] : void 0;
+  return typeof v === "number" ? v : 0;
+};
+function resolveCurrentVouchers(events) {
+  const byAgg = /* @__PURE__ */ new Map();
+  for (const e of Array.isArray(events) ? events : []) {
+    if (e.aggregateType !== "voucher") continue;
+    (byAgg.get(e.aggregateId) ?? byAgg.set(e.aggregateId, []).get(e.aggregateId)).push(e);
+  }
+  const out = [];
+  for (const [id, evs] of byAgg) {
+    if (evs.some((e) => e.eventType === "voucher.cancelled")) continue;
+    const reposted = evs.filter((e) => e.eventType === "voucher.reposted");
+    const ev = reposted.length ? reposted[reposted.length - 1] : evs.find((e) => e.eventType === "voucher.posted");
+    if (!ev) continue;
+    const p = ev.payload;
+    out.push({ id, date: str(p, "date") || ev.occurredAt.slice(0, 10), voucherNo: str(p, "voucherNo"), narration: str(p, "narration"), createdAt: str(p, "createdAt"), memberId: str(p, "memberId"), amount: num(p, "amount"), legs: legsOf(p), type: str(p, "type"), branchId: str(p, "branchId"), createdBy: str(p, "createdBy") });
+  }
+  return out;
+}
+
+// src/lib/ledger/cashBook.ts
+function projectCashBook(events, accountId, accounts, opts) {
+  const acctName = new Map(accounts.map((a) => [a.id, a.name]));
+  const current = resolveCurrentVouchers(events);
+  current.sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || "").localeCompare(b.voucherNo || "") || a.id.localeCompare(b.id));
+  let running = opts.openingMinor;
+  const rows = [];
+  for (const c of current) {
+    if (opts.toDate && c.date > opts.toDate) continue;
+    const cashLegs = c.legs.filter((l) => l.accountId === accountId);
+    if (cashLegs.length === 0) continue;
+    const contra = c.legs.find((l) => l.accountId !== accountId);
+    const particulars = c.narration || (contra ? acctName.get(contra.accountId) ?? "" : "");
+    for (const l of cashLegs) {
+      running += l.drCr === "Dr" ? l.amountMinor : -l.amountMinor;
+      if (opts.fromDate && c.date < opts.fromDate) continue;
+      rows.push({ id: c.id, date: c.date, voucherNo: c.voucherNo, particulars, type: l.drCr === "Dr" ? "receipt" : "payment", amountMinor: l.amountMinor, runningBalanceMinor: running });
+    }
+  }
+  return rows;
+}
+
 // src/lib/ai/flags.ts
 function killList(raw) {
   const ids = (raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -1104,6 +1181,8 @@ export {
   computeTds,
   isAiEnabled,
   isRefusal,
+  mapLedgerEventRows,
+  projectCashBook,
   resolveAiFlags,
   resolveJurisdiction,
   resolveTaxRule,

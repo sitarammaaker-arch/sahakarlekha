@@ -22,6 +22,13 @@ export { classify } from '../../../src/lib/ask/classify';
 export { answerFact, unverifiedHint } from '../../../src/lib/ask/fact';
 export { TDS_RULES, resolveTaxRule, verifiedValue } from '../../../src/lib/rules/tax';
 export { computeTds, isRefusal } from '../../../src/lib/tax/computeTds';
+// D-lane (Slice 4) groundwork: the SAME journal mapper + cash-book projector the Cash
+// Book page runs. The server must never compute a balance its own way — the day it
+// drifted, the assistant and the page would disagree in front of a user, and the
+// assistant would be the one nobody could explain (RULE 2).
+export { mapLedgerEventRows } from '../../../src/lib/ledger/rows';
+export { projectCashBook } from '../../../src/lib/ledger/cashBook';
+export type { LedgerCashRow } from '../../../src/lib/ledger/cashBook';
 export { resolveAiFlags, AI_OFF } from '../../../src/lib/ai/flags';
 export { isAiEnabled } from '../../../src/lib/ai/killSwitch';
 export type { AiFlags } from '../../../src/lib/ai/killSwitch';
