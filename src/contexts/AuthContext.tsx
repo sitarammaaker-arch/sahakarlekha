@@ -30,8 +30,11 @@ export type MfaResult = { ok: true } | { ok: false; reason: 'bad-code' | 'save-f
 /** Outcome of a login attempt. `mfa` = password OK but a 2FA code is now required.
  *  `reason: 'password_reset_required'` = the password was correct on the legacy
  *  (JWT-less) path, but there is no Supabase Auth session — under tenant RLS such a
- *  session can read nothing, so the user must reset their password to sign in (W-1). */
-export type LoginResult = { status: 'ok' | 'mfa' | 'failed'; reason?: 'password_reset_required' };
+ *  session can read nothing, so the user must reset their password to sign in (W-1).
+ *  `reason: 'mfa_status_unavailable'` = the password was correct but the account's 2FA
+ *  state could not be established, so the login is refused rather than completed without
+ *  the gate. An unreadable flag is not the same as "no 2FA" (fail closed). */
+export type LoginResult = { status: 'ok' | 'mfa' | 'failed'; reason?: 'password_reset_required' | 'mfa_status_unavailable' };
 
 interface AuthContextType {
   user: User | null;
@@ -143,6 +146,28 @@ async function checkSuperAdmin(_email?: string): Promise<boolean> {
   }
 }
 
+/** The platform admin's 2FA enrolment state (migration 025), or null if it could not be
+ *  established. One retry absorbs a transient blip; anything else — RPC error, non-boolean
+ *  payload, network throw — stays indeterminate, and the caller must refuse the login
+ *  rather than read it as "not enrolled".
+ *
+ *  `error` is checked explicitly because supabase-js RESOLVES a failed RPC as
+ *  `{ data: null, error }` instead of throwing: reading only `data` behind a try/catch
+ *  silently turns every server-side failure into "no 2FA", which is what made this gate
+ *  fail open. */
+async function readPlatformMfaStatus(): Promise<boolean | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { data, error } = await supabase.rpc('platform_admin_mfa_status');
+      if (!error && typeof data === 'boolean') return data;
+    } catch {
+      // network throw — fall through to the retry
+    }
+    if (attempt === 0) await new Promise(r => setTimeout(r, 400));
+  }
+  return null;
+}
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => restoreSession());
   const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(() => {
@@ -250,21 +275,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ECR-12 — after a correct password on a society_users path, require a TOTP code
   // if the account has 2FA enrolled; otherwise finish the login immediately.
-  const finishOrChallenge = useCallback(async (u: User): Promise<LoginResult> => {
-    try {
-      const { data } = await supabase
-        .from('society_users')
-        .select('mfa_enabled')
-        .eq('email', u.email)
-        .maybeSingle();
-      if ((data as { mfa_enabled?: boolean } | null)?.mfa_enabled) {
-        // Only the flag is read here — the secret stays server-side (ECR-12 s3).
-        pendingMfaRef.current = { user: { ...u, mfaEnabled: true } };
-        return { status: 'mfa' };
-      }
-    } catch {
-      // Supabase unreachable — cannot read the flag, so MFA can't be enforced
-      // (fail-open on offline; in production Supabase is always reachable here).
+  //
+  // FAIL CLOSED: `mfa_enabled` comes from the society_users row the caller already read
+  // to authenticate — it is deliberately NOT re-read here. A second read is a second
+  // request an attacker can block or time out, and its failure used to be swallowed into
+  // a completed login. If the caller's one read fails, `userData` is null and login never
+  // reaches this function, so the gate has no fail-open path left.
+  const finishOrChallenge = useCallback((u: User): LoginResult => {
+    if (u.mfaEnabled) {
+      // Only the flag is used here — the secret stays server-side (ECR-12 s3).
+      pendingMfaRef.current = { user: u };
+      return { status: 'mfa' };
     }
     completeLogin(u);
     return { status: 'ok' };
@@ -341,7 +362,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           .maybeSingle();
 
         if (userData) {
-          return await finishOrChallenge(buildUser(userData));
+          return finishOrChallenge(buildUser(userData));
         }
 
         // Super admin may not be in society_users — check platform_admins
@@ -356,11 +377,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           };
           // H3 / slice B: if this platform admin has enrolled 2FA, require a TOTP (or recovery) code
           // before completing login. signInWithPassword's JWT is already active, so the
-          // is_platform_admin()-gated verify RPCs work during the challenge. A status-check failure
-          // does NOT block login (fail-open) — availability over a rare RPC hiccup; the common
-          // enrolled path always challenges. Recovery codes (slice C) cover a lost authenticator.
-          const { data: mfaOn } = await supabase.rpc('platform_admin_mfa_status');
-          if (mfaOn === true) {
+          // is_platform_admin()-gated verify RPCs work during the challenge. Recovery codes
+          // (slice C) cover a lost authenticator.
+          //
+          // FAIL CLOSED: an unreadable enrolment state is not "not enrolled". This RPC is a single
+          // request an attacker can block, poison or time out, and the account behind it is the most
+          // privileged in the product — so a persistent failure refuses the login and drops the JWT
+          // that signInWithPassword just minted, rather than trading the 2FA gate for availability.
+          const mfaOn = await readPlatformMfaStatus();
+          if (mfaOn === null) {
+            await supabase.auth.signOut().catch(() => { /* session is refused regardless */ });
+            return { status: 'failed', reason: 'mfa_status_unavailable' };
+          }
+          if (mfaOn) {
             pendingMfaRef.current = { user: { ...u, mfaEnabled: true } };
             return { status: 'mfa' };
           }
