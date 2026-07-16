@@ -48,7 +48,7 @@ import { buildEvent, type LedgerEvent } from '@/lib/ledger/event';
 import { planOpeningDelta } from '@/lib/ledger/genesis';
 import { voucherPostingLines, voucherReversalLines, voucherEventMeta } from '@/lib/ledger/voucherEvent';
 import { currentPostingEventId } from '@/lib/ledger/aggregateState';
-import { persistEventAuthoritative } from '@/lib/ledger/persist';
+import { persistEventAuthoritative, persistEventsAuthoritative } from '@/lib/ledger/persist';
 import { ledgerTrialBalance } from '@/lib/ledger/trialBalance';
 import { ledgerParity, balancesFromJournal } from '@/lib/ledger/parity';
 import { ledgerCashBookEntries, ledgerBankBookEntries, ledgerMemberLedgerEntries, ledgerReceiptsPaymentsData } from '@/lib/ledger/reports';
@@ -394,6 +394,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     verify: async (eventId: string): Promise<{ found: boolean; error: string | null }> => {
       const { data, error } = await supabase.from('ledger_events').select('event_id').eq('event_id', eventId).limit(1);
       return { found: !!data && data.length > 0, error: error?.message ?? null };
+    },
+    // journal-first-write (slice 6): atomic batch insert for a multi-event append — an EDIT journals a
+    // reverse+repost PAIR that must land whole or not at all (a half-written pair on a WORM log is a
+    // permanent parity break). One insert() call with an array = one atomic statement.
+    insertMany: async (events: LedgerEvent[]): Promise<{ error: string | null }> => {
+      const { error } = await supabase.from('ledger_events').insert(events.map(toLedgerEventRow));
+      return { error: error?.message ?? null };
     },
   };
   // P0 #3: append-only audit. Actor is read from a ref so it is never stale inside the
@@ -2012,18 +2019,45 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     vouchersRef.current = vouchersRef.current.map(v => v.id === id ? updatedVoucher : v);
     setVouchersState(prev => prev.map(v => v.id === id ? updatedVoucher : v));
 
-    // Two-step persist + rollback. Same pattern as addVoucher.
+    // Revert the optimistic edit (shared by both save paths on failure).
+    const revertEdit = () => {
+      vouchersRef.current = vouchersRef.current.map(v => v.id === id ? current : v);
+      setVouchersState(prev => prev.map(v => v.id === id ? current : v));
+      if (editEvents.length) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => !editEvents.some(x => x.eventId === e.eventId));
+    };
+
+    // ── journal-first-write (slice 6) — DORMANT, per-tenant flag, default OFF ─────────────────────
+    // A POSTINGS-CHANGED edit under the flag makes the reverse+repost PAIR the authoritative save
+    // (whole-or-nothing via persistEventsAuthoritative — a half-written pair on a WORM log is a
+    // permanent parity break); the vouchers table is then a best-effort projection. A postings-NEUTRAL
+    // edit (narration/member/date only) emits NO event, so it has nothing to make authoritative — it
+    // falls through to the table-first path below even under the flag. Flag OFF → table-first, byte-identical.
+    if (societyRef.current?.journalFirstWrites && editEvents.length > 0) {
+      persistEventsAuthoritative(editEvents, ledgerAppendIO).then((res) => {
+        if (!res.ok) {
+          // The append IS the save — its failure is a failed edit (RULE 1). Revert + surface loudly.
+          reportError('voucher-edit-journal-append', res.error ?? 'append failed', { voucherId: id });
+          revertEdit();
+          toastRef.current({ title: '❌ Voucher edit cloud par save NAHI hua', description: `${res.error ?? 'journal append failed'}. Badlav local se hata diya — refresh par purana data safe hai.`, variant: 'destructive', duration: 15000 });
+          return;
+        }
+        // Saved (journal). Project the edited row into the table best-effort — a table failure is now
+        // RECOVERABLE (rebuildable from the journal), so onBaseFail LOGS, never rolls back.
+        persistVoucher(updatedVoucher, {
+          isUpdate: true, journalFirst: true,
+          onBaseFail: () => reportError('voucher-edit-table-projection', 'table write failed after durable journal append (recoverable)', { voucherId: id }),
+        });
+        syncEntries(updatedVoucher);
+      });
+      return;
+    }
+
+    // ── Default (flag OFF, or a postings-neutral edit): two-step persist + rollback. BYTE-IDENTICAL. ──
     persistVoucher(updatedVoucher, {
       isUpdate: true,
       // The reverse-old + repost-new pair is durably appended only after the base row is confirmed.
       onBaseSuccess: () => { for (const e of editEvents) persistLedgerEvent(e); },
-      onBaseFail: () => {
-        // Revert local state so UI matches what's actually in Supabase
-        vouchersRef.current = vouchersRef.current.map(v => v.id === id ? current : v);
-        setVouchersState(prev => prev.map(v => v.id === id ? current : v));
-        // Keep the shadow ledger consistent with the reverted edit.
-        if (editEvents.length) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => !editEvents.some(x => x.eventId === e.eventId));
-      },
+      onBaseFail: revertEdit,
     });
     // syncEntries (which uses base columns only) is fired by persistVoucher only on add,
     // so we trigger it explicitly here for updates to keep voucher_entries in sync.
@@ -2162,6 +2196,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = prev.map(v => v.id === id ? cancelledVoucher : v);
       return updated;
     });
+
+    // ── journal-first-write (slice 6) — DORMANT, per-tenant flag, default OFF ─────────────────────
+    // Under the flag, when there IS a posting to reverse, the cancel's SAVE is the authoritative
+    // append of the reversing event (which nets the voucher's postings out of the journal); the table
+    // soft-delete is then a best-effort projection. A pre-T-06 orphan with no posting (cancelEvent
+    // null) has nothing to append and already contributes nothing → it falls through to the table-first
+    // path below even under the flag. Flag OFF → table-first, byte-identical.
+    if (societyRef.current?.journalFirstWrites && cancelEvent) {
+      persistEventAuthoritative(cancelEvent, ledgerAppendIO).then((res) => {
+        if (!res.ok) {
+          // The append IS the save — its failure is a failed cancel (RULE 1). Un-cancel + surface loudly.
+          reportError('voucher-cancel-journal-append', res.error ?? 'append failed', { voucherId: id });
+          setVouchersState(prev => prev.map(v => v.id === id ? current : v));
+          ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent!.eventId);
+          toastRef.current({ title: '❌ Voucher cancel cloud par save NAHI hua', description: `${res.error ?? 'journal append failed'}. Cancel local se hata diya — refresh par voucher safe hai.`, variant: 'destructive', duration: 15000 });
+          return;
+        }
+        // Saved (journal). Project the soft-delete into the table best-effort — a failure is now
+        // RECOVERABLE (the journal is the truth), so LOG, never roll back.
+        supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelledVoucher.deletedAt, deletedBy, deletedReason: reason }).eq('id', id).then(({ error }) => {
+          if (error) reportError('voucher-cancel-table-projection', 'table soft-delete failed after durable journal append (recoverable): ' + error.message, { voucherId: id });
+          else deleteEntries(id); // remove from voucher_entries so the cancelled voucher has no SQL-visible impact
+        });
+      });
+      return true;
+    }
+
+    // ── Default (flag OFF, or no posting to reverse): table-first soft-delete. BYTE-IDENTICAL. ──
     // Soft-delete via a TARGETED update of only the delete columns. Upserting the
     // whole voucher object fails with a schema-cache error when it carries any
     // late-added column the table lacks (RULE 1) — which silently left cancelled
