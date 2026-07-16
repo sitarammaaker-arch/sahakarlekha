@@ -84,9 +84,14 @@ const EMPTY_CHALLAN = (): Omit<TdsChallan, 'id' | 'createdAt'> => ({
 const TdsRegister: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { purchases: allPurchases, suppliers, society, matchesActiveBranch } = useData();
+  const { purchases: allPurchases, suppliers, society, matchesActiveBranch, salaryRecords: allSalaryRecords, employees } = useData();
   // ECR-17: honour the active branch (same rule as GstSummary / the registers).
   const purchases = useMemo(() => allPurchases.filter(p => matchesActiveBranch(p.branchId)), [allPurchases, matchesActiveBranch]);
+  /* Salary is NOT branch-scoped — `SalaryRecord` has no branchId (verified, not assumed:
+     tsc rejected it). So a branch view shows every branch's salary TDS. That is a real
+     gap for a multi-branch society's 24Q, but inventing a scope here would be worse than
+     naming it: the fix belongs on the record, not on this page's filter. */
+  const salaryRecords = allSalaryRecords;
   const { toast } = useToast();
   const hi = language === 'hi';
   const fy = society.financialYear;
@@ -149,6 +154,53 @@ const TdsRegister: React.FC = () => {
       });
   }, [purchases, suppliers, fy]);
 
+  /* Auto-import from salary (s.192 / Act-2025 s.392) — the same DERIVE pattern as
+     purchases above, deliberately.
+
+     Salary TDS lives in `SalaryRecord.tds`, and that stays its ONE source of truth: we
+     derive a view, we do not copy rows. Storing it a second time is what breeds the
+     "the reports don't agree" class of bug RULE 2 warns about — and the register would
+     be the copy that silently drifts.
+
+     `sal-<id>` mirrors `pur-<id>`, which matters more than it looks: the challan-link
+     map below is keyed on the stable entry id and already "works for auto pur-<id> +
+     manual alike". So salary TDS gets challan linkage, 24Q and the 26Q export for free —
+     no migration, no new table, no change to tds26q.ts. */
+  const salaryTdsEntries = useMemo((): TdsEntry[] => {
+    return salaryRecords
+      // No isDeleted on SalaryRecord (unlike purchases) — a salary run is cancelled by
+      // reversing the voucher, not by soft-deleting the record.
+      .filter(r => (r.tds || 0) > 0)
+      .map(r => {
+        const emp = employees.find(e => e.id === r.employeeId);
+        // FY from the salary MONTH, not the society's current FY — a March salary
+        // processed in April belongs to the old year's 24Q (mirrors Audit #10 above).
+        const d = `${r.month}-01`;
+        const sd = new Date(d);
+        const sy = sd.getMonth() >= 3 ? sd.getFullYear() : sd.getFullYear() - 1;
+        const gross = (r.basicSalary || 0) + (r.allowances || 0);
+        return {
+          id: `sal-${r.id}`,
+          date: d,
+          deducteePan: emp?.pan || '',
+          deducteeName: emp?.name || '',
+          deducteeType: 'individual' as TdsDeducteeType,
+          section: '192' as TdsSection,
+          natureOfPayment: 'Salary',
+          grossAmount: gross,
+          // The RATE is not a rule here — salary TDS is slab-derived, so it is whatever
+          // this month's deduction worked out to. Recording a made-up "rate" would be a
+          // fabricated figure on a statutory register (AI-N8).
+          tdsRate: gross > 0 ? Number(((r.tds || 0) / gross * 100).toFixed(2)) : 0,
+          tdsAmount: r.tds || 0,
+          quarter: getQuarterFromDate(d),
+          financialYear: `${sy}-${String((sy + 1) % 100).padStart(2, '0')}`,
+          status: 'pending' as const,
+          createdAt: r.createdAt,
+        };
+      });
+  }, [salaryRecords, employees]);
+
   // Combined entries (auto-imported + persisted manual, excluding soft-deleted)
   const activeManualEntries = useMemo(() => entries.filter(e => !e.isDeleted), [entries]);
   const activeChallans = useMemo(() => challans.filter(c => !c.isDeleted), [challans]);
@@ -156,8 +208,8 @@ const TdsRegister: React.FC = () => {
   // the 26Q export + display see the linkage without any change to tds26q.ts.
   const linkMap = useMemo(() => { const m = new Map<string, string>(); for (const l of links) { if (l.challanId) m.set(l.entryId, l.challanId); } return m; }, [links]);
   const allEntries = useMemo(
-    () => [...purchaseTdsEntries, ...activeManualEntries].map(e => { const c = linkMap.get(e.id); return c ? { ...e, challanId: c } : e; }),
-    [purchaseTdsEntries, activeManualEntries, linkMap],
+    () => [...purchaseTdsEntries, ...salaryTdsEntries, ...activeManualEntries].map(e => { const c = linkMap.get(e.id); return c ? { ...e, challanId: c } : e; }),
+    [purchaseTdsEntries, salaryTdsEntries, activeManualEntries, linkMap],
   );
   const quarterEntries = allEntries.filter(e => e.quarter === selectedQuarter && e.financialYear === fy);
   const quarterChallans = activeChallans.filter(c => c.quarter === selectedQuarter && c.financialYear === fy);
