@@ -156,6 +156,24 @@ console.log('\n  ask-core — the mechanism, with no model\n');
     /societyId = undefined;/.test(seam));
   ok('client: no longer offers a societyId parameter to be believed',
     !/societyId\?: string/.test(client));
+
+  /* THE FETCH (Slice 4). The service-role client BYPASSES RLS, so the `.eq('society_id')`
+     is not a belt-and-braces filter — it IS the tenant boundary. It is the one line in
+     this function that, if wrong, shows one society another's cash. Asserted by reading
+     the source: no unit test of ask() can see it, because ask() is handed the books. */
+  const evFetch = /from\('ledger_events'\)[\s\S]{0,80}\.eq\('society_id', societyId\)/.test(seam);
+  const acFetch = /from\('accounts'\)[\s\S]{0,80}\.eq\('society_id', societyId\)/.test(seam);
+  ok('fetch: ledger_events is scoped to the VERIFIED societyId', evFetch);
+  ok('fetch: accounts is scoped to the VERIFIED societyId', acFetch);
+  ok('fetch: never scoped to body.societyId', !/eq\('society_id', body\./.test(seam));
+  ok('fetch: branch comes from the JWT claim, not the body',
+    /user_branch_id/.test(seam) && !/activeBranchId: body\./.test(seam));
+  ok('fetch: only loads the books for a D-lane question — a journal per "क्या है" is waste',
+    /probe\.lane === 'D'/.test(seam));
+  ok('fetch: a failed load leaves society undefined (the D-lane then refuses)',
+    /catch\s*\{[\s\S]{0,240}\}/.test(seam) && !/society = \{[^}]*\}\s*;?\s*\}\s*catch/.test(seam));
+  ok('audit: records WHAT LEDGER WAS READ — an auditor must reconstruct what the AI saw',
+    /ledgerRead:/.test(seam));
 }
 
 /* 10 · THE D-LANE, WIRED (Slice 4). The society's books are INJECTED — the fetch is the

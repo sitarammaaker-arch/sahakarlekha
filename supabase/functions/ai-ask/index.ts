@@ -18,7 +18,7 @@
  * Enable:  supabase secrets set AI_ENABLED=true      (default is OFF — fails closed)
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { ask, CORPUS, resolveAiFlags } from '../_shared/ask-core.mjs';
+import { ask, CORPUS, resolveAiFlags, classify, mapLedgerEventRows } from '../_shared/ask-core.mjs';
 
 const CORS = {
   'access-control-allow-origin': '*',
@@ -57,6 +57,8 @@ Deno.serve(async (req: Request) => {
      society_id, so it is resolved from society_users, keyed on the verified email. */
   let societyId: string | undefined;
   let userEmail: string | undefined;
+  /** ECR-17: the branch the user is scoped to, from the JWT claim (mig 038) — not the body. */
+  let userBranchId: string | undefined;
   const authHeader = req.headers.get('Authorization') ?? '';
   const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
   const supaUrl = Deno.env.get('SUPABASE_URL') ?? '';
@@ -72,6 +74,11 @@ Deno.serve(async (req: Request) => {
       }).auth.getUser();
       if (!error && data?.user?.email) {
         userEmail = data.user.email.toLowerCase();
+        // The branch claim the auth hook stamps (mig 038). Read from the VERIFIED user,
+        // so a caller cannot widen their own scope by asking nicely.
+        const claims = (data.user as { app_metadata?: Record<string, unknown> }).app_metadata ?? {};
+        const bid = (data.user.user_metadata?.user_branch_id ?? claims.user_branch_id) as string | undefined;
+        userBranchId = typeof bid === 'string' && bid ? bid : undefined;
         if (svcKey) {
           const { data: row } = await createClient(supaUrl, svcKey)
             .from('society_users')
@@ -86,6 +93,45 @@ Deno.serve(async (req: Request) => {
       // A token we cannot verify is a token we do not honour: stay anonymous. Never fall
       // back to the body — that is the whole hole this closes.
       societyId = undefined;
+    }
+  }
+
+  /* LOAD THE BOOKS — only for a verified society, only for a D-lane question.
+     Fetching a journal for "दोहरा लेखा क्या है" would be pure waste, and the K/F/N lanes
+     answer without it. So classify cheaply first: the load is the expensive, risky part
+     and it should happen only when it is the answer.
+
+     Everything is scoped to the VERIFIED societyId (never the body — #218). RLS is the
+     backstop, not the plan: the service-role client bypasses it, so the `.eq('society_id')`
+     here IS the tenant boundary. That is the one line in this function that, if wrong,
+     shows one society another's cash. */
+  let society: Parameters<typeof ask>[5];
+  if (societyId && svcKey && supaUrl) {
+    const probe = classify(text, true);
+    if (probe.lane === 'D') {
+      try {
+        const db = createClient(supaUrl, svcKey);
+        const [evRes, acctRes, brRes] = await Promise.all([
+          // Ordered the way the projection expects to read them; the deterministic
+          // tie-break lives inside projectCashBook, so this only needs to be stable.
+          db.from('ledger_events').select('*').eq('society_id', societyId).order('occurred_at', { ascending: true }),
+          db.from('accounts').select('*').eq('society_id', societyId),
+          db.from('branches').select('id, isHeadOffice').eq('society_id', societyId),
+        ]);
+        if (!evRes.error && !acctRes.error) {
+          society = {
+            events: mapLedgerEventRows(evRes.data ?? []),
+            accounts: (acctRes.data ?? []) as never,
+            // Branch comes from the VERIFIED token, never the body (AI-P2). Absent claim
+            // ⇒ consolidated, which is what a society with no branches sees anyway.
+            activeBranchId: userBranchId ?? '',
+            headOfficeBranchId: (brRes.data ?? []).find((b: { isHeadOffice?: boolean }) => b.isHeadOffice)?.id,
+          };
+        }
+      } catch {
+        // Leave `society` undefined: the D-lane then refuses with "बही लोड नहीं हुई",
+        // which is true. Never let a failed load fall through to a document answer.
+      }
     }
   }
 
@@ -108,6 +154,8 @@ Deno.serve(async (req: Request) => {
     CORPUS,
     resolveAiFlags(Deno.env.toObject()),
     new Date().toISOString().slice(0, 10),
+    8,
+    society,   // undefined ⇒ the D-lane refuses with "बही लोड नहीं हुई" — true, not a fallback
   );
 
   const latencyMs = Date.now() - started;
@@ -146,6 +194,14 @@ Deno.serve(async (req: Request) => {
           confidence: answer.confidence,
           cites: answer.cites.map((c: { id: string }) => c.id),
           trace: answer.trace,
+          // WAS THE SOCIETY'S LEDGER READ, and how much of it. The whole point of the
+          // audit trail is that an auditor can reconstruct what the AI saw — "it answered
+          // ₹51,000" is not reconstructible; "it read 412 events and 37 accounts of
+          // SOC001, branch BR1" is. This is the first time the seam touches the books, so
+          // it is the first time this matters (AI-A2/AI-A5).
+          ledgerRead: society
+            ? { events: society.events.length, accounts: society.accounts.length, branch: society.activeBranchId || 'consolidated' }
+            : null,
           latencyMs,
           // model/tokens/cost land here when stage 6 does. Their absence is itself the
           // record: this answer cost nothing and no model saw it.
