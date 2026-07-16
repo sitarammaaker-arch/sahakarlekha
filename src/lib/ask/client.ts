@@ -28,8 +28,24 @@ export interface AskOutcome {
   answerId?: string;
 }
 
-/** Give up fast: a slow assistant is worse than an instant plain search. */
-const TIMEOUT_MS = 4000;
+/* HOW LONG TO WAIT — and why 4s was wrong once the seam grew a D-lane.
+   4s was set when the seam only ranked documents. Then it started reading the society's
+   actual journal: measured latency for "मेरी समिति का रोकड़ शेष कितना है" on a 1846-event,
+   586-account book came in at 3335ms, 3991ms and 5187ms — straddling the deadline. So the
+   seam computed a correct answer, the audit row recorded `answered: true`, and the browser
+   had already given up and shown local search. The user saw "इसका सीधा जवाब अभी नहीं मिला"
+   about a question the system had, in fact, answered. A timeout that discards finished work
+   is not a safety net.
+
+   The old comment said a slow assistant is worse than an instant plain search. That is true
+   for a document lookup and false for your own cash balance — and it was never the tradeoff
+   here anyway: this page renders the local corpus IMMEDIATELY and only lets the seam
+   override it, so waiting costs an empty screen exactly nothing. Nobody waits on a spinner;
+   they read local results while the real answer lands.
+
+   12s: comfortably past a D-lane read (which pages the journal in 1000-row chunks, so it
+   grows with the book), still short enough that a dead seam does not feel like a hang. */
+const TIMEOUT_MS = 12_000;
 
 /** The local path: today's /ask, unchanged. Instant, free, works offline. */
 function localOnly(q: string): AskOutcome {
