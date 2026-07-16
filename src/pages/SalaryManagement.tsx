@@ -7,6 +7,7 @@ import { tdsBasisNote, type TaxRegime } from '@/lib/tdsProjection';
 import { resolveTaxBasis } from '@/lib/rules/incomeTax';
 import { cumulativeMonthlyTds, monthsLeftInFy, fyBounds, isInFy } from '@/lib/payroll/cumulativeTds';
 import { isPeriodLocked } from '@/lib/periodLock';
+import { getTdsChallanLinks } from '@/lib/storage';
 import { professionalTaxForState } from '@/lib/professionalTax';
 import { build24Q, type Quarter } from '@/lib/form24Q';
 import { daysInMonth, prorate } from '@/lib/attendance';
@@ -250,6 +251,27 @@ const SalaryManagement: React.FC = () => {
   // Employees already over-deducted this FY — surfaced below the TDS note, never hidden.
   const excessRows = processRows.filter(r => !r.processed && r.tdsExcess > 0);
   const totalExcess = excessRows.reduce((s, r) => s + r.tdsExcess, 0);
+
+  /* WHICH RECOVERY ROUTE APPLIES — the point of task B.
+     Until salary TDS became a TdsEntry (`sal-<recordId>`, TdsRegister), the software
+     could only recite both routes and let the clerk work it out. Now it can look: a
+     salary month whose entry carries a challan link has been DEPOSITED, so the excess is
+     already the employee's tax credit and only an ITR gets it back. If it was never
+     deposited, the money is still with the society and can simply be returned — which is
+     enormously better for the employee, and time-boxed: after the FY closes that route
+     shuts.
+     Read straight from the same store TdsRegister writes; no copy, no new table. */
+  const excessDeposited = useMemo(() => {
+    if (!excessRows.length) return false;
+    const links = new Set(getTdsChallanLinks().filter(l => l.challanId).map(l => l.entryId));
+    const fy = fyBounds(processingMonth);
+    // Any prior salary run this FY, for an over-deducted employee, already challan-linked.
+    return salaryRecords.some(r =>
+      (r.tds || 0) > 0 &&
+      isInFy(r.month, fy) &&
+      excessRows.some(x => x.employee.id === r.employeeId) &&
+      links.has(`sal-${r.id}`));
+  }, [excessRows, salaryRecords, processingMonth]);
 
   // ── Tab 3 – Salary History state ────────────────────────────────────────
   // ECR-14: Form 24Q dialog
@@ -763,11 +785,22 @@ const SalaryManagement: React.FC = () => {
                   employee never learns they are owed money and quietly loses it. A silent
                   zero here would be the same class of defect as the FY 2024-25 slabs:
                   correct-looking, and wrong for the person. */}
+              {/* Task B's payoff: name the route that applies instead of reciting both.
+                  The "not deposited" case is the good one and it is TIME-BOXED — the
+                  money is still with the society and can go back with this month's
+                  salary, but only until the FY closes. A clerk told "it might be either"
+                  does nothing; a clerk told "you are holding their money" acts. */}
               {excessRows.length > 0 && (
-                <p className="text-[11px] mt-1 text-amber-600 dark:text-amber-500 font-medium">
+                <p className={`text-[11px] mt-1 font-medium ${excessDeposited ? 'text-amber-600 dark:text-amber-500' : 'text-emerald-700 dark:text-emerald-500'}`}>
                   {hi
-                    ? `⚠️ ${excessRows.length} कर्मचारी से इस वर्ष ₹${totalExcess.toLocaleString('en-IN')} अधिक TDS कट चुका है। आगे के महीनों में ₹0 कटेगा। पहले से कटी राशि वेतन से वापस नहीं होती — यदि चालान से जमा हो चुकी है तो कर्मचारी को ITR से refund मिलेगा; यदि जमा नहीं हुई तो समिति सीधे लौटा सकती है।`
-                    : `⚠️ ${excessRows.length} employee(s) have had ₹${totalExcess.toLocaleString('en-IN')} over-deducted this FY. Remaining months are ₹0. Payroll cannot refund it — if already deposited by challan the employee claims it via ITR; if not yet deposited, the society can return it directly.`}
+                    ? `⚠️ ${excessRows.length} कर्मचारी से इस वर्ष ₹${totalExcess.toLocaleString('en-IN')} अधिक TDS कट चुका है। आगे के महीनों में ₹0 कटेगा। ` +
+                      (excessDeposited
+                        ? `यह राशि चालान से जमा हो चुकी है — इसलिए वेतन से वापस नहीं की जा सकती। कर्मचारी को ITR भरने पर refund मिलेगा (Form 26AS में क्रेडिट दिखेगा)।`
+                        : `✅ यह राशि अभी चालान से जमा नहीं हुई — यानी पैसा अभी समिति के पास है और कर्मचारी को इसी वेतन में सीधे लौटाया जा सकता है। वित्तीय वर्ष बंद होने के बाद यह रास्ता बंद हो जाएगा। अपने CA से प्रक्रिया पूछ लें।`)
+                    : `⚠️ ${excessRows.length} employee(s) have had ₹${totalExcess.toLocaleString('en-IN')} over-deducted this FY. Remaining months are ₹0. ` +
+                      (excessDeposited
+                        ? `It has already been deposited by challan, so payroll cannot refund it — the employee claims it via ITR (it shows as credit in Form 26AS).`
+                        : `✅ It has NOT been deposited yet — the money is still with the society and can be returned directly in this month's salary. This route closes once the FY does. Confirm the procedure with your CA.`)}
                 </p>
               )}
               {rowsLoaded && alreadyProcessedForMonth && (
