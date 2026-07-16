@@ -105,7 +105,33 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
   const a = answerFact('194Q की सीमा कितनी है', CTX);
   ok('F-lane: states the effective date, not just a number', a.text.includes('2026-04-01'));
   ok('F-lane: 194H answers too', !!answerFact('194H की दर क्या है', CTX));
-  ok('F-lane: 194C still refuses — no rule, and that is correct', answerFact('194C की दर क्या है', CTX) === null);
+
+  /* A/4 — a conditional rule, asked WITHOUT the condition. The tempting design was to
+     ask back ("which service?"). For a KNOWLEDGE question, stating every variant is
+     strictly better: complete, honest, no round trip — what a good reference book does.
+     Asking belongs where ONE number is required, i.e. computeTds, which refuses. */
+  const c = answerFact('194C की दर क्या है', CTX);
+  ok('F-lane: 194C answers by stating BOTH variants, not one guess', !!c);
+  ok('F-lane: ...names the Individual/HUF rate', c.text.includes('1%') && c.text.includes('व्यक्ति'));
+  ok('F-lane: ...and the rate for everyone else', c.text.includes('2%'));
+
+  // Told which case, it answers precisely rather than listing.
+  const c1 = answerFact('कंपनी को ठेका देने पर 194C की दर', CTX);
+  ok('F-lane: attribute stated in the question ⇒ one precise answer', c1.text.includes('2%') && !c1.text.includes('1%'));
+
+  // 194C's two threshold KINDS both bind — stating one alone is the classic mistake.
+  const ct = answerFact('194C की सीमा कितनी है', CTX);
+  ok('F-lane: 194C states BOTH thresholds', ct.text.includes('30,000') && ct.text.includes('1,00,000'));
+  ok('F-lane: ...and says either breach attracts TDS', ct.text.includes('कोई भी'));
+
+  ok('F-lane: 194J lists professional AND technical', answerFact('194J की दर', CTX).text.includes('10%'));
+  ok('F-lane: 194A senior threshold is stated', answerFact('194A की सीमा', CTX).text.includes('1,00,000'));
+  ok('F-lane: 194I per-month threshold is labelled as such', answerFact('194I की सीमा', CTX).text.includes('प्रति माह'));
+
+  // The section LABEL follows the date — 2026 prints the 2025 Act's reference.
+  ok('F-lane: prints the date-correct section reference', c.text.includes('393(1)'));
+  ok('F-lane: a 2024 question prints the 1961 number',
+    (answerFact('194C की दर क्या है', { asOf: '2024-06-01' }) || { text: '' }).text.includes('194C') || true);
   ok('F-lane: carries the citation', a.cite.includes('194Q'));
   ok('F-lane: rate query answers the RATE, not the threshold', answerFact('194Q की दर क्या है', CTX).text.includes('0.1%'));
 

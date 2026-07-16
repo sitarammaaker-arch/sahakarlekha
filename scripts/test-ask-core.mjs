@@ -88,10 +88,12 @@ console.log('\n  ask-core — the mechanism, with no model\n');
   ok('F-lane: cites the section to check', q.cites.some(c => c.title.includes('393(1) Table 8')));
   ok('F-lane: high confidence — only a verified rule earns it', q.confidence === 'high');
 
-  /* And the discipline still holds for everything unverified. GST has no rule at all;
-     194C has one the CA gave but this catalog's shape cannot hold honestly (two
-     thresholds, two rates). Both must still refuse. */
-  ok('F-lane: 194C still refuses — the catalog cannot hold its shape', run('194C की दर क्या है').answer === null);
+  /* A/4 — 194C now answers through the seam too, stating both variants rather than
+     guessing one. The discipline still holds where there is genuinely no rule: GST. */
+  const c = run('194C की दर क्या है');
+  ok('F-lane: 194C answers through the seam', !!c.answer && c.lane === 'F');
+  ok('F-lane: 194C states both variants, not one guess', c.answer.includes('1%') && c.answer.includes('2%'));
+  ok('F-lane: GST still refuses — no rule exists at all', run('GST की दर क्या है').answer === null);
 }
 
 /* 5 · SCOPE (AI-N5 / CAIOS-K8) — anonymous cannot reach society data. */
