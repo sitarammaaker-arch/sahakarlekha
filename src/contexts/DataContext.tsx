@@ -219,6 +219,9 @@ interface DataContextType {
   mergeAccounts: (keepId: string, removeId: string) => number;
   resetAccounts: (templateAccounts: LedgerAccount[]) => void;
   updateSociety: (data: Partial<SocietySettings>) => void;
+  /** T-23: lock the FY as a finalization. When society.fyCloseAuthorityRequired is on, a valid board
+   *  resolution must authorize it (else refused). Returns true when locked. */
+  closeFinancialYear: (opts?: { attestation?: AuthorityAttestation }) => boolean;
 
   addLoan: (data: Omit<Loan, 'id' | 'loanNo' | 'createdAt'>) => Loan;
   updateLoan: (id: string, data: Partial<Loan>) => void;
@@ -3646,6 +3649,35 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return updated;
     });
   }, []);
+
+  // ── T-23 · Governance authority for the FY close (UCAS CM-2 / CL-7) ──────────
+  // Locking the financial year is a FINALIZATION: its legality derives from a recorded board
+  // resolution. When the per-tenant flag is on, the close REQUIRES that authority — validated
+  // (correct kind, reference, date, authorizer, and SoD: the authorizer must not be the admin
+  // locking) and stamped on the society so the locked year ties to the resolution that closed it.
+  // Flag OFF (default) ⇒ the exact lock the setup page did before, byte-identical.
+  // Returns true when the year was locked; false when refused (a toast explains why).
+  const closeFinancialYear = useCallback((opts?: { attestation?: AuthorityAttestation }): boolean => {
+    let recorded: string | undefined;
+    if (societyRef.current?.fyCloseAuthorityRequired) {
+      const verdict = authorizeFinalization({ act: 'fy_close', preparedBy: userRef.current?.name ?? '', attestation: opts?.attestation });
+      if (!verdict.ok || !verdict.recorded) {
+        toastRef.current({ title: '🏛️ प्राधिकार आवश्यक', description: `${verdict.problems.join('; ')} — बोर्ड संकल्प के बिना वित्तीय वर्ष लॉक नहीं होगा। (FY close needs a recorded board resolution.)`, variant: 'destructive', duration: 12000 });
+        return false;
+      }
+      const r = verdict.recorded;
+      recorded = `${r.kind} ${r.reference} (${r.date}) — ${r.authorizedBy}`;
+    }
+    updateSociety({
+      fyLocked: true,
+      fyLockedAt: new Date().toISOString().split('T')[0],
+      fyLockedBy: userRef.current?.name || 'Admin',
+      fyUnlockRequestedBy: undefined,
+      fyUnlockRequestedAt: undefined,
+      ...(recorded ? { fyCloseAuthority: recorded } : {}),
+    });
+    return true;
+  }, [updateSociety]);
 
   // C6: admin hides/shows an ENTITLED capability for this society. Writes/removes an
   // admin 'revoke' row only (admin can never entitle). RULE-1: optimistic + rollback on
@@ -7145,7 +7177,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
-    addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
+    addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety, closeFinancialYear,
     addLoan, updateLoan, deleteLoan,
     addAsset, updateAsset, disposeAsset, deleteAsset, postDepreciation,
     addAuditObjection, updateAuditObjection, deleteAuditObjection,
@@ -7184,7 +7216,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
-    addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety,
+    addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety, closeFinancialYear,
     addLoan, updateLoan, deleteLoan,
     addAsset, updateAsset, disposeAsset, deleteAsset, postDepreciation,
     addAuditObjection, updateAuditObjection, deleteAuditObjection,
