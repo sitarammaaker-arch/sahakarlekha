@@ -24,9 +24,20 @@ export interface FactAnswer {
   ruleKey: string;
 }
 
-/** Section mentioned in the query, in either script. Sparse on purpose — see tax.ts. */
+/**
+ * Section mentioned in the query, in either script. Sparse on purpose — see tax.ts:
+ * only sections whose shape this catalog can hold honestly are here. A user asking
+ * about 194C gets "I have no rule for this", which is true, rather than a half-answer
+ * that silently drops its second threshold.
+ *
+ * Users still type the 1961 numbers — those are the numbers in their heads, on their
+ * old vouchers and in every book they own — so that is what we match on. What we PRINT
+ * is resolved by date (lib/rules/tdsSections.ts). Matching the new numbers too can come
+ * when people start using them.
+ */
 const SECTIONS: [RegExp, string][] = [
-  [/194\s*-?\s*q/i, '194q'],
+  [/194\s*-?\s*q|393.*table\s*8|माल.*खरीद.*tds/i, '194q'],
+  [/194\s*-?\s*h|393.*table\s*1|कमीशन.*tds|दलाली/i, '194h'],
 ];
 
 const ASPECTS: [string[], 'threshold' | 'rate_pct'][] = [
