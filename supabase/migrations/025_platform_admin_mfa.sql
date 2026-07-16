@@ -1,12 +1,15 @@
--- 025 · platform-admin TOTP MFA — enrolment (audit H3, slice A: enroll only, NOT enforced at login).
+-- 025 · platform-admin TOTP MFA — enrolment (audit H3, slice A).
 --
 -- The existing MFA RPCs (app_mfa_*) join society_users, so they can't serve the platform admin (who
 -- has no society_users row). These parallel RPCs reuse the SAME TOTP core (app_totp_matches) but key
 -- off the caller's VERIFIED JWT email and the platform_admins.mfa_enabled flag instead. The secret is
 -- stored in the same RLS-locked user_mfa table (email-keyed). is_platform_admin() gates every one.
 --
--- SLICE A is safe/additive: login is NOT yet gated on this (that's slice B), so enrolling — or a bug
--- here — cannot lock the admin out. Run once in the Supabase SQL editor.
+-- SLICE A was safe/additive: at the time it shipped, login was not yet gated on this, so enrolling —
+-- or a bug here — could not lock the admin out. SUPERSEDED: migration 027 (slice B) added
+-- platform_admin_mfa_verify and the client now ENFORCES this flag at login, fail-closed — an
+-- enrolled admin who loses their authenticator needs the recovery codes from migration 026.
+-- Run once in the Supabase SQL editor.
 
 alter table platform_admins add column if not exists mfa_enabled boolean not null default false;
 
