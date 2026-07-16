@@ -102,8 +102,12 @@ function baseInput(over = {}) {
   ok(out.status === 'passed', 'a backup that reproduces the live books passes');
   ok(out.verdict.ok === true && out.verdict.differences.length === 0, 'with no differences');
   ok(out.live.balanced && out.restored.balanced, 'both sides balance');
-  ok(out.health.status === 'green', 'and a passing rehearsal makes the health card green');
-  ok(out.health.proven === true, 'the backup is now proven');
+  // A passing rehearsal PROVES the backup restores — it says nothing about where the copies live.
+  // Since runRehearsal evaluates no placement, the card stays amber (T-36 / DP-P4: never green on
+  // missing data). Restorable is not the same as safe.
+  ok(out.health.proven === true, 'the backup is now proven (the rehearsal restored it)');
+  ok(out.health.status === 'amber', 'but the card is amber, not green — the copy placement is unevaluated');
+  ok(out.health.reasons.some((r) => /placement has never been evaluated/.test(r)), 'and it says so');
   ok(summarizeRun(out, false).includes('reproduce the current books exactly'), 'the summary says it passed');
 }
 

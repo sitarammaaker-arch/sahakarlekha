@@ -111,9 +111,18 @@ const row = (at, passed, backupCreatedAt) => ({ created_at: at, after: { passed,
 ok(healthFromRehearsalRows([], NOW).status !== 'green', 'no evidence ⇒ never green');
 ok(healthFromRehearsalRows([], NOW).proven === false, 'no evidence ⇒ not proven');
 
-const freshPass = healthFromRehearsalRows([row(daysAgo(1), true)], NOW);
-ok(freshPass.status === 'green', 'a fresh, passing, recorded rehearsal ⇒ green');
+// A 3-2-1 placement verdict (evaluate321's shape when the copies are placed safely).
+const goodPlacement = { ok: true, copies: 3, providers: 2, offProviderOffRegion: true, deficiencies: [] };
+
+const freshPass = healthFromRehearsalRows([row(daysAgo(1), true)], NOW, undefined, goodPlacement);
+ok(freshPass.status === 'green', 'a fresh, passing, recorded rehearsal WITH a safe placement ⇒ green');
 ok(freshPass.proven === true, 'and is proven (this is what flips the UI to "backup")');
+
+// T-36 / DP-P4: the same evidence WITHOUT a placement verdict cannot be green — a backup that
+// restores perfectly is still one vendor away from total loss.
+const noPlacement = healthFromRehearsalRows([row(daysAgo(1), true)], NOW);
+ok(noPlacement.status === 'amber', 'the same rehearsal evidence with NO placement ⇒ amber, never green');
+ok(noPlacement.proven === true, 'still proven — placement is a separate fact from restorability');
 
 ok(healthFromRehearsalRows([row(daysAgo(1), false)], NOW).status === 'red', 'a recorded FAILED rehearsal ⇒ red');
 ok(healthFromRehearsalRows([row(daysAgo(30), true)], NOW).proven === false, 'a stale passing rehearsal is not proven');
