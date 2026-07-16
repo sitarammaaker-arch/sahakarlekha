@@ -15,8 +15,9 @@
  * next slice; it is Med-breaking (money) and gated by the additive-then-flip rule (R2). This slice
  * only makes the correct posting COMPUTABLE from real society data, so it can be validated first.
  */
-import { toMinor } from '../money';
+import { toMinor, toRupees } from '../money';
 import { resolveJurisdiction } from '../jurisdiction';
+import type { VoucherLine } from '@/types';
 import {
   computeAppropriation,
   appropriationToLines,
@@ -115,4 +116,44 @@ export function planSocietyAppropriation(input: SocietyAppropriationInput): Soci
   const legs = ok ? appropriationToLines(plan, accounts) : [];
 
   return { plan, legs, accounts, jurisdiction, ok, problems };
+}
+
+/** The accounting content of an appropriation voucher — the fields addVoucher needs that are pure
+ *  functions of the plan. The runtime caller (DataContext) adds `date`, `createdBy`, etc. */
+export interface AppropriationVoucherContent {
+  type: 'journal';
+  debitAccountId: string;
+  creditAccountId: string;
+  amount: number;
+  lines: VoucherLine[];
+  narration: string;
+}
+
+/** The default appropriation narration (RULE 7 — Hindi first). */
+export const DEFAULT_APPROPRIATION_NARRATION = 'वर्षांत लाभ-विनियोजन / Statutory appropriation of net surplus';
+
+/**
+ * PURE — the appropriation as a balanced journal voucher's ACCOUNTING content (rupees): Dr the P&L
+ * Appropriation (Net Surplus) head, Cr each fund. Line amounts are `toRupees` of the exact-paise legs,
+ * so ΣDr === ΣCr in rupees. Line ids are deterministic (`appr-L<i>`) — the persist layer may reissue
+ * them. Returns null when there is nothing to post (a refused or empty appropriation) — the caller then
+ * posts nothing rather than an unbalanced/empty voucher.
+ */
+export function appropriationVoucherContent(appr: SocietyAppropriation, narration?: string): AppropriationVoucherContent | null {
+  if (!appr.ok || appr.legs.length === 0) return null;
+  const lines: VoucherLine[] = appr.legs.map((l, i) => ({
+    id: `appr-L${i}`,
+    accountId: l.accountId,
+    type: l.drCr,
+    amount: toRupees(l.amountMinor),
+  }));
+  const firstCr = appr.legs.find((l) => l.drCr === 'Cr');
+  return {
+    type: 'journal',
+    debitAccountId: appr.accounts.appropriation,   // the Dr leg's head (Net Surplus)
+    creditAccountId: firstCr?.accountId ?? '',      // legacy single-field: the first fund credited
+    amount: toRupees(appr.plan.totalAppropriatedMinor),
+    lines,
+    narration: narration ?? DEFAULT_APPROPRIATION_NARRATION,
+  };
 }
