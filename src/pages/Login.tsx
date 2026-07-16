@@ -54,6 +54,12 @@ const Login: React.FC = () => {
       } else if (result.status === 'mfa') {
         setMfaStep(true);
         setMfaCode('');
+      } else if (result.reason === 'mfa_status_unavailable') {
+        // Password was correct, but the 2FA state couldn't be read — login is refused
+        // (fail closed), so say that plainly instead of the misleading "wrong password".
+        setError(language === 'hi'
+          ? 'सुरक्षा जाँच (2FA) पूरी नहीं हो सकी — सर्वर से संपर्क नहीं हुआ। सुरक्षा के लिए लॉगिन रोक दिया गया है। कृपया थोड़ी देर बाद दोबारा कोशिश करें।'
+          : 'The security (2FA) check could not be completed — the server was unreachable. Login has been blocked for your safety. Please try again shortly.');
       } else if (result.reason === 'password_reset_required') {
         // W-1: correct legacy password but no Supabase Auth session (JWT). Under
         // tenant RLS the user must reset their password to sign in.
