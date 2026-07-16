@@ -49,6 +49,7 @@ import { planOpeningDelta } from '@/lib/ledger/genesis';
 import { voucherPostingLines, voucherReversalLines, voucherEventMeta } from '@/lib/ledger/voucherEvent';
 import { currentPostingEventId } from '@/lib/ledger/aggregateState';
 import { persistEventAuthoritative, persistEventsAuthoritative } from '@/lib/ledger/persist';
+import { planSocietyAppropriation, appropriationVoucherContent } from '@/lib/rules/societyAppropriation';
 import { ledgerTrialBalance } from '@/lib/ledger/trialBalance';
 import { ledgerParity, balancesFromJournal } from '@/lib/ledger/parity';
 import { ledgerCashBookEntries, ledgerBankBookEntries, ledgerMemberLedgerEntries, ledgerReceiptsPaymentsData } from '@/lib/ledger/reports';
@@ -156,6 +157,10 @@ interface DataContextType {
   updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => void;
   cancelVoucher: (id: string, reason: string, deletedBy: string) => boolean;
   reverseVoucher: (id: string, reason: string) => Voucher | null;
+  /** T-20: post the year-end statutory appropriation of net surplus as ONE balanced voucher through
+   *  the canonical engine (effective-dated UCAS rates). Flag-gated (society.statutoryAppropriation).
+   *  Returns the posted voucher, or null when blocked/refused (a toast explains why). */
+  addStatutoryAppropriation: (opts: { date: string; narration?: string; discretionary?: { dividend?: number } }) => Voucher | null;
   restoreVoucher: (id: string) => void;
   clearVoucher: (id: string, clearedDate?: string) => void;
   unclearVoucher: (id: string) => void;
@@ -5413,6 +5418,47 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit: toRupees(subMinor(totalIncomeMinor, totalExpensesMinor)) };
   }, [getTrialBalance, getTradingAccount, society.financialYear, society.societyType, societyCapabilities]);
 
+  // ── T-20 · Statutory appropriation posting (UCAS CM-1) ───────────────────────
+  // Post the year-end appropriation of net surplus as ONE balanced voucher (Dr Net Surplus / Cr each
+  // statutory fund) via the CANONICAL engine — effective-dated UCAS rates, exact paise, caps enforced.
+  // Flag-gated per tenant (society.statutoryAppropriation, default off) so the legacy ad-hoc float path
+  // (ReserveFund / ProfitDistribution) is untouched until the flip. Posts through addVoucher, so it
+  // inherits the ledger append, journal-first write path, RULE-1 rollback, numbering and FY guards —
+  // no persistence is re-implemented here. A refused/invalid plan is surfaced, never posted (RULE 1).
+  const addStatutoryAppropriation = useCallback((opts: { date: string; narration?: string; discretionary?: { dividend?: number } }): Voucher | null => {
+    const soc = societyRef.current;
+    if (!soc?.statutoryAppropriation) {
+      toastRef.current({ title: 'सुविधा सक्रिय नहीं', description: 'इस समिति के लिए वैधानिक लाभ-विनियोजन अभी सक्षम नहीं है। (Statutory Appropriation is not enabled for this society.)', variant: 'destructive', duration: 9000 });
+      return null;
+    }
+    if (guardFYLocked()) return null;                                        // RULE 6
+    if (guardPermission('create', 'लाभ-विनियोजन पोस्ट करने')) return null;     // ECR-06
+    if (guardPeriodLock(opts.date)) return null;                             // ECR-07: no posting into a closed period
+
+    const netSurplus = getProfitLoss().netProfit;
+    const shareCapital = getShareCapitalReconciliation().controlBalance;      // ECR-05: the control-ledger paid-up base
+    const appr = planSocietyAppropriation({
+      netSurplus,
+      shareCapital,
+      state: soc.state,
+      asOf: opts.date,
+      discretionary: { dividend: opts.discretionary?.dividend ?? 0 },         // core-only: reserve + education + optional dividend
+    });
+    if (!appr.ok) {
+      // A bad plan (cap breach / over-appropriation) is refused, never posted (RULE 1).
+      toastRef.current({ title: '❌ विनियोजन पोस्ट नहीं हुआ', description: `${appr.problems.join('; ')} — कृपया सुधारें। (Appropriation refused.)`, variant: 'destructive', duration: 12000 });
+      return null;
+    }
+    const content = appropriationVoucherContent(appr, opts.narration);
+    if (!content) {
+      toastRef.current({ title: 'कुछ विनियोजित नहीं हुआ', description: 'कोई शुद्ध अधिशेष नहीं — पोस्ट करने को कुछ नहीं। (No net surplus to appropriate.)', variant: 'destructive', duration: 9000 });
+      return null;
+    }
+    const v = addVoucher({ ...content, date: opts.date, createdBy: userRef.current?.name ?? '' });
+    toastRef.current({ title: '✅ वैधानिक लाभ-विनियोजन पोस्ट', description: `कुल ₹${content.amount.toFixed(2)} — ${content.lines.length - 1} निधियों में। वाउचर ${v.voucherNo}.`, duration: 8000 });
+    return v;
+  }, [getProfitLoss, getShareCapitalReconciliation, addVoucher, guardFYLocked, guardPermission, guardPeriodLock]);
+
   // ── Inventory ──────────────────────────────────────────────────────────────
   // Two-step stock_items save pattern (same as purchases for GST/TDS columns):
   // Step 1: upsert base columns only — schema cache always knows these, never fails.
@@ -7079,7 +7125,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment,
-    addVoucher, updateVoucher, cancelVoucher, reverseVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
+    addVoucher, updateVoucher, cancelVoucher, reverseVoucher, addStatutoryAppropriation, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
     addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
@@ -7118,7 +7164,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment,
-    addVoucher, updateVoucher, cancelVoucher, reverseVoucher, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
+    addVoucher, updateVoucher, cancelVoucher, reverseVoucher, addStatutoryAppropriation, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
     addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,

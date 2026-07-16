@@ -853,6 +853,8 @@ alter table society_settings add column if not exists "activitiesCutoverEnabled"
 -- journal, but ONLY when ledgerParity holds at runtime (else it falls back to the voucher-state
 -- compute), so a flip can never break a report. NULL/false ⇒ voucher-state (default). See migration 037.
 alter table society_settings add column if not exists "ledgerReadsEnabled" boolean default false;
+-- T-20 (UCAS CM-1): per-tenant statutory appropriation posting (migration 049). Default off.
+alter table society_settings add column if not exists "statutoryAppropriation" boolean default false;
 
 -- ECR-07 dual-control: FY unlock must be requested by one admin and approved by
 -- another. These hold the open request until a second admin finalises it.
