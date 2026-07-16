@@ -82,6 +82,19 @@ console.log('\n  D-lane groundwork — one journal reader, three callers\n');
   ok('entry: exports the cash-book projector — not a server-side re-implementation',
     /projectCashBook/.test(entry));
 
+  /* STEP 2's DECISION, pinned: the D-lane answers from the JOURNAL via the SAME wrapper
+     the page's parity-gated selector calls (`ledgerReport('cashBook', stateResult,
+     () => ledgerCashBookEntries(...), cashBookParity)` — DataContext.tsx:4465). Both
+     paths run there, parity is checked at runtime, and the journal wins (T-09). So the
+     assistant agrees with the screen by construction. Exporting `projectCashBook` alone
+     would have been the raw projector, one layer below what the page actually runs. */
+  ok('entry: exports ledgerCashBookEntries — the function the PAGE calls, not a layer below',
+    /ledgerCashBookEntries/.test(entry));
+
+  const dc = readFileSync(resolve(ROOT, 'src', 'contexts', 'DataContext.tsx'), 'utf8');
+  ok('page: really does read the cash book from the JOURNAL (the decision\'s premise)',
+    /ledgerCashBookEntries\(ledgerEventsRef\.current/.test(dc));
+
   const bundle = readFileSync(resolve(ROOT, 'supabase', 'functions', '_shared', 'ask-core.mjs'), 'utf8');
   ok('bundle: contains the mapper', /mapLedgerEventRows/.test(bundle));
   ok('bundle: contains the projector', /projectCashBook/.test(bundle));
