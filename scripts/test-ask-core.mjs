@@ -80,19 +80,17 @@ console.log('\n  ask-core — the mechanism, with no model\n');
      turns the hedge into a fact. 194Q was seeded ₹50,00,000 and hedged; the CA said
      ₹10,00,000 (under the 2025 Act, where s.194Q no longer exists). Now it answers.
      Every rule a human confirms converts one refusal — and nothing else does. */
-  /* 194Q went the other way and that is the system working. It was verified at
-     ₹10,00,000 on a CA-reviewed list; the founder then stated ₹50,00,000 with a worked
-     example. 5× apart, both from the same channel. So it is back to unverified: when
-     sources conflict, "take the newer one" is the same error in the other direction. */
+  /* 194Q, settled by the Act's own text (s.393(1) Table Sl. No. 8(ii), read from
+     incometaxindia.gov.in): ₹50,00,000 at 0.1%. It went unverified → verified(wrong) →
+     unverified → verified(sourced), and each move was driven by evidence rather than by
+     who spoke last. That round trip is the mechanism working, not thrashing. */
   const q = run('194Q की सीमा कितनी है');
-  ok('F-lane: 194Q refuses again — its threshold is contested', q.answer === null);
-  ok('F-lane: says the rule exists but is unchecked', q.trace.guard.includes('unverified'));
-  ok('F-lane: leaks NEITHER contested figure', !(q.unanswered || '').match(/50,00,000|10,00,000/));
+  ok('F-lane: 194Q answers — settled by the section text', !!q.answer && q.lane === 'F');
+  ok('F-lane: states ₹50,00,000, the Act\'s figure', q.answer.includes('50,00,000'));
+  ok('F-lane: no guard fired — the rule is verified', q.trace.guard === null);
 
-  /* 194H is uncontested and still answers — one section's dispute does not silence the
-     catalog. */
   const h = run('194H की दर क्या है');
-  ok('F-lane: 194H still answers — the dispute is scoped to 194Q', !!h.answer && h.lane === 'F');
+  ok('F-lane: 194H answers too', !!h.answer && h.lane === 'F');
 
   /* A/4 — 194C now answers through the seam too, stating both variants rather than
      guessing one. The discipline still holds where there is genuinely no rule: GST. */
