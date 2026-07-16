@@ -46,6 +46,10 @@ export const StatutoryAppropriationPanel: React.FC = () => {
 
   const [date, setDate] = useState(todayISO);
   const [dividend, setDividend] = useState('');
+  // T-23: the AGM governance act that authorizes the appropriation (required before posting).
+  const [agmRef, setAgmRef] = useState('');
+  const [agmDate, setAgmDate] = useState('');
+  const [agmBy, setAgmBy] = useState('');
 
   const netSurplus = getProfitLoss().netProfit;
   const shareCapital = getShareCapitalReconciliation().controlBalance;
@@ -61,9 +65,14 @@ export const StatutoryAppropriationPanel: React.FC = () => {
 
   const rows = appr.plan.lines.filter((l) => l.amountMinor > 0 || l.step === 'carry_forward');
   const nothingToPost = netSurplus <= 0;
+  const authComplete = agmRef.trim() !== '' && agmDate !== '' && agmBy.trim() !== '';
 
   const handlePost = () => {
-    addStatutoryAppropriation({ date, discretionary: { dividend: dividendAmt } });
+    addStatutoryAppropriation({
+      date,
+      discretionary: { dividend: dividendAmt },
+      attestation: { kind: 'agm_adoption', reference: agmRef.trim(), date: agmDate, authorizedBy: agmBy.trim() },
+    });
   };
 
   return (
@@ -121,9 +130,28 @@ export const StatutoryAppropriationPanel: React.FC = () => {
           </div>
         )}
 
+        {/* T-23: the AGM governance act authorizing the appropriation — required before posting (CL-7). */}
+        <div className="border-t pt-3">
+          <p className="text-xs font-medium mb-2">{hi ? 'AGM प्राधिकार (आवश्यक)' : 'AGM authority (required)'}</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <Label htmlFor="agm-ref" className="text-xs">{hi ? 'संकल्प क्रमांक' : 'Resolution no.'}</Label>
+              <Input id="agm-ref" value={agmRef} onChange={(e) => setAgmRef(e.target.value)} placeholder={hi ? 'जैसे AGM/2025-26/04' : 'e.g. AGM/2025-26/04'} className="h-8 w-48" />
+            </div>
+            <div>
+              <Label htmlFor="agm-date" className="text-xs">{hi ? 'AGM तारीख' : 'AGM date'}</Label>
+              <Input id="agm-date" type="date" value={agmDate} onChange={(e) => setAgmDate(e.target.value)} className="h-8 w-40" />
+            </div>
+            <div>
+              <Label htmlFor="agm-by" className="text-xs">{hi ? 'अधिकृत निकाय' : 'Authorized by'}</Label>
+              <Input id="agm-by" value={agmBy} onChange={(e) => setAgmBy(e.target.value)} placeholder={hi ? 'जैसे साधारण सभा' : 'e.g. General Body'} className="h-8 w-48" />
+            </div>
+          </div>
+        </div>
+
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button size="sm" disabled={!appr.ok || nothingToPost}>
+            <Button size="sm" disabled={!appr.ok || nothingToPost || !authComplete}>
               {hi ? 'विनियोजन पोस्ट करें' : 'Post Appropriation'}
             </Button>
           </AlertDialogTrigger>
