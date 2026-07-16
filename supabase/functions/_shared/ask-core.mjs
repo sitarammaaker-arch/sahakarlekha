@@ -865,7 +865,164 @@ function unverifiedHint(query, ctx) {
   return null;
 }
 
+// src/lib/money.ts
+var DEFAULT_ROUNDING = "half-up";
+function assertFinite(value, where) {
+  if (!Number.isFinite(value)) throw new RangeError(`money.${where}: value is not finite (${value})`);
+}
+function assertMinor(value, where) {
+  if (!Number.isInteger(value)) throw new RangeError(`money.${where}: minor units must be an integer paise value, got ${value}`);
+}
+function isValidMinor(value) {
+  return typeof value === "number" && Number.isInteger(value);
+}
+function roundMinor(value, mode = DEFAULT_ROUNDING) {
+  assertFinite(value, "roundMinor");
+  switch (mode) {
+    case "down":
+      return Math.trunc(value);
+    case "up":
+      return value >= 0 ? Math.ceil(value) : Math.floor(value);
+    case "half-even": {
+      const floor = Math.floor(value);
+      const diff = value - floor;
+      if (diff < 0.5) return floor;
+      if (diff > 0.5) return floor + 1;
+      return floor % 2 === 0 ? floor : floor + 1;
+    }
+    case "half-up":
+    default:
+      return value >= 0 ? Math.round(value) : -Math.round(-value);
+  }
+}
+function toMinor(rupees, mode = DEFAULT_ROUNDING) {
+  assertFinite(rupees, "toMinor");
+  return roundMinor(rupees * 100, mode);
+}
+function toRupees(minor) {
+  assertMinor(minor, "toRupees");
+  return minor / 100;
+}
+function applyPercent(baseMinor, pct2, mode = DEFAULT_ROUNDING) {
+  assertMinor(baseMinor, "applyPercent");
+  assertFinite(pct2, "applyPercent");
+  return { minor: roundMinor(baseMinor * pct2 / 100, mode), mode };
+}
+
+// src/lib/ledger/aggregateState.ts
+function legsOf(payload) {
+  if (!payload || typeof payload !== "object") return [];
+  const arr = payload.lines;
+  if (!Array.isArray(arr)) return [];
+  const out = [];
+  for (const l of arr) {
+    if (l && typeof l === "object" && typeof l.accountId === "string" && (l.drCr === "Dr" || l.drCr === "Cr") && isValidMinor(l.amountMinor)) {
+      out.push({ accountId: l.accountId, drCr: l.drCr, amountMinor: l.amountMinor });
+    }
+  }
+  return out;
+}
+var str = (p, k) => {
+  const v = p && typeof p === "object" ? p[k] : void 0;
+  return typeof v === "string" ? v : "";
+};
+var num = (p, k) => {
+  const v = p && typeof p === "object" ? p[k] : void 0;
+  return typeof v === "number" ? v : 0;
+};
+function resolveCurrentVouchers(events) {
+  const byAgg = /* @__PURE__ */ new Map();
+  for (const e of Array.isArray(events) ? events : []) {
+    if (e.aggregateType !== "voucher") continue;
+    (byAgg.get(e.aggregateId) ?? byAgg.set(e.aggregateId, []).get(e.aggregateId)).push(e);
+  }
+  const out = [];
+  for (const [id, evs] of byAgg) {
+    if (evs.some((e) => e.eventType === "voucher.cancelled")) continue;
+    const reposted = evs.filter((e) => e.eventType === "voucher.reposted");
+    const ev = reposted.length ? reposted[reposted.length - 1] : evs.find((e) => e.eventType === "voucher.posted");
+    if (!ev) continue;
+    const p = ev.payload;
+    out.push({ id, date: str(p, "date") || ev.occurredAt.slice(0, 10), voucherNo: str(p, "voucherNo"), narration: str(p, "narration"), createdAt: str(p, "createdAt"), memberId: str(p, "memberId"), amount: num(p, "amount"), legs: legsOf(p), type: str(p, "type"), branchId: str(p, "branchId"), createdBy: str(p, "createdBy") });
+  }
+  return out;
+}
+
+// src/lib/ledger/cashBook.ts
+function projectCashBook(events, accountId, accounts, opts) {
+  const acctName = new Map(accounts.map((a) => [a.id, a.name]));
+  const current = resolveCurrentVouchers(events);
+  current.sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || "").localeCompare(b.voucherNo || "") || a.id.localeCompare(b.id));
+  let running = opts.openingMinor;
+  const rows = [];
+  for (const c of current) {
+    if (opts.toDate && c.date > opts.toDate) continue;
+    const cashLegs = c.legs.filter((l) => l.accountId === accountId);
+    if (cashLegs.length === 0) continue;
+    const contra = c.legs.find((l) => l.accountId !== accountId);
+    const particulars = c.narration || (contra ? acctName.get(contra.accountId) ?? "" : "");
+    for (const l of cashLegs) {
+      running += l.drCr === "Dr" ? l.amountMinor : -l.amountMinor;
+      if (opts.fromDate && c.date < opts.fromDate) continue;
+      rows.push({ id: c.id, date: c.date, voucherNo: c.voucherNo, particulars, type: l.drCr === "Dr" ? "receipt" : "payment", amountMinor: l.amountMinor, runningBalanceMinor: running });
+    }
+  }
+  return rows;
+}
+
+// src/lib/branchScope.ts
+var ALL_BRANCHES = "all";
+function matchesBranch(branchId, activeBranchId, headOfficeId) {
+  if (!activeBranchId || activeBranchId === ALL_BRANCHES) return true;
+  const effective = branchId || headOfficeId || "";
+  return effective === activeBranchId;
+}
+function unbranchedInScope(activeBranchId, headOfficeId) {
+  return matchesBranch(void 0, activeBranchId, headOfficeId);
+}
+
+// src/lib/storage.ts
+var ACCOUNT_IDS = {
+  CASH: "3301",
+  // Cash in Hand
+  BANK: "3302",
+  // Bank Accounts (GROUP — sub-accounts are individual banks)
+  SHARE_CAP: "1102",
+  // Individual Share Capital (member share capital)
+  ADM_FEE: "4407"
+  // Admission Fee (Income — P&L, audit C-3)
+};
+
+// src/lib/ask/tools/cashBalance.ts
+var CASH_ACCOUNT_ID = ACCOUNT_IDS.CASH;
+function cashBalance(input) {
+  const cash = input.accounts.find((a) => a.id === CASH_ACCOUNT_ID);
+  if (!cash) return null;
+  const openingIncluded = unbranchedInScope(input.activeBranchId ?? "", input.headOfficeBranchId);
+  const openingMinor = openingIncluded ? toMinor(cash.openingBalanceType === "debit" ? cash.openingBalance : -cash.openingBalance) : 0;
+  const rows = projectCashBook(input.events, CASH_ACCOUNT_ID, input.accounts, {
+    openingMinor,
+    toDate: input.asOf
+  });
+  const balanceMinor = rows.length ? rows[rows.length - 1].runningBalanceMinor : openingMinor;
+  return {
+    balanceMinor,
+    formatted: formatMinorInr(balanceMinor),
+    entryCount: rows.length,
+    asOf: input.asOf ?? null,
+    openingIncluded
+  };
+}
+function formatMinorInr(minor) {
+  const neg = minor < 0;
+  const abs = Math.abs(minor);
+  const rupees = Math.floor(abs / 100);
+  const paise = String(abs % 100).padStart(2, "0");
+  return `${neg ? "-" : ""}\u20B9${rupees.toLocaleString("en-IN")}.${paise}`;
+}
+
 // src/lib/ask/core.ts
+var CASH_WORDS = ["\u0930\u094B\u0915\u0921\u093C", "\u0928\u0915\u0926", "\u0915\u0948\u0936", "cash", "rokad", "nakad"];
 var ASK_FEATURE = "ask";
 var SAY = {
   unknown: "\u092E\u0941\u091D\u0947 \u0907\u0938\u0915\u093E \u092A\u0915\u094D\u0915\u093E \u0909\u0924\u094D\u0924\u0930 \u0928\u0939\u0940\u0902 \u092A\u0924\u093E\u0964 \u0928\u0940\u091A\u0947 \u0915\u0947 \u0938\u094D\u0930\u094B\u0924 \u0926\u0947\u0916\u0947\u0902, \u092F\u093E \u0905\u092A\u0928\u0947 CA / RCS \u0938\u0947 \u092A\u0942\u091B\u0947\u0902\u0964",
@@ -876,10 +1033,15 @@ var SAY = {
   stateVaries: "\u0927\u094D\u092F\u093E\u0928 \u0926\u0947\u0902: \u092F\u0939 \u0928\u093F\u092F\u092E \u0939\u0930 \u0930\u093E\u091C\u094D\u092F \u092E\u0947\u0902 \u0905\u0932\u0917 \u0939\u094B \u0938\u0915\u0924\u093E \u0939\u0948\u0964",
   action: "\u092E\u0948\u0902 \u0935\u093E\u0909\u091A\u0930 \u092F\u093E \u0915\u094B\u0908 \u092D\u0940 \u092A\u094D\u0930\u0935\u093F\u0937\u094D\u091F\u093F \u0916\u0941\u0926 \u0928\u0939\u0940\u0902 \u092C\u0928\u093E \u0938\u0915\u0924\u093E \u2014 \u092F\u0939 \u0905\u092D\u0940 \u0909\u092A\u0932\u092C\u094D\u0927 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964 \u092B\u093C\u093F\u0932\u0939\u093E\u0932 \u092F\u0939 \u0915\u093E\u092E \u0906\u092A\u0915\u094B \u0938\u094D\u0935\u092F\u0902 \u0915\u0930\u0928\u093E \u0939\u094B\u0917\u093E\u0964",
   needLogin: "\u0905\u092A\u0928\u0940 \u0938\u092E\u093F\u0924\u093F \u0915\u093E \u0906\u0901\u0915\u0921\u093C\u093E \u0926\u0947\u0916\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F \u0906\u092A\u0915\u094B login \u0915\u0930\u0928\u093E \u0939\u094B\u0917\u093E\u0964",
-  noData: "\u092F\u0939 \u0906\u092A\u0915\u0940 \u0938\u092E\u093F\u0924\u093F \u0915\u0947 \u0906\u0901\u0915\u0921\u093C\u0947 \u0938\u0947 \u091C\u0941\u0921\u093C\u093E \u0938\u0935\u093E\u0932 \u0939\u0948, \u092A\u0930 \u092F\u0939 \u0938\u0941\u0935\u093F\u0927\u093E \u0905\u092D\u0940 \u0909\u092A\u0932\u092C\u094D\u0927 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964"
+  noData: "\u0906\u092A\u0915\u0940 \u0938\u092E\u093F\u0924\u093F \u0915\u0940 \u092C\u0939\u0940 \u0905\u092D\u0940 \u0932\u094B\u0921 \u0928\u0939\u0940\u0902 \u0939\u094B \u092A\u093E\u0908 \u2014 \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u0906\u0901\u0915\u0921\u093C\u093E \u0928\u0939\u0940\u0902 \u092C\u0924\u093E\u090A\u0901\u0917\u093E\u0964 \u0926\u094B\u092C\u093E\u0930\u093E \u0915\u094B\u0936\u093F\u0936 \u0915\u0930\u0947\u0902\u0964",
+  // A D-lane question with no tool must refuse, never fall through to documents: an
+  // answer about "your society's stock" pulled from a help article looks like a fact
+  // about their books and is not.
+  noTool: "\u092F\u0939 \u0906\u092A\u0915\u0940 \u0938\u092E\u093F\u0924\u093F \u0915\u0947 \u0906\u0901\u0915\u0921\u093C\u0947 \u0938\u0947 \u091C\u0941\u0921\u093C\u093E \u0938\u0935\u093E\u0932 \u0939\u0948, \u092A\u0930 \u0905\u092D\u0940 \u092E\u0948\u0902 \u0938\u093F\u0930\u094D\u092B\u093C \u0930\u094B\u0915\u0921\u093C \u0936\u0947\u0937 \u092C\u0924\u093E \u0938\u0915\u0924\u093E \u0939\u0942\u0901\u0964 \u092C\u093E\u0915\u093C\u0940 \u0915\u0947 \u0932\u093F\u090F \u0938\u0902\u092C\u0902\u0927\u093F\u0924 \u0930\u093F\u092A\u094B\u0930\u094D\u091F \u0916\u094B\u0932\u0947\u0902\u0964",
+  noCashAccount: "\u0906\u092A\u0915\u0940 \u0938\u092E\u093F\u0924\u093F \u092E\u0947\u0902 \u0930\u094B\u0915\u0921\u093C \u0916\u093E\u0924\u093E \u0928\u0939\u0940\u0902 \u092E\u093F\u0932\u093E \u2014 \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u0936\u0947\u0937 \u0928\u0939\u0940\u0902 \u092C\u0924\u093E \u0938\u0915\u0924\u093E\u0964"
 };
 var cite = (r) => ({ id: r.id, title: r.title, url: r.url, type: r.type });
-function ask(req, docs, flags, today, limit = 8) {
+function ask(req, docs, flags, today, limit = 8, society) {
   const tenant = req.societyId ?? "anonymous";
   const jurisdiction = req.state ? resolveJurisdiction(req.state) : "";
   const asOf = req.asOf || today;
@@ -939,10 +1101,57 @@ function ask(req, docs, flags, today, limit = 8) {
     });
   }
   if (intent.lane === "D") {
+    if (!req.societyId) {
+      return base({
+        lane: "D",
+        unanswered: SAY.needLogin,
+        trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: "D-lane: anonymous", model: null }
+      });
+    }
+    if (!society) {
+      return base({
+        lane: "D",
+        unanswered: SAY.noData,
+        trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: "D-lane: no society data loaded", model: null }
+      });
+    }
+    if (!CASH_WORDS.some((w) => req.text.toLowerCase().includes(w))) {
+      return base({
+        lane: "D",
+        unanswered: SAY.noTool,
+        trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: "D-lane: no tool for this question", model: null }
+      });
+    }
+    const bal = cashBalance({
+      events: society.events,
+      accounts: society.accounts,
+      activeBranchId: society.activeBranchId,
+      headOfficeBranchId: society.headOfficeBranchId,
+      asOf
+    });
+    if (!bal) {
+      return base({
+        lane: "D",
+        unanswered: SAY.noCashAccount,
+        trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: "D-lane: no cash account", model: null }
+      });
+    }
+    const scope = bal.openingIncluded ? "" : " (\u0936\u093E\u0916\u093E \u0926\u0943\u0936\u094D\u092F \u2014 \u0938\u092E\u093F\u0924\u093F \u0915\u093E \u092A\u094D\u0930\u093E\u0930\u0902\u092D\u093F\u0915 \u0936\u0947\u0937 \u0936\u093E\u092E\u093F\u0932 \u0928\u0939\u0940\u0902)";
     return base({
       lane: "D",
-      unanswered: req.societyId ? SAY.noData : SAY.needLogin,
-      trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: "D-lane: no tools (Slice 4)", model: null }
+      answer: `\u0930\u094B\u0915\u0921\u093C \u0936\u0947\u0937: ${bal.formatted}${asOf ? ` (${asOf} \u0924\u0915)` : ""}${scope}`,
+      confidence: "high",
+      // it came from the ledger, not from a document
+      cites: [{ id: "tool:cashBalance", title: "\u0930\u094B\u0915\u0921\u093C \u092C\u0939\u0940 (Cash Book)", url: "/cash-book", type: "help" }],
+      trace: {
+        reason: intent.reason,
+        jurisdiction,
+        asOf,
+        corpus: [],
+        retrieved: [`tool:cashBalance@${bal.entryCount}entries`],
+        guard: null,
+        model: null
+      }
     });
   }
   if (intent.lane === "A") {
@@ -983,46 +1192,6 @@ function ask(req, docs, flags, today, limit = 8) {
       model: null
     }
   });
-}
-
-// src/lib/money.ts
-var DEFAULT_ROUNDING = "half-up";
-function assertFinite(value, where) {
-  if (!Number.isFinite(value)) throw new RangeError(`money.${where}: value is not finite (${value})`);
-}
-function assertMinor(value, where) {
-  if (!Number.isInteger(value)) throw new RangeError(`money.${where}: minor units must be an integer paise value, got ${value}`);
-}
-function isValidMinor(value) {
-  return typeof value === "number" && Number.isInteger(value);
-}
-function roundMinor(value, mode = DEFAULT_ROUNDING) {
-  assertFinite(value, "roundMinor");
-  switch (mode) {
-    case "down":
-      return Math.trunc(value);
-    case "up":
-      return value >= 0 ? Math.ceil(value) : Math.floor(value);
-    case "half-even": {
-      const floor = Math.floor(value);
-      const diff = value - floor;
-      if (diff < 0.5) return floor;
-      if (diff > 0.5) return floor + 1;
-      return floor % 2 === 0 ? floor : floor + 1;
-    }
-    case "half-up":
-    default:
-      return value >= 0 ? Math.round(value) : -Math.round(-value);
-  }
-}
-function toRupees(minor) {
-  assertMinor(minor, "toRupees");
-  return minor / 100;
-}
-function applyPercent(baseMinor, pct2, mode = DEFAULT_ROUNDING) {
-  assertMinor(baseMinor, "applyPercent");
-  assertFinite(pct2, "applyPercent");
-  return { minor: roundMinor(baseMinor * pct2 / 100, mode), mode };
 }
 
 // src/lib/tax/computeTds.ts
@@ -1092,67 +1261,6 @@ var mapLedgerEventRows = (rows) => rows.map((r) => ({
   ...r.reversal_of ? { reversalOf: r.reversal_of } : {},
   payload: r.payload
 }));
-
-// src/lib/ledger/aggregateState.ts
-function legsOf(payload) {
-  if (!payload || typeof payload !== "object") return [];
-  const arr = payload.lines;
-  if (!Array.isArray(arr)) return [];
-  const out = [];
-  for (const l of arr) {
-    if (l && typeof l === "object" && typeof l.accountId === "string" && (l.drCr === "Dr" || l.drCr === "Cr") && isValidMinor(l.amountMinor)) {
-      out.push({ accountId: l.accountId, drCr: l.drCr, amountMinor: l.amountMinor });
-    }
-  }
-  return out;
-}
-var str = (p, k) => {
-  const v = p && typeof p === "object" ? p[k] : void 0;
-  return typeof v === "string" ? v : "";
-};
-var num = (p, k) => {
-  const v = p && typeof p === "object" ? p[k] : void 0;
-  return typeof v === "number" ? v : 0;
-};
-function resolveCurrentVouchers(events) {
-  const byAgg = /* @__PURE__ */ new Map();
-  for (const e of Array.isArray(events) ? events : []) {
-    if (e.aggregateType !== "voucher") continue;
-    (byAgg.get(e.aggregateId) ?? byAgg.set(e.aggregateId, []).get(e.aggregateId)).push(e);
-  }
-  const out = [];
-  for (const [id, evs] of byAgg) {
-    if (evs.some((e) => e.eventType === "voucher.cancelled")) continue;
-    const reposted = evs.filter((e) => e.eventType === "voucher.reposted");
-    const ev = reposted.length ? reposted[reposted.length - 1] : evs.find((e) => e.eventType === "voucher.posted");
-    if (!ev) continue;
-    const p = ev.payload;
-    out.push({ id, date: str(p, "date") || ev.occurredAt.slice(0, 10), voucherNo: str(p, "voucherNo"), narration: str(p, "narration"), createdAt: str(p, "createdAt"), memberId: str(p, "memberId"), amount: num(p, "amount"), legs: legsOf(p), type: str(p, "type"), branchId: str(p, "branchId"), createdBy: str(p, "createdBy") });
-  }
-  return out;
-}
-
-// src/lib/ledger/cashBook.ts
-function projectCashBook(events, accountId, accounts, opts) {
-  const acctName = new Map(accounts.map((a) => [a.id, a.name]));
-  const current = resolveCurrentVouchers(events);
-  current.sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || "").localeCompare(b.voucherNo || "") || a.id.localeCompare(b.id));
-  let running = opts.openingMinor;
-  const rows = [];
-  for (const c of current) {
-    if (opts.toDate && c.date > opts.toDate) continue;
-    const cashLegs = c.legs.filter((l) => l.accountId === accountId);
-    if (cashLegs.length === 0) continue;
-    const contra = c.legs.find((l) => l.accountId !== accountId);
-    const particulars = c.narration || (contra ? acctName.get(contra.accountId) ?? "" : "");
-    for (const l of cashLegs) {
-      running += l.drCr === "Dr" ? l.amountMinor : -l.amountMinor;
-      if (opts.fromDate && c.date < opts.fromDate) continue;
-      rows.push({ id: c.id, date: c.date, voucherNo: c.voucherNo, particulars, type: l.drCr === "Dr" ? "receipt" : "payment", amountMinor: l.amountMinor, runningBalanceMinor: running });
-    }
-  }
-  return rows;
-}
 
 // src/lib/ledger/reports.ts
 function ledgerCashBookEntries(events, cashAccountId, accounts, opts) {

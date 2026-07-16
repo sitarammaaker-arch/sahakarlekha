@@ -158,5 +158,68 @@ console.log('\n  ask-core — the mechanism, with no model\n');
     !/societyId\?: string/.test(client));
 }
 
+/* 10 · THE D-LANE, WIRED (Slice 4). The society's books are INJECTED — the fetch is the
+   seam's job (I/O), the decision is the core's (pure). Every branch below is a refusal
+   except one, and that ratio is the design: a D-lane question answered from anything but
+   the ledger is the whole reason the lane exists. */
+{
+  const CASH = '3301';
+  const accounts = [{ id: CASH, name: 'Cash in Hand', openingBalance: 50000, openingBalanceType: 'debit' }];
+  const ev = (id, date, legs) => ({
+    eventId: 'e-' + id, eventType: 'voucher.posted', schemaVersion: 1, tenantId: 'SOC001',
+    jurisdiction: 'hr', aggregateType: 'voucher', aggregateId: id, sequence: 1,
+    occurredAt: date + 'T10:00:00Z', producer: { kind: 'human', id: 'u1' },
+    payload: { id, date, voucherNo: 'V-' + id, narration: 't', createdAt: date + 'T10:00:00Z', lines: legs },
+  });
+  const events = [ev('v1', '2026-04-10', [{ accountId: CASH, drCr: 'Dr', amountMinor: 100000 }])];
+  const books = { events, accounts, activeBranchId: '', headOfficeBranchId: 'HO' };
+  const withBooks = (text, s = books, over = {}) =>
+    ask({ text, channel: 'web', societyId: 'SOC001', ...over }, CORPUS, ON, TODAY, 8, s);
+
+  // The happy path — and the figure is the TOOL's, verbatim.
+  const r = withBooks('रोकड़ शेष कितना है');
+  ok('D-lane: answers from the ledger', r.lane === 'D' && !!r.answer);
+  ok('D-lane: quotes the tool\'s string verbatim (§3.7 number check)', r.answer.includes('₹51,000.00'));
+  ok('D-lane: high confidence — it came from the books, not a document', r.confidence === 'high');
+  ok('D-lane: no guard fired', r.trace.guard === null);
+  ok('D-lane: the trace names the TOOL, not a doc', r.trace.retrieved[0].startsWith('tool:cashBalance'));
+  ok('D-lane: cites the Cash Book so the user can check it', r.cites[0].url === '/cash-book');
+
+  /* Anonymous can never reach the books (AI-N5) — even with books injected.
+     Note the possessive: without an owner "रोकड़ शेष कितना है" is not a D question at
+     all, it is a question about the world, and it correctly routes to K (§4.2 — D needs
+     quantitative AND an owner, or a visitor asking "कितना खर्चा आएगा" would be told to
+     log in). "मेरी समिति का" is what makes it about someone's books. */
+  const anon = ask({ text: 'मेरी समिति का रोकड़ शेष कितना है', channel: 'web' }, CORPUS, ON, TODAY, 8, books);
+  ok('D-lane: anonymous refuses even when books are present', anon.lane === 'D' && anon.answer === null);
+  ok('D-lane: ...and says to log in', (anon.unanswered || '').includes('login'));
+
+  // Books absent ⇒ refuse. NEVER fall back to documents.
+  const noBooks = ask({ text: 'रोकड़ शेष कितना है', channel: 'web', societyId: 'SOC001' }, CORPUS, ON, TODAY, 8);
+  ok('D-lane: no books loaded ⇒ refuses, never guesses', noBooks.answer === null);
+  ok('D-lane: ...and blames the load, not the user', (noBooks.unanswered || '').includes('लोड'));
+
+  // A D question with no tool must refuse — not answer from a help article.
+  const noTool = withBooks('मेरी समिति का स्टॉक कितना है');
+  ok('D-lane: no tool for this question ⇒ refuses', noTool.lane === 'D' && noTool.answer === null);
+  ok('D-lane: ...and says what it CAN do', (noTool.unanswered || '').includes('रोकड़'));
+
+  // Missing cash account ⇒ refuse, not "₹0".
+  const noAcct = withBooks('रोकड़ शेष कितना है', { ...books, accounts: [] });
+  ok('D-lane: no cash account ⇒ refuses, never "₹0"', noAcct.answer === null);
+
+  /* THE ECR-17 SCOPE, surfaced. A branch's figure legitimately excludes the society's
+     opening — the user comparing it to the consolidated one must be told why, or they
+     conclude the software is broken. */
+  const br = withBooks('रोकड़ शेष कितना है', { ...books, activeBranchId: 'BR1' });
+  ok('D-lane: a branch excludes the opening', br.answer.includes('₹1,000.00'));
+  ok('D-lane: ...and SAYS so, rather than looking broken', br.answer.includes('शाखा दृश्य'));
+
+  // The kill switch still governs the books, not just the corpus.
+  const off = ask({ text: 'रोकड़ शेष कितना है', channel: 'web', societyId: 'SOC001' },
+    CORPUS, { globalEnabled: false }, TODAY, 8, books);
+  ok('D-lane: AI off ⇒ degraded, the books are never touched', off.degraded === true && off.answer === null);
+}
+
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
