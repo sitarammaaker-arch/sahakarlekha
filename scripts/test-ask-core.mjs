@@ -72,9 +72,19 @@ console.log('\n  ask-core — the mechanism, with no model\n');
   ok('F-lane: states no figure', r.answer === null);
   ok('F-lane: hedges with a reason', r.unanswered.includes('CA'));
   ok('F-lane: still offers sources to read', r.cites.length > 0);
-  ok('F-lane: trace names the missing rule source', r.trace.guard.includes('no rule source'));
+  ok('F-lane: trace names why it refused', r.trace.guard.includes('no rule for this specific'));
   // The whole point: search DOES find GST docs. The lane refuses anyway.
   ok('F-lane: refuses even though docs exist', r.trace.retrieved.length > 0 && r.answer === null);
+
+  /* Slice 2 — the F-lane now distinguishes two different truths. "मुझे नहीं पता"
+     (no rule at all, e.g. GST) is NOT the same as "the rule is in the catalog but no
+     human has verified it" (194Q). The second tells the user what would fix it, and
+     an unverified rule must still never be stated as fact. */
+  const u = run('194Q की सीमा कितनी है');
+  ok('F-lane: 194Q — seeded but UNVERIFIED ⇒ still no figure', u.answer === null);
+  ok('F-lane: says the rule exists but is unchecked', u.trace.guard.includes('unverified'));
+  ok('F-lane: names the section to check', (u.unanswered || '').includes('194Q'));
+  ok('F-lane: never leaks the unverified number', !(u.unanswered || '').includes('50,00,000'));
 }
 
 /* 5 · SCOPE (AI-N5 / CAIOS-K8) — anonymous cannot reach society data. */

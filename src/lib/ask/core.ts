@@ -28,6 +28,7 @@ import type { AiFlags } from '../ai/killSwitch';
 import { resolveJurisdiction } from '../jurisdiction';
 import { classify } from './classify';
 import type { Intent, Lane } from './classify';
+import { answerFact, unverifiedHint } from './fact';
 
 export type { Lane, Intent };
 
@@ -84,6 +85,11 @@ const SAY = {
   regulated:
     'यह एक नियामक आँकड़ा है (दर / सीमा / धारा) और मेरे पास इसका प्रमाणित, तिथि-सहित स्रोत नहीं है — ' +
     'इसलिए मैं अंदाज़ा नहीं लगाऊँगा। अपने CA / RCS या आधिकारिक पोर्टल से पुष्टि करें।',
+  // A different, more useful truth than "मुझे नहीं पता": the rule is in the catalog,
+  // it just has not been checked by a human yet — and it names what to check.
+  unverified: (cite: string) =>
+    'इसका नियम मेरे पास दर्ज तो है, पर अभी किसी इंसान ने उसे सत्यापित नहीं किया — ' +
+    'इसलिए मैं उसे तथ्य की तरह नहीं बोलूँगा। जाँचने योग्य स्रोत: ' + cite,
   stateVaries: 'ध्यान दें: यह नियम हर राज्य में अलग हो सकता है।',
   action:
     'मैं वाउचर या कोई भी प्रविष्टि खुद नहीं बना सकता — यह अभी उपलब्ध नहीं है। ' +
@@ -136,15 +142,43 @@ export function ask(
   /* Lanes that do not retrieve at all. Answering these from documents is precisely
      the mistake this architecture exists to prevent. */
   if (intent.lane === 'F') {
-    // Slice 2 gives this lane a rules engine to look up. Until then it must hedge —
-    // and hedging is the CORRECT behaviour, not a gap: a rate stated without a
-    // versioned, cited source is a compliance event waiting to happen (AI-N3/AI-N8).
+    /* Slice 2 — Tier 0. An exact, versioned lookup, NEVER a document and never a model.
+       Sources are still attached either way, so an answer is checkable and a refusal
+       still points somewhere useful. */
     const hits = searchIndex(docs, req.text, limit);
+    const fact = answerFact(req.text, { asOf, jurisdiction });
+
+    if (fact) {
+      return base({
+        lane: 'F',
+        answer: fact.text,
+        // The citation IS the answer's authority — stated first, ahead of the docs.
+        cites: [{ id: fact.ruleKey, title: fact.cite, url: '', type: 'glossary' }, ...hits.map(cite)],
+        confidence: 'high', // a verified, effective-dated rule is the only thing here that earns this
+        trace: {
+          reason: intent.reason, jurisdiction, asOf, corpus: [],
+          retrieved: [`rule:${fact.ruleKey}@v${fact.version}`, ...hits.map((h) => h.id)],
+          guard: null, model: null,
+        },
+      });
+    }
+
+    /* No VERIFIED rule ⇒ no figure. This is the guarantee, not a gap: a rate stated
+       without a versioned, cited source is a compliance event waiting to happen
+       (AI-N3/AI-N8). Each rule a human verifies turns one of these into a fact. */
+    const pending = unverifiedHint(req.text, { asOf, jurisdiction });
     return base({
       lane: 'F',
-      unanswered: SAY.regulated + (jurisdiction ? '' : ' ' + SAY.stateVaries),
+      // "I don't know" and "the rule is there but nobody checked it" are different
+      // truths. The second one tells the user exactly what would fix it.
+      unanswered: (pending ? SAY.unverified(pending) : SAY.regulated) + (jurisdiction ? '' : ' ' + SAY.stateVaries),
       cites: hits.map(cite),
-      trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: hits.map((h) => h.id), guard: 'F-lane: no rule source (Slice 2)', model: null },
+      trace: {
+        reason: intent.reason, jurisdiction, asOf, corpus: [],
+        retrieved: hits.map((h) => h.id),
+        guard: pending ? `F-lane: rule exists but unverified (${pending})` : 'F-lane: no rule for this specific',
+        model: null,
+      },
     });
   }
   if (intent.lane === 'D') {

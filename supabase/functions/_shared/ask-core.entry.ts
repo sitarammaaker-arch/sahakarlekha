@@ -17,6 +17,11 @@
 export { ask, ASK_FEATURE } from '../../../src/lib/ask/core';
 export type { AskRequest, AskAnswer, Citation, Channel, Lane, Intent } from '../../../src/lib/ask/core';
 export { classify } from '../../../src/lib/ask/classify';
+// Tier 0 — the F-lane's rule catalog and the deterministic calculator. The LLM never
+// computes money (AI-P3), so the figure has to come from here, on the server too.
+export { answerFact, unverifiedHint } from '../../../src/lib/ask/fact';
+export { TDS_RULES, resolveTaxRule, verifiedValue } from '../../../src/lib/rules/tax';
+export { computeTds, isRefusal } from '../../../src/lib/tax/computeTds';
 export { resolveAiFlags, AI_OFF } from '../../../src/lib/ai/flags';
 export { isAiEnabled } from '../../../src/lib/ai/killSwitch';
 export type { AiFlags } from '../../../src/lib/ai/killSwitch';

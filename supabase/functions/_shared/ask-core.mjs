@@ -403,11 +403,117 @@ function classify(text, hasSociety) {
   return { lane: "K", corpus: [], reason: "bare term \u2014 no frame given, no corpus opinion" };
 }
 
+// src/lib/rules/engine.ts
+function latestOnOrBefore(values, asOfMs) {
+  let best = null;
+  let bestMs = -Infinity;
+  for (const v of values) {
+    const t = Date.parse(v.effectiveFrom);
+    if (Number.isNaN(t) || t > asOfMs) continue;
+    if (t > bestMs) {
+      bestMs = t;
+      best = v;
+    }
+  }
+  return best;
+}
+function resolveRule(rule, opts) {
+  const asOfMs = Date.parse(opts.asOf);
+  if (Number.isNaN(asOfMs)) return null;
+  const jur = (opts.jurisdiction ?? "").trim();
+  const chain = jur ? [jur, ""] : [""];
+  for (const j of chain) {
+    const values = rule.byJurisdiction[j];
+    if (values && values.length) {
+      const v = latestOnOrBefore(values, asOfMs);
+      if (v) return v;
+    }
+  }
+  return null;
+}
+
+// src/lib/rules/tax.ts
+var FA21 = "2021-07-01";
+function tds(key, value, cite2, effectiveFrom) {
+  const v = { value, effectiveFrom, version: 1, verified: false, cite: cite2, note: `UNVERIFIED \u2014 check ${cite2}` };
+  return { key, byJurisdiction: { "": [v] } };
+}
+var TDS_RULES = {
+  // Purchase of goods above the threshold — the section behind the procurement dispute.
+  "tds.194q.threshold": tds("tds.194q.threshold", 5e6, "Income-tax Act s.194Q (Finance Act 2021) \u2014 aggregate purchase value in a FY", FA21),
+  "tds.194q.rate_pct": tds("tds.194q.rate_pct", 0.1, "Income-tax Act s.194Q \u2014 rate on value exceeding the threshold", FA21)
+};
+function resolveTaxRule(key, ctx) {
+  const rule = TDS_RULES[key];
+  if (!rule) return null;
+  const rv = resolveRule(rule, { asOf: ctx.asOf, jurisdiction: ctx.jurisdiction });
+  if (!rv) return null;
+  return {
+    value: rv.value,
+    effectiveFrom: rv.effectiveFrom,
+    version: rv.version ?? 1,
+    cite: rv.cite,
+    verified: rv.verified === true
+  };
+}
+function verifiedValue(key, ctx) {
+  const r = resolveTaxRule(key, ctx);
+  return r && r.verified ? r : null;
+}
+
+// src/lib/ask/fact.ts
+var SECTIONS = [
+  [/194\s*-?\s*q/i, "194q"]
+];
+var ASPECTS = [
+  [["\u0938\u0940\u092E\u093E", "limit", "threshold", "seema", "\u0915\u092C \u0915\u093E\u091F\u0928\u093E", "\u0915\u092C \u0915\u091F\u0947\u0917\u093E", "\u0915\u093F\u0924\u0928\u0947 \u0938\u0947"], "threshold"],
+  [["\u0926\u0930", "\u0930\u0947\u091F", "rate", "\u092A\u094D\u0930\u0924\u093F\u0936\u0924", "\u0915\u093F\u0924\u0928\u093E \u0915\u091F\u0947\u0917\u093E", "\u0915\u093F\u0924\u0928\u093E \u0915\u093E\u091F\u0947\u0902", "percent"], "rate_pct"]
+];
+var inr = (rupees) => "\u20B9" + rupees.toLocaleString("en-IN");
+function answerFact(query, ctx) {
+  const q = query.toLowerCase();
+  let section = null;
+  for (const [rx, key2] of SECTIONS) if (rx.test(q)) {
+    section = key2;
+    break;
+  }
+  if (!section) return null;
+  let aspect = null;
+  for (const [words, a] of ASPECTS) if (words.some((w) => q.includes(w))) {
+    aspect = a;
+    break;
+  }
+  if (!aspect) return null;
+  const key = `tds.${section}.${aspect}`;
+  const rule = verifiedValue(key, ctx);
+  if (!rule) return null;
+  const label = section.toUpperCase();
+  const text = aspect === "threshold" ? `\u0927\u093E\u0930\u093E ${label} \u0915\u0940 \u0938\u0940\u092E\u093E ${inr(rule.value)} \u0939\u0948 \u2014 ${rule.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940\u0964 \u0907\u0938\u0938\u0947 \u0905\u0927\u093F\u0915 \u092E\u0942\u0932\u094D\u092F \u092A\u0930 \u0939\u0940 TDS \u0932\u093E\u0917\u0942 \u0939\u094B\u0924\u093E \u0939\u0948\u0964` : `\u0927\u093E\u0930\u093E ${label} \u0915\u0940 \u0926\u0930 ${rule.value}% \u0939\u0948 \u2014 ${rule.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940\u0964 \u092F\u0939 \u0938\u0940\u092E\u093E \u0938\u0947 \u0905\u0927\u093F\u0915 \u0935\u093E\u0932\u0940 \u0930\u093E\u0936\u093F \u092A\u0930 \u0932\u0917\u0924\u0940 \u0939\u0948\u0964`;
+  return { text, cite: rule.cite, effectiveFrom: rule.effectiveFrom, version: rule.version, ruleKey: key };
+}
+function unverifiedHint(query, ctx) {
+  const q = query.toLowerCase();
+  let section = null;
+  for (const [rx, key] of SECTIONS) if (rx.test(q)) {
+    section = key;
+    break;
+  }
+  if (!section) return null;
+  for (const [, aspect] of ASPECTS) {
+    const r = resolveTaxRule(`tds.${section}.${aspect}`, ctx);
+    if (r && !r.verified) return r.cite;
+  }
+  return null;
+}
+
 // src/lib/ask/core.ts
 var ASK_FEATURE = "ask";
 var SAY = {
   unknown: "\u092E\u0941\u091D\u0947 \u0907\u0938\u0915\u093E \u092A\u0915\u094D\u0915\u093E \u0909\u0924\u094D\u0924\u0930 \u0928\u0939\u0940\u0902 \u092A\u0924\u093E\u0964 \u0928\u0940\u091A\u0947 \u0915\u0947 \u0938\u094D\u0930\u094B\u0924 \u0926\u0947\u0916\u0947\u0902, \u092F\u093E \u0905\u092A\u0928\u0947 CA / RCS \u0938\u0947 \u092A\u0942\u091B\u0947\u0902\u0964",
   regulated: "\u092F\u0939 \u090F\u0915 \u0928\u093F\u092F\u093E\u092E\u0915 \u0906\u0901\u0915\u0921\u093C\u093E \u0939\u0948 (\u0926\u0930 / \u0938\u0940\u092E\u093E / \u0927\u093E\u0930\u093E) \u0914\u0930 \u092E\u0947\u0930\u0947 \u092A\u093E\u0938 \u0907\u0938\u0915\u093E \u092A\u094D\u0930\u092E\u093E\u0923\u093F\u0924, \u0924\u093F\u0925\u093F-\u0938\u0939\u093F\u0924 \u0938\u094D\u0930\u094B\u0924 \u0928\u0939\u0940\u0902 \u0939\u0948 \u2014 \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u0905\u0902\u0926\u093E\u091C\u093C\u093E \u0928\u0939\u0940\u0902 \u0932\u0917\u093E\u090A\u0901\u0917\u093E\u0964 \u0905\u092A\u0928\u0947 CA / RCS \u092F\u093E \u0906\u0927\u093F\u0915\u093E\u0930\u093F\u0915 \u092A\u094B\u0930\u094D\u091F\u0932 \u0938\u0947 \u092A\u0941\u0937\u094D\u091F\u093F \u0915\u0930\u0947\u0902\u0964",
+  // A different, more useful truth than "मुझे नहीं पता": the rule is in the catalog,
+  // it just has not been checked by a human yet — and it names what to check.
+  unverified: (cite2) => "\u0907\u0938\u0915\u093E \u0928\u093F\u092F\u092E \u092E\u0947\u0930\u0947 \u092A\u093E\u0938 \u0926\u0930\u094D\u091C \u0924\u094B \u0939\u0948, \u092A\u0930 \u0905\u092D\u0940 \u0915\u093F\u0938\u0940 \u0907\u0902\u0938\u093E\u0928 \u0928\u0947 \u0909\u0938\u0947 \u0938\u0924\u094D\u092F\u093E\u092A\u093F\u0924 \u0928\u0939\u0940\u0902 \u0915\u093F\u092F\u093E \u2014 \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u0909\u0938\u0947 \u0924\u0925\u094D\u092F \u0915\u0940 \u0924\u0930\u0939 \u0928\u0939\u0940\u0902 \u092C\u094B\u0932\u0942\u0901\u0917\u093E\u0964 \u091C\u093E\u0901\u091A\u0928\u0947 \u092F\u094B\u0917\u094D\u092F \u0938\u094D\u0930\u094B\u0924: " + cite2,
   stateVaries: "\u0927\u094D\u092F\u093E\u0928 \u0926\u0947\u0902: \u092F\u0939 \u0928\u093F\u092F\u092E \u0939\u0930 \u0930\u093E\u091C\u094D\u092F \u092E\u0947\u0902 \u0905\u0932\u0917 \u0939\u094B \u0938\u0915\u0924\u093E \u0939\u0948\u0964",
   action: "\u092E\u0948\u0902 \u0935\u093E\u0909\u091A\u0930 \u092F\u093E \u0915\u094B\u0908 \u092D\u0940 \u092A\u094D\u0930\u0935\u093F\u0937\u094D\u091F\u093F \u0916\u0941\u0926 \u0928\u0939\u0940\u0902 \u092C\u0928\u093E \u0938\u0915\u0924\u093E \u2014 \u092F\u0939 \u0905\u092D\u0940 \u0909\u092A\u0932\u092C\u094D\u0927 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964 \u092B\u093C\u093F\u0932\u0939\u093E\u0932 \u092F\u0939 \u0915\u093E\u092E \u0906\u092A\u0915\u094B \u0938\u094D\u0935\u092F\u0902 \u0915\u0930\u0928\u093E \u0939\u094B\u0917\u093E\u0964",
   needLogin: "\u0905\u092A\u0928\u0940 \u0938\u092E\u093F\u0924\u093F \u0915\u093E \u0906\u0901\u0915\u0921\u093C\u093E \u0926\u0947\u0916\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F \u0906\u092A\u0915\u094B login \u0915\u0930\u0928\u093E \u0939\u094B\u0917\u093E\u0964",
@@ -435,11 +541,42 @@ function ask(req, docs, flags, today, limit = 8) {
   const intent = classify(req.text, !!req.societyId);
   if (intent.lane === "F") {
     const hits2 = searchIndex(docs, req.text, limit);
+    const fact = answerFact(req.text, { asOf, jurisdiction });
+    if (fact) {
+      return base({
+        lane: "F",
+        answer: fact.text,
+        // The citation IS the answer's authority — stated first, ahead of the docs.
+        cites: [{ id: fact.ruleKey, title: fact.cite, url: "", type: "glossary" }, ...hits2.map(cite)],
+        confidence: "high",
+        // a verified, effective-dated rule is the only thing here that earns this
+        trace: {
+          reason: intent.reason,
+          jurisdiction,
+          asOf,
+          corpus: [],
+          retrieved: [`rule:${fact.ruleKey}@v${fact.version}`, ...hits2.map((h) => h.id)],
+          guard: null,
+          model: null
+        }
+      });
+    }
+    const pending = unverifiedHint(req.text, { asOf, jurisdiction });
     return base({
       lane: "F",
-      unanswered: SAY.regulated + (jurisdiction ? "" : " " + SAY.stateVaries),
+      // "I don't know" and "the rule is there but nobody checked it" are different
+      // truths. The second one tells the user exactly what would fix it.
+      unanswered: (pending ? SAY.unverified(pending) : SAY.regulated) + (jurisdiction ? "" : " " + SAY.stateVaries),
       cites: hits2.map(cite),
-      trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: hits2.map((h) => h.id), guard: "F-lane: no rule source (Slice 2)", model: null }
+      trace: {
+        reason: intent.reason,
+        jurisdiction,
+        asOf,
+        corpus: [],
+        retrieved: hits2.map((h) => h.id),
+        guard: pending ? `F-lane: rule exists but unverified (${pending})` : "F-lane: no rule for this specific",
+        model: null
+      }
     });
   }
   if (intent.lane === "D") {
@@ -489,6 +626,92 @@ function ask(req, docs, flags, today, limit = 8) {
   });
 }
 
+// src/lib/money.ts
+var DEFAULT_ROUNDING = "half-up";
+function assertFinite(value, where) {
+  if (!Number.isFinite(value)) throw new RangeError(`money.${where}: value is not finite (${value})`);
+}
+function assertMinor(value, where) {
+  if (!Number.isInteger(value)) throw new RangeError(`money.${where}: minor units must be an integer paise value, got ${value}`);
+}
+function isValidMinor(value) {
+  return typeof value === "number" && Number.isInteger(value);
+}
+function roundMinor(value, mode = DEFAULT_ROUNDING) {
+  assertFinite(value, "roundMinor");
+  switch (mode) {
+    case "down":
+      return Math.trunc(value);
+    case "up":
+      return value >= 0 ? Math.ceil(value) : Math.floor(value);
+    case "half-even": {
+      const floor = Math.floor(value);
+      const diff = value - floor;
+      if (diff < 0.5) return floor;
+      if (diff > 0.5) return floor + 1;
+      return floor % 2 === 0 ? floor : floor + 1;
+    }
+    case "half-up":
+    default:
+      return value >= 0 ? Math.round(value) : -Math.round(-value);
+  }
+}
+function applyPercent(baseMinor, pct, mode = DEFAULT_ROUNDING) {
+  assertMinor(baseMinor, "applyPercent");
+  assertFinite(pct, "applyPercent");
+  return { minor: roundMinor(baseMinor * pct / 100, mode), mode };
+}
+
+// src/lib/tax/computeTds.ts
+var isRefusal = (o) => o.refused === true;
+var inr2 = (minor) => "\u20B9" + (minor / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+function computeTds(input) {
+  const s = input.section.toLowerCase().replace(/^section\s*/, "").trim();
+  const missing = [];
+  if (!isValidMinor(input.aggregateMinor)) {
+    return { applicable: false, refused: true, reason: "\u0930\u093E\u0936\u093F \u092A\u0948\u0938\u0947 (integer) \u092E\u0947\u0902 \u091A\u093E\u0939\u093F\u090F", missing: ["aggregateMinor"] };
+  }
+  const thr = verifiedValue(`tds.${s}.threshold`, input.ctx);
+  const rate = verifiedValue(`tds.${s}.rate_pct`, input.ctx);
+  if (!thr) missing.push(`tds.${s}.threshold`);
+  if (!rate) missing.push(`tds.${s}.rate_pct`);
+  if (!thr || !rate) {
+    return {
+      applicable: false,
+      refused: true,
+      reason: `\u0927\u093E\u0930\u093E ${s.toUpperCase()} \u0915\u0947 \u0932\u093F\u090F \u092E\u0947\u0930\u0947 \u092A\u093E\u0938 \u092A\u094D\u0930\u092E\u093E\u0923\u093F\u0924, \u0924\u093F\u0925\u093F-\u0938\u0939\u093F\u0924 \u0928\u093F\u092F\u092E \u0928\u0939\u0940\u0902 \u0939\u0948 \u2014 \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u0917\u0923\u0928\u093E \u0928\u0939\u0940\u0902 \u0915\u0930\u0942\u0901\u0917\u093E\u0964 \u0928\u093F\u092F\u092E \u091C\u094B\u0921\u093C\u0947\u0902/\u0938\u0924\u094D\u092F\u093E\u092A\u093F\u0924 \u0915\u0930\u0947\u0902: src/lib/rules/tax.ts`,
+      missing
+    };
+  }
+  const basis = [
+    { key: `tds.${s}.threshold`, version: thr.version, effectiveFrom: thr.effectiveFrom, cite: thr.cite },
+    { key: `tds.${s}.rate_pct`, version: rate.version, effectiveFrom: rate.effectiveFrom, cite: rate.cite }
+  ];
+  const thresholdMinor = Math.round(thr.value * 100);
+  if (input.aggregateMinor <= thresholdMinor) {
+    return {
+      applicable: false,
+      tdsMinor: 0,
+      taxableMinor: 0,
+      thresholdMinor,
+      ratePct: rate.value,
+      explain: `\u0915\u0941\u0932 ${inr2(input.aggregateMinor)} \u2014 \u0927\u093E\u0930\u093E ${s.toUpperCase()} \u0915\u0940 \u0938\u0940\u092E\u093E ${inr2(thresholdMinor)} \u0938\u0947 \u0905\u0927\u093F\u0915 \u0928\u0939\u0940\u0902, \u0907\u0938\u0932\u093F\u090F TDS \u0928\u0939\u0940\u0902 \u0915\u091F\u0947\u0917\u093E\u0964`,
+      basis
+    };
+  }
+  const taxableMinor = input.aggregateMinor - thresholdMinor;
+  const { minor: tdsMinor } = applyPercent(taxableMinor, rate.value);
+  return {
+    applicable: true,
+    tdsMinor,
+    taxableMinor,
+    thresholdMinor,
+    ratePct: rate.value,
+    explain: `\u0915\u0941\u0932 ${inr2(input.aggregateMinor)} \u092E\u0947\u0902 \u0938\u0947 \u0938\u0940\u092E\u093E ${inr2(thresholdMinor)} \u0918\u091F\u093E\u0915\u0930 ${inr2(taxableMinor)} \u092A\u0930 ${rate.value}% TDS = ${inr2(tdsMinor)}\u0964 (\u0928\u093F\u092F\u092E ${thr.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940)`,
+    basis
+  };
+}
+
 // src/lib/ai/flags.ts
 function killList(raw) {
   const ids = (raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -513,9 +736,16 @@ export {
   AI_OFF,
   ASK_FEATURE,
   CORPUS,
+  TDS_RULES,
+  answerFact,
   ask,
   classify,
+  computeTds,
   isAiEnabled,
+  isRefusal,
   resolveAiFlags,
-  resolveJurisdiction
+  resolveJurisdiction,
+  resolveTaxRule,
+  unverifiedHint,
+  verifiedValue
 };
