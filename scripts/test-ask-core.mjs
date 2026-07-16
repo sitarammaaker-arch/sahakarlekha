@@ -133,5 +133,30 @@ console.log('\n  ask-core — the mechanism, with no model\n');
   ok('answer: cites carry a url to check', r.cites.every((c) => !!c.url));
 }
 
+/* 9 · IDENTITY COMES FROM THE VERIFIED TOKEN, NEVER THE BODY (AI-P2).
+   The pure core takes societyId as a parameter — it cannot know where the caller got it.
+   So the guarantee lives in the SEAM, and these assertions read the seam's source: a
+   test that only exercised ask() would pass while the hole stayed wide open. Grepping
+   source is a blunt instrument, but the alternative is trusting a comment. */
+{
+  const seam = readFileSync(resolve(ROOT, 'supabase', 'functions', 'ai-ask', 'index.ts'), 'utf8');
+  const client = readFileSync(resolve(ROOT, 'src', 'lib', 'ask', 'client.ts'), 'utf8');
+
+  ok('seam: never passes body.societyId into ask()', !/societyId:\s*typeof body\.societyId/.test(seam));
+  ok('seam: never passes body.userId into ask()', !/userId:\s*typeof body\.userId/.test(seam));
+  ok('seam: verifies the bearer token', /auth\.getUser\(\)/.test(seam));
+  ok('seam: resolves the society from society_users, not the request',
+    /from\('society_users'\)/.test(seam) && /select\('society_id'\)/.test(seam));
+  ok('seam: treats the anon key as NO user — a public visitor is not authenticated',
+    /bearer !== anonKey/.test(seam));
+  ok('seam: only active users resolve a society', /is_active['"]?,\s*true\)/.test(seam));
+  ok('seam: the AUDIT row records the verified id, not the claim',
+    /society_id: societyId \|\| 'anonymous'/.test(seam) && !/society_id: \(body\.societyId/.test(seam));
+  ok('seam: an unverifiable token stays anonymous, never falls back to the body',
+    /societyId = undefined;/.test(seam));
+  ok('client: no longer offers a societyId parameter to be believed',
+    !/societyId\?: string/.test(client));
+}
+
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
