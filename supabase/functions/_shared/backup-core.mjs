@@ -3961,6 +3961,34 @@ async function encryptArchive(archive, passphrase, meta, options = {}) {
   out.set(ciphertext, prefix.length);
   return out;
 }
+
+// src/lib/backup/placement.ts
+function evaluate321(copies, tenantJurisdiction) {
+  const deficiencies = [];
+  const providers = new Set(copies.map((c13) => c13.provider)).size;
+  if (copies.length < 3) deficiencies.push(`needs \u22653 copies, has ${copies.length} (3-2-1)`);
+  if (providers < 2) deficiencies.push(`needs \u22652 providers, has ${providers} (never all with one vendor)`);
+  const primary = copies[0];
+  const offProviderOffRegion = primary != null && copies.some((c13) => c13 !== primary && c13.provider !== primary.provider && c13.region !== primary.region);
+  if (!offProviderOffRegion) deficiencies.push("needs \u22651 copy that is both off-provider and off-region (DP-P4)");
+  const misplaced = copies.filter((c13) => c13.jurisdiction !== tenantJurisdiction);
+  if (misplaced.length > 0) {
+    deficiencies.push(`${misplaced.length} copy/copies outside the tenant jurisdiction "${tenantJurisdiction}" (residency, ADR-0009)`);
+  }
+  return { ok: deficiencies.length === 0, copies: copies.length, providers, offProviderOffRegion, deficiencies };
+}
+
+// src/lib/jurisdiction.ts
+var JURISDICTION_ALIASES = Object.freeze({
+  hr: "hr",
+  haryana: "hr",
+  "\u0939\u0930\u093F\u092F\u093E\u0923\u093E": "hr"
+});
+function resolveJurisdiction(state) {
+  const s = (state ?? "").trim().toLowerCase();
+  if (!s) return "";
+  return JURISDICTION_ALIASES[s] ?? s;
+}
 export {
   BACKUP_FORMAT_VERSION,
   REGISTRY,
@@ -3968,6 +3996,8 @@ export {
   backupEntities,
   buildArchive,
   encryptArchive,
+  evaluate321,
   planArchive,
+  resolveJurisdiction,
   sha256Bytes
 };
