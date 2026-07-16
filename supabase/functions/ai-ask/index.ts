@@ -87,13 +87,27 @@ Deno.serve(async (req: Request) => {
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
+  /* WHY IDENTITY RESOLUTION ENDED WHERE IT DID — recorded on the audit row.
+     A logged-in founder was landing here as `anonymous` and the trail could not say
+     which of the four branches below dropped him: no bearer, the anon key, a rejected
+     token, or no society_users row. "Anonymous" is a conclusion; this is the reason.
+     Booleans and error messages only — a token or a key must never reach a log. */
+  const authTrace: Record<string, unknown> = {
+    bearer: !bearer ? 'none' : bearer === anonKey ? 'anon-key' : 'user-jwt',
+    env: { url: !!supaUrl, anon: !!anonKey, svc: !!svcKey },
+    step: 'skipped',
+  };
+
   // The anon key is itself a JWT and is what an anonymous /ask visitor sends. Treat it
   // as no user at all — otherwise every public visitor would look authenticated.
   if (bearer && bearer !== anonKey && supaUrl && anonKey) {
     try {
+      authTrace.step = 'getUser';
       const { data, error } = await createClient(supaUrl, anonKey, {
         global: { headers: { Authorization: `Bearer ${bearer}` } },
       }).auth.getUser();
+      if (error) authTrace.getUserError = error.message;
+      else if (!data?.user?.email) authTrace.getUserError = 'verified but no email on user';
       if (!error && data?.user?.email) {
         userEmail = data.user.email.toLowerCase();
         // The branch claim the auth hook stamps (mig 038). Read from the VERIFIED user,
@@ -102,19 +116,27 @@ Deno.serve(async (req: Request) => {
         const bid = (data.user.user_metadata?.user_branch_id ?? claims.user_branch_id) as string | undefined;
         userBranchId = typeof bid === 'string' && bid ? bid : undefined;
         if (svcKey) {
-          const { data: row } = await createClient(supaUrl, svcKey)
+          authTrace.step = 'societyLookup';
+          const { data: row, error: sErr } = await createClient(supaUrl, svcKey)
             .from('society_users')
             .select('society_id')
             .eq('email', userEmail)
             .eq('is_active', true)
             .maybeSingle();
+          if (sErr) authTrace.societyError = sErr.message;
+          // The lookup is case-sensitive and filtered on is_active: a real user whose row
+          // is stored `Foo@x.com`, or deactivated, resolves to no society and answers as
+          // a stranger. Silent today; named here.
+          else if (!row) authTrace.societyError = 'no active society_users row for this email';
           societyId = (row as { society_id?: string } | null)?.society_id ?? undefined;
         }
       }
-    } catch {
+      authTrace.step = 'done';
+    } catch (e) {
       // A token we cannot verify is a token we do not honour: stay anonymous. Never fall
       // back to the body — that is the whole hole this closes.
       societyId = undefined;
+      authTrace.threw = e instanceof Error ? e.message : String(e);
     }
   }
 
@@ -224,6 +246,9 @@ Deno.serve(async (req: Request) => {
           ledgerRead: society
             ? { events: society.events.length, accounts: society.accounts.length, branch: society.activeBranchId || 'consolidated' }
             : null,
+          // WHY the identity above is what it is. `society_id: 'anonymous'` on its own is
+          // unfalsifiable — this makes it explain itself (AI-A5).
+          authTrace,
           latencyMs,
           // model/tokens/cost land here when stage 6 does. Their absence is itself the
           // record: this answer cost nothing and no model saw it.
