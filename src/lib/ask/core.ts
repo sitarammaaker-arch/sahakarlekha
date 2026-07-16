@@ -29,6 +29,28 @@ import { resolveJurisdiction } from '../jurisdiction';
 import { classify } from './classify';
 import type { Intent, Lane } from './classify';
 import { answerFact, unverifiedHint } from './fact';
+import { cashBalance } from './tools/cashBalance';
+import type { LedgerEvent } from '../ledger/event';
+import type { LedgerAccount } from '@/types';
+
+/**
+ * The society's books, INJECTED — the fetch is the seam's job (I/O), the decision is
+ * this module's (pure). Same split as `docs`: ask() stays testable without a server,
+ * and the one place that touches the network is the one place that is audited.
+ *
+ * Absent = the seam could not load them. That is a refusal, never a fallback to
+ * documents — see the D-lane below.
+ */
+export interface SocietyData {
+  events: readonly LedgerEvent[];
+  accounts: readonly LedgerAccount[];
+  /** The branch in view. '' / undefined = consolidated. Drives the ECR-17 opening rule. */
+  activeBranchId?: string;
+  headOfficeBranchId?: string;
+}
+
+/** Cash questions, in both scripts. Sparse on purpose: one tool exists. */
+const CASH_WORDS = ['रोकड़', 'नकद', 'कैश', 'cash', 'rokad', 'nakad'];
 
 export type { Lane, Intent };
 
@@ -95,7 +117,12 @@ const SAY = {
     'मैं वाउचर या कोई भी प्रविष्टि खुद नहीं बना सकता — यह अभी उपलब्ध नहीं है। ' +
     'फ़िलहाल यह काम आपको स्वयं करना होगा।',
   needLogin: 'अपनी समिति का आँकड़ा देखने के लिए आपको login करना होगा।',
-  noData: 'यह आपकी समिति के आँकड़े से जुड़ा सवाल है, पर यह सुविधा अभी उपलब्ध नहीं है।',
+  noData: 'आपकी समिति की बही अभी लोड नहीं हो पाई — इसलिए मैं आँकड़ा नहीं बताऊँगा। दोबारा कोशिश करें।',
+  // A D-lane question with no tool must refuse, never fall through to documents: an
+  // answer about "your society's stock" pulled from a help article looks like a fact
+  // about their books and is not.
+  noTool: 'यह आपकी समिति के आँकड़े से जुड़ा सवाल है, पर अभी मैं सिर्फ़ रोकड़ शेष बता सकता हूँ। बाक़ी के लिए संबंधित रिपोर्ट खोलें।',
+  noCashAccount: 'आपकी समिति में रोकड़ खाता नहीं मिला — इसलिए मैं शेष नहीं बता सकता।',
 };
 
 const cite = (r: SearchResult): Citation => ({ id: r.id, title: r.title, url: r.url, type: r.type });
@@ -110,6 +137,8 @@ export function ask(
   flags: AiFlags,
   today: string,
   limit = 8,
+  /** The society's books, when the seam could load them. Absent ⇒ the D-lane refuses. */
+  society?: SocietyData,
 ): AskAnswer {
   const tenant = req.societyId ?? 'anonymous';
   const jurisdiction = req.state ? resolveJurisdiction(req.state) : '';
@@ -182,10 +211,69 @@ export function ask(
     });
   }
   if (intent.lane === 'D') {
+    /* Anonymous can never reach society data — no token, no books (§5.1, AI-N5). The
+       seam derives identity from the verified JWT, so `societyId` being absent here
+       means genuinely nobody, not "the caller didn't say". */
+    if (!req.societyId) {
+      return base({
+        lane: 'D',
+        unanswered: SAY.needLogin,
+        trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: 'D-lane: anonymous', model: null },
+      });
+    }
+    /* The seam could not load the books (not passed, fetch failed, RLS said no). Say so
+       rather than guess: a D-lane question answered from anything but the ledger is the
+       whole reason this lane exists. */
+    if (!society) {
+      return base({
+        lane: 'D',
+        unanswered: SAY.noData,
+        trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: 'D-lane: no society data loaded', model: null },
+      });
+    }
+
+    /* TOOL ROUTING. One tool exists (cash). A D-lane question we have no tool for must
+       REFUSE — not fall through to documents. "मेरी समिति का स्टॉक कितना है" answered
+       from a help article would be exactly the failure the lane split prevents: it looks
+       like an answer about their books and is not. */
+    if (!CASH_WORDS.some((w) => req.text.toLowerCase().includes(w))) {
+      return base({
+        lane: 'D',
+        unanswered: SAY.noTool,
+        trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: 'D-lane: no tool for this question', model: null },
+      });
+    }
+
+    const bal = cashBalance({
+      events: society.events,
+      accounts: society.accounts,
+      activeBranchId: society.activeBranchId,
+      headOfficeBranchId: society.headOfficeBranchId,
+      asOf,
+    });
+    if (!bal) {
+      return base({
+        lane: 'D',
+        unanswered: SAY.noCashAccount,
+        trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: 'D-lane: no cash account', model: null },
+      });
+    }
+
+    /* The figure is the TOOL's, verbatim. `bal.formatted` is the only string a model may
+       quote (§3.7's number check is a set-membership test on tool output), so it is what
+       goes in the answer — never re-formatted here, or the check would fail against its
+       own source. */
+    const scope = bal.openingIncluded ? '' : ' (शाखा दृश्य — समिति का प्रारंभिक शेष शामिल नहीं)';
     return base({
       lane: 'D',
-      unanswered: req.societyId ? SAY.noData : SAY.needLogin,
-      trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: 'D-lane: no tools (Slice 4)', model: null },
+      answer: `रोकड़ शेष: ${bal.formatted}${asOf ? ` (${asOf} तक)` : ''}${scope}`,
+      confidence: 'high', // it came from the ledger, not from a document
+      cites: [{ id: 'tool:cashBalance', title: 'रोकड़ बही (Cash Book)', url: '/cash-book', type: 'help' }],
+      trace: {
+        reason: intent.reason, jurisdiction, asOf, corpus: [],
+        retrieved: [`tool:cashBalance@${bal.entryCount}entries`],
+        guard: null, model: null,
+      },
     });
   }
   if (intent.lane === 'A') {
