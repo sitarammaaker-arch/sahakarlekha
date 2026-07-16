@@ -109,16 +109,45 @@ const FY_2025_26: SlabSet = {
 };
 
 /**
- * Newest first. Append future years here — a data change, never a code change.
+ * FY 2026-27 (Tax Year 2026-27) — the CURRENT year. THE FIRST VERIFIED SET IN THIS FILE.
  *
- * NOTE: FY 2026-27 IS DELIBERATELY ABSENT. Today falls in it, so every projection is
- * flagged stale — and that is the honest state of affairs, not an oversight. No
- * authoritative FY 2026-27 (AY 2027-28) table could be read; the ITD's published help
- * pages are for AY 2026-27, i.e. the PRECEDING financial year. Guessing that the slabs
- * carried over unchanged would remove the warning while removing none of the risk, which
- * is the worst of both worlds: silent and wrong (see tdsProjection.ts's original defect).
+ * PROVENANCE — recorded precisely, because `verified: true` is a claim about a HUMAN,
+ * not about a source:
+ *   • Verified by: the founder, on his CA's confirmation, 2026-07-16.
+ *   • What the CA reviewed: docs/CA-VERIFICATION-2026-07.md — a 15-question list.
+ *   • Honest caveat: the founder's draft answers to that list were AI-generated (every
+ *     cited URL carried utm_source=chatgpt.com, and one cited s.202 — an unrelated
+ *     section — for the slabs). They were then put to a CA, who confirmed them. So the
+ *     chain is: AI draft → human expert review → founder's accountability. NOT: AI said so.
+ *   • Independent corroboration for the slabs specifically: these bands, the ₹60,000/₹12L
+ *     87A rebate and the 4% cess were read directly off the ITD portal by this codebase's
+ *     author (incometax.gov.in .../return-applicable-1) for AY 2026-27, and the portal's
+ *     cumulative figures reconcile exactly. The CA's answer says these carry forward
+ *     unchanged into FY 2026-27. Two independent paths agreeing is why this one is trusted.
+ *
+ * If this later proves wrong, that chain is what an auditor reads — which is the entire
+ * reason the field exists. `verified: true` never meant "correct"; it meant "owned".
  */
-export const SLAB_SETS: SlabSet[] = [FY_2025_26, FY_2024_25];
+const FY_2026_27: SlabSet = {
+  fy: 'FY 2026-27',
+  effectiveFrom: '2026-04-01',
+  effectiveTo: '2027-04-01',
+  new: [[400000, 0], [800000, 0.05], [1200000, 0.10], [1600000, 0.15], [2000000, 0.20], [2400000, 0.25], [Infinity, 0.30]],
+  old: [[250000, 0], [500000, 0.05], [1000000, 0.20], [Infinity, 0.30]],
+  stdDeduction: { new: 75000, old: 50000 },
+  rebateLimit: { new: 1200000, old: 500000 },
+  cess: 1.04,
+  verified: true,
+  cite: 'Income-tax Act 2025 (in force 1-4-2026) — new-regime slabs, std deduction ₹75,000, s.87A rebate ₹60,000 up to ₹12,00,000 taxable, cess 4%. Confirmed by the society\'s CA against docs/CA-VERIFICATION-2026-07.md on 2026-07-16; slabs independently corroborated against incometax.gov.in (AY 2026-27), which the CA states carry forward unchanged.',
+};
+
+/**
+ * Newest first — the stale fallback picks the closest law. Append future years here: a
+ * data change, never a code change. NEVER delete an old set; a 2024 report must still
+ * reproduce 2024's law, and the Income-tax Act 2025's own transitional provisions keep
+ * the 1961 Act alive for earlier tax years.
+ */
+export const SLAB_SETS: SlabSet[] = [FY_2026_27, FY_2025_26, FY_2024_25];
 
 export interface TaxBasis {
   set: SlabSet;

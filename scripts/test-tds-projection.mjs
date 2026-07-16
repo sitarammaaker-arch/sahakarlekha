@@ -75,30 +75,37 @@ ok(suggestMonthlyTds(30000, 'new', 0, 12, FY24) === 0, 'monthly 30k (annual 3.6L
 ok(annualIncomeTax(875000, 'new', 0, FY24) === r0(30000 * 1.04), 'new: 8.75L gross → ₹31,200 (taxable 8L, no rebate)');
 
 /* ── Slab provenance (rules/incomeTax.ts) ──────────────────────────────────────
-   The defect: this file applied FY 2024-25 law with no date parameter, so in
-   FY 2026-27 it silently computed on the wrong year. The figures are unchanged
-   (asserted above); what is new is that the wrongness is now REPORTABLE. */
+   The defect was: this file applied FY 2024-25 law with no date parameter, so in
+   FY 2026-27 it silently computed on the wrong year. Two fixes, in order:
+     1. the slabs became dated data, so the wrongness became REPORTABLE (amber warning);
+     2. the CA confirmed FY 2026-27, so the right law is now present and the warning is
+        gone — asserted below, along with the fact that an unknown year STILL warns.
+   The mechanism has to survive being satisfied, or it was only ever theatre. */
 const { resolveTaxBasis, describeBasis, SLAB_SETS } = await import(abs('../src/lib/rules/incomeTax.ts'));
 const { annualIncomeTaxWithBasis, tdsBasisNote } = await import(abs('../src/lib/tdsProjection.ts'));
 
-ok(SLAB_SETS[0].fy === 'FY 2025-26', 'catalog: newest set first — the stale fallback picks the closest law');
+ok(SLAB_SETS[0].fy === 'FY 2026-27', 'catalog: newest set first — the stale fallback picks the closest law');
 ok(SLAB_SETS.some((s) => s.fy === 'FY 2024-25'), 'catalog: older years are KEPT — a 2024 report must reproduce 2024 law');
-ok(!SLAB_SETS.some((s) => s.fy.includes('2026-27')), 'catalog: FY 2026-27 is absent — no authoritative table was found, so none is invented');
-ok(SLAB_SETS.every((s) => s.verified === false), 'catalog: EVERY set is UNVERIFIED — no figure here is settled');
+ok(SLAB_SETS.some((s) => s.fy === 'FY 2026-27' && s.verified), 'catalog: FY 2026-27 is present AND verified (CA-confirmed 2026-07-16)');
+ok(SLAB_SETS.filter((s) => !s.verified).length === 2, 'catalog: the two historical sets stay UNVERIFIED — only the CA-confirmed year is settled');
 
 const inYear = resolveTaxBasis('2024-06-01');
 ok(!inYear.stale && inYear.set.fy === 'FY 2024-25', 'basis: a date inside FY 2024-25 is not stale');
 
 // THE BUG, now visible: today is FY 2026-27 and no slab set covers it.
 const now = resolveTaxBasis('2026-07-16');
-ok(now.stale === true, 'basis: FY 2026-27 has NO slab set ⇒ flagged stale, not silently wrong');
-ok(describeBasis(now).includes('⚠️'), 'basis: the stale note warns the user');
+ok(now.stale === false && now.set.fy === 'FY 2026-27', 'basis: today resolves to FY 2026-27 — no longer stale');
+ok(!describeBasis(now).includes('⚠️'), 'basis: the amber warning is GONE — the law now covers the date');
+ok(describeBasis(now) === 'FY 2026-27 के slab से।', 'basis: verified ⇒ a plain statement, no hedge');
+// A date with no law at all still degrades loudly — the mechanism is intact.
+const far = resolveTaxBasis('2030-07-16');
+ok(far.stale === true && describeBasis(far).includes('⚠️'), 'basis: a year we have no law for still warns');
 ok(describeBasis(inYear).includes('सत्यापित नहीं'), 'basis: even in-year says it is unverified');
 
 // The figure still computes (payroll must not stop) — but it carries its provenance.
 const w = annualIncomeTaxWithBasis(1000000, 'new', 0, '2026-07-16');
-ok(typeof w.tax === 'number', 'stale: still computes — a payroll run that halts is worse');
-ok(w.basis.set.fy === 'FY 2025-26', 'stale: falls back to the NEWEST law, not the oldest');
+ok(typeof w.tax === 'number', 'today: computes');
+ok(w.basis.set.fy === 'FY 2026-27' && !w.basis.stale, 'today: uses the CURRENT law, verified');
 
 /* WHAT THE DEFECT ACTUALLY COST — the reason this is not an academic tidy-up.
    The same ₹10L salary, under the two laws:
@@ -109,8 +116,9 @@ ok(w.basis.set.fy === 'FY 2025-26', 'stale: falls back to the NEWEST law, not th
    difference; it is a person's money. */
 ok(annualIncomeTax(1000000, 'new', 0, FY24) === 44200, 'impact: FY 2024-25 taxes a ₹10L salary ₹44,200');
 ok(annualIncomeTax(1000000, 'new', 0, '2025-06-01') === 0, 'impact: FY 2025-26 taxes the SAME salary ₹0 (87A limit 7L→12L)');
-ok(w.basis.stale === true, 'stale: but the caller is TOLD the law does not fit the date');
-ok(tdsBasisNote('2026-07-16').includes('⚠️'), 'ui: the salary screen gets a warning line');
+// THE FIX, end to end: what a clerk processing salary TODAY actually gets.
+ok(annualIncomeTax(1000000, 'new') === 0, 'impact: TODAY a ₹10L salary is taxed ₹0 — was ₹44,200 this morning');
+ok(!tdsBasisNote('2026-07-16').includes('⚠️'), 'ui: the salary screen no longer warns');
 
 console.log(`
 TDS projection (pure): ${pass} passed, ${fail} failed`);
