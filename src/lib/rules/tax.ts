@@ -168,12 +168,42 @@ export const TDS_RULES: RuleCatalog = {
      have to take the society's prior-year turnover as an input and gate on it. That is
      the next slice here, and until it exists computeTds's refusal is the only correct
      behaviour for this section. UNVERIFIED like everything else on this list. */
+  /* NOTE 1 HAS NOW BEEN READ, and it does NOT say what we expected. Verbatim:
+       "Note 1.-(a) The deduction of tax under serial number 8(ii) shall not apply to a
+        transaction on which tax is deductible or collectible under any of the provisions
+        of the Act.
+        (b) The tax shall be deducted on the sum exceeding fifty lakh rupees."
+
+     So Note 1 confirms ₹50,00,000 and "on the sum exceeding" — and contains **no
+     ₹10-crore buyer-turnover condition at all**. That gate came from a statement, not a
+     source. It may live in the definition of "buyer" elsewhere in s.393, or it may be a
+     1961-Act memory that did not survive the rewrite. NOT READ ⇒ NOT KNOWN.
+
+     It stays recorded and unverified rather than deleted, because "we looked and did not
+     find it" is a different state from "it does not exist", and the difference matters:
+     if the gate is real and we drop it, the software tells small societies to deduct when
+     they must not. Someone must read the definition of "buyer" in s.393 and settle it. */
   'tds.194q.applies_if.buyer_turnover_min': tds(
     'tds.194q.applies_if.buyer_turnover_min', 100000000,
-    'GATE: 194Q applies only if the BUYER\'s preceding-year turnover exceeded ₹10 crore (founder, 2026-07-16). ' +
-      'The Act\'s Table Sl. No. 8(ii) says "Threshold limit: As per Note 1" — Note 1 is where this lives and it ' +
-      'has NOT been read yet. UNVERIFIED, and not enforced by computeTds. Most cooperative societies fall below ' +
-      'this and owe NO 194Q at all.',
+    'CLAIMED GATE, NOT FOUND IN THE TEXT: "194Q applies only if the buyer\'s preceding-year turnover exceeded ' +
+      '₹10 crore" (founder, 2026-07-16). Note 1 to s.393(1) Table Sl. No. 8(ii) has now been read and contains ' +
+      'NO such condition — only "tax shall be deducted on the sum exceeding fifty lakh rupees" plus a carve-out ' +
+      'where the transaction is already taxed under another provision. The gate may sit in the definition of ' +
+      '"buyer" in s.393, unread. UNVERIFIED and unenforced. If real, most cooperative societies owe NO 194Q at all.',
+    TY2627,
+  ),
+
+  /* Note 1(a) — a real carve-out, from the text, that computeTds does NOT yet honour:
+     8(ii) does not apply where the SAME transaction already attracts TDS/TCS under any
+     other provision. Recorded as a flag rather than a number because it is a condition on
+     the transaction, not a threshold; wiring it needs computeTds to know what else applies
+     to the same sum. Until then computeTds can over-deduct on a doubly-covered
+     transaction — named here so it is not mistaken for handled. */
+  'tds.194q.excluded_if.taxed_under_other_provision': verified(
+    'tds.194q.excluded_if.taxed_under_other_provision', 1,
+    'Income-tax Act 2025 s.393(1) Table Sl. No. 8(ii), Note 1(a) — "shall not apply to a transaction on which ' +
+      'tax is deductible or collectible under any of the provisions of the Act". SOURCE: incometaxindia.gov.in/w/section-393-5. ' +
+      'RECORDED BUT NOT ENFORCED by computeTds.',
     TY2627,
   ),
 
