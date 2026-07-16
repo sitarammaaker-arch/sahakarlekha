@@ -20,16 +20,38 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { ask, CORPUS, resolveAiFlags, classify, mapLedgerEventRows } from '../_shared/ask-core.mjs';
 
-const CORS = {
-  'access-control-allow-origin': '*',
-  'access-control-allow-headers': 'authorization, content-type, apikey',
-  'access-control-allow-methods': 'POST, OPTIONS',
-};
+/* CORS — and the bug that made this seam unreachable from a browser for a day.
+   The allow-list used to be a hand-written 'authorization, content-type, apikey'. But
+   supabase-js sets X-Client-Info on EVERY request (DEFAULT_HEADERS, supabase-js/dist/
+   index.mjs) and may add x-region. A preflight asking for a header the response does not
+   allow FAILS — and a failed preflight means the browser never sends the POST at all.
+   The symptom is silent and deeply misleading: Invocations showed a wall of OPTIONS 200
+   with not one POST, /ask quietly fell back to local search (client.ts), and no audit row
+   was ever written — so the trail said "anonymous", which sent us hunting an auth bug
+   that did not exist.
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { ...CORS, 'content-type': 'application/json' } });
+   So do not hand-maintain a list of the SDK's headers: echo what the preflight asks for.
+   The next header the SDK adds must not take the assistant down again.
+
+   Safe here: allow-origin is '*', so the browser sends no cookies and this grants a
+   caller nothing. CORS is not this seam's security boundary — the verified JWT is
+   (#218), and it is enforced below regardless of who was allowed to ask. */
+const corsFor = (req: Request) => ({
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers':
+    req.headers.get('access-control-request-headers') ??
+    'authorization, x-client-info, apikey, content-type',
+  'access-control-allow-methods': 'POST, OPTIONS',
+  // Without this Chrome re-flies the preflight every few seconds — a needless round
+  // trip on a rural connection, for every keystroke-triggered ask.
+  'access-control-max-age': '86400',
+});
 
 Deno.serve(async (req: Request) => {
+  const CORS = corsFor(req);
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { ...CORS, 'content-type': 'application/json' } });
+
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
 
