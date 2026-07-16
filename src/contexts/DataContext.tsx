@@ -761,14 +761,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // We loop .range() in 1000-row pages until a partial page comes back. Guarantees
     // ALL rows are loaded regardless of server-side cap; otherwise the user's newest
     // entries silently vanish on F5 once total rows exceed the cap.
-    const fetchAllPaged = async <T,>(table: string, orderCol?: string): Promise<{ data: T[]; error: { message: string } | null }> => {
+    //
+    // `orderBy` MUST end in a UNIQUE column, so the order is TOTAL. Paging with LIMIT/OFFSET over a
+    // non-unique ORDER BY (or none at all) leaves tied rows free to sort differently on each page
+    // request, which duplicates or drops them — see the note on the shared helper in supabasePaging.ts.
+    // Defaults to the primary key `id`; ledger_events keys on `event_id` instead.
+    const fetchAllPaged = async <T,>(table: string, orderBy: string[] = ['id']): Promise<{ data: T[]; error: { message: string } | null }> => {
       const PAGE = 1000;
       const out: T[] = [];
       let from = 0;
       // Safety cap: 200 pages = 200,000 rows. Tweak if any single table ever exceeds this.
       for (let i = 0; i < 200; i++) {
         let q = supabase.from(table).select('*').eq('society_id', sid).range(from, from + PAGE - 1);
-        if (orderCol) q = q.order(orderCol);
+        for (const col of orderBy) q = q.order(col, { ascending: true });
         const { data, error } = await q;
         if (error) return { data: out, error };
         if (!data || data.length === 0) break;
@@ -789,25 +794,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           { data: socData }, { data: supData }, { data: cusData },
           { data: kccData }, { data: recData }, { data: kaData }, { data: p7Data },
         ] = await Promise.all([
-          fetchAllPaged<Voucher>('vouchers', 'createdAt'),
+          fetchAllPaged<Voucher>('vouchers', ['createdAt', 'id']),
           fetchAllPaged<Member>('members'),
           fetchAllPaged<LedgerAccount>('accounts'),
           fetchAllPaged<Loan>('loans'),
           fetchAllPaged<Asset>('assets'),
           fetchAllPaged<AuditObjection>('audit_objections'),
           fetchAllPaged<StockItem>('stock_items'),
-          fetchAllPaged<StockMovement>('stock_movements', 'createdAt'),
-          fetchAllPaged<Sale>('sales', 'createdAt'),
-          fetchAllPaged<Purchase>('purchases', 'createdAt'),
+          fetchAllPaged<StockMovement>('stock_movements', ['createdAt', 'id']),
+          fetchAllPaged<Sale>('sales', ['createdAt', 'id']),
+          fetchAllPaged<Purchase>('purchases', ['createdAt', 'id']),
           fetchAllPaged<Employee>('employees'),
-          fetchAllPaged<SalaryRecord>('salary_records', 'createdAt'),
+          fetchAllPaged<SalaryRecord>('salary_records', ['createdAt', 'id']),
           supabase.from('society_settings').select('*').eq('society_id', sid).limit(1),
           fetchAllPaged<Supplier>('suppliers'),
           fetchAllPaged<Customer>('customers'),
           fetchAllPaged<KccLoan>('kcc_loans'),
-          fetchAllPaged<Recoverable>('recoverables', 'createdAt'),
-          fetchAllPaged<KachiAaratEntry>('kachi_aarat_entries', 'createdAt'),
-          fetchAllPaged<P7Entry>('p7_entries', 'createdAt'),
+          fetchAllPaged<Recoverable>('recoverables', ['createdAt', 'id']),
+          fetchAllPaged<KachiAaratEntry>('kachi_aarat_entries', ['createdAt', 'id']),
+          fetchAllPaged<P7Entry>('p7_entries', ['createdAt', 'id']),
         ]);
 
         if (vErr) console.warn('Vouchers query error:', vErr.message);
@@ -1353,11 +1358,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // voucher-state compute — no harm. snake_case columns → the camelCase LedgerEvent shape.
           if ((socData[0] as SocietySettings).ledgerReadsEnabled) {
             try {
-              // NOTE: this loader's fetchAllPaged is the LOCAL one — (table, orderCol), society-scoped
+              // NOTE: this loader's fetchAllPaged is the LOCAL one — (table, orderBy), society-scoped
               // already. It was being called as (table, sid, orderCol), so `sid` landed in orderCol:
               // Postgres rejected the order column, the query errored, and a cut-over tenant loaded an
               // EMPTY journal — every ledger read then failed parity and silently fell back forever.
-              const { data: evData } = await fetchAllPaged<Record<string, unknown>>('ledger_events', 'occurred_at');
+              // `orderBy` is a string[] precisely so that mix-up can no longer typecheck.
+              // event_id (the PK) breaks occurred_at ties: genesis stamps every voucher of a day at
+              // that day's midnight, so ties are the rule here, not the exception — see genesis.ts.
+              const { data: evData } = await fetchAllPaged<Record<string, unknown>>('ledger_events', ['occurred_at', 'event_id']);
               ledgerEventsRef.current = mapLedgerEventRows(evData ?? []);
               journalLoadedRef.current = true; // safe to derive per-aggregate sequences from the ref
             } catch (e) { console.warn('T-09 journal load (best-effort) failed:', e); }
@@ -5104,7 +5112,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const sid = societyIdRef.current;
     if (!sid) return ledgerEventsRef.current.length;
     try {
-      const { data } = await fetchAllPagedFor<Record<string, unknown>>('ledger_events', sid, 'occurred_at');
+      const { data } = await fetchAllPagedFor<Record<string, unknown>>('ledger_events', sid, ['occurred_at', 'event_id']);
       ledgerEventsRef.current = mapLedgerEventRows(data ?? []);
       journalLoadedRef.current = true; // full log in memory — sequences are now collision-free
     } catch (e) {

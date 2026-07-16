@@ -67,6 +67,7 @@
     "test:ledger-projections": "node scripts/test-ledger-projections.mjs",
     "test:ledger-correction": "node scripts/test-ledger-correction.mjs",
     "test:ledger-cutover": "node scripts/test-ledger-cutover.mjs",
+    "test:supabase-paging": "node scripts/test-supabase-paging.mjs",
     "test:rules-engine": "node scripts/test-rules-engine.mjs",
     "test:ucas-rules": "node scripts/test-ucas-rules.mjs",
     "test:ucas-appropriation": "node scripts/test-ucas-appropriation.mjs",
