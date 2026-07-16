@@ -185,6 +185,7 @@
     "build:ask-core": "esbuild supabase/functions/_shared/ask-core.entry.ts --bundle --format=esm --platform=neutral --alias:@=./src --outfile=supabase/functions/_shared/ask-core.mjs --log-level=warning",
     "test:ask-core": "node scripts/test-ask-core.mjs",
     "test:dlane-parity": "node scripts/test-dlane-parity.mjs",
+    "test:tool-cash-balance": "node scripts/test-tool-cash-balance.mjs",
     "test:compute-tds": "node scripts/test-compute-tds.mjs",
     "test:cumulative-tds": "node scripts/test-cumulative-tds.mjs",
     "test:tds-sections": "node scripts/test-tds-sections.mjs",
