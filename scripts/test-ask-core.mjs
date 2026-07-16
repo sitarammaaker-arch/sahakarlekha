@@ -80,18 +80,26 @@ console.log('\n  ask-core — the mechanism, with no model\n');
      turns the hedge into a fact. 194Q was seeded ₹50,00,000 and hedged; the CA said
      ₹10,00,000 (under the 2025 Act, where s.194Q no longer exists). Now it answers.
      Every rule a human confirms converts one refusal — and nothing else does. */
+  /* 194Q went the other way and that is the system working. It was verified at
+     ₹10,00,000 on a CA-reviewed list; the founder then stated ₹50,00,000 with a worked
+     example. 5× apart, both from the same channel. So it is back to unverified: when
+     sources conflict, "take the newer one" is the same error in the other direction. */
   const q = run('194Q की सीमा कितनी है');
-  ok('F-lane: 194Q now ANSWERS — the hedge became a fact', !!q.answer);
-  ok('F-lane: states the CA-confirmed ₹10,00,000, not the ₹50,00,000 seed', q.answer.includes('10,00,000'));
-  ok('F-lane: states the effective date', q.answer.includes('2026-04-01'));
-  ok('F-lane: no guard fired — it had a verified rule', q.trace.guard === null);
-  ok('F-lane: cites the section to check', q.cites.some(c => c.title.includes('393(1) Table 8')));
-  ok('F-lane: high confidence — only a verified rule earns it', q.confidence === 'high');
+  ok('F-lane: 194Q refuses again — its threshold is contested', q.answer === null);
+  ok('F-lane: says the rule exists but is unchecked', q.trace.guard.includes('unverified'));
+  ok('F-lane: leaks NEITHER contested figure', !(q.unanswered || '').match(/50,00,000|10,00,000/));
 
-  /* And the discipline still holds for everything unverified. GST has no rule at all;
-     194C has one the CA gave but this catalog's shape cannot hold honestly (two
-     thresholds, two rates). Both must still refuse. */
-  ok('F-lane: 194C still refuses — the catalog cannot hold its shape', run('194C की दर क्या है').answer === null);
+  /* 194H is uncontested and still answers — one section's dispute does not silence the
+     catalog. */
+  const h = run('194H की दर क्या है');
+  ok('F-lane: 194H still answers — the dispute is scoped to 194Q', !!h.answer && h.lane === 'F');
+
+  /* A/4 — 194C now answers through the seam too, stating both variants rather than
+     guessing one. The discipline still holds where there is genuinely no rule: GST. */
+  const c = run('194C की दर क्या है');
+  ok('F-lane: 194C answers through the seam', !!c.answer && c.lane === 'F');
+  ok('F-lane: 194C states both variants, not one guess', c.answer.includes('1%') && c.answer.includes('2%'));
+  ok('F-lane: GST still refuses — no rule exists at all', run('GST की दर क्या है').answer === null);
 }
 
 /* 5 · SCOPE (AI-N5 / CAIOS-K8) — anonymous cannot reach society data. */
