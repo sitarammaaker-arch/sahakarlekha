@@ -3,7 +3,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { computeStatutory } from '@/lib/payrollStatutory';
-import { suggestMonthlyTds, type TaxRegime } from '@/lib/tdsProjection';
+import { suggestMonthlyTds, tdsBasisNote, type TaxRegime } from '@/lib/tdsProjection';
+import { resolveTaxBasis } from '@/lib/rules/incomeTax';
 import { professionalTaxForState } from '@/lib/professionalTax';
 import { build24Q, type Quarter } from '@/lib/form24Q';
 import { daysInMonth, prorate } from '@/lib/attendance';
@@ -221,6 +222,12 @@ const SalaryManagement: React.FC = () => {
   const [processRows, setProcessRows] = useState<ProcessRow[]>([]);
   const [rowsLoaded, setRowsLoaded] = useState(false);
   const [taxRegime, setTaxRegime] = useState<TaxRegime>('new');   // ECR-14: TDS-192 projection regime
+  // Warn on BOTH failure modes (rules/incomeTax.ts): the law does not cover today
+  // (stale), OR it does but nobody has verified the figures. Unverified is quieter than
+  // stale but it is not safe — the clerk is about to accept this number into a salary
+  // record either way, so both earn the amber.
+  const tdsBasis = resolveTaxBasis(new Date().toISOString().slice(0, 10));
+  const tdsStale = tdsBasis.stale || !tdsBasis.set.verified;
 
   // ── Tab 3 – Salary History state ────────────────────────────────────────
   // ECR-14: Form 24Q dialog
@@ -671,6 +678,13 @@ const SalaryManagement: React.FC = () => {
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground mt-2">{hi ? 'TDS स्वतः projected (वार्षिक अनुमान से मासिक) — हर पंक्ति में बदल सकते हैं।' : 'TDS is auto-projected (annual estimate → monthly) — editable per row.'}</p>
+              {/* WHICH YEAR'S LAW produced this number. It used to say nothing, and an
+                  auto-filled figure that says nothing is taken as settled — that is how
+                  FY 2024-25 slabs quietly computed FY 2026-27 salaries. The projection is
+                  editable, so the clerk can act on this; they just have to be told. */}
+              <p className={`text-[11px] mt-1 ${tdsStale ? 'text-amber-600 dark:text-amber-500 font-medium' : 'text-muted-foreground'}`}>
+                {tdsBasisNote()}
+              </p>
               {rowsLoaded && alreadyProcessedForMonth && (
                 <div className="mt-3 flex items-center gap-2 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md px-3 py-2 text-sm">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
