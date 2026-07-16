@@ -17,6 +17,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   healthFromRehearsalRows,
+  placementFromBackupRows,
+  type BackupAuditRow,
   type BackupHealth,
   type RehearsalAuditRow,
 } from '@/lib/backup/health';
@@ -36,6 +38,10 @@ export interface UseBackupHealth {
 export function useBackupHealth(): UseBackupHealth {
   const { user } = useAuth();
   const [rows, setRows] = useState<RehearsalAuditRow[] | null>(null);
+  // T-36: the placement verdict the LATEST scheduled backup recorded for itself. Without this the
+  // card could never report anything but "placement never evaluated" — the server grades the copies
+  // (step B) and this is the wire that carries that verdict to the gate (step A).
+  const [backupRows, setBackupRows] = useState<BackupAuditRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
@@ -62,13 +68,28 @@ export function useBackupHealth(): UseBackupHealth {
         setError(null);
         setRows((data ?? []) as RehearsalAuditRow[]);
       });
+    // The scheduled backup is the run that actually places the copies, so its row carries the
+    // verdict. A read failure leaves the placement unknown ⇒ amber, never a green guess.
+    void supabase
+      .from('audit_log')
+      .select('created_at, after')
+      .eq('society_id', societyId)
+      .eq('action', 'export')
+      .eq('actor_name', 'scheduled-backup')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setBackupRows((data ?? []) as BackupAuditRow[]);
+      });
     return () => {
       cancelled = true;
     };
   }, [user?.societyId, tick]);
 
   // `now` is read here (a side-effecting hook, not a pure module) and injected into the pure gate.
-  const health = rows === null ? null : healthFromRehearsalRows(rows, new Date().toISOString());
+  const placement = backupRows === null ? null : placementFromBackupRows(backupRows);
+  const health = rows === null ? null : healthFromRehearsalRows(rows, new Date().toISOString(), undefined, placement);
 
   return {
     health,

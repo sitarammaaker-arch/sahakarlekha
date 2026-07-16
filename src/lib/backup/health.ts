@@ -187,6 +187,48 @@ export function healthFromRehearsalRows(
   return backupHealth({ lastBackupAt: backupCreatedAt, lastVerifyAt: at, lastRehearsal: { at, passed }, now, freshnessDays, placement });
 }
 
+/**
+ * A `backup` `export` row read back from `audit_log` — only the field the placement gate needs.
+ * Its `after` payload is written by supabase/functions/scheduled-backup (T-36 step B), which grades
+ * the run's own placement with evaluate321 and records the verdict.
+ */
+export interface BackupAuditRow {
+  created_at?: string | null;
+  after?: { placement?: unknown } | null;
+}
+
+/**
+ * PURE — the placement verdict recorded on the LATEST scheduled backup, or null when there is none.
+ *
+ * It NEVER invents a verdict. Anything that is absent, or not shaped like a real Placement321Verdict
+ * (an older backup taken before T-36, a hand-run client backup, a malformed payload), reads as null —
+ * which the health gate treats as "never evaluated" (amber). Guessing here would be the exact failure
+ * the card exists to prevent: a green light that means "we have not checked".
+ */
+export function placementFromBackupRows(rows: readonly BackupAuditRow[]): Placement321Verdict | null {
+  let latest: BackupAuditRow | null = null;
+  let latestMs = -Infinity;
+  for (const r of rows) {
+    const at = r?.created_at;
+    if (!at) continue;
+    const ms = Date.parse(at);
+    if (Number.isNaN(ms)) continue;
+    if (ms > latestMs) { latestMs = ms; latest = r; }
+  }
+  const p = latest?.after?.placement;
+  if (!p || typeof p !== 'object') return null;
+  const v = p as Record<string, unknown>;
+  // `ok` and `deficiencies` are the load-bearing fields — without them there is no verdict to trust.
+  if (typeof v.ok !== 'boolean' || !Array.isArray(v.deficiencies)) return null;
+  return {
+    ok: v.ok,
+    copies: typeof v.copies === 'number' ? v.copies : 0,
+    providers: typeof v.providers === 'number' ? v.providers : 0,
+    offProviderOffRegion: v.offProviderOffRegion === true,
+    deficiencies: v.deficiencies.filter((d): d is string => typeof d === 'string'),
+  };
+}
+
 /** PURE — one line for the card header. Hindi first (RULE 7). */
 export function summarizeHealth(health: BackupHealth, hi = true): string {
   switch (health.status) {
