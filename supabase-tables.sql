@@ -855,6 +855,9 @@ alter table society_settings add column if not exists "activitiesCutoverEnabled"
 alter table society_settings add column if not exists "ledgerReadsEnabled" boolean default false;
 -- T-20 (UCAS CM-1): per-tenant statutory appropriation posting (migration 049). Default off.
 alter table society_settings add column if not exists "statutoryAppropriation" boolean default false;
+-- T-23 (UCAS CM-2 / CL-7): FY close needs a recorded board resolution (migration 050). Default off.
+alter table society_settings add column if not exists "fyCloseAuthorityRequired" boolean default false;
+alter table society_settings add column if not exists "fyCloseAuthority" text;
 
 -- ECR-07 dual-control: FY unlock must be requested by one admin and approved by
 -- another. These hold the open request until a second admin finalises it.

@@ -33,10 +33,14 @@ const SocietySetup: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const { toast } = useToast();
-  const { society, societyCapabilities, updateSociety, accounts, vouchers, updateAccount, addAccount, deleteAccount, resetAccounts, getAccountBalance, getTrialBalance, getProfitLoss, getReceiptsPayments } = useData();
+  const { society, societyCapabilities, updateSociety, closeFinancialYear, accounts, vouchers, updateAccount, addAccount, deleteAccount, resetAccounts, getAccountBalance, getTrialBalance, getProfitLoss, getReceiptsPayments } = useData();
 
   // ECR-07: period-lock date input (back-dating prevention)
   const [periodLockInput, setPeriodLockInput] = useState(society.periodLockDate || '');
+  // T-23: the board resolution that authorizes the FY close (only used when the tenant requires it).
+  const [brRef, setBrRef] = useState('');
+  const [brDate, setBrDate] = useState('');
+  const [brBy, setBrBy] = useState('');
   const handleSetPeriodLock = () => {
     if (!periodLockInput) return;
     updateSociety({ periodLockDate: periodLockInput, periodLockBy: 'Admin' });
@@ -157,8 +161,15 @@ const SocietySetup: React.FC = () => {
 
   // ECR-07 dual-control: locking is single-admin; UNLOCKING needs a request by one
   // admin and approval by a different admin.
+  // T-23: the close now goes through closeFinancialYear — which, when the tenant requires it,
+  // demands a recorded board resolution. Flag off ⇒ it locks exactly as before.
   const handleLockFY = () => {
-    updateSociety({ fyLocked: true, fyLockedAt: new Date().toISOString().split('T')[0], fyLockedBy: user?.name || 'Admin', fyUnlockRequestedBy: undefined, fyUnlockRequestedAt: undefined });
+    const locked = closeFinancialYear({
+      attestation: society.fyCloseAuthorityRequired
+        ? { kind: 'board_resolution', reference: brRef.trim(), date: brDate, authorizedBy: brBy.trim() }
+        : undefined,
+    });
+    if (!locked) return;   // refused — closeFinancialYear already explained why
     toast({ title: language === 'hi' ? `FY ${society.financialYear} लॉक किया गया` : `FY ${society.financialYear} Locked`, description: language === 'hi' ? 'अब इस वर्ष में कोई नई एंट्री नहीं हो सकती।' : 'No new vouchers can be added to this financial year.' });
   };
   const handleRequestUnlock = () => {
@@ -758,10 +769,30 @@ const SocietySetup: React.FC = () => {
                           ? 'लॉक करने के बाद इस वित्तीय वर्ष में कोई नई वाउचर एंट्री नहीं हो सकती।'
                           : 'Locking prevents any new voucher entries for this financial year. Use after audit completion.')}
                     </p>
+                    {/* T-23: the board resolution that authorized the close — the audit link (CL-7). */}
+                    {society.fyLocked && society.fyCloseAuthority && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {language === 'hi' ? 'प्राधिकार: ' : 'Authority: '}{society.fyCloseAuthority}
+                      </p>
+                    )}
+                    {/* T-23: this tenant requires a recorded board resolution to close the year. */}
+                    {!society.fyLocked && society.fyCloseAuthorityRequired && (
+                      <div className="mt-2">
+                        <p className="text-xs font-medium mb-1">{language === 'hi' ? 'बोर्ड संकल्प (आवश्यक)' : 'Board resolution (required)'}</p>
+                        <div className="flex flex-wrap gap-2">
+                          <Input value={brRef} onChange={(e) => setBrRef(e.target.value)} placeholder={language === 'hi' ? 'संकल्प क्रमांक' : 'Resolution no.'} className="h-8 w-44" />
+                          <Input type="date" value={brDate} onChange={(e) => setBrDate(e.target.value)} className="h-8 w-40" />
+                          <Input value={brBy} onChange={(e) => setBrBy(e.target.value)} placeholder={language === 'hi' ? 'अधिकृत निकाय' : 'Authorized by'} className="h-8 w-44" />
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
                     {!society.fyLocked ? (
-                      <Button variant="destructive" size="sm" className="gap-2" onClick={handleLockFY}>
+                      <Button
+                        variant="destructive" size="sm" className="gap-2" onClick={handleLockFY}
+                        disabled={!!society.fyCloseAuthorityRequired && !(brRef.trim() && brDate && brBy.trim())}
+                      >
                         <Lock className="h-4 w-4" />{language === 'hi' ? 'FY लॉक करें' : 'Lock FY'}
                       </Button>
                     ) : (() => {
