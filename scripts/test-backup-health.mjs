@@ -59,7 +59,7 @@ try {
   process.exit(1);
 }
 
-const { backupHealth, summarizeHealth } = mod;
+const { backupHealth, summarizeHealth, healthFromRehearsalRows } = mod;
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -67,12 +67,17 @@ const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  �
 const NOW = '2026-07-10T00:00:00Z';
 const daysAgo = (n) => new Date(Date.parse(NOW) - n * 86400000).toISOString();
 
-// The only shape that earns green: recent backup, verified, rehearsal passed & recent.
+// A placement that satisfies 3-2-1 / LOCKSS (the shape evaluate321 returns when ok).
+const goodPlacement = { ok: true, copies: 3, providers: 2, offProviderOffRegion: true, deficiencies: [] };
+
+// The only shape that earns green: recent backup, verified, rehearsal passed & recent, AND the
+// copies placed safely (T-36 / DP-P4 — a single-vendor backup is one outage from total loss).
 const healthy = {
   lastBackupAt: daysAgo(1),
   lastVerifyAt: daysAgo(1),
   lastRehearsal: { at: daysAgo(1), passed: true },
   now: NOW,
+  placement: goodPlacement,
 };
 
 // ── 1. GREEN IS HARD TO EARN ─────────────────────────────────────────────────
@@ -144,6 +149,37 @@ for (const forbidden of ['supabase', 'fetch(', 'localStorage', 'document.', 'Dat
   ok(!source.includes(forbidden), `health.ts is pure and deterministic (found "${forbidden}")`);
 }
 ok(rawSource.includes('NEVER GREEN ON MISSING DATA'), 'the one rule is stated at the top of the file');
+
+// ── PLACEMENT (T-36 / DP-P4) — a restorable backup is still not safe at one vendor ──────────────
+{
+  // No placement evaluated ⇒ missing data ⇒ never green (THE ONE RULE).
+  const unevaluated = backupHealth({ ...healthy, placement: undefined });
+  ok(unevaluated.status === 'amber', 'a perfect backup with an UNEVALUATED placement is amber, never green');
+  ok(unevaluated.reasons.some((r) => /placement has never been evaluated/.test(r)), 'and says the placement was never evaluated');
+  ok(backupHealth({ ...healthy, placement: null }).status === 'amber', 'placement: null is treated the same as absent');
+
+  // The real situation today: one copy, one vendor.
+  const singleVendor = {
+    ok: false, copies: 1, providers: 1, offProviderOffRegion: false,
+    deficiencies: ['needs ≥3 copies, has 1 (3-2-1)', 'needs ≥2 providers, has 1 (never all with one vendor)'],
+  };
+  const oneVendor = backupHealth({ ...healthy, placement: singleVendor });
+  ok(oneVendor.status === 'amber', 'a fresh, verified, REHEARSED backup that lives at ONE vendor is amber — restorable is not the same as safe');
+  ok(oneVendor.proven === true, 'it is still "proven" (the rehearsal did restore it) — placement is a separate fact');
+  ok(oneVendor.reasons.some((r) => r.startsWith('placement: ') && /≥2 providers/.test(r)), 'every placement deficiency is surfaced verbatim');
+  ok(oneVendor.reasons.length === singleVendor.deficiencies.length, 'only the placement reasons remain — nothing else is wrong');
+
+  // Placement never makes it RED: the bytes do restore; they are merely not durable enough.
+  ok(backupHealth({ ...healthy, placement: singleVendor }).status !== 'red', 'a placement shortfall is amber, never red');
+  // …but a failed rehearsal still wins (red beats amber).
+  ok(backupHealth({ ...healthy, placement: singleVendor, lastRehearsal: { at: daysAgo(1), passed: false } }).status === 'red',
+    'a FAILED rehearsal still dominates a placement shortfall (worst condition wins)');
+
+  // healthFromRehearsalRows passes the placement through.
+  const rows = [{ created_at: daysAgo(1), after: { passed: true, backupCreatedAt: daysAgo(1) } }];
+  ok(healthFromRehearsalRows(rows, NOW, 7, goodPlacement).status === 'green', 'healthFromRehearsalRows: a good placement earns green');
+  ok(healthFromRehearsalRows(rows, NOW, 7).status === 'amber', 'healthFromRehearsalRows: no placement ⇒ amber (never green on missing data)');
+}
 
 console.log(`\nBackup health: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

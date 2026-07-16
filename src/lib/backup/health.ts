@@ -9,12 +9,13 @@
  * THE ONE RULE: NEVER GREEN ON MISSING DATA.
  *
  * A health card exists to answer "is this society's data safe?" The dangerous answer is a
- * green light that means "we have not checked." So green requires three POSITIVE facts, all
+ * green light that means "we have not checked." So green requires four POSITIVE facts, all
  * present and all fresh:
  *
  *   1. a backup was taken, and recently;
  *   2. that backup was verified;
- *   3. a rehearsal RESTORED it and the books matched — recently.
+ *   3. a rehearsal RESTORED it and the books matched — recently;
+ *   4. the copies are PLACED safely — 3-2-1 / LOCKSS (T-36 / DP-P4).
  *
  * Absent any one of them, the card is amber or red, never green. In particular:
  *
@@ -23,12 +24,17 @@
  *     is a hope. Amber, never green.
  *   * A rehearsal that FAILED is a known-bad backup. Red. This is worse than no backup,
  *     because it looked like safety.
+ *   * A backup whose copies all sit with ONE vendor is one outage — or one ransomware event,
+ *     or one vendor's bankruptcy — from total loss (placement.ts). A perfectly restorable
+ *     single-vendor backup is still not safe, so it cannot be green. Amber. And a placement
+ *     that was never evaluated is missing data, which by THE ONE RULE is also never green.
  *
  * This is why the roadmap says: do not ship the word "backup" in the UI until a rehearsal
  * is green. This function is what enforces that — it cannot be made to say green without a
  * passing, fresh rehearsal.
  * ─────────────────────────────────────────────────────────────────────────────────────
  */
+import type { Placement321Verdict } from './placement';
 
 export type HealthStatus = 'green' | 'amber' | 'red' | 'unknown';
 
@@ -48,6 +54,11 @@ export interface HealthInputs {
   now: string;
   /** How many days before a backup or rehearsal is considered stale. Default 7 (weekly, D6). */
   freshnessDays?: number;
+  /**
+   * The 3-2-1 / LOCKSS verdict for where the copies actually live (evaluate321, T-36 / DP-P4).
+   * null/undefined ⇒ the placement was never evaluated — missing data, so never green.
+   */
+  placement?: Placement321Verdict | null;
 }
 
 export interface BackupHealth {
@@ -116,6 +127,14 @@ export function backupHealth(inputs: HealthInputs): BackupHealth {
     proven = true;
   }
 
+  // Placement (T-36 / DP-P4) — a restorable backup whose copies all sit with one vendor is still
+  // one outage from total loss. Amber, never red: the bytes do restore; they are just not durable.
+  if (!inputs.placement) {
+    reasons.push('the copy placement has never been evaluated — 3-2-1 is unproven');
+  } else if (!inputs.placement.ok) {
+    for (const d of inputs.placement.deficiencies) reasons.push(`placement: ${d}`);
+  }
+
   let status: HealthStatus;
   if (reasons.length === 0) status = 'green';
   else if (red) status = 'red';
@@ -145,6 +164,7 @@ export function healthFromRehearsalRows(
   rows: readonly RehearsalAuditRow[],
   now: string,
   freshnessDays?: number,
+  placement?: Placement321Verdict | null,
 ): BackupHealth {
   let latest: RehearsalAuditRow | null = null;
   let latestMs = -Infinity;
@@ -156,7 +176,7 @@ export function healthFromRehearsalRows(
     if (ms > latestMs) { latestMs = ms; latest = r; }
   }
   if (!latest) {
-    return backupHealth({ lastBackupAt: null, lastVerifyAt: null, lastRehearsal: null, now, freshnessDays });
+    return backupHealth({ lastBackupAt: null, lastVerifyAt: null, lastRehearsal: null, now, freshnessDays, placement });
   }
   const at = latest.created_at as string;
   const passed = latest.after?.passed === true;
@@ -164,7 +184,7 @@ export function healthFromRehearsalRows(
     typeof latest.after?.backupCreatedAt === 'string' ? latest.after.backupCreatedAt : at;
   // A rehearsal verifies the archive before comparing, so a recorded rehearsal is also a
   // recorded verification at the same instant.
-  return backupHealth({ lastBackupAt: backupCreatedAt, lastVerifyAt: at, lastRehearsal: { at, passed }, now, freshnessDays });
+  return backupHealth({ lastBackupAt: backupCreatedAt, lastVerifyAt: at, lastRehearsal: { at, passed }, now, freshnessDays, placement });
 }
 
 /** PURE — one line for the card header. Hindi first (RULE 7). */
