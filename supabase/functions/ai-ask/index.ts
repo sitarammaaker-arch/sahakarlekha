@@ -69,17 +69,25 @@ async function fetchAllRows(
   columns: string,
   societyId: string,
   orderBy: string[],
+  /** Where the time went, per table — see the `timings` note in the handler. */
+  stats?: Record<string, number>,
 ): Promise<Record<string, unknown>[]> {
+  const t0 = Date.now();
   const out: Record<string, unknown>[] = [];
+  let pages = 0;
   for (let from = 0; from < MAX_ROWS; from += PAGE) {
     let q = db.from(table).select(columns).eq('society_id', societyId);
     for (const col of orderBy) q = q.order(col, { ascending: true });
     const { data, error } = await q.range(from, from + PAGE - 1);
+    pages++;
     if (error) throw new Error(`${table}: ${error.message}`);
     const rows = (data ?? []) as Record<string, unknown>[];
     out.push(...rows);
     // A short page is the only end-of-data signal PostgREST gives us.
-    if (rows.length < PAGE) return out;
+    if (rows.length < PAGE) {
+      if (stats) { stats[`${table}Ms`] = Date.now() - t0; stats[`${table}Pages`] = pages; }
+      return out;
+    }
   }
   throw new Error(`${table}: more than ${MAX_ROWS} rows — refusing to answer from a partial book`);
 }
@@ -124,6 +132,23 @@ Deno.serve(async (req: Request) => {
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
+  /* WHERE THE TIME WENT — the same move as authTrace, for the same reason.
+     `latencyMs` says 5187ms and nothing else. Every explanation on offer is a guess, and
+     the arithmetic kills the obvious ones before they are tested: the events fetch is TWO
+     round trips, not five seconds' worth; `select('*')` on 586 narrow account rows is tens
+     of KB, not seconds. Meanwhile two things nobody suspected sit on this clock ahead of
+     the load — getUser() is an HTTP call to the auth server, and the society_users lookup
+     is a second one, both strictly sequential before a single event is read.
+
+     So: measure the parts before optimising any of them. A total is not a diagnosis, and
+     this seam has already cost one session to six theories that a single instrumented
+     read would have killed. Instrument, then read. Do not theorise. */
+  const timings: Record<string, number> = {};
+  const time = async <T>(key: string, fn: () => Promise<T>): Promise<T> => {
+    const t0 = Date.now();
+    try { return await fn(); } finally { timings[key] = Date.now() - t0; }
+  };
+
   /* WHY IDENTITY RESOLUTION ENDED WHERE IT DID — recorded on the audit row.
      A logged-in founder was landing here as `anonymous` and the trail could not say
      which of the four branches below dropped him: no bearer, the anon key, a rejected
@@ -149,10 +174,10 @@ Deno.serve(async (req: Request) => {
          at 19:32. An identity that works four times out of six is not an identity.
          getUser(jwt) takes the by-value path: one network check of exactly this token,
          no storage, no locks, no isolate memory. Stateless, as a seam must be. */
-      const { data, error } = await createClient(supaUrl, anonKey, {
+      const { data, error } = await time('getUserMs', () => createClient(supaUrl, anonKey, {
         // Belt and braces: never let a server client persist or refresh a session.
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-      }).auth.getUser(bearer);
+      }).auth.getUser(bearer));
       if (error) authTrace.getUserError = error.message;
       else if (!data?.user?.email) authTrace.getUserError = 'verified but no email on user';
       if (!error && data?.user?.email) {
@@ -164,12 +189,12 @@ Deno.serve(async (req: Request) => {
         userBranchId = typeof bid === 'string' && bid ? bid : undefined;
         if (svcKey) {
           authTrace.step = 'societyLookup';
-          const { data: row, error: sErr } = await createClient(supaUrl, svcKey)
+          const { data: row, error: sErr } = await time('societyLookupMs', () => createClient(supaUrl, svcKey)
             .from('society_users')
             .select('society_id')
             .eq('email', userEmail)
             .eq('is_active', true)
-            .maybeSingle();
+            .maybeSingle());
           if (sErr) authTrace.societyError = sErr.message;
           // The lookup is case-sensitive and filtered on is_active: a real user whose row
           // is stored `Foo@x.com`, or deactivated, resolves to no society and answers as
@@ -204,14 +229,14 @@ Deno.serve(async (req: Request) => {
     if (probe.lane === 'D') {
       try {
         const db = createClient(supaUrl, svcKey);
-        const [events, accounts, branches] = await Promise.all([
+        const [events, accounts, branches] = await time('loadMs', () => Promise.all([
           // occurred_at is not unique — event_id (the primary key) makes the order total,
           // which is what makes paging sound. projectCashBook still applies its own
           // deterministic tie-break; this only has to be stable and complete.
-          fetchAllRows(db, 'ledger_events', '*', societyId, ['occurred_at', 'event_id']),
-          fetchAllRows(db, 'accounts', '*', societyId, ['id']),
-          fetchAllRows(db, 'branches', 'id, isHeadOffice', societyId, ['id']),
-        ]);
+          fetchAllRows(db, 'ledger_events', '*', societyId, ['occurred_at', 'event_id'], timings),
+          fetchAllRows(db, 'accounts', '*', societyId, ['id'], timings),
+          fetchAllRows(db, 'branches', 'id, isHeadOffice', societyId, ['id'], timings),
+        ]));
         society = {
           events: mapLedgerEventRows(events),
           accounts: accounts as never,
@@ -231,6 +256,10 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  /* The projection is CPU, not I/O — the only stage here that is not a network wait, and
+     the one stage a faster query cannot help. If resolveCurrentVouchers over 1846 events
+     turns out to be the cost, every idea about fetching is aimed at the wrong thing. */
+  const askStarted = Date.now();
   const answer = ask(
     {
       text,
@@ -254,7 +283,12 @@ Deno.serve(async (req: Request) => {
     society,   // undefined ⇒ the D-lane refuses with "बही लोड नहीं हुई" — true, not a fallback
   );
 
+  timings.askMs = Date.now() - askStarted;
   const latencyMs = Date.now() - started;
+  // What the parts do NOT account for: isolate warm-up, JSON parse of the request, the
+  // client construction. If `unaccountedMs` is most of the total, the slow thing is
+  // something none of the stages below name — which is worth knowing before optimising one.
+  timings.unaccountedMs = latencyMs - (timings.getUserMs ?? 0) - (timings.societyLookupMs ?? 0) - (timings.loadMs ?? 0) - timings.askMs;
 
   /* RECORD — stage 8. Every answer, on the SAME append-only trail as human actions
      (AI-A1: never a separate, weaker log). No new table: audit_log is already WORM
@@ -304,6 +338,13 @@ Deno.serve(async (req: Request) => {
           // And why the books were not read, when they were not.
           ledgerError: ledgerError ?? null,
           latencyMs,
+          /* THE BREAKDOWN BEHIND latencyMs — getUserMs, societyLookupMs, loadMs,
+             ledger_eventsMs/Pages, accountsMs, branchesMs, askMs, unaccountedMs.
+             latencyMs alone cannot be acted on: it says the seam is slow, not which of six
+             stages is. This is the cheapest possible instrument (a Date.now() per stage,
+             no extra I/O) and it rides the row that already exists, which is why it can
+             ship before the fix rather than after it. */
+          timings,
           // model/tokens/cost land here when stage 6 does. Their absence is itself the
           // record: this answer cost nothing and no model saw it.
         },

@@ -144,7 +144,14 @@ console.log('\n  ask-core — the mechanism, with no model\n');
 
   ok('seam: never passes body.societyId into ask()', !/societyId:\s*typeof body\.societyId/.test(seam));
   ok('seam: never passes body.userId into ask()', !/userId:\s*typeof body\.userId/.test(seam));
-  ok('seam: verifies the bearer token', /auth\.getUser\(\)/.test(seam));
+  /* BY VALUE, and only by value. This asserted `getUser()` — the no-argument form — until
+     that turned out to BE a bug: with no argument, auth-js routes through _useSession and
+     reads the client's own stored session, which an Edge isolate reuses across requests.
+     The same founder with the same valid token verified at 19:30 and got "Auth session
+     missing!" at 19:32. So the old assertion was pinning the defect in place. The absent
+     form is now half the test: `getUser(bearer)` must be there AND `getUser()` must not. */
+  ok('seam: verifies the bearer token BY VALUE, never via isolate session state',
+    /auth\.getUser\(bearer\)/.test(seam) && !/auth\.getUser\(\)/.test(seam));
   ok('seam: resolves the society from society_users, not the request',
     /from\('society_users'\)/.test(seam) && /select\('society_id'\)/.test(seam));
   ok('seam: treats the anon key as NO user — a public visitor is not authenticated',
@@ -161,10 +168,27 @@ console.log('\n  ask-core — the mechanism, with no model\n');
      is not a belt-and-braces filter — it IS the tenant boundary. It is the one line in
      this function that, if wrong, shows one society another's cash. Asserted by reading
      the source: no unit test of ask() can see it, because ask() is handed the books. */
-  const evFetch = /from\('ledger_events'\)[\s\S]{0,80}\.eq\('society_id', societyId\)/.test(seam);
-  const acFetch = /from\('accounts'\)[\s\S]{0,80}\.eq\('society_id', societyId\)/.test(seam);
-  ok('fetch: ledger_events is scoped to the VERIFIED societyId', evFetch);
-  ok('fetch: accounts is scoped to the VERIFIED societyId', acFetch);
+  /* The boundary MOVED — it did not weaken. Both reads used to build their own query and
+     carry their own `.eq`; they now go through fetchAllRows (the pager that fixed the
+     1000-row truncation), so the boundary is one line in one helper. These assertions used
+     to grep each call site and went dark the moment that landed — a failing security test
+     protects nothing, and a test kept passing by weakening it protects less. So: assert the
+     boundary where it now lives, AND that no call site can quietly bypass the helper. */
+  const pagerScoped = /db\.from\(table\)[\s\S]{0,80}\.eq\('society_id', societyId\)/.test(seam);
+  ok('fetch: the shared pager applies the tenant boundary', pagerScoped);
+  ok('fetch: ledger_events is read ONLY through the scoped pager',
+    /fetchAllRows\(db, 'ledger_events'/.test(seam) && !/from\('ledger_events'\)/.test(seam));
+  ok('fetch: accounts is read ONLY through the scoped pager',
+    /fetchAllRows\(db, 'accounts'/.test(seam) && !/from\('accounts'\)/.test(seam));
+
+  /* READ THE WHOLE BOOK OR REFUSE (AI-N8, RULE 2). PostgREST caps at 1000 rows, returns a
+     200, and says nothing — the seam's first real D-lane read answered from 54% of a
+     journal, dropping the NEWEST events because the order is oldest-first. Pinned here so
+     a future "simplification" back to a bare select cannot pass. */
+  ok('fetch: pages to exhaustion — a short page is the only end-of-data signal',
+    /rows\.length < PAGE/.test(seam));
+  ok('fetch: refuses rather than answering money from a partial book',
+    /refusing to answer from a partial book/.test(seam));
   ok('fetch: never scoped to body.societyId', !/eq\('society_id', body\./.test(seam));
   ok('fetch: branch comes from the JWT claim, not the body',
     /user_branch_id/.test(seam) && !/activeBranchId: body\./.test(seam));
