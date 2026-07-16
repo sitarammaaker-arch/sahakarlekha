@@ -4,10 +4,16 @@
  * guide, blog, faq) via the existing site-search engine, and presents the top one as a
  * direct answer with citation + a few related links.
  *
- * This is the retrieval ("R") foundation of the AI copilot. By design it ONLY ever surfaces
- * real, existing content — it never generates free-form text, so it cannot fabricate numbers
- * or law (Constitution Art. VIII). A later optional layer can add LLM synthesis on top of
- * the same retrieval, behind a cost/API-key decision.
+ * By design it ONLY ever surfaces real, existing content — it never generates free-form text,
+ * so it cannot fabricate numbers or law (Constitution Art. VIII).
+ *
+ * CAIOS Slice 1: this is now a CHANNEL, not a brain. It renders the local corpus instantly
+ * (that corpus is in the bundle — making the user wait on a network hop for something we can
+ * answer offline would be a regression), then asks the seam (`POST /ai-ask` → src/lib/ask/client.ts)
+ * and lets the guard override it. The seam adds what a client cannot: the kill switch, lane
+ * routing, jurisdiction, the refusal to assert a regulated specific, and the audit row.
+ * If the seam is silent — not deployed, AI off, no signal — this page behaves exactly as it
+ * always has. That fallback is the design (CAIOS-K1 / AI-G4), not a safety net.
  */
 import React from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -16,8 +22,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { trackEvent } from '@/lib/analytics';
 import { search, TYPE_LABEL } from '@/lib/siteSearch';
+import { askSeam, type AskOutcome } from '@/lib/ask/client';
 import { WHATSAPP_NUMBER } from '@/lib/socials';
-import { Sparkles, Send, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Sparkles, Send, ArrowRight, ShieldCheck, Info } from 'lucide-react';
 
 const EXAMPLES = [
   'member kaise jode',
@@ -39,14 +46,35 @@ const AskAssistant: React.FC = () => {
   });
 
   React.useEffect(() => { setInput(q); }, [q]);
+
+  /* Render the local answer FIRST, synchronously — the corpus is already in the
+     bundle, so making the user wait on a network round-trip for something we can
+     answer instantly would be a regression dressed as an upgrade. The seam then
+     refines it (guard, lane, jurisdiction, audit) when it replies. If it never
+     replies — not deployed, AI off, no signal — this IS the answer, exactly as today. */
   const results = React.useMemo(() => (q ? search(q, 8) : []), [q]);
+  const [outcome, setOutcome] = React.useState<AskOutcome | null>(null);
+
+  React.useEffect(() => {
+    setOutcome(null);
+    if (!q) return;
+    let live = true;
+    askSeam(q).then((o) => { if (live && o.source === 'seam') setOutcome(o); });
+    return () => { live = false; };
+  }, [q]);
+
   React.useEffect(() => { if (q) trackEvent('ask_query', { q, results: results.length }); /* eslint-disable-line */ }, [q]);
 
   const ask = (value: string) => { const v = value.trim(); setParams(v ? { q: v } : {}); };
   const submit = (e: React.FormEvent) => { e.preventDefault(); ask(input); };
 
-  const top = results[0];
-  const rest = results.slice(1, 6);
+  /* The guard spoke: it retrieved something but refused to assert (a regulated
+     specific, or nothing servable). We must show the refusal INSTEAD of the top hit —
+     showing a document as "the answer" here is precisely what the guard said not to
+     do (AI-N3/AI-N8). Sources stay, so the user can still go and read. */
+  const refusal = outcome?.answer?.unanswered ?? null;
+  const top = refusal ? null : results[0];
+  const rest = refusal ? results.slice(0, 6) : results.slice(1, 6);
 
   return (
     <PublicLayout>
@@ -76,6 +104,24 @@ const AskAssistant: React.FC = () => {
                 {ex}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* The guard refused (blueprint §4.5). Shown INSTEAD of a top hit, never
+            alongside one: presenting a document as "the answer" to "GST की दर क्या है"
+            is the exact thing the guard exists to stop. The sources below stay, so a
+            refusal still points somewhere useful — it is honest, not a dead end. */}
+        {q && refusal && (
+          <div className="mt-8">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-500 mb-2">
+              मैं इसका उत्तर नहीं दूँगा
+            </p>
+            <Card className="border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20">
+              <CardContent className="p-5 flex gap-3">
+                <Info className="h-5 w-5 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-foreground leading-relaxed">{refusal}</p>
+              </CardContent>
+            </Card>
           </div>
         )}
 
