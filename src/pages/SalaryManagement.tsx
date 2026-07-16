@@ -222,8 +222,12 @@ const SalaryManagement: React.FC = () => {
   const [processRows, setProcessRows] = useState<ProcessRow[]>([]);
   const [rowsLoaded, setRowsLoaded] = useState(false);
   const [taxRegime, setTaxRegime] = useState<TaxRegime>('new');   // ECR-14: TDS-192 projection regime
-  // Is the projection using a year's law that does not cover today? (rules/incomeTax.ts)
-  const tdsStale = resolveTaxBasis(new Date().toISOString().slice(0, 10)).stale;
+  // Warn on BOTH failure modes (rules/incomeTax.ts): the law does not cover today
+  // (stale), OR it does but nobody has verified the figures. Unverified is quieter than
+  // stale but it is not safe — the clerk is about to accept this number into a salary
+  // record either way, so both earn the amber.
+  const tdsBasis = resolveTaxBasis(new Date().toISOString().slice(0, 10));
+  const tdsStale = tdsBasis.stale || !tdsBasis.set.verified;
 
   // ── Tab 3 – Salary History state ────────────────────────────────────────
   // ECR-14: Form 24Q dialog

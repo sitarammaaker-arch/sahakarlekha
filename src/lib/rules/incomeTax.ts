@@ -67,8 +67,58 @@ const FY_2024_25: SlabSet = {
   cite: 'Income-tax Act s.115BAC / Finance Act 2024 — VERIFY against the current Finance Act',
 };
 
-/** Newest first. Append future years here — a data change, never a code change. */
-export const SLAB_SETS: SlabSet[] = [FY_2024_25];
+/**
+ * FY 2025-26 (AY 2026-27) — new-regime slabs read from the Income Tax Department's own
+ * portal, not from a summary and not from model memory:
+ *   https://www.incometax.gov.in/iec/foportal/help/individual/return-applicable-1
+ *
+ * The table SELF-CHECKS, which is why it is trusted enough to record. The portal states
+ * each band cumulatively ("₹60,000 + 15% above ₹12,00,000"), and every cumulative figure
+ * reconciles exactly against the bands below it: 4–8L@5% = 20,000 → matches its "₹20,000";
+ * +8–12L@10% = 60,000 → matches "₹60,000"; +12–16L@15% = 1,20,000 → matches; +16–20L@20%
+ * = 2,00,000 → matches; +20–24L@25% = 3,00,000 → matches. A garbled table does not
+ * reconcile — an earlier search returned one with overlapping bands and a missing 10–12L
+ * slab, which is exactly what this arithmetic check catches.
+ *
+ * STILL `verified: false`, for three separate reasons, each sufficient on its own:
+ *   1. STANDARD DEDUCTION IS NOT SOURCED. The ITD page does not state it ("not stated"),
+ *      and two searches disagreed (₹75,000 vs ₹50,000). The values below are CARRIED
+ *      OVER from FY 2024-25 unchanged — they are not research, and they may be wrong.
+ *   2. OLD-REGIME SLABS ARE ALSO CARRIED OVER, not sourced. Only the new regime was on
+ *      the page read.
+ *   3. Accountability is not a knowledge problem (AI-G1). "Claude read it on a website"
+ *      is not a defence before an auditor or the Registrar. `verified: true` means a
+ *      named human owns the figure — and that can never be me.
+ */
+const FY_2025_26: SlabSet = {
+  fy: 'FY 2025-26',
+  effectiveFrom: '2025-04-01',
+  effectiveTo: '2026-04-01',
+  // SOURCED — incometax.gov.in, arithmetic reconciled (see above).
+  new: [[400000, 0], [800000, 0.05], [1200000, 0.10], [1600000, 0.15], [2000000, 0.20], [2400000, 0.25], [Infinity, 0.30]],
+  // CARRIED OVER from FY 2024-25 — NOT sourced. Verify before relying on it.
+  old: [[250000, 0], [500000, 0.05], [1000000, 0.20], [Infinity, 0.30]],
+  // CARRIED OVER — the ITD page does not state the standard deduction. Sources conflict.
+  stdDeduction: { new: 75000, old: 50000 },
+  // SOURCED — "Rebate Limit: ₹60,000 … Taxable income shall not exceed 12,00,000".
+  rebateLimit: { new: 1200000, old: 500000 },
+  // SOURCED — "4% to be paid on the amount of income tax plus Surcharge (if any)".
+  cess: 1.04,
+  verified: false,
+  cite: 'incometax.gov.in AY 2026-27 (new regime slabs + 87A + cess SOURCED; standard deduction & old-regime slabs CARRIED OVER, unsourced) — VERIFY',
+};
+
+/**
+ * Newest first. Append future years here — a data change, never a code change.
+ *
+ * NOTE: FY 2026-27 IS DELIBERATELY ABSENT. Today falls in it, so every projection is
+ * flagged stale — and that is the honest state of affairs, not an oversight. No
+ * authoritative FY 2026-27 (AY 2027-28) table could be read; the ITD's published help
+ * pages are for AY 2026-27, i.e. the PRECEDING financial year. Guessing that the slabs
+ * carried over unchanged would remove the warning while removing none of the risk, which
+ * is the worst of both worlds: silent and wrong (see tdsProjection.ts's original defect).
+ */
+export const SLAB_SETS: SlabSet[] = [FY_2025_26, FY_2024_25];
 
 export interface TaxBasis {
   set: SlabSet;
