@@ -59,7 +59,7 @@ try {
   process.exit(1);
 }
 
-const { backupHealth, summarizeHealth, healthFromRehearsalRows } = mod;
+const { backupHealth, summarizeHealth, healthFromRehearsalRows, placementFromBackupRows } = mod;
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -179,6 +179,41 @@ ok(rawSource.includes('NEVER GREEN ON MISSING DATA'), 'the one rule is stated at
   const rows = [{ created_at: daysAgo(1), after: { passed: true, backupCreatedAt: daysAgo(1) } }];
   ok(healthFromRehearsalRows(rows, NOW, 7, goodPlacement).status === 'green', 'healthFromRehearsalRows: a good placement earns green');
   ok(healthFromRehearsalRows(rows, NOW, 7).status === 'amber', 'healthFromRehearsalRows: no placement ⇒ amber (never green on missing data)');
+}
+
+// ── placementFromBackupRows — the wire from the server's recorded verdict to the gate ───────────
+{
+  const verdict = { ok: false, copies: 1, providers: 1, offProviderOffRegion: false, deficiencies: ['needs ≥2 providers, has 1 (never all with one vendor)'] };
+  const row = (at, placement) => ({ created_at: at, after: { placement } });
+
+  const got = placementFromBackupRows([row(daysAgo(1), verdict)]);
+  ok(got !== null && got.ok === false && got.providers === 1, 'a recorded verdict is read back');
+  ok(got.deficiencies[0].includes('≥2 providers'), 'its deficiencies survive the round trip');
+
+  // The LATEST backup row wins.
+  const older = { ...verdict, providers: 9 };
+  const latest = placementFromBackupRows([row(daysAgo(9), older), row(daysAgo(1), verdict)]);
+  ok(latest.providers === 1, 'the LATEST backup row supplies the verdict, not an older one');
+
+  // NEVER invent a verdict — anything unreadable is null ⇒ "never evaluated" ⇒ amber.
+  ok(placementFromBackupRows([]) === null, 'no backup rows ⇒ null (never evaluated)');
+  ok(placementFromBackupRows([row(daysAgo(1), undefined)]) === null, 'a pre-T-36 backup (no placement) ⇒ null, not a guess');
+  ok(placementFromBackupRows([row(daysAgo(1), { copies: 3 })]) === null, 'a payload without ok/deficiencies is not a verdict ⇒ null');
+  ok(placementFromBackupRows([row(daysAgo(1), 'green')]) === null, 'a non-object placement ⇒ null');
+  ok(placementFromBackupRows([{ created_at: null, after: { placement: verdict } }]) === null, 'a row with no timestamp is ignored');
+  ok(placementFromBackupRows([{ created_at: daysAgo(1), after: null }]) === null, 'a row with no after payload ⇒ null');
+
+  // Malformed fields degrade safely rather than throwing.
+  const messy = placementFromBackupRows([row(daysAgo(1), { ok: true, deficiencies: ['x', 7, null], copies: 'lots' })]);
+  ok(messy.copies === 0 && messy.deficiencies.length === 1, 'malformed fields degrade to safe defaults (non-strings dropped)');
+
+  // End to end: a recorded single-vendor verdict actually lands in the gate as amber.
+  const endToEnd = healthFromRehearsalRows(
+    [{ created_at: daysAgo(1), after: { passed: true, backupCreatedAt: daysAgo(1) } }],
+    NOW, 7, placementFromBackupRows([row(daysAgo(1), verdict)]),
+  );
+  ok(endToEnd.status === 'amber' && endToEnd.reasons.some((r) => /≥2 providers/.test(r)),
+    'end to end: the server-recorded single-vendor verdict reaches the card as amber with the real reason');
 }
 
 console.log(`\nBackup health: ${pass} passed, ${fail} failed`);
