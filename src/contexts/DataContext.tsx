@@ -35,7 +35,7 @@ import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, isBankAccount } from '@/lib/storage';
-import { isUniqueViolation, isMissingBranchColumn, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
+import { isUniqueViolation, isMissingBranchColumn, payloadWithoutMissingColumn, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability, SocietyActivityRow } from '@/lib/navigation';
@@ -613,6 +613,52 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (godownId) supabase.from('stock_movements').update({ godownId }).eq('id', mv.id).then(({ error: gErr }) => { if (gErr) console.warn('Movement godown patch:', gErr.message); });
     });
   };
+
+  // Step-2 "extras" update that survives a pre-migration column (RULE 1). The base row is
+  // already saved; this patches the columns added later by ALTER TABLE (GST/TDS/TCS,
+  // customerId, …). PostgREST fails the WHOLE update on ONE unknown column, so on a stale/
+  // un-migrated schema we drop exactly that column and retry — every column that DOES exist
+  // still lands, instead of one un-migrated flag silently taking all of them (the rcmApplicable
+  // incident: months of purchases kept their base row but lost all GST, under a console.warn
+  // nobody saw). Only when a column that is genuinely missing can't be trimmed away do we stop
+  // and show a VISIBLE toast naming it — never a silent warn. On a migrated DB the first update
+  // succeeds and none of this runs, so healthy societies see no change.
+  const persistExtras = (
+    table: 'sales' | 'purchases',
+    id: string,
+    extras: Record<string, unknown>,
+    label: string,
+    dropped: string[] = [],
+  ) => {
+    supabase.from(table).update(extras).eq('id', id).then(({ error }) => {
+      if (!error) {
+        // Everything we could save is saved. If we had to drop un-migrated columns to get
+        // here, say so — mildly, not destructively: the money columns landed, only a missing
+        // flag/column didn't. Silence here is exactly what hid the rcmApplicable loss.
+        if (dropped.length) toastRef.current({
+          title: 'सहेजा गया — पर कुछ कॉलम इस DB में नहीं हैं',
+          description: `${label}: बाक़ी सब सेव हुआ; ये कॉलम missing hain — pending migration chalayein: ${dropped.join(', ')}.`,
+          duration: 12000,
+        });
+        return;
+      }
+      const trimmed = dropped.length < 24 ? payloadWithoutMissingColumn(error, extras) : null;
+      if (trimmed && Object.keys(trimmed).length > 0) {
+        const col = Object.keys(extras).find(k => !(k in trimmed))!;
+        persistExtras(table, id, trimmed, label, [...dropped, col]);
+        return;
+      }
+      // Not a missing-column error, or nothing left to trim: surface it, never bury it.
+      console.warn(`${label} (extras) update:`, error.message);
+      toastRef.current({
+        title: 'कुछ फ़ील्ड सेव नहीं हुए',
+        description: `${label}: मुख्य रिकॉर्ड सुरक्षित है, पर extras सेव नहीं हुए — pending migration chalayein. (${error.message})`,
+        variant: 'destructive',
+        duration: 14000,
+      });
+    });
+  };
+
   const [members, setMembersState] = useState<Member[]>([]);
   const membersRef = useRef<Member[]>(members);
   useEffect(() => { membersRef.current = members; }, [members]);
@@ -5820,10 +5866,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const attemptSaleSave = (base: typeof saleBase, tries: number) => {
       supabase.from('sales').upsert(withSoc(base)).then(({ error }) => {
         if (!error) {
-          // Step 2: GST columns update (only Sale GST fields — no TDS for sales)
-          supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember })
-            .eq('id', sale.id)
-            .then(({ error: gstErr }) => { if (gstErr) console.warn('Sale GST/extra fields update:', gstErr.message); });
+          // Step 2: Sale GST + customer/member (no TDS on sales). Same missing-column guard as
+          // purchases — one un-migrated column can't silently drop the GST anymore (RULE 1).
+          persistExtras('sales', sale.id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember }, `Sale ${sale.saleNo}`);
           return;
         }
         if (isMissingBranchColumn(error) && 'branchId' in base) {
@@ -6048,9 +6093,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // re-verify. (A fully atomic sale-edit is a separate, larger redesign.)
           toastRef.current({ title: 'बिक्री edit cloud-save fail', description: `Sale row cloud save fail — ${error.message}. Refresh karke sale dobara check karein; zaroorat ho to phir se edit karein.`, variant: 'destructive', duration: 15000 });
         } else {
-          supabase.from('sales').update({ cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId })
-            .eq('id', id)
-            .then(({ error: gstErr }) => { if (gstErr) console.warn('Sale GST fields update:', gstErr.message); });
+          persistExtras('sales', id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId }, `Sale ${original.saleNo}`);
         }
       });
     };
@@ -6169,18 +6212,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const attemptPurchaseSave = (base: typeof purchaseBase, tries: number) => {
       supabase.from('purchases').upsert(withSoc(base)).then(({ error }) => {
         if (!error) {
-          // Step 2: GST/TDS columns update (safe — if this fails, base record is already saved)
-          supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false })
-            .eq('id', purchase.id)
-            .then(({ error: gstErr }) => {
-              // RULE 1 note: the base row is already safe. But a TCS purchase whose extras fail
-              // reloads with tcsPct 0 while its voucher still carries the Dr 3307 line — the two
-              // would disagree. Migration 052 is what closes that, so say so loudly.
-              if (gstErr) {
-                console.warn('Purchase GST/TDS/TCS fields update:', gstErr.message);
-                if ((pTcsAmt ?? 0) > 0) toastRef.current({ title: 'TCS सेव नहीं हुआ', description: `Purchase bach gayi, par TCS column missing — migration 052 chalayein, phir purchase edit karke TCS % dobara bharein. (${gstErr.message})`, variant: 'destructive', duration: 14000 });
-              }
-            });
+          // Step 2: GST/TDS/TCS columns — one un-migrated column no longer takes the rest (RULE 1).
+          persistExtras('purchases', purchase.id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false }, `Purchase ${purchase.purchaseNo}`);
           return;
         }
         if (isMissingBranchColumn(error) && 'branchId' in base) {
@@ -6415,14 +6448,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('Purchase update failed:', error.message);
           toastRef.current({ title: 'Purchase update nahi hua', description: error.message, variant: 'destructive' });
         } else {
-          supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false })
-            .eq('id', id)
-            .then(({ error: gstErr }) => {
-              if (gstErr) {
-                console.warn('Purchase GST/TDS/TCS fields update:', gstErr.message);
-                if ((pTcsAmt ?? 0) > 0) toastRef.current({ title: 'TCS सेव नहीं हुआ', description: `Purchase update ho gayi, par TCS column missing — migration 052 chalayein. (${gstErr.message})`, variant: 'destructive', duration: 14000 });
-              }
-            });
+          persistExtras('purchases', id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false }, `Purchase ${original.purchaseNo}`);
         }
       });
     };
