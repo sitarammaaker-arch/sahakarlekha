@@ -1510,17 +1510,19 @@ export interface Purchase {
   totalAmount: number;
   discount: number;
   netAmount: number;       // taxable amount (after discount, before GST)
-  // GST / TDS fields
+  // GST / TDS / TCS fields
   cgstPct: number;
   sgstPct: number;
   igstPct: number;
   tdsPct: number;
+  tcsPct?: number;         // seller-collected income tax (e.g. forest depot timber) — ADDS to the bill
   cgstAmount: number;
   sgstAmount: number;
   igstAmount: number;
   tdsAmount: number;
+  tcsAmount?: number;
   taxAmount: number;       // cgst + sgst + igst
-  grandTotal: number;      // netAmount + taxAmount - tdsAmount
+  grandTotal: number;      // netAmount + taxAmount + tcsAmount - tdsAmount
   paymentMode: PaymentMode;
   bankAccountId?: string;  // when paymentMode = 'bank', which bank account to credit
   supplierId?: string;     // linked registered supplier

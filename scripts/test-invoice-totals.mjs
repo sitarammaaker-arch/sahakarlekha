@@ -1,4 +1,9 @@
-// Born-exact invoice totals (T-02 slice 5 / ADR-0006).
+// Born-exact invoice totals (T-02 slice 5 / ADR-0006) + the TDS/TCS sign rule.
+//
+// §5b pins the direction of the two income taxes, because getting it wrong is silent and
+// expensive: TDS we deduct (payable DOWN, Cr 2202 — a liability we owe), TCS the seller
+// collects (payable UP, Dr 3307 — our own 26AS credit). A real ₹49.23L forest-depot timber
+// bill is the fixture; it booked ₹1,64,120 short when its 2% "I.T." was typed into tdsPct.
 //
 // SaleManagement / PurchaseManagement computed GST/TDS with `+(x).toFixed(2)` /
 // `Math.round(x*100)/100`, which misround at a float half-boundary (2.5% of ₹107 = ₹2.675,
@@ -68,6 +73,61 @@ ok(t5.grandTotal === 98.98, `grandTotal = 107 + 2.68 − 10.70 = 98.98 (got ${t5
 
 // ── 5. tdsPct omitted (sale) ⇒ tds 0, unaffected ─────────────────────────────
 ok(computeInvoiceTotals({ items: [{ amount: 500 }], igstPct: 18 }).tdsAmount === 0, 'a sale (no tdsPct) has tds 0');
+
+// ── 5b. TCS — the SELLER's income tax, which ADDS ────────────────────────────
+// THE BILL THAT FOUND THIS: Kohla depot, 01.04.2026, Safeda timber, to The Assandh Cooperative
+// Marketing Cum Processing Society. 4149.20 qtl @ ₹988.87 = ₹41,03,009 + IGST 18% ₹7,38,542
+// + "I.T." 2% ₹82,060 = ₹49,23,611. The depot COLLECTS that 2% from the society and adds it.
+// Before tcsPct existed, the only field on the screen was tdsPct, which subtracts.
+const P = (r) => Math.round(r * 100);   // rupees → paise, for exact comparison
+const depot = computeInvoiceTotals({ items: [{ amount: 4103009 }], igstPct: 18, tcsPct: 2 });
+ok(depot.netAmount === 4103009, `depot bill: taxable ₹41,03,009 (got ${depot.netAmount})`);
+ok(P(depot.igstAmount) === P(738541.62), `depot bill: IGST 18% = ₹7,38,541.62 (got ${depot.igstAmount})`);
+ok(P(depot.tcsAmount) === P(82060.18), `depot bill: I.T. 2% = ₹82,060.18 (got ${depot.tcsAmount})`);
+// KNOWN, DELIBERATE: the depot rounds EACH tax to whole rupees on its bill (₹7,38,542 +
+// ₹82,060 = ₹49,23,611); we hold exact paise from the percentage, landing 20 paise lower.
+// This is how GST has always behaved here — the operator types a rate, not an amount — so the
+// gap is the existing design, not TCS. Pinned so nobody "fixes" the paise away by accident.
+ok(P(depot.grandTotal) === P(4923610.80), `depot bill: grand total ₹49,23,610.80 exact (got ${depot.grandTotal})`);
+ok(P(4923611) - P(depot.grandTotal) === 20, 'we sit 20 paise under the depot\'s rupee-rounded ₹49,23,611 — rate-driven, as GST always has been');
+// The old advice — "put the 2% in TDS" — and why it was wrong by twice the tax.
+const asTds = computeInvoiceTotals({ items: [{ amount: 4103009 }], igstPct: 18, tdsPct: 2 });
+ok(P(asTds.grandTotal) === P(4759490.44), `the same 2% in tdsPct gives ₹47,59,490.44 — TDS subtracts (got ${asTds.grandTotal})`);
+ok(P(depot.grandTotal) - P(asTds.grandTotal) === 2 * P(depot.tcsAmount), 'TDS vs TCS differ by TWICE the tax — opposite signs, never one field');
+ok(P(depot.grandTotal) - P(asTds.grandTotal) === P(164120.36), 'the real cost of the confusion on this one bill: ₹1,64,120.36');
+
+// TCS and TDS can ride the same bill without touching each other.
+const both = computeInvoiceTotals({ items: [{ amount: 1000 }], igstPct: 18, tdsPct: 10, tcsPct: 1 });
+ok(both.tcsAmount === 10 && both.tdsAmount === 100, 'both: TCS ₹10 (1%), TDS ₹100 (10%)');
+ok(both.grandTotal === 1000 + 180 + 10 - 100, 'both: grandTotal = net + tax + tcs − tds = ₹1,090');
+
+// TCS is born exact in paise, like every other percentage here (the §1 half-boundary rule).
+ok(computeInvoiceTotals({ items: [{ amount: 107 }], tcsPct: 2.5 }).tcsAmount === 2.68, 'TCS 2.5% of ₹107 rounds half-up to ₹2.68, not toFixed 2.67');
+
+// Omitting tcsPct must leave every existing caller's number untouched.
+const noTcs = computeInvoiceTotals({ items: [{ amount: 500 }], igstPct: 18, tdsPct: 5 });
+ok(noTcs.tcsAmount === 0 && noTcs.grandTotal === 500 + 90 - 25, 'tcsPct omitted ⇒ tcs 0 and the old formula stands (₹565)');
+
+// ── 5c. The purchase voucher balances — Dr(goods) + Dr(ITC) + Dr(TCS) === Cr(payable) ──
+// splitNetByAccount must hand the goods lines the GOODS value only. Leave TCS in and the
+// ₹41.03L lot books at ₹41.85L — the society's tax credit silently becomes timber cost.
+const { splitNetByAccount } = await import(abs('../src/lib/voucherUtils.ts'));
+const drGoods = splitNetByAccount(
+  [{ accountId: '5101', weight: 4103009 }],
+  depot.grandTotal, depot.taxAmount, depot.tdsAmount, depot.tcsAmount,
+);
+ok(drGoods.length === 1 && drGoods[0].amount === 4103009, `Dr goods = ₹41,03,009, TCS excluded (got ${drGoods[0]?.amount})`);
+const drTotal = drGoods.reduce((s, l) => s + l.amount, 0) + depot.taxAmount + depot.tcsAmount;
+ok(drTotal === depot.grandTotal, `voucher balances: Dr ₹${drTotal} === Cr ₹${depot.grandTotal}`);
+// And the split across two ledgers still sums to the goods value exactly (RULE 4, exact paise).
+const twoAcc = splitNetByAccount(
+  [{ accountId: '5101', weight: 2000000 }, { accountId: '5102', weight: 2103009 }],
+  depot.grandTotal, depot.taxAmount, depot.tdsAmount, depot.tcsAmount,
+);
+ok(twoAcc.reduce((s, l) => s + l.amount, 0) === 4103009, 'two purchase ledgers still sum to exactly the goods value');
+// A purchase with no TCS splits exactly as before (tcs defaults 0 — no caller shifts).
+const legacy = splitNetByAccount([{ accountId: '5101', weight: 1000 }], 1090, 180, 100);
+ok(legacy[0].amount === 1010, 'no-TCS caller unchanged: net = grandTotal − tax + tds = ₹1,010');
 
 // ── 6. Consumer GRN invoice delegates to the SAME born-exact rule (buildGrnInvoice) ──
 const { buildGrnInvoice, lineAmount } = await import(abs('../src/lib/consumer/purchaseOrder.ts'));

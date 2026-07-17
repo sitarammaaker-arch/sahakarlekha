@@ -56,7 +56,7 @@ export const HOUSING_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '3302', name: 'Bank Accounts',              nameHi: 'बैंक खाते',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: false, parentId: '3300', subtype: 'cash_bank' },
   { id: '3303', name: 'Maintenance Receivable',     nameHi: 'प्राप्य रखरखाव शुल्क',      type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
   { id: '3304', name: 'Water Charges Receivable',   nameHi: 'प्राप्य जल शुल्क',          type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
-  { id: '3307', name: 'TDS Receivable',             nameHi: 'प्राप्य TDS',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
+  { id: '3307', name: 'TDS / TCS Receivable',       nameHi: 'प्राप्य TDS / TCS',         type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
   { id: '3310', name: 'GST Input Credit (ITC)',     nameHi: 'GST इनपुट क्रेडिट',        type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
   { id: '3312', name: 'Interest Receivable',        nameHi: 'प्राप्य ब्याज',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
 

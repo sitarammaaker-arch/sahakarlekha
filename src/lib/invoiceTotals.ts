@@ -1,6 +1,12 @@
 /**
- * Invoice totals — the ONE place a sale/purchase's net, GST, TDS and grand total are
+ * Invoice totals — the ONE place a sale/purchase's net, GST, TDS, TCS and grand total are
  * computed, born exact in integer paise (T-02 / ADR-0006).
+ *
+ * TDS and TCS pull in OPPOSITE directions and must never share a field:
+ *   TDS — WE deduct from the supplier and owe the government  → grandTotal goes DOWN, Cr 2202.
+ *   TCS — the SELLER collects from US and adds it to the bill → grandTotal goes UP,   Dr 3307.
+ * A forest-depot timber bill charges TCS: base 41,03,009 + IGST 7,38,542 + I.T. 82,060 =
+ * 49,23,611. Putting that 2% in tdsPct produced 47,59,491 — short by twice the tax.
  *
  * Each percentage goes through money.applyPercent (disciplined half-up rounding), which
  * avoids the `+(x).toFixed(2)` / `Math.round(x*100)/100` float-boundary misround — e.g.
@@ -8,7 +14,7 @@
  * 2.67499…; applyPercent rounds the exact 267.5 paise up to ₹2.68. Every sum is integer paise.
  *
  * SaleManagement and PurchaseManagement both call this, so the two forms cannot drift apart
- * (RULE 2). A sale simply passes tdsPct 0 (or omits it).
+ * (RULE 2). A sale simply passes tdsPct/tcsPct 0 (or omits them).
  */
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, applyPercent } from '@/lib/money';
 
@@ -19,6 +25,7 @@ export interface InvoiceTotalsInput {
   sgstPct?: number;
   igstPct?: number;
   tdsPct?: number;
+  tcsPct?: number;
 }
 
 export interface InvoiceTotals {
@@ -29,9 +36,11 @@ export interface InvoiceTotals {
   igstAmount: number;
   /** cgst + sgst + igst. */
   taxAmount: number;
-  /** net × tdsPct. */
+  /** net × tdsPct — WE deduct it, so it REDUCES the grand total. */
   tdsAmount: number;
-  /** net + tax − tds. */
+  /** net × tcsPct — the SELLER collects it, so it RAISES the grand total. */
+  tcsAmount: number;
+  /** net + tax + tcs − tds. */
   grandTotal: number;
 }
 
@@ -44,7 +53,8 @@ export function computeInvoiceTotals(input: InvoiceTotalsInput): InvoiceTotals {
   const igstMinor = applyPercent(netMinor, Number(input.igstPct) || 0).minor;
   const taxMinor = addMinor(cgstMinor, sgstMinor, igstMinor);
   const tdsMinor = applyPercent(netMinor, Number(input.tdsPct) || 0).minor;
-  const grandTotalMinor = subMinor(addMinor(netMinor, taxMinor), tdsMinor);
+  const tcsMinor = applyPercent(netMinor, Number(input.tcsPct) || 0).minor;
+  const grandTotalMinor = subMinor(addMinor(netMinor, taxMinor, tcsMinor), tdsMinor);
   return {
     netAmount: toRupees(netMinor),
     cgstAmount: toRupees(cgstMinor),
@@ -52,6 +62,7 @@ export function computeInvoiceTotals(input: InvoiceTotalsInput): InvoiceTotals {
     igstAmount: toRupees(igstMinor),
     taxAmount: toRupees(taxMinor),
     tdsAmount: toRupees(tdsMinor),
+    tcsAmount: toRupees(tcsMinor),
     grandTotal: toRupees(grandTotalMinor),
   };
 }

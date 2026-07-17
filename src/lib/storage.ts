@@ -127,6 +127,9 @@ export const ACCOUNT_IDS = {
   BANK:      '3302',  // Bank Accounts (GROUP — sub-accounts are individual banks)
   SHARE_CAP: '1102',  // Individual Share Capital (member share capital)
   ADM_FEE:   '4407',  // Admission Fee (Income — P&L, audit C-3)
+  TAX_CREDIT:'3307',  // TDS / TCS Receivable — income tax credited to US (26AS), an ASSET.
+                      // TCS a seller collects from us lands here; TDS we deduct from others
+                      // is the mirror image and goes to 2202 TDS Payable, a LIABILITY.
 } as const;
 
 /**
@@ -239,7 +242,7 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '3304', name: 'Loans & Advances',           nameHi: 'ऋण एवं अग्रिम',            type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3305', name: 'Subsidy Receivable',         nameHi: 'प्राप्य अनुदान',            type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3306', name: 'Rent Receivable',            nameHi: 'प्राप्य किराया',            type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
-  { id: '3307', name: 'TDS Receivable',             nameHi: 'प्राप्य TDS',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
+  { id: '3307', name: 'TDS / TCS Receivable',       nameHi: 'प्राप्य TDS / TCS',         type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3308', name: 'MSP Receivable',             nameHi: 'प्राप्य MSP',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3309', name: 'Member Receivable',          nameHi: 'सदस्य प्राप्य',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3310', name: 'GST Input Credit (ITC)',     nameHi: 'GST इनपुट क्रेडिट (ITC)',   type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
@@ -415,7 +418,7 @@ export const PACS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '3303', name: 'Short-term Loans (KCC)',      nameHi: 'अल्पकालीन ऋण (KCC)',       type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3304', name: 'Medium-term Loans',          nameHi: 'मध्यकालीन ऋण',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3305', name: 'Long-term Loans',            nameHi: 'दीर्घकालीन ऋण',            type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
-  { id: '3307', name: 'TDS Receivable',             nameHi: 'प्राप्य TDS',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
+  { id: '3307', name: 'TDS / TCS Receivable',       nameHi: 'प्राप्य TDS / TCS',         type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3310', name: 'GST Input Credit (ITC)',     nameHi: 'GST इनपुट क्रेडिट (ITC)',   type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3311', name: 'Prepaid Expenses',           nameHi: 'अग्रिम व्यय',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3312', name: 'Interest Receivable on Loans',nameHi: 'ऋण पर प्राप्य ब्याज',     type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
@@ -540,7 +543,7 @@ export const CONSUMER_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '3302', name: 'Bank Accounts',              nameHi: 'बैंक खाते',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: false, parentId: '3300', subtype: 'cash_bank' },
   { id: '3303', name: 'Sundry Debtors',             nameHi: 'विविध देनदार',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3304', name: 'Loans & Advances',           nameHi: 'ऋण एवं अग्रिम',            type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
-  { id: '3307', name: 'TDS Receivable',             nameHi: 'प्राप्य TDS',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
+  { id: '3307', name: 'TDS / TCS Receivable',       nameHi: 'प्राप्य TDS / TCS',         type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3310', name: 'GST Input Credit (ITC)',     nameHi: 'GST इनपुट क्रेडिट (ITC)',   type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3311', name: 'Prepaid Expenses',           nameHi: 'अग्रिम व्यय',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3315', name: 'Advance to Employees',       nameHi: 'कर्मचारियों को अग्रिम',     type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
@@ -661,7 +664,7 @@ const ACCOUNT_PATCHES: Record<string, Partial<LedgerAccount>> = {
 const ACCOUNTS_TO_ADD: LedgerAccount[] = [
   { id: '2107', name: 'Member Deposits',            nameHi: 'सदस्य जमाराशि',            type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'deposit' },
   { id: '2109', name: 'Wages Payable',              nameHi: 'देय मज़दूरी',              type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
-  { id: '3307', name: 'TDS Receivable',             nameHi: 'प्राप्य TDS',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
+  { id: '3307', name: 'TDS / TCS Receivable',       nameHi: 'प्राप्य TDS / TCS',         type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '2203', name: 'EPF Payable',                nameHi: 'देय EPF',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
   { id: '2204', name: 'ESI Payable',                nameHi: 'देय ESI',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
   { id: '5203', name: 'PF',                         nameHi: 'भविष्य निधि (PF)',          type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5200', subtype: 'employee_expense' },
