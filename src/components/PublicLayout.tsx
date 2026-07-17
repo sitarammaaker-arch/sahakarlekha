@@ -6,6 +6,7 @@ import React, { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { SOCIAL_CHANNELS, SocialIcon } from '@/lib/socials';
 import WhatsAppFab from '@/components/WhatsAppFab';
 import { SOCIETY_TYPES } from '@/content/societyTypes';
@@ -16,6 +17,7 @@ interface PublicLayoutProps {
 
 const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
   const { pathname } = useLocation();
+  const { isAuthenticated } = useAuth();
 
   // Scroll to top on route change
   useEffect(() => {
@@ -34,17 +36,37 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
               <p className="text-xs text-muted-foreground">सहकारलेखा</p>
             </div>
           </Link>
+          {/* A logged-in user must never be shown "Login / Free Registration". /ask lives on
+              this layout, so the founder watched it answer from his OWN ledger while the
+              navbar invited him to register — and reasonably concluded his session was gone.
+              It was not: same page, same session, the seam logged society_id + user-jwt +
+              answered:true. But a page that tells a user they are logged out IS lying, and it
+              cost hours of hunting an auth bug that never existed.
+              Anonymous render stays byte-identical, so prerendered marketing HTML is unchanged
+              — a crawler is never authenticated, and hydration swaps this for a real user. */}
           <div className="flex items-center gap-2">
-            <Link to="/login">
-              <Button variant="outline" size="sm">Login</Button>
-            </Link>
-            <Link to="/register">
-              <Button size="sm" className="gap-1">
-                <span className="hidden lg:inline">Free Registration</span>
-                <span className="lg:hidden">Register</span>
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
+            {isAuthenticated ? (
+              <Link to="/dashboard">
+                <Button size="sm" className="gap-1">
+                  <span className="hidden lg:inline">डैशबोर्ड / Dashboard</span>
+                  <span className="lg:hidden">डैशबोर्ड</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="outline" size="sm">Login</Button>
+                </Link>
+                <Link to="/register">
+                  <Button size="sm" className="gap-1">
+                    <span className="hidden lg:inline">Free Registration</span>
+                    <span className="lg:hidden">Register</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </nav>
