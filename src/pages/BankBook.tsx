@@ -124,6 +124,7 @@ const BankBook: React.FC = () => {
       openingBalanceType: 'debit',
       isSystem: false,
       parentId: ACCOUNT_IDS.BANK,
+      subtype: 'cash_bank',
     });
     setSelectedBank(acc.id);
     setBankForm({ name: '', nameHi: '', opening: '0' });
