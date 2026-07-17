@@ -33,6 +33,40 @@ export function isMissingBranchColumn(error: { code?: string; message?: string }
 }
 
 /**
+ * PostgREST rejects an ENTIRE .update() when one column is absent from its schema
+ * cache (a pre-migration database) — it writes NONE of the others and returns PGRST204
+ * "Could not find the 'X' column of 'T' in the schema cache". Our step-2 "extras" update
+ * bundles many columns at once (GST/TDS/TCS/customerId/…), so a single un-migrated column
+ * silently dropped EVERY extra. That is how, for months, purchases across societies saved
+ * their base row but lost all GST — and only a console.warn nobody read was written.
+ *
+ * Given the failing error and the payload we tried to write, this returns the payload
+ * MINUS the one offending column, so the caller can retry and still land every column that
+ * DOES exist. Loop it (a DB may lack several columns); each call strictly shrinks the
+ * payload, so it terminates. Returns null when the error is NOT a missing-column error, or
+ * the column name can't be parsed, or it isn't in the payload — the caller then stops and
+ * surfaces the failure instead of looping.
+ *
+ * SAFETY: this never adds a key and never removes a key not named by the server, so it can
+ * only ever cause MORE of the intended columns to be written to an already-saved row — it
+ * cannot corrupt or drop good data. On a fully-migrated DB the first update succeeds and
+ * this is never called.
+ */
+export function payloadWithoutMissingColumn<T extends Record<string, unknown>>(
+  error: { code?: string; message?: string } | null | undefined,
+  payload: T,
+): T | null {
+  if (!error) return null;
+  const msg = error.message || '';
+  const isMissingCol = error.code === 'PGRST204' || /schema cache|could not find/i.test(msg);
+  if (!isMissingCol) return null;
+  const col = msg.match(/'([^']+)' column/)?.[1] ?? msg.match(/column ['"]?([A-Za-z0-9_]+)['"]?/)?.[1];
+  if (!col || !Object.prototype.hasOwnProperty.call(payload, col)) return null;
+  const { [col]: _dropped, ...rest } = payload;
+  return rest as T;
+}
+
+/**
  * Next sequence number for a `PREFIX/<fy>/<NNN>` document series, from the rows
  * already known locally. Mirrors the inline max+1 used across the save paths so
  * a renumber-retry lands on a fresh candidate.

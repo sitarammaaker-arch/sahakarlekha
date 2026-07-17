@@ -135,6 +135,7 @@
     "test:share-premium": "node scripts/test-share-premium.mjs",
     "test:voucher-reversal": "node scripts/test-voucher-reversal.mjs",
     "test:persist": "node scripts/test-voucher-persistence.mjs",
+    "test:db-retry": "node scripts/test-db-retry.mjs",
     "test:xlsx": "node scripts/test-xlsx-compat.mjs",
     "test:ob": "node scripts/test-opening-balances.mjs",
     "test:analytics-metrics": "node scripts/test-analytics-metrics.mjs",
