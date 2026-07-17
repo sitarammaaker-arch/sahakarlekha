@@ -183,6 +183,7 @@
     "test:pigmy": "node scripts/test-pigmy.mjs",
     "test:report-comparative": "node scripts/test-report-comparative.mjs",
     "test:role-dashboard": "node scripts/test-role-dashboard.mjs",
+    "test:bank-accounts": "node scripts/test-bank-accounts.mjs",
     "build:ask-core": "esbuild supabase/functions/_shared/ask-core.entry.ts --bundle --format=esm --platform=neutral --alias:@=./src --outfile=supabase/functions/_shared/ask-core.mjs --log-level=warning",
     "test:ask-core": "node scripts/test-ask-core.mjs",
     "test:dlane-parity": "node scripts/test-dlane-parity.mjs",

@@ -132,15 +132,21 @@ export const ACCOUNT_IDS = {
 /**
  * Get all bank account IDs (leaf accounts under the Bank Accounts group).
  * If 3302 is a group → returns its children.
- * If 3302 is a leaf (backward compat) → returns ['3302'].
+ * If 3302 is a leaf → returns 3302 itself PLUS any sub-accounts hanging off it.
+ *
+ * Every seeded template ships 3302 as a leaf, so societies post their bank
+ * vouchers directly to it. Bank Book's "Add Bank" then adds children under it
+ * without flipping isGroup — so 3302 must keep listing itself (that's where the
+ * history lives) while also surfacing the new accounts. Same shape as
+ * getCashBankIds in validation.ts, which already ignores isGroup here.
  */
 export function getBankAccountIds(accounts: { id: string; parentId?: string; isGroup?: boolean; subtype?: string }[]): string[] {
   const bankGroup = accounts.find(a => a.id === ACCOUNT_IDS.BANK);
+  const children = accounts.filter(a => !a.isGroup && a.parentId === ACCOUNT_IDS.BANK).map(a => a.id);
   if (bankGroup?.isGroup) {
-    const children = accounts.filter(a => !a.isGroup && a.parentId === ACCOUNT_IDS.BANK);
-    return children.length > 0 ? children.map(a => a.id) : [ACCOUNT_IDS.BANK];
+    return children.length > 0 ? children : [ACCOUNT_IDS.BANK];
   }
-  return [ACCOUNT_IDS.BANK];
+  return [ACCOUNT_IDS.BANK, ...children];
 }
 
 /** Check if an account ID is a bank account (direct or sub-account of 3302) */
