@@ -33,7 +33,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
             <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-lg">स</div>
             <div>
               <span className="block font-bold text-lg text-foreground leading-tight">SahakarLekha</span>
-              <p className="text-xs text-muted-foreground">सहकारलेखा</p>
+              <p className="text-xs text-muted-foreground">सहकार लेखा</p>
             </div>
           </Link>
           {/* A logged-in user must never be shown "Login / Free Registration". /ask lives on
