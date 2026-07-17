@@ -71,11 +71,12 @@ const PurchaseManagement: React.FC = () => {
   const [supplierPhone, setSupplierPhone] = useState('');
   const [items, setItems] = useState<PurchaseItem[]>([EMPTY_ITEM()]);
   const [discount, setDiscount] = useState<number>(0);
-  // GST / TDS rates (%)
+  // GST / TDS / TCS rates (%)
   const [cgstPct, setCgstPct] = useState<number>(0);
   const [sgstPct, setSgstPct] = useState<number>(0);
   const [igstPct, setIgstPct] = useState<number>(0);
   const [tdsPct, setTdsPct] = useState<number>(0);
+  const [tcsPct, setTcsPct] = useState<number>(0);
   const [rcmApplicable, setRcmApplicable] = useState<boolean>(false); // ECR-22: reverse charge
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
   const [narration, setNarration] = useState('');
@@ -137,9 +138,9 @@ const PurchaseManagement: React.FC = () => {
 
   // ── Derived totals ────────────────────────────────────────────────────────
   const totalAmount = items.reduce((s, i) => s + i.amount, 0);
-  // T-02: net / GST / TDS / grand-total born exact in integer paise (shared with SaleManagement).
-  const { netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, tdsAmount, grandTotal } =
-    computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct, tdsPct });
+  // T-02: net / GST / TDS / TCS / grand-total born exact in integer paise (shared with SaleManagement).
+  const { netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, tdsAmount, tcsAmount, grandTotal } =
+    computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct, tdsPct, tcsPct });
 
   // ── Item row helpers ──────────────────────────────────────────────────────
   const updateItem = (index: number, patch: Partial<PurchaseItem>) => {
@@ -181,7 +182,7 @@ const PurchaseManagement: React.FC = () => {
     setSupplierPhone('');
     setItems([EMPTY_ITEM()]);
     setDiscount(0);
-    setCgstPct(0); setSgstPct(0); setIgstPct(0); setTdsPct(0); setRcmApplicable(false);
+    setCgstPct(0); setSgstPct(0); setIgstPct(0); setTdsPct(0); setTcsPct(0); setRcmApplicable(false);
     setPaymentMode('cash');
     setNarration('');
     setEditingId(null);
@@ -200,6 +201,7 @@ const PurchaseManagement: React.FC = () => {
     setSgstPct(purchase.sgstPct || 0);
     setIgstPct(purchase.igstPct || 0);
     setTdsPct(purchase.tdsPct || 0);
+    setTcsPct(purchase.tcsPct || 0);
     setRcmApplicable(!!purchase.rcmApplicable);
     setPaymentMode(purchase.paymentMode);
     setNarration(purchase.narration || '');
@@ -234,8 +236,8 @@ const PurchaseManagement: React.FC = () => {
       totalAmount,
       discount,
       netAmount,
-      cgstPct, sgstPct, igstPct, tdsPct,
-      cgstAmount, sgstAmount, igstAmount, tdsAmount,
+      cgstPct, sgstPct, igstPct, tdsPct, tcsPct,
+      cgstAmount, sgstAmount, igstAmount, tdsAmount, tcsAmount,
       taxAmount, grandTotal,
       rcmApplicable,
       paymentMode,
@@ -340,10 +342,12 @@ const PurchaseManagement: React.FC = () => {
         sgstPct: purchase.sgstPct || 0,
         igstPct: purchase.igstPct || 0,
         tdsPct: purchase.tdsPct || 0,
+        tcsPct: purchase.tcsPct || 0,
         cgstAmount: purchase.cgstAmount || 0,
         sgstAmount: purchase.sgstAmount || 0,
         igstAmount: purchase.igstAmount || 0,
         tdsAmount: purchase.tdsAmount || 0,
+        tcsAmount: purchase.tcsAmount || 0,
         taxAmount: purchase.taxAmount || 0,
         grandTotal: purchase.grandTotal || purchase.netAmount,
         paymentMode: purchase.paymentMode,
@@ -669,14 +673,37 @@ const PurchaseManagement: React.FC = () => {
                   )}
                 </div>
 
-                {/* TDS Section */}
+                {/* TDS Section — WE deduct; the supplier gets paid less */}
                 <div className="bg-orange-50 dark:bg-orange-950/30 rounded-lg p-3 space-y-2">
-                  <p className="font-semibold text-orange-700 dark:text-orange-300 text-xs uppercase tracking-wide">TDS {language === 'hi' ? 'कटौती' : 'Deduction'}</p>
+                  <p className="font-semibold text-orange-700 dark:text-orange-300 text-xs uppercase tracking-wide">
+                    TDS {language === 'hi' ? 'कटौती — हम काटते हैं (घटेगा)' : 'Deduction — we deduct (reduces)'}
+                  </p>
                   <div className="flex items-center justify-between gap-2">
                     <span className="w-20">TDS %</span>
                     <Input type="number" min={0} max={30} step={0.1} value={tdsPct} onChange={e => setTdsPct(Math.max(0, Number(e.target.value)))} className="w-20 h-7 text-right text-sm" />
-                    <span className="w-24 text-right text-destructive font-medium">{tdsAmount > 0 ? `(${fmt(tdsAmount)})` : '—'}</span>
+                    {/* Always show a figure. This read '—' at zero while every GST row read ₹0.00,
+                        so an empty form looked like the field was dead — a real society burned half
+                        an hour on it before sending a screenshot. */}
+                    <span className="w-24 text-right text-destructive font-medium">{tdsAmount > 0 ? `(${fmt(tdsAmount)})` : fmt(0)}</span>
                   </div>
+                </div>
+
+                {/* TCS Section — the SELLER collects; the bill goes UP. Forest-depot timber, scrap,
+                    minerals etc. carry this. Never the same field as TDS: opposite sign, opposite ledger. */}
+                <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-lg p-3 space-y-2">
+                  <p className="font-semibold text-emerald-700 dark:text-emerald-300 text-xs uppercase tracking-wide">
+                    TCS {language === 'hi' ? 'आयकर — विक्रेता वसूलता है (जुड़ेगा)' : 'Income tax — seller collects (adds)'}
+                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="w-20">TCS %</span>
+                    <Input type="number" min={0} max={30} step={0.1} value={tcsPct} onChange={e => setTcsPct(Math.max(0, Number(e.target.value)))} className="w-20 h-7 text-right text-sm" />
+                    <span className="w-24 text-right text-emerald-700 dark:text-emerald-300 font-medium">{fmt(tcsAmount)}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'hi'
+                      ? 'बिल पर "I.T." लिखा हो और रकम में जुड़ा हो — तो यहाँ भरें, TDS में नहीं।'
+                      : 'If the bill shows "I.T." ADDED to the total, it belongs here — not in TDS.'}
+                  </p>
                 </div>
 
                 {/* Grand Total */}
@@ -696,6 +723,13 @@ const PurchaseManagement: React.FC = () => {
                     {language === 'hi'
                       ? `* TDS के लिए अलग जर्नल एंट्री स्वतः बनेगी (Dr ${supplierName || 'आपूर्तिकर्ता'} / Cr TDS देय)`
                       : `* Separate journal entry will be auto-created for TDS (Dr ${supplierName || 'Supplier'} / Cr TDS Payable)`}
+                  </p>
+                )}
+                {tcsAmount > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'hi'
+                      ? `* TCS आपका आयकर क्रेडिट है — "प्राप्य TDS / TCS" खाते में जाएगा (Dr), देय में नहीं`
+                      : `* TCS is your income-tax credit — booked to "TDS / TCS Receivable" (Dr), not to a payable`}
                   </p>
                 )}
               </CardContent>
@@ -1046,6 +1080,18 @@ const PurchaseManagement: React.FC = () => {
                     <div className="flex justify-between text-orange-700">
                       <span>TDS ({viewPurchase.tdsPct || 0}%)</span>
                       <span className="text-red-600">- {fmt(viewPurchase.tdsAmount!)}</span>
+                    </div>
+                  </div>
+                )}
+                {/* TCS collected by the seller — shown as an addition, mirroring the bill */}
+                {(viewPurchase.tcsAmount || 0) > 0 && (
+                  <div className="rounded-md bg-emerald-50 border border-emerald-200 p-2 space-y-1 text-left">
+                    <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1">
+                      {language === 'hi' ? 'TCS (आयकर — विक्रेता द्वारा वसूल)' : 'TCS (income tax — collected by seller)'}
+                    </p>
+                    <div className="flex justify-between text-emerald-700">
+                      <span>TCS ({viewPurchase.tcsPct || 0}%)</span>
+                      <span>+ {fmt(viewPurchase.tcsAmount!)}</span>
                     </div>
                   </div>
                 )}

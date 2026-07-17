@@ -1158,14 +1158,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // paise so the Dr lines sum to exactly the net and the voucher balances by construction.
             splitNetByAccount(
               purchase.items.map(it => ({ accountId: stockMap.get(it.itemId)?.purchaseAccountId || '5101', weight: it.amount })),
-              grandTotal, purchase.taxAmount || 0, purchase.tdsAmount || 0,
+              grandTotal, purchase.taxAmount || 0, purchase.tdsAmount || 0, purchase.tcsAmount || 0,
             ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Dr', amount }));
             if ((purchase.taxAmount ?? 0) > 0) {
               lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: purchase.taxAmount!, narration: `GST ITC: CGST ₹${purchase.cgstAmount||0} + SGST ₹${purchase.sgstAmount||0} + IGST ₹${purchase.igstAmount||0}` });
             }
-            // grandTotal ALREADY nets TDS (= netAmount + tax − tds). The supplier/cash payable
-            // IS grandTotal; the TDS is the separate Cr to 2202 below. Subtracting tds again here
-            // double-counted it and left the voucher short on the Cr side by the TDS amount.
+            if ((purchase.tcsAmount ?? 0) > 0) {
+              lines.push({ id: lid(), accountId: ACCOUNT_IDS.TAX_CREDIT, type: 'Dr', amount: purchase.tcsAmount!, narration: `TCS ${purchase.tcsPct||0}% — collected by ${purchase.supplierName}` });
+            }
+            // grandTotal ALREADY carries tax + TCS and nets TDS (= net + tax + tcs − tds). The
+            // supplier/cash payable IS grandTotal; the TDS is the separate Cr to 2202 below.
+            // Subtracting tds again here double-counted it and left the Cr side short.
             const netPayable = grandTotal;
             if (netPayable > 0) {
               lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: netPayable });
@@ -6094,7 +6097,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // balances by construction. Falls back to '5101' for unmapped items.
     splitNetByAccount(
       data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.purchaseAccountId || '5101', weight: it.amount })),
-      grandTotal, data.taxAmount || 0, data.tdsAmount || 0,
+      grandTotal, data.taxAmount || 0, data.tdsAmount || 0, data.tcsAmount || 0,
     ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Dr', amount }));
 
     // Dr: GST Input Credit (3310) for tax amount
@@ -6102,8 +6105,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: data.taxAmount!, narration: `GST ITC: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
     }
 
-    // Cr: Cash / Bank / Supplier for net payable (grandTotal - tdsAmount)
-    const netPayable = grandTotal;  // grandTotal already nets TDS (= netAmount + tax − TDS)
+    // Dr: TDS / TCS Receivable (3307) — the seller collected this income tax FROM us and put it
+    // on the bill, so it is our 26AS credit, not the goods' cost. Dr, never Cr 2202.
+    if ((data.tcsAmount ?? 0) > 0) {
+      lines.push({ id: lid(), accountId: ACCOUNT_IDS.TAX_CREDIT, type: 'Dr', amount: data.tcsAmount!, narration: `TCS ${data.tcsPct||0}% — collected by ${data.supplierName}` });
+    }
+
+    // Cr: Cash / Bank / Supplier for net payable (grandTotal already = net + tax + TCS − TDS)
+    const netPayable = grandTotal;
     if (netPayable > 0) {
       lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: netPayable });
     }
@@ -6155,15 +6164,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ECR-17 Phase 5: branchId stays IN purchaseBase — the branch-scoped RLS SELECT policies
     // (migration 039) must see it on the row from birth, or a branch-restricted user's own
     // purchase vanishes from their next load. Stale-schema-cache fallback below (RULE 1).
-    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, taxVoucherIds: _tv, ...purchaseBase } = purchase;
+    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, taxVoucherIds: _tv, ...purchaseBase } = purchase;
     // Feature 6: duplicate purchaseNo (another till) → 23505; bump + retry (only purchaseNo changes).
     const attemptPurchaseSave = (base: typeof purchaseBase, tries: number) => {
       supabase.from('purchases').upsert(withSoc(base)).then(({ error }) => {
         if (!error) {
           // Step 2: GST/TDS columns update (safe — if this fails, base record is already saved)
-          supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false })
+          supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false })
             .eq('id', purchase.id)
-            .then(({ error: gstErr }) => { if (gstErr) console.warn('Purchase GST fields update:', gstErr.message); });
+            .then(({ error: gstErr }) => {
+              // RULE 1 note: the base row is already safe. But a TCS purchase whose extras fail
+              // reloads with tcsPct 0 while its voucher still carries the Dr 3307 line — the two
+              // would disagree. Migration 052 is what closes that, so say so loudly.
+              if (gstErr) {
+                console.warn('Purchase GST/TDS/TCS fields update:', gstErr.message);
+                if ((pTcsAmt ?? 0) > 0) toastRef.current({ title: 'TCS सेव नहीं हुआ', description: `Purchase bach gayi, par TCS column missing — migration 052 chalayein, phir purchase edit karke TCS % dobara bharein. (${gstErr.message})`, variant: 'destructive', duration: 14000 });
+              }
+            });
           return;
         }
         if (isMissingBranchColumn(error) && 'branchId' in base) {
@@ -6333,12 +6350,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // T-02 / RULE 4: exact-paise split by purchaseAccountId (same shared rule as addPurchase / repair).
     splitNetByAccount(
       data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.purchaseAccountId || '5101', weight: it.amount })),
-      grandTotal, data.taxAmount || 0, data.tdsAmount || 0,
+      grandTotal, data.taxAmount || 0, data.tdsAmount || 0, data.tcsAmount || 0,
     ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Dr', amount }));
     if ((data.taxAmount ?? 0) > 0) {
       lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: data.taxAmount!, narration: `GST ITC: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
     }
-    const netPayable = grandTotal;  // grandTotal already nets TDS (= netAmount + tax − TDS)
+    if ((data.tcsAmount ?? 0) > 0) {
+      lines.push({ id: lid(), accountId: ACCOUNT_IDS.TAX_CREDIT, type: 'Dr', amount: data.tcsAmount!, narration: `TCS ${data.tcsPct||0}% — collected by ${data.supplierName}` });
+    }
+    const netPayable = grandTotal;  // grandTotal already = net + tax + TCS − TDS
     if (netPayable > 0) {
       lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: netPayable });
     }
@@ -6383,7 +6403,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setPurchasesState(prev => prev.map(p => p.id === id ? updated : p));
 
     // ECR-17 Phase 5: branchId stays IN purchaseBase (see addPurchase); stale-schema-cache fallback (RULE 1).
-    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, taxVoucherIds: _tv, ...purchaseBase } = updated;
+    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, taxVoucherIds: _tv, ...purchaseBase } = updated;
     const attemptPurchaseUpdate = (payload: typeof purchaseBase) => {
       supabase.from('purchases').upsert(withSoc(payload)).then(({ error }) => {
         if (error) {
@@ -6395,9 +6415,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('Purchase update failed:', error.message);
           toastRef.current({ title: 'Purchase update nahi hua', description: error.message, variant: 'destructive' });
         } else {
-          supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false })
+          supabase.from('purchases').update({ cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false })
             .eq('id', id)
-            .then(({ error: gstErr }) => { if (gstErr) console.warn('Purchase GST fields update:', gstErr.message); });
+            .then(({ error: gstErr }) => {
+              if (gstErr) {
+                console.warn('Purchase GST/TDS/TCS fields update:', gstErr.message);
+                if ((pTcsAmt ?? 0) > 0) toastRef.current({ title: 'TCS सेव नहीं हुआ', description: `Purchase update ho gayi, par TCS column missing — migration 052 chalayein. (${gstErr.message})`, variant: 'destructive', duration: 14000 });
+              }
+            });
         }
       });
     };

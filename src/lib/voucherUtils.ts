@@ -83,11 +83,18 @@ export function splitNetByAccount(
   grandTotal: number,
   taxAmount: number,
   tdsAmount = 0,
+  tcsAmount = 0,
 ): { accountId: string; amount: number }[] {
   // net = grandTotal − tax, plus TDS for a PURCHASE: its goods value adds back the TDS the
   // supplier payable already deducted, so Dr(net)+ITC === Cr(grandTotal)+TDS. tds defaults 0,
   // so sale callers (grandTotal − tax) are unchanged.
-  const netMinor = addMinor(subMinor(toMinor(Number(grandTotal) || 0), toMinor(Number(taxAmount) || 0)), toMinor(Number(tdsAmount) || 0));
+  // TCS pulls the other way: the seller ADDED it to the bill, so the payable already carries
+  // it and it must come back OUT — it is the society's tax credit, not the goods' cost. Leave
+  // it in and a ₹41.03L timber lot books as ₹41.85L. tcs defaults 0, so no caller shifts.
+  const netMinor = subMinor(
+    addMinor(subMinor(toMinor(Number(grandTotal) || 0), toMinor(Number(taxAmount) || 0)), toMinor(Number(tdsAmount) || 0)),
+    toMinor(Number(tcsAmount) || 0),
+  );
   if (netMinor <= 0 || entries.length === 0) return [];
   const order: string[] = [];
   const weightByAcc = new Map<string, number>();

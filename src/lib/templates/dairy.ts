@@ -66,7 +66,7 @@ export const DAIRY_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '3303', name: 'Sundry Debtors',             nameHi: 'विविध देनदार',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
   { id: '3304', name: 'Milk Procurement Advance',   nameHi: 'दुग्ध खरीदी अग्रिम',       type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
   { id: '3305', name: 'Member Input Receivable',    nameHi: 'सदस्य आदान प्राप्य',       type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
-  { id: '3307', name: 'TDS Receivable',             nameHi: 'प्राप्य TDS',               type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
+  { id: '3307', name: 'TDS / TCS Receivable',       nameHi: 'प्राप्य TDS / TCS',         type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
   { id: '3310', name: 'GST Input Credit (ITC)',     nameHi: 'GST इनपुट क्रेडिट',        type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
   { id: '3312', name: 'Interest Receivable',        nameHi: 'प्राप्य ब्याज',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300' },
   { id: '3400', name: 'Inventory',                  nameHi: 'माल-सूची',                 type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '3000' },

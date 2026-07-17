@@ -287,10 +287,12 @@ create table if not exists purchases (
   "sgstPct" numeric default 0,
   "igstPct" numeric default 0,
   "tdsPct" numeric default 0,
+  "tcsPct" numeric default 0,
   "cgstAmount" numeric default 0,
   "sgstAmount" numeric default 0,
   "igstAmount" numeric default 0,
   "tdsAmount" numeric default 0,
+  "tcsAmount" numeric default 0,
   "taxAmount" numeric default 0,
   "grandTotal" numeric default 0,
   "paymentMode" text,
@@ -482,6 +484,10 @@ alter table purchases add column if not exists "taxAmount" numeric default 0;
 alter table purchases add column if not exists "grandTotal" numeric default 0;
 -- ECR-22: Reverse Charge Mechanism flag (recipient self-assesses GST on this inward supply).
 alter table purchases add column if not exists "rcmApplicable" boolean default false;
+-- Migration 052: TCS the SELLER collects from us and adds to the bill (forest-depot timber etc).
+-- Opposite of tdsPct: it RAISES grandTotal and is Dr'd to 3307 (our 26AS credit), never Cr 2202.
+alter table purchases add column if not exists "tcsPct" numeric default 0;
+alter table purchases add column if not exists "tcsAmount" numeric default 0;
 alter table purchases add column if not exists "supplierId" text;
 alter table purchases add column if not exists "taxVoucherIds" jsonb default '[]';
 

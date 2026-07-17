@@ -3151,11 +3151,14 @@ export interface PurchaseRecordInput {
   sgstPct: number;
   igstPct: number;
   tdsPct: number;
+  tcsPct?: number;
   cgstAmount: number;
   sgstAmount: number;
   igstAmount: number;
   tdsAmount: number;
+  tcsAmount?: number;
   taxAmount: number;
+  /** net + tax + TCS − TDS. Already the payable — do NOT net TDS off it again. */
   grandTotal: number;
   paymentMode: string;
   narration?: string;
@@ -3391,7 +3394,12 @@ export function generatePurchaseRecordPDF(input: PurchaseRecordInput, society: S
   if (input.tdsAmount > 0) {
     addTotalsRow(`TDS @ ${input.tdsPct}% (deducted)`, '- ' + fmt(input.tdsAmount));
   }
-  addTotalsRow('Grand Total Payable', fmt(input.grandTotal - (input.tdsAmount || 0)), { bold: true, fill: [194, 65, 12] });
+  if ((input.tcsAmount || 0) > 0) {
+    addTotalsRow(`TCS @ ${input.tcsPct || 0}% (collected by seller)`, '+ ' + fmt(input.tcsAmount!));
+  }
+  // grandTotal IS the payable — computeInvoiceTotals already took TDS out of it. Subtracting it
+  // here again printed a bill one TDS short, in the figure AND in the words below.
+  addTotalsRow('Grand Total Payable', fmt(input.grandTotal), { bold: true, fill: [194, 65, 12] });
   ty += 2;
 
   // ── Amount in words ────────────────────────────────────────────────────────
@@ -3399,7 +3407,7 @@ export function generatePurchaseRecordPDF(input: PurchaseRecordInput, society: S
   doc.setFont(font, 'bold');
   doc.text('Amount in Words:', left, ty);
   doc.setFont(font, 'normal');
-  const netPayable = input.grandTotal - (input.tdsAmount || 0);
+  const netPayable = input.grandTotal;
   const words = _numToWordsIN(netPayable);
   doc.text(words, left + 32, ty, { maxWidth: pageW - left - 32 - 12 });
   ty += 7;
