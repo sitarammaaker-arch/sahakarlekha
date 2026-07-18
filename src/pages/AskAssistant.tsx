@@ -68,13 +68,28 @@ const AskAssistant: React.FC = () => {
   const ask = (value: string) => { const v = value.trim(); setParams(v ? { q: v } : {}); };
   const submit = (e: React.FormEvent) => { e.preventDefault(); ask(input); };
 
-  /* The guard spoke: it retrieved something but refused to assert (a regulated
-     specific, or nothing servable). We must show the refusal INSTEAD of the top hit —
-     showing a document as "the answer" here is precisely what the guard said not to
-     do (AI-N3/AI-N8). Sources stay, so the user can still go and read. */
-  const refusal = outcome?.answer?.unanswered ?? null;
-  const top = refusal ? null : results[0];
-  const rest = refusal ? results.slice(0, 6) : results.slice(1, 6);
+  /* The seam spoke. Three outcomes, in precedence:
+     - it REFUSED (unanswered) → the amber refusal, never a document dressed as the answer
+       (AI-N3/AI-N8);
+     - it COMPUTED an answer — a D-lane figure from the ledger or an F-lane verified rule →
+       show THAT. There is no local-search equivalent of "your trial balance ties out", so
+       the old code, which only ever rendered results[0] (the local top document), DROPPED
+       every D/F answer: the founder saw the Trial Balance help doc for "does my trial
+       balance tie out?" no matter how fast the seam answered. This was the real bug — not
+       latency, which only decided how long before the doc appeared;
+     - it answered from a DOCUMENT (K/N) → results[0] already renders that richly (title,
+       snippet, cookbook lines) and matches the seam's own top cite, so that path is left
+       exactly as-is.
+     Sources always stay below, so an answer is checkable and a refusal still points
+     somewhere useful. */
+  const seam = outcome?.source === 'seam' ? outcome.answer : null;
+  const refusal = seam?.unanswered ?? null;
+  const computed = seam && !refusal && seam.answer && (seam.lane === 'D' || seam.lane === 'F')
+    ? { text: seam.answer, cite: seam.cites?.[0] ?? null, lane: seam.lane }
+    : null;
+  const suppressTop = !!(refusal || computed);
+  const top = suppressTop ? null : results[0];
+  const rest = suppressTop ? results.slice(0, 6) : results.slice(1, 6);
 
   return (
     <PublicLayout>
@@ -120,6 +135,28 @@ const AskAssistant: React.FC = () => {
               <CardContent className="p-5 flex gap-3">
                 <Info className="h-5 w-5 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
                 <p className="text-foreground leading-relaxed">{refusal}</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* The seam COMPUTED an answer — a figure from the ledger (D) or a verified rule (F).
+            Shown as THE answer, ahead of documents, because it is not a document: it is the
+            society's own number or a cited statutory value. Every numeral here came from a
+            tool (§4.7), never prose a model wrote. */}
+        {q && computed && (
+          <div className="mt-8">
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">
+              जवाब{computed.lane === 'D' ? ' · आपकी बही से' : ''}
+            </p>
+            <Card className="border-primary/30">
+              <CardContent className="p-5">
+                <p className="text-lg font-medium text-foreground leading-relaxed">{computed.text}</p>
+                {computed.cite?.url && (
+                  <Link to={computed.cite.url} className="inline-flex items-center gap-1 text-primary font-semibold mt-3 hover:underline">
+                    {computed.cite.title || 'पूरा देखें'} <ArrowRight className="h-4 w-4" />
+                  </Link>
+                )}
               </CardContent>
             </Card>
           </div>
