@@ -79,7 +79,18 @@ export const SYNONYMS: string[][] = [
   ['asset', 'एसेट', 'sampatti', 'संपत्ति', 'परिसंपत्ति'],
 ];
 
-export const norm = (s: string) => s.toLowerCase().trim();
+/* NUKTA IS OPTIONAL IN PRACTICE, SO IT MUST BE OPTIONAL IN SEARCH.
+   The Authorised Capital KI carries `hindi_name: ऑथराइज़्ड कैपिटल` (ज़, U+095B). A user
+   types ऑथराइज्ड (ज). Byte-wise those never meet, so a question whose answer we hold —
+   with its Hindi name written right there in the frontmatter — returned the Share doc
+   instead. This is not one term: it is every ज़ फ़ क़ ख़ ग़ ड़ ढ़ in the corpus, against
+   the majority of Hindi typists, who omit the dot.
+
+   NFD splits ज़ into ज + ◌़; dropping U+093C makes both spellings converge, and NFC
+   recomposes. Applied to queries AND to every haystack (siteSearch builds them with this
+   same norm), so the two sides normalise identically — half a fix would be no fix. */
+export const norm = (s: string) =>
+  s.normalize('NFD').replace(/़/g, '').normalize('NFC').toLowerCase().trim();
 
 // Grammatical particles that carry no search value and are often absent from the
 // content haystack — removing them keeps AND-matching from failing on phrases like
@@ -160,6 +171,16 @@ export function searchIndex(docs: SearchDoc[], query: string, limit = 30): Searc
   const tokens = tokenize(query);
   if (!tokens.length) return [];
   const results: SearchResult[] = [];
+  /* AND is right until it is the only thing standing between a user and an answer we
+     already hold. `npm run eval:ask --fails`: 13 of 95 golden questions returned NOTHING,
+     and every one of them wanted a glossary doc that EXISTS —
+       "pacs software"        → the PACS KI never says "software"
+       "NEFT और RTGS में अंतर" → the KI never says "अंतर"
+     One stray word vetoes the whole corpus. That is not precision, it is a veto.
+     So: partial matches are collected but only CONSULTED when the AND pass finds nothing.
+     Queries that work today take the identical path and cannot regress — their AND set is
+     non-empty, so the fallback is never reached. */
+  const partial: (SearchResult & { matched: number })[] = [];
 
   for (const doc of docs) {
     // altTitle is scored at title weight but never shown — see SearchDoc.altTitle.
@@ -187,13 +208,30 @@ export function searchIndex(docs: SearchDoc[], query: string, limit = 30): Searc
       if (hit) matchedTokens++;
     }
 
-    // require every query token to match somehow (AND semantics) for precision
+    // every query token matched somehow (AND semantics) — the precise tier
     if (matchedTokens === tokens.length && score > 0) {
       results.push({ ...doc, score });
+    } else if (score > 0) {
+      partial.push({ ...doc, score, matched: matchedTokens });
     }
   }
 
-  return results
-    .sort((a, b) => b.score - a.score || a.title.length - b.title.length)
-    .slice(0, limit);
+  if (results.length) {
+    return results
+      .sort((a, b) => b.score - a.score || a.title.length - b.title.length)
+      .slice(0, limit);
+  }
+
+  /* Nothing matched every token. Before answering "इसका सीधा जवाब अभी नहीं मिला" —
+     which the founder read, all day, about questions this corpus can answer — try the
+     best partial coverage. Ranked by how much of the question a doc accounts for FIRST,
+     so "pacs software" prefers the doc that owns "pacs" over any doc that merely says
+     "software"; score (title hits weigh 10, body 4) breaks the tie. */
+  /* A "cover at least half the query" filter was tried here and lost on every axis
+     (top-1 76→75, top-6 92→89, nothing 0→2, wrong 3→4): dropping a thin match promotes
+     a worse one behind it. Coverage belongs in the SORT, not in a gate. */
+  return partial
+    .sort((a, b) => b.matched - a.matched || b.score - a.score || a.title.length - b.title.length)
+    .slice(0, limit)
+    .map(({ matched: _matched, ...doc }) => doc);
 }
