@@ -399,6 +399,44 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { error: error?.message ?? null };
     },
   };
+  // Live-cancel hardening (journal-drift fix). cancelVoucher appends its reversing `voucher.cancelled`
+  // ONLY when the voucher's posting is already in the in-memory journal (ledgerEventsRef). For a tenant
+  // whose FULL journal was NOT loaded at cancel time — ledgerReads off, a failed/in-flight/truncated
+  // load — that posting is absent from the ref even though ledger_events HAS it, so the guard sees "no
+  // posting", appends nothing, and the journal keeps a LIVE voucher.posted for a cancelled voucher: a
+  // parity break (the raw-journal D-lane then over-counts it). This best-effort async check runs ONLY
+  // when the journal wasn't loaded (the sync path already handles the loaded case). It fetches THIS
+  // voucher's events from the DB (ground truth) and, IFF a posting exists with no cancel yet, appends
+  // the reversing voucher.cancelled — sequence from the FETCHED events (the empty ref would give seq 1
+  // and collide on the unique index). It NEVER appends when there is no posting: that would be an orphan
+  // reversal (legs cancelling nothing), the exact CV/320/329 parity break scripts/reconcile-cancelled-
+  // ledger.mjs exists to repair. Idempotent: skips if a voucher.cancelled already exists.
+  const ensureVoucherCancelEvent = async (voucher: Voucher, deletedBy: string, reason: string) => {
+    try {
+      const { data, error } = await supabase.from('ledger_events')
+        .select('event_id, event_type, schema_version, society_id, jurisdiction, aggregate_type, aggregate_id, sequence, occurred_at, producer_kind, producer_id, on_behalf_of, reversal_of, payload')
+        .eq('aggregate_type', 'voucher').eq('aggregate_id', voucher.id);
+      if (error || !data) return;
+      const evs = mapLedgerEventRows(data);
+      const posting = currentPostingEventId(evs, voucher.id);
+      if (!posting) return;                                              // no posting → appending would orphan
+      if (evs.some(e => e.eventType === 'voucher.cancelled')) return;    // already reconciled — idempotent
+      const maxSeq = evs.reduce((m, e) => Math.max(m, e.sequence || 0), 0);
+      const cancelEvent = buildEvent({
+        eventType: 'voucher.cancelled',
+        tenantId: societyIdRef.current,
+        jurisdiction: jurisdictionRef.current,
+        aggregateType: 'voucher',
+        aggregateId: voucher.id,
+        sequence: maxSeq + 1,
+        reversalOf: posting,
+        producer: { kind: 'human', id: deletedBy ?? null },
+        payload: { lines: voucherReversalLines(voucher), ...voucherEventMeta(voucher), reason },
+      }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
+      const { error: insErr } = await supabase.from('ledger_events').insert(toLedgerEventRow(cancelEvent));
+      if (insErr) console.warn('ensureVoucherCancelEvent append (best-effort):', insErr.message);
+    } catch { /* best-effort — never affects the cancel */ }
+  };
   // P0 #3: append-only audit. Actor is read from a ref so it is never stale inside the
   // delete/approve useCallbacks; emitAudit is fire-and-forget and never blocks the write.
   const userRef = useRef(user);
@@ -2302,6 +2340,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else {
         deleteEntries(id); // remove from voucher_entries so cancelled voucher has no SQL-visible impact
         if (cancelEvent) persistLedgerEvent(cancelEvent); // durable append only after the cancel is confirmed
+        // Journal not loaded → the sync guard above couldn't see the posting and built no cancelEvent.
+        // Check the DB directly and append the reversing event iff a posting really exists (else no-op).
+        else if (!journalLoadedRef.current) void ensureVoucherCancelEvent(current, deletedBy, reason);
       }
     });
     return true;
