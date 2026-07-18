@@ -199,11 +199,18 @@ Deno.serve(async (req: Request) => {
   let society: Parameters<typeof ask>[5];
   /** Why the books were not loaded, when they were not. A refusal must be able to say why. */
   let ledgerError: string | undefined;
+  /* WHERE THE SECONDS GO. The trial-balance tool answers correctly (audit: answered:true)
+     but at 18s+, past the browser's ceiling — and the tool itself is ~5ms (measured), so
+     the cost is here, in auth + fetch + map, on a possibly-cold isolate. Rather than guess
+     which, time each stage and record it: one real request then says exactly where the 18s
+     is, the way authTrace/latencyMs found the earlier bugs. Instrument, then read. */
+  const timings: Record<string, number | null> = { authMs: Date.now() - started, fetchMs: null, mapMs: null, askMs: null, eventRows: null };
   if (societyId && svcKey && supaUrl) {
     const probe = classify(text, true);
     if (probe.lane === 'D') {
       try {
         const db = createClient(supaUrl, svcKey);
+        const tFetch = Date.now();
         const [events, accounts, branches] = await Promise.all([
           // occurred_at is not unique — event_id (the primary key) makes the order total,
           // which is what makes paging sound. projectCashBook still applies its own
@@ -212,8 +219,13 @@ Deno.serve(async (req: Request) => {
           fetchAllRows(db, 'accounts', '*', societyId, ['id']),
           fetchAllRows(db, 'branches', 'id, isHeadOffice', societyId, ['id']),
         ]);
+        timings.fetchMs = Date.now() - tFetch;
+        timings.eventRows = events.length;
+        const tMap = Date.now();
+        const mappedEvents = mapLedgerEventRows(events);
+        timings.mapMs = Date.now() - tMap;
         society = {
-          events: mapLedgerEventRows(events),
+          events: mappedEvents,
           accounts: accounts as never,
           // Branch comes from the VERIFIED token, never the body (AI-P2). Absent claim
           // ⇒ consolidated, which is what a society with no branches sees anyway.
@@ -231,6 +243,7 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  const tAsk = Date.now();
   const answer = ask(
     {
       text,
@@ -254,6 +267,7 @@ Deno.serve(async (req: Request) => {
     society,   // undefined ⇒ the D-lane refuses with "बही लोड नहीं हुई" — true, not a fallback
   );
 
+  timings.askMs = Date.now() - tAsk;
   const latencyMs = Date.now() - started;
 
   /* RECORD — stage 8. Every answer, on the SAME append-only trail as human actions
@@ -304,6 +318,11 @@ Deno.serve(async (req: Request) => {
           // And why the books were not read, when they were not.
           ledgerError: ledgerError ?? null,
           latencyMs,
+          // Per-stage breakdown so "18s" stops being a mystery: authMs (getUser +
+          // society_users, cold-start-sensitive), fetchMs (the journal read), mapMs
+          // (row → event), askMs (the pure core incl. the tool). One request tells us
+          // which to fix — see the timings comment above.
+          timings,
           // model/tokens/cost land here when stage 6 does. Their absence is itself the
           // record: this answer cost nothing and no model saw it.
         },
