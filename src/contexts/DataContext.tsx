@@ -1101,6 +1101,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           // SALES
           for (const sale of ((slData || []) as Sale[])) {
+            // A soft-deleted sale is archived (hidden from the app) but its row stays in the DB
+            // for audit. setSalesState filters it out (line ~1343: `.filter(s => !s.isDeleted)`) —
+            // so the repair loop MUST too, or it repairs a sale the rest of the app has deleted.
+            // Without this, cancelling the orphan voucher is futile: the deleted sale is still in
+            // slData, so the next load resurrects the voucher under a new number, forever. RULE-5.
+            if (sale.isDeleted) continue;
             // First try sale.voucherId; if missing, look up by refId from existing repair vouchers
             // (handles the case where the sale.voucherId Supabase patch failed previously —
             //  prevents creating a brand-new duplicate every F5).
@@ -1182,6 +1188,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           // PURCHASES
           for (const purchase of ((puData || []) as Purchase[])) {
+            // A soft-deleted purchase is archived (hidden from the app) but its row stays in the
+            // DB for audit. setPurchasesState filters it out (line ~1344: `.filter(p => !p.isDeleted)`)
+            // — so the repair loop MUST too, or it repairs a purchase the rest of the app has
+            // deleted. This is the ghost-voucher bug: cancel the orphan payment voucher, and the
+            // next load recreates it from the still-present deleted purchase, under a new number,
+            // forever. The founder hit exactly this: PV/372 → cancel → refresh → PV/373. RULE-5.
+            if (purchase.isDeleted) continue;
             let existing = purchase.voucherId ? voucherById.get(purchase.voucherId) : undefined;
             if (!existing || existing.isDeleted) existing = repairByRefId.get(`purchase:${purchase.id}`);
             if (existing && !existing.isDeleted && purchase.voucherId !== existing.id) {
