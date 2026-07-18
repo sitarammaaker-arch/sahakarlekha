@@ -102,5 +102,49 @@ const cancelOldAmount = [ev('cv-edit', 1, 'voucher.cancelled', voucherReversalLi
 const rebuilt = rebuildPosting(edited, cancelOldAmount);
 ok(netOf([...cancelOldAmount, rebuilt]).length !== 0, 'leg-mismatch: rebuilt posting does NOT net to zero → routed to MANUAL, not auto-fixed');
 
+// ── The SYMMETRIC orphan: a DELETED voucher whose journal has a LIVE posting and NO cancel ───────────
+//    (the ₹52L D-lane over-count class — the live cancel path appended nothing because the journal was
+//    not loaded at cancel time). Repair: APPEND the missing voucher.cancelled (the voucher's reversing
+//    legs), reversalOf → the live posting. posted + cancelled then net to zero.
+const rebuildCancel = (v, evs) => {
+  const maxSeq = evs.reduce((m, e) => Math.max(m, e.sequence || 0), 0);
+  let postedId, repostId, repostSeq = -1;
+  for (const e of evs) {
+    if (e.eventType === 'voucher.posted') postedId = e.eventId;
+    else if (e.eventType === 'voucher.reposted' && (e.sequence || 0) > repostSeq) { repostSeq = e.sequence || 0; repostId = e.eventId; }
+  }
+  return buildEvent(
+    { eventType: 'voucher.cancelled', tenantId: SID, jurisdiction: v.jurisdiction, aggregateType: 'voucher', aggregateId: v.id, sequence: maxSeq + 1, reversalOf: repostId ?? postedId, producer: { kind: 'import', id: 'cancelled-reconcile' }, payload: { lines: voucherReversalLines(v), ...voucherEventMeta(v), reconciledCancel: true } },
+    { eventId: `reconcile-cancel-${v.id}`, occurredAt: v.deletedAt || `${v.date}T00:00:01.000Z` },
+  );
+};
+
+const v379 = { id: 'cv379', type: 'journal', date: '2026-03-01', debitAccountId: 'bank-1859', creditAccountId: '3301', amount: 4923623.28, isDeleted: true, deletedAt: '2026-03-15T00:00:00Z', voucherNo: 'PV/2026-27/379', jurisdiction: 'hr' };
+const lonePosting = [ev('cv379', 1, 'voucher.posted', voucherPostingLines(v379), '2026-03-01T00:00:00Z')];
+
+// 6. A deleted voucher with a LIVE posting and no cancel → journal OVER-counts (non-zero) → parity fails.
+ok(netOf(lonePosting).length === 2, 'lone posting on a DELETED voucher → aggregate does NOT self-net (over-count)');
+ok(!ledgerParity(lonePosting, [v379], []).matches, 'deleted voucher + lone posting → trialBalance parity FAILS');
+
+// 7. Repair: append the reversing cancel → posted + cancelled net to ZERO, parity green.
+const cancel = rebuildCancel(v379, lonePosting);
+const reconciled2 = [...lonePosting, cancel];
+ok(reconciled2.length === lonePosting.length + 1, 'append-only: the posting is retained, cancel added');
+ok(netOf(reconciled2).length === 0, 'after appending the missing cancel → aggregate nets to zero');
+ok(ledgerParity(reconciled2, [v379], []).matches, 'reconciled journal matches the (excluded) deleted voucher → parity green');
+ok(cancel.reversalOf === 'e-cv379-1', 'appended cancel points reversalOf at the live posting (CL-2 lineage)');
+ok(cancel.eventId === 'reconcile-cancel-cv379', 'appended cancel uses a deterministic id (idempotent under upsert)');
+ok(cancel.sequence === 2, 'cancel takes a fresh sequence (2) — never reuses the posting’s sequence (unique index)');
+
+// 8. Idempotent: a second pass sees the aggregate already self-netting → plans no repair.
+ok(netOf(reconciled2).length === 0, 'idempotent (symmetric): re-running sees a self-netting aggregate, nothing to repair');
+
+// 9. VERIFY-GUARD (symmetric): if the voucher’s CURRENT legs differ from the live posting, the rebuilt
+//    cancel does NOT net to zero → MANUAL, never auto-write.
+const vEdited2 = { ...v379, id: 'cv-edit2', amount: 9000 };  // current legs ₹9,000
+const oldPosting = [ev('cv-edit2', 1, 'voucher.posted', voucherPostingLines({ ...vEdited2, amount: 5000 }), '2026-03-01T00:00:00Z')];  // journal posting was ₹5,000
+const rebuiltCancel = rebuildCancel(vEdited2, oldPosting);
+ok(netOf([...oldPosting, rebuiltCancel]).length !== 0, 'leg-mismatch: rebuilt cancel does NOT net to zero → routed to MANUAL, not auto-fixed');
+
 console.log(`\nCancelled-voucher reconcile (T-09): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

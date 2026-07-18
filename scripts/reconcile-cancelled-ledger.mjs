@@ -1,20 +1,29 @@
 // Cancelled-voucher ledger RECONCILE (T-09 / ADR-0001) — repair the WORM journal where a DELETED
-// voucher carries a lone `voucher.cancelled` event with NO matching `voucher.posted`, WITHOUT deleting
-// a single event.
+// voucher's events do NOT net to zero, in EITHER direction, WITHOUT deleting a single event.
 //
 // WHY THIS EXISTS
 //   A cancelled voucher should book TWO events — voucher.posted (original legs) + voucher.cancelled
 //   (reversing legs) — which net to zero, so a deleted voucher contributes nothing to the trial
-//   balance. But the live cancel path (DataContext.cancelVoucher) appends the reversing event even when
-//   the journal never held a posting for that voucher (it was posted BEFORE the journal/genesis existed,
-//   and genesis SKIPS deleted vouchers so it never seeded the posting either). The result is an ORPHAN
-//   reversal: its legs sit in the journal with nothing to cancel, and the trialBalance parity gate
-//   reports a per-account drift (observed at Rania: CV/2026/27/320 + /329 → 3301 +₹25,000, bank −₹25,000).
+//   balance. Two drifts break that, and this script repairs both by APPENDING the missing half:
 //
-//   The fix is NOT to delete the reversal (WORM), but to APPEND the missing original posting — the same
-//   voucher.posted genesis would have seeded had the voucher still been active. posted + cancelled then
-//   net to zero: exactly the shape a normally-cancelled voucher has, which every projection already
-//   handles (that is why the bank book stayed green while only the trial balance drifted).
+//   (1) ORPHAN CANCEL (cancel, no posting). The live cancel path (DataContext.cancelVoucher) appended a
+//       reversing event even when the journal never held a posting for that voucher (posted BEFORE the
+//       journal/genesis existed; genesis SKIPS deleted vouchers so it never seeded the posting either).
+//       The reversal's legs then sit with nothing to cancel — a per-account drift (Rania: CV/2026/27/320
+//       + /329 → 3301 +₹25,000, bank −₹25,000). Fix: append the missing voucher.posted (the legs genesis
+//       would have seeded). posted + cancelled net to zero.
+//
+//   (2) ORPHAN POSTING (posting, no cancel). The SAME live cancel path appends the reversing event ONLY
+//       when the voucher's posting is already in the in-memory journal. For a tenant whose full journal
+//       wasn't loaded at cancel time (ledgerReads off, or a failed/in-flight/truncated load), the guard
+//       saw no posting and appended nothing — so a cancelled voucher keeps a LIVE voucher.posted that
+//       over-counts every raw-journal read (the ₹52L D-lane over-count; founder society
+//       d5e007f0-fef0-48dd-b5dc-7230ce0aa82c). Fix: append the missing voucher.cancelled (reversing
+//       legs), reversalOf → the live posting. posted + cancelled net to zero. (The live path is now
+//       hardened via ensureVoucherCancelEvent, so new cancels don't drift; this repairs the historical.)
+//
+//   In BOTH cases the appended event yields exactly the shape a normally-cancelled voucher has, which
+//   every projection already handles (that is why the bank book stayed green while the trial balance drifted).
 //
 // SAFE BY DESIGN
 //   • DRY-RUN by default — prints every repair and the posting it would append; writes nothing. --commit writes.
@@ -72,7 +81,7 @@ const USING_SERVICE = !!env.SUPABASE_SERVICE_ROLE_KEY;
 
 const { buildEvent } = await import(abs('../src/lib/ledger/event.ts'));
 const { genesisEventId } = await import(abs('../src/lib/ledger/genesis.ts'));
-const { voucherPostingLines, voucherEventMeta } = await import(abs('../src/lib/ledger/voucherEvent.ts'));
+const { voucherPostingLines, voucherReversalLines, voucherEventMeta } = await import(abs('../src/lib/ledger/voucherEvent.ts'));
 const { projectTrialBalance } = await import(abs('../src/lib/ledger/projections.ts'));
 const { toRupees } = await import(abs('../src/lib/money.ts'));
 const { createClient } = await import('@supabase/supabase-js');
@@ -93,7 +102,7 @@ async function readAll(table, cols) {
   return rows;
 }
 
-const vouchers = await readAll('vouchers', 'id, society_id, type, date, "debitAccountId", "creditAccountId", amount, lines, "isDeleted", "approvalStatus", "voucherNo", narration, "createdAt", "memberId", jurisdiction');
+const vouchers = await readAll('vouchers', 'id, society_id, type, date, "debitAccountId", "creditAccountId", amount, lines, "isDeleted", "deletedAt", "deletedReason", "approvalStatus", "voucherNo", narration, "createdAt", "memberId", jurisdiction');
 const events = await readAll('ledger_events', 'event_id, society_id, jurisdiction, event_type, aggregate_id, sequence, occurred_at, payload');
 let names = new Map();
 try { names = new Map((await readAll('societies', 'id, name')).map((s) => [String(s.id), s.name])); } catch { /* ignore */ }
@@ -129,42 +138,73 @@ for (const [aggId, evs] of eventsByAgg) {
   const nonZero = netOf(evs);
   if (nonZero.length === 0) { inSync++; continue; }        // self-netting (normal posted+cancelled) — fine
 
-  // We only auto-repair the CONFIRMED shape: a DELETED voucher whose journal has a cancel but no
-  // posting. Missing rows / pending / edited-leg shapes are reported for MANUAL review, never touched.
+  // Auto-repair the two CONFIRMED reconcilable shapes of a DELETED voucher whose journal does NOT
+  // net to zero:
+  //   (1) orphan CANCEL  — a voucher.cancelled but NO posting → append the missing voucher.posted (the
+  //       legs genesis would have seeded). posted + cancelled then net to zero.
+  //   (2) orphan POSTING — a posting but NO voucher.cancelled → append the missing voucher.cancelled
+  //       (reversing legs). This is the drift the LIVE cancel path left when the journal wasn't loaded
+  //       at cancel time: the voucher.posted stays LIVE and over-counts every raw-journal read.
+  // Missing rows / pending / both-present-yet-still-nonzero (edited legs) → MANUAL, never touched.
   if (!v) { manual.push({ sid, voucherId: aggId, voucherNo: label, reason: 'no voucher row (MISSING) — cannot rebuild legs' }); continue; }
   if (!v.isDeleted) { manual.push({ sid, voucherId: aggId, voucherNo: label, reason: `pending voucher with non-zero journal (${evs.map((e) => e.event_type).join('+')}) — review` }); continue; }
 
   const hasPosting = evs.some((e) => e.event_type === 'voucher.posted' || e.event_type === 'voucher.reposted');
   const hasCancel = evs.some((e) => e.event_type === 'voucher.cancelled');
-  if (hasPosting || !hasCancel) { manual.push({ sid, voucherId: aggId, voucherNo: label, reason: `deleted voucher with unexpected event shape (${evs.map((e) => e.event_type).join('+')})` }); continue; }
-
-  // Rebuild the missing original posting from the voucher's own legs, at a fresh sequence (the lone
-  // cancel already occupies its sequence — the unique index forbids reuse). Dated at the voucher date
-  // so it sorts before the cancel.
   const maxSeq = evs.reduce((m, e) => Math.max(m, e.sequence || 0), 0);
-  const lines = voucherPostingLines(v);
-  if (lines.length === 0) { manual.push({ sid, voucherId: aggId, voucherNo: label, reason: 'voucher has no posting legs to rebuild' }); continue; }
-  const posted = buildEvent(
-    {
-      eventType: 'voucher.posted',
-      tenantId: sid,
-      jurisdiction: v.jurisdiction ?? undefined,
-      aggregateType: 'voucher',
-      aggregateId: aggId,
-      sequence: maxSeq + 1,
-      producer: { kind: 'import', id: 'cancelled-reconcile' },
-      payload: { lines, ...voucherEventMeta(v), genesis: true, reconciledPosting: true },
-    },
-    { eventId: genesisEventId(aggId), occurredAt: `${v.date}T00:00:00.000Z` },
-  );
+  let appendEvent = null;   // the ONE event this repair appends
+  let kind = null;          // 'posting' | 'cancel' — for reporting
 
-  // VERIFY: after appending, the aggregate must net to ZERO on every account. Else leave it for manual.
-  const after = netOf([...evs, { event_type: posted.eventType, payload: posted.payload }]);
-  if (after.length !== 0) {
-    manual.push({ sid, voucherId: aggId, voucherNo: label, reason: `rebuilt posting does not net the cancel to zero (legs changed?) — residual ${after.map((l) => l.accountId + ':₹' + toRupees(l.netMinor)).join(', ')}` });
+  if (!hasPosting && hasCancel) {
+    // (1) rebuild the original posting at a fresh sequence (the lone cancel already occupies its
+    // sequence — the unique index forbids reuse), dated at the voucher date so it sorts before the cancel.
+    const lines = voucherPostingLines(v);
+    if (lines.length === 0) { manual.push({ sid, voucherId: aggId, voucherNo: label, reason: 'voucher has no posting legs to rebuild' }); continue; }
+    appendEvent = buildEvent(
+      {
+        eventType: 'voucher.posted', tenantId: sid, jurisdiction: v.jurisdiction ?? undefined,
+        aggregateType: 'voucher', aggregateId: aggId, sequence: maxSeq + 1,
+        producer: { kind: 'import', id: 'cancelled-reconcile' },
+        payload: { lines, ...voucherEventMeta(v), genesis: true, reconciledPosting: true },
+      },
+      { eventId: genesisEventId(aggId), occurredAt: `${v.date}T00:00:00.000Z` },
+    );
+    kind = 'posting';
+  } else if (hasPosting && !hasCancel) {
+    // (2) append the missing reversing cancel. reversalOf → the CURRENT posting (latest reposted, else
+    // posted). Reversing legs come from the voucher itself; dated at deletedAt (else just after the
+    // posting) so it sorts after. Deterministic id in a distinct namespace from genesis → idempotent.
+    let postedId, repostId, repostSeq = -1;
+    for (const e of evs) {
+      if (e.event_type === 'voucher.posted') postedId = e.event_id;
+      else if (e.event_type === 'voucher.reposted' && (e.sequence || 0) > repostSeq) { repostSeq = e.sequence || 0; repostId = e.event_id; }
+    }
+    const postingId = repostId ?? postedId;
+    const lines = voucherReversalLines(v);
+    if (lines.length === 0) { manual.push({ sid, voucherId: aggId, voucherNo: label, reason: 'voucher has no legs to reverse' }); continue; }
+    appendEvent = buildEvent(
+      {
+        eventType: 'voucher.cancelled', tenantId: sid, jurisdiction: v.jurisdiction ?? undefined,
+        aggregateType: 'voucher', aggregateId: aggId, sequence: maxSeq + 1, reversalOf: postingId,
+        producer: { kind: 'import', id: 'cancelled-reconcile' },
+        payload: { lines, ...voucherEventMeta(v), reconciledCancel: true, reason: v.deletedReason || 'reconcile: missing cancel for deleted voucher' },
+      },
+      { eventId: `reconcile-cancel-${aggId}`, occurredAt: v.deletedAt || `${v.date}T00:00:01.000Z` },
+    );
+    kind = 'cancel';
+  } else {
+    // both present yet still non-zero (edited legs), or neither (some other non-zero event). Manual.
+    manual.push({ sid, voucherId: aggId, voucherNo: label, reason: `deleted voucher with non-netting event shape (${evs.map((e) => e.event_type).join('+')}) — review` });
     continue;
   }
-  fixes.push({ sid, voucherId: aggId, voucherNo: label, postedEvent: posted, lines: nonZero });
+
+  // VERIFY: after appending, the aggregate must net to ZERO on every account. Else leave it for manual.
+  const after = netOf([...evs, { event_type: appendEvent.eventType, payload: appendEvent.payload }]);
+  if (after.length !== 0) {
+    manual.push({ sid, voucherId: aggId, voucherNo: label, reason: `appended ${kind} does not net to zero (legs changed?) — residual ${after.map((l) => l.accountId + ':₹' + toRupees(l.netMinor)).join(', ')}` });
+    continue;
+  }
+  fixes.push({ sid, voucherId: aggId, voucherNo: label, appendEvent, kind, lines: nonZero });
 }
 
 const toRow = (e) => ({
@@ -182,13 +222,15 @@ console.log(`\nCancelled-voucher reconcile ${COMMIT ? '(COMMIT)' : '(DRY-RUN)'} 
 console.log(`  voucher aggregates in journal:   ${eventsByAgg.size}`);
 console.log(`  active vouchers (out of scope):  ${activeSkipped}`);
 console.log(`  deleted & self-netting (fine):   ${inSync}`);
-console.log(`  REPAIRABLE (append missing post): ${fixes.length}  across ${bySoc.size} societ${bySoc.size === 1 ? 'y' : 'ies'}`);
+const nPostFix = fixes.filter((f) => f.kind === 'posting').length;
+const nCancelFix = fixes.filter((f) => f.kind === 'cancel').length;
+console.log(`  REPAIRABLE (append 1 event):     ${fixes.length}  (${nPostFix} missing-posting, ${nCancelFix} missing-cancel)  across ${bySoc.size} societ${bySoc.size === 1 ? 'y' : 'ies'}`);
 console.log(`  MANUAL review (not auto-fixed):   ${manual.length}`);
 
 for (const [sid, fs] of bySoc) {
   console.log(`\n  society ${sid}${names.get(sid) ? '  (' + names.get(sid) + ')' : ''} — ${fs.length} repair(s):`);
   for (const f of fs) {
-    console.log(`    • voucher ${f.voucherNo} (${f.voucherId}) — append posting ${f.postedEvent.eventId}`);
+    console.log(`    • voucher ${f.voucherNo} (${f.voucherId}) — append ${f.appendEvent.eventType} ${f.appendEvent.eventId}`);
     for (const l of f.lines) console.log(`        nets out ${l.accountId}: ${l.drMinor ? 'Dr ₹' + toRupees(l.drMinor) : ''}${l.crMinor ? 'Cr ₹' + toRupees(l.crMinor) : ''} (was net ₹${toRupees(l.netMinor)} → 0)`);
   }
 }
@@ -198,14 +240,14 @@ if (manual.length) {
   if (manual.length > 50) console.log(`    … and ${manual.length - 50} more`);
 }
 
-if (!fixes.length) { console.log('\n✓ No repairable orphan-cancel aggregates found.'); process.exit(0); }
+if (!fixes.length) { console.log('\n✓ No repairable orphan (posting-only / cancel-only) aggregates found.'); process.exit(0); }
 if (!COMMIT) {
-  console.log('\nDRY-RUN — nothing written. Re-run with --commit to append the missing postings above.');
+  console.log('\nDRY-RUN — nothing written. Re-run with --commit to append the missing events above.');
   console.log('Append-only: no event is deleted; posted + cancelled will then net to zero (a normal cancelled voucher).');
   process.exit(0);
 }
 
-const rows = fixes.map((f) => toRow(f.postedEvent));
+const rows = fixes.map((f) => toRow(f.appendEvent));
 const BATCH = 500;
 let written = 0;
 for (let i = 0; i < rows.length; i += BATCH) {
@@ -214,5 +256,5 @@ for (let i = 0; i < rows.length; i += BATCH) {
   if (error) fail(`write ledger_events (batch @${i})`, error);
   written += chunk.length;
 }
-console.log(`\n✓ Appended ${written} missing voucher.posted event(s). Re-run the parity check — trialBalance should now be green.`);
+console.log(`\n✓ Appended ${written} missing event(s) (${nPostFix} posting, ${nCancelFix} cancel). Re-run the parity check — trialBalance should now be green.`);
 process.exit(0);
