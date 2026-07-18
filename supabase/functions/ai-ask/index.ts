@@ -137,9 +137,14 @@ Deno.serve(async (req: Request) => {
 
   // The anon key is itself a JWT and is what an anonymous /ask visitor sends. Treat it
   // as no user at all — otherwise every public visitor would look authenticated.
+  /* authMs came back at ~9s — so split it: getUser (a network JWT verify, cold-start-
+     sensitive) vs the society_users lookup. The fix differs (keep-warm / local verify vs
+     an index), so we measure which, not guess. */
+  const authTimes: Record<string, number> = {};
   if (bearer && bearer !== anonKey && supaUrl && anonKey) {
     try {
       authTrace.step = 'getUser';
+      const tGetUser = Date.now();
       /* VERIFY THE TOKEN WE WERE HANDED — explicitly, by value.
          This used to call getUser() with no argument and lean on the Authorization
          header, which routes through auth-js's _useSession: the client's OWN stored
@@ -153,6 +158,7 @@ Deno.serve(async (req: Request) => {
         // Belt and braces: never let a server client persist or refresh a session.
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
       }).auth.getUser(bearer);
+      authTimes.getUserMs = Date.now() - tGetUser;
       if (error) authTrace.getUserError = error.message;
       else if (!data?.user?.email) authTrace.getUserError = 'verified but no email on user';
       if (!error && data?.user?.email) {
@@ -164,12 +170,14 @@ Deno.serve(async (req: Request) => {
         userBranchId = typeof bid === 'string' && bid ? bid : undefined;
         if (svcKey) {
           authTrace.step = 'societyLookup';
+          const tSoc = Date.now();
           const { data: row, error: sErr } = await createClient(supaUrl, svcKey)
             .from('society_users')
             .select('society_id')
             .eq('email', userEmail)
             .eq('is_active', true)
             .maybeSingle();
+          authTimes.societyMs = Date.now() - tSoc;
           if (sErr) authTrace.societyError = sErr.message;
           // The lookup is case-sensitive and filtered on is_active: a real user whose row
           // is stored `Foo@x.com`, or deactivated, resolves to no society and answers as
@@ -204,7 +212,7 @@ Deno.serve(async (req: Request) => {
      the cost is here, in auth + fetch + map, on a possibly-cold isolate. Rather than guess
      which, time each stage and record it: one real request then says exactly where the 18s
      is, the way authTrace/latencyMs found the earlier bugs. Instrument, then read. */
-  const timings: Record<string, number | null> = { authMs: Date.now() - started, fetchMs: null, mapMs: null, askMs: null, eventRows: null };
+  const timings: Record<string, number | null> = { authMs: Date.now() - started, fetchMs: null, mapMs: null, askMs: null, eventRows: null, ...authTimes };
   if (societyId && svcKey && supaUrl) {
     const probe = classify(text, true);
     if (probe.lane === 'D') {
