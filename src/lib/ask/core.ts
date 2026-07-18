@@ -30,6 +30,7 @@ import { classify } from './classify';
 import type { Intent, Lane } from './classify';
 import { answerFact, unverifiedHint } from './fact';
 import { cashBalance } from './tools/cashBalance';
+import { trialBalanceCheck } from './tools/trialBalance';
 import type { LedgerEvent } from '../ledger/event';
 import type { LedgerAccount } from '@/types';
 
@@ -49,8 +50,12 @@ export interface SocietyData {
   headOfficeBranchId?: string;
 }
 
-/** Cash questions, in both scripts. Sparse on purpose: one tool exists. */
+/* D-lane tool words, in both scripts. Order matters at the routing site: the FIRST
+   set whose word appears wins, so a phrase like "ट्रायल बैलेंस का रोकड़" (unlikely, but)
+   resolves deterministically. Keep each set to the terms that unambiguously name that
+   report — a word shared with another tool belongs in neither. */
 const CASH_WORDS = ['रोकड़', 'नकद', 'कैश', 'cash', 'rokad', 'nakad'];
+const TB_WORDS = ['ट्रायल बैलेंस', 'ट्रायल', 'trial balance', 'trial', 'तलपट', 'talpat', 'कुल नाम जमा', 'नाम जमा मिलान'];
 
 export type { Lane, Intent };
 
@@ -121,7 +126,8 @@ const SAY = {
   // A D-lane question with no tool must refuse, never fall through to documents: an
   // answer about "your society's stock" pulled from a help article looks like a fact
   // about their books and is not.
-  noTool: 'यह आपकी समिति के आँकड़े से जुड़ा सवाल है, पर अभी मैं सिर्फ़ रोकड़ शेष बता सकता हूँ। बाक़ी के लिए संबंधित रिपोर्ट खोलें।',
+  noTool: 'यह आपकी समिति के आँकड़े से जुड़ा सवाल है, पर अभी मैं सिर्फ़ रोकड़ शेष और ट्रायल बैलेंस बता सकता हूँ। बाक़ी के लिए संबंधित रिपोर्ट खोलें।',
+  noAccounts: 'आपकी समिति में अभी कोई खाता नहीं मिला — इसलिए मैं ट्रायल बैलेंस नहीं बता सकता।',
   noCashAccount: 'आपकी समिति में रोकड़ खाता नहीं मिला — इसलिए मैं शेष नहीं बता सकता।',
 };
 
@@ -232,11 +238,43 @@ export function ask(
       });
     }
 
-    /* TOOL ROUTING. One tool exists (cash). A D-lane question we have no tool for must
-       REFUSE — not fall through to documents. "मेरी समिति का स्टॉक कितना है" answered
-       from a help article would be exactly the failure the lane split prevents: it looks
-       like an answer about their books and is not. */
-    if (!CASH_WORDS.some((w) => req.text.toLowerCase().includes(w))) {
+    /* TOOL ROUTING. Each tool owns a word set; the first that matches the question wins.
+       A D-lane question we have NO tool for must REFUSE — not fall through to documents.
+       "मेरी समिति का स्टॉक कितना है" answered from a help article would be exactly the
+       failure the lane split prevents: it looks like an answer about their books and is
+       not. Adding a tool = one word set + one branch here + a pure tool file. */
+    const q = req.text.toLowerCase();
+
+    // Trial balance — checked before cash so "ट्रायल बैलेंस" never routes on a stray "cash".
+    if (TB_WORDS.some((w) => q.includes(w))) {
+      const tb = trialBalanceCheck({ events: society.events, accounts: society.accounts, asOf });
+      if (!tb) {
+        return base({
+          lane: 'D',
+          unanswered: SAY.noAccounts,
+          trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: 'D-lane: no accounts', model: null },
+        });
+      }
+      /* Every numeral in the answer is a TOOL string, verbatim (§3.7 number check). The
+         verdict is the tool's `balanced`, not a re-comparison here. */
+      const verdict = tb.balanced
+        ? 'मिलता है ✓'
+        : `मिलता नहीं ⚠️ — अंतर ${tb.formattedDifference} (कोई प्रविष्टि असंतुलित है)`;
+      return base({
+        lane: 'D',
+        answer: `कुल नाम (Dr): ${tb.formattedDebit} · कुल जमा (Cr): ${tb.formattedCredit}${asOf ? ` (${asOf} तक)` : ''} — ${verdict}`,
+        confidence: 'high',
+        cites: [{ id: 'tool:trialBalance', title: 'ट्रायल बैलेंस (Trial Balance)', url: '/trial-balance', type: 'help' }],
+        trace: {
+          reason: intent.reason, jurisdiction, asOf, corpus: [],
+          retrieved: [`tool:trialBalance@${tb.accountCount}accounts`],
+          guard: tb.balanced ? 'D-lane: trial balance tool' : 'D-lane: trial balance tool (UNBALANCED)',
+          model: null,
+        },
+      });
+    }
+
+    if (!CASH_WORDS.some((w) => q.includes(w))) {
       return base({
         lane: 'D',
         unanswered: SAY.noTool,
