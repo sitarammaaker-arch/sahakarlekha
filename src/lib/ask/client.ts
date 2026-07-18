@@ -43,9 +43,21 @@ export interface AskOutcome {
    override it, so waiting costs an empty screen exactly nothing. Nobody waits on a spinner;
    they read local results while the real answer lands.
 
-   12s: comfortably past a D-lane read (which pages the journal in 1000-row chunks, so it
-   grows with the book), still short enough that a dead seam does not feel like a hang. */
-const TIMEOUT_MS = 12_000;
+   12s covered the cash reads. It did NOT cover the trial-balance tool: measured latency
+   18411ms on the same 1848-event / 586-account book — and the tool itself is not the cost
+   (projectSplitTrialBalance is ~5ms; ledgerTrialBalance ~5ms, measured). The 18s is the
+   seam LOADING the journal — the same fetch cash makes, which came back at 5s when the
+   isolate was warm. So this is cold-start + fetch variance, not the new tool, and it will
+   hit cash too on a cold isolate. 20s covers the observed worst case with a small margin.
+
+   This is a BAND-AID, and the comment should say so: a longer wait is not the fix, a faster
+   read is. The honest fix is the seam's fetch (fewer columns, concurrent paging, and above
+   all not paying a cold-start on every gap) — tracked as its own task. Raising the ceiling
+   only stops the browser from throwing away an answer the seam already computed; it does
+   nothing for the 18 seconds themselves. If a read ever exceeds 20s, do NOT bump this again
+   — fix the read. The page shows local results instantly meanwhile, so the wait is never a
+   blank screen, which is the only reason a ceiling this high is tolerable at all. */
+const TIMEOUT_MS = 20_000;
 
 /** The local path: today's /ask, unchanged. Instant, free, works offline. */
 function localOnly(q: string): AskOutcome {
