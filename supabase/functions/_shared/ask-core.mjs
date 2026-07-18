@@ -38,7 +38,7 @@ var SYNONYMS = [
   ["liability", "\u0932\u093E\u092F\u092C\u093F\u0932\u093F\u091F\u0940", "\u0926\u0947\u092F\u0924\u093E", "denadari", "\u0926\u0947\u0928\u0926\u093E\u0930\u0940"],
   ["asset", "\u090F\u0938\u0947\u091F", "sampatti", "\u0938\u0902\u092A\u0924\u094D\u0924\u093F", "\u092A\u0930\u093F\u0938\u0902\u092A\u0924\u094D\u0924\u093F"]
 ];
-var norm = (s) => s.toLowerCase().trim();
+var norm = (s) => s.normalize("NFD").replace(/़/g, "").normalize("NFC").toLowerCase().trim();
 var STOPWORDS = /* @__PURE__ */ new Set([
   // particles
   "\u0915\u0940",
@@ -216,6 +216,7 @@ function searchIndex(docs, query, limit = 30) {
   const tokens = tokenize(query);
   if (!tokens.length) return [];
   const results = [];
+  const partial = [];
   for (const doc of docs) {
     const title = doc.altTitle ? norm(doc.title) + " " + norm(doc.altTitle) : norm(doc.title);
     const words = doc.haystack.split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}]/gu, "")).filter(Boolean);
@@ -250,9 +251,14 @@ function searchIndex(docs, query, limit = 30) {
     }
     if (matchedTokens === tokens.length && score > 0) {
       results.push({ ...doc, score });
+    } else if (score > 0) {
+      partial.push({ ...doc, score, matched: matchedTokens });
     }
   }
-  return results.sort((a, b) => b.score - a.score || a.title.length - b.title.length).slice(0, limit);
+  if (results.length) {
+    return results.sort((a, b) => b.score - a.score || a.title.length - b.title.length).slice(0, limit);
+  }
+  return partial.sort((a, b) => b.matched - a.matched || b.score - a.score || a.title.length - b.title.length).slice(0, limit).map(({ matched: _matched, ...doc }) => doc);
 }
 
 // src/lib/ai/killSwitch.ts
@@ -989,8 +995,12 @@ var ACCOUNT_IDS = {
   // Bank Accounts (GROUP — sub-accounts are individual banks)
   SHARE_CAP: "1102",
   // Individual Share Capital (member share capital)
-  ADM_FEE: "4407"
+  ADM_FEE: "4407",
   // Admission Fee (Income — P&L, audit C-3)
+  TAX_CREDIT: "3307"
+  // TDS / TCS Receivable — income tax credited to US (26AS), an ASSET.
+  // TCS a seller collects from us lands here; TDS we deduct from others
+  // is the mirror image and goes to 2202 TDS Payable, a LIABILITY.
 };
 
 // src/lib/ask/tools/cashBalance.ts
