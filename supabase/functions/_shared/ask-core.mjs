@@ -1031,8 +1031,134 @@ function formatMinorInr(minor) {
   return `${neg ? "-" : ""}\u20B9${rupees.toLocaleString("en-IN")}.${paise}`;
 }
 
+// src/lib/ledger/projections.ts
+function legsOf2(payload) {
+  if (!payload || typeof payload !== "object") return [];
+  const arr = payload.lines;
+  if (!Array.isArray(arr)) return [];
+  const out = [];
+  for (const l of arr) {
+    if (l && typeof l === "object" && typeof l.accountId === "string" && (l.drCr === "Dr" || l.drCr === "Cr") && isValidMinor(l.amountMinor)) {
+      out.push({ accountId: l.accountId, drCr: l.drCr, amountMinor: l.amountMinor });
+    }
+  }
+  return out;
+}
+function asOfMillis(asOf) {
+  return asOf ? Date.parse(asOf) : null;
+}
+function occurredBy(event, asOfMs) {
+  if (asOfMs === null) return true;
+  const t = Date.parse(event.occurredAt);
+  return Number.isNaN(t) ? false : t <= asOfMs;
+}
+function projectSplitTrialBalance(events, asOf) {
+  const cutoff = asOfMillis(asOf);
+  const acc = /* @__PURE__ */ new Map();
+  let count = 0;
+  for (const e of events) {
+    if (!occurredBy(e, cutoff)) continue;
+    count++;
+    const isOpening = e.eventType === "account.opening";
+    for (const l of legsOf2(e.payload)) {
+      let b = acc.get(l.accountId);
+      if (!b) {
+        b = { oDr: 0, oCr: 0, tDr: 0, tCr: 0 };
+        acc.set(l.accountId, b);
+      }
+      if (isOpening) {
+        if (l.drCr === "Dr") b.oDr += l.amountMinor;
+        else b.oCr += l.amountMinor;
+      } else {
+        if (l.drCr === "Dr") b.tDr += l.amountMinor;
+        else b.tCr += l.amountMinor;
+      }
+    }
+  }
+  const lines = [...acc.keys()].sort().map((accountId) => {
+    const b = acc.get(accountId);
+    const totalDrMinor2 = b.oDr + b.tDr;
+    const totalCrMinor2 = b.oCr + b.tCr;
+    return { accountId, openingDrMinor: b.oDr, openingCrMinor: b.oCr, txnDrMinor: b.tDr, txnCrMinor: b.tCr, totalDrMinor: totalDrMinor2, totalCrMinor: totalCrMinor2, netMinor: totalDrMinor2 - totalCrMinor2 };
+  });
+  const totalDrMinor = lines.reduce((s, l) => s + l.totalDrMinor, 0);
+  const totalCrMinor = lines.reduce((s, l) => s + l.totalCrMinor, 0);
+  return { asOf: asOf ?? null, lines, totalDrMinor, totalCrMinor, balanced: totalDrMinor === totalCrMinor, eventCount: count };
+}
+
+// src/lib/ledger/trialBalance.ts
+function ledgerTrialBalance(events, accounts, asOf) {
+  const split = projectSplitTrialBalance(events, asOf);
+  const byId = new Map(split.lines.map((l) => [l.accountId, l]));
+  const results = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const account of Array.isArray(accounts) ? accounts : []) {
+    if (account.isGroup) continue;
+    seen.add(account.id);
+    const l = byId.get(account.id);
+    const oDr = l?.openingDrMinor ?? 0, oCr = l?.openingCrMinor ?? 0, tDr = l?.txnDrMinor ?? 0, tCr = l?.txnCrMinor ?? 0;
+    const totDr = oDr + tDr, totCr = oCr + tCr;
+    results.push({
+      account,
+      openingDebit: toRupees(oDr),
+      openingCredit: toRupees(oCr),
+      transactionDebit: toRupees(tDr),
+      transactionCredit: toRupees(tCr),
+      totalDebit: toRupees(totDr),
+      totalCredit: toRupees(totCr),
+      netBalance: toRupees(totDr - totCr)
+    });
+  }
+  for (const l of split.lines) {
+    if (seen.has(l.accountId)) continue;
+    const account = {
+      id: l.accountId,
+      name: `[Deleted] ${l.accountId.slice(0, 8)}...`,
+      nameHi: `[\u0939\u091F\u093E\u092F\u093E] ${l.accountId.slice(0, 8)}...`,
+      type: "liability",
+      openingBalance: 0,
+      openingBalanceType: "credit"
+    };
+    results.push({
+      account,
+      openingDebit: toRupees(l.openingDrMinor),
+      openingCredit: toRupees(l.openingCrMinor),
+      transactionDebit: toRupees(l.txnDrMinor),
+      transactionCredit: toRupees(l.txnCrMinor),
+      totalDebit: toRupees(l.totalDrMinor),
+      totalCredit: toRupees(l.totalCrMinor),
+      netBalance: toRupees(l.netMinor)
+    });
+  }
+  return results;
+}
+
+// src/lib/ask/tools/trialBalance.ts
+function trialBalanceCheck(input) {
+  const rows = ledgerTrialBalance(input.events, input.accounts, input.asOf);
+  if (!rows.length) return null;
+  let totalDebitMinor = 0;
+  let totalCreditMinor = 0;
+  for (const r of rows) {
+    totalDebitMinor += toMinor(r.totalDebit);
+    totalCreditMinor += toMinor(r.totalCredit);
+  }
+  const differenceMinor = totalDebitMinor - totalCreditMinor;
+  return {
+    totalDebitMinor,
+    totalCreditMinor,
+    differenceMinor,
+    balanced: differenceMinor === 0,
+    formattedDebit: formatMinorInr(totalDebitMinor),
+    formattedCredit: formatMinorInr(totalCreditMinor),
+    formattedDifference: formatMinorInr(Math.abs(differenceMinor)),
+    accountCount: rows.length
+  };
+}
+
 // src/lib/ask/core.ts
 var CASH_WORDS = ["\u0930\u094B\u0915\u0921\u093C", "\u0928\u0915\u0926", "\u0915\u0948\u0936", "cash", "rokad", "nakad"];
+var TB_WORDS = ["\u091F\u094D\u0930\u093E\u092F\u0932 \u092C\u0948\u0932\u0947\u0902\u0938", "\u091F\u094D\u0930\u093E\u092F\u0932", "trial balance", "trial", "\u0924\u0932\u092A\u091F", "talpat", "\u0915\u0941\u0932 \u0928\u093E\u092E \u091C\u092E\u093E", "\u0928\u093E\u092E \u091C\u092E\u093E \u092E\u093F\u0932\u093E\u0928"];
 var ASK_FEATURE = "ask";
 var SAY = {
   unknown: "\u092E\u0941\u091D\u0947 \u0907\u0938\u0915\u093E \u092A\u0915\u094D\u0915\u093E \u0909\u0924\u094D\u0924\u0930 \u0928\u0939\u0940\u0902 \u092A\u0924\u093E\u0964 \u0928\u0940\u091A\u0947 \u0915\u0947 \u0938\u094D\u0930\u094B\u0924 \u0926\u0947\u0916\u0947\u0902, \u092F\u093E \u0905\u092A\u0928\u0947 CA / RCS \u0938\u0947 \u092A\u0942\u091B\u0947\u0902\u0964",
@@ -1047,7 +1173,8 @@ var SAY = {
   // A D-lane question with no tool must refuse, never fall through to documents: an
   // answer about "your society's stock" pulled from a help article looks like a fact
   // about their books and is not.
-  noTool: "\u092F\u0939 \u0906\u092A\u0915\u0940 \u0938\u092E\u093F\u0924\u093F \u0915\u0947 \u0906\u0901\u0915\u0921\u093C\u0947 \u0938\u0947 \u091C\u0941\u0921\u093C\u093E \u0938\u0935\u093E\u0932 \u0939\u0948, \u092A\u0930 \u0905\u092D\u0940 \u092E\u0948\u0902 \u0938\u093F\u0930\u094D\u092B\u093C \u0930\u094B\u0915\u0921\u093C \u0936\u0947\u0937 \u092C\u0924\u093E \u0938\u0915\u0924\u093E \u0939\u0942\u0901\u0964 \u092C\u093E\u0915\u093C\u0940 \u0915\u0947 \u0932\u093F\u090F \u0938\u0902\u092C\u0902\u0927\u093F\u0924 \u0930\u093F\u092A\u094B\u0930\u094D\u091F \u0916\u094B\u0932\u0947\u0902\u0964",
+  noTool: "\u092F\u0939 \u0906\u092A\u0915\u0940 \u0938\u092E\u093F\u0924\u093F \u0915\u0947 \u0906\u0901\u0915\u0921\u093C\u0947 \u0938\u0947 \u091C\u0941\u0921\u093C\u093E \u0938\u0935\u093E\u0932 \u0939\u0948, \u092A\u0930 \u0905\u092D\u0940 \u092E\u0948\u0902 \u0938\u093F\u0930\u094D\u092B\u093C \u0930\u094B\u0915\u0921\u093C \u0936\u0947\u0937 \u0914\u0930 \u091F\u094D\u0930\u093E\u092F\u0932 \u092C\u0948\u0932\u0947\u0902\u0938 \u092C\u0924\u093E \u0938\u0915\u0924\u093E \u0939\u0942\u0901\u0964 \u092C\u093E\u0915\u093C\u0940 \u0915\u0947 \u0932\u093F\u090F \u0938\u0902\u092C\u0902\u0927\u093F\u0924 \u0930\u093F\u092A\u094B\u0930\u094D\u091F \u0916\u094B\u0932\u0947\u0902\u0964",
+  noAccounts: "\u0906\u092A\u0915\u0940 \u0938\u092E\u093F\u0924\u093F \u092E\u0947\u0902 \u0905\u092D\u0940 \u0915\u094B\u0908 \u0916\u093E\u0924\u093E \u0928\u0939\u0940\u0902 \u092E\u093F\u0932\u093E \u2014 \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u091F\u094D\u0930\u093E\u092F\u0932 \u092C\u0948\u0932\u0947\u0902\u0938 \u0928\u0939\u0940\u0902 \u092C\u0924\u093E \u0938\u0915\u0924\u093E\u0964",
   noCashAccount: "\u0906\u092A\u0915\u0940 \u0938\u092E\u093F\u0924\u093F \u092E\u0947\u0902 \u0930\u094B\u0915\u0921\u093C \u0916\u093E\u0924\u093E \u0928\u0939\u0940\u0902 \u092E\u093F\u0932\u093E \u2014 \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u0936\u0947\u0937 \u0928\u0939\u0940\u0902 \u092C\u0924\u093E \u0938\u0915\u0924\u093E\u0964"
 };
 var cite = (r) => ({ id: r.id, title: r.title, url: r.url, type: r.type });
@@ -1125,7 +1252,34 @@ function ask(req, docs, flags, today, limit = 8, society) {
         trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: "D-lane: no society data loaded", model: null }
       });
     }
-    if (!CASH_WORDS.some((w) => req.text.toLowerCase().includes(w))) {
+    const q = req.text.toLowerCase();
+    if (TB_WORDS.some((w) => q.includes(w))) {
+      const tb = trialBalanceCheck({ events: society.events, accounts: society.accounts, asOf });
+      if (!tb) {
+        return base({
+          lane: "D",
+          unanswered: SAY.noAccounts,
+          trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: "D-lane: no accounts", model: null }
+        });
+      }
+      const verdict = tb.balanced ? "\u092E\u093F\u0932\u0924\u093E \u0939\u0948 \u2713" : `\u092E\u093F\u0932\u0924\u093E \u0928\u0939\u0940\u0902 \u26A0\uFE0F \u2014 \u0905\u0902\u0924\u0930 ${tb.formattedDifference} (\u0915\u094B\u0908 \u092A\u094D\u0930\u0935\u093F\u0937\u094D\u091F\u093F \u0905\u0938\u0902\u0924\u0941\u0932\u093F\u0924 \u0939\u0948)`;
+      return base({
+        lane: "D",
+        answer: `\u0915\u0941\u0932 \u0928\u093E\u092E (Dr): ${tb.formattedDebit} \xB7 \u0915\u0941\u0932 \u091C\u092E\u093E (Cr): ${tb.formattedCredit}${asOf ? ` (${asOf} \u0924\u0915)` : ""} \u2014 ${verdict}`,
+        confidence: "high",
+        cites: [{ id: "tool:trialBalance", title: "\u091F\u094D\u0930\u093E\u092F\u0932 \u092C\u0948\u0932\u0947\u0902\u0938 (Trial Balance)", url: "/trial-balance", type: "help" }],
+        trace: {
+          reason: intent.reason,
+          jurisdiction,
+          asOf,
+          corpus: [],
+          retrieved: [`tool:trialBalance@${tb.accountCount}accounts`],
+          guard: tb.balanced ? "D-lane: trial balance tool" : "D-lane: trial balance tool (UNBALANCED)",
+          model: null
+        }
+      });
+    }
+    if (!CASH_WORDS.some((w) => q.includes(w))) {
       return base({
         lane: "D",
         unanswered: SAY.noTool,
