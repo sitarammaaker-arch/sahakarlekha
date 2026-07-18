@@ -93,10 +93,13 @@ const balancedEvents = [
   const r = B.ask({ text: 'मेरा ट्रायल बैलेंस मिलता है?', channel: 'web', societyId: 'SOC001', userId: 'u@x.com' },
     B.CORPUS, flags, '2026-07-18', 8, society);
   ok('bundle route: a possessive trial-balance question lands in lane D', r.lane === 'D', JSON.stringify(r.trace));
-  ok('bundle route: it answers with the tool figure, not a refusal',
-    !!r.answer && r.answer.includes('₹1,00,000.00') && !r.unanswered, r.answer || r.unanswered);
-  ok('bundle route: the cite points at the Trial Balance page',
-    (r.cites || []).some((c) => c.id === 'tool:trialBalance'));
+  /* D-LANE FIGURES ARE DISABLED IN core.ts (RULE 2): the seam reads the raw journal, which
+     over-counts when it has drifted from the vouchers (cancelled-but-still-in-journal). Until
+     the seam matches the app's parity-gated source, ask() refuses rather than state a wrong
+     balance. The TOOL is still correct (asserted above); this checks the SEAM withholds it. */
+  ok('bundle route: the seam WITHHOLDS the figure while the D-lane is disabled (RULE 2)',
+    !r.answer && (r.unanswered || '').includes('सटीक आँकड़ा नहीं'), r.answer || r.unanswered);
+  ok('bundle route: the trace says the D-lane is disabled', (r.trace?.guard || '').includes('disabled'));
 
   // Anonymous must still be refused — no token, no books (AI-N5).
   const anon = B.ask({ text: 'मेरा ट्रायल बैलेंस मिलता है?', channel: 'web' }, B.CORPUS, flags, '2026-07-18', 8);
