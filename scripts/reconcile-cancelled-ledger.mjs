@@ -92,7 +92,9 @@ async function readAll(table, cols) {
   const rows = []; const size = 1000; let from = 0;
   for (;;) {
     let q = db.from(table).select(cols).range(from, from + size - 1);
-    if (SID) q = q.eq('society_id', SID);
+    // `societies` is keyed by `id` (no society_id column) — never scope IT by society_id (it is only a
+    // best-effort name lookup); vouchers/ledger_events do carry society_id and ARE scoped when SID given.
+    if (SID && table !== 'societies') q = q.eq('society_id', SID);
     const { data, error } = await q;
     if (error) fail(`read ${table}`, error);
     rows.push(...(data ?? []));
