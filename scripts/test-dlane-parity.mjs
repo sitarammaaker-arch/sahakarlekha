@@ -16,7 +16,7 @@
 
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadViteModule } from './lib/vite-bundle.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -100,6 +100,35 @@ console.log('\n  D-lane groundwork — one journal reader, three callers\n');
   ok('bundle: contains the projector', /projectCashBook/.test(bundle));
   ok('bundle: NO browser-only globals — Deno would die at runtime, not at build',
     !/\bdocument\.|window\.|localStorage/.test(bundle));
+}
+
+/* 5 · THE BUNDLE IS NOT STALE — the drift that actually shipped, now gated.
+   `ask-core.mjs` is an esbuild artifact of src/lib. It is committed, and NOTHING rebuilt
+   it: a change to rank.ts (PR #232 — nukta folding + the AND fallback) reached the browser
+   via Vercel but not the seam, which imports this bundle. A logged-in founder typed
+   "ऑथराइज्ड कैपिटल" (no nukta) and the seam, running the OLD ranker, refused an answer it
+   now holds. Every source-based test (test:ask-core, 74/74) stayed green because they load
+   src/, not this file — the exact blind spot.
+
+   These load the COMMITTED bundle — what actually deploys — and assert the two invariants
+   PR #232 shipped. Behavioural, not a byte-compare, so they don't go flaky across esbuild
+   versions; and general, not a fixture — any future rank.ts change that isn't rebuilt into
+   the bundle regresses one of them. If this goes red: `npm run build:ask-core` and commit. */
+{
+  const B = await import(pathToFileURL(resolve(ROOT, 'supabase', 'functions', '_shared', 'ask-core.mjs')).href);
+  const flags = B.resolveAiFlags({ AI_ENABLED: 'true' });
+  const cite = (q) => B.ask({ text: q, channel: 'web' }, B.CORPUS, flags, '2026-07-17', 8).cites?.[0]?.id;
+
+  // Nukta invariant: with-dot and without-dot must reach the SAME doc. The stale bundle's
+  // `norm` was toLowerCase().trim(), so these diverged — the founder's exact bug.
+  ok('bundle nukta: ऑथराइज्ड == ऑथराइज़्ड (same top doc)',
+    cite('ऑथराइज्ड कैपिटल') === cite('ऑथराइज़्ड कैपिटल') && !!cite('ऑथराइज्ड कैपिटल'),
+    'stale bundle? run: npm run build:ask-core');
+
+  // Fallback invariant: a partial-match query must still answer. The stale bundle was
+  // AND-only ("pacs software" → the PACS KI never says "software" → ∅).
+  ok('bundle fallback: "pacs software" answers instead of dead-ending',
+    !!cite('pacs software'), 'stale bundle? run: npm run build:ask-core');
 }
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
