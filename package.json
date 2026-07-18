@@ -191,6 +191,7 @@
     "test:tool-cash-balance": "node scripts/test-tool-cash-balance.mjs",
     "test:compute-tds": "node scripts/test-compute-tds.mjs",
     "test:cumulative-tds": "node scripts/test-cumulative-tds.mjs",
+    "test:catalog-version": "node scripts/test-catalog-version.mjs",
     "test:tds-sections": "node scripts/test-tds-sections.mjs",
     "build:backup-core": "esbuild supabase/functions/_shared/backup-core.entry.ts --bundle --format=esm --platform=neutral --alias:@=./src --outfile=supabase/functions/_shared/backup-core.mjs --log-level=warning",
     "test:backup-core-bundle": "node scripts/test-backup-core-bundle.mjs",
