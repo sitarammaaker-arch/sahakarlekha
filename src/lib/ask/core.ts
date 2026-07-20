@@ -128,10 +128,6 @@ const SAY = {
   // about their books and is not.
   noTool: 'यह आपकी समिति के आँकड़े से जुड़ा सवाल है, पर अभी मैं सिर्फ़ रोकड़ शेष और ट्रायल बैलेंस बता सकता हूँ। बाक़ी के लिए संबंधित रिपोर्ट खोलें।',
   noAccounts: 'आपकी समिति में अभी कोई खाता नहीं मिला — इसलिए मैं ट्रायल बैलेंस नहीं बता सकता।',
-  // The D-lane figure is temporarily withheld: the assistant's read is not yet reconciled
-  // with the app's own reports the way the report pages are, so a number here could disagree
-  // with your screen. Point the user at the authoritative source rather than risk a wrong one.
-  dLaneUnverified: 'अभी मैं आपकी बही का सटीक आँकड़ा नहीं बता सकता — यह रिपोर्ट पेज से पूरी तरह मेल खाए, इसकी जाँच अभी बाक़ी है, और मैं ग़लत आँकड़ा नहीं दूँगा। कृपया सीधे संबंधित रिपोर्ट (Cash Book / Trial Balance) देखें — वही सही है।',
   noCashAccount: 'आपकी समिति में रोकड़ खाता नहीं मिला — इसलिए मैं शेष नहीं बता सकता।',
 };
 
@@ -241,26 +237,6 @@ export function ask(
         trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: 'D-lane: no society data loaded', model: null },
       });
     }
-
-    /* ⛔ D-LANE FIGURES ARE DISABLED — a wrong balance is worse than "I don't know" (RULE 2).
-       Proven on the founder's own books: the assistant read the RAW journal and reported a
-       trial balance of ₹2,31,65,941.28 while the Trial Balance page showed ₹1,80,60,318.00 —
-       off by ₹51 lakh, and confidently "मिलता है ✓". Root cause (confirmed by query): the
-       app's getTrialBalance trusts the journal ONLY when ledgerParity says it matches the
-       vouchers, and otherwise falls back to voucher STATE (activeVouchers, excludes cancelled).
-       This society's journal has DRIFTED — 6 recently-cancelled vouchers (incl. a ₹49.23L ghost)
-       keep a live `voucher.posted` event with no cancellation event, because cancelling marks
-       the voucher isDeleted in state but does not append a journal event. The seam has no
-       vouchers and so cannot run that parity gate; reading the raw journal over-counts. Until
-       the seam reads the SAME source the page shows (fetch vouchers + parity, or compute from
-       state), it MUST NOT state a figure. The tools below are correct and tested — the DATA
-       they are fed is not trustworthy yet. Re-enable by removing this guard once the seam
-       matches getTrialBalance. */
-    return base({
-      lane: 'D',
-      unanswered: SAY.dLaneUnverified,
-      trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: 'D-lane: disabled — journal not parity-checked against vouchers', model: null },
-    });
 
     /* TOOL ROUTING. Each tool owns a word set; the first that matches the question wins.
        A D-lane question we have NO tool for must REFUSE — not fall through to documents.

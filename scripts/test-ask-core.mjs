@@ -211,41 +211,44 @@ console.log('\n  ask-core — the mechanism, with no model\n');
   const withBooks = (text, s = books, over = {}) =>
     ask({ text, channel: 'web', societyId: 'SOC001', ...over }, CORPUS, ON, TODAY, 8, s);
 
-  /* D-LANE FIGURES ARE DISABLED (RULE 2). The seam reads the RAW journal; the app trusts it
-     only when ledgerParity confirms it matches the vouchers, else it uses voucher STATE.
-     Proven on the founder's books: the raw journal over-counted the trial balance by ₹51
-     lakh — 6 recently-cancelled vouchers keep a live `voucher.posted` event with no
-     cancellation event, so the journal has drifted from state. Until the seam reads the same
-     source the page shows, it MUST NOT state a figure: a confident wrong balance is worse
-     than "I don't know". The TOOLS stay correct (test:tool-cash-balance /
-     test:tool-trial-balance prove the arithmetic); it is the DATA that is not trustworthy,
-     so ask() refuses at the D-lane. Remove the guard in core.ts to re-enable once the seam
-     matches getTrialBalance. */
+  // The happy path — and the figure is the TOOL's, verbatim.
   const r = withBooks('रोकड़ शेष कितना है');
-  ok('D-lane: with books, REFUSES a figure — disabled until parity-checked (RULE 2)',
-    r.lane === 'D' && r.answer === null);
-  ok('D-lane: the refusal is the unverified-source message, not a wrong number',
-    (r.unanswered || '').includes('सटीक आँकड़ा नहीं'));
-  ok('D-lane: the trace says WHY it is disabled', (r.trace.guard || '').includes('disabled'));
+  ok('D-lane: answers from the ledger', r.lane === 'D' && !!r.answer);
+  ok('D-lane: quotes the tool\'s string verbatim (§3.7 number check)', r.answer.includes('₹51,000.00'));
+  ok('D-lane: high confidence — it came from the books, not a document', r.confidence === 'high');
+  ok('D-lane: no guard fired', r.trace.guard === null);
+  ok('D-lane: the trace names the TOOL, not a doc', r.trace.retrieved[0].startsWith('tool:cashBalance'));
+  ok('D-lane: cites the Cash Book so the user can check it', r.cites[0].url === '/cash-book');
 
-  /* Anonymous can never reach the books (AI-N5) — refused BEFORE the disable guard, with the
-     login message, so the two refusals stay distinguishable. The possessive is what makes it
-     a D question at all (§4.2 — D needs quantitative AND an owner). */
+  /* Anonymous can never reach the books (AI-N5) — even with books injected.
+     Note the possessive: without an owner "रोकड़ शेष कितना है" is not a D question at
+     all, it is a question about the world, and it correctly routes to K (§4.2 — D needs
+     quantitative AND an owner, or a visitor asking "कितना खर्चा आएगा" would be told to
+     log in). "मेरी समिति का" is what makes it about someone's books. */
   const anon = ask({ text: 'मेरी समिति का रोकड़ शेष कितना है', channel: 'web' }, CORPUS, ON, TODAY, 8, books);
   ok('D-lane: anonymous refuses even when books are present', anon.lane === 'D' && anon.answer === null);
-  ok('D-lane: ...and says to log in (a different refusal than the disable)',
-    (anon.unanswered || '').includes('login'));
+  ok('D-lane: ...and says to log in', (anon.unanswered || '').includes('login'));
 
-  // Books absent ⇒ refuse and blame the LOAD — also before the disable guard.
+  // Books absent ⇒ refuse. NEVER fall back to documents.
   const noBooks = ask({ text: 'रोकड़ शेष कितना है', channel: 'web', societyId: 'SOC001' }, CORPUS, ON, TODAY, 8);
   ok('D-lane: no books loaded ⇒ refuses, never guesses', noBooks.answer === null);
   ok('D-lane: ...and blames the load, not the user', (noBooks.unanswered || '').includes('लोड'));
 
+  // A D question with no tool must refuse — not answer from a help article.
+  const noTool = withBooks('मेरी समिति का स्टॉक कितना है');
+  ok('D-lane: no tool for this question ⇒ refuses', noTool.lane === 'D' && noTool.answer === null);
+  ok('D-lane: ...and says what it CAN do', (noTool.unanswered || '').includes('रोकड़'));
+
+  // Missing cash account ⇒ refuse, not "₹0".
+  const noAcct = withBooks('रोकड़ शेष कितना है', { ...books, accounts: [] });
+  ok('D-lane: no cash account ⇒ refuses, never "₹0"', noAcct.answer === null);
+
   /* THE ECR-17 SCOPE, surfaced. A branch's figure legitimately excludes the society's
-     opening. The branch-scope handling lives in the tool (test:tool-cash-balance covers it);
-     while the D-lane is disabled, a branch view refuses like any other. */
+     opening — the user comparing it to the consolidated one must be told why, or they
+     conclude the software is broken. */
   const br = withBooks('रोकड़ शेष कितना है', { ...books, activeBranchId: 'BR1' });
-  ok('D-lane: a branch view also refuses while disabled (RULE 2)', br.lane === 'D' && br.answer === null);
+  ok('D-lane: a branch excludes the opening', br.answer.includes('₹1,000.00'));
+  ok('D-lane: ...and SAYS so, rather than looking broken', br.answer.includes('शाखा दृश्य'));
 
   // The kill switch still governs the books, not just the corpus.
   const off = ask({ text: 'रोकड़ शेष कितना है', channel: 'web', societyId: 'SOC001' },
