@@ -89,6 +89,14 @@ export interface AskAnswer {
   answer: string | null;
   cites: Citation[];
   confidence: 'high' | 'medium' | 'low';
+  /** an optional structured breakdown the channel renders as a table (D-lane). Every cell is a
+   *  pre-formatted string — the tool owns the numerals (§4.7), the channel only lays them out. */
+  table?: {
+    columns: string[];
+    rows: string[][];
+    /** per-column alignment; omitted columns default to left. */
+    align?: ('left' | 'right')[];
+  };
   /** set when we will not answer — carries the honest reason, in the user's Hindi */
   unanswered?: string;
   /** true = AI is off (or gated); the channel should fall back to plain search */
@@ -287,15 +295,21 @@ export function ask(
           trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: 'D-lane: no bank account', model: null },
         });
       }
-      // Show the per-bank split only when there is more than one — a single bank needs no breakdown.
-      const split = bank.bankCount > 1
-        ? ' — ' + bank.perBank.map((b) => `${b.name}: ${b.formatted}`).join(' · ')
-        : '';
+      // The total goes in the text line; the per-bank breakdown goes in a table (क्रमांक | बैंक |
+      // बैलेंस | Dr/Cr) — but only when there is more than one bank, since a single bank needs no split.
+      const table = bank.bankCount > 1
+        ? {
+            columns: ['क्रमांक', 'बैंक', 'बैलेंस', 'Dr/Cr'],
+            align: ['left', 'left', 'right', 'left'] as ('left' | 'right')[],
+            rows: bank.perBank.map((b, i) => [String(i + 1), b.name, b.magnitude, b.drCr]),
+          }
+        : undefined;
       return base({
         lane: 'D',
-        answer: `कुल बैंक शेष: ${bank.formatted}${asOf ? ` (${asOf} तक)` : ''}${split}`,
+        answer: `कुल बैंक शेष: ${bank.formatted}${asOf ? ` (${asOf} तक)` : ''}`,
         confidence: 'high',
         cites: [{ id: 'tool:bankBalance', title: 'बैंक बही (Bank Book)', url: '/bank-book', type: 'help' }],
+        table,
         trace: {
           reason: intent.reason, jurisdiction, asOf, corpus: [],
           retrieved: [`tool:bankBalance@${bank.bankCount}banks`],
