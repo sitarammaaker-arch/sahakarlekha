@@ -1177,14 +1177,14 @@ function bankBalance(input) {
   const hasRealBank = accts.some((a) => !a.isGroup && (a.id === ACCOUNT_IDS.BANK || a.parentId === ACCOUNT_IDS.BANK));
   if (!hasRealBank) return null;
   const bankIds = new Set(getBankAccountIds(accts));
-  const rows = ledgerTrialBalance(input.events, input.accounts, input.asOf);
+  const rowById = new Map(ledgerTrialBalance(input.events, input.accounts, input.asOf).map((r) => [r.account.id, r]));
   let balanceMinor = 0;
   const perBank = [];
-  for (const r of rows) {
-    if (!bankIds.has(r.account.id)) continue;
-    const netMinor = toMinor(r.netBalance);
+  for (const a of input.accounts) {
+    if (!bankIds.has(a.id)) continue;
+    const netMinor = rowById.has(a.id) ? toMinor(rowById.get(a.id).netBalance) : 0;
     balanceMinor += netMinor;
-    perBank.push({ name: r.account.name, formatted: formatMinorInr(netMinor) });
+    perBank.push({ name: a.name, formatted: formatMinorInr(netMinor) });
   }
   return { balanceMinor, formatted: formatMinorInr(balanceMinor), bankCount: perBank.length, perBank };
 }

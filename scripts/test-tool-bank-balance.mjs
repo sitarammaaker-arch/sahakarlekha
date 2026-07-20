@@ -55,6 +55,11 @@ const events = [
   ok('per-bank split carries each bank (incl. the Cr one as negative)',
     b.perBank.some((x) => x.formatted === '₹1,00,000.00') && b.perBank.some((x) => x.formatted === '-₹70,035.60'));
   ok('a non-bank account is NOT counted', !b.perBank.some((x) => x.name === 'Sales'));
+  // Serial order = the accounts-list order (HDFC before Sirsa here), NOT the trial balance's accountId
+  // sort. Reversing the accounts must reverse the split — proving it follows the chart, not the ids.
+  ok('split follows the accounts-list serial order', b.perBank[0].name === 'HDFC Saving A/c' && b.perBank[1].name === 'Sirsa Coop Bank A/c');
+  const rev = bankBalance({ events, accounts: [accounts[2], accounts[1], accounts[0]] });
+  ok('reversing the chart reverses the split (serial, not id-sorted)', rev.perBank[0].name === 'Sirsa Coop Bank A/c' && rev.perBank[1].name === 'HDFC Saving A/c');
 }
 
 // The seam route, through the DEPLOYED bundle: "मेरा बैंक बैलेंस कितना है" → lane D → bank tool.

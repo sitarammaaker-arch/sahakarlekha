@@ -53,14 +53,18 @@ export function bankBalance(input: BankBalanceInput): BankBalanceResult | null {
 
   // The SAME rows the Trial Balance page shows (cancelled-clean). netBalance is Dr-positive rupees;
   // toMinor recovers exact paise so summing several banks cannot drift in the last paisa.
-  const rows = ledgerTrialBalance(input.events, input.accounts, input.asOf);
+  const rowById = new Map(ledgerTrialBalance(input.events, input.accounts, input.asOf).map((r) => [r.account.id, r]));
+
+  // Walk the accounts in their OWN order — the serial order of the chart of accounts, i.e. exactly the
+  // order the Bank Book / खाता सूची lists them, NOT the trial balance's accountId sort. A bank with no
+  // activity has no TB row; show it as ₹0.00 so the serial list stays complete.
   let balanceMinor = 0;
   const perBank: { name: string; formatted: string }[] = [];
-  for (const r of rows) {
-    if (!bankIds.has(r.account.id)) continue;
-    const netMinor = toMinor(r.netBalance);
+  for (const a of input.accounts) {
+    if (!bankIds.has(a.id)) continue;
+    const netMinor = rowById.has(a.id) ? toMinor(rowById.get(a.id)!.netBalance) : 0;
     balanceMinor += netMinor;
-    perBank.push({ name: r.account.name, formatted: formatMinorInr(netMinor) });
+    perBank.push({ name: a.name, formatted: formatMinorInr(netMinor) });
   }
   return { balanceMinor, formatted: formatMinorInr(balanceMinor), bankCount: perBank.length, perBank };
 }
