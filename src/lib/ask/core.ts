@@ -31,6 +31,7 @@ import type { Intent, Lane } from './classify';
 import { answerFact, unverifiedHint } from './fact';
 import { cashBalance } from './tools/cashBalance';
 import { trialBalanceCheck } from './tools/trialBalance';
+import { bankBalance } from './tools/bankBalance';
 import type { LedgerEvent } from '../ledger/event';
 import type { LedgerAccount } from '@/types';
 
@@ -56,6 +57,7 @@ export interface SocietyData {
    report — a word shared with another tool belongs in neither. */
 const CASH_WORDS = ['रोकड़', 'नकद', 'कैश', 'cash', 'rokad', 'nakad'];
 const TB_WORDS = ['ट्रायल बैलेंस', 'ट्रायल', 'trial balance', 'trial', 'तलपट', 'talpat', 'कुल नाम जमा', 'नाम जमा मिलान'];
+const BANK_WORDS = ['बैंक', 'bank'];
 
 export type { Lane, Intent };
 
@@ -126,8 +128,9 @@ const SAY = {
   // A D-lane question with no tool must refuse, never fall through to documents: an
   // answer about "your society's stock" pulled from a help article looks like a fact
   // about their books and is not.
-  noTool: 'यह आपकी समिति के आँकड़े से जुड़ा सवाल है, पर अभी मैं सिर्फ़ रोकड़ शेष और ट्रायल बैलेंस बता सकता हूँ। बाक़ी के लिए संबंधित रिपोर्ट खोलें।',
+  noTool: 'यह आपकी समिति के आँकड़े से जुड़ा सवाल है, पर अभी मैं सिर्फ़ रोकड़ शेष, बैंक शेष और ट्रायल बैलेंस बता सकता हूँ। बाक़ी के लिए संबंधित रिपोर्ट खोलें।',
   noAccounts: 'आपकी समिति में अभी कोई खाता नहीं मिला — इसलिए मैं ट्रायल बैलेंस नहीं बता सकता।',
+  noBankAccount: 'आपकी समिति में कोई बैंक खाता नहीं मिला — इसलिए मैं बैंक शेष नहीं बता सकता।',
   noCashAccount: 'आपकी समिति में रोकड़ खाता नहीं मिला — इसलिए मैं शेष नहीं बता सकता।',
 };
 
@@ -270,6 +273,33 @@ export function ask(
           retrieved: [`tool:trialBalance@${tb.accountCount}accounts`],
           guard: tb.balanced ? 'D-lane: trial balance tool' : 'D-lane: trial balance tool (UNBALANCED)',
           model: null,
+        },
+      });
+    }
+
+    // Bank — before the cash refuse, or "बैंक बैलेंस" (no "cash" word) would fall through to it.
+    if (BANK_WORDS.some((w) => q.includes(w))) {
+      const bank = bankBalance({ events: society.events, accounts: society.accounts, asOf });
+      if (!bank) {
+        return base({
+          lane: 'D',
+          unanswered: SAY.noBankAccount,
+          trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: 'D-lane: no bank account', model: null },
+        });
+      }
+      // Show the per-bank split only when there is more than one — a single bank needs no breakdown.
+      const split = bank.bankCount > 1
+        ? ' — ' + bank.perBank.map((b) => `${b.name}: ${b.formatted}`).join(' · ')
+        : '';
+      return base({
+        lane: 'D',
+        answer: `कुल बैंक शेष: ${bank.formatted}${asOf ? ` (${asOf} तक)` : ''}${split}`,
+        confidence: 'high',
+        cites: [{ id: 'tool:bankBalance', title: 'बैंक बही (Bank Book)', url: '/bank-book', type: 'help' }],
+        trace: {
+          reason: intent.reason, jurisdiction, asOf, corpus: [],
+          retrieved: [`tool:bankBalance@${bank.bankCount}banks`],
+          guard: null, model: null,
         },
       });
     }
