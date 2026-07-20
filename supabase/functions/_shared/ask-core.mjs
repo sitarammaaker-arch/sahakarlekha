@@ -1002,6 +1002,14 @@ var ACCOUNT_IDS = {
   // TCS a seller collects from us lands here; TDS we deduct from others
   // is the mirror image and goes to 2202 TDS Payable, a LIABILITY.
 };
+function getBankAccountIds(accounts) {
+  const bankGroup = accounts.find((a) => a.id === ACCOUNT_IDS.BANK);
+  const children = accounts.filter((a) => !a.isGroup && a.parentId === ACCOUNT_IDS.BANK).map((a) => a.id);
+  if (bankGroup?.isGroup) {
+    return children.length > 0 ? children : [ACCOUNT_IDS.BANK];
+  }
+  return [ACCOUNT_IDS.BANK, ...children];
+}
 
 // src/lib/ask/tools/cashBalance.ts
 var CASH_ACCOUNT_ID = ACCOUNT_IDS.CASH;
@@ -1163,9 +1171,28 @@ function trialBalanceCheck(input) {
   };
 }
 
+// src/lib/ask/tools/bankBalance.ts
+function bankBalance(input) {
+  const accts = input.accounts;
+  const hasRealBank = accts.some((a) => !a.isGroup && (a.id === ACCOUNT_IDS.BANK || a.parentId === ACCOUNT_IDS.BANK));
+  if (!hasRealBank) return null;
+  const bankIds = new Set(getBankAccountIds(accts));
+  const rows = ledgerTrialBalance(input.events, input.accounts, input.asOf);
+  let balanceMinor = 0;
+  const perBank = [];
+  for (const r of rows) {
+    if (!bankIds.has(r.account.id)) continue;
+    const netMinor = toMinor(r.netBalance);
+    balanceMinor += netMinor;
+    perBank.push({ name: r.account.name, formatted: formatMinorInr(netMinor) });
+  }
+  return { balanceMinor, formatted: formatMinorInr(balanceMinor), bankCount: perBank.length, perBank };
+}
+
 // src/lib/ask/core.ts
 var CASH_WORDS = ["\u0930\u094B\u0915\u0921\u093C", "\u0928\u0915\u0926", "\u0915\u0948\u0936", "cash", "rokad", "nakad"];
 var TB_WORDS = ["\u091F\u094D\u0930\u093E\u092F\u0932 \u092C\u0948\u0932\u0947\u0902\u0938", "\u091F\u094D\u0930\u093E\u092F\u0932", "trial balance", "trial", "\u0924\u0932\u092A\u091F", "talpat", "\u0915\u0941\u0932 \u0928\u093E\u092E \u091C\u092E\u093E", "\u0928\u093E\u092E \u091C\u092E\u093E \u092E\u093F\u0932\u093E\u0928"];
+var BANK_WORDS = ["\u092C\u0948\u0902\u0915", "bank"];
 var ASK_FEATURE = "ask";
 var SAY = {
   unknown: "\u092E\u0941\u091D\u0947 \u0907\u0938\u0915\u093E \u092A\u0915\u094D\u0915\u093E \u0909\u0924\u094D\u0924\u0930 \u0928\u0939\u0940\u0902 \u092A\u0924\u093E\u0964 \u0928\u0940\u091A\u0947 \u0915\u0947 \u0938\u094D\u0930\u094B\u0924 \u0926\u0947\u0916\u0947\u0902, \u092F\u093E \u0905\u092A\u0928\u0947 CA / RCS \u0938\u0947 \u092A\u0942\u091B\u0947\u0902\u0964",
@@ -1180,8 +1207,9 @@ var SAY = {
   // A D-lane question with no tool must refuse, never fall through to documents: an
   // answer about "your society's stock" pulled from a help article looks like a fact
   // about their books and is not.
-  noTool: "\u092F\u0939 \u0906\u092A\u0915\u0940 \u0938\u092E\u093F\u0924\u093F \u0915\u0947 \u0906\u0901\u0915\u0921\u093C\u0947 \u0938\u0947 \u091C\u0941\u0921\u093C\u093E \u0938\u0935\u093E\u0932 \u0939\u0948, \u092A\u0930 \u0905\u092D\u0940 \u092E\u0948\u0902 \u0938\u093F\u0930\u094D\u092B\u093C \u0930\u094B\u0915\u0921\u093C \u0936\u0947\u0937 \u0914\u0930 \u091F\u094D\u0930\u093E\u092F\u0932 \u092C\u0948\u0932\u0947\u0902\u0938 \u092C\u0924\u093E \u0938\u0915\u0924\u093E \u0939\u0942\u0901\u0964 \u092C\u093E\u0915\u093C\u0940 \u0915\u0947 \u0932\u093F\u090F \u0938\u0902\u092C\u0902\u0927\u093F\u0924 \u0930\u093F\u092A\u094B\u0930\u094D\u091F \u0916\u094B\u0932\u0947\u0902\u0964",
+  noTool: "\u092F\u0939 \u0906\u092A\u0915\u0940 \u0938\u092E\u093F\u0924\u093F \u0915\u0947 \u0906\u0901\u0915\u0921\u093C\u0947 \u0938\u0947 \u091C\u0941\u0921\u093C\u093E \u0938\u0935\u093E\u0932 \u0939\u0948, \u092A\u0930 \u0905\u092D\u0940 \u092E\u0948\u0902 \u0938\u093F\u0930\u094D\u092B\u093C \u0930\u094B\u0915\u0921\u093C \u0936\u0947\u0937, \u092C\u0948\u0902\u0915 \u0936\u0947\u0937 \u0914\u0930 \u091F\u094D\u0930\u093E\u092F\u0932 \u092C\u0948\u0932\u0947\u0902\u0938 \u092C\u0924\u093E \u0938\u0915\u0924\u093E \u0939\u0942\u0901\u0964 \u092C\u093E\u0915\u093C\u0940 \u0915\u0947 \u0932\u093F\u090F \u0938\u0902\u092C\u0902\u0927\u093F\u0924 \u0930\u093F\u092A\u094B\u0930\u094D\u091F \u0916\u094B\u0932\u0947\u0902\u0964",
   noAccounts: "\u0906\u092A\u0915\u0940 \u0938\u092E\u093F\u0924\u093F \u092E\u0947\u0902 \u0905\u092D\u0940 \u0915\u094B\u0908 \u0916\u093E\u0924\u093E \u0928\u0939\u0940\u0902 \u092E\u093F\u0932\u093E \u2014 \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u091F\u094D\u0930\u093E\u092F\u0932 \u092C\u0948\u0932\u0947\u0902\u0938 \u0928\u0939\u0940\u0902 \u092C\u0924\u093E \u0938\u0915\u0924\u093E\u0964",
+  noBankAccount: "\u0906\u092A\u0915\u0940 \u0938\u092E\u093F\u0924\u093F \u092E\u0947\u0902 \u0915\u094B\u0908 \u092C\u0948\u0902\u0915 \u0916\u093E\u0924\u093E \u0928\u0939\u0940\u0902 \u092E\u093F\u0932\u093E \u2014 \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u092C\u0948\u0902\u0915 \u0936\u0947\u0937 \u0928\u0939\u0940\u0902 \u092C\u0924\u093E \u0938\u0915\u0924\u093E\u0964",
   noCashAccount: "\u0906\u092A\u0915\u0940 \u0938\u092E\u093F\u0924\u093F \u092E\u0947\u0902 \u0930\u094B\u0915\u0921\u093C \u0916\u093E\u0924\u093E \u0928\u0939\u0940\u0902 \u092E\u093F\u0932\u093E \u2014 \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u0936\u0947\u0937 \u0928\u0939\u0940\u0902 \u092C\u0924\u093E \u0938\u0915\u0924\u093E\u0964"
 };
 var cite = (r) => ({ id: r.id, title: r.title, url: r.url, type: r.type });
@@ -1282,6 +1310,32 @@ function ask(req, docs, flags, today, limit = 8, society) {
           corpus: [],
           retrieved: [`tool:trialBalance@${tb.accountCount}accounts`],
           guard: tb.balanced ? "D-lane: trial balance tool" : "D-lane: trial balance tool (UNBALANCED)",
+          model: null
+        }
+      });
+    }
+    if (BANK_WORDS.some((w) => q.includes(w))) {
+      const bank = bankBalance({ events: society.events, accounts: society.accounts, asOf });
+      if (!bank) {
+        return base({
+          lane: "D",
+          unanswered: SAY.noBankAccount,
+          trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: "D-lane: no bank account", model: null }
+        });
+      }
+      const split = bank.bankCount > 1 ? " \u2014 " + bank.perBank.map((b) => `${b.name}: ${b.formatted}`).join(" \xB7 ") : "";
+      return base({
+        lane: "D",
+        answer: `\u0915\u0941\u0932 \u092C\u0948\u0902\u0915 \u0936\u0947\u0937: ${bank.formatted}${asOf ? ` (${asOf} \u0924\u0915)` : ""}${split}`,
+        confidence: "high",
+        cites: [{ id: "tool:bankBalance", title: "\u092C\u0948\u0902\u0915 \u092C\u0939\u0940 (Bank Book)", url: "/bank-book", type: "help" }],
+        trace: {
+          reason: intent.reason,
+          jurisdiction,
+          asOf,
+          corpus: [],
+          retrieved: [`tool:bankBalance@${bank.bankCount}banks`],
+          guard: null,
           model: null
         }
       });
