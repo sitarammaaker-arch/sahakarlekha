@@ -14,6 +14,7 @@
  */
 import type { LedgerEvent } from './event';
 import { isValidMinor } from '../money';
+import { resolveCurrentVouchers } from './aggregateState';
 
 interface Leg {
   accountId: string;
@@ -136,15 +137,36 @@ export function projectSplitTrialBalance(events: readonly LedgerEvent[], asOf?: 
   const cutoff = asOfMillis(asOf);
   const acc = new Map<string, { oDr: number; oCr: number; tDr: number; tCr: number }>();
   let count = 0;
+  const bucket = (accountId: string) => {
+    let b = acc.get(accountId);
+    if (!b) { b = { oDr: 0, oCr: 0, tDr: 0, tCr: 0 }; acc.set(accountId, b); }
+    return b;
+  };
+
+  // OPENING columns — from account.opening events, as of the cutoff (by occurred time).
   for (const e of events) {
-    if (!occurredBy(e, cutoff)) continue;
+    if (e.eventType !== 'account.opening' || !occurredBy(e, cutoff)) continue;
     count++;
-    const isOpening = e.eventType === 'account.opening';
     for (const l of legsOf(e.payload)) {
-      let b = acc.get(l.accountId);
-      if (!b) { b = { oDr: 0, oCr: 0, tDr: 0, tCr: 0 }; acc.set(l.accountId, b); }
-      if (isOpening) { if (l.drCr === 'Dr') b.oDr += l.amountMinor; else b.oCr += l.amountMinor; }
-      else { if (l.drCr === 'Dr') b.tDr += l.amountMinor; else b.tCr += l.amountMinor; }
+      const b = bucket(l.accountId);
+      if (l.drCr === 'Dr') b.oDr += l.amountMinor; else b.oCr += l.amountMinor;
+    }
+  }
+
+  // TRANSACTION columns — from the CURRENT vouchers, NOT the raw event legs. resolveCurrentVouchers
+  // (aggregateState) drops cancelled aggregates and takes an edit's latest reposted legs — the SAME
+  // resolution the Cash Book uses (projectCashBook), so the two reports agree by construction (RULE 2).
+  // Summing raw legs instead counted a cancelled voucher's posting AND its reversing event as gross
+  // activity (net-zero on balances, but it inflated total Dr/Cr): a society's trial-balance total read
+  // ₹2.82cr against ₹1.80cr on the state path, because the journal reconcile appended the reversals.
+  // Cutoff is by VOUCHER DATE (v.date), matching the state path's activeVouchers.filter(v.date<=asOf)
+  // and projectCashBook's toDate — not by event time, or an edit re-dated later would drop wrongly.
+  for (const v of resolveCurrentVouchers(events)) {
+    if (asOf && v.date > asOf) continue;
+    count++;
+    for (const l of v.legs) {
+      const b = bucket(l.accountId);
+      if (l.drCr === 'Dr') b.tDr += l.amountMinor; else b.tCr += l.amountMinor;
     }
   }
   const lines = [...acc.keys()].sort().map((accountId) => {

@@ -1056,23 +1056,30 @@ function projectSplitTrialBalance(events, asOf) {
   const cutoff = asOfMillis(asOf);
   const acc = /* @__PURE__ */ new Map();
   let count = 0;
+  const bucket = (accountId) => {
+    let b = acc.get(accountId);
+    if (!b) {
+      b = { oDr: 0, oCr: 0, tDr: 0, tCr: 0 };
+      acc.set(accountId, b);
+    }
+    return b;
+  };
   for (const e of events) {
-    if (!occurredBy(e, cutoff)) continue;
+    if (e.eventType !== "account.opening" || !occurredBy(e, cutoff)) continue;
     count++;
-    const isOpening = e.eventType === "account.opening";
     for (const l of legsOf2(e.payload)) {
-      let b = acc.get(l.accountId);
-      if (!b) {
-        b = { oDr: 0, oCr: 0, tDr: 0, tCr: 0 };
-        acc.set(l.accountId, b);
-      }
-      if (isOpening) {
-        if (l.drCr === "Dr") b.oDr += l.amountMinor;
-        else b.oCr += l.amountMinor;
-      } else {
-        if (l.drCr === "Dr") b.tDr += l.amountMinor;
-        else b.tCr += l.amountMinor;
-      }
+      const b = bucket(l.accountId);
+      if (l.drCr === "Dr") b.oDr += l.amountMinor;
+      else b.oCr += l.amountMinor;
+    }
+  }
+  for (const v of resolveCurrentVouchers(events)) {
+    if (asOf && v.date > asOf) continue;
+    count++;
+    for (const l of v.legs) {
+      const b = bucket(l.accountId);
+      if (l.drCr === "Dr") b.tDr += l.amountMinor;
+      else b.tCr += l.amountMinor;
     }
   }
   const lines = [...acc.keys()].sort().map((accountId) => {

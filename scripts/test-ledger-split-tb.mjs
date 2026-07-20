@@ -72,5 +72,24 @@ ok(line(asOf, '1001').openingDrMinor === 500000, 'openings (dated 2000) are alwa
 const frac = projectSplitTrialBalance(planOpeningEvents([{ id: '5', openingBalance: 33.33, openingBalanceType: 'debit' }], 'SOC001', { openingDate: '2000-01-01' }));
 ok(line(frac, '5').openingDrMinor === 3333, '₹33.33 opening → 3333 paise exactly');
 
+// 6. A CANCELLED voucher is EXCLUDED from the trial balance — the SAME resolveCurrentVouchers the
+//    Cash Book uses drops it. Summing raw event legs instead counted BOTH its posting and the
+//    reversing voucher.cancelled event as gross activity: net-zero on balances, but it inflated
+//    total Dr/Cr — a society read ₹2.82cr against ₹1.80cr on the state path after the journal
+//    reconcile appended the reversals. Closing balances must be identical with and without it.
+const postC = planGenesisEvents([{ voucher: v('c', { amount: 2000 }), tenantId: 'SOC001', jurisdiction: 'hr' }]).events;
+const postingC = postC.find((e) => e.eventType === 'voucher.posted');
+const cancelC = buildEvent(
+  { eventType: 'voucher.cancelled', tenantId: 'SOC001', jurisdiction: 'hr', aggregateType: 'voucher',
+    aggregateId: 'c', sequence: 2, producer: { kind: 'human', id: 'u' }, reversalOf: postingC.eventId,
+    payload: { lines: [{ accountId: '1001', drCr: 'Cr', amountMinor: 200000 }, { accountId: '4101', drCr: 'Dr', amountMinor: 200000 }] } },
+  { eventId: 'cancel-c', occurredAt: '2025-06-02T10:00:00Z' },
+);
+const withCancel = projectSplitTrialBalance([...openings, ...posting, ...postC, cancelC]);
+ok(line(withCancel, '1001').txnDrMinor === 100000, 'cancelled voucher EXCLUDED from gross (txn Dr stays 100000, not 300000)');
+ok(line(withCancel, '1001').totalDrMinor === 600000 && line(withCancel, '1001').netMinor === 600000, 'closing UNCHANGED by the cancel (still 600000)');
+ok(withCancel.totalDrMinor === tb.totalDrMinor && withCancel.totalCrMinor === tb.totalCrMinor && withCancel.balanced,
+  'grand totals identical to the no-cancel TB — a cancelled voucher adds nothing to gross');
+
 console.log(`\nSplit trial balance (T-09): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
