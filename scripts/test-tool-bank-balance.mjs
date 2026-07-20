@@ -52,9 +52,18 @@ const events = [
   ok('sums both banks, exact paise (1,00,000 − 70,035.60 = 29,964.40)', b && b.balanceMinor === 2996440, JSON.stringify(b));
   ok('formatted total is the human string', b.formatted === '₹29,964.40');
   ok('counts both banks', b.bankCount === 2);
-  ok('per-bank split carries each bank (incl. the Cr one as negative)',
-    b.perBank.some((x) => x.formatted === '₹1,00,000.00') && b.perBank.some((x) => x.formatted === '-₹70,035.60'));
+  // Each bank is a table row: magnitude (absolute) + a Dr/Cr side — the side carries the sign, so a
+  // Cr bank shows a positive magnitude with 'Cr', never a "-₹" number.
+  const hdfc = b.perBank.find((x) => x.name === 'HDFC Saving A/c');
+  const sirsa = b.perBank.find((x) => x.name === 'Sirsa Coop Bank A/c');
+  ok('a Dr bank: positive magnitude, side Dr', hdfc.magnitude === '₹1,00,000.00' && hdfc.drCr === 'Dr', JSON.stringify(hdfc));
+  ok('a Cr bank: magnitude is the ABSOLUTE, side Cr (no minus in the number)', sirsa.magnitude === '₹70,035.60' && sirsa.drCr === 'Cr', JSON.stringify(sirsa));
   ok('a non-bank account is NOT counted', !b.perBank.some((x) => x.name === 'Sales'));
+  // Serial order = the accounts-list order (HDFC before Sirsa here), NOT the accountId sort. Reversing
+  // the chart reverses the split — proving the table follows the chart serial, not the ids.
+  ok('split follows the accounts-list serial order', b.perBank[0].name === 'HDFC Saving A/c' && b.perBank[1].name === 'Sirsa Coop Bank A/c');
+  const rev = bankBalance({ events, accounts: [accounts[2], accounts[1], accounts[0]] });
+  ok('reversing the chart reverses the split (serial, not id-sorted)', rev.perBank[0].name === 'Sirsa Coop Bank A/c' && rev.perBank[1].name === 'HDFC Saving A/c');
 }
 
 // The seam route, through the DEPLOYED bundle: "मेरा बैंक बैलेंस कितना है" → lane D → bank tool.
@@ -68,6 +77,20 @@ const events = [
   ok('bundle route: it answers with the bank total, not a refusal',
     !!r.answer && r.answer.includes('कुल बैंक शेष') && r.answer.includes('₹29,964.40') && !r.unanswered, r.answer || r.unanswered);
   ok('bundle route: the cite points at the Bank Book', (r.cites || []).some((c) => c.id === 'tool:bankBalance'));
+  // The breakdown now rides on a structured `table` (क्रमांक | बैंक | बैलेंस | Dr/Cr), not inline text,
+  // so the channel can render it as a real table. The total stays in the text line only.
+  ok('bundle route: the total is NOT dumped inline into the text', !r.answer.includes('·') && !r.answer.includes(' — '), r.answer);
+  ok('bundle route: a multi-bank answer carries a table with the 4 columns',
+    !!r.table && r.table.columns.length === 4 && r.table.columns[0] === 'क्रमांक' && r.table.columns[3] === 'Dr/Cr', JSON.stringify(r.table?.columns));
+  ok('bundle route: table has one row per bank, serial-numbered, with magnitude + side',
+    r.table.rows.length === 2 && r.table.rows[0][0] === '1' && r.table.rows[0][2] === '₹1,00,000.00' && r.table.rows[0][3] === 'Dr'
+    && r.table.rows[1][0] === '2' && r.table.rows[1][2] === '₹70,035.60' && r.table.rows[1][3] === 'Cr', JSON.stringify(r.table?.rows));
+
+  // A single bank needs no breakdown — no table.
+  const oneBank = [{ id: 'bank-hdfc', name: 'HDFC Saving A/c', parentId: ACCOUNT_IDS.BANK }];
+  const one = B.ask({ text: 'मेरा बैंक बैलेंस', channel: 'web', societyId: 'SOC001', userId: 'u@x.com' },
+    B.CORPUS, flags, '2026-07-20', 8, { events, accounts: oneBank, activeBranchId: '' });
+  ok('bundle route: a single-bank society gets NO table (nothing to split)', one.lane === 'D' && !!one.answer && !one.table, JSON.stringify(one.table));
 
   const anon = B.ask({ text: 'मेरा बैंक बैलेंस कितना है', channel: 'web' }, B.CORPUS, flags, '2026-07-20', 8);
   ok('bundle route: anonymous is refused (needs login)', anon.lane === 'D' && !!anon.unanswered && !anon.answer);

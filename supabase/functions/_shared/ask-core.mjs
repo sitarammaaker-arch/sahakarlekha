@@ -1177,14 +1177,19 @@ function bankBalance(input) {
   const hasRealBank = accts.some((a) => !a.isGroup && (a.id === ACCOUNT_IDS.BANK || a.parentId === ACCOUNT_IDS.BANK));
   if (!hasRealBank) return null;
   const bankIds = new Set(getBankAccountIds(accts));
-  const rows = ledgerTrialBalance(input.events, input.accounts, input.asOf);
+  const rowById = new Map(ledgerTrialBalance(input.events, input.accounts, input.asOf).map((r) => [r.account.id, r]));
   let balanceMinor = 0;
   const perBank = [];
-  for (const r of rows) {
-    if (!bankIds.has(r.account.id)) continue;
-    const netMinor = toMinor(r.netBalance);
+  for (const a of input.accounts) {
+    if (!bankIds.has(a.id)) continue;
+    const netMinor = rowById.has(a.id) ? toMinor(rowById.get(a.id).netBalance) : 0;
     balanceMinor += netMinor;
-    perBank.push({ name: r.account.name, formatted: formatMinorInr(netMinor) });
+    perBank.push({
+      name: a.name,
+      balanceMinor: netMinor,
+      magnitude: formatMinorInr(Math.abs(netMinor)),
+      drCr: netMinor > 0 ? "Dr" : netMinor < 0 ? "Cr" : "\u2014"
+    });
   }
   return { balanceMinor, formatted: formatMinorInr(balanceMinor), bankCount: perBank.length, perBank };
 }
@@ -1323,12 +1328,17 @@ function ask(req, docs, flags, today, limit = 8, society) {
           trace: { reason: intent.reason, jurisdiction, asOf, corpus: [], retrieved: [], guard: "D-lane: no bank account", model: null }
         });
       }
-      const split = bank.bankCount > 1 ? " \u2014 " + bank.perBank.map((b) => `${b.name}: ${b.formatted}`).join(" \xB7 ") : "";
+      const table = bank.bankCount > 1 ? {
+        columns: ["\u0915\u094D\u0930\u092E\u093E\u0902\u0915", "\u092C\u0948\u0902\u0915", "\u092C\u0948\u0932\u0947\u0902\u0938", "Dr/Cr"],
+        align: ["left", "left", "right", "left"],
+        rows: bank.perBank.map((b, i) => [String(i + 1), b.name, b.magnitude, b.drCr])
+      } : void 0;
       return base({
         lane: "D",
-        answer: `\u0915\u0941\u0932 \u092C\u0948\u0902\u0915 \u0936\u0947\u0937: ${bank.formatted}${asOf ? ` (${asOf} \u0924\u0915)` : ""}${split}`,
+        answer: `\u0915\u0941\u0932 \u092C\u0948\u0902\u0915 \u0936\u0947\u0937: ${bank.formatted}${asOf ? ` (${asOf} \u0924\u0915)` : ""}`,
         confidence: "high",
         cites: [{ id: "tool:bankBalance", title: "\u092C\u0948\u0902\u0915 \u092C\u0939\u0940 (Bank Book)", url: "/bank-book", type: "help" }],
+        table,
         trace: {
           reason: intent.reason,
           jurisdiction,
