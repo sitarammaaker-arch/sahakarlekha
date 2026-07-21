@@ -23,6 +23,7 @@
     "test:jurisdiction-packs": "node scripts/test-jurisdiction-packs.mjs",
     "test:money": "node scripts/test-money.mjs",
     "test:pay-lexer": "node scripts/test-pay-lexer.mjs",
+    "test:pay-parser": "node scripts/test-pay-parser.mjs",
     "test:funds": "node scripts/test-funds.mjs",
     "test:appropriation": "node scripts/test-appropriation.mjs",
     "test:approval-transition": "node scripts/test-approval-transition.mjs",
