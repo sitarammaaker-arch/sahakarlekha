@@ -80,5 +80,34 @@ ok(p(g.pfEmployee) + p(g.esiEmployee) + p(g.pt) + p(g.tds) === p(g.totalEmployee
 ok(p(g.gross) - p(g.totalEmployeeDeductions) === p(g.netSalary), 'netSalary = gross − deductions to the paisa');
 ok(p(g.pfEmployer) + p(g.esiEmployer) === p(g.employerContributions), 'employer contributions sum exactly');
 
+// 9. Manual overrides — the society fine-tunes a statutory figure; the override REPLACES the auto
+//    amount and flows into totals/net; a null override leaves auto untouched.
+const base = computeStatutory({ basic: 30000, allowances: 5000, pfApplicable: true, esiApplicable: true });
+ok(base.pfEmployee === 1800 && base.pfEmployer === 1950, 'baseline PF (auto) before override');
+
+// Override employee PF to 2000 and employer PF to 2200 — used as-is; net drops by the extra employee PF.
+const ov = computeStatutory({ basic: 30000, allowances: 5000, pfApplicable: true, esiApplicable: true,
+  pfEmployeeOverride: 2000, pfEmployerOverride: 2200 });
+ok(ov.pfEmployee === 2000 && ov.pfEmployer === 2200, 'PF overrides used verbatim (employee + employer)');
+ok(ov.totalEmployeeDeductions === 2000, 'employee deductions follow the override (2000, no ESI, gross > 21000)');
+ok(ov.netSalary === r2(35000 - 2000), 'net reflects the overridden employee PF');
+ok(ov.employerContributions === 2200, 'employer contributions follow the employer override');
+
+// Override wins even when auto-ineligible: ESI here is 0 (gross 35000 > 21000), but an override adds it.
+const ovEsi = computeStatutory({ basic: 30000, allowances: 5000, pfApplicable: true, esiApplicable: true,
+  esiEmployeeOverride: 150, esiEmployerOverride: 650 });
+ok(ovEsi.esiEmployee === 150 && ovEsi.esiEmployer === 650, 'ESI override applies even when auto-ineligible');
+ok(ovEsi.totalEmployeeDeductions === r2(1800 + 150), 'overridden ESI joins the employee deductions');
+
+// null / undefined override ⇒ identical to auto (no accidental zeroing).
+const ovNull = computeStatutory({ basic: 30000, allowances: 5000, pfApplicable: true, esiApplicable: true,
+  pfEmployeeOverride: null, esiEmployeeOverride: undefined });
+ok(ovNull.pfEmployee === base.pfEmployee && ovNull.totalEmployeeDeductions === base.totalEmployeeDeductions,
+  'null/undefined override = auto (unchanged)');
+
+// An explicit 0 override IS a value (not "auto") — e.g. waive employee PF for one payslip.
+const ovZero = computeStatutory({ basic: 30000, allowances: 5000, pfApplicable: true, esiApplicable: true, pfEmployeeOverride: 0 });
+ok(ovZero.pfEmployee === 0 && ovZero.netSalary === 35000, 'a 0 override waives that deduction (0 ≠ auto)');
+
 console.log(`\nPayroll statutory (pure): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

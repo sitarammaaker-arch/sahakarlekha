@@ -24,6 +24,13 @@ export interface StatutoryInput {
   tds?: number;           // TDS u/s 192 (input)
   pfCeiling?: number;
   esiThreshold?: number;
+  // Manual overrides (₹). null / undefined ⇒ use the auto-computed amount; a number ⇒ use it as-is.
+  // The society is the authority on its own payslip — the auto rate is the default, not a cage. An
+  // override wins REGARDLESS of eligibility (e.g. add ESI for an edge case the ₹21,000 gate misses).
+  pfEmployeeOverride?: number | null;
+  pfEmployerOverride?: number | null;
+  esiEmployeeOverride?: number | null;
+  esiEmployerOverride?: number | null;
 }
 
 export interface StatutoryResult {
@@ -50,13 +57,17 @@ export function computeStatutory(input: StatutoryInput): StatutoryResult {
   const allowMinor = toMinor(Math.max(0, Number(input.allowances) || 0));
   const grossMinor = addMinor(basicMinor, allowMinor);
 
+  // A manual override (if given) replaces the auto amount, in exact paise. null/undefined ⇒ auto.
+  const override = (auto: number, ov?: number | null) =>
+    ov == null ? auto : toMinor(Math.max(0, Number(ov) || 0));
+
   const pfWageMinor = Math.min(basicMinor, toMinor(pfCeiling));
-  const pfEmployeeMinor = input.pfApplicable ? applyPercent(pfWageMinor, 12).minor : 0;
-  const pfEmployerMinor = input.pfApplicable ? applyPercent(pfWageMinor, 13).minor : 0;   // 12% + 1% admin/EDLI
+  const pfEmployeeMinor = override(input.pfApplicable ? applyPercent(pfWageMinor, 12).minor : 0, input.pfEmployeeOverride);
+  const pfEmployerMinor = override(input.pfApplicable ? applyPercent(pfWageMinor, 13).minor : 0, input.pfEmployerOverride);   // 12% + 1% admin/EDLI
 
   const esiEligible = !!input.esiApplicable && grossMinor > 0 && grossMinor <= toMinor(esiThreshold);
-  const esiEmployeeMinor = esiEligible ? applyPercent(grossMinor, 0.75).minor : 0;
-  const esiEmployerMinor = esiEligible ? applyPercent(grossMinor, 3.25).minor : 0;
+  const esiEmployeeMinor = override(esiEligible ? applyPercent(grossMinor, 0.75).minor : 0, input.esiEmployeeOverride);
+  const esiEmployerMinor = override(esiEligible ? applyPercent(grossMinor, 3.25).minor : 0, input.esiEmployerOverride);
 
   const ptMinor = toMinor(Math.max(0, Number(input.pt) || 0));
   const tdsMinor = toMinor(Math.max(0, Number(input.tds) || 0));
