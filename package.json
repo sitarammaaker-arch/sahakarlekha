@@ -31,6 +31,7 @@
     "test:pay-rule-resolver": "node scripts/test-pay-rule-resolver.mjs",
     "test:pay-policy-resolver": "node scripts/test-pay-policy-resolver.mjs",
     "test:pay-clamps": "node scripts/test-pay-clamps.mjs",
+    "test:pay-freeze": "node scripts/test-pay-freeze.mjs",
     "test:funds": "node scripts/test-funds.mjs",
     "test:appropriation": "node scripts/test-appropriation.mjs",
     "test:approval-transition": "node scripts/test-approval-transition.mjs",
