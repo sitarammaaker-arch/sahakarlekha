@@ -28,6 +28,7 @@
     "test:pay-exec-context": "node scripts/test-pay-exec-context.mjs",
     "test:pay-run-aggregate": "node scripts/test-pay-run-aggregate.mjs",
     "test:pay-scope": "node scripts/test-pay-scope.mjs",
+    "test:pay-rule-resolver": "node scripts/test-pay-rule-resolver.mjs",
     "test:funds": "node scripts/test-funds.mjs",
     "test:appropriation": "node scripts/test-appropriation.mjs",
     "test:approval-transition": "node scripts/test-approval-transition.mjs",
