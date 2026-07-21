@@ -36,6 +36,11 @@ export type PayEventType =
   | 'reversed'
   | 'cancelled';
 
+/** Runtime list of every PayEventType (for validation; mirrors the type + Phase-4 enum). */
+export const PAY_EVENT_TYPES: readonly PayEventType[] = [
+  'initiated', 'calculated', 'verified', 'approved', 'locked', 'posted', 'paid', 'reversed', 'cancelled',
+];
+
 /** Legal transitions per state. `cancelled`/`rolled_back` are terminal (no outgoing edges). */
 const ALLOWED: Readonly<Record<RunState, readonly RunState[]>> = {
   draft: ['verified', 'cancelled'],
