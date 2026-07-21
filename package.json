@@ -26,6 +26,7 @@
     "test:pay-event": "node scripts/test-pay-event.mjs",
     "test:pay-stage-plan": "node scripts/test-pay-stage-plan.mjs",
     "test:pay-exec-context": "node scripts/test-pay-exec-context.mjs",
+    "test:pay-run-aggregate": "node scripts/test-pay-run-aggregate.mjs",
     "test:funds": "node scripts/test-funds.mjs",
     "test:appropriation": "node scripts/test-appropriation.mjs",
     "test:approval-transition": "node scripts/test-approval-transition.mjs",
