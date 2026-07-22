@@ -4,3 +4,4 @@ export { freezeViews } from '@/lib/pay/resolve/freeze.ts';
 export { mapCatalog } from '@/lib/pay/orchestrator/mapCatalog.ts';
 export { assembleRun } from '@/lib/pay/orchestrator/assembleRun.ts';
 export { makeMoney } from '@/lib/pay/formula/evaluator.ts';
+export { canTransition, stateAfterEvent } from '@/lib/pay/runtime/runState.ts';
