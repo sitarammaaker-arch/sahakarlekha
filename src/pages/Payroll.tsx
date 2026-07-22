@@ -17,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Wallet, Users, IndianRupee, Loader2, Play, UserPlus } from 'lucide-react';
+import { Wallet, Users, IndianRupee, Loader2, Play, UserPlus, Printer } from 'lucide-react';
 
 interface PayRun {
   run_id: string; run_no: string; period: string; period_month: string;
@@ -167,6 +167,26 @@ const Payroll: React.FC = () => {
   };
 
   const nameOf = (n: { hi?: string; en?: string } | null) => (hi ? n?.hi : n?.en) || n?.en || n?.hi || '—';
+
+  const printPayslip = (slip: Payslip, slipLines: Payline[]) => {
+    const earn = slipLines.filter((l) => !isDeduction(l.kind));
+    const ded = slipLines.filter((l) => isDeduction(l.kind));
+    const rows = (arr: Payline[]) => arr.map((l) => `<tr><td>${nameOf(l.name)} <span style="color:#888;font-size:11px">${l.code}</span></td><td style="text-align:right">${rupees(l.computed_minor)}</td></tr>`).join('') || '<tr><td colspan="2" style="color:#888">—</td></tr>';
+    const w = window.open('', '_blank', 'width=720,height=900');
+    if (!w) { toast({ title: hi ? 'प्रिंट विंडो नहीं खुली' : 'Print window blocked', description: hi ? 'popup की अनुमति दें' : 'Allow popups', variant: 'destructive' }); return; }
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${hi ? 'वेतन पर्ची' : 'Payslip'} ${slip.payslip_no}</title>
+      <style>body{font-family:system-ui,'Segoe UI',sans-serif;color:#111;margin:32px;max-width:640px}h1{font-size:20px;margin:0 0 2px}.sub{color:#555;font-size:13px;margin:0 0 16px}table{width:100%;border-collapse:collapse;margin:8px 0}td,th{padding:6px 8px;border-bottom:1px solid #eee;font-size:13px}th{text-align:left;background:#f6f6f6}.tot td{font-weight:600;border-top:2px solid #333}.net{margin-top:16px;padding:10px 12px;background:#f0f7f0;border-radius:8px;font-size:16px;font-weight:700;display:flex;justify-content:space-between}.cols{display:flex;gap:16px}.cols>div{flex:1}@media print{body{margin:12px}}</style></head><body>
+      <h1>${hi ? 'वेतन पर्ची' : 'Salary Slip'}</h1>
+      <p class="sub">${nameOf(slip.employee_name)} · ${slip.employee_code} &nbsp;|&nbsp; ${hi ? 'अवधि' : 'Period'}: ${selected?.period ?? ''} &nbsp;|&nbsp; ${slip.payslip_no}<br>${hi ? 'भुगतान दिन' : 'Paid days'}: ${Number(slip.paid_days)}</p>
+      <div class="cols">
+        <div><table><thead><tr><th>${hi ? 'आय' : 'Earnings'}</th><th style="text-align:right">₹</th></tr></thead><tbody>${rows(earn)}<tr class="tot"><td>${hi ? 'कुल आय' : 'Gross'}</td><td style="text-align:right">${rupees(slip.gross_minor)}</td></tr></tbody></table></div>
+        <div><table><thead><tr><th>${hi ? 'कटौती' : 'Deductions'}</th><th style="text-align:right">₹</th></tr></thead><tbody>${rows(ded)}<tr class="tot"><td>${hi ? 'कुल कटौती' : 'Total'}</td><td style="text-align:right">${rupees(slip.deductions_minor)}</td></tr></tbody></table></div>
+      </div>
+      <div class="net"><span>${hi ? 'शुद्ध वेतन / Net Pay' : 'Net Pay'}</span><span>${rupees(slip.net_minor)}</span></div>
+      <p style="color:#999;font-size:11px;margin-top:24px">${hi ? 'सहकार लेखा द्वारा गणना' : 'Computed by SahakarLekha'}</p>
+      <script>window.onload=function(){window.print()}</script></body></html>`);
+    w.document.close();
+  };
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -335,6 +355,11 @@ const Payroll: React.FC = () => {
                                     <span className={isDeduction(ln.kind) ? 'text-destructive' : ''}>{isDeduction(ln.kind) ? '− ' : ''}{rupees(ln.computed_minor)}</span>
                                   </div>
                                 ))}
+                                <div className="pt-1 px-2">
+                                  <Button size="sm" variant="outline" onClick={() => printPayslip(s, lines)}>
+                                    <Printer className="h-3 w-3 mr-1" /> {hi ? 'पर्ची प्रिंट करें' : 'Print payslip'}
+                                  </Button>
+                                </div>
                               </div>
                             )}
                           </TableCell>
