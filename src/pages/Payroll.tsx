@@ -256,9 +256,9 @@ const Payroll: React.FC = () => {
 
   const doTransition = async (runId: string, action: string) => {
     setTransitioning(runId);
-    // 'post' → pay-post (GL voucher); 'pay' → pay-pay (payment voucher); the rest → pay-transition
-    const fn = action === 'post' ? 'pay-post' : action === 'pay' ? 'pay-pay' : 'pay-transition';
-    const isFinancial = action === 'post' || action === 'pay';
+    // 'post' → pay-post · 'pay' → pay-pay · 'rollback' → pay-rollback · rest → pay-transition
+    const fn = action === 'post' ? 'pay-post' : action === 'pay' ? 'pay-pay' : action === 'rollback' ? 'pay-rollback' : 'pay-transition';
+    const isFinancial = action === 'post' || action === 'pay' || action === 'rollback';
     const { data, error } = await supabase.functions.invoke(fn, { body: isFinancial ? { runId } : { runId, action } });
     setTransitioning(null);
     if (error || (data as { error?: string })?.error) {
@@ -271,6 +271,9 @@ const Payroll: React.FC = () => {
     } else if (action === 'pay') {
       const d = data as { net?: number };
       toast({ title: hi ? 'भुगतान हो गया ✓' : 'Salaries paid ✓', description: hi ? `payment voucher बना (₹${d.net})` : `payment voucher created (₹${d.net})` });
+    } else if (action === 'rollback') {
+      const d = data as { reversed?: { rev: string }[] };
+      toast({ title: hi ? 'रन उलट दिया गया ✓' : 'Run reversed ✓', description: hi ? `${d.reversed?.length ?? 0} reversing voucher बने (books शून्य पर)` : `${d.reversed?.length ?? 0} reversing voucher(s) — books net to zero` });
     } else {
       toast({ title: hi ? 'हो गया ✓' : 'Done ✓', description: `${(data as { from?: string }).from} → ${(data as { state?: string }).state}` });
     }
@@ -525,6 +528,18 @@ const Payroll: React.FC = () => {
                         <Button size="sm" variant="outline" className="mr-1" disabled={transitioning === r.run_id}
                           onClick={(e) => { e.stopPropagation(); doTransition(r.run_id, nextAction(r.state)!.action); }}>
                           {transitioning === r.run_id ? <Loader2 className="h-3 w-3 animate-spin" /> : nextAction(r.state)!.label}
+                        </Button>
+                      )}
+                      {(r.state === 'posted' || r.state === 'paid') && (
+                        <Button size="sm" variant="ghost" className="mr-1 text-destructive" disabled={transitioning === r.run_id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const msg = hi
+                              ? `रन ${r.run_no} को उलटें? इसकी बही entries reverse हो जाएँगी (books शून्य पर आएँगी); original रहेंगे। यह सुधार के लिए है।`
+                              : `Reverse run ${r.run_no}? Its ledger entries will be reversed (books net to zero); originals are kept. For corrections.`;
+                            if (window.confirm(msg)) doTransition(r.run_id, 'rollback');
+                          }}>
+                          {transitioning === r.run_id ? <Loader2 className="h-3 w-3 animate-spin" /> : (hi ? 'उलटें' : 'Reverse')}
                         </Button>
                       )}
                       <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); openRun(r); }}>{hi ? 'देखें' : 'View'}</Button>
