@@ -1752,6 +1752,7 @@ export interface SalaryRecord {
   pt?: number;                // professional tax
   tds?: number;               // TDS u/s 192
   paymentMode: PaymentMode;
+  bankAccountId?: string;     // when paymentMode = 'bank', which bank account the salary is paid from
   voucherId?: string;         // payment voucher (Dr Salary Payable / Cr Bank), set when paid
   accrualVoucherId?: string;  // accrual voucher (Dr Salary Expense / Cr Salary Payable), set at processing
   isPaid: boolean;

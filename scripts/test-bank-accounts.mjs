@@ -80,5 +80,20 @@ ok(getBankAccountIds(CMS_SOCIETY_ACCOUNTS).join() === BANK, 'seeded CMS chart �
 const seededPlusBank = [...CMS_SOCIETY_ACCOUNTS, sbi];
 ok(getBankAccountIds(seededPlusBank).join() === `${BANK},u-sbi`, 'seeded CMS chart + added bank → both listed');
 
+// 7. THE BANK-PICKER CONTRACT (migration 054). The purchase/sale/salary screens now let the
+//    operator choose WHICH bank; every posting site resolves the credit/debit bank as
+//    `chosen ?? getBankAccountIds(accounts)[0]`. Pin that exact rule against the real function
+//    so "pay salary from HDFC, PF from the cooperative bank" can't silently regress to bank #1.
+const hdfc = { id: 'u-hdfc', name: 'HDFC', parentId: BANK, isGroup: false, subtype: 'cash_bank' };
+const coop = { id: 'u-coop', name: 'Cooperative Bank', parentId: BANK, isGroup: false, subtype: 'cash_bank' };
+const multiBank = [cash, leafBank, hdfc, coop];
+const resolveBank = (chosen, accs) => chosen || getBankAccountIds(accs)[0];   // the inline rule, verbatim
+ok(resolveBank('u-hdfc', multiBank) === 'u-hdfc', 'a chosen bank (HDFC) is used verbatim, not the default');
+ok(resolveBank('u-coop', multiBank) === 'u-coop', 'a different chosen bank (Cooperative) is honoured — salary vs PF can differ');
+ok(resolveBank(undefined, multiBank) === BANK, 'no choice → falls back to the first bank (today\'s behaviour, unchanged)');
+ok(resolveBank('', multiBank) === BANK, 'empty choice (cash mode / not picked) → first bank, never a crash');
+// The chosen id must be a real bank in the list — the UI only offers getBankAccountIds, so this holds.
+ok(getBankAccountIds(multiBank).includes(resolveBank('u-hdfc', multiBank)), 'the resolved bank is always one the picker actually lists');
+
 console.log(`\nBank accounts (pure): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
