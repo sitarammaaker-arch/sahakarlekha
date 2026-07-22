@@ -26,7 +26,7 @@ const EFF = '2026-01-01';
 const SFL: Record<string, string> = {
   DA: 'formula "DA" :: Money let b = BASIC in b * 20%',
   HRA: 'formula "HRA" :: Money let b = BASIC in b * 40%',
-  PF: 'formula "PF" :: Money let b = BASIC in b * 12%',
+  PF: 'formula "PF" :: Money let b = BASIC in b * (pf_rate / 100)',
   // Loss of Pay: deduct the full-pay-equivalent (BASIC + DA 20% + HRA 40% = 160% of BASIC) for absent days.
   LOP: 'formula "LOP" :: Money let b = BASIC in b * 160% * (attendance.lopDays / 30)',
 };
@@ -61,6 +61,10 @@ async function ensureStandardConfig(tx: postgres.TransactionSql, societyId: stri
   for (const code of CODES) {
     await tx`insert into pay_config.component_binding(structure_version_id,component_id,created_by) values(${sv.id},${comp[code]},${creator})`;
   }
+  // seed the default PF rate (12%) — the admin edits it with an authoritative source
+  await tx`insert into pay_config.statutory_setting(society_id,key,value_num,label,source,created_by)
+    values(${societyId},'pf_rate',12,'PF employee contribution %','EPF & MP Act 1952 — default; confirm for your establishment',${creator})
+    on conflict (society_id,key) do nothing`;
   return { versionId: sv.id as string, basicComponentId: comp.BASIC };
 }
 
