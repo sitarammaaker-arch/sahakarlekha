@@ -16,7 +16,9 @@
  *   • LOP is treated as an expense reduction (not a liability); all other deductions as statutory
  *     liabilities in one "Statutory Deductions Payable";
  *   • amounts are posted in RUPEES (paise ÷ 100).
- * FINANCIAL PATH — gated on MFA (ADR-0012) for production (the 'posted' pay_event hits the aal2 gate).
+ * FINANCIAL PATH — this uses a direct DB connection (service boundary), which BYPASSES RLS, so the
+ * migration-114 aal2 RLS gate does NOT apply here. MFA is enforced in-function via the JWT `aal` claim,
+ * switched on by PAY_REQUIRE_AAL2=true after MFA go-live (ADR-0012); admin-JWT + role gate it meanwhile.
  *
  * Auth: verified JWT → society + admin role. A caller only posts their own society's runs.
  */
@@ -43,6 +45,16 @@ Deno.serve(async (req: Request) => {
   if (!jwt) return json(401, { error: 'missing bearer token' }, CORS);
   const { data: { user } } = await createClient(supaUrl, anonKey, { global: { headers: { Authorization: `Bearer ${jwt}` } } }).auth.getUser();
   if (!user?.email) return json(401, { error: 'invalid session' }, CORS);
+
+  // MFA gate for this FINANCIAL action. This function writes via a direct DB connection, which bypasses
+  // RLS (so the migration-114 aal2 RLS gate does NOT reach it). We therefore enforce AAL2 here, reading
+  // the `aal` claim from the getUser-verified JWT. Off by default (PAY_REQUIRE_AAL2 unset) so it cannot
+  // fail-close before MFA go-live; the admin sets PAY_REQUIRE_AAL2=true once native MFA is live (runbook step 3).
+  if ((Deno.env.get('PAY_REQUIRE_AAL2') ?? '').toLowerCase() === 'true') {
+    let aal = '';
+    try { aal = JSON.parse(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).aal ?? ''; } catch { /* malformed → treat as no MFA */ }
+    if (aal !== 'aal2') return json(403, { error: 'MFA (AAL2) required to post payroll — step up your session' }, CORS);
+  }
 
   let body: { runId?: string };
   try { body = await req.json(); } catch { return json(400, { error: 'bad JSON' }, CORS); }

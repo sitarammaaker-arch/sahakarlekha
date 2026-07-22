@@ -10,7 +10,8 @@
  *
  * ⚠ FOR THE SOCIETY'S REVIEW before real books: the "Bank / Cash" account is auto-created with a
  * standard name — map it to the ACTUAL bank/cash account you pay salaries from. Amounts in rupees.
- * FINANCIAL PATH — gated on MFA (ADR-0012) for production.
+ * FINANCIAL PATH — direct DB connection bypasses RLS, so MFA is enforced in-function via the JWT `aal`
+ * claim (PAY_REQUIRE_AAL2=true after MFA go-live, ADR-0012); admin-JWT + role gate it meanwhile.
  *
  * Auth: verified JWT → society + admin role. Caller only pays their own society's runs.
  */
@@ -37,6 +38,14 @@ Deno.serve(async (req: Request) => {
   if (!jwt) return json(401, { error: 'missing bearer token' }, CORS);
   const { data: { user } } = await createClient(supaUrl, anonKey, { global: { headers: { Authorization: `Bearer ${jwt}` } } }).auth.getUser();
   if (!user?.email) return json(401, { error: 'invalid session' }, CORS);
+
+  // MFA gate (see pay-post): direct-DB writes bypass the aal2 RLS gate, so enforce AAL2 in-function from
+  // the verified JWT. Off unless PAY_REQUIRE_AAL2=true (set after MFA go-live) — never fail-closes early.
+  if ((Deno.env.get('PAY_REQUIRE_AAL2') ?? '').toLowerCase() === 'true') {
+    let aal = '';
+    try { aal = JSON.parse(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).aal ?? ''; } catch { /* malformed → treat as no MFA */ }
+    if (aal !== 'aal2') return json(403, { error: 'MFA (AAL2) required to disburse payroll — step up your session' }, CORS);
+  }
 
   let body: { runId?: string };
   try { body = await req.json(); } catch { return json(400, { error: 'bad JSON' }, CORS); }
