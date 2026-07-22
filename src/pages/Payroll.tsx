@@ -17,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Wallet, Users, IndianRupee, Loader2, Play, UserPlus, Printer } from 'lucide-react';
+import { Wallet, Users, IndianRupee, Loader2, Play, UserPlus, Printer, Download } from 'lucide-react';
 
 interface PayRun {
   run_id: string; run_no: string; period: string; period_month: string;
@@ -221,6 +221,21 @@ const Payroll: React.FC = () => {
     w.document.close();
   };
 
+  const downloadRegister = () => {
+    if (!selected || slips.length === 0) return;
+    const money = (m: number) => (Number(m) / 100).toFixed(2);
+    const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+    const head = [hi ? 'कर्मचारी' : 'Employee', hi ? 'कोड' : 'Code', hi ? 'सकल' : 'Gross', hi ? 'कटौती' : 'Deductions', hi ? 'नेट' : 'Net', hi ? 'भुगतान दिन' : 'Paid Days'];
+    const rows = slips.map((s) => [nameOf(s.employee_name), s.employee_code, money(s.gross_minor), money(s.deductions_minor), money(s.net_minor), String(Number(s.paid_days))]);
+    const totals = [hi ? 'कुल' : 'TOTAL', '', money(slips.reduce((a, s) => a + Number(s.gross_minor), 0)), money(slips.reduce((a, s) => a + Number(s.deductions_minor), 0)), money(slips.reduce((a, s) => a + Number(s.net_minor), 0)), ''];
+    const csv = '﻿' + [head, ...rows, totals].map((r) => r.map(esc).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `payroll-register-${selected.run_no}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    toast({ title: hi ? 'रजिस्टर डाउनलोड ✓' : 'Register downloaded ✓', description: `${selected.run_no} — ${slips.length} ${hi ? 'कर्मचारी' : 'employees'}` });
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center gap-2">
@@ -360,6 +375,11 @@ const Payroll: React.FC = () => {
             <DialogTitle className="flex items-center gap-2">
               <IndianRupee className="h-5 w-5" />
               {hi ? 'पेस्लिप' : 'Payslips'} — {selected?.run_no} <span className="text-muted-foreground font-normal">({selected?.period})</span>
+              {slips.length > 0 && (
+                <Button size="sm" variant="outline" className="ml-auto" onClick={downloadRegister}>
+                  <Download className="h-4 w-4 mr-1" /> {hi ? 'रजिस्टर CSV' : 'Register CSV'}
+                </Button>
+              )}
             </DialogTitle>
           </DialogHeader>
           {slipsLoading ? (
