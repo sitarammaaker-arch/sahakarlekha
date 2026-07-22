@@ -22,6 +22,24 @@ tables/app untouched). **Production has never been touched.**
 - Payroll UI: runs list, payslip breakdown, print, Register CSV, **PF ECR** file, employee + statutory editors.
 - AAL2 MFA gate (114) — staging-verified, **NOT applied anywhere yet** (deliberately gated, step 4).
 
+**Readiness gates — all GREEN on staging (2026-07-22):** RLS coverage (73 `pay_*` tables all
+enabled+forced, 157 policies, no permissive SELECT, WORM tables lock UPDATE/DELETE); the pure calc
+suite (payslip aggregation incl. fixed-component lines); routing + role-gated nav (admin/accountant);
+the `_shared/pay-core.mjs` bundle in sync with `src/lib/pay`; and the full cycle (add → run → post →
+pay) with multi-employee + odd-paise + LOP tying out exactly to the ledger.
+
+---
+
+## Step 0 — 🟡 Pre-flight (re-run after each step below; all green = safe to proceed)
+
+Point `DATABASE_URL` at the target project, then:
+```bash
+node scripts/pay-apply.mjs supabase/migrations/payroll/VERIFICATION.sql   # schema objects present → ALL OK
+npm run test:pay-rls-coverage                                             # live RLS complete → PASS
+npm run test:pay-payslip && npm run test:pay-assemble-run                 # pure calc invariants → PASS
+```
+On production these confirm the deploy landed; on staging they are green today.
+
 ---
 
 ## Step 1 — 🔴 Deploy the schema to production
