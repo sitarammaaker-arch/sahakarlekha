@@ -90,7 +90,7 @@ Deno.serve(async (req: Request) => {
       comps.forEach((c: Record<string, unknown>) => { codeToId[c.code as string] = c.component_id as string; });
       const spec = mapCatalog({
         currency: 'INR', ruleView,
-        components: comps.map((c: Record<string, unknown>) => ({ code: c.code, kind: c.kind, calcMethod: c.calc_method, formulaSource: c.expression_text, overrideFixedMinor: c.fixed_minor, overrideCurrency: c.fixed_currency })),
+        components: comps.map((c: Record<string, unknown>) => ({ code: c.code, kind: c.kind, calcMethod: c.calc_method, formulaSource: c.expression_text, overrideFixedMinor: c.fixed_minor == null ? null : Number(c.fixed_minor), overrideCurrency: c.fixed_currency })),
       });
       for (const s of spec.formulaSources) sourcesByCode[s.code] = s.source;
       for (const k of Object.keys(spec.fixedComponents)) fixedCodes.add(k);

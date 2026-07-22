@@ -17,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Wallet, Users, IndianRupee, Loader2, Play } from 'lucide-react';
+import { Wallet, Users, IndianRupee, Loader2, Play, UserPlus } from 'lucide-react';
 
 interface PayRun {
   run_id: string; run_no: string; period: string; period_month: string;
@@ -30,6 +30,9 @@ interface Payslip {
 }
 interface Payline {
   code: string; name: { hi?: string; en?: string } | null; kind: string; computed_minor: number; currency: string; seq: number;
+}
+interface Employee {
+  id: string; employee_code: string; full_name: { hi?: string; en?: string } | null; date_of_join: string; basic_minor: number | null;
 }
 const isDeduction = (kind: string) => kind === 'deduction' || kind === 'loan_recovery';
 
@@ -57,6 +60,34 @@ const Payroll: React.FC = () => {
   const [period, setPeriod] = useState('');
   const [running, setRunning] = useState(false);
 
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [empOpen, setEmpOpen] = useState(false);
+  const [empName, setEmpName] = useState('');
+  const [empCode, setEmpCode] = useState('');
+  const [empBasic, setEmpBasic] = useState('');
+  const [empSaving, setEmpSaving] = useState(false);
+
+  const loadEmployees = useCallback(async () => {
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'list' } });
+    if (!error && data) setEmployees((data as { employees?: Employee[] }).employees || []);
+  }, []);
+
+  const addEmployee = async () => {
+    const basicMinor = Math.round(Number(empBasic) * 100);
+    if (!empName.trim() || !empCode.trim()) { toast({ title: hi ? 'नाम और कोड ज़रूरी' : 'Name and code required', variant: 'destructive' }); return; }
+    if (!Number.isFinite(basicMinor) || basicMinor <= 0) { toast({ title: hi ? 'मूल वेतन डालें' : 'Enter basic salary', variant: 'destructive' }); return; }
+    setEmpSaving(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'add', name: empName.trim(), code: empCode.trim(), basicMinor } });
+    setEmpSaving(false);
+    if (error || (data as { error?: string })?.error) {
+      toast({ title: hi ? 'कर्मचारी नहीं जुड़ा' : 'Could not add employee', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' });
+      return;
+    }
+    toast({ title: hi ? 'कर्मचारी जुड़ गया ✓' : 'Employee added ✓', description: `${empName} (${empCode})` });
+    setEmpOpen(false); setEmpName(''); setEmpCode(''); setEmpBasic('');
+    loadEmployees();
+  };
+
   const loadRuns = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.rpc('pay_list_runs');
@@ -68,7 +99,7 @@ const Payroll: React.FC = () => {
     setLoading(false);
   }, [hi, toast]);
 
-  useEffect(() => { loadRuns(); }, [loadRuns]);
+  useEffect(() => { loadRuns(); loadEmployees(); }, [loadRuns, loadEmployees]);
 
   const runPayroll = async () => {
     if (!/^\d{4}-\d{2}$/.test(period)) {
@@ -115,7 +146,7 @@ const Payroll: React.FC = () => {
     setLinesLoading(false);
   };
 
-  const empName = (n: Payslip['employee_name'] | Payline['name']) => (hi ? n?.hi : n?.en) || n?.en || n?.hi || '—';
+  const nameOf = (n: { hi?: string; en?: string } | null) => (hi ? n?.hi : n?.en) || n?.en || n?.hi || '—';
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -147,6 +178,47 @@ const Payroll: React.FC = () => {
       <p className="text-sm text-muted-foreground">
         {hi ? 'पेरोल इंजन द्वारा गणना किए गए वेतन-रन और उनकी पेस्लिप।' : 'Salary runs computed by the payroll engine and their payslips.'}
       </p>
+
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-primary" />
+            <span className="font-medium">{hi ? 'कर्मचारी' : 'Employees'}</span>
+            <Badge variant="outline">{employees.length}</Badge>
+            <Button className="ml-auto" size="sm" variant="outline" onClick={() => { setEmpName(''); setEmpCode(''); setEmpBasic(''); setEmpOpen(true); }}>
+              <UserPlus className="h-4 w-4 mr-1" /> {hi ? 'कर्मचारी जोड़ें' : 'Add employee'}
+            </Button>
+          </div>
+          {employees.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{hi ? 'अभी कोई कर्मचारी नहीं। "कर्मचारी जोड़ें" से शुरू करें, फिर पेरोल चलाएँ।' : 'No employees yet — add one, then run payroll.'}</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {employees.map((e) => (
+                <div key={e.id} className="text-sm border rounded-md px-2 py-1">
+                  <span className="font-medium">{nameOf(e.full_name)}</span> <span className="text-xs text-muted-foreground">{e.employee_code}</span>
+                  {e.basic_minor != null && <span className="ml-1 text-xs text-muted-foreground">· {hi ? 'मूल' : 'Basic'} {rupees(e.basic_minor)}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={empOpen} onOpenChange={(o) => !empSaving && setEmpOpen(o)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>{hi ? 'कर्मचारी जोड़ें' : 'Add employee'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1"><Label>{hi ? 'नाम' : 'Name'}</Label><Input value={empName} onChange={(e) => setEmpName(e.target.value)} placeholder={hi ? 'जैसे रमेश कुमार' : 'e.g. Ramesh Kumar'} /></div>
+            <div className="space-y-1"><Label>{hi ? 'कर्मचारी कोड' : 'Employee code'}</Label><Input value={empCode} onChange={(e) => setEmpCode(e.target.value)} placeholder="E001" /></div>
+            <div className="space-y-1"><Label>{hi ? 'मूल वेतन (₹/माह)' : 'Basic salary (₹/month)'}</Label><Input type="number" value={empBasic} onChange={(e) => setEmpBasic(e.target.value)} placeholder="25000" /></div>
+            <p className="text-xs text-muted-foreground">{hi ? 'DA (मूल का 20%), HRA (40%), PF (12%) अपने-आप जुड़ेंगे।' : 'DA (20% of basic), HRA (40%), PF (12%) are added automatically.'}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmpOpen(false)} disabled={empSaving}>{hi ? 'रद्द' : 'Cancel'}</Button>
+            <Button onClick={addEmployee} disabled={empSaving}>{empSaving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {hi ? 'जोड़ रहा है…' : 'Adding…'}</> : (hi ? 'जोड़ें' : 'Add')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardContent className="p-0">
@@ -217,7 +289,7 @@ const Payroll: React.FC = () => {
                       <TableRow className="cursor-pointer" onClick={() => toggleLines(s.payslip_id)}>
                         <TableCell>
                           <span className="text-xs text-primary mr-1">{expanded === s.payslip_id ? '▾' : '▸'}</span>
-                          <span className="font-medium">{empName(s.employee_name)}</span> <span className="text-xs text-muted-foreground">{s.employee_code}</span>
+                          <span className="font-medium">{nameOf(s.employee_name)}</span> <span className="text-xs text-muted-foreground">{s.employee_code}</span>
                         </TableCell>
                         <TableCell className="text-right">{rupees(s.gross_minor)}</TableCell>
                         <TableCell className="text-right">{rupees(s.deductions_minor)}</TableCell>
@@ -233,7 +305,7 @@ const Payroll: React.FC = () => {
                               <div className="space-y-1">
                                 {lines.map((ln) => (
                                   <div key={ln.code} className="flex justify-between text-sm px-2">
-                                    <span>{empName(ln.name)} <span className="text-xs text-muted-foreground">{ln.code}</span></span>
+                                    <span>{nameOf(ln.name)} <span className="text-xs text-muted-foreground">{ln.code}</span></span>
                                     <span className={isDeduction(ln.kind) ? 'text-destructive' : ''}>{isDeduction(ln.kind) ? '− ' : ''}{rupees(ln.computed_minor)}</span>
                                   </div>
                                 ))}
