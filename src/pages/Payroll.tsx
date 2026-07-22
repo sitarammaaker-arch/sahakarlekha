@@ -6,7 +6,7 @@
  *
  * This is the read-only first slice; running/approving/posting a run is a later slice.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useToast } from '@/hooks/use-toast';
@@ -14,8 +14,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Wallet, Users, IndianRupee, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Wallet, Users, IndianRupee, Loader2, Play } from 'lucide-react';
 
 interface PayRun {
   run_id: string; run_no: string; period: string; period_month: string;
@@ -51,18 +53,40 @@ const Payroll: React.FC = () => {
   const [lines, setLines] = useState<Payline[]>([]);
   const [linesLoading, setLinesLoading] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const { data, error } = await supabase.rpc('pay_list_runs');
-      if (error) {
-        toast({ title: hi ? 'पेरोल लोड नहीं हुआ' : 'Could not load payroll', description: error.message, variant: 'destructive' });
-      } else {
-        setRuns((data as PayRun[]) || []);
-      }
-      setLoading(false);
-    })();
+  const [runOpen, setRunOpen] = useState(false);
+  const [period, setPeriod] = useState('');
+  const [running, setRunning] = useState(false);
+
+  const loadRuns = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase.rpc('pay_list_runs');
+    if (error) {
+      toast({ title: hi ? 'पेरोल लोड नहीं हुआ' : 'Could not load payroll', description: error.message, variant: 'destructive' });
+    } else {
+      setRuns((data as PayRun[]) || []);
+    }
+    setLoading(false);
   }, [hi, toast]);
+
+  useEffect(() => { loadRuns(); }, [loadRuns]);
+
+  const runPayroll = async () => {
+    if (!/^\d{4}-\d{2}$/.test(period)) {
+      toast({ title: hi ? 'अवधि चुनें' : 'Pick a period', description: hi ? 'YYYY-MM (जैसे 2026-05)' : 'YYYY-MM (e.g. 2026-05)', variant: 'destructive' });
+      return;
+    }
+    setRunning(true);
+    const { data, error } = await supabase.functions.invoke('pay-run', { body: { period } });
+    setRunning(false);
+    if (error || (data && (data as { error?: string }).error)) {
+      toast({ title: hi ? 'पेरोल नहीं चला' : 'Payroll run failed', description: error?.message || (data as { error?: string })?.error || '', variant: 'destructive' });
+      return;
+    }
+    const d = data as { runNo?: string; employeeCount?: number };
+    toast({ title: hi ? 'पेरोल चल गया ✓' : 'Payroll run complete ✓', description: `${d.runNo} — ${d.employeeCount} ${hi ? 'पेस्लिप' : 'payslip(s)'}` });
+    setRunOpen(false);
+    loadRuns();
+  };
 
   const openRun = async (run: PayRun) => {
     setSelected(run);
@@ -99,7 +123,27 @@ const Payroll: React.FC = () => {
         <Wallet className="h-6 w-6 text-primary" />
         <h1 className="text-xl md:text-2xl font-semibold">{hi ? 'पेरोल' : 'Payroll'}</h1>
         <Badge variant="secondary" className="ml-1">{hi ? 'नया इंजन' : 'new engine'}</Badge>
+        <Button className="ml-auto" size="sm" onClick={() => { setPeriod(''); setRunOpen(true); }}>
+          <Play className="h-4 w-4 mr-1" /> {hi ? 'नया पेरोल चलाएँ' : 'Run payroll'}
+        </Button>
       </div>
+
+      <Dialog open={runOpen} onOpenChange={(o) => !running && setRunOpen(o)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>{hi ? 'नया पेरोल चलाएँ' : 'Run payroll'}</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="pay-period">{hi ? 'अवधि (माह)' : 'Period (month)'}</Label>
+            <Input id="pay-period" type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
+            <p className="text-xs text-muted-foreground">{hi ? 'सर्वर इस माह के लिए सभी नियुक्त कर्मचारियों की गणना करके पेस्लिप बनाएगा।' : 'The server computes payslips for all assigned employees for this month.'}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRunOpen(false)} disabled={running}>{hi ? 'रद्द' : 'Cancel'}</Button>
+            <Button onClick={runPayroll} disabled={running}>
+              {running ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {hi ? 'चल रहा है…' : 'Running…'}</> : <>{hi ? 'चलाएँ' : 'Run'}</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <p className="text-sm text-muted-foreground">
         {hi ? 'पेरोल इंजन द्वारा गणना किए गए वेतन-रन और उनकी पेस्लिप।' : 'Salary runs computed by the payroll engine and their payslips.'}
       </p>
