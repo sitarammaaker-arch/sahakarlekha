@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,7 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { BadgeDollarSign, UserPlus, Pencil, Trash2, Search, CheckCircle, Users, AlertTriangle, Download, FileSpreadsheet } from 'lucide-react';
+import { BadgeDollarSign, UserPlus, Pencil, Trash2, Search, CheckCircle, Users, AlertTriangle, Download, FileSpreadsheet, SlidersHorizontal, RotateCcw } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { useToast } from '@/hooks/use-toast';
@@ -80,6 +81,12 @@ interface ProcessRow {
   paidDays: number;  // ECR-14: attendance (paid days this month)
   paymentMode: PaymentMode;
   processed: boolean;
+  // Manual overrides for the auto PF/ESI figures (₹). null ⇒ use the computed rate. The society can
+  // fine-tune any statutory amount; clearing the box reverts to auto.
+  pfEmployeeOverride: number | null;
+  pfEmployerOverride: number | null;
+  esiEmployeeOverride: number | null;
+  esiEmployerOverride: number | null;
 }
 
 // ── EmployeeForm component (outside SalaryManagement to prevent remount) ─────
@@ -448,6 +455,8 @@ const SalaryManagement: React.FC = () => {
         paidDays: daysInMonth(processingMonth),   // ECR-14: full month by default
         paymentMode: 'bank' as PaymentMode,
         processed: salaryRecords.some(r => r.employeeId === emp.id && r.month === processingMonth),
+        pfEmployeeOverride: null, pfEmployerOverride: null,
+        esiEmployeeOverride: null, esiEmployerOverride: null,   // all auto until the user changes them
       }))
     );
     setRowsLoaded(true);
@@ -463,7 +472,7 @@ const SalaryManagement: React.FC = () => {
     }));
   };
 
-  const updateRow = (empId: string, field: keyof Pick<ProcessRow, 'allowances' | 'deductions' | 'pt' | 'tds' | 'paidDays' | 'paymentMode'>, value: number | PaymentMode) => {
+  const updateRow = (empId: string, field: keyof Pick<ProcessRow, 'allowances' | 'deductions' | 'pt' | 'tds' | 'paidDays' | 'paymentMode' | 'pfEmployeeOverride' | 'pfEmployerOverride' | 'esiEmployeeOverride' | 'esiEmployerOverride'>, value: number | PaymentMode | null) => {
     setProcessRows(rows =>
       rows.map(r => (r.employee.id === empId ? { ...r, [field]: value } : r))
     );
@@ -471,7 +480,10 @@ const SalaryManagement: React.FC = () => {
 
   // ECR-14: statutory computation for a process row. Earnings are pro-rated by attendance
   // (paid days / days-in-month) first, so PF/ESI compute on the actually-earned wage.
-  const rowStatutory = (row: ProcessRow) => {
+  // withOverrides=false ⇒ the AUTO baseline (what the rate computes), used to pre-fill the override
+  // boxes and show the "auto" value; the default (true) ⇒ the EFFECTIVE figures that drive the
+  // Deduction total, Net Salary and the saved record.
+  const rowStatutory = (row: ProcessRow, withOverrides = true) => {
     const monthDays = daysInMonth(processingMonth);
     return computeStatutory({
       basic: prorate(row.employee.basicSalary, row.paidDays, monthDays),
@@ -480,6 +492,12 @@ const SalaryManagement: React.FC = () => {
       esiApplicable: row.employee.esiApplicable ?? true,
       pt: row.pt,
       tds: row.tds,
+      ...(withOverrides ? {
+        pfEmployeeOverride: row.pfEmployeeOverride,
+        pfEmployerOverride: row.pfEmployerOverride,
+        esiEmployeeOverride: row.esiEmployeeOverride,
+        esiEmployerOverride: row.esiEmployerOverride,
+      } : {}),
     });
   };
 
@@ -849,8 +867,11 @@ const SalaryManagement: React.FC = () => {
                       </TableHeader>
                       <TableBody>
                         {processRows.map(row => {
-                          const s = rowStatutory(row);
+                          const s = rowStatutory(row);              // effective (overrides applied)
+                          const autoS = rowStatutory(row, false);   // auto baseline (for the override boxes)
                           const net = s.netSalary;
+                          const pfEsiOverridden = row.pfEmployeeOverride !== null || row.pfEmployerOverride !== null
+                            || row.esiEmployeeOverride !== null || row.esiEmployerOverride !== null;
                           return (
                             <TableRow
                               key={row.employee.id}
@@ -904,9 +925,58 @@ const SalaryManagement: React.FC = () => {
                                 />
                               </TableCell>
                               <TableCell className="text-right">
-                                <div className="font-medium text-sm">{fmt(s.totalEmployeeDeductions)}</div>
-                                <div className="text-[10px] text-muted-foreground">
-                                  PF {fmt(s.pfEmployee)}{s.esiEligible ? ` · ESI ${fmt(s.esiEmployee)}` : ''}
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <div>
+                                    <div className="font-medium text-sm">{fmt(s.totalEmployeeDeductions)}</div>
+                                    <div className="text-[10px] text-muted-foreground">
+                                      PF {fmt(s.pfEmployee)}{(s.esiEligible || s.esiEmployee > 0) ? ` · ESI ${fmt(s.esiEmployee)}` : ''}
+                                      {pfEsiOverridden && <span className="ml-1 text-amber-600 dark:text-amber-500">• बदला गया</span>}
+                                    </div>
+                                  </div>
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <Button
+                                        type="button" variant="ghost" size="icon"
+                                        className={`h-7 w-7 shrink-0 ${pfEsiOverridden ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground'}`}
+                                        disabled={row.processed}
+                                        title={hi ? 'PF/ESI समायोजित करें' : 'Adjust PF/ESI'}
+                                      >
+                                        <SlidersHorizontal className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-72" align="end">
+                                      <p className="text-sm font-semibold mb-1">{hi ? 'PF / ESI समायोजित करें' : 'Adjust PF / ESI'}</p>
+                                      <p className="text-[11px] text-muted-foreground mb-3">
+                                        {hi ? 'खाली छोड़ने पर अपने-आप गणना (auto) लागू रहेगी।' : 'Leave blank to keep the auto-computed amount.'}
+                                      </p>
+                                      {([
+                                        { key: 'pfEmployeeOverride' as const, label: hi ? 'PF — कर्मचारी' : 'PF — Employee', auto: autoS.pfEmployee, ov: row.pfEmployeeOverride },
+                                        { key: 'pfEmployerOverride' as const, label: hi ? 'PF — नियोक्ता' : 'PF — Employer', auto: autoS.pfEmployer, ov: row.pfEmployerOverride },
+                                        { key: 'esiEmployeeOverride' as const, label: hi ? 'ESI — कर्मचारी' : 'ESI — Employee', auto: autoS.esiEmployee, ov: row.esiEmployeeOverride },
+                                        { key: 'esiEmployerOverride' as const, label: hi ? 'ESI — नियोक्ता' : 'ESI — Employer', auto: autoS.esiEmployer, ov: row.esiEmployerOverride },
+                                      ]).map(f => (
+                                        <div key={f.key} className="flex items-center justify-between gap-2 mb-2">
+                                          <span className="text-xs w-28">{f.label}</span>
+                                          <Input
+                                            type="number" min="0"
+                                            value={f.ov ?? ''}
+                                            placeholder={fmt(f.auto).replace('₹', '')}
+                                            onChange={e => updateRow(row.employee.id, f.key, e.target.value === '' ? null : (Number(e.target.value) || 0))}
+                                            className="w-24 text-right h-8"
+                                          />
+                                          <Button
+                                            type="button" variant="ghost" size="icon"
+                                            className="h-7 w-7 shrink-0"
+                                            disabled={f.ov === null}
+                                            title={hi ? 'auto पर लौटाएँ' : 'Reset to auto'}
+                                            onClick={() => updateRow(row.employee.id, f.key, null)}
+                                          >
+                                            <RotateCcw className="h-3.5 w-3.5" />
+                                          </Button>
+                                        </div>
+                                      ))}
+                                    </PopoverContent>
+                                  </Popover>
                                 </div>
                               </TableCell>
                               <TableCell className="text-right font-bold text-primary">

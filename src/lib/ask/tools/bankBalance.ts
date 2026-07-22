@@ -26,15 +26,26 @@ export interface BankBalanceInput {
   asOf?: string;
 }
 
+/** One bank's row in the breakdown — the table shape the channel renders (क्रमांक is the index). */
+export interface BankBalanceRow {
+  name: string;
+  /** Signed, Dr-positive, in paise — for sorting / totals, never shown raw. */
+  balanceMinor: number;
+  /** The balance MAGNITUDE (absolute), e.g. "₹70,035.60" — the side lives in drCr. */
+  magnitude: string;
+  /** Dr (net debit), Cr (net credit), or — for exactly zero. */
+  drCr: 'Dr' | 'Cr' | '—';
+}
+
 export interface BankBalanceResult {
   /** Total across all bank accounts, Dr-positive, in paise. A Cr total (net overdraft) is negative. */
   balanceMinor: number;
-  /** The ONLY total string a model may quote (§3.7 number check). */
+  /** The ONLY total string a model may quote (§3.7 number check) — signed. */
   formatted: string;
   /** How many bank accounts were summed. */
   bankCount: number;
-  /** Per-bank breakdown — name + its own formatted balance, for an answer that can show the split. */
-  perBank: { name: string; formatted: string }[];
+  /** Per-bank breakdown in chart serial order — name + magnitude + side, for a table answer. */
+  perBank: BankBalanceRow[];
 }
 
 /**
@@ -53,14 +64,23 @@ export function bankBalance(input: BankBalanceInput): BankBalanceResult | null {
 
   // The SAME rows the Trial Balance page shows (cancelled-clean). netBalance is Dr-positive rupees;
   // toMinor recovers exact paise so summing several banks cannot drift in the last paisa.
-  const rows = ledgerTrialBalance(input.events, input.accounts, input.asOf);
+  const rowById = new Map(ledgerTrialBalance(input.events, input.accounts, input.asOf).map((r) => [r.account.id, r]));
+
+  // Walk the accounts in their OWN order — the serial order of the chart of accounts, i.e. exactly the
+  // order the Bank Book / खाता सूची lists them, NOT the trial balance's accountId sort. A bank with no
+  // activity has no TB row; show it as ₹0.00 / — so the serial list stays complete.
   let balanceMinor = 0;
-  const perBank: { name: string; formatted: string }[] = [];
-  for (const r of rows) {
-    if (!bankIds.has(r.account.id)) continue;
-    const netMinor = toMinor(r.netBalance);
+  const perBank: BankBalanceRow[] = [];
+  for (const a of input.accounts) {
+    if (!bankIds.has(a.id)) continue;
+    const netMinor = rowById.has(a.id) ? toMinor(rowById.get(a.id)!.netBalance) : 0;
     balanceMinor += netMinor;
-    perBank.push({ name: r.account.name, formatted: formatMinorInr(netMinor) });
+    perBank.push({
+      name: a.name,
+      balanceMinor: netMinor,
+      magnitude: formatMinorInr(Math.abs(netMinor)),
+      drCr: netMinor > 0 ? 'Dr' : netMinor < 0 ? 'Cr' : '—',
+    });
   }
   return { balanceMinor, formatted: formatMinorInr(balanceMinor), bankCount: perBank.length, perBank };
 }

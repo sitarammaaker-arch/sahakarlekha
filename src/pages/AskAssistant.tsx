@@ -85,7 +85,7 @@ const AskAssistant: React.FC = () => {
   const seam = outcome?.source === 'seam' ? outcome.answer : null;
   const refusal = seam?.unanswered ?? null;
   const computed = seam && !refusal && seam.answer && (seam.lane === 'D' || seam.lane === 'F')
-    ? { text: seam.answer, cite: seam.cites?.[0] ?? null, lane: seam.lane }
+    ? { text: seam.answer, cite: seam.cites?.[0] ?? null, lane: seam.lane, table: seam.table ?? null }
     : null;
   const suppressTop = !!(refusal || computed);
   const top = suppressTop ? null : results[0];
@@ -152,6 +152,26 @@ const AskAssistant: React.FC = () => {
             <Card className="border-primary/30">
               <CardContent className="p-5">
                 <p className="text-lg font-medium text-foreground leading-relaxed">{computed.text}</p>
+                {computed.table && (
+                  <table className="w-full text-sm mt-4 border rounded-lg overflow-hidden">
+                    <thead>
+                      <tr className="bg-muted/50 border-b">
+                        {computed.table.columns.map((c, i) => (
+                          <th key={i} className={`py-2 px-3 font-semibold text-foreground ${computed.table.align?.[i] === 'right' ? 'text-right' : 'text-left'}`}>{c}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {computed.table.rows.map((row, ri) => (
+                        <tr key={ri} className="border-b last:border-0">
+                          {row.map((cell, ci) => (
+                            <td key={ci} className={`py-1.5 px-3 ${computed.table!.align?.[ci] === 'right' ? 'text-right tabular-nums' : ''} ${cell === 'Dr' ? 'text-blue-600 dark:text-blue-400 font-semibold' : cell === 'Cr' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-foreground'}`}>{cell}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
                 {computed.cite?.url && (
                   <Link to={computed.cite.url} className="inline-flex items-center gap-1 text-primary font-semibold mt-3 hover:underline">
                     {computed.cite.title || 'पूरा देखें'} <ArrowRight className="h-4 w-4" />
