@@ -35,10 +35,24 @@ interface Payline {
 }
 interface Employee {
   id: string; employee_code: string; full_name: { hi?: string; en?: string } | null; date_of_join: string; basic_minor: number | null;
-  uan?: string | null; pan?: string | null; esic_ip?: string | null;
+  employment_type?: string | null; uan?: string | null; pan?: string | null; esic_ip?: string | null;
 }
 interface StatSetting { key: string; value_num: number; label: string | null; source: string | null; }
 const isDeduction = (kind: string) => kind === 'deduction' || kind === 'loan_recovery';
+
+// Slice-1 employee types (map to seeded pay_core.employment_type codes). 'muster' (daily wages) is next.
+const EMP_TYPES = [
+  { code: 'permanent',  hi: 'स्थायी',         en: 'Permanent' },
+  { code: 'deputation', hi: 'प्रतिनियुक्ति',  en: 'Deputation' },
+  { code: 'contract',   hi: 'संविदा',         en: 'Contractual' },
+  { code: 'honorary',   hi: 'मानद',           en: 'Honorary' },
+];
+const empTypeLabel = (code: string | null | undefined, hi: boolean) => {
+  const t = EMP_TYPES.find((x) => x.code === code);
+  return t ? (hi ? t.hi : t.en) : (code || '');
+};
+// contract / honorary take a single consolidated amount; the rest take a monthly Basic.
+const isConsolidatedType = (code: string) => code === 'contract' || code === 'honorary';
 
 // supabase-js resolves an Edge Function's non-2xx as { data: null, error: FunctionsHttpError }, and the
 // JSON body — our friendly { error: "…" } message — lives on error.context, NOT error.message (which is
@@ -109,6 +123,7 @@ const Payroll: React.FC = () => {
   const [empName, setEmpName] = useState('');
   const [empCode, setEmpCode] = useState('');
   const [empBasic, setEmpBasic] = useState('');
+  const [empType, setEmpType] = useState('permanent');
   const [empSaving, setEmpSaving] = useState(false);
 
   const [attEmp, setAttEmp] = useState<Employee | null>(null);
@@ -174,16 +189,16 @@ const Payroll: React.FC = () => {
   const addEmployee = async () => {
     const basicMinor = Math.round(Number(empBasic) * 100);
     if (!empName.trim() || !empCode.trim()) { toast({ title: hi ? 'नाम और कोड ज़रूरी' : 'Name and code required', variant: 'destructive' }); return; }
-    if (!Number.isFinite(basicMinor) || basicMinor <= 0) { toast({ title: hi ? 'मूल वेतन डालें' : 'Enter basic salary', variant: 'destructive' }); return; }
+    if (!Number.isFinite(basicMinor) || basicMinor <= 0) { toast({ title: hi ? 'राशि डालें' : 'Enter an amount', variant: 'destructive' }); return; }
     setEmpSaving(true);
-    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'add', name: empName.trim(), code: empCode.trim(), basicMinor } });
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'add', name: empName.trim(), code: empCode.trim(), type: empType, basicMinor } });
     setEmpSaving(false);
     if (error || (data as { error?: string })?.error) {
       toast({ title: hi ? 'कर्मचारी नहीं जुड़ा' : 'Could not add employee', description: await invokeError(error, data), variant: 'destructive' });
       return;
     }
-    toast({ title: hi ? 'कर्मचारी जुड़ गया ✓' : 'Employee added ✓', description: `${empName} (${empCode})` });
-    setEmpOpen(false); setEmpName(''); setEmpCode(''); setEmpBasic('');
+    toast({ title: hi ? 'कर्मचारी जुड़ गया ✓' : 'Employee added ✓', description: `${empName} (${empCode}) · ${empTypeLabel(empType, hi)}` });
+    setEmpOpen(false); setEmpName(''); setEmpCode(''); setEmpBasic(''); setEmpType('permanent');
     loadEmployees();
   };
 
@@ -435,7 +450,7 @@ const Payroll: React.FC = () => {
             <Users className="h-4 w-4 text-primary" />
             <span className="font-medium">{hi ? 'कर्मचारी' : 'Employees'}</span>
             <Badge variant="outline">{activeEmployees.length}</Badge>
-            <Button className="ml-auto" size="sm" variant="outline" onClick={() => { setEmpName(''); setEmpCode(''); setEmpBasic(''); setEmpOpen(true); }}>
+            <Button className="ml-auto" size="sm" variant="outline" onClick={() => { setEmpName(''); setEmpCode(''); setEmpBasic(''); setEmpType('permanent'); setEmpOpen(true); }}>
               <UserPlus className="h-4 w-4 mr-1" /> {hi ? 'कर्मचारी जोड़ें' : 'Add employee'}
             </Button>
           </div>
@@ -447,7 +462,8 @@ const Payroll: React.FC = () => {
                 <button key={e.id} type="button" className="text-sm border rounded-md px-2 py-1 hover:bg-muted text-left" title={hi ? 'उपस्थिति सेट करें' : 'Set attendance'}
                   onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); }}>
                   <span className="font-medium">{nameOf(e.full_name)}</span> <span className="text-xs text-muted-foreground">{e.employee_code}</span>
-                  {e.basic_minor != null && <span className="ml-1 text-xs text-muted-foreground">· {hi ? 'मूल' : 'Basic'} {rupees(e.basic_minor)}</span>}
+                  {e.employment_type && <span className="ml-1 text-[10px] px-1 rounded bg-muted text-muted-foreground">{empTypeLabel(e.employment_type, hi)}</span>}
+                  {e.basic_minor != null && <span className="ml-1 text-xs text-muted-foreground">· {rupees(e.basic_minor)}</span>}
                 </button>
               ))}
             </div>
@@ -461,8 +477,21 @@ const Payroll: React.FC = () => {
           <div className="space-y-3">
             <div className="space-y-1"><Label>{hi ? 'नाम' : 'Name'}</Label><Input value={empName} onChange={(e) => setEmpName(e.target.value)} placeholder={hi ? 'जैसे रमेश कुमार' : 'e.g. Ramesh Kumar'} /></div>
             <div className="space-y-1"><Label>{hi ? 'कर्मचारी कोड' : 'Employee code'}</Label><Input value={empCode} onChange={(e) => setEmpCode(e.target.value)} placeholder="E001" /></div>
-            <div className="space-y-1"><Label>{hi ? 'मूल वेतन (₹/माह)' : 'Basic salary (₹/month)'}</Label><Input type="number" value={empBasic} onChange={(e) => setEmpBasic(e.target.value)} placeholder="25000" /></div>
-            <p className="text-xs text-muted-foreground">{hi ? 'DA (मूल का 20%), HRA (40%), PF (12%) अपने-आप जुड़ेंगे।' : 'DA (20% of basic), HRA (40%), PF (12%) are added automatically.'}</p>
+            <div className="space-y-1">
+              <Label>{hi ? 'प्रकार' : 'Type'}</Label>
+              <select className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm" value={empType} onChange={(e) => setEmpType(e.target.value)}>
+                {EMP_TYPES.map((t) => <option key={t.code} value={t.code}>{hi ? t.hi : t.en}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>{isConsolidatedType(empType) ? (hi ? 'एकमुश्त राशि (₹/माह)' : 'Consolidated amount (₹/month)') : (hi ? 'मूल वेतन (₹/माह)' : 'Basic salary (₹/month)')}</Label>
+              <Input type="number" value={empBasic} onChange={(e) => setEmpBasic(e.target.value)} placeholder="25000" />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {empType === 'permanent' ? (hi ? 'DA (मूल का 20%), HRA (40%), PF (12%) अपने-आप जुड़ेंगे।' : 'DA (20% of basic), HRA (40%), PF (12%) are added automatically.')
+                : empType === 'deputation' ? (hi ? 'मूल + DA + प्रतिनियुक्ति भत्ता (बाद में सेट करें)। PF नहीं।' : 'Basic + DA + Deputation allowance (set later). No PF.')
+                : (hi ? 'केवल एकमुश्त राशि, कोई सांविधिक कटौती नहीं।' : 'Consolidated amount only, no statutory deductions.')}
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEmpOpen(false)} disabled={empSaving}>{hi ? 'रद्द' : 'Cancel'}</Button>

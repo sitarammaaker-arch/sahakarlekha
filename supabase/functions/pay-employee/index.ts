@@ -31,38 +31,45 @@ const SFL: Record<string, string> = {
   LOP: 'formula "LOP" :: Money let b = BASIC in b * 160% * (attendance.lopDays / 30)',
 };
 
-// Ensure the society has the STANDARD structure; returns { versionId, basicComponentId }.
-async function ensureStandardConfig(tx: postgres.TransactionSql, societyId: string, creator: string) {
-  const [existing] = await tx`
-    select sv.id as version_id, cc.id as basic_id
-    from pay_config.structure_template st
-    join pay_config.structure_version sv on sv.structure_id = st.id and sv.status = 'active'
-    join pay_config.component_catalog cc on cc.society_id = st.society_id and cc.code = 'BASIC'
-    where st.society_id = ${societyId} and st.code = 'STANDARD' limit 1`;
-  if (existing) return { versionId: existing.version_id as string, basicComponentId: existing.basic_id as string };
+// Society-wide component catalog (shared DEFINITIONS; per-employee independence comes from each
+// employee having their OWN structure + overrides — Phase 2 will let those overrides diverge freely).
+const COMPONENTS: Record<string, { kind: string; method: string; formula: string | null; label: string }> = {
+  BASIC:        { kind: 'earning',   method: 'fixed',   formula: null,    label: 'Basic' },
+  DA:           { kind: 'earning',   method: 'formula', formula: SFL.DA,  label: 'DA' },
+  HRA:          { kind: 'earning',   method: 'formula', formula: SFL.HRA, label: 'HRA' },
+  PF:           { kind: 'deduction', method: 'formula', formula: SFL.PF,  label: 'PF' },
+  LOP:          { kind: 'deduction', method: 'formula', formula: SFL.LOP, label: 'Loss of Pay' },
+  DEP_ALLOW:    { kind: 'earning',   method: 'fixed',   formula: null,    label: 'Deputation Allowance' },
+  CONSOLIDATED: { kind: 'earning',   method: 'fixed',   formula: null,    label: 'Consolidated Pay' },
+};
 
-  const CODES = ['BASIC', 'DA', 'HRA', 'PF', 'LOP'];
-  const comp: Record<string, string> = {};
-  for (const code of CODES) {
-    const [r] = await tx`insert into pay_config.component_catalog(society_id,code,display_name,created_by) values(${societyId},${code},${L(code)},${creator}) returning id`;
-    comp[code] = r.id;
+// Each employment TYPE → the components its structure binds + which one the entered amount fills +
+// which extra components default to 0 (editable later). Keys are the seeded pay_core.employment_type
+// codes. 'muster' (daily wages) is the next slice — it needs the rate×days calc.
+const TYPE_STRUCTURE: Record<string, { components: string[]; primary: string; zero: string[] }> = {
+  permanent:  { components: ['BASIC', 'DA', 'HRA', 'PF', 'LOP'], primary: 'BASIC', zero: [] },
+  deputation: { components: ['BASIC', 'DA', 'DEP_ALLOW', 'LOP'], primary: 'BASIC', zero: ['DEP_ALLOW'] },
+  contract:   { components: ['CONSOLIDATED'], primary: 'CONSOLIDATED', zero: [] },
+  honorary:   { components: ['CONSOLIDATED'], primary: 'CONSOLIDATED', zero: [] },
+};
+
+// Idempotent: ensure every society component + the default statutory rates exist. Returns { code: id }.
+async function ensureSocietyComponents(tx: postgres.TransactionSql, societyId: string, creator: string) {
+  const ids: Record<string, string> = {};
+  for (const [code, def] of Object.entries(COMPONENTS)) {
+    const [existing] = await tx`select id from pay_config.component_catalog where society_id = ${societyId} and code = ${code} limit 1`;
+    if (existing) { ids[code] = existing.id as string; continue; }
+    const [c] = await tx`insert into pay_config.component_catalog(society_id,code,display_name,created_by) values(${societyId},${code},${L(def.label)},${creator}) returning id`;
+    ids[code] = c.id;
+    let formulaRef: string | null = null;
+    if (def.method === 'formula' && def.formula) {
+      const [fc] = await tx`insert into pay_formula.formula_catalog(name,created_by) values(${`${code} formula [${societyId}]`},${creator}) returning id`;
+      const [fv] = await tx`insert into pay_formula.formula_version(formula_id,expression_text,effective_from,created_by,status) values(${fc.id},${def.formula},${EFF},${creator},'active') returning id`;
+      formulaRef = fv.id;
+    }
+    await tx`insert into pay_config.component_version(component_id,kind,calc_method,gl_symbolic_role,formula_ref,effective_from,created_by,status)
+      values(${ids[code]},${def.kind},${def.method}::pay_core.calc_method,${code.toLowerCase()},${formulaRef},${EFF},${creator},'active')`;
   }
-  const cv = async (code: string, kind: string, method: string, formulaRef: string | null) =>
-    tx`insert into pay_config.component_version(component_id,kind,calc_method,gl_symbolic_role,formula_ref,effective_from,created_by,status)
-       values(${comp[code]},${kind},${method}::pay_core.calc_method,${code.toLowerCase()},${formulaRef},${EFF},${creator},'active')`;
-  await cv('BASIC', 'earning', 'fixed', null);
-  for (const code of ['DA', 'HRA', 'PF', 'LOP']) {
-    const [fc] = await tx`insert into pay_formula.formula_catalog(name,created_by) values(${`${code} formula [${societyId}]`},${creator}) returning id`;
-    const [fv] = await tx`insert into pay_formula.formula_version(formula_id,expression_text,effective_from,created_by,status) values(${fc.id},${SFL[code]},${EFF},${creator},'active') returning id`;
-    await cv(code, (code === 'PF' || code === 'LOP') ? 'deduction' : 'earning', 'formula', fv.id);
-  }
-  const [st] = await tx`insert into pay_config.structure_template(society_id,code,display_name,created_by) values(${societyId},'STANDARD',${L('Standard salary')},${creator}) returning id`;
-  const [sv] = await tx`insert into pay_config.structure_version(structure_id,effective_from,created_by,status) values(${st.id},${EFF},${creator},'active') returning id`;
-  for (const code of CODES) {
-    await tx`insert into pay_config.component_binding(structure_version_id,component_id,created_by) values(${sv.id},${comp[code]},${creator})`;
-  }
-  // seed the default statutory rates — the admin edits each with an authoritative source.
-  // pf_rate feeds the run; the rest are used only when generating the PF ECR file (employer split).
   const seedRates: [string, number, string][] = [
     ['pf_rate', 12, 'PF employee contribution %'],
     ['employer_pf_rate', 12, 'PF employer contribution % (EPS + EPF split)'],
@@ -75,7 +82,19 @@ async function ensureStandardConfig(tx: postgres.TransactionSql, societyId: stri
       values(${societyId},${k},${v},${lbl},'Statutory default — confirm for your establishment',${creator})
       on conflict (society_id,key) do nothing`;
   }
-  return { versionId: sv.id as string, basicComponentId: comp.BASIC };
+  return ids;
+}
+
+// Create a per-employee salary structure for the type. Each employee gets their OWN template
+// (EMP-<code>) so it can be edited independently later. Returns the version + which override to fill.
+async function createEmployeeStructure(tx: postgres.TransactionSql, societyId: string, empCode: string, type: string, creator: string, compIds: Record<string, string>) {
+  const spec = TYPE_STRUCTURE[type];
+  const [st] = await tx`insert into pay_config.structure_template(society_id,code,display_name,created_by) values(${societyId},${`EMP-${empCode}`},${L(`Salary — ${empCode}`)},${creator}) returning id`;
+  const [sv] = await tx`insert into pay_config.structure_version(structure_id,effective_from,created_by,status) values(${st.id},${EFF},${creator},'active') returning id`;
+  for (const code of spec.components) {
+    await tx`insert into pay_config.component_binding(structure_version_id,component_id,created_by) values(${sv.id},${compIds[code]},${creator})`;
+  }
+  return { versionId: sv.id as string, primaryComponentId: compIds[spec.primary], zeroComponentIds: spec.zero.map((c) => compIds[c]) };
 }
 
 Deno.serve(async (req: Request) => {
@@ -90,7 +109,7 @@ Deno.serve(async (req: Request) => {
   const { data: { user } } = await createClient(supaUrl, anonKey, { global: { headers: { Authorization: `Bearer ${jwt}` } } }).auth.getUser();
   if (!user?.email) return json(401, { error: 'invalid session' }, CORS);
 
-  let body: { action?: string; name?: string; code?: string; basicMinor?: number; employeeId?: string; period?: string; lopDays?: number; key?: string; value?: number; label?: string; source?: string; uan?: string; pan?: string; esicIp?: string };
+  let body: { action?: string; name?: string; code?: string; basicMinor?: number; type?: string; employeeId?: string; period?: string; lopDays?: number; key?: string; value?: number; label?: string; source?: string; uan?: string; pan?: string; esicIp?: string };
   try { body = await req.json(); } catch { return json(400, { error: 'bad JSON' }, CORS); }
 
   const sql = postgres(dbUrl, { prepare: false, max: 3 });
@@ -104,10 +123,11 @@ Deno.serve(async (req: Request) => {
       const rows = await sql`
         select e.id, e.employee_code, e.full_name, e.date_of_join,
                si.uan, si.pan, si.esic_ip,
+               e.employment_type,
                (select ao.fixed_minor from pay_config.structure_assignment sa
                   join pay_config.assignment_override ao on ao.assignment_id = sa.id
-                  join pay_config.component_catalog cc on cc.id = ao.component_id and cc.code = 'BASIC'
-                where sa.employee_id = e.id and sa.effective_to is null limit 1) as basic_minor
+                  join pay_config.component_catalog cc on cc.id = ao.component_id and cc.code in ('BASIC','CONSOLIDATED')
+                where sa.employee_id = e.id and sa.effective_to is null order by cc.code limit 1) as basic_minor
         from pay_core.employee e
         left join pay_core.statutory_identity si on si.employee_id = e.id
         where e.society_id = ${societyId} order by e.employee_code`;
@@ -116,23 +136,30 @@ Deno.serve(async (req: Request) => {
 
     if (body.action === 'add') {
       const name = (body.name ?? '').trim(), code = (body.code ?? '').trim();
+      const type = (body.type ?? 'permanent').trim();
       const basicMinor = Number(body.basicMinor);
       if (!name || !code) return json(400, { error: 'name and code required' }, CORS);
-      if (!Number.isFinite(basicMinor) || basicMinor <= 0) return json(400, { error: 'basicMinor must be a positive number (paise)' }, CORS);
+      if (!TYPE_STRUCTURE[type]) return json(400, { error: `type must be one of: ${Object.keys(TYPE_STRUCTURE).join(', ')}` }, CORS);
+      if (!Number.isFinite(basicMinor) || basicMinor <= 0) return json(400, { error: 'amount must be a positive number (paise)' }, CORS);
 
       const out = await sql.begin(async (tx: postgres.TransactionSql) => {
-        const { versionId, basicComponentId } = await ensureStandardConfig(tx, societyId, su.id);
+        const compIds = await ensureSocietyComponents(tx, societyId, su.id);
         const [dup] = await tx`select 1 from pay_core.employee where society_id = ${societyId} and employee_code = ${code} limit 1`;
         if (dup) throw new Error(`employee code '${code}' already exists`);
         const [emp] = await tx`insert into pay_core.employee(society_id,employee_code,full_name,date_of_join,employment_type,created_by)
-          values(${societyId},${code},${L(name)},${EFF},'permanent',${su.id}) returning id`;
+          values(${societyId},${code},${L(name)},${EFF},${type},${su.id}) returning id`;
+        const { versionId, primaryComponentId, zeroComponentIds } = await createEmployeeStructure(tx, societyId, code, type, su.id, compIds);
         const [asg] = await tx`insert into pay_config.structure_assignment(society_id,employee_id,structure_version_id,effective_from,created_by)
           values(${societyId},${emp.id},${versionId},${EFF},${su.id}) returning id`;
         await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,reason,created_by)
-          values(${asg.id},${basicComponentId},${basicMinor},'INR','initial salary',${su.id})`;
+          values(${asg.id},${primaryComponentId},${basicMinor},'INR','initial salary',${su.id})`;
+        for (const zid of zeroComponentIds) {
+          await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,reason,created_by)
+            values(${asg.id},${zid},0,'INR','default (edit later)',${su.id})`;
+        }
         return { employeeId: emp.id };
       });
-      return json(200, { ok: true, employeeId: out.employeeId, code }, CORS);
+      return json(200, { ok: true, employeeId: out.employeeId, code, type }, CORS);
     }
 
     if (body.action === 'attendance') {
@@ -157,7 +184,7 @@ Deno.serve(async (req: Request) => {
       const rows = await sql`
         update pay_config.assignment_override ao set fixed_minor = ${basicMinor}
         from pay_config.structure_assignment sa, pay_config.component_catalog cc
-        where ao.assignment_id = sa.id and ao.component_id = cc.id and cc.code = 'BASIC'
+        where ao.assignment_id = sa.id and ao.component_id = cc.id and cc.code in ('BASIC','CONSOLIDATED')
           and sa.employee_id = ${empId} and sa.effective_to is null and sa.society_id = ${societyId}
         returning ao.id`;
       if (!rows.length) return json(404, { error: 'employee / basic override not found in your society' }, CORS);
