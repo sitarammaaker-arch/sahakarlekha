@@ -17,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Wallet, Users, IndianRupee, Loader2, Play, UserPlus, Printer, Download } from 'lucide-react';
+import { Wallet, Users, IndianRupee, Loader2, Play, UserPlus, Printer, Download, Settings2 } from 'lucide-react';
 
 interface PayRun {
   run_id: string; run_no: string; period: string; period_month: string;
@@ -34,6 +34,7 @@ interface Payline {
 interface Employee {
   id: string; employee_code: string; full_name: { hi?: string; en?: string } | null; date_of_join: string; basic_minor: number | null;
 }
+interface StatSetting { key: string; value_num: number; label: string | null; source: string | null; }
 const isDeduction = (kind: string) => kind === 'deduction' || kind === 'loan_recovery';
 
 const rupees = (minor: number | string) =>
@@ -60,6 +61,32 @@ const Payroll: React.FC = () => {
   const [period, setPeriod] = useState('');
   const [running, setRunning] = useState(false);
   const [transitioning, setTransitioning] = useState<string | null>(null);
+
+  const [statList, setStatList] = useState<StatSetting[]>([]);
+  const [statOpen, setStatOpen] = useState(false);
+  const [statKey, setStatKey] = useState('');
+  const [statVal, setStatVal] = useState('');
+  const [statSrc, setStatSrc] = useState('');
+  const [statBusy, setStatBusy] = useState(false);
+
+  const loadStatutory = useCallback(async () => {
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'statutory-list' } });
+    if (!error && data) setStatList((data as { settings?: StatSetting[] }).settings || []);
+  }, []);
+
+  const editStat = (s: StatSetting) => { setStatKey(s.key); setStatVal(String(Number(s.value_num))); setStatSrc(s.source || ''); };
+
+  const saveStatutory = async () => {
+    const value = Number(statVal);
+    if (!Number.isFinite(value) || value < 0) { toast({ title: hi ? 'मान डालें' : 'Enter a value', variant: 'destructive' }); return; }
+    if (!statSrc.trim()) { toast({ title: hi ? 'स्रोत ज़रूरी' : 'Source required', description: hi ? 'Act/circular का हवाला डालें' : 'Cite the Act/circular', variant: 'destructive' }); return; }
+    setStatBusy(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'statutory-set', key: statKey, value, source: statSrc.trim() } });
+    setStatBusy(false);
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं सहेजा' : 'Save failed', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' }); return; }
+    toast({ title: hi ? 'दर सहेजी ✓' : 'Rate saved ✓', description: `${statKey} = ${value}` });
+    setStatKey(''); loadStatutory();
+  };
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [empOpen, setEmpOpen] = useState(false);
@@ -142,7 +169,7 @@ const Payroll: React.FC = () => {
     setLoading(false);
   }, [hi, toast]);
 
-  useEffect(() => { loadRuns(); loadEmployees(); }, [loadRuns, loadEmployees]);
+  useEffect(() => { loadRuns(); loadEmployees(); loadStatutory(); }, [loadRuns, loadEmployees, loadStatutory]);
 
   const runPayroll = async () => {
     if (!/^\d{4}-\d{2}$/.test(period)) {
@@ -264,10 +291,42 @@ const Payroll: React.FC = () => {
         <Wallet className="h-6 w-6 text-primary" />
         <h1 className="text-xl md:text-2xl font-semibold">{hi ? 'पेरोल' : 'Payroll'}</h1>
         <Badge variant="secondary" className="ml-1">{hi ? 'नया इंजन' : 'new engine'}</Badge>
-        <Button className="ml-auto" size="sm" onClick={() => { setPeriod(''); setRunOpen(true); }}>
+        <Button className="ml-auto" size="sm" variant="ghost" onClick={() => { setStatKey(''); setStatOpen(true); }}>
+          <Settings2 className="h-4 w-4 mr-1" /> {hi ? 'सांविधिक दरें' : 'Statutory rates'}
+        </Button>
+        <Button size="sm" onClick={() => { setPeriod(''); setRunOpen(true); }}>
           <Play className="h-4 w-4 mr-1" /> {hi ? 'नया पेरोल चलाएँ' : 'Run payroll'}
         </Button>
       </div>
+
+      <Dialog open={statOpen} onOpenChange={(o) => !statBusy && setStatOpen(o)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{hi ? 'सांविधिक दरें' : 'Statutory rates'}</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground">{hi ? 'ये दरें payroll की गणना चलाती हैं। हर दर के साथ उसका authoritative स्रोत (Act/circular) ज़रूर दर्ज करें — मान अनुमान से नहीं, स्रोत से।' : 'These rates drive the payroll calculation. Record each rate WITH its authoritative source (Act/circular) — values come from the source, never a guess.'}</p>
+          <div className="space-y-2">
+            {statList.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{hi ? 'कोई दर नहीं (पहला कर्मचारी जोड़ने पर pf_rate बनती है)।' : 'No rates yet (pf_rate is created when you add the first employee).'}</p>
+            ) : statList.map((s) => (
+              <div key={s.key} className="border rounded-md p-2">
+                {statKey === s.key ? (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium">{s.label || s.key} <span className="text-xs text-muted-foreground">({s.key})</span></div>
+                    <div className="flex gap-2 items-center"><Input type="number" className="w-24" value={statVal} onChange={(e) => setStatVal(e.target.value)} /><span className="text-sm text-muted-foreground">{hi ? '(मान)' : '(value)'}</span></div>
+                    <Input value={statSrc} onChange={(e) => setStatSrc(e.target.value)} placeholder={hi ? 'स्रोत — Act धारा / circular / URL' : 'Source — Act section / circular / URL'} />
+                    <div className="flex gap-2"><Button size="sm" onClick={saveStatutory} disabled={statBusy}>{statBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'सहेजें' : 'Save')}</Button><Button size="sm" variant="ghost" onClick={() => setStatKey('')}>{hi ? 'रद्द' : 'Cancel'}</Button></div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div><span className="font-medium">{s.label || s.key}</span> <span className="text-sm">= {Number(s.value_num)}</span><div className="text-xs text-muted-foreground">{s.source || (hi ? '⚠ स्रोत दर्ज नहीं' : '⚠ no source recorded')}</div></div>
+                    <Button size="sm" variant="outline" onClick={() => editStat(s)}>{hi ? 'बदलें' : 'Edit'}</Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setStatOpen(false)}>{hi ? 'बंद करें' : 'Close'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={runOpen} onOpenChange={(o) => !running && setRunOpen(o)}>
         <DialogContent className="max-w-sm">

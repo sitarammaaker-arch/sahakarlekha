@@ -1095,7 +1095,7 @@ function factsToEnv(facts, currency) {
   };
 }
 function runComponents(set, inputs) {
-  const vars = { ...factsToEnv(inputs.facts, inputs.currency), ...inputs.fixedComponents };
+  const vars = { ...factsToEnv(inputs.facts, inputs.currency), ...inputs.scalars ?? {}, ...inputs.fixedComponents };
   return evaluatePlan(set, { vars, fns: inputs.fns });
 }
 
