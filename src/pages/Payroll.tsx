@@ -4,7 +4,9 @@
  * pay_run_payslips, migration 115) — the browser cannot touch the pay_* schemas directly. RLS scopes
  * everything to the logged-in user's society.
  *
- * This is the read-only first slice; running/approving/posting a run is a later slice.
+ * Full cycle: add employees + attendance + statutory IDs/rates → run → verify/approve/lock → post to
+ * the ledger → pay; plus payslip print, Register CSV, and the PF ECR filing file. Writes go through the
+ * pay-* Edge Functions (the browser cannot touch the pay_* schemas); reads via the tenant-safe RPCs.
  */
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -37,6 +39,19 @@ interface Employee {
 }
 interface StatSetting { key: string; value_num: number; label: string | null; source: string | null; }
 const isDeduction = (kind: string) => kind === 'deduction' || kind === 'loan_recovery';
+
+// supabase-js resolves an Edge Function's non-2xx as { data: null, error: FunctionsHttpError }, and the
+// JSON body — our friendly { error: "…" } message — lives on error.context, NOT error.message (which is
+// the generic "…non-2xx status code"). Unwrap it so the server's message actually reaches the user.
+async function invokeError(error: unknown, data: unknown): Promise<string> {
+  const inData = (data as { error?: string } | null)?.error;
+  if (inData) return inData;
+  const ctx = (error as { context?: Response } | null)?.context;
+  if (ctx && typeof ctx.json === 'function') {
+    try { const body = await ctx.json() as { error?: string }; if (body?.error) return body.error; } catch { /* body not JSON */ }
+  }
+  return (error as { message?: string } | null)?.message ?? 'unknown error';
+}
 
 const rupees = (minor: number | string) =>
   '₹' + (Number(minor) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -84,7 +99,7 @@ const Payroll: React.FC = () => {
     setStatBusy(true);
     const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'statutory-set', key: statKey, value, source: statSrc.trim() } });
     setStatBusy(false);
-    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं सहेजा' : 'Save failed', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' }); return; }
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं सहेजा' : 'Save failed', description: await invokeError(error, data), variant: 'destructive' }); return; }
     toast({ title: hi ? 'दर सहेजी ✓' : 'Rate saved ✓', description: `${statKey} = ${value}` });
     setStatKey(''); loadStatutory();
   };
@@ -111,7 +126,7 @@ const Payroll: React.FC = () => {
     setIdBusy(true);
     const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'identity-set', employeeId: attEmp!.id, uan: idUan.trim(), pan: idPan.trim(), esicIp: idEsic.trim() } });
     setIdBusy(false);
-    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं सहेजा' : 'Save failed', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' }); return; }
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं सहेजा' : 'Save failed', description: await invokeError(error, data), variant: 'destructive' }); return; }
     toast({ title: hi ? 'सांविधिक पहचान सहेजी ✓' : 'Statutory IDs saved ✓', description: hi ? 'ECR/24Q में उपयोग होगा' : 'Used in ECR / 24Q filing' });
     setAttEmp(null); loadEmployees();
   };
@@ -122,7 +137,7 @@ const Payroll: React.FC = () => {
     setEmpBusy(true);
     const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'update', employeeId: attEmp!.id, basicMinor } });
     setEmpBusy(false);
-    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं बदला' : 'Update failed', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' }); return; }
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं बदला' : 'Update failed', description: await invokeError(error, data), variant: 'destructive' }); return; }
     toast({ title: hi ? 'वेतन बदला ✓' : 'Salary updated ✓', description: `${nameOf(attEmp!.full_name)} — ₹${editBasic}` });
     setAttEmp(null); loadEmployees();
   };
@@ -131,7 +146,7 @@ const Payroll: React.FC = () => {
     setEmpBusy(true);
     const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'deactivate', employeeId: attEmp!.id } });
     setEmpBusy(false);
-    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं हटा' : 'Failed', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' }); return; }
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं हटा' : 'Failed', description: await invokeError(error, data), variant: 'destructive' }); return; }
     toast({ title: hi ? 'कर्मचारी हटाया ✓' : 'Employee removed ✓', description: hi ? 'अगली पेरोल से बाहर (पुरानी पेस्लिप सुरक्षित)' : 'Excluded from future runs (past payslips kept)' });
     setAttEmp(null); loadEmployees();
   };
@@ -144,7 +159,7 @@ const Payroll: React.FC = () => {
     const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'attendance', employeeId: attEmp!.id, period: attPeriod, lopDays: lop } });
     setAttSaving(false);
     if (error || (data as { error?: string })?.error) {
-      toast({ title: hi ? 'उपस्थिति नहीं सहेजी' : 'Could not save', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' });
+      toast({ title: hi ? 'उपस्थिति नहीं सहेजी' : 'Could not save', description: await invokeError(error, data), variant: 'destructive' });
       return;
     }
     toast({ title: hi ? 'उपस्थिति सहेजी ✓' : 'Attendance saved ✓', description: `${attPeriod}: ${30 - lop} ${hi ? 'दिन' : 'days'} (LOP ${lop})` });
@@ -164,7 +179,7 @@ const Payroll: React.FC = () => {
     const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'add', name: empName.trim(), code: empCode.trim(), basicMinor } });
     setEmpSaving(false);
     if (error || (data as { error?: string })?.error) {
-      toast({ title: hi ? 'कर्मचारी नहीं जुड़ा' : 'Could not add employee', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' });
+      toast({ title: hi ? 'कर्मचारी नहीं जुड़ा' : 'Could not add employee', description: await invokeError(error, data), variant: 'destructive' });
       return;
     }
     toast({ title: hi ? 'कर्मचारी जुड़ गया ✓' : 'Employee added ✓', description: `${empName} (${empCode})` });
@@ -194,7 +209,7 @@ const Payroll: React.FC = () => {
     const { data, error } = await supabase.functions.invoke('pay-run', { body: { period } });
     setRunning(false);
     if (error || (data && (data as { error?: string }).error)) {
-      toast({ title: hi ? 'पेरोल नहीं चला' : 'Payroll run failed', description: error?.message || (data as { error?: string })?.error || '', variant: 'destructive' });
+      toast({ title: hi ? 'पेरोल नहीं चला' : 'Payroll run failed', description: await invokeError(error, data) || '', variant: 'destructive' });
       return;
     }
     const d = data as { runNo?: string; employeeCount?: number };
@@ -247,7 +262,7 @@ const Payroll: React.FC = () => {
     const { data, error } = await supabase.functions.invoke(fn, { body: isFinancial ? { runId } : { runId, action } });
     setTransitioning(null);
     if (error || (data as { error?: string })?.error) {
-      toast({ title: hi ? 'बदलाव नहीं हुआ' : 'Action failed', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' });
+      toast({ title: hi ? 'बदलाव नहीं हुआ' : 'Action failed', description: await invokeError(error, data), variant: 'destructive' });
       return;
     }
     if (action === 'post') {
