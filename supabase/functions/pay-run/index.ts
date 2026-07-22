@@ -113,6 +113,20 @@ Deno.serve(async (req: Request) => {
       emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, paidDays, lopDays, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns: {}, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
     }
 
+    // 5b. Employees now have HETEROGENEOUS per-employee structures, but assembleRun compiles ONE shared
+    // plan and runs it for everyone. So an employee who has BASIC but not (say) HRA would still get HRA
+    // computed, and one without BASIC would make a BASIC-referencing formula refuse. Reconcile both:
+    // mark every plan-formula code an employee does NOT own as 'info' (excluded from the payslip, never
+    // PAY-CAL-601), and inject BASIC=0 where the shared plan needs it but the structure omits it (so it
+    // computes 0 and is then excluded — never a PAY-DSL-REF refusal).
+    const planFormulaCodes = Object.keys(sourcesByCode);
+    for (const r of emReqs) {
+      const cls = r.aggregate.classification as Record<string, string>;
+      for (const code of planFormulaCodes) if (cls[code] === undefined) cls[code] = 'info';
+      const fc = r.calc.fixedComponents as Record<string, unknown>;
+      if (fixedCodes.has('BASIC') && fc.BASIC === undefined) fc.BASIC = makeMoney(0, 'INR');
+    }
+
     // 6. assemble the run (one shared plan; typeBase declares fixed components + fact vars)
     const typeBase = { vars: { ...Object.fromEntries([...fixedCodes].map((c) => [c, 'Money'])), ...Object.fromEntries(Object.keys(scalars).map((k) => [k, 'Number'])), attendance: 'Map', tax: 'Map', leaveBalance: 'Map', loanRecovery: 'Money', loanRecoveries: 'List' }, fns: {} };
     const runId = crypto.randomUUID();
