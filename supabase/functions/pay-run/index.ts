@@ -98,8 +98,9 @@ Deno.serve(async (req: Request) => {
       for (const s of spec.formulaSources) sourcesByCode[s.code] = s.source;
       for (const k of Object.keys(spec.fixedComponents)) fixedCodes.add(k);
       const [att] = await sql`select paid_days, lop_days from pay_calc.attendance where society_id = ${societyId} and employee_id = ${emp.id} and period_month = ${periodMonth} limit 1`;
-      const facts = { attendance: { paidDays: att ? Number(att.paid_days) : 30, lopDays: att ? Number(att.lop_days) : 0, otHours: 0 }, leave: [], loan: [], tax: { ytdByHead: {}, monthsRemaining: 12, regime: 'new' } };
-      emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns: {}, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
+      const paidDays = att ? Number(att.paid_days) : 30, lopDays = att ? Number(att.lop_days) : 0;
+      const facts = { attendance: { paidDays, lopDays, otHours: 0 }, leave: [], loan: [], tax: { ytdByHead: {}, monthsRemaining: 12, regime: 'new' } };
+      emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, paidDays, lopDays, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns: {}, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
     }
 
     // 6. assemble the run (one shared plan; typeBase declares fixed components + fact vars)
@@ -123,7 +124,7 @@ Deno.serve(async (req: Request) => {
         const req0 = emReqs.find((r) => r.employeeId === ps.employeeId)!;
         const slipId = crypto.randomUUID();
         await tx`insert into pay_calc.payslip(id,society_id,pay_run_id,employee_id,period_month,payslip_no,gross_minor,deductions_minor,net_minor,currency,paid_days,lop_days,created_by)
-          values(${slipId},${societyId},${runId},${ps.employeeId},${periodMonth},${`PS-${runNo}-${req0.empCode}`},${ps.payslip.grossEarnings.minor},${ps.payslip.grossDeductions.minor},${ps.payslip.netPay.minor},'INR',30,0,${su.id})`;
+          values(${slipId},${societyId},${runId},${ps.employeeId},${periodMonth},${`PS-${runNo}-${req0.empCode}`},${ps.payslip.grossEarnings.minor},${ps.payslip.grossDeductions.minor},${ps.payslip.netPay.minor},'INR',${req0.paidDays},${req0.lopDays},${su.id})`;
         let seq = 1;
         for (const line of [...ps.payslip.earnings, ...ps.payslip.deductions]) {
           await tx`insert into pay_calc.payslip_line(society_id,payslip_id,period_month,component_id,computed_minor,currency,sequence) values(${societyId},${slipId},${periodMonth},${codeToId[line.code]},${line.amount.minor},'INR',${seq++})`;
