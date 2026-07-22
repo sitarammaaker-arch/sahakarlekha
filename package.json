@@ -28,6 +28,7 @@
     "test:pay-typecheck": "node scripts/test-pay-typecheck.mjs",
     "test:pay-dag": "node scripts/test-pay-dag.mjs",
     "test:pay-compile": "node scripts/test-pay-compile.mjs",
+    "test:pay-evalplan": "node scripts/test-pay-evalplan.mjs",
     "test:funds": "node scripts/test-funds.mjs",
     "test:appropriation": "node scripts/test-appropriation.mjs",
     "test:approval-transition": "node scripts/test-approval-transition.mjs",
