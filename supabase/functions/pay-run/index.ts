@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
     const ruleView = freezeViews(catalogs, freezeCtx).ruleView;
 
     // 5. per-employee: effective components → mapCatalog → calc request
-    const facts = { attendance: { paidDays: 30, lopDays: 0, otHours: 0 }, leave: [], loan: [], tax: { ytdByHead: {}, monthsRemaining: 12, regime: 'new' } };
+    // per-employee attendance (default a full 30-day month when none is recorded)
     const codeToId: Record<string, string> = {};
     const emReqs: Record<string, unknown>[] = [];
     const sourcesByCode: Record<string, string> = {};
@@ -94,6 +94,8 @@ Deno.serve(async (req: Request) => {
       });
       for (const s of spec.formulaSources) sourcesByCode[s.code] = s.source;
       for (const k of Object.keys(spec.fixedComponents)) fixedCodes.add(k);
+      const [att] = await sql`select paid_days, lop_days from pay_calc.attendance where society_id = ${societyId} and employee_id = ${emp.id} and period_month = ${periodMonth} limit 1`;
+      const facts = { attendance: { paidDays: att ? Number(att.paid_days) : 30, lopDays: att ? Number(att.lop_days) : 0, otHours: 0 }, leave: [], loan: [], tax: { ytdByHead: {}, monthsRemaining: 12, regime: 'new' } };
       emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns: {} }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
     }
 

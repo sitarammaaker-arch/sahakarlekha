@@ -68,6 +68,26 @@ const Payroll: React.FC = () => {
   const [empBasic, setEmpBasic] = useState('');
   const [empSaving, setEmpSaving] = useState(false);
 
+  const [attEmp, setAttEmp] = useState<Employee | null>(null);
+  const [attPeriod, setAttPeriod] = useState('');
+  const [attLop, setAttLop] = useState('');
+  const [attSaving, setAttSaving] = useState(false);
+
+  const saveAttendance = async () => {
+    if (!/^\d{4}-\d{2}$/.test(attPeriod)) { toast({ title: hi ? 'अवधि चुनें' : 'Pick a period', variant: 'destructive' }); return; }
+    const lop = Number(attLop);
+    if (!Number.isFinite(lop) || lop < 0 || lop > 31) { toast({ title: hi ? 'LOP दिन 0–31' : 'LOP days 0–31', variant: 'destructive' }); return; }
+    setAttSaving(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'attendance', employeeId: attEmp!.id, period: attPeriod, lopDays: lop } });
+    setAttSaving(false);
+    if (error || (data as { error?: string })?.error) {
+      toast({ title: hi ? 'उपस्थिति नहीं सहेजी' : 'Could not save', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' });
+      return;
+    }
+    toast({ title: hi ? 'उपस्थिति सहेजी ✓' : 'Attendance saved ✓', description: `${attPeriod}: ${30 - lop} ${hi ? 'दिन' : 'days'} (LOP ${lop})` });
+    setAttEmp(null);
+  };
+
   const loadEmployees = useCallback(async () => {
     const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'list' } });
     if (!error && data) setEmployees((data as { employees?: Employee[] }).employees || []);
@@ -234,10 +254,11 @@ const Payroll: React.FC = () => {
           ) : (
             <div className="flex flex-wrap gap-2">
               {employees.map((e) => (
-                <div key={e.id} className="text-sm border rounded-md px-2 py-1">
+                <button key={e.id} type="button" className="text-sm border rounded-md px-2 py-1 hover:bg-muted text-left" title={hi ? 'उपस्थिति सेट करें' : 'Set attendance'}
+                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); }}>
                   <span className="font-medium">{nameOf(e.full_name)}</span> <span className="text-xs text-muted-foreground">{e.employee_code}</span>
                   {e.basic_minor != null && <span className="ml-1 text-xs text-muted-foreground">· {hi ? 'मूल' : 'Basic'} {rupees(e.basic_minor)}</span>}
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -256,6 +277,21 @@ const Payroll: React.FC = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEmpOpen(false)} disabled={empSaving}>{hi ? 'रद्द' : 'Cancel'}</Button>
             <Button onClick={addEmployee} disabled={empSaving}>{empSaving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {hi ? 'जोड़ रहा है…' : 'Adding…'}</> : (hi ? 'जोड़ें' : 'Add')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!attEmp} onOpenChange={(o) => !attSaving && !o && setAttEmp(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>{hi ? 'उपस्थिति' : 'Attendance'} — {attEmp ? nameOf(attEmp.full_name) : ''}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1"><Label>{hi ? 'अवधि (माह)' : 'Period (month)'}</Label><Input type="month" value={attPeriod} onChange={(e) => setAttPeriod(e.target.value)} /></div>
+            <div className="space-y-1"><Label>{hi ? 'बिना-वेतन दिन (LOP)' : 'Loss-of-pay days (LOP)'}</Label><Input type="number" min="0" max="31" value={attLop} onChange={(e) => setAttLop(e.target.value)} placeholder="0" /></div>
+            <p className="text-xs text-muted-foreground">{hi ? 'इतने दिनों का वेतन उस माह की पेरोल में कटेगा (30-दिन आधार)।' : "That many days' pay is deducted in this month's run (30-day basis)."}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAttEmp(null)} disabled={attSaving}>{hi ? 'रद्द' : 'Cancel'}</Button>
+            <Button onClick={saveAttendance} disabled={attSaving}>{attSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'सहेजें' : 'Save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
