@@ -26,6 +26,17 @@ const EMAIL = env('RLS_TEST_A_EMAIL'), PASSWORD = env('RLS_TEST_A_PASSWORD');
 if (!URL || !ANON || !EMAIL || !PASSWORD) { console.log('SKIP — missing SUPABASE_URL/ANON/RLS_TEST_A creds'); process.exit(0); }
 
 const aalOf = (jwt) => JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString('utf8')).aal;
+
+// TOTP is time-based; this box's clock may be skewed vs the Supabase server (e.g. a sandbox clock).
+// Read the server's own time from a response Date header so codes match the server's window.
+async function serverNowMs() {
+  try {
+    const res = await fetch(URL + '/auth/v1/health', { headers: { apikey: ANON } });
+    const d = res.headers.get('date');
+    if (d) return new Date(d).getTime();
+  } catch { /* fall back to local */ }
+  return Date.now();
+}
 let pass = 0, fail = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.error('  ✗', msg); } };
 
@@ -51,12 +62,18 @@ try {
 
   // 3. challenge + verify with a generated code → step up to aal2 (retry once across a step boundary)
   let verified = null, lastErr = null;
-  for (let attempt = 0; attempt < 2 && !verified; attempt++) {
-    const code = await totp(secret);
+  const baseMs = await serverNowMs();
+  const skewSec = Math.round((baseMs - Date.now()) / 1000);
+  if (Math.abs(skewSec) > 30) console.log(`  (local↔server clock skew ~${skewSec}s — generating TOTP at server time)`);
+  // try the server's current step and its neighbours (covers step boundaries + small skew)
+  const offsets = [0, 30000, -30000, 60000, -60000];
+  for (const off of offsets) {
+    if (verified) break;
+    const code = await totp(secret, baseMs + off);
     const { data: ch, error: ec } = await sb.auth.mfa.challenge({ factorId });
     if (ec) { lastErr = ec; continue; }
     const { data: vf, error: ev } = await sb.auth.mfa.verify({ factorId, challengeId: ch.id, code });
-    if (ev) { lastErr = ev; await new Promise((r) => setTimeout(r, 1200)); continue; }
+    if (ev) { lastErr = ev; continue; }
     verified = vf;
   }
   if (!verified) throw new Error('verify failed: ' + (lastErr?.message ?? 'unknown'));
