@@ -101,6 +101,7 @@ Deno.serve(async (req: Request) => {
       const [{ nextseq }] = await tx`select coalesce(max(sequence),0)+1 as nextseq from pay_calc.pay_event where aggregate_id = ${body.runId}`;
       await tx`insert into pay_calc.pay_event(society_id,aggregate_type,aggregate_id,sequence,event_type,producer_kind,actor_email,payload)
         values(${societyId},'pay_run',${body.runId},${nextseq},'posted'::pay_core.pay_event_type,'human',${user.email},${JSON.stringify({ voucher: vId, expense: rup(expense), statutory: rup(statutory), net: rup(net) })})`;
+      await tx`update pay_calc.payslip set status = 'posted'::pay_core.payslip_status where pay_run_id = ${body.runId}`;
       // payroll_run.posting_ref → the posting_link id (FK run_posting_fk); the voucher id lives on posting_link.voucher_ref
       await tx`update pay_calc.payroll_run set state = 'posted'::pay_core.pay_run_state, posting_ref = ${pl.id}, updated_at = now(), updated_by = ${su.id} where id = ${body.runId}`;
       return { voucherId: vId };

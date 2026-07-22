@@ -84,6 +84,7 @@ Deno.serve(async (req: Request) => {
       const [{ nextseq }] = await tx`select coalesce(max(sequence),0)+1 as nextseq from pay_calc.pay_event where aggregate_id = ${body.runId}`;
       await tx`insert into pay_calc.pay_event(society_id,aggregate_type,aggregate_id,sequence,event_type,producer_kind,actor_email,payload)
         values(${societyId},'pay_run',${body.runId},${nextseq},'paid'::pay_core.pay_event_type,'human',${user.email},${JSON.stringify({ voucher: vId, net: rup(net) })})`;
+      await tx`update pay_calc.payslip set status = 'paid'::pay_core.payslip_status where pay_run_id = ${body.runId}`;
       await tx`update pay_calc.payroll_run set state = 'paid'::pay_core.pay_run_state, updated_at = now(), updated_by = ${su.id} where id = ${body.runId}`;
       return { voucherId: vId };
     });
