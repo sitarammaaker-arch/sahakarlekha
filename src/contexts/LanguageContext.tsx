@@ -146,6 +146,7 @@ export const translations: Translations = {
   purchases: { hi: 'खरीद', en: 'Purchases' },
   makePayment: { hi: 'भुगतान करें', en: 'Make Payment' },
   salary: { hi: 'वेतन', en: 'Salary' },
+  payroll: { hi: 'पेरोल', en: 'Payroll' },
   suppliers: { hi: 'आपूर्तिकर्ता', en: 'Suppliers' },
   customers: { hi: 'ग्राहक', en: 'Customers' },
   
