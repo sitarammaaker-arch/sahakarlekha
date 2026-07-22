@@ -18,6 +18,7 @@ tables/app untouched). **Production has never been touched.**
   - `pay-transition` — verify → approve → lock (maker-checker).
   - `pay-post` — post a locked run to the general ledger (double-entry voucher).
   - `pay-pay` — disburse a posted run (payment voucher).
+  - `pay-rollback` — reverse a posted/paid run (append-only mirror vouchers; books net to zero).
 - Public read API (115, 117) + partitioned-table RLS fix (116).
 - Payroll UI: runs list, payslip breakdown, print, Register CSV, **PF ECR** file, employee + statutory editors.
 - AAL2 MFA gate (114) — staging-verified, **NOT applied anywhere yet** (deliberately gated, step 4).
@@ -94,7 +95,7 @@ step 1.2. Point the CLI at production (either `supabase link` to the prod ref, o
    ```
 2. **Deploy** all five:
    ```bash
-   for f in pay-employee pay-run pay-transition pay-post pay-pay; do
+   for f in pay-employee pay-run pay-transition pay-post pay-pay pay-rollback; do
      npx supabase functions deploy "$f" --project-ref <prod-ref>
    done
    ```
