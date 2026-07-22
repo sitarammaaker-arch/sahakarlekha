@@ -26,6 +26,10 @@ interface Payslip {
   payslip_no: string; gross_minor: number; deductions_minor: number; net_minor: number;
   currency: string; paid_days: number; lop_days: number; status: string;
 }
+interface Payline {
+  code: string; name: { hi?: string; en?: string } | null; kind: string; computed_minor: number; currency: string; seq: number;
+}
+const isDeduction = (kind: string) => kind === 'deduction' || kind === 'loan_recovery';
 
 const rupees = (minor: number | string) =>
   '₹' + (Number(minor) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -43,6 +47,9 @@ const Payroll: React.FC = () => {
   const [selected, setSelected] = useState<PayRun | null>(null);
   const [slips, setSlips] = useState<Payslip[]>([]);
   const [slipsLoading, setSlipsLoading] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [lines, setLines] = useState<Payline[]>([]);
+  const [linesLoading, setLinesLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -70,7 +77,21 @@ const Payroll: React.FC = () => {
     setSlipsLoading(false);
   };
 
-  const empName = (n: Payslip['employee_name']) => (hi ? n?.hi : n?.en) || n?.en || n?.hi || '—';
+  const toggleLines = async (payslipId: string) => {
+    if (expanded === payslipId) { setExpanded(null); return; }
+    setExpanded(payslipId);
+    setLinesLoading(true);
+    setLines([]);
+    const { data, error } = await supabase.rpc('pay_payslip_lines', { p_payslip_id: payslipId });
+    if (error) {
+      toast({ title: hi ? 'ब्रेकडाउन लोड नहीं हुआ' : 'Could not load breakdown', description: error.message, variant: 'destructive' });
+    } else {
+      setLines((data as Payline[]) || []);
+    }
+    setLinesLoading(false);
+  };
+
+  const empName = (n: Payslip['employee_name'] | Payline['name']) => (hi ? n?.hi : n?.en) || n?.en || n?.hi || '—';
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -148,13 +169,36 @@ const Payroll: React.FC = () => {
                 </TableHeader>
                 <TableBody>
                   {slips.map((s) => (
-                    <TableRow key={s.payslip_id}>
-                      <TableCell><span className="font-medium">{empName(s.employee_name)}</span> <span className="text-xs text-muted-foreground">{s.employee_code}</span></TableCell>
-                      <TableCell className="text-right">{rupees(s.gross_minor)}</TableCell>
-                      <TableCell className="text-right">{rupees(s.deductions_minor)}</TableCell>
-                      <TableCell className="text-right font-semibold">{rupees(s.net_minor)}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{Number(s.paid_days)}</TableCell>
-                    </TableRow>
+                    <React.Fragment key={s.payslip_id}>
+                      <TableRow className="cursor-pointer" onClick={() => toggleLines(s.payslip_id)}>
+                        <TableCell>
+                          <span className="text-xs text-primary mr-1">{expanded === s.payslip_id ? '▾' : '▸'}</span>
+                          <span className="font-medium">{empName(s.employee_name)}</span> <span className="text-xs text-muted-foreground">{s.employee_code}</span>
+                        </TableCell>
+                        <TableCell className="text-right">{rupees(s.gross_minor)}</TableCell>
+                        <TableCell className="text-right">{rupees(s.deductions_minor)}</TableCell>
+                        <TableCell className="text-right font-semibold">{rupees(s.net_minor)}</TableCell>
+                        <TableCell className="text-right text-muted-foreground">{Number(s.paid_days)}</TableCell>
+                      </TableRow>
+                      {expanded === s.payslip_id && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="bg-muted/40 py-2">
+                            {linesLoading ? (
+                              <div className="flex items-center gap-2 px-2 text-muted-foreground text-sm"><Loader2 className="h-4 w-4 animate-spin" /> {hi ? 'लोड हो रहा है…' : 'Loading…'}</div>
+                            ) : (
+                              <div className="space-y-1">
+                                {lines.map((ln) => (
+                                  <div key={ln.code} className="flex justify-between text-sm px-2">
+                                    <span>{empName(ln.name)} <span className="text-xs text-muted-foreground">{ln.code}</span></span>
+                                    <span className={isDeduction(ln.kind) ? 'text-destructive' : ''}>{isDeduction(ln.kind) ? '− ' : ''}{rupees(ln.computed_minor)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                   ))}
                 </TableBody>
               </Table>
