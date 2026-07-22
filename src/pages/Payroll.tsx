@@ -33,6 +33,7 @@ interface Payline {
 }
 interface Employee {
   id: string; employee_code: string; full_name: { hi?: string; en?: string } | null; date_of_join: string; basic_minor: number | null;
+  uan?: string | null; pan?: string | null; esic_ip?: string | null;
 }
 interface StatSetting { key: string; value_num: number; label: string | null; source: string | null; }
 const isDeduction = (kind: string) => kind === 'deduction' || kind === 'loan_recovery';
@@ -101,6 +102,19 @@ const Payroll: React.FC = () => {
   const [attSaving, setAttSaving] = useState(false);
   const [editBasic, setEditBasic] = useState('');
   const [empBusy, setEmpBusy] = useState(false);
+  const [idUan, setIdUan] = useState('');
+  const [idPan, setIdPan] = useState('');
+  const [idEsic, setIdEsic] = useState('');
+  const [idBusy, setIdBusy] = useState(false);
+
+  const saveIdentity = async () => {
+    setIdBusy(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'identity-set', employeeId: attEmp!.id, uan: idUan.trim(), pan: idPan.trim(), esicIp: idEsic.trim() } });
+    setIdBusy(false);
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं सहेजा' : 'Save failed', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' }); return; }
+    toast({ title: hi ? 'सांविधिक पहचान सहेजी ✓' : 'Statutory IDs saved ✓', description: hi ? 'ECR/24Q में उपयोग होगा' : 'Used in ECR / 24Q filing' });
+    setAttEmp(null); loadEmployees();
+  };
 
   const updateSalary = async () => {
     const basicMinor = Math.round(Number(editBasic) * 100);
@@ -285,6 +299,47 @@ const Payroll: React.FC = () => {
     toast({ title: hi ? 'रजिस्टर डाउनलोड ✓' : 'Register downloaded ✓', description: `${selected.run_no} — ${slips.length} ${hi ? 'कर्मचारी' : 'employees'}` });
   };
 
+  const rate = (k: string, dflt: number) => { const s = statList.find((x) => x.key === k); return s ? Number(s.value_num) : dflt; };
+  const saveText = (name: string, text: string, mime: string) => {
+    const url = URL.createObjectURL(new Blob([text], { type: `${mime};charset=utf-8` }));
+    const a = document.createElement('a'); a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  };
+
+  // PF ECR (EPFO Unified Portal) — 11 fields, '#~#'-separated, one line per member. Employer split
+  // (EPS/EDLI) uses editable-sourced rates; nothing statutory is hard-coded. Whole rupees, per ECR spec.
+  const downloadEcr = async () => {
+    if (!selected || slips.length === 0) return;
+    const epsRate = rate('eps_rate', 8.33), employerPfRate = rate('employer_pf_rate', 12), ceilingP = Math.round(rate('eps_wage_ceiling', 15000) * 100);
+    const uanByCode: Record<string, string> = {};
+    employees.forEach((e) => { if (e.uan) uanByCode[e.employee_code] = e.uan; });
+    const R = (p: number) => String(Math.round(p / 100)); // paise → whole rupees
+    const missing: string[] = [];
+    const rows: string[] = [];
+    for (const s of slips) {
+      const { data } = await supabase.rpc('pay_payslip_lines', { p_payslip_id: s.payslip_id });
+      const ls = (data as Payline[]) || [];
+      const amt = (code: string) => Number(ls.find((l) => l.code === code)?.computed_minor ?? 0);
+      const epfWagesP = amt('BASIC');                         // EPF wages
+      const empPfP = amt('PF');                               // employee EPF remitted
+      const epsWagesP = Math.min(epfWagesP, ceilingP);        // capped
+      const epsP = Math.round(epsWagesP * epsRate / 100);                       // EPS (employer, of capped wages)
+      const diffP = Math.max(0, Math.round(epfWagesP * employerPfRate / 100) - epsP); // EPF-EPS diff (employer share − EPS)
+      const ncp = Math.max(0, 30 - Number(s.paid_days));
+      const uan = uanByCode[s.employee_code] || '';
+      if (!uan) missing.push(s.employee_code);
+      rows.push([uan, nameOf(s.employee_name), R(Number(s.gross_minor)), R(epfWagesP), R(epsWagesP), R(epsWagesP), R(empPfP), R(epsP), R(diffP), String(ncp), '0'].join('#~#'));
+    }
+    saveText(`ECR-${selected.run_no}.txt`, rows.join('\n') + '\n', 'text/plain');
+    toast({
+      title: hi ? 'PF ECR फ़ाइल डाउनलोड ✓' : 'PF ECR file downloaded ✓',
+      description: (missing.length ? (hi ? `⚠ ${missing.length} कर्मचारी बिना UAN (${missing.join(', ')}). ` : `⚠ ${missing.length} without UAN (${missing.join(', ')}). `) : '')
+        + (hi ? 'अपलोड से पहले वर्तमान EPFO ECR spec से मिलाएँ।' : 'Confirm against the current EPFO ECR spec before upload.'),
+      variant: missing.length ? 'destructive' : 'default',
+      duration: missing.length ? 12000 : 6000,
+    });
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center gap-2">
@@ -364,7 +419,7 @@ const Payroll: React.FC = () => {
             <div className="flex flex-wrap gap-2">
               {employees.map((e) => (
                 <button key={e.id} type="button" className="text-sm border rounded-md px-2 py-1 hover:bg-muted text-left" title={hi ? 'उपस्थिति सेट करें' : 'Set attendance'}
-                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); }}>
+                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); }}>
                   <span className="font-medium">{nameOf(e.full_name)}</span> <span className="text-xs text-muted-foreground">{e.employee_code}</span>
                   {e.basic_minor != null && <span className="ml-1 text-xs text-muted-foreground">· {hi ? 'मूल' : 'Basic'} {rupees(e.basic_minor)}</span>}
                 </button>
@@ -406,6 +461,13 @@ const Payroll: React.FC = () => {
               <div className="space-y-1"><Label className="text-xs">{hi ? 'अवधि (माह)' : 'Period (month)'}</Label><Input type="month" value={attPeriod} onChange={(e) => setAttPeriod(e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">{hi ? 'बिना-वेतन दिन (LOP)' : 'Loss-of-pay days (LOP)'}</Label><Input type="number" min="0" max="31" value={attLop} onChange={(e) => setAttLop(e.target.value)} placeholder="0" /></div>
               <Button size="sm" variant="outline" onClick={saveAttendance} disabled={attSaving}>{attSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'उपस्थिति सहेजें' : 'Save attendance')}</Button>
+            </div>
+            <div className="border-t pt-3 space-y-2">
+              <Label className="text-sm font-medium">{hi ? 'सांविधिक पहचान (filing के लिए)' : 'Statutory IDs (for filing)'}</Label>
+              <div className="space-y-1"><Label className="text-xs">UAN <span className="text-muted-foreground">({hi ? 'PF ECR' : 'PF ECR'})</span></Label><Input value={idUan} onChange={(e) => setIdUan(e.target.value)} placeholder="12 digits" maxLength={12} /></div>
+              <div className="space-y-1"><Label className="text-xs">PAN <span className="text-muted-foreground">(TDS 24Q)</span></Label><Input value={idPan} onChange={(e) => setIdPan(e.target.value.toUpperCase())} placeholder="ABCDE1234F" maxLength={10} /></div>
+              <div className="space-y-1"><Label className="text-xs">ESIC IP <span className="text-muted-foreground">(ESI)</span></Label><Input value={idEsic} onChange={(e) => setIdEsic(e.target.value)} placeholder={hi ? 'IP संख्या' : 'IP number'} /></div>
+              <Button size="sm" variant="outline" onClick={saveIdentity} disabled={idBusy}>{idBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'पहचान सहेजें' : 'Save IDs')}</Button>
             </div>
           </div>
           <DialogFooter className="sm:justify-between">
@@ -467,9 +529,14 @@ const Payroll: React.FC = () => {
               <IndianRupee className="h-5 w-5" />
               {hi ? 'पेस्लिप' : 'Payslips'} — {selected?.run_no} <span className="text-muted-foreground font-normal">({selected?.period})</span>
               {slips.length > 0 && (
-                <Button size="sm" variant="outline" className="ml-auto" onClick={downloadRegister}>
-                  <Download className="h-4 w-4 mr-1" /> {hi ? 'रजिस्टर CSV' : 'Register CSV'}
-                </Button>
+                <div className="ml-auto flex gap-2">
+                  <Button size="sm" variant="outline" onClick={downloadRegister}>
+                    <Download className="h-4 w-4 mr-1" /> {hi ? 'रजिस्टर CSV' : 'Register CSV'}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={downloadEcr} title={hi ? 'EPFO PF ECR फ़ाइल' : 'EPFO PF ECR file'}>
+                    <Download className="h-4 w-4 mr-1" /> {hi ? 'PF ECR' : 'PF ECR'}
+                  </Button>
+                </div>
               )}
             </DialogTitle>
           </DialogHeader>
