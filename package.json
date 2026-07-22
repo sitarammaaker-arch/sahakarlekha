@@ -42,6 +42,7 @@
     "test:pay-components": "node scripts/test-pay-components.mjs",
     "test:pay-payslip": "node scripts/test-pay-payslip.mjs",
     "test:pay-engine": "node scripts/test-pay-engine.mjs",
+    "test:pay-assemble-run": "node scripts/test-pay-assemble-run.mjs",
     "test:funds": "node scripts/test-funds.mjs",
     "test:appropriation": "node scripts/test-appropriation.mjs",
     "test:approval-transition": "node scripts/test-approval-transition.mjs",
