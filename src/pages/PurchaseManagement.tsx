@@ -26,6 +26,7 @@ import { PackagePlus, Plus, Trash2, Eye, Pencil, Printer, Search, FileSpreadshee
 import { generatePurchaseRecordPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
+import { getBankAccountIds } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { computeInvoiceTotals } from '@/lib/invoiceTotals';
 import { toMinor, toRupees, mulMinor } from '@/lib/money';
@@ -61,7 +62,7 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const PurchaseManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { purchases, stockItems, suppliers, addPurchase, updatePurchase, deletePurchase, addStockItem, society } = useData();
+  const { purchases, stockItems, suppliers, accounts, addPurchase, updatePurchase, deletePurchase, addStockItem, society } = useData();
   const { toast } = useToast();
 
   // ── New Purchase form state ───────────────────────────────────────────────
@@ -79,6 +80,7 @@ const PurchaseManagement: React.FC = () => {
   const [tcsPct, setTcsPct] = useState<number>(0);
   const [rcmApplicable, setRcmApplicable] = useState<boolean>(false); // ECR-22: reverse charge
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
+  const [bankAccountId, setBankAccountId] = useState<string>('');   // which bank, when mode = 'bank'
   const [narration, setNarration] = useState('');
   const [savedPurchaseNo, setSavedPurchaseNo] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -184,6 +186,7 @@ const PurchaseManagement: React.FC = () => {
     setDiscount(0);
     setCgstPct(0); setSgstPct(0); setIgstPct(0); setTdsPct(0); setTcsPct(0); setRcmApplicable(false);
     setPaymentMode('cash');
+    setBankAccountId('');
     setNarration('');
     setEditingId(null);
   };
@@ -204,6 +207,7 @@ const PurchaseManagement: React.FC = () => {
     setTcsPct(purchase.tcsPct || 0);
     setRcmApplicable(!!purchase.rcmApplicable);
     setPaymentMode(purchase.paymentMode);
+    setBankAccountId(purchase.bankAccountId || '');
     setNarration(purchase.narration || '');
     setSavedPurchaseNo(null);
     setActiveTab('new-purchase');
@@ -241,6 +245,7 @@ const PurchaseManagement: React.FC = () => {
       taxAmount, grandTotal,
       rcmApplicable,
       paymentMode,
+      bankAccountId: paymentMode === 'bank' ? (bankAccountId || undefined) : undefined,
       narration: narration.trim(),
       createdBy: user?.name ?? 'Unknown',
     };
@@ -759,6 +764,19 @@ const PurchaseManagement: React.FC = () => {
                     </button>
                   ))}
                 </div>
+                {paymentMode === 'bank' && (
+                  <div className="space-y-1">
+                    <Label>{language === 'hi' ? 'बैंक खाता' : 'Bank Account'}</Label>
+                    <Select value={bankAccountId} onValueChange={setBankAccountId}>
+                      <SelectTrigger><SelectValue placeholder={language === 'hi' ? 'बैंक चुनें' : 'Select bank'} /></SelectTrigger>
+                      <SelectContent>
+                        {getBankAccountIds(accounts).map(id => accounts.find(a => a.id === id)).filter((a): a is NonNullable<typeof a> => !!a).map(a => (
+                          <SelectItem key={a.id} value={a.id}>{language === 'hi' ? (a.nameHi || a.name) : a.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <Label>{language === 'hi' ? 'नोट (वैकल्पिक)' : 'Narration (Optional)'}</Label>
                   <Textarea
