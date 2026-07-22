@@ -63,6 +63,9 @@ Deno.serve(async (req: Request) => {
 
     // 4. rules → freeze (BASIC etc. resolve by component-code convention)
     const rules = await sql`select rc.key, rv.scope_level, rv.value_json from pay_rule.rule_value rv join pay_rule.rule_catalog rc on rc.id = rv.rule_id where rv.status = 'active'`;
+    // editable statutory rates (admin-owned, sourced) → injected as scalar vars the formulas use
+    const stat = await sql`select key, value_num from pay_config.statutory_setting where society_id = ${societyId}`;
+    const scalars: Record<string, number> = { pf_rate: 12, ...Object.fromEntries(stat.map((r: Record<string, unknown>) => [r.key, Number(r.value_num)])) };
     const catalogs = {
       rules: Object.fromEntries(rules.map((r: Record<string, unknown>) => [r.key, { candidates: [{ value: Number(r.value_json), scope: { level: r.scope_level }, effectiveFrom: '2026-01-01', jurisdiction: '' }], required: true }])),
       policies: {}, config: {},
@@ -96,11 +99,11 @@ Deno.serve(async (req: Request) => {
       for (const k of Object.keys(spec.fixedComponents)) fixedCodes.add(k);
       const [att] = await sql`select paid_days, lop_days from pay_calc.attendance where society_id = ${societyId} and employee_id = ${emp.id} and period_month = ${periodMonth} limit 1`;
       const facts = { attendance: { paidDays: att ? Number(att.paid_days) : 30, lopDays: att ? Number(att.lop_days) : 0, otHours: 0 }, leave: [], loan: [], tax: { ytdByHead: {}, monthsRemaining: 12, regime: 'new' } };
-      emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns: {} }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
+      emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns: {}, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
     }
 
     // 6. assemble the run (one shared plan; typeBase declares fixed components + fact vars)
-    const typeBase = { vars: { ...Object.fromEntries([...fixedCodes].map((c) => [c, 'Money'])), attendance: 'Map', tax: 'Map', leaveBalance: 'Map', loanRecovery: 'Money', loanRecoveries: 'List' }, fns: {} };
+    const typeBase = { vars: { ...Object.fromEntries([...fixedCodes].map((c) => [c, 'Money'])), ...Object.fromEntries(Object.keys(scalars).map((k) => [k, 'Number'])), attendance: 'Map', tax: 'Map', leaveBalance: 'Map', loanRecovery: 'Money', loanRecoveries: 'List' }, fns: {} };
     const runId = crypto.randomUUID();
     const assembled = assembleRun({
       societyId, runId, sequence: 1,

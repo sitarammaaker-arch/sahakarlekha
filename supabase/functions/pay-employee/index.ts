@@ -26,7 +26,7 @@ const EFF = '2026-01-01';
 const SFL: Record<string, string> = {
   DA: 'formula "DA" :: Money let b = BASIC in b * 20%',
   HRA: 'formula "HRA" :: Money let b = BASIC in b * 40%',
-  PF: 'formula "PF" :: Money let b = BASIC in b * 12%',
+  PF: 'formula "PF" :: Money let b = BASIC in b * (pf_rate / 100)',
   // Loss of Pay: deduct the full-pay-equivalent (BASIC + DA 20% + HRA 40% = 160% of BASIC) for absent days.
   LOP: 'formula "LOP" :: Money let b = BASIC in b * 160% * (attendance.lopDays / 30)',
 };
@@ -61,6 +61,10 @@ async function ensureStandardConfig(tx: postgres.TransactionSql, societyId: stri
   for (const code of CODES) {
     await tx`insert into pay_config.component_binding(structure_version_id,component_id,created_by) values(${sv.id},${comp[code]},${creator})`;
   }
+  // seed the default PF rate (12%) — the admin edits it with an authoritative source
+  await tx`insert into pay_config.statutory_setting(society_id,key,value_num,label,source,created_by)
+    values(${societyId},'pf_rate',12,'PF employee contribution %','EPF & MP Act 1952 — default; confirm for your establishment',${creator})
+    on conflict (society_id,key) do nothing`;
   return { versionId: sv.id as string, basicComponentId: comp.BASIC };
 }
 
@@ -76,7 +80,7 @@ Deno.serve(async (req: Request) => {
   const { data: { user } } = await createClient(supaUrl, anonKey, { global: { headers: { Authorization: `Bearer ${jwt}` } } }).auth.getUser();
   if (!user?.email) return json(401, { error: 'invalid session' }, CORS);
 
-  let body: { action?: string; name?: string; code?: string; basicMinor?: number; employeeId?: string; period?: string; lopDays?: number };
+  let body: { action?: string; name?: string; code?: string; basicMinor?: number; employeeId?: string; period?: string; lopDays?: number; key?: string; value?: number; label?: string; source?: string };
   try { body = await req.json(); } catch { return json(400, { error: 'bad JSON' }, CORS); }
 
   const sql = postgres(dbUrl, { prepare: false, max: 3 });
@@ -157,7 +161,23 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, employeeId: empId, ended: rows.length }, CORS);
     }
 
-    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate'" }, CORS);
+    if (body.action === 'statutory-list') {
+      const rows = await sql`select key, value_num, label, source from pay_config.statutory_setting where society_id = ${societyId} order by key`;
+      return json(200, { settings: rows }, CORS);
+    }
+
+    if (body.action === 'statutory-set') {
+      const key = (body.key ?? '').trim();
+      const value = Number(body.value);
+      if (!/^[a-z0-9_]+$/.test(key)) return json(400, { error: 'invalid key' }, CORS);
+      if (!Number.isFinite(value) || value < 0) return json(400, { error: 'value must be a non-negative number' }, CORS);
+      await sql`insert into pay_config.statutory_setting(society_id,key,value_num,label,source,created_by)
+        values(${societyId},${key},${value},${body.label ?? null},${body.source ?? null},${su.id})
+        on conflict (society_id,key) do update set value_num = ${value}, label = coalesce(${body.label ?? null}, pay_config.statutory_setting.label), source = ${body.source ?? null}, updated_at = now(), updated_by = ${su.id}`;
+      return json(200, { ok: true, key, value }, CORS);
+    }
+
+    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate' / 'statutory-list' / 'statutory-set'" }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {

@@ -60,6 +60,10 @@ export interface CalcInputs {
   fixedComponents: Record<string, Value>;
   /** Whitelisted functions available to formulas at run time. */
   fns: EvalEnv['fns'];
+  /** Extra SCALAR variables a formula may reference — e.g. editable statutory rates (pf_rate = 12).
+   *  Numbers/percentages, never Money. INJECTED by the server from the society's (sourced) settings;
+   *  this keeps statutory values out of the code — the admin owns them. */
+  scalars?: Record<string, number>;
 }
 
 /**
@@ -69,6 +73,6 @@ export interface CalcInputs {
  * refuses with the evaluator's PAY-DSL-REF-020 — never a silent 0.
  */
 export function runComponents(set: CompiledFormulaSet, inputs: CalcInputs): PlanResult {
-  const vars: Record<string, Value> = { ...factsToEnv(inputs.facts, inputs.currency), ...inputs.fixedComponents };
+  const vars: Record<string, Value> = { ...factsToEnv(inputs.facts, inputs.currency), ...(inputs.scalars ?? {}), ...inputs.fixedComponents };
   return evaluatePlan(set, { vars, fns: inputs.fns });
 }
