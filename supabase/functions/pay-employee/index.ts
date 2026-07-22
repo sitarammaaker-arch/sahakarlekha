@@ -137,7 +137,31 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, employeeId: empId, period: body.period, paidDays: paid, lopDays: lop }, CORS);
     }
 
-    return json(400, { error: "action must be 'list' / 'add' / 'attendance'" }, CORS);
+    if (body.action === 'update') {
+      const empId = body.employeeId ?? '';
+      const basicMinor = Number(body.basicMinor);
+      if (!Number.isFinite(basicMinor) || basicMinor <= 0) return json(400, { error: 'basicMinor must be a positive number (paise)' }, CORS);
+      const rows = await sql`
+        update pay_config.assignment_override ao set fixed_minor = ${basicMinor}
+        from pay_config.structure_assignment sa, pay_config.component_catalog cc
+        where ao.assignment_id = sa.id and ao.component_id = cc.id and cc.code = 'BASIC'
+          and sa.employee_id = ${empId} and sa.effective_to is null and sa.society_id = ${societyId}
+        returning ao.id`;
+      if (!rows.length) return json(404, { error: 'employee / basic override not found in your society' }, CORS);
+      return json(200, { ok: true, employeeId: empId, basicMinor }, CORS);
+    }
+
+    if (body.action === 'deactivate') {
+      const empId = body.employeeId ?? '';
+      const [owner] = await sql`select 1 from pay_core.employee where id = ${empId} and society_id = ${societyId} limit 1`;
+      if (!owner) return json(404, { error: 'employee not found in your society' }, CORS);
+      // end the active assignment → excluded from future runs (past runs/payslips are untouched)
+      const rows = await sql`update pay_config.structure_assignment set effective_to = current_date, updated_at = now(), updated_by = ${su.id}
+        where employee_id = ${empId} and society_id = ${societyId} and effective_to is null returning id`;
+      return json(200, { ok: true, employeeId: empId, ended: rows.length }, CORS);
+    }
+
+    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate'" }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {
