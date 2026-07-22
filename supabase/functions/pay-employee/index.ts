@@ -27,6 +27,8 @@ const SFL: Record<string, string> = {
   DA: 'formula "DA" :: Money let b = BASIC in b * 20%',
   HRA: 'formula "HRA" :: Money let b = BASIC in b * 40%',
   PF: 'formula "PF" :: Money let b = BASIC in b * 12%',
+  // Loss of Pay: deduct the full-pay-equivalent (BASIC + DA 20% + HRA 40% = 160% of BASIC) for absent days.
+  LOP: 'formula "LOP" :: Money let b = BASIC in b * 160% * (attendance.lopDays / 30)',
 };
 
 // Ensure the society has the STANDARD structure; returns { versionId, basicComponentId }.
@@ -39,8 +41,9 @@ async function ensureStandardConfig(tx: postgres.TransactionSql, societyId: stri
     where st.society_id = ${societyId} and st.code = 'STANDARD' limit 1`;
   if (existing) return { versionId: existing.version_id as string, basicComponentId: existing.basic_id as string };
 
+  const CODES = ['BASIC', 'DA', 'HRA', 'PF', 'LOP'];
   const comp: Record<string, string> = {};
-  for (const code of ['BASIC', 'DA', 'HRA', 'PF']) {
+  for (const code of CODES) {
     const [r] = await tx`insert into pay_config.component_catalog(society_id,code,display_name,created_by) values(${societyId},${code},${L(code)},${creator}) returning id`;
     comp[code] = r.id;
   }
@@ -48,14 +51,14 @@ async function ensureStandardConfig(tx: postgres.TransactionSql, societyId: stri
     tx`insert into pay_config.component_version(component_id,kind,calc_method,gl_symbolic_role,formula_ref,effective_from,created_by,status)
        values(${comp[code]},${kind},${method}::pay_core.calc_method,${code.toLowerCase()},${formulaRef},${EFF},${creator},'active')`;
   await cv('BASIC', 'earning', 'fixed', null);
-  for (const code of ['DA', 'HRA', 'PF']) {
+  for (const code of ['DA', 'HRA', 'PF', 'LOP']) {
     const [fc] = await tx`insert into pay_formula.formula_catalog(name,created_by) values(${`${code} formula [${societyId}]`},${creator}) returning id`;
     const [fv] = await tx`insert into pay_formula.formula_version(formula_id,expression_text,effective_from,created_by,status) values(${fc.id},${SFL[code]},${EFF},${creator},'active') returning id`;
-    await cv(code, code === 'PF' ? 'deduction' : 'earning', 'formula', fv.id);
+    await cv(code, (code === 'PF' || code === 'LOP') ? 'deduction' : 'earning', 'formula', fv.id);
   }
   const [st] = await tx`insert into pay_config.structure_template(society_id,code,display_name,created_by) values(${societyId},'STANDARD',${L('Standard salary')},${creator}) returning id`;
   const [sv] = await tx`insert into pay_config.structure_version(structure_id,effective_from,created_by,status) values(${st.id},${EFF},${creator},'active') returning id`;
-  for (const code of ['BASIC', 'DA', 'HRA', 'PF']) {
+  for (const code of CODES) {
     await tx`insert into pay_config.component_binding(structure_version_id,component_id,created_by) values(${sv.id},${comp[code]},${creator})`;
   }
   return { versionId: sv.id as string, basicComponentId: comp.BASIC };
@@ -73,7 +76,7 @@ Deno.serve(async (req: Request) => {
   const { data: { user } } = await createClient(supaUrl, anonKey, { global: { headers: { Authorization: `Bearer ${jwt}` } } }).auth.getUser();
   if (!user?.email) return json(401, { error: 'invalid session' }, CORS);
 
-  let body: { action?: string; name?: string; code?: string; basicMinor?: number };
+  let body: { action?: string; name?: string; code?: string; basicMinor?: number; employeeId?: string; period?: string; lopDays?: number };
   try { body = await req.json(); } catch { return json(400, { error: 'bad JSON' }, CORS); }
 
   const sql = postgres(dbUrl, { prepare: false, max: 3 });
@@ -115,7 +118,22 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, employeeId: out.employeeId, code }, CORS);
     }
 
-    return json(400, { error: "action must be 'list' or 'add'" }, CORS);
+    if (body.action === 'attendance') {
+      const empId = body.employeeId ?? '';
+      if (!/^\d{4}-\d{2}$/.test(body.period ?? '')) return json(400, { error: 'period "YYYY-MM" required' }, CORS);
+      const lop = Number(body.lopDays);
+      if (!Number.isFinite(lop) || lop < 0 || lop > 31) return json(400, { error: 'lopDays must be 0–31' }, CORS);
+      const periodMonth = `${body.period}-01`;
+      const paid = 30 - lop;
+      const [owner] = await sql`select 1 from pay_core.employee where id = ${empId} and society_id = ${societyId} limit 1`;
+      if (!owner) return json(404, { error: 'employee not found in your society' }, CORS);
+      await sql`insert into pay_calc.attendance(society_id,employee_id,period_month,paid_days,lop_days,created_by)
+        values(${societyId},${empId},${periodMonth},${paid},${lop},${su.id})
+        on conflict (society_id,employee_id,period_month) do update set paid_days = ${paid}, lop_days = ${lop}, updated_at = now(), updated_by = ${su.id}`;
+      return json(200, { ok: true, employeeId: empId, period: body.period, paidDays: paid, lopDays: lop }, CORS);
+    }
+
+    return json(400, { error: "action must be 'list' / 'add' / 'attendance'" }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {
