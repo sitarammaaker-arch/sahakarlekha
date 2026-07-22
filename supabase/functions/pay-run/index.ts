@@ -124,7 +124,9 @@ Deno.serve(async (req: Request) => {
       const cls = r.aggregate.classification as Record<string, string>;
       for (const code of planFormulaCodes) if (cls[code] === undefined) cls[code] = 'info';
       const fc = r.calc.fixedComponents as Record<string, unknown>;
-      if (fixedCodes.has('BASIC') && fc.BASIC === undefined) fc.BASIC = makeMoney(0, 'INR');
+      // inject 0 for EVERY fixed component the shared plan might reference (BASIC, DAILY_RATE, …) that
+      // this employee's structure omits, so a cross-structure formula computes 0 instead of refusing.
+      for (const code of fixedCodes) if (fc[code] === undefined) fc[code] = makeMoney(0, 'INR');
     }
 
     // 6. assemble the run (one shared plan; typeBase declares fixed components + fact vars)
