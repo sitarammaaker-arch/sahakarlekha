@@ -46,5 +46,8 @@ export function computePayslip(input: ComputePayslipInput): Payslip {
     currency: input.calc.currency,
     classification: input.aggregate.classification,
     clamps: input.aggregate.clamps,
+    // fixed/rule components (e.g. BASIC) are plan INPUTS, not outputs — pass them so a classified
+    // fixed earning still appears on the payslip.
+    fixedComponents: input.calc.fixedComponents,
   });
 }

@@ -42,19 +42,30 @@ export interface Payslip {
 
 export interface AggregateSpec {
   currency: string;
-  /** Side for EVERY computed component. A missing entry refuses (PAY-CAL-601). */
+  /** Side for EVERY computed component. A computed-but-unclassified value refuses (PAY-CAL-601);
+   *  a classified component with no value refuses (PAY-CAL-604). */
   classification: Record<string, ComponentSide>;
   /** Optional per-component statutory bounds (paise), applied at value-use. */
   clamps?: Record<string, ClampBounds>;
+  /** Fixed component values that are themselves payslip lines (e.g. BASIC from a rule/override) —
+   *  they are plan INPUTS, not plan outputs, so they must be supplied here to appear on the payslip.
+   *  Merged under the computed plan values; a classified component takes its value from whichever
+   *  side supplies it. */
+  fixedComponents?: Record<string, Value>;
 }
 
 const isMoney = (v: Value): v is MoneyValue =>
   !!v && typeof v === 'object' && (v as { kind?: string }).kind === 'money';
 
 /**
- * PURE — aggregate computed component values into a payslip. Iterates the values in plan order
- * (their insertion order), so lines are deterministic. Throws on an unclassified component
- * (PAY-CAL-601), a non-money or wrong-currency earning/deduction (PAY-CAL-602 / 603).
+ * PURE — aggregate component values into a payslip. Lines are built from the CLASSIFICATION (the
+ * declared payslip lines), each value pulled from the computed plan OR the fixed inputs — so a
+ * fixed/rule earning (BASIC/Basic-Pay) appears alongside formula components (DA/HRA/PF). Order is
+ * the classification's insertion order (deterministic).
+ *
+ * Two safety passes: a COMPUTED plan value that isn't classified refuses (PAY-CAL-601, a config gap
+ * — never a silent drop); a CLASSIFIED component with no value anywhere refuses (PAY-CAL-604). A
+ * non-money or wrong-currency line refuses (PAY-CAL-602 / 603).
  */
 export function aggregatePayslip(values: Record<string, Value>, spec: AggregateSpec): Payslip {
   const earnings: PayslipLine[] = [];
@@ -62,14 +73,23 @@ export function aggregatePayslip(values: Record<string, Value>, spec: AggregateS
   let grossEarningsMinor = 0;
   let grossDeductionsMinor = 0;
 
+  // 1. safety — every COMPUTED plan output must be classified (a computed-but-unclassified
+  //    component is a config gap, never a silent drop).
   for (const code of Object.keys(values)) {
-    const side = spec.classification[code];
-    if (side === undefined) {
+    if (spec.classification[code] === undefined) {
       throw new RangeError(`PAY-CAL-601: component '${code}' is computed but unclassified (earning/deduction/info required)`);
     }
+  }
+
+  // 2. build lines from the classification; each value comes from a fixed input OR a plan output.
+  const pool: Record<string, Value> = { ...(spec.fixedComponents ?? {}), ...values };
+  for (const [code, side] of Object.entries(spec.classification)) {
     if (side === 'info') continue; // intermediate — deliberately excluded from the payslip
 
-    const raw = values[code];
+    const raw = pool[code];
+    if (raw === undefined) {
+      throw new RangeError(`PAY-CAL-604: ${side} component '${code}' is classified but has no computed or fixed value`);
+    }
     if (!isMoney(raw)) {
       throw new RangeError(`PAY-CAL-602: ${side} component '${code}' must be a money value`);
     }
