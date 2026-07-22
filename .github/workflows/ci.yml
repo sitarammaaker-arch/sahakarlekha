@@ -57,3 +57,12 @@ jobs:
             exit 1
           fi
           echo "All pure test suites passed."
+
+      - name: Payroll staging RLS-coverage (opt-in; runs only if a staging DB secret is set)
+        # READ-ONLY assertion that the payroll schema's RLS is complete on a target staging DB.
+        # Skips cleanly (green) when PAYROLL_STAGING_DATABASE_URL is unset, so this is opt-in and
+        # never blocks a PR by default. CI deliberately does NOT apply/re-run migrations against
+        # staging (that would mutate a shared DB) — apply + VERIFICATION.sql are a manual/deploy step.
+        env:
+          DATABASE_URL: ${{ secrets.PAYROLL_STAGING_DATABASE_URL }}
+        run: npm run test:pay-rls-coverage

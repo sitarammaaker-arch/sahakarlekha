@@ -107,6 +107,7 @@ const PurchaseManagement = lazyWithRetry(() => import("./pages/PurchaseManagemen
 const MakePayment = lazyWithRetry(() => import("./pages/MakePayment"));
 const PurchaseRegister = lazyWithRetry(() => import("./pages/PurchaseRegister"));
 const SalaryManagement = lazyWithRetry(() => import("./pages/SalaryManagement"));
+const Payroll = lazyWithRetry(() => import("./pages/Payroll"));
 const Suppliers = lazyWithRetry(() => import("./pages/Suppliers"));
 const Customers = lazyWithRetry(() => import("./pages/Customers"));
 const DeletedVouchers = lazyWithRetry(() => import("./pages/DeletedVouchers"));
@@ -344,6 +345,7 @@ const AppRoutes = () => {
       <Route path="/make-payment" element={<ProtectedRoute><MakePayment /></ProtectedRoute>} />
       <Route path="/purchase-register" element={<ProtectedRoute><PurchaseRegister /></ProtectedRoute>} />
       <Route path="/salary" element={<ProtectedRoute><SalaryManagement /></ProtectedRoute>} />
+      <Route path="/payroll" element={<ProtectedRoute><Payroll /></ProtectedRoute>} />
       <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
       <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
       <Route path="/deleted-vouchers" element={<ProtectedRoute><DeletedVouchers /></ProtectedRoute>} />
