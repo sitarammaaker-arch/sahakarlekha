@@ -53,6 +53,16 @@ Deno.serve(async (req: Request) => {
     if (!['admin', 'accountant'].includes(su.role)) return json(403, { error: 'only admin / accountant may run payroll' }, CORS);
     const societyId = su.society_id as string;
 
+    // 2b. one run per period — refuse a duplicate up front with a clear message (the DB index
+    // `run_one_open` also blocks it, but as a cryptic 500). Matches this function's scope: no
+    // branch/department split, accrual basis. A cancelled/rolled-back run does NOT block a redo.
+    const [dup] = await sql`
+      select run_no, state::text from pay_calc.payroll_run
+      where society_id = ${societyId} and period = ${period}
+        and scope_branch_id is null and scope_department_id is null and pay_basis = 'accrual'
+        and state not in ('cancelled','rolled_back') limit 1`;
+    if (dup) return json(409, { error: `is avdhi (${period}) ka payroll pehle se hai — run ${dup.run_no} (${dup.state}). Dobara chalane ke liye pehle use cancel karein.` }, CORS);
+
     // 3. employees with an active salary-structure assignment
     const employees = await sql`
       select e.id, e.employee_code, sa.id as assignment_id, sa.structure_version_id
@@ -137,7 +147,11 @@ Deno.serve(async (req: Request) => {
 
     return json(200, { ok: true, runId, runNo, employeeCount: assembled.payslips.length, period }, CORS);
   } catch (e) {
-    return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
+    const msg = String((e as Error)?.message ?? e);
+    // backstop for the pre-check race: if two runs for the same period land together, the DB index
+    // `run_one_open` blocks the second — surface it as the same friendly 409, not a raw 500.
+    if (msg.includes('run_one_open')) return json(409, { error: `is avdhi (${period}) ka payroll pehle se hai. Dobara chalane ke liye pehle use cancel karein.` }, CORS);
+    return json(500, { error: msg }, CORS);
   } finally {
     await sql.end();
   }
