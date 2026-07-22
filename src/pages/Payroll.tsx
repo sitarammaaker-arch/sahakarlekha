@@ -172,22 +172,27 @@ const Payroll: React.FC = () => {
     if (state === 'verified') return { action: 'approve', label: hi ? 'स्वीकृत करें' : 'Approve' };
     if (state === 'approved') return { action: 'lock', label: hi ? 'लॉक करें' : 'Lock' };
     if (state === 'locked') return { action: 'post', label: hi ? 'बही में पोस्ट करें' : 'Post to ledger' };
+    if (state === 'posted') return { action: 'pay', label: hi ? 'भुगतान करें' : 'Pay salaries' };
     return null;
   };
 
   const doTransition = async (runId: string, action: string) => {
     setTransitioning(runId);
-    // 'post' creates the GL voucher (pay-post); the rest are state transitions (pay-transition)
-    const fn = action === 'post' ? 'pay-post' : 'pay-transition';
-    const { data, error } = await supabase.functions.invoke(fn, { body: action === 'post' ? { runId } : { runId, action } });
+    // 'post' → pay-post (GL voucher); 'pay' → pay-pay (payment voucher); the rest → pay-transition
+    const fn = action === 'post' ? 'pay-post' : action === 'pay' ? 'pay-pay' : 'pay-transition';
+    const isFinancial = action === 'post' || action === 'pay';
+    const { data, error } = await supabase.functions.invoke(fn, { body: isFinancial ? { runId } : { runId, action } });
     setTransitioning(null);
     if (error || (data as { error?: string })?.error) {
       toast({ title: hi ? 'बदलाव नहीं हुआ' : 'Action failed', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' });
       return;
     }
     if (action === 'post') {
-      const d = data as { voucherId?: string; expense?: number };
+      const d = data as { expense?: number };
       toast({ title: hi ? 'बही में पोस्ट हो गया ✓' : 'Posted to ledger ✓', description: hi ? `journal voucher बना (₹${d.expense})` : `journal voucher created (₹${d.expense})` });
+    } else if (action === 'pay') {
+      const d = data as { net?: number };
+      toast({ title: hi ? 'भुगतान हो गया ✓' : 'Salaries paid ✓', description: hi ? `payment voucher बना (₹${d.net})` : `payment voucher created (₹${d.net})` });
     } else {
       toast({ title: hi ? 'हो गया ✓' : 'Done ✓', description: `${(data as { from?: string }).from} → ${(data as { state?: string }).state}` });
     }
