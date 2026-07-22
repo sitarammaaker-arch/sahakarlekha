@@ -360,6 +360,12 @@ const Payroll: React.FC = () => {
     });
   };
 
+  // The payroll is audit-append-only (records are never hard-deleted). Hide the ones the user has
+  // retired so they don't clutter the working view: cancelled runs (void, no ledger effect) and
+  // deactivated employees (no active salary assignment → basic_minor is null). History still exists.
+  const visibleRuns = runs.filter((r) => r.state !== 'cancelled');
+  const activeEmployees = employees.filter((e) => e.basic_minor != null);
+
   return (
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center gap-2">
@@ -428,16 +434,16 @@ const Payroll: React.FC = () => {
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-primary" />
             <span className="font-medium">{hi ? 'कर्मचारी' : 'Employees'}</span>
-            <Badge variant="outline">{employees.length}</Badge>
+            <Badge variant="outline">{activeEmployees.length}</Badge>
             <Button className="ml-auto" size="sm" variant="outline" onClick={() => { setEmpName(''); setEmpCode(''); setEmpBasic(''); setEmpOpen(true); }}>
               <UserPlus className="h-4 w-4 mr-1" /> {hi ? 'कर्मचारी जोड़ें' : 'Add employee'}
             </Button>
           </div>
-          {employees.length === 0 ? (
+          {activeEmployees.length === 0 ? (
             <p className="text-sm text-muted-foreground">{hi ? 'अभी कोई कर्मचारी नहीं। "कर्मचारी जोड़ें" से शुरू करें, फिर पेरोल चलाएँ।' : 'No employees yet — add one, then run payroll.'}</p>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {employees.map((e) => (
+              {activeEmployees.map((e) => (
                 <button key={e.id} type="button" className="text-sm border rounded-md px-2 py-1 hover:bg-muted text-left" title={hi ? 'उपस्थिति सेट करें' : 'Set attendance'}
                   onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); }}>
                   <span className="font-medium">{nameOf(e.full_name)}</span> <span className="text-xs text-muted-foreground">{e.employee_code}</span>
@@ -501,7 +507,7 @@ const Payroll: React.FC = () => {
         <CardContent className="p-0">
           {loading ? (
             <div className="flex items-center gap-2 p-8 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {hi ? 'लोड हो रहा है…' : 'Loading…'}</div>
-          ) : runs.length === 0 ? (
+          ) : visibleRuns.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
               {hi ? 'अभी कोई पेरोल-रन नहीं। (पेरोल इंजन से एक रन बनने पर यहाँ दिखेगा।)' : 'No payroll runs yet. (A run computed by the payroll engine will appear here.)'}
             </div>
@@ -518,7 +524,7 @@ const Payroll: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {runs.map((r) => (
+                {visibleRuns.map((r) => (
                   <TableRow key={r.run_id} className="cursor-pointer" onClick={() => openRun(r)}>
                     <TableCell className="font-medium">{r.run_no}</TableCell>
                     <TableCell>{r.period}</TableCell>
