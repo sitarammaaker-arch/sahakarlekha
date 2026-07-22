@@ -470,6 +470,8 @@ alter table sales add column if not exists "taxAmount" numeric default 0;
 alter table sales add column if not exists "grandTotal" numeric default 0;
 alter table sales add column if not exists "customerId" text;
 alter table sales add column if not exists "gstVoucherIds" jsonb default '[]';
+-- Migration 054: which bank a bank-mode sale receipt hits (null → default bank, as before).
+alter table sales add column if not exists "bankAccountId" text;
 
 -- Purchases: GST + TDS fields
 alter table purchases add column if not exists "cgstPct" numeric default 0;
@@ -490,6 +492,8 @@ alter table purchases add column if not exists "tcsPct" numeric default 0;
 alter table purchases add column if not exists "tcsAmount" numeric default 0;
 alter table purchases add column if not exists "supplierId" text;
 alter table purchases add column if not exists "taxVoucherIds" jsonb default '[]';
+-- Migration 054: which bank a bank-mode purchase payment hits (null → default bank, as before).
+alter table purchases add column if not exists "bankAccountId" text;
 
 -- Vouchers: multi-line support (Phase 1 - Path B)
 alter table vouchers add column if not exists lines jsonb default '[]';
@@ -2871,6 +2875,8 @@ alter table salary_records add column if not exists "esiEmployee" numeric;
 alter table salary_records add column if not exists "esiEmployer" numeric;
 alter table salary_records add column if not exists "pt" numeric;
 alter table salary_records add column if not exists "tds" numeric;
+-- Migration 054: which bank a bank-mode salary payment hits (null → default bank, as before).
+alter table salary_records add column if not exists "bankAccountId" text;
 alter table employees add column if not exists "pfApplicable" boolean;
 alter table employees add column if not exists "esiApplicable" boolean;
 alter table employees add column if not exists "uan" text;

@@ -7,7 +7,7 @@ import { tdsBasisNote, type TaxRegime } from '@/lib/tdsProjection';
 import { resolveTaxBasis } from '@/lib/rules/incomeTax';
 import { cumulativeMonthlyTds, monthsLeftInFy, fyBounds, isInFy } from '@/lib/payroll/cumulativeTds';
 import { isPeriodLocked } from '@/lib/periodLock';
-import { getTdsChallanLinks } from '@/lib/storage';
+import { getTdsChallanLinks, getBankAccountIds } from '@/lib/storage';
 import { professionalTaxForState } from '@/lib/professionalTax';
 import { build24Q, type Quarter } from '@/lib/form24Q';
 import { daysInMonth, prorate } from '@/lib/attendance';
@@ -211,6 +211,7 @@ const SalaryManagement: React.FC = () => {
     addSalaryRecord,
     updateSalaryRecord,
     deleteSalaryRecord,
+    accounts,
     society,
     getEntityLinks,
   } = useData();
@@ -297,6 +298,7 @@ const SalaryManagement: React.FC = () => {
   const [markPaidId, setMarkPaidId] = useState<string | null>(null);
   const [markPaidDate, setMarkPaidDate] = useState(new Date().toISOString().split('T')[0]);
   const [markPaidMode, setMarkPaidMode] = useState<PaymentMode>('bank');
+  const [markPaidBankId, setMarkPaidBankId] = useState<string>('');   // which bank, when mode = 'bank'
   const [deleteSlipId, setDeleteSlipId] = useState<string | null>(null);
 
   // ── derived – Employees ──────────────────────────────────────────────────
@@ -538,7 +540,7 @@ const SalaryManagement: React.FC = () => {
 
   const handleMarkPaid = () => {
     if (!markPaidId) return;
-    updateSalaryRecord(markPaidId, { isPaid: true, paidDate: markPaidDate, paymentMode: markPaidMode });
+    updateSalaryRecord(markPaidId, { isPaid: true, paidDate: markPaidDate, paymentMode: markPaidMode, bankAccountId: markPaidMode === 'bank' ? (markPaidBankId || undefined) : undefined });
     toast({ title: hi ? 'भुगतान चिह्नित किया गया' : 'Marked as paid' });
     setMarkPaidId(null);
   };
@@ -1198,6 +1200,7 @@ const SalaryManagement: React.FC = () => {
                                     setMarkPaidId(record.id);
                                     setMarkPaidDate(new Date().toISOString().split('T')[0]);
                                     setMarkPaidMode(record.paymentMode);
+                                    setMarkPaidBankId(record.bankAccountId || '');
                                   }}
                                 >
                                   <CheckCircle className="h-4 w-4" />
@@ -1335,6 +1338,19 @@ const SalaryManagement: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
+            {markPaidMode === 'bank' && (
+              <div className="space-y-1">
+                <Label>{hi ? 'बैंक खाता' : 'Bank Account'}</Label>
+                <Select value={markPaidBankId} onValueChange={setMarkPaidBankId}>
+                  <SelectTrigger><SelectValue placeholder={hi ? 'बैंक चुनें' : 'Select bank'} /></SelectTrigger>
+                  <SelectContent>
+                    {getBankAccountIds(accounts).map(id => accounts.find(a => a.id === id)).filter((a): a is NonNullable<typeof a> => !!a).map(a => (
+                      <SelectItem key={a.id} value={a.id}>{hi ? (a.nameHi || a.name) : a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setMarkPaidId(null)}>
