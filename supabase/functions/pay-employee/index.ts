@@ -29,6 +29,8 @@ const SFL: Record<string, string> = {
   PF: 'formula "PF" :: Money let b = BASIC in b * (pf_rate / 100)',
   // Loss of Pay: deduct the full-pay-equivalent (BASIC + DA 20% + HRA 40% = 160% of BASIC) for absent days.
   LOP: 'formula "LOP" :: Money let b = BASIC in b * 160% * (attendance.lopDays / 30)',
+  // Daily wages: the day rate (a hidden input component) times the days actually worked.
+  DAILY_WAGE: 'formula "DAILY_WAGE" :: Money let r = DAILY_RATE in r * attendance.paidDays',
 };
 
 // Society-wide component catalog (shared DEFINITIONS; per-employee independence comes from each
@@ -41,16 +43,21 @@ const COMPONENTS: Record<string, { kind: string; method: string; formula: string
   LOP:          { kind: 'deduction', method: 'formula', formula: SFL.LOP, label: 'Loss of Pay' },
   DEP_ALLOW:    { kind: 'earning',   method: 'fixed',   formula: null,    label: 'Deputation Allowance' },
   CONSOLIDATED: { kind: 'earning',   method: 'fixed',   formula: null,    label: 'Consolidated Pay' },
+  // Daily wages: DAILY_RATE is a hidden input (kind 'employer_contrib' → 'info', excluded from the
+  // payslip); DAILY_WAGE = rate × days-worked is the visible earning.
+  DAILY_RATE:   { kind: 'employer_contrib', method: 'fixed',   formula: null,           label: 'Daily Rate (per day)' },
+  DAILY_WAGE:   { kind: 'earning',          method: 'formula', formula: SFL.DAILY_WAGE, label: 'Daily Wages' },
 };
 
 // Each employment TYPE → the components its structure binds + which one the entered amount fills +
 // which extra components default to 0 (editable later). Keys are the seeded pay_core.employment_type
-// codes. 'muster' (daily wages) is the next slice — it needs the rate×days calc.
+// codes. muster = daily wages (the entered amount is the DAILY RATE; DAILY_WAGE = rate × days worked).
 const TYPE_STRUCTURE: Record<string, { components: string[]; primary: string; zero: string[] }> = {
   permanent:  { components: ['BASIC', 'DA', 'HRA', 'PF', 'LOP'], primary: 'BASIC', zero: [] },
   deputation: { components: ['BASIC', 'DA', 'DEP_ALLOW', 'LOP'], primary: 'BASIC', zero: ['DEP_ALLOW'] },
   contract:   { components: ['CONSOLIDATED'], primary: 'CONSOLIDATED', zero: [] },
   honorary:   { components: ['CONSOLIDATED'], primary: 'CONSOLIDATED', zero: [] },
+  muster:     { components: ['DAILY_RATE', 'DAILY_WAGE'], primary: 'DAILY_RATE', zero: [] },
 };
 
 // Idempotent: ensure every society component + the default statutory rates exist. Returns { code: id }.
@@ -126,7 +133,7 @@ Deno.serve(async (req: Request) => {
                e.employment_type,
                (select ao.fixed_minor from pay_config.structure_assignment sa
                   join pay_config.assignment_override ao on ao.assignment_id = sa.id
-                  join pay_config.component_catalog cc on cc.id = ao.component_id and cc.code in ('BASIC','CONSOLIDATED')
+                  join pay_config.component_catalog cc on cc.id = ao.component_id and cc.code in ('BASIC','CONSOLIDATED','DAILY_RATE')
                 where sa.employee_id = e.id and sa.effective_to is null order by cc.code limit 1) as basic_minor
         from pay_core.employee e
         left join pay_core.statutory_identity si on si.employee_id = e.id
@@ -184,7 +191,7 @@ Deno.serve(async (req: Request) => {
       const rows = await sql`
         update pay_config.assignment_override ao set fixed_minor = ${basicMinor}
         from pay_config.structure_assignment sa, pay_config.component_catalog cc
-        where ao.assignment_id = sa.id and ao.component_id = cc.id and cc.code in ('BASIC','CONSOLIDATED')
+        where ao.assignment_id = sa.id and ao.component_id = cc.id and cc.code in ('BASIC','CONSOLIDATED','DAILY_RATE')
           and sa.employee_id = ${empId} and sa.effective_to is null and sa.society_id = ${societyId}
         returning ao.id`;
       if (!rows.length) return json(404, { error: 'employee / basic override not found in your society' }, CORS);
