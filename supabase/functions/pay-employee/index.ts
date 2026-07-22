@@ -43,6 +43,7 @@ const COMPONENTS: Record<string, { kind: string; method: string; formula: string
   LOP:          { kind: 'deduction', method: 'formula', formula: SFL.LOP, label: 'Loss of Pay' },
   DEP_ALLOW:    { kind: 'earning',   method: 'fixed',   formula: null,    label: 'Deputation Allowance' },
   CONSOLIDATED: { kind: 'earning',   method: 'fixed',   formula: null,    label: 'Consolidated Pay' },
+  STIPEND:      { kind: 'earning',   method: 'fixed',   formula: null,    label: 'Stipend' },
   // Daily wages: DAILY_RATE is a hidden input (kind 'employer_contrib' → 'info', excluded from the
   // payslip); DAILY_WAGE = rate × days-worked is the visible earning.
   DAILY_RATE:   { kind: 'employer_contrib', method: 'fixed',   formula: null,           label: 'Daily Rate (per day)' },
@@ -58,7 +59,30 @@ const TYPE_STRUCTURE: Record<string, { components: string[]; primary: string; ze
   contract:   { components: ['CONSOLIDATED'], primary: 'CONSOLIDATED', zero: [] },
   honorary:   { components: ['CONSOLIDATED'], primary: 'CONSOLIDATED', zero: [] },
   muster:     { components: ['DAILY_RATE', 'DAILY_WAGE'], primary: 'DAILY_RATE', zero: [] },
+  probation:  { components: ['BASIC', 'DA', 'HRA', 'PF', 'LOP'], primary: 'BASIC', zero: [] },       // like permanent
+  seasonal:   { components: ['BASIC', 'DA', 'PF', 'LOP'], primary: 'BASIC', zero: [] },               // monthly, PF, no HRA
+  fixedterm:  { components: ['BASIC', 'DA', 'PF', 'LOP'], primary: 'BASIC', zero: [] },               // statutory for the term
+  apprentice: { components: ['STIPEND'], primary: 'STIPEND', zero: [] },                              // stipend, no statutory
+  parttime:   { components: ['CONSOLIDATED'], primary: 'CONSOLIDATED', zero: [] },
+  consultant: { components: ['CONSOLIDATED'], primary: 'CONSOLIDATED', zero: [] },                    // retainer fee (194J TDS later)
+  casual:     { components: ['DAILY_RATE', 'DAILY_WAGE'], primary: 'DAILY_RATE', zero: [] },          // like muster
 };
+
+// The seeded pay_core.employment_type rows the structures above rely on (FK). Idempotent — the table
+// is an open taxonomy (is_system), so we top it up on demand rather than via a fresh migration.
+const EMP_TYPE_SEED: [string, string, string][] = [
+  ['permanent', 'स्थायी', 'Permanent'], ['deputation', 'प्रतिनियुक्ति', 'Deputation'],
+  ['muster', 'मस्टर / दैनिक श्रमिक', 'Muster Labour'], ['contract', 'संविदा', 'Contract'],
+  ['honorary', 'मानद', 'Honorary'], ['probation', 'परिवीक्षाधीन', 'Probationer'],
+  ['seasonal', 'मौसमी', 'Seasonal'], ['fixedterm', 'नियत-अवधि', 'Fixed-term'],
+  ['apprentice', 'प्रशिक्षु', 'Apprentice'], ['parttime', 'अंशकालिक', 'Part-time'],
+  ['consultant', 'सलाहकार', 'Consultant'], ['casual', 'आकस्मिक', 'Casual'],
+];
+async function ensureEmploymentTypes(tx: postgres.TransactionSql) {
+  for (const [code, hi, en] of EMP_TYPE_SEED) {
+    await tx`insert into pay_core.employment_type(code,label) values(${code},${JSON.stringify({ hi, en })}) on conflict do nothing`;
+  }
+}
 
 // Idempotent: ensure every society component + the default statutory rates exist. Returns { code: id }.
 async function ensureSocietyComponents(tx: postgres.TransactionSql, societyId: string, creator: string) {
@@ -133,7 +157,7 @@ Deno.serve(async (req: Request) => {
                e.employment_type,
                (select ao.fixed_minor from pay_config.structure_assignment sa
                   join pay_config.assignment_override ao on ao.assignment_id = sa.id
-                  join pay_config.component_catalog cc on cc.id = ao.component_id and cc.code in ('BASIC','CONSOLIDATED','DAILY_RATE')
+                  join pay_config.component_catalog cc on cc.id = ao.component_id and cc.code in ('BASIC','CONSOLIDATED','DAILY_RATE','STIPEND')
                 where sa.employee_id = e.id and sa.effective_to is null order by cc.code limit 1) as basic_minor
         from pay_core.employee e
         left join pay_core.statutory_identity si on si.employee_id = e.id
@@ -151,6 +175,7 @@ Deno.serve(async (req: Request) => {
 
       const out = await sql.begin(async (tx: postgres.TransactionSql) => {
         const compIds = await ensureSocietyComponents(tx, societyId, su.id);
+        await ensureEmploymentTypes(tx);
         const [dup] = await tx`select 1 from pay_core.employee where society_id = ${societyId} and employee_code = ${code} limit 1`;
         if (dup) throw new Error(`employee code '${code}' already exists`);
         const [emp] = await tx`insert into pay_core.employee(society_id,employee_code,full_name,date_of_join,employment_type,created_by)
@@ -191,7 +216,7 @@ Deno.serve(async (req: Request) => {
       const rows = await sql`
         update pay_config.assignment_override ao set fixed_minor = ${basicMinor}
         from pay_config.structure_assignment sa, pay_config.component_catalog cc
-        where ao.assignment_id = sa.id and ao.component_id = cc.id and cc.code in ('BASIC','CONSOLIDATED','DAILY_RATE')
+        where ao.assignment_id = sa.id and ao.component_id = cc.id and cc.code in ('BASIC','CONSOLIDATED','DAILY_RATE','STIPEND')
           and sa.employee_id = ${empId} and sa.effective_to is null and sa.society_id = ${societyId}
         returning ao.id`;
       if (!rows.length) return json(404, { error: 'employee / basic override not found in your society' }, CORS);

@@ -43,17 +43,27 @@ const isDeduction = (kind: string) => kind === 'deduction' || kind === 'loan_rec
 // Employee types (map to seeded pay_core.employment_type codes).
 const EMP_TYPES = [
   { code: 'permanent',  hi: 'स्थायी',              en: 'Permanent' },
+  { code: 'probation',  hi: 'परिवीक्षाधीन',        en: 'Probationer' },
   { code: 'deputation', hi: 'प्रतिनियुक्ति',       en: 'Deputation' },
+  { code: 'fixedterm',  hi: 'नियत-अवधि',           en: 'Fixed-term' },
+  { code: 'seasonal',   hi: 'मौसमी',               en: 'Seasonal' },
   { code: 'muster',     hi: 'मस्टर / दैनिक श्रमिक', en: 'Daily Wages' },
+  { code: 'casual',     hi: 'आकस्मिक / दिहाड़ी',    en: 'Casual' },
+  { code: 'apprentice', hi: 'प्रशिक्षु',           en: 'Apprentice' },
+  { code: 'parttime',   hi: 'अंशकालिक',            en: 'Part-time' },
   { code: 'contract',   hi: 'संविदा',              en: 'Contractual' },
+  { code: 'consultant', hi: 'सलाहकार',             en: 'Consultant' },
   { code: 'honorary',   hi: 'मानद',                en: 'Honorary' },
 ];
+const DAILY_TYPES = ['muster', 'casual'];
 const empTypeLabel = (code: string | null | undefined, hi: boolean) => {
   const t = EMP_TYPES.find((x) => x.code === code);
   return t ? (hi ? t.hi : t.en) : (code || '');
 };
-// contract / honorary take a single consolidated amount; the rest take a monthly Basic.
-const isConsolidatedType = (code: string) => code === 'contract' || code === 'honorary';
+// consolidated (single monthly amount) types; the daily types take a per-day rate; apprentice a
+// stipend; everything else a monthly Basic.
+const isConsolidatedType = (code: string) => ['contract', 'honorary', 'parttime', 'consultant'].includes(code);
+const isDailyType = (code: string) => DAILY_TYPES.includes(code);
 
 // supabase-js resolves an Edge Function's non-2xx as { data: null, error: FunctionsHttpError }, and the
 // JSON body — our friendly { error: "…" } message — lives on error.context, NOT error.message (which is
@@ -485,14 +495,19 @@ const Payroll: React.FC = () => {
               </select>
             </div>
             <div className="space-y-1">
-              <Label>{empType === 'muster' ? (hi ? 'दैनिक दर (₹/दिन)' : 'Daily rate (₹/day)') : isConsolidatedType(empType) ? (hi ? 'एकमुश्त राशि (₹/माह)' : 'Consolidated amount (₹/month)') : (hi ? 'मूल वेतन (₹/माह)' : 'Basic salary (₹/month)')}</Label>
-              <Input type="number" value={empBasic} onChange={(e) => setEmpBasic(e.target.value)} placeholder={empType === 'muster' ? '500' : '25000'} />
+              <Label>{isDailyType(empType) ? (hi ? 'दैनिक दर (₹/दिन)' : 'Daily rate (₹/day)')
+                : empType === 'apprentice' ? (hi ? 'छात्रवृत्ति (₹/माह)' : 'Stipend (₹/month)')
+                : isConsolidatedType(empType) ? (hi ? 'एकमुश्त राशि (₹/माह)' : 'Consolidated amount (₹/month)')
+                : (hi ? 'मूल वेतन (₹/माह)' : 'Basic salary (₹/month)')}</Label>
+              <Input type="number" value={empBasic} onChange={(e) => setEmpBasic(e.target.value)} placeholder={isDailyType(empType) ? '500' : '25000'} />
             </div>
             <p className="text-xs text-muted-foreground">
-              {empType === 'permanent' ? (hi ? 'DA (मूल का 20%), HRA (40%), PF (12%) अपने-आप जुड़ेंगे।' : 'DA (20% of basic), HRA (40%), PF (12%) are added automatically.')
+              {(empType === 'permanent' || empType === 'probation') ? (hi ? 'DA (मूल का 20%), HRA (40%), PF (12%) अपने-आप जुड़ेंगे।' : 'DA (20% of basic), HRA (40%), PF (12%) are added automatically.')
                 : empType === 'deputation' ? (hi ? 'मूल + DA + प्रतिनियुक्ति भत्ता (बाद में सेट करें)। PF नहीं।' : 'Basic + DA + Deputation allowance (set later). No PF.')
-                : empType === 'muster' ? (hi ? 'वेतन = दैनिक दर × उपस्थिति-दिन (उपस्थिति चिप पर सेट करें)।' : 'Pay = daily rate × days worked (set attendance on the chip).')
-                : (hi ? 'केवल एकमुश्त राशि, कोई सांविधिक कटौती नहीं।' : 'Consolidated amount only, no statutory deductions.')}
+                : (empType === 'seasonal' || empType === 'fixedterm') ? (hi ? 'मूल + DA + PF (HRA नहीं)।' : 'Basic + DA + PF (no HRA).')
+                : isDailyType(empType) ? (hi ? 'वेतन = दैनिक दर × उपस्थिति-दिन (उपस्थिति चिप पर सेट करें)।' : 'Pay = daily rate × days worked (set attendance on the chip).')
+                : empType === 'apprentice' ? (hi ? 'केवल छात्रवृत्ति, कोई सांविधिक कटौती नहीं।' : 'Stipend only, no statutory deductions.')
+                : (hi ? 'केवल एकमुश्त राशि, कोई सांविधिक कटौती नहीं (TDS बाद में)।' : 'Consolidated amount only, no statutory deductions (TDS later).')}
             </p>
           </div>
           <DialogFooter>
