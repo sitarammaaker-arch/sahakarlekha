@@ -5914,7 +5914,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ECR-17 Phase 5: branchId stays IN saleBase — the branch-scoped RLS SELECT policies
     // (migration 039) must see it on the row from birth, or a branch-restricted user's own
     // sale vanishes from their next load. Stale-schema-cache fallback below (RULE 1).
-    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember, gstVoucherIds: _gv, ...saleBase } = sale;
+    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember, bankAccountId: sBankId, gstVoucherIds: _gv, ...saleBase } = sale;
     // Feature 6: a duplicate saleNo (another till) makes the base upsert fail with 23505 —
     // bump to the next number, restamp local state, and retry (only saleNo changes).
     const attemptSaleSave = (base: typeof saleBase, tries: number) => {
@@ -5922,7 +5922,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!error) {
           // Step 2: Sale GST + customer/member (no TDS on sales). Same missing-column guard as
           // purchases — one un-migrated column can't silently drop the GST anymore (RULE 1).
-          persistExtras('sales', sale.id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember }, `Sale ${sale.saleNo}`);
+          persistExtras('sales', sale.id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember, bankAccountId: sBankId ?? null }, `Sale ${sale.saleNo}`);
           return;
         }
         if (isMissingBranchColumn(error) && 'branchId' in base) {
@@ -6131,7 +6131,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setSalesState(prev => prev.map(s => s.id === id ? updated : s));
 
     // ECR-17 Phase 5: branchId stays IN saleBase (see addSale); stale-schema-cache fallback (RULE 1).
-    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, gstVoucherIds: _gv, ...saleBase } = updated;
+    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, bankAccountId: sBankId, gstVoucherIds: _gv, ...saleBase } = updated;
     const attemptSaleUpdate = (payload: typeof saleBase) => {
       supabase.from('sales').upsert(withSoc(payload)).then(({ error }) => {
         if (error) {
@@ -6147,7 +6147,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // re-verify. (A fully atomic sale-edit is a separate, larger redesign.)
           toastRef.current({ title: 'बिक्री edit cloud-save fail', description: `Sale row cloud save fail — ${error.message}. Refresh karke sale dobara check karein; zaroorat ho to phir se edit karein.`, variant: 'destructive', duration: 15000 });
         } else {
-          persistExtras('sales', id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId }, `Sale ${original.saleNo}`);
+          persistExtras('sales', id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, bankAccountId: sBankId ?? null }, `Sale ${original.saleNo}`);
         }
       });
     };
@@ -6261,13 +6261,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ECR-17 Phase 5: branchId stays IN purchaseBase — the branch-scoped RLS SELECT policies
     // (migration 039) must see it on the row from birth, or a branch-restricted user's own
     // purchase vanishes from their next load. Stale-schema-cache fallback below (RULE 1).
-    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, taxVoucherIds: _tv, ...purchaseBase } = purchase;
+    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, bankAccountId: pBankId, taxVoucherIds: _tv, ...purchaseBase } = purchase;
     // Feature 6: duplicate purchaseNo (another till) → 23505; bump + retry (only purchaseNo changes).
     const attemptPurchaseSave = (base: typeof purchaseBase, tries: number) => {
       supabase.from('purchases').upsert(withSoc(base)).then(({ error }) => {
         if (!error) {
           // Step 2: GST/TDS/TCS columns — one un-migrated column no longer takes the rest (RULE 1).
-          persistExtras('purchases', purchase.id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false }, `Purchase ${purchase.purchaseNo}`);
+          persistExtras('purchases', purchase.id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, bankAccountId: pBankId ?? null }, `Purchase ${purchase.purchaseNo}`);
           return;
         }
         if (isMissingBranchColumn(error) && 'branchId' in base) {
@@ -6490,7 +6490,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setPurchasesState(prev => prev.map(p => p.id === id ? updated : p));
 
     // ECR-17 Phase 5: branchId stays IN purchaseBase (see addPurchase); stale-schema-cache fallback (RULE 1).
-    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, taxVoucherIds: _tv, ...purchaseBase } = updated;
+    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, bankAccountId: pBankId, taxVoucherIds: _tv, ...purchaseBase } = updated;
     const attemptPurchaseUpdate = (payload: typeof purchaseBase) => {
       supabase.from('purchases').upsert(withSoc(payload)).then(({ error }) => {
         if (error) {
@@ -6502,7 +6502,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('Purchase update failed:', error.message);
           toastRef.current({ title: 'Purchase update nahi hua', description: error.message, variant: 'destructive' });
         } else {
-          persistExtras('purchases', id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false }, `Purchase ${original.purchaseNo}`);
+          persistExtras('purchases', id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, bankAccountId: pBankId ?? null }, `Purchase ${original.purchaseNo}`);
         }
       });
     };
@@ -6675,7 +6675,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // payment CLEARS that liability (Dr 2103 / Cr Bank). Legacy records with no accrual fall
       // back to the old expense-on-pay (Dr 5201 / Cr Bank) so their books stay correct.
       const emp = employees.find(e => e.id === oldRecord.employeeId);
-      const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+      // Pay from the chosen bank; fall back to the first bank when none picked (unchanged default).
+      const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : (merged.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
       const debitAcc = oldRecord.accrualVoucherId ? (accounts.find(a => a.id === '2103')?.id || '2103') : '5201';
       const newV = addVoucher({
         type: 'payment' as const,
@@ -6696,7 +6697,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const v = vouchersRef.current.find(x => x.id === oldRecord.voucherId);
         if (v && !v.isDeleted) {
           const emp = employees.find(e => e.id === oldRecord.employeeId);
-          const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+          const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : (merged.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
           const payDebit = oldRecord.accrualVoucherId ? (accounts.find(a => a.id === '2103')?.id || '2103') : '5201';
           const newLines: VoucherLine[] = [
             { id: lid(), accountId: payDebit, type: 'Dr', amount: merged.netSalary },

@@ -27,6 +27,7 @@ import { ShoppingCart, Plus, Trash2, Eye, Pencil, Search, FileSpreadsheet, Downl
 import { generateSaleInvoicePDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
+import { getBankAccountIds } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { computeInvoiceTotals } from '@/lib/invoiceTotals';
 import { toMinor, toRupees, mulMinor } from '@/lib/money';
@@ -62,7 +63,7 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const SaleManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { sales, stockItems, stockMovements, customers, addSale, updateSale, deleteSale, addStockItem, society } = useData();
+  const { sales, stockItems, stockMovements, customers, accounts, addSale, updateSale, deleteSale, addStockItem, society } = useData();
   // Available qty is ALWAYS movement-based (RULE 2). Never read stockItem.currentStock
   // here — that cache drifts when a purchase voucher is edited/deleted and caused the
   // "sale shows 120 but stock report shows 0" bug.
@@ -80,6 +81,7 @@ const SaleManagement: React.FC = () => {
   const [sgstPct, setSgstPct] = useState<number>(0);
   const [igstPct, setIgstPct] = useState<number>(0);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
+  const [bankAccountId, setBankAccountId] = useState<string>('');   // which bank, when mode = 'bank'
   const [narration, setNarration] = useState('');
   const [savedSaleNo, setSavedSaleNo] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -184,6 +186,7 @@ const SaleManagement: React.FC = () => {
     setDiscount(0);
     setCgstPct(0); setSgstPct(0); setIgstPct(0);
     setPaymentMode('cash');
+    setBankAccountId('');
     setNarration('');
     setEditingId(null);
   };
@@ -201,6 +204,7 @@ const SaleManagement: React.FC = () => {
     setSgstPct(sale.sgstPct || 0);
     setIgstPct(sale.igstPct || 0);
     setPaymentMode(sale.paymentMode);
+    setBankAccountId(sale.bankAccountId || '');
     setNarration(sale.narration || '');
     setSavedSaleNo(null);
     setActiveTab('new-sale');
@@ -265,6 +269,7 @@ const SaleManagement: React.FC = () => {
       cgstAmount, sgstAmount, igstAmount,
       taxAmount, grandTotal,
       paymentMode,
+      bankAccountId: paymentMode === 'bank' ? (bankAccountId || undefined) : undefined,
       narration: narration.trim(),
       createdBy: user?.name ?? 'Unknown',
     };
@@ -731,6 +736,19 @@ const SaleManagement: React.FC = () => {
                     </button>
                   ))}
                 </div>
+                {paymentMode === 'bank' && (
+                  <div className="space-y-1">
+                    <Label>{language === 'hi' ? 'बैंक खाता' : 'Bank Account'}</Label>
+                    <Select value={bankAccountId} onValueChange={setBankAccountId}>
+                      <SelectTrigger><SelectValue placeholder={language === 'hi' ? 'बैंक चुनें' : 'Select bank'} /></SelectTrigger>
+                      <SelectContent>
+                        {getBankAccountIds(accounts).map(id => accounts.find(a => a.id === id)).filter((a): a is NonNullable<typeof a> => !!a).map(a => (
+                          <SelectItem key={a.id} value={a.id}>{language === 'hi' ? (a.nameHi || a.name) : a.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <Label>{language === 'hi' ? 'नोट (वैकल्पिक)' : 'Narration (Optional)'}</Label>
                   <Textarea
