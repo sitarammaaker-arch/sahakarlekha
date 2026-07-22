@@ -59,6 +59,7 @@ const Payroll: React.FC = () => {
   const [runOpen, setRunOpen] = useState(false);
   const [period, setPeriod] = useState('');
   const [running, setRunning] = useState(false);
+  const [transitioning, setTransitioning] = useState<string | null>(null);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [empOpen, setEmpOpen] = useState(false);
@@ -144,6 +145,25 @@ const Payroll: React.FC = () => {
       setLines((data as Payline[]) || []);
     }
     setLinesLoading(false);
+  };
+
+  const nextAction = (state: string): { action: string; label: string } | null => {
+    if (state === 'draft') return { action: 'verify', label: hi ? 'सत्यापित करें' : 'Verify' };
+    if (state === 'verified') return { action: 'approve', label: hi ? 'स्वीकृत करें' : 'Approve' };
+    if (state === 'approved') return { action: 'lock', label: hi ? 'लॉक करें' : 'Lock' };
+    return null;
+  };
+
+  const doTransition = async (runId: string, action: string) => {
+    setTransitioning(runId);
+    const { data, error } = await supabase.functions.invoke('pay-transition', { body: { runId, action } });
+    setTransitioning(null);
+    if (error || (data as { error?: string })?.error) {
+      toast({ title: hi ? 'बदलाव नहीं हुआ' : 'Transition failed', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' });
+      return;
+    }
+    toast({ title: hi ? 'हो गया ✓' : 'Done ✓', description: `${(data as { from?: string }).from} → ${(data as { state?: string }).state}` });
+    loadRuns();
   };
 
   const nameOf = (n: { hi?: string; en?: string } | null) => (hi ? n?.hi : n?.en) || n?.en || n?.hi || '—';
@@ -248,7 +268,13 @@ const Payroll: React.FC = () => {
                     <TableCell><Badge variant={stateVariant(r.state)}>{r.state}</Badge></TableCell>
                     <TableCell className="text-right">{r.payslip_count}</TableCell>
                     <TableCell className="text-right font-medium">{rupees(r.total_net_minor)}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right whitespace-nowrap">
+                      {nextAction(r.state) && (
+                        <Button size="sm" variant="outline" className="mr-1" disabled={transitioning === r.run_id}
+                          onClick={(e) => { e.stopPropagation(); doTransition(r.run_id, nextAction(r.state)!.action); }}>
+                          {transitioning === r.run_id ? <Loader2 className="h-3 w-3 animate-spin" /> : nextAction(r.state)!.label}
+                        </Button>
+                      )}
                       <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); openRun(r); }}>{hi ? 'देखें' : 'View'}</Button>
                     </TableCell>
                   </TableRow>

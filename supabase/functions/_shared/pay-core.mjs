@@ -1202,6 +1202,31 @@ var ALLOWED = {
   rolled_back: []
 };
 var RUN_STATES = Object.keys(ALLOWED);
+function canTransition(from, to) {
+  return (ALLOWED[from] ?? []).includes(to);
+}
+function assertTransition(from, to) {
+  if (!canTransition(from, to)) {
+    throw new Error(`PAY-RUN-STATE: illegal transition ${from} \u2192 ${to}`);
+  }
+}
+var EVENT_TO_STATE = {
+  initiated: "draft",
+  verified: "verified",
+  approved: "approved",
+  locked: "locked",
+  posted: "posted",
+  paid: "paid",
+  cancelled: "cancelled",
+  reversed: "rolled_back"
+};
+function stateAfterEvent(current, event) {
+  const target = EVENT_TO_STATE[event];
+  if (target === void 0) return current;
+  if (current === target) return current;
+  assertTransition(current, target);
+  return target;
+}
 
 // src/lib/pay/runtime/payEvent.ts
 var PRINCIPAL_KINDS = /* @__PURE__ */ new Set(["human", "agent", "import", "integration"]);
@@ -1274,7 +1299,9 @@ function assembleRun(input, evCtx) {
 }
 export {
   assembleRun,
+  canTransition,
   freezeViews,
   makeMoney,
-  mapCatalog
+  mapCatalog,
+  stateAfterEvent
 };
