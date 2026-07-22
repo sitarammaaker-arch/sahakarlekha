@@ -61,10 +61,20 @@ async function ensureStandardConfig(tx: postgres.TransactionSql, societyId: stri
   for (const code of CODES) {
     await tx`insert into pay_config.component_binding(structure_version_id,component_id,created_by) values(${sv.id},${comp[code]},${creator})`;
   }
-  // seed the default PF rate (12%) — the admin edits it with an authoritative source
-  await tx`insert into pay_config.statutory_setting(society_id,key,value_num,label,source,created_by)
-    values(${societyId},'pf_rate',12,'PF employee contribution %','EPF & MP Act 1952 — default; confirm for your establishment',${creator})
-    on conflict (society_id,key) do nothing`;
+  // seed the default statutory rates — the admin edits each with an authoritative source.
+  // pf_rate feeds the run; the rest are used only when generating the PF ECR file (employer split).
+  const seedRates: [string, number, string][] = [
+    ['pf_rate', 12, 'PF employee contribution %'],
+    ['employer_pf_rate', 12, 'PF employer contribution % (EPS + EPF split)'],
+    ['eps_rate', 8.33, 'EPS (pension) contribution % of EPS wages'],
+    ['edli_rate', 0.5, 'EDLI contribution %'],
+    ['eps_wage_ceiling', 15000, 'EPS / EDLI wage ceiling (₹, whole rupees)'],
+  ];
+  for (const [k, v, lbl] of seedRates) {
+    await tx`insert into pay_config.statutory_setting(society_id,key,value_num,label,source,created_by)
+      values(${societyId},${k},${v},${lbl},'Statutory default — confirm for your establishment',${creator})
+      on conflict (society_id,key) do nothing`;
+  }
   return { versionId: sv.id as string, basicComponentId: comp.BASIC };
 }
 
@@ -80,7 +90,7 @@ Deno.serve(async (req: Request) => {
   const { data: { user } } = await createClient(supaUrl, anonKey, { global: { headers: { Authorization: `Bearer ${jwt}` } } }).auth.getUser();
   if (!user?.email) return json(401, { error: 'invalid session' }, CORS);
 
-  let body: { action?: string; name?: string; code?: string; basicMinor?: number; employeeId?: string; period?: string; lopDays?: number; key?: string; value?: number; label?: string; source?: string };
+  let body: { action?: string; name?: string; code?: string; basicMinor?: number; employeeId?: string; period?: string; lopDays?: number; key?: string; value?: number; label?: string; source?: string; uan?: string; pan?: string; esicIp?: string };
   try { body = await req.json(); } catch { return json(400, { error: 'bad JSON' }, CORS); }
 
   const sql = postgres(dbUrl, { prepare: false, max: 3 });
@@ -93,11 +103,14 @@ Deno.serve(async (req: Request) => {
     if (body.action === 'list') {
       const rows = await sql`
         select e.id, e.employee_code, e.full_name, e.date_of_join,
+               si.uan, si.pan, si.esic_ip,
                (select ao.fixed_minor from pay_config.structure_assignment sa
                   join pay_config.assignment_override ao on ao.assignment_id = sa.id
                   join pay_config.component_catalog cc on cc.id = ao.component_id and cc.code = 'BASIC'
                 where sa.employee_id = e.id and sa.effective_to is null limit 1) as basic_minor
-        from pay_core.employee e where e.society_id = ${societyId} order by e.employee_code`;
+        from pay_core.employee e
+        left join pay_core.statutory_identity si on si.employee_id = e.id
+        where e.society_id = ${societyId} order by e.employee_code`;
       return json(200, { employees: rows }, CORS);
     }
 
@@ -161,6 +174,20 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, employeeId: empId, ended: rows.length }, CORS);
     }
 
+    if (body.action === 'identity-set') {
+      const empId = body.employeeId ?? '';
+      const uan = (body.uan ?? '').trim(), pan = (body.pan ?? '').trim().toUpperCase(), esicIp = (body.esicIp ?? '').trim();
+      if (uan && !/^\d{12}$/.test(uan)) return json(400, { error: 'UAN must be 12 digits' }, CORS);
+      if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) return json(400, { error: 'PAN must be like ABCDE1234F' }, CORS);
+      const [owner] = await sql`select 1 from pay_core.employee where id = ${empId} and society_id = ${societyId} limit 1`;
+      if (!owner) return json(404, { error: 'employee not found in your society' }, CORS);
+      await sql`insert into pay_core.statutory_identity(society_id,employee_id,uan,pan,esic_ip,created_by)
+        values(${societyId},${empId},${uan || null},${pan || null},${esicIp || null},${su.id})
+        on conflict (employee_id) do update set
+          uan = ${uan || null}, pan = ${pan || null}, esic_ip = ${esicIp || null}, updated_at = now(), updated_by = ${su.id}`;
+      return json(200, { ok: true, employeeId: empId }, CORS);
+    }
+
     if (body.action === 'statutory-list') {
       const rows = await sql`select key, value_num, label, source from pay_config.statutory_setting where society_id = ${societyId} order by key`;
       return json(200, { settings: rows }, CORS);
@@ -177,7 +204,7 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, key, value }, CORS);
     }
 
-    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate' / 'statutory-list' / 'statutory-set'" }, CORS);
+    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate' / 'identity-set' / 'statutory-list' / 'statutory-set'" }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {
