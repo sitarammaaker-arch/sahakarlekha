@@ -171,18 +171,26 @@ const Payroll: React.FC = () => {
     if (state === 'draft') return { action: 'verify', label: hi ? 'सत्यापित करें' : 'Verify' };
     if (state === 'verified') return { action: 'approve', label: hi ? 'स्वीकृत करें' : 'Approve' };
     if (state === 'approved') return { action: 'lock', label: hi ? 'लॉक करें' : 'Lock' };
+    if (state === 'locked') return { action: 'post', label: hi ? 'बही में पोस्ट करें' : 'Post to ledger' };
     return null;
   };
 
   const doTransition = async (runId: string, action: string) => {
     setTransitioning(runId);
-    const { data, error } = await supabase.functions.invoke('pay-transition', { body: { runId, action } });
+    // 'post' creates the GL voucher (pay-post); the rest are state transitions (pay-transition)
+    const fn = action === 'post' ? 'pay-post' : 'pay-transition';
+    const { data, error } = await supabase.functions.invoke(fn, { body: action === 'post' ? { runId } : { runId, action } });
     setTransitioning(null);
     if (error || (data as { error?: string })?.error) {
-      toast({ title: hi ? 'बदलाव नहीं हुआ' : 'Transition failed', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' });
+      toast({ title: hi ? 'बदलाव नहीं हुआ' : 'Action failed', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' });
       return;
     }
-    toast({ title: hi ? 'हो गया ✓' : 'Done ✓', description: `${(data as { from?: string }).from} → ${(data as { state?: string }).state}` });
+    if (action === 'post') {
+      const d = data as { voucherId?: string; expense?: number };
+      toast({ title: hi ? 'बही में पोस्ट हो गया ✓' : 'Posted to ledger ✓', description: hi ? `journal voucher बना (₹${d.expense})` : `journal voucher created (₹${d.expense})` });
+    } else {
+      toast({ title: hi ? 'हो गया ✓' : 'Done ✓', description: `${(data as { from?: string }).from} → ${(data as { state?: string }).state}` });
+    }
     loadRuns();
   };
 
