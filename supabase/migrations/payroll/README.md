@@ -34,8 +34,19 @@ own transaction by the runner below.
 | `110_pay_rls.sql` | RLS: tenant + role + branch + PII + WORM |
 | `111_pay_views_matviews.sql` | security-invoker views + matviews (tenant-safe wrappers) |
 | `113_pay_seed.sql` | platform reference taxonomies, standard components, skeletons |
+| `114_pay_aal2_gate.sql` | **AAL2 (native MFA) gate** — RESTRICTIVE `aal2` policies on financial writes + PII reads (ADR-0012 task 3). **Applied SEPARATELY, not with the base deploy** — see note below. |
+| `114_pay_aal2_gate_down.sql` | removes the AAL2 gate (fully reversible) |
+| `114_VERIFY.sql` | structural self-test for the gate (asserts 18 restrictive policies) |
 | `999_pay_rollback_all.sql` | full teardown — drops every `pay_*` schema (public untouched) |
 | `VERIFICATION.sql` | structural self-test (own transaction; rolls back its own test rows) |
+
+> **⚠ Migration 114 deploy ordering (load-bearing).** `114` is **not** part of the `100→113` base
+> deploy above. It fail-closes the gated surfaces for any `aal1` (password-only) session, so it must
+> be applied **only after** native Supabase MFA is enabled on the project (ADR-0012 task 1) and
+> enrolled users have factors (task 2) — otherwise it locks those surfaces for everyone. On empty
+> staging it is harmless and is exactly the fail-closed behaviour verified by `114_VERIFY.sql`.
+> Verified on staging (2026-07-22): clean apply → 18 restrictive policies → clean rollback → 0 remain.
+> Behavioural verification (`aal1` denied / `aal2` allowed) is deferred to the task-1 live-auth harness.
 
 ## How to apply / verify (staging)
 
