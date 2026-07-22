@@ -53,32 +53,38 @@ const values = runComponents(set, { facts, currency: 'INR', fixedComponents: { B
 // BASIC 3000000 → DA 600000, HRA 1200000, GROSS 4800000, PF 360000, LOAN 200000
 
 const classification = { BASIC: 'earning', DA: 'earning', HRA: 'earning', GROSS: 'info', PF: 'deduction', LOAN: 'deduction' };
-// NOTE: BASIC isn't in `values` (it's a fixed input, not a computed component), so it's never aggregated here.
+// BASIC is a fixed/rule component (a plan INPUT, not a computed output) — it must be supplied via
+// fixedComponents to appear on the payslip. This is exactly the case end-to-end testing surfaced.
+const fixed = { BASIC: makeMoney(3000000, 'INR') };
 
-// 1. full aggregation
-const slip = aggregatePayslip(values, { currency: 'INR', classification });
-ok(slip.earnings.length === 2 && slip.deductions.length === 2, '2 earnings (DA, HRA), 2 deductions (PF, LOAN); GROSS excluded as info');
-ok(money(slip.grossEarnings, 1800000), 'gross earnings = DA 600000 + HRA 1200000 = 1800000');
+// 1. full aggregation — BASIC (fixed earning) appears alongside the computed DA/HRA
+const slip = aggregatePayslip(values, { currency: 'INR', classification, fixedComponents: fixed });
+ok(slip.earnings.length === 3 && slip.deductions.length === 2, '3 earnings (BASIC, DA, HRA), 2 deductions (PF, LOAN); GROSS excluded as info');
+ok(money(slip.grossEarnings, 4800000), 'gross earnings = BASIC 3000000 + DA 600000 + HRA 1200000 = 4800000');
 ok(money(slip.grossDeductions, 560000), 'gross deductions = PF 360000 + LOAN 200000 = 560000');
-ok(money(slip.netPay, 1240000), 'net = 1800000 − 560000 = 1240000 (aggregated, not a formula)');
+ok(money(slip.netPay, 4240000), 'net = 4800000 − 560000 = 4240000 (fixed BASIC included)');
 
-// 2. lines carry their side + code, in plan order
-ok(slip.earnings[0].code === 'DA' && slip.earnings[1].code === 'HRA', 'earnings in plan order');
+// 2. lines in classification order, BASIC (fixed) first
+ok(slip.earnings[0].code === 'BASIC' && slip.earnings[1].code === 'DA' && slip.earnings[2].code === 'HRA', 'earnings in classification order, fixed BASIC included');
 ok(slip.earnings.every((l) => l.clamped === 'none'), 'no clamp applied when no bounds given');
 
 // 3. an unclassified computed component refuses (no silent drop)
 throws(() => aggregatePayslip(values, { currency: 'INR', classification: { DA: 'earning', HRA: 'earning', GROSS: 'info', PF: 'deduction' } }),
   /PAY-CAL-601.*'LOAN'/, 'unclassified LOAN refuses (PAY-CAL-601)');
 
+// 3b. a classified component with no computed OR fixed value refuses (the fix's new guard)
+throws(() => aggregatePayslip(values, { currency: 'INR', classification }),
+  /PAY-CAL-604.*'BASIC'/, 'classified BASIC with no value (fixed not supplied) refuses (PAY-CAL-604)');
+
 // 4. statutory clamp applied at value-use — HRA ceilinged
-const capped = aggregatePayslip(values, { currency: 'INR', classification, clamps: { HRA: { ceiling: 1000000 } } });
+const capped = aggregatePayslip(values, { currency: 'INR', classification, fixedComponents: fixed, clamps: { HRA: { ceiling: 1000000 } } });
 const hraLine = capped.earnings.find((l) => l.code === 'HRA');
 ok(money(hraLine.amount, 1000000) && hraLine.clamped === 'ceiling', 'HRA 1200000 clamped down to ceiling 1000000');
-ok(money(capped.grossEarnings, 1600000), 'gross earnings reflect the clamped HRA (600000 + 1000000)');
-ok(money(capped.netPay, 1040000), 'net reflects the clamp (1600000 − 560000)');
+ok(money(capped.grossEarnings, 4600000), 'gross earnings reflect the clamped HRA (3000000 + 600000 + 1000000)');
+ok(money(capped.netPay, 4040000), 'net reflects the clamp (4600000 − 560000)');
 
 // 5. a floor clamp raises a value
-const floored = aggregatePayslip(values, { currency: 'INR', classification, clamps: { PF: { floor: 500000 } } });
+const floored = aggregatePayslip(values, { currency: 'INR', classification, fixedComponents: fixed, clamps: { PF: { floor: 500000 } } });
 ok(floored.deductions.find((l) => l.code === 'PF').clamped === 'floor' && money(floored.grossDeductions, 700000), 'PF 360000 raised to floor 500000');
 
 // 6. non-money earning refuses
