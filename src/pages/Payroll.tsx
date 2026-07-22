@@ -72,6 +72,28 @@ const Payroll: React.FC = () => {
   const [attPeriod, setAttPeriod] = useState('');
   const [attLop, setAttLop] = useState('');
   const [attSaving, setAttSaving] = useState(false);
+  const [editBasic, setEditBasic] = useState('');
+  const [empBusy, setEmpBusy] = useState(false);
+
+  const updateSalary = async () => {
+    const basicMinor = Math.round(Number(editBasic) * 100);
+    if (!Number.isFinite(basicMinor) || basicMinor <= 0) { toast({ title: hi ? 'मूल वेतन डालें' : 'Enter basic salary', variant: 'destructive' }); return; }
+    setEmpBusy(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'update', employeeId: attEmp!.id, basicMinor } });
+    setEmpBusy(false);
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं बदला' : 'Update failed', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' }); return; }
+    toast({ title: hi ? 'वेतन बदला ✓' : 'Salary updated ✓', description: `${nameOf(attEmp!.full_name)} — ₹${editBasic}` });
+    setAttEmp(null); loadEmployees();
+  };
+
+  const deactivateEmp = async () => {
+    setEmpBusy(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'deactivate', employeeId: attEmp!.id } });
+    setEmpBusy(false);
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं हटा' : 'Failed', description: error?.message || (data as { error?: string })?.error, variant: 'destructive' }); return; }
+    toast({ title: hi ? 'कर्मचारी हटाया ✓' : 'Employee removed ✓', description: hi ? 'अगली पेरोल से बाहर (पुरानी पेस्लिप सुरक्षित)' : 'Excluded from future runs (past payslips kept)' });
+    setAttEmp(null); loadEmployees();
+  };
 
   const saveAttendance = async () => {
     if (!/^\d{4}-\d{2}$/.test(attPeriod)) { toast({ title: hi ? 'अवधि चुनें' : 'Pick a period', variant: 'destructive' }); return; }
@@ -283,7 +305,7 @@ const Payroll: React.FC = () => {
             <div className="flex flex-wrap gap-2">
               {employees.map((e) => (
                 <button key={e.id} type="button" className="text-sm border rounded-md px-2 py-1 hover:bg-muted text-left" title={hi ? 'उपस्थिति सेट करें' : 'Set attendance'}
-                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); }}>
+                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); }}>
                   <span className="font-medium">{nameOf(e.full_name)}</span> <span className="text-xs text-muted-foreground">{e.employee_code}</span>
                   {e.basic_minor != null && <span className="ml-1 text-xs text-muted-foreground">· {hi ? 'मूल' : 'Basic'} {rupees(e.basic_minor)}</span>}
                 </button>
@@ -309,17 +331,27 @@ const Payroll: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!attEmp} onOpenChange={(o) => !attSaving && !o && setAttEmp(null)}>
+      <Dialog open={!!attEmp} onOpenChange={(o) => !attSaving && !empBusy && !o && setAttEmp(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>{hi ? 'उपस्थिति' : 'Attendance'} — {attEmp ? nameOf(attEmp.full_name) : ''}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1"><Label>{hi ? 'अवधि (माह)' : 'Period (month)'}</Label><Input type="month" value={attPeriod} onChange={(e) => setAttPeriod(e.target.value)} /></div>
-            <div className="space-y-1"><Label>{hi ? 'बिना-वेतन दिन (LOP)' : 'Loss-of-pay days (LOP)'}</Label><Input type="number" min="0" max="31" value={attLop} onChange={(e) => setAttLop(e.target.value)} placeholder="0" /></div>
-            <p className="text-xs text-muted-foreground">{hi ? 'इतने दिनों का वेतन उस माह की पेरोल में कटेगा (30-दिन आधार)।' : "That many days' pay is deducted in this month's run (30-day basis)."}</p>
+          <DialogHeader><DialogTitle>{attEmp ? nameOf(attEmp.full_name) : ''} <span className="text-xs text-muted-foreground font-normal">{attEmp?.employee_code}</span></DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>{hi ? 'मूल वेतन (₹/माह)' : 'Basic salary (₹/month)'}</Label>
+              <div className="flex gap-2">
+                <Input type="number" value={editBasic} onChange={(e) => setEditBasic(e.target.value)} placeholder="25000" />
+                <Button variant="outline" onClick={updateSalary} disabled={empBusy}>{empBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'बदलें' : 'Update')}</Button>
+              </div>
+            </div>
+            <div className="border-t pt-3 space-y-2">
+              <Label className="text-sm font-medium">{hi ? 'उपस्थिति' : 'Attendance'}</Label>
+              <div className="space-y-1"><Label className="text-xs">{hi ? 'अवधि (माह)' : 'Period (month)'}</Label><Input type="month" value={attPeriod} onChange={(e) => setAttPeriod(e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">{hi ? 'बिना-वेतन दिन (LOP)' : 'Loss-of-pay days (LOP)'}</Label><Input type="number" min="0" max="31" value={attLop} onChange={(e) => setAttLop(e.target.value)} placeholder="0" /></div>
+              <Button size="sm" variant="outline" onClick={saveAttendance} disabled={attSaving}>{attSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'उपस्थिति सहेजें' : 'Save attendance')}</Button>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAttEmp(null)} disabled={attSaving}>{hi ? 'रद्द' : 'Cancel'}</Button>
-            <Button onClick={saveAttendance} disabled={attSaving}>{attSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'सहेजें' : 'Save')}</Button>
+          <DialogFooter className="sm:justify-between">
+            <Button variant="ghost" className="text-destructive" onClick={deactivateEmp} disabled={empBusy}>{hi ? 'कर्मचारी हटाएँ' : 'Remove employee'}</Button>
+            <Button variant="outline" onClick={() => setAttEmp(null)} disabled={attSaving || empBusy}>{hi ? 'बंद करें' : 'Close'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
