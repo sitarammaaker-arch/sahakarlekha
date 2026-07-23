@@ -232,7 +232,15 @@ Deno.serve(async (req: Request) => {
                (select ao.fixed_minor from pay_config.structure_assignment sa
                   join pay_config.assignment_override ao on ao.assignment_id = sa.id
                   join pay_config.component_catalog cc on cc.id = ao.component_id and cc.code in ('BASIC','CONSOLIDATED','DAILY_RATE','STIPEND')
-                where sa.employee_id = e.id and sa.effective_to is null order by cc.code limit 1) as basic_minor
+                where sa.employee_id = e.id and sa.effective_to is null order by cc.code limit 1) as basic_minor,
+               -- the day they left, and what they were on then, so a FORMER employee is still a
+               -- record you can open — a service record is asked for exactly when someone leaves
+               (select sa.effective_to from pay_config.structure_assignment sa
+                where sa.employee_id = e.id order by sa.effective_from desc limit 1) as left_on,
+               (select ao.fixed_minor from pay_config.structure_assignment sa
+                  join pay_config.assignment_override ao on ao.assignment_id = sa.id
+                  join pay_config.component_catalog cc on cc.id = ao.component_id and cc.code in ('BASIC','CONSOLIDATED','DAILY_RATE','STIPEND')
+                where sa.employee_id = e.id order by sa.effective_from desc, cc.code limit 1) as last_basic_minor
         from pay_core.employee e
         left join pay_core.statutory_identity si on si.employee_id = e.id
         where e.society_id = ${societyId} order by e.employee_code`;
@@ -323,6 +331,13 @@ Deno.serve(async (req: Request) => {
     // ── Per-employee salary structure: read it, and edit any component's value ──────────────
     if (body.action === 'structure-get') {
       const empId = body.employeeId ?? '';
+      // The open assignment for somebody still employed, the last one they held otherwise — a former
+      // employee's record has to be readable, and an empty structure is not "no structure", it is a
+      // question the caller cannot tell apart from still loading.
+      const [asg] = await sql`select id from pay_config.structure_assignment
+        where employee_id = ${empId} and society_id = ${societyId}
+        order by (effective_to is null) desc, effective_from desc limit 1`;
+      if (!asg) return json(200, { components: [], ended: null }, CORS);
       const rows = await sql`
         select cc.code, cc.display_name, cv.kind, cv.calc_method::text as calc_method,
                fv.expression_text, ao.fixed_minor, sa.effective_from
@@ -332,7 +347,7 @@ Deno.serve(async (req: Request) => {
         join lateral (select * from pay_config.component_version v where v.component_id = cc.id and v.status = 'active' order by v.effective_from desc limit 1) cv on true
         left join pay_formula.formula_version fv on fv.id = cv.formula_ref
         left join pay_config.assignment_override ao on ao.assignment_id = sa.id and ao.component_id = cc.id
-        where sa.employee_id = ${empId} and sa.society_id = ${societyId} and sa.effective_to is null
+        where sa.id = ${asg.id}
         order by cv.sequence, cc.code`;
       return json(200, { components: rows }, CORS);
     }

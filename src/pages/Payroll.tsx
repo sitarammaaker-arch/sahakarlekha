@@ -38,6 +38,8 @@ interface Payline {
 interface Employee {
   id: string; employee_code: string; full_name: { hi?: string; en?: string } | null; date_of_join: string; basic_minor: number | null;
   employment_type?: string | null; uan?: string | null; pan?: string | null; esic_ip?: string | null;
+  left_on?: string | null;            // set once they have left — basic_minor goes null with it
+  last_basic_minor?: number | null;   // what they were on in their final assignment
 }
 interface StatSetting { key: string; value_num: number; label: string | null; source: string | null; }
 interface AttRow {
@@ -204,6 +206,8 @@ const Payroll: React.FC = () => {
   const [empJoin, setEmpJoin] = useState('');    // date of joining — a fact, printed on the payslip
   const [joinEdit, setJoinEdit] = useState('');  // correcting it for an existing employee
   const [exitDate, setExitDate] = useState('');  // last working day, asked for when removing
+  const [showFormer, setShowFormer] = useState(false);
+  const [structLoading, setStructLoading] = useState(false);
   const [joinBusy, setJoinBusy] = useState(false);
   const [empSaving, setEmpSaving] = useState(false);
 
@@ -243,9 +247,10 @@ const Payroll: React.FC = () => {
   const [structBusy, setStructBusy] = useState('');
 
   const loadStructure = async (empId: string) => {
-    setStructure([]);
+    setStructure([]); setStructLoading(true);
     const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'structure-get', employeeId: empId } });
     if (!error && data) setStructure((data as { components?: StructComp[] }).components || []);
+    setStructLoading(false);
   };
 
   // Editing one component's amount for ONE employee — the server versions the assignment so the
@@ -320,6 +325,7 @@ const Payroll: React.FC = () => {
       </div>
       <div>
         ${info(hi ? 'नियुक्ति तिथि' : 'Date of joining', String(attEmp.date_of_join || '').slice(0, 10))}
+        ${attEmp.left_on ? info(hi ? 'सेवा समाप्ति' : 'Last working day', String(attEmp.left_on).slice(0, 10)) : ''}
         ${info('UAN', attEmp.uan)}
         ${info('PAN', attEmp.pan)}
         ${info('ESIC IP', attEmp.esic_ip)}
@@ -835,6 +841,8 @@ const Payroll: React.FC = () => {
   // deactivated employees (no active salary assignment → basic_minor is null). History still exists.
   const visibleRuns = runs.filter((r) => r.state !== 'cancelled');
   const activeEmployees = employees.filter((e) => e.basic_minor != null);
+  const formerEmployees = employees.filter((e) => e.basic_minor == null);
+  const hasLeft = attEmp != null && attEmp.basic_minor == null;   // opened from the former list
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -1001,6 +1009,28 @@ const Payroll: React.FC = () => {
               ))}
             </div>
           )}
+
+          {/* Former employees stay reachable. A service record is asked for exactly when somebody
+              leaves, and hiding them outright meant there was no way to open one. */}
+          {formerEmployees.length > 0 && (
+            <div className="mt-3 pt-3 border-t">
+              <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setShowFormer((v) => !v)}>
+                {showFormer ? '▾' : '▸'} {hi ? `पूर्व कर्मचारी (${formerEmployees.length})` : `Former employees (${formerEmployees.length})`}
+              </button>
+              {showFormer && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {formerEmployees.map((e) => (
+                    <button key={e.id} type="button" className="text-sm border border-dashed rounded-md px-2 py-1 hover:bg-muted text-left text-muted-foreground"
+                      title={hi ? 'सेवा पुस्तिका / इतिहास देखें' : 'View service record / history'}
+                      onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); setJoinEdit(String(e.date_of_join || '').slice(0,10)); setExitDate(''); setStructEdit(''); setHistOpen(true); loadStructure(e.id); loadHistory(e.id); loadLoans(e.id); }}>
+                      <span className="font-medium">{nameOf(e.full_name)}</span> <span className="text-xs">{e.employee_code}</span>
+                      {e.left_on && <span className="ml-1 text-[10px]">· {hi ? 'अंतिम दिन' : 'left'} {String(e.left_on).slice(0, 10)}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1042,13 +1072,22 @@ const Payroll: React.FC = () => {
         <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader><DialogTitle className="break-words">{attEmp ? nameOf(attEmp.full_name) : ''} <span className="text-xs text-muted-foreground font-normal">{attEmp?.employee_code}</span></DialogTitle></DialogHeader>
           <div className="space-y-4">
+            {hasLeft && (
+              <p className="text-xs px-2 py-1.5 rounded bg-muted text-muted-foreground">
+                {hi
+                  ? `पूर्व कर्मचारी${attEmp?.left_on ? ` — अंतिम कार्यदिवस ${String(attEmp.left_on).slice(0, 10)}` : ''}। रिकॉर्ड पढ़ने और सेवा पुस्तिका छापने के लिए खुला है; वेतन-संबंधी बदलाव बंद हैं।`
+                  : `Former employee${attEmp?.left_on ? ` — last working day ${String(attEmp.left_on).slice(0, 10)}` : ''}. Open for reading the record and printing the service record; pay changes are closed.`}
+              </p>
+            )}
             <div className="space-y-2">
               <Label className="text-sm font-medium">
                 {hi ? 'वेतन ढाँचा' : 'Salary structure'}
                 {attEmp?.employment_type && <span className="ml-1 text-[10px] px-1 rounded bg-muted text-muted-foreground font-normal">{empTypeLabel(attEmp.employment_type, hi)}</span>}
               </Label>
               {structure.length === 0 ? (
-                <p className="text-xs text-muted-foreground">{hi ? 'लोड हो रहा है…' : 'Loading…'}</p>
+                <p className="text-xs text-muted-foreground">
+                  {structLoading ? (hi ? 'लोड हो रहा है…' : 'Loading…') : (hi ? 'कोई ढाँचा नहीं मिला।' : 'No structure found.')}
+                </p>
               ) : structure.map((c) => (
                 <div key={c.code} className="border rounded-md p-2 text-sm">
                   {structEdit === c.code ? (
@@ -1069,7 +1108,7 @@ const Payroll: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-1 shrink-0">
+                      <div className={`flex gap-1 shrink-0 ${hasLeft ? 'hidden' : ''}`}>
                         {/* a pinned formula component can go back to being computed */}
                         {c.fixed_minor != null && c.calc_method === 'formula' && (
                           <Button size="sm" variant="ghost" className="px-2" title={hi ? 'सूत्र पर लौटाएँ' : 'Back to formula'} disabled={structBusy === c.code}
@@ -1087,7 +1126,7 @@ const Payroll: React.FC = () => {
                   )}
                 </div>
               ))}
-              <div className="flex gap-1 items-center">
+              <div className={`flex gap-1 items-center ${hasLeft ? 'hidden' : ''}`}>
                 <select className="h-8 flex-1 min-w-0 rounded-md border border-input bg-background px-2 text-xs" value={addCode} onChange={(e) => { setAddCode(e.target.value); setAddVal(''); }}>
                   <option value="">{hi ? '+ घटक जोड़ें…' : '+ Add component…'}</option>
                   {ADDABLE_COMPONENTS.filter((a) => !structure.some((s) => s.code === a.code)).map((a) => (
@@ -1169,7 +1208,7 @@ const Payroll: React.FC = () => {
               ))}
               <p className="text-[11px] text-muted-foreground">{hi ? 'हर दर-बदलाव एक नया संस्करण बनाता है — पुराना कभी मिटता नहीं (audit)।' : 'Every rate change opens a new version — the old one is never erased (audit).'}</p>
             </div>
-            <div className="border-t pt-3 space-y-2">
+            <div className={`border-t pt-3 space-y-2 ${hasLeft ? 'hidden' : ''}`}>
               <Label className="text-sm font-medium">{hi ? 'उपस्थिति' : 'Attendance'}</Label>
               <div className="space-y-1"><Label className="text-xs">{hi ? 'अवधि (माह)' : 'Period (month)'}</Label><Input type="month" value={attPeriod} onChange={(e) => setAttPeriod(e.target.value)} /></div>
               <div className="space-y-1">
@@ -1203,7 +1242,7 @@ const Payroll: React.FC = () => {
 
             {/* The last working day decides the final month's pay, so it is asked for rather than
                 assumed to be today — a removal recorded a week late would otherwise over-pay. */}
-            <div className="space-y-1 pt-2 border-t">
+            <div className={`space-y-1 pt-2 border-t ${hasLeft ? 'hidden' : ''}`}>
               <Label className="text-xs">{hi ? 'अंतिम कार्यदिवस (हटाने पर)' : 'Last working day (on removal)'}</Label>
               <Input type="date" value={exitDate} onChange={(e) => setExitDate(e.target.value)} />
               <p className="text-[11px] text-muted-foreground">
@@ -1212,7 +1251,9 @@ const Payroll: React.FC = () => {
             </div>
           </div>
           <DialogFooter className="sm:justify-between">
-            <Button variant="ghost" className="text-destructive" onClick={deactivateEmp} disabled={empBusy}>{hi ? 'कर्मचारी हटाएँ' : 'Remove employee'}</Button>
+            {hasLeft
+              ? <span className="text-xs text-muted-foreground self-center">{hi ? 'सेवा समाप्त' : 'Service ended'}</span>
+              : <Button variant="ghost" className="text-destructive" onClick={deactivateEmp} disabled={empBusy}>{hi ? 'कर्मचारी हटाएँ' : 'Remove employee'}</Button>}
             <div className="flex gap-2">
               <Button variant="outline" onClick={printServiceBook}>
                 <Printer className="h-4 w-4 mr-1" /> {hi ? 'सेवा पुस्तिका' : 'Service record'}
