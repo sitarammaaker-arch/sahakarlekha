@@ -153,6 +153,13 @@ const Payroll: React.FC = () => {
   const [runOpen, setRunOpen] = useState(false);
   const [period, setPeriod] = useState('');
   const [running, setRunning] = useState(false);
+  // who this run would cover, and who has no attendance recorded — shown in the Run dialog itself
+  const [runAtt, setRunAtt] = useState<AttRow[]>([]);
+  const loadRunAtt = async (p: string) => {
+    if (!/^\d{4}-\d{2}$/.test(p)) { setRunAtt([]); return; }
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'attendance-list', period: p } });
+    setRunAtt(!error && data ? ((data as { attendance?: AttRow[] }).attendance || []) : []);
+  };
   const [transitioning, setTransitioning] = useState<string | null>(null);
 
   const [statList, setStatList] = useState<StatSetting[]>([]);
@@ -743,7 +750,7 @@ const Payroll: React.FC = () => {
         <Button size="sm" variant="ghost" onClick={() => { setStatKey(''); setStatOpen(true); }}>
           <Settings2 className="h-4 w-4 mr-1" /> {hi ? 'सांविधिक दरें' : 'Statutory rates'}
         </Button>
-        <Button size="sm" onClick={() => { setPeriod(''); setRunOpen(true); }}>
+        <Button size="sm" onClick={() => { setPeriod(''); setRunAtt([]); setRunOpen(true); }}>
           <Play className="h-4 w-4 mr-1" /> {hi ? 'नया पेरोल चलाएँ' : 'Run payroll'}
         </Button>
       </div>
@@ -837,8 +844,26 @@ const Payroll: React.FC = () => {
           <DialogHeader><DialogTitle>{hi ? 'नया पेरोल चलाएँ' : 'Run payroll'}</DialogTitle></DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="pay-period">{hi ? 'अवधि (माह)' : 'Period (month)'}</Label>
-            <Input id="pay-period" type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
+            <Input id="pay-period" type="month" value={period} onChange={(e) => { setPeriod(e.target.value); loadRunAtt(e.target.value); }} />
             <p className="text-xs text-muted-foreground">{hi ? 'सर्वर इस माह के लिए सभी नियुक्त कर्मचारियों की गणना करके पेस्लिप बनाएगा।' : 'The server computes payslips for all assigned employees for this month.'}</p>
+            {/* The attendance warning belongs HERE — this is where the decision is made. Someone who
+                never opens the Attendance screen would otherwise pay a full month by accident. */}
+            {runAtt.length > 0 && (() => {
+              const missing = runAtt.filter((r) => r.lop_days == null).length;
+              return (
+                <div className={`text-xs px-2 py-1.5 rounded ${missing ? 'bg-amber-500/10 text-amber-700' : 'bg-muted text-muted-foreground'}`}>
+                  {hi ? `${runAtt.length} कर्मचारी इसमें शामिल होंगे।` : `${runAtt.length} employee(s) will be included.`}
+                  {missing > 0 && (
+                    <> {hi ? `⚠ इनमें ${missing} की उपस्थिति दर्ज़ नहीं — उन्हें पूरे 30 दिन का वेतन मिलेगा।` : `⚠ ${missing} of them have no attendance recorded — they will be paid a full 30 days.`}
+                      <button type="button" className="ml-1 underline font-medium"
+                        onClick={() => { setRunOpen(false); setAttListPeriod(period); setAttListOpen(true); loadAttList(period); }}>
+                        {hi ? 'अभी भरें' : 'Fill it now'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRunOpen(false)} disabled={running}>{hi ? 'रद्द' : 'Cancel'}</Button>
