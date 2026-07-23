@@ -686,8 +686,10 @@ const Payroll: React.FC = () => {
       </Dialog>
 
       <Dialog open={!!attEmp} onOpenChange={(o) => !attSaving && !empBusy && !o && setAttEmp(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>{attEmp ? nameOf(attEmp.full_name) : ''} <span className="text-xs text-muted-foreground font-normal">{attEmp?.employee_code}</span></DialogTitle></DialogHeader>
+        {/* This dialog carries the structure editor, advances and history now — it needs room, and its
+            rows must be free to shrink, else the content overflows sideways instead of wrapping. */}
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto overflow-x-hidden">
+          <DialogHeader><DialogTitle className="break-words">{attEmp ? nameOf(attEmp.full_name) : ''} <span className="text-xs text-muted-foreground font-normal">{attEmp?.employee_code}</span></DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium">
@@ -700,9 +702,9 @@ const Payroll: React.FC = () => {
                 <div key={c.code} className="border rounded-md p-2 text-sm">
                   {structEdit === c.code ? (
                     <div className="flex gap-2 items-center">
-                      <Input type="number" className="h-8" value={structVal} onChange={(e) => setStructVal(e.target.value)} autoFocus />
-                      <Button size="sm" onClick={() => saveStructVal(c.code)} disabled={structBusy === c.code}>{structBusy === c.code ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'सहेजें' : 'Save')}</Button>
-                      <Button size="sm" variant="ghost" onClick={() => setStructEdit('')}>{hi ? 'रद्द' : 'Cancel'}</Button>
+                      <Input type="number" className="h-8 flex-1 min-w-0" value={structVal} onChange={(e) => setStructVal(e.target.value)} autoFocus />
+                      <Button size="sm" className="shrink-0" onClick={() => saveStructVal(c.code)} disabled={structBusy === c.code}>{structBusy === c.code ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'सहेजें' : 'Save')}</Button>
+                      <Button size="sm" variant="ghost" className="shrink-0" onClick={() => setStructEdit('')}>{hi ? 'रद्द' : 'Cancel'}</Button>
                     </div>
                   ) : (
                     <div className="flex items-center justify-between gap-2">
@@ -767,12 +769,12 @@ const Payroll: React.FC = () => {
               ) : (
                 <div className="space-y-1">
                   <div className="flex gap-1">
-                    <Input type="number" className="h-8" value={loanPrincipal} onChange={(e) => setLoanPrincipal(e.target.value)} placeholder={hi ? 'राशि ₹' : 'Amount ₹'} />
-                    <Input type="number" className="h-8" value={loanInstallment} onChange={(e) => setLoanInstallment(e.target.value)} placeholder={hi ? 'किस्त ₹/माह' : 'Instalment ₹/mo'} />
+                    <Input type="number" className="h-8 flex-1 min-w-0" value={loanPrincipal} onChange={(e) => setLoanPrincipal(e.target.value)} placeholder={hi ? 'राशि ₹' : 'Amount ₹'} />
+                    <Input type="number" className="h-8 flex-1 min-w-0" value={loanInstallment} onChange={(e) => setLoanInstallment(e.target.value)} placeholder={hi ? 'किस्त ₹/माह' : 'Instalment ₹/mo'} />
                   </div>
                   <div className="flex gap-1">
-                    <Input className="h-8" value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} placeholder={hi ? 'प्रयोजन (वैकल्पिक)' : 'Purpose (optional)'} />
-                    <Button size="sm" onClick={addLoan} disabled={loanBusy}>{loanBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'दर्ज़ करें' : 'Record')}</Button>
+                    <Input className="h-8 flex-1 min-w-0" value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} placeholder={hi ? 'प्रयोजन (वैकल्पिक)' : 'Purpose (optional)'} />
+                    <Button size="sm" className="shrink-0" onClick={addLoan} disabled={loanBusy}>{loanBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'दर्ज़ करें' : 'Record')}</Button>
                   </div>
                 </div>
               )}
