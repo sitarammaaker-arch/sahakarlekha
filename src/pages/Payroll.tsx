@@ -38,6 +38,10 @@ interface Employee {
   employment_type?: string | null; uan?: string | null; pan?: string | null; esic_ip?: string | null;
 }
 interface StatSetting { key: string; value_num: number; label: string | null; source: string | null; }
+interface StructComp {
+  code: string; display_name: { hi?: string; en?: string } | null; kind: string;
+  calc_method: string; expression_text: string | null; fixed_minor: number | null;
+}
 const isDeduction = (kind: string) => kind === 'deduction' || kind === 'loan_recovery';
 
 // Employee types (map to seeded pay_core.employment_type codes).
@@ -147,6 +151,31 @@ const Payroll: React.FC = () => {
   const [idPan, setIdPan] = useState('');
   const [idEsic, setIdEsic] = useState('');
   const [idBusy, setIdBusy] = useState(false);
+
+  const [structure, setStructure] = useState<StructComp[]>([]);
+  const [structEdit, setStructEdit] = useState('');
+  const [structVal, setStructVal] = useState('');
+  const [structBusy, setStructBusy] = useState('');
+
+  const loadStructure = async (empId: string) => {
+    setStructure([]);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'structure-get', employeeId: empId } });
+    if (!error && data) setStructure((data as { components?: StructComp[] }).components || []);
+  };
+
+  // Editing one component's amount for ONE employee — the server versions the assignment so the
+  // employee's pay history is preserved (nothing is overwritten).
+  const saveStructVal = async (code: string) => {
+    const minor = Math.round(Number(structVal) * 100);
+    if (!Number.isFinite(minor) || minor < 0) { toast({ title: hi ? 'मान डालें' : 'Enter a value', variant: 'destructive' }); return; }
+    setStructBusy(code);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'structure-set', employeeId: attEmp!.id, code, basicMinor: minor } });
+    setStructBusy('');
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं बदला' : 'Update failed', description: await invokeError(error, data), variant: 'destructive' }); return; }
+    const versioned = (data as { versioned?: boolean })?.versioned;
+    toast({ title: hi ? 'ढाँचा बदला ✓' : 'Structure updated ✓', description: `${code} = ₹${structVal}` + (versioned ? (hi ? ' · नया संस्करण (पुराना इतिहास सुरक्षित)' : ' · new version (history kept)') : '') });
+    setStructEdit(''); loadStructure(attEmp!.id); loadEmployees();
+  };
 
   const saveIdentity = async () => {
     setIdBusy(true);
@@ -471,7 +500,7 @@ const Payroll: React.FC = () => {
             <div className="flex flex-wrap gap-2">
               {activeEmployees.map((e) => (
                 <button key={e.id} type="button" className="text-sm border rounded-md px-2 py-1 hover:bg-muted text-left" title={hi ? 'उपस्थिति सेट करें' : 'Set attendance'}
-                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); }}>
+                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); setStructEdit(''); loadStructure(e.id); }}>
                   <span className="font-medium">{nameOf(e.full_name)}</span> <span className="text-xs text-muted-foreground">{e.employee_code}</span>
                   {e.employment_type && <span className="ml-1 text-[10px] px-1 rounded bg-muted text-muted-foreground">{empTypeLabel(e.employment_type, hi)}</span>}
                   {e.basic_minor != null && <span className="ml-1 text-xs text-muted-foreground">· {rupees(e.basic_minor)}</span>}
@@ -521,12 +550,36 @@ const Payroll: React.FC = () => {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>{attEmp ? nameOf(attEmp.full_name) : ''} <span className="text-xs text-muted-foreground font-normal">{attEmp?.employee_code}</span></DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1">
-              <Label>{hi ? 'मूल वेतन (₹/माह)' : 'Basic salary (₹/month)'}</Label>
-              <div className="flex gap-2">
-                <Input type="number" value={editBasic} onChange={(e) => setEditBasic(e.target.value)} placeholder="25000" />
-                <Button variant="outline" onClick={updateSalary} disabled={empBusy}>{empBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'बदलें' : 'Update')}</Button>
-              </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                {hi ? 'वेतन ढाँचा' : 'Salary structure'}
+                {attEmp?.employment_type && <span className="ml-1 text-[10px] px-1 rounded bg-muted text-muted-foreground font-normal">{empTypeLabel(attEmp.employment_type, hi)}</span>}
+              </Label>
+              {structure.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{hi ? 'लोड हो रहा है…' : 'Loading…'}</p>
+              ) : structure.map((c) => (
+                <div key={c.code} className="border rounded-md p-2 text-sm">
+                  {structEdit === c.code ? (
+                    <div className="flex gap-2 items-center">
+                      <Input type="number" className="h-8" value={structVal} onChange={(e) => setStructVal(e.target.value)} autoFocus />
+                      <Button size="sm" onClick={() => saveStructVal(c.code)} disabled={structBusy === c.code}>{structBusy === c.code ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'सहेजें' : 'Save')}</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setStructEdit('')}>{hi ? 'रद्द' : 'Cancel'}</Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="font-medium">{nameOf(c.display_name)}</span>
+                        <span className="ml-1 text-[10px] text-muted-foreground">{isDeduction(c.kind) ? (hi ? 'कटौती' : 'deduction') : c.kind === 'employer_contrib' ? (hi ? 'इनपुट' : 'input') : (hi ? 'आय' : 'earning')}</span>
+                        <div className="text-xs text-muted-foreground">
+                          {c.fixed_minor != null ? rupees(c.fixed_minor) : (hi ? 'सूत्र से गणना' : 'computed by formula')}
+                        </div>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => { setStructEdit(c.code); setStructVal(c.fixed_minor != null ? String(Number(c.fixed_minor) / 100) : ''); }}>{hi ? 'बदलें' : 'Edit'}</Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <p className="text-[11px] text-muted-foreground">{hi ? 'कोई भी मान इस कर्मचारी के लिए तय कर सकते हैं — सूत्र वाले घटक पर भी। बदलाव इतिहास में सुरक्षित रहता है।' : 'You can pin any amount for THIS employee — even on a formula component. Every change is kept in history.'}</p>
             </div>
             <div className="border-t pt-3 space-y-2">
               <Label className="text-sm font-medium">{hi ? 'उपस्थिति' : 'Attendance'}</Label>
