@@ -226,6 +226,28 @@ Deno.serve(async (req: Request) => {
       return json(200, { components: rows }, CORS);
     }
 
+    // The employee's PAY HISTORY: every structure assignment they have ever held, newest first, with
+    // the amounts that applied in that window. Nothing here is reconstructed — the timeline exists
+    // because `structure-set` closes one assignment and opens the next instead of overwriting.
+    if (body.action === 'history-get') {
+      const empId = body.employeeId ?? '';
+      const rows = await sql`
+        select sa.id, sa.effective_from, sa.effective_to, sa.created_at,
+               cc.code, cc.display_name, ao.fixed_minor
+        from pay_config.structure_assignment sa
+        left join pay_config.assignment_override ao on ao.assignment_id = sa.id
+        left join pay_config.component_catalog cc on cc.id = ao.component_id
+        where sa.employee_id = ${empId} and sa.society_id = ${societyId}
+        order by sa.effective_from desc, sa.created_at desc, cc.code`;
+      const byAsg = new Map<string, { id: string; from: unknown; to: unknown; values: unknown[] }>();
+      for (const r of rows as Record<string, unknown>[]) {
+        const id = String(r.id);
+        if (!byAsg.has(id)) byAsg.set(id, { id, from: r.effective_from, to: r.effective_to, values: [] });
+        if (r.code) byAsg.get(id)!.values.push({ code: r.code, name: r.display_name, minor: r.fixed_minor });
+      }
+      return json(200, { history: [...byAsg.values()] }, CORS);
+    }
+
     // Change ONE component's value for ONE employee. History-safe: unless the assignment started
     // today (a same-day correction), the current assignment is CLOSED and a new one opened carrying
     // every override forward — so the employee's pay timeline is preserved, never overwritten.
@@ -321,7 +343,7 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, key, value }, CORS);
     }
 
-    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate' / 'identity-set' / 'structure-get' / 'structure-set' / 'statutory-list' / 'statutory-set'" }, CORS);
+    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate' / 'identity-set' / 'structure-get' / 'structure-set' / 'history-get' / 'statutory-list' / 'statutory-set'" }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {

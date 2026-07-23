@@ -152,6 +152,15 @@ const Payroll: React.FC = () => {
   const [idEsic, setIdEsic] = useState('');
   const [idBusy, setIdBusy] = useState(false);
 
+  const [history, setHistory] = useState<{ id: string; from: string; to: string | null; values: { code: string; name: { hi?: string; en?: string } | null; minor: number }[] }[]>([]);
+  const [histOpen, setHistOpen] = useState(false);
+
+  const loadHistory = async (empId: string) => {
+    setHistory([]);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'history-get', employeeId: empId } });
+    if (!error && data) setHistory((data as { history?: typeof history }).history || []);
+  };
+
   const [structure, setStructure] = useState<StructComp[]>([]);
   const [structEdit, setStructEdit] = useState('');
   const [structVal, setStructVal] = useState('');
@@ -174,7 +183,7 @@ const Payroll: React.FC = () => {
     if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं बदला' : 'Update failed', description: await invokeError(error, data), variant: 'destructive' }); return; }
     const versioned = (data as { versioned?: boolean })?.versioned;
     toast({ title: hi ? 'ढाँचा बदला ✓' : 'Structure updated ✓', description: `${code} = ₹${structVal}` + (versioned ? (hi ? ' · नया संस्करण (पुराना इतिहास सुरक्षित)' : ' · new version (history kept)') : '') });
-    setStructEdit(''); loadStructure(attEmp!.id); loadEmployees();
+    setStructEdit(''); loadStructure(attEmp!.id); loadHistory(attEmp!.id); loadEmployees();
   };
 
   const saveIdentity = async () => {
@@ -500,7 +509,7 @@ const Payroll: React.FC = () => {
             <div className="flex flex-wrap gap-2">
               {activeEmployees.map((e) => (
                 <button key={e.id} type="button" className="text-sm border rounded-md px-2 py-1 hover:bg-muted text-left" title={hi ? 'उपस्थिति सेट करें' : 'Set attendance'}
-                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); setStructEdit(''); loadStructure(e.id); }}>
+                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); setStructEdit(''); setHistOpen(false); loadStructure(e.id); loadHistory(e.id); }}>
                   <span className="font-medium">{nameOf(e.full_name)}</span> <span className="text-xs text-muted-foreground">{e.employee_code}</span>
                   {e.employment_type && <span className="ml-1 text-[10px] px-1 rounded bg-muted text-muted-foreground">{empTypeLabel(e.employment_type, hi)}</span>}
                   {e.basic_minor != null && <span className="ml-1 text-xs text-muted-foreground">· {rupees(e.basic_minor)}</span>}
@@ -580,6 +589,32 @@ const Payroll: React.FC = () => {
                 </div>
               ))}
               <p className="text-[11px] text-muted-foreground">{hi ? 'कोई भी मान इस कर्मचारी के लिए तय कर सकते हैं — सूत्र वाले घटक पर भी। बदलाव इतिहास में सुरक्षित रहता है।' : 'You can pin any amount for THIS employee — even on a formula component. Every change is kept in history.'}</p>
+            </div>
+
+            <div className="border-t pt-3 space-y-2">
+              <button type="button" className="flex items-center gap-1 text-sm font-medium hover:underline" onClick={() => setHistOpen((o) => !o)}>
+                {hi ? 'वेतन इतिहास' : 'Pay history'} <Badge variant="outline" className="text-[10px]">{history.length}</Badge>
+                <span className="text-xs text-muted-foreground">{histOpen ? '▲' : '▼'}</span>
+              </button>
+              {histOpen && (history.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{hi ? 'कोई इतिहास नहीं' : 'No history'}</p>
+              ) : (
+                <div className="space-y-1">
+                  {history.map((v) => (
+                    <div key={v.id} className="text-xs border-l-2 border-muted pl-2 py-1">
+                      <div className="font-medium">
+                        {String(v.from).slice(0, 10)} → {v.to ? String(v.to).slice(0, 10) : (hi ? 'अब तक' : 'current')}
+                        {!v.to && <span className="ml-1 text-[10px] px-1 rounded bg-primary/10 text-primary">{hi ? 'चालू' : 'active'}</span>}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {v.values.length === 0 ? (hi ? '— कोई तय राशि नहीं' : '— no pinned amounts')
+                          : v.values.map((x) => `${nameOf(x.name)} ${rupees(x.minor)}`).join(' · ')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              <p className="text-[11px] text-muted-foreground">{hi ? 'हर दर-बदलाव एक नया संस्करण बनाता है — पुराना कभी मिटता नहीं (audit)।' : 'Every rate change opens a new version — the old one is never erased (audit).'}</p>
             </div>
             <div className="border-t pt-3 space-y-2">
               <Label className="text-sm font-medium">{hi ? 'उपस्थिति' : 'Attendance'}</Label>
