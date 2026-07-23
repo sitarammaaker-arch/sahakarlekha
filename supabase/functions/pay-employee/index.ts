@@ -252,6 +252,22 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, employeeId: out.employeeId, code, type }, CORS);
     }
 
+    // Attendance for ONE period across the whole society: every employee who would be paid, with what
+    // is recorded for them. An employee with NO row is paid a full 30 days by default — the caller
+    // needs to see that, otherwise an unrecorded absence is silently paid in full.
+    if (body.action === 'attendance-list') {
+      if (!/^\d{4}-\d{2}$/.test(body.period ?? '')) return json(400, { error: 'period "YYYY-MM" required' }, CORS);
+      const rows = await sql`
+        select e.id, e.employee_code, e.full_name, e.employment_type, a.paid_days, a.lop_days
+        from pay_core.employee e
+        join pay_config.structure_assignment sa on sa.employee_id = e.id and sa.effective_to is null
+        left join pay_calc.attendance a
+          on a.employee_id = e.id and a.society_id = ${societyId} and a.period_month = ${`${body.period}-01`}
+        where e.society_id = ${societyId}
+        order by e.employee_code`;
+      return json(200, { period: body.period, attendance: rows }, CORS);
+    }
+
     if (body.action === 'attendance') {
       const empId = body.employeeId ?? '';
       if (!/^\d{4}-\d{2}$/.test(body.period ?? '')) return json(400, { error: 'period "YYYY-MM" required' }, CORS);
@@ -488,7 +504,7 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, key, value }, CORS);
     }
 
-    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate' / 'identity-set' / 'structure-get' / 'structure-set' / 'structure-unset' / 'structure-add' / 'structure-remove' / 'history-get' / 'loan-list' / 'loan-add' / 'loan-close' / 'statutory-list' / 'statutory-set'" }, CORS);
+    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'attendance-list' / 'update' / 'deactivate' / 'identity-set' / 'structure-get' / 'structure-set' / 'structure-unset' / 'structure-add' / 'structure-remove' / 'history-get' / 'loan-list' / 'loan-add' / 'loan-close' / 'statutory-list' / 'statutory-set'" }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {

@@ -39,6 +39,10 @@ interface Employee {
   employment_type?: string | null; uan?: string | null; pan?: string | null; esic_ip?: string | null;
 }
 interface StatSetting { key: string; value_num: number; label: string | null; source: string | null; }
+interface AttRow {
+  id: string; employee_code: string; full_name: { hi?: string; en?: string } | null;
+  employment_type: string | null; paid_days: number | null; lop_days: number | null;
+}
 interface StructComp {
   code: string; display_name: { hi?: string; en?: string } | null; kind: string;
   calc_method: string; expression_text: string | null; fixed_minor: number | null;
@@ -315,6 +319,45 @@ const Payroll: React.FC = () => {
     if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं हुआ' : 'Failed', description: await invokeError(error, data), variant: 'destructive' }); return; }
     toast({ title: hi ? 'सूत्र पर लौटा ✓' : 'Back to formula ✓', description: hi ? `${code} अब सूत्र से गणना होगा` : `${code} is computed by its formula again` });
     loadStructure(attEmp!.id); loadHistory(attEmp!.id); loadEmployees();
+  };
+
+  // ── Attendance for the whole society, one period at a time ────────────────────────────
+  // Setting it employee-by-employee is fine for one absence and painful for a month-end; and an
+  // employee with NO row is silently paid a full 30 days, which the admin should SEE before running.
+  const [attListOpen, setAttListOpen] = useState(false);
+  const [attListPeriod, setAttListPeriod] = useState('');
+  const [attRows, setAttRows] = useState<AttRow[]>([]);
+  const [attEdits, setAttEdits] = useState<Record<string, string>>({});
+  const [attListBusy, setAttListBusy] = useState(false);
+
+  const loadAttList = async (period: string) => {
+    if (!/^\d{4}-\d{2}$/.test(period)) { setAttRows([]); setAttEdits({}); return; }
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'attendance-list', period } });
+    if (error || !data) { toast({ title: hi ? 'लोड नहीं हुआ' : 'Could not load', description: await invokeError(error, data), variant: 'destructive' }); return; }
+    const rows = (data as { attendance?: AttRow[] }).attendance || [];
+    setAttRows(rows);
+    setAttEdits(Object.fromEntries(rows.map((r) => [r.id, r.lop_days == null ? '' : String(Number(r.lop_days))])));
+  };
+
+  const saveAttList = async () => {
+    setAttListBusy(true);
+    let saved = 0, failed = 0;
+    for (const r of attRows) {
+      const raw = (attEdits[r.id] ?? '').trim();
+      if (raw === '') continue;                                        // left blank → leave as it was
+      const lop = Number(raw);
+      if (!Number.isFinite(lop) || lop < 0 || lop > 31) { failed++; continue; }
+      if (r.lop_days != null && Number(r.lop_days) === lop) continue;   // unchanged
+      const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'attendance', employeeId: r.id, period: attListPeriod, lopDays: lop } });
+      if (error || (data as { error?: string })?.error) failed++; else saved++;
+    }
+    setAttListBusy(false);
+    toast({
+      title: failed ? (hi ? 'कुछ नहीं सहेजे' : 'Some failed') : (hi ? 'उपस्थिति सहेजी ✓' : 'Attendance saved ✓'),
+      description: hi ? `${saved} सहेजे${failed ? `, ${failed} विफल (0–31 दिन ही मान्य)` : ''}` : `${saved} saved${failed ? `, ${failed} failed (0–31 days only)` : ''}`,
+      variant: failed ? 'destructive' : 'default',
+    });
+    loadAttList(attListPeriod);
   };
 
   const [addCode, setAddCode] = useState('');
@@ -694,7 +737,10 @@ const Payroll: React.FC = () => {
         <Wallet className="h-6 w-6 text-primary" />
         <h1 className="text-xl md:text-2xl font-semibold">{hi ? 'पेरोल' : 'Payroll'}</h1>
         <Badge variant="secondary" className="ml-1">{hi ? 'नया इंजन' : 'new engine'}</Badge>
-        <Button className="ml-auto" size="sm" variant="ghost" onClick={() => { setStatKey(''); setStatOpen(true); }}>
+        <Button className="ml-auto" size="sm" variant="ghost" onClick={() => { const p = new Date().toISOString().slice(0, 7); setAttListPeriod(p); setAttListOpen(true); loadAttList(p); }}>
+          <Users className="h-4 w-4 mr-1" /> {hi ? 'उपस्थिति' : 'Attendance'}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => { setStatKey(''); setStatOpen(true); }}>
           <Settings2 className="h-4 w-4 mr-1" /> {hi ? 'सांविधिक दरें' : 'Statutory rates'}
         </Button>
         <Button size="sm" onClick={() => { setPeriod(''); setRunOpen(true); }}>
@@ -732,6 +778,57 @@ const Payroll: React.FC = () => {
             ))}
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setStatOpen(false)}>{hi ? 'बंद करें' : 'Close'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={attListOpen} onOpenChange={(o) => !attListBusy && setAttListOpen(o)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto overflow-x-hidden">
+          <DialogHeader><DialogTitle>{hi ? 'उपस्थिति — पूरी समिति' : 'Attendance — whole society'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-xs">{hi ? 'अवधि (माह)' : 'Period (month)'}</Label>
+              <Input type="month" value={attListPeriod} onChange={(e) => { setAttListPeriod(e.target.value); loadAttList(e.target.value); }} />
+            </div>
+            {attRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{hi ? 'इस अवधि के लिए कोई कर्मचारी नहीं (या अवधि चुनें)।' : 'No payable employees for this period (or pick a period).'}</p>
+            ) : (
+              <>
+                {attRows.some((r) => r.lop_days == null) && (
+                  <p className="text-xs px-2 py-1.5 rounded bg-amber-500/10 text-amber-700">
+                    {hi
+                      ? `⚠ ${attRows.filter((r) => r.lop_days == null).length} कर्मचारियों की उपस्थिति दर्ज़ नहीं — उन्हें पूरे 30 दिन का वेतन मिलेगा।`
+                      : `⚠ ${attRows.filter((r) => r.lop_days == null).length} employee(s) have no attendance recorded — they will be paid a full 30 days.`}
+                  </p>
+                )}
+                <div className="space-y-1">
+                  {attRows.map((r) => (
+                    <div key={r.id} className="flex items-center gap-2 border rounded-md px-2 py-1.5">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium truncate">{nameOf(r.full_name)} <span className="text-xs text-muted-foreground">{r.employee_code}</span></div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {r.lop_days == null
+                            ? (hi ? 'दर्ज़ नहीं → 30 दिन' : 'not recorded → 30 days')
+                            : (hi ? `भुगतान ${Number(r.paid_days)} दिन` : `${Number(r.paid_days)} paid days`)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Input type="number" min="0" max="31" className="h-8 w-16" placeholder="0"
+                          value={attEdits[r.id] ?? ''} onChange={(e) => setAttEdits((m) => ({ ...m, [r.id]: e.target.value }))} />
+                        <span className="text-[11px] text-muted-foreground">{hi ? 'LOP दिन' : 'LOP'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted-foreground">{hi ? 'खाली छोड़ा तो जैसा है वैसा ही रहेगा। LOP = बिना-वेतन दिन (0–31)।' : 'Left blank stays as it is. LOP = loss-of-pay days (0–31).'}</p>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAttListOpen(false)} disabled={attListBusy}>{hi ? 'बंद करें' : 'Close'}</Button>
+            <Button onClick={saveAttList} disabled={attListBusy || attRows.length === 0}>
+              {attListBusy ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {hi ? 'सहेज रहा है…' : 'Saving…'}</> : (hi ? 'सहेजें' : 'Save')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
