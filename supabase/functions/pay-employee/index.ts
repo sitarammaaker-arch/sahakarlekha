@@ -27,8 +27,15 @@ const SFL: Record<string, string> = {
   DA: 'formula "DA" :: Money let b = BASIC in b * 20%',
   HRA: 'formula "HRA" :: Money let b = BASIC in b * 40%',
   PF: 'formula "PF" :: Money let b = BASIC in b * (pf_rate / 100)',
-  // Loss of Pay: deduct the full-pay-equivalent (BASIC + DA 20% + HRA 40% = 160% of BASIC) for absent days.
+  // Loss of Pay must deduct ONE DAY OF WHAT THIS EMPLOYEE ACTUALLY EARNS, so it differs by structure:
+  //   LOP        basic + DA 20% + HRA 40% = 160% of basic   (permanent, probation)
+  //   LOP_NOHRA  basic + DA 20%           = 120% of basic   (seasonal, fixed-term — no HRA)
+  //   LOP_DEP    basic + DA 20% + the deputation allowance  (deputation)
+  // Each references only FIXED components (BASIC, DEP_ALLOW), which pay-run injects as 0 for an
+  // employee who lacks them — so no variant can pick up a value from someone else's structure.
   LOP: 'formula "LOP" :: Money let b = BASIC in b * 160% * (attendance.lopDays / 30)',
+  LOP_NOHRA: 'formula "LOP_NOHRA" :: Money let b = BASIC in b * 120% * (attendance.lopDays / 30)',
+  LOP_DEP: 'formula "LOP_DEP" :: Money let b = BASIC in (b * 120% + DEP_ALLOW) * (attendance.lopDays / 30)',
   // Daily wages: the day rate (a hidden input component) times the days actually worked.
   DAILY_WAGE: 'formula "DAILY_WAGE" :: Money let r = DAILY_RATE in r * attendance.paidDays',
   // Staff advance: `loanRecovery` is a fact the runtime supplies per employee (0 when none).
@@ -43,6 +50,8 @@ const COMPONENTS: Record<string, { kind: string; method: string; formula: string
   HRA:          { kind: 'earning',   method: 'formula', formula: SFL.HRA, label: 'HRA' },
   PF:           { kind: 'deduction', method: 'formula', formula: SFL.PF,  label: 'PF' },
   LOP:          { kind: 'deduction', method: 'formula', formula: SFL.LOP, label: 'Loss of Pay' },
+  LOP_NOHRA:    { kind: 'deduction', method: 'formula', formula: SFL.LOP_NOHRA, label: 'Loss of Pay' },
+  LOP_DEP:      { kind: 'deduction', method: 'formula', formula: SFL.LOP_DEP, label: 'Loss of Pay' },
   DEP_ALLOW:    { kind: 'earning',   method: 'fixed',   formula: null,    label: 'Deputation Allowance' },
   CONSOLIDATED: { kind: 'earning',   method: 'fixed',   formula: null,    label: 'Consolidated Pay' },
   STIPEND:      { kind: 'earning',   method: 'fixed',   formula: null,    label: 'Stipend' },
@@ -113,13 +122,13 @@ async function changeStructureComponent(
 // codes. muster = daily wages (the entered amount is the DAILY RATE; DAILY_WAGE = rate × days worked).
 const TYPE_STRUCTURE: Record<string, { components: string[]; primary: string; zero: string[] }> = {
   permanent:  { components: ['BASIC', 'DA', 'HRA', 'PF', 'LOP'], primary: 'BASIC', zero: [] },
-  deputation: { components: ['BASIC', 'DA', 'DEP_ALLOW', 'LOP'], primary: 'BASIC', zero: ['DEP_ALLOW'] },
+  deputation: { components: ['BASIC', 'DA', 'DEP_ALLOW', 'LOP_DEP'], primary: 'BASIC', zero: ['DEP_ALLOW'] },
   contract:   { components: ['CONSOLIDATED'], primary: 'CONSOLIDATED', zero: [] },
   honorary:   { components: ['CONSOLIDATED'], primary: 'CONSOLIDATED', zero: [] },
   muster:     { components: ['DAILY_RATE', 'DAILY_WAGE'], primary: 'DAILY_RATE', zero: [] },
   probation:  { components: ['BASIC', 'DA', 'HRA', 'PF', 'LOP'], primary: 'BASIC', zero: [] },       // like permanent
-  seasonal:   { components: ['BASIC', 'DA', 'PF', 'LOP'], primary: 'BASIC', zero: [] },               // monthly, PF, no HRA
-  fixedterm:  { components: ['BASIC', 'DA', 'PF', 'LOP'], primary: 'BASIC', zero: [] },               // statutory for the term
+  seasonal:   { components: ['BASIC', 'DA', 'PF', 'LOP_NOHRA'], primary: 'BASIC', zero: [] },          // monthly, PF, no HRA
+  fixedterm:  { components: ['BASIC', 'DA', 'PF', 'LOP_NOHRA'], primary: 'BASIC', zero: [] },          // statutory for the term
   apprentice: { components: ['STIPEND'], primary: 'STIPEND', zero: [] },                              // stipend, no statutory
   parttime:   { components: ['CONSOLIDATED'], primary: 'CONSOLIDATED', zero: [] },
   consultant: { components: ['CONSOLIDATED'], primary: 'CONSOLIDATED', zero: [] },                    // retainer fee (194J TDS later)
