@@ -202,6 +202,7 @@ const Payroll: React.FC = () => {
   const [empType, setEmpType] = useState('permanent');
   const [empJoin, setEmpJoin] = useState('');    // date of joining — a fact, printed on the payslip
   const [joinEdit, setJoinEdit] = useState('');  // correcting it for an existing employee
+  const [exitDate, setExitDate] = useState('');  // last working day, asked for when removing
   const [joinBusy, setJoinBusy] = useState(false);
   const [empSaving, setEmpSaving] = useState(false);
 
@@ -471,11 +472,19 @@ const Payroll: React.FC = () => {
   };
 
   const deactivateEmp = async () => {
+    const last = exitDate.trim();
+    if (!window.confirm(hi
+      ? `${nameOf(attEmp?.full_name)} को हटाएँ? ${last ? `${last} तक का वेतन बनेगा।` : 'आज तक का वेतन बनेगा।'}`
+      : `Remove ${nameOf(attEmp?.full_name)}? Pay will be computed up to ${last || 'today'}.`)) return;
     setEmpBusy(true);
-    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'deactivate', employeeId: attEmp!.id } });
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'deactivate', employeeId: attEmp!.id, ...(last ? { lastDay: last } : {}) } });
     setEmpBusy(false);
     if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं हटा' : 'Failed', description: await invokeError(error, data), variant: 'destructive' }); return; }
-    toast({ title: hi ? 'कर्मचारी हटाया ✓' : 'Employee removed ✓', description: hi ? 'अगली पेरोल से बाहर (पुरानी पेस्लिप सुरक्षित)' : 'Excluded from future runs (past payslips kept)' });
+    toast({
+      title: hi ? 'कर्मचारी हटाया ✓' : 'Employee removed ✓',
+      description: hi ? `${last || 'आज'} तक का वेतन बनेगा; उसके बाद की पेरोल से बाहर (पुरानी पेस्लिप सुरक्षित)`
+        : `Paid up to ${last || 'today'}; excluded from later runs (past payslips kept)`,
+    });
     setAttEmp(null); loadEmployees();
   };
 
@@ -974,7 +983,7 @@ const Payroll: React.FC = () => {
             <div className="flex flex-wrap gap-2">
               {activeEmployees.map((e) => (
                 <button key={e.id} type="button" className="text-sm border rounded-md px-2 py-1 hover:bg-muted text-left" title={hi ? 'उपस्थिति सेट करें' : 'Set attendance'}
-                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); setJoinEdit(String(e.date_of_join || '').slice(0,10)); setStructEdit(''); setHistOpen(false); loadStructure(e.id); loadHistory(e.id); loadLoans(e.id); }}>
+                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); setJoinEdit(String(e.date_of_join || '').slice(0,10)); setExitDate(''); setStructEdit(''); setHistOpen(false); loadStructure(e.id); loadHistory(e.id); loadLoans(e.id); }}>
                   <span className="font-medium">{nameOf(e.full_name)}</span> <span className="text-xs text-muted-foreground">{e.employee_code}</span>
                   {e.employment_type && <span className="ml-1 text-[10px] px-1 rounded bg-muted text-muted-foreground">{empTypeLabel(e.employment_type, hi)}</span>}
                   {e.basic_minor != null && <span className="ml-1 text-xs text-muted-foreground">· {rupees(e.basic_minor)}</span>}
@@ -1180,6 +1189,16 @@ const Payroll: React.FC = () => {
               <div className="space-y-1"><Label className="text-xs">PAN <span className="text-muted-foreground">(TDS 24Q)</span></Label><Input value={idPan} onChange={(e) => setIdPan(e.target.value.toUpperCase())} placeholder="ABCDE1234F" maxLength={10} /></div>
               <div className="space-y-1"><Label className="text-xs">ESIC IP <span className="text-muted-foreground">(ESI)</span></Label><Input value={idEsic} onChange={(e) => setIdEsic(e.target.value)} placeholder={hi ? 'IP संख्या' : 'IP number'} /></div>
               <Button size="sm" variant="outline" onClick={saveIdentity} disabled={idBusy}>{idBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'पहचान सहेजें' : 'Save IDs')}</Button>
+            </div>
+
+            {/* The last working day decides the final month's pay, so it is asked for rather than
+                assumed to be today — a removal recorded a week late would otherwise over-pay. */}
+            <div className="space-y-1 pt-2 border-t">
+              <Label className="text-xs">{hi ? 'अंतिम कार्यदिवस (हटाने पर)' : 'Last working day (on removal)'}</Label>
+              <Input type="date" value={exitDate} onChange={(e) => setExitDate(e.target.value)} />
+              <p className="text-[11px] text-muted-foreground">
+                {hi ? 'इसी दिन तक का वेतन बनेगा। खाली छोड़ा तो आज मान लिया जाएगा।' : 'Pay is computed up to this day. Left blank, today is assumed.'}
+              </p>
             </div>
           </div>
           <DialogFooter className="sm:justify-between">
