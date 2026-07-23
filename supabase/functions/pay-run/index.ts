@@ -63,12 +63,21 @@ Deno.serve(async (req: Request) => {
         and state not in ('cancelled','rolled_back') limit 1`;
     if (dup) return json(409, { error: `is avdhi (${period}) ka payroll pehle se hai — run ${dup.run_no} (${dup.state}). Dobara chalane ke liye pehle use cancel karein.` }, CORS);
 
-    // 3. employees with an active salary-structure assignment
+    // 3. employees whose salary structure covers any part of THIS period — not just those with an
+    // open assignment. Somebody who left mid-month still earned the days they served, and an
+    // assignment is also closed when a structure is edited (a new version supersedes it), so we take
+    // the LATEST assignment per employee: the open one if there is one, else the last to end.
+    const daysInMonth = new Date(Date.UTC(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0)).getUTCDate();
+    const periodEnd = `${period}-${String(daysInMonth).padStart(2, '0')}`;
     const employees = await sql`
-      select e.id, e.employee_code, sa.id as assignment_id, sa.structure_version_id
+      select distinct on (e.id) e.id, e.employee_code, e.date_of_join, sa.id as assignment_id,
+             sa.structure_version_id, sa.effective_to
       from pay_core.employee e
-      join pay_config.structure_assignment sa on sa.employee_id = e.id and sa.effective_to is null
-      where e.society_id = ${societyId}`;
+      join pay_config.structure_assignment sa on sa.employee_id = e.id
+        and sa.effective_from <= ${periodEnd}
+        and (sa.effective_to is null or sa.effective_to >= ${periodMonth})
+      where e.society_id = ${societyId} and e.date_of_join <= ${periodEnd}
+      order by e.id, (sa.effective_to is null) desc, sa.effective_from desc`;
     if (!employees.length) return json(400, { error: 'no employees have a salary structure assigned' }, CORS);
 
     // 4. rules → freeze (BASIC etc. resolve by component-code convention)
@@ -99,7 +108,7 @@ Deno.serve(async (req: Request) => {
         join lateral (select * from pay_config.component_version v where v.component_id = cc.id and v.status = 'active' and v.effective_from <= ${periodMonth} order by v.effective_from desc limit 1) cv on true
         left join pay_formula.formula_version fv on fv.id = cv.formula_ref
         left join pay_config.assignment_override ao on ao.assignment_id = sa.id and ao.component_id = cc.id
-        where sa.employee_id = ${emp.id} and sa.effective_to is null`;
+        where sa.id = ${emp.assignment_id}`;   // the assignment chosen above — a leaver's is closed
       comps.forEach((c: Record<string, unknown>) => { codeToId[c.code as string] = c.component_id as string; });
       const spec = mapCatalog({
         currency: 'INR', ruleView,
@@ -108,7 +117,27 @@ Deno.serve(async (req: Request) => {
       for (const s of spec.formulaSources) sourcesByCode[s.code] = s.source;
       for (const k of Object.keys(spec.fixedComponents)) fixedCodes.add(k);
       const [att] = await sql`select paid_days, lop_days from pay_calc.attendance where society_id = ${societyId} and employee_id = ${emp.id} and period_month = ${periodMonth} limit 1`;
-      const paidDays = att ? Number(att.paid_days) : 30, lopDays = att ? Number(att.lop_days) : 0;
+      // Days of THIS period the employee was actually on the rolls. A mid-month joiner or leaver is
+      // owed only those days — the unserved rest is fed into lopDays, so every structure's own LOP
+      // formula pro-rates it (a whole month's pay for eleven days served was the bug). Converted into
+      // the 30-day convention the LOP formulas divide by, so net comes out exactly served/daysInMonth.
+      // a date column arrives as a Date from postgres.js, a literal as a string — take its own
+      // calendar day either way (never toISOString, which shifts the day in a non-UTC zone).
+      const ymd = (d: unknown) => d instanceof Date
+        ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        : String(d).slice(0, 10);
+      const dayNo = (d: unknown) => Math.floor(Date.parse(`${ymd(d)}T00:00:00Z`) / 86400000);
+      const from = Math.max(dayNo(periodMonth), dayNo(emp.date_of_join));
+      const to = Math.min(dayNo(periodEnd), emp.effective_to ? dayNo(emp.effective_to) : dayNo(periodEnd));
+      const servedDays = Math.max(0, to - from + 1);
+      if (servedDays === 0) continue;   // joined after this period, or left before it began
+      const unservedDays = Math.round(30 * (1 - servedDays / daysInMonth) * 100) / 100;
+      const attLop = att ? Number(att.lop_days) : 0;
+      const paidDays = att ? Number(att.paid_days) : Math.min(30, servedDays);
+      const lopDays = Math.min(30, attLop + unservedDays);
+      // What the payslip PRINTS. The fact above stays as recorded (daily wages are paid on it);
+      // this is only the days-paid figure, which must never read more than the days served.
+      const paidDaysShown = Math.max(0, Math.min(paidDays, servedDays - attLop));
       // staff advance: recover this month's instalment, never more than what is still outstanding.
       // Recovery is only CREDITED against the loan when the run is actually paid (pay-pay).
       const [ln] = await sql`select id, installment_minor, principal_minor, recovered_minor from pay_calc.employee_loan
@@ -117,7 +146,7 @@ Deno.serve(async (req: Request) => {
         ? [{ loanId: String(ln.id), amountMinor: Math.max(0, Math.min(Number(ln.installment_minor), Number(ln.principal_minor) - Number(ln.recovered_minor))) }]
         : [];
       const facts = { attendance: { paidDays, lopDays, otHours: 0 }, leave: [], loan, tax: { ytdByHead: {}, monthsRemaining: 12, regime: 'new' } };
-      emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, paidDays, lopDays, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns: {}, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
+      emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, paidDays, paidDaysShown, lopDays, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns: {}, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
     }
 
     // 5b. Employees now have HETEROGENEOUS per-employee structures, but assembleRun compiles ONE shared
@@ -162,7 +191,7 @@ Deno.serve(async (req: Request) => {
         const req0 = emReqs.find((r) => r.employeeId === ps.employeeId)!;
         const slipId = crypto.randomUUID();
         await tx`insert into pay_calc.payslip(id,society_id,pay_run_id,employee_id,period_month,payslip_no,gross_minor,deductions_minor,net_minor,currency,paid_days,lop_days,created_by)
-          values(${slipId},${societyId},${runId},${ps.employeeId},${periodMonth},${`PS-${runNo}-${req0.empCode}`},${ps.payslip.grossEarnings.minor},${ps.payslip.grossDeductions.minor},${ps.payslip.netPay.minor},'INR',${req0.paidDays},${req0.lopDays},${su.id})`;
+          values(${slipId},${societyId},${runId},${ps.employeeId},${periodMonth},${`PS-${runNo}-${req0.empCode}`},${ps.payslip.grossEarnings.minor},${ps.payslip.grossDeductions.minor},${ps.payslip.netPay.minor},'INR',${req0.paidDaysShown},${req0.lopDays},${su.id})`;
         let seq = 1;
         for (const line of [...ps.payslip.earnings, ...ps.payslip.deductions]) {
           await tx`insert into pay_calc.payslip_line(society_id,payslip_id,period_month,component_id,computed_minor,currency,sequence) values(${societyId},${slipId},${periodMonth},${codeToId[line.code]},${line.amount.minor},'INR',${seq++})`;
