@@ -41,6 +41,7 @@
     "test:pay-evalplan": "node scripts/test-pay-evalplan.mjs",
     "test:pay-components": "node scripts/test-pay-components.mjs",
     "test:pay-payslip": "node scripts/test-pay-payslip.mjs",
+    "test:pay-ecr": "node scripts/test-pay-ecr.mjs",
     "test:pay-engine": "node scripts/test-pay-engine.mjs",
     "test:pay-assemble-run": "node scripts/test-pay-assemble-run.mjs",
     "test:pay-map-catalog": "node scripts/test-pay-map-catalog.mjs",
