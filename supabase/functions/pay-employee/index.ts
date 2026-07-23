@@ -279,13 +279,22 @@ Deno.serve(async (req: Request) => {
     // needs to see that, otherwise an unrecorded absence is silently paid in full.
     if (body.action === 'attendance-list') {
       if (!/^\d{4}-\d{2}$/.test(body.period ?? '')) return json(400, { error: 'period "YYYY-MM" required' }, CORS);
+      // EXACTLY who pay-run will pay for this period — anyone whose assignment overlaps it, which
+      // includes somebody who has since left. Selecting only open assignments (what this did) left a
+      // leaver off the list for their FINAL month, the one month their absence still had to be
+      // recorded, and made the run dialog's "no attendance recorded" warning count the wrong people.
+      const pStart = `${body.period}-01`;
+      const pEnd = `${body.period}-${String(new Date(Date.UTC(Number(body.period.slice(0, 4)), Number(body.period.slice(5, 7)), 0)).getUTCDate()).padStart(2, '0')}`;
       const rows = await sql`
         select e.id, e.employee_code, e.full_name, e.employment_type, a.paid_days, a.lop_days
         from pay_core.employee e
-        join pay_config.structure_assignment sa on sa.employee_id = e.id and sa.effective_to is null
         left join pay_calc.attendance a
-          on a.employee_id = e.id and a.society_id = ${societyId} and a.period_month = ${`${body.period}-01`}
-        where e.society_id = ${societyId}
+          on a.employee_id = e.id and a.society_id = ${societyId} and a.period_month = ${pStart}
+        where e.society_id = ${societyId} and e.date_of_join <= ${pEnd}
+          and exists (select 1 from pay_config.structure_assignment sa
+                      where sa.employee_id = e.id and sa.society_id = ${societyId}
+                        and sa.effective_from <= ${pEnd}
+                        and (sa.effective_to is null or sa.effective_to >= ${pStart}))
         order by e.employee_code`;
       return json(200, { period: body.period, attendance: rows }, CORS);
     }
