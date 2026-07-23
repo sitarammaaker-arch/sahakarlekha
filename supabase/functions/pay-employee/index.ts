@@ -31,6 +31,8 @@ const SFL: Record<string, string> = {
   LOP: 'formula "LOP" :: Money let b = BASIC in b * 160% * (attendance.lopDays / 30)',
   // Daily wages: the day rate (a hidden input component) times the days actually worked.
   DAILY_WAGE: 'formula "DAILY_WAGE" :: Money let r = DAILY_RATE in r * attendance.paidDays',
+  // Staff advance: `loanRecovery` is a fact the runtime supplies per employee (0 when none).
+  LOAN_RECOVERY: 'formula "LOAN_RECOVERY" :: Money let r = loanRecovery in r',
 };
 
 // Society-wide component catalog (shared DEFINITIONS; per-employee independence comes from each
@@ -48,7 +50,63 @@ const COMPONENTS: Record<string, { kind: string; method: string; formula: string
   // payslip); DAILY_WAGE = rate × days-worked is the visible earning.
   DAILY_RATE:   { kind: 'employer_contrib', method: 'fixed',   formula: null,           label: 'Daily Rate (per day)' },
   DAILY_WAGE:   { kind: 'earning',          method: 'formula', formula: SFL.DAILY_WAGE, label: 'Daily Wages' },
+  // Staff advance recovery. `loanRecovery` is a per-employee FACT (pay-run loads the active loan), so
+  // unlike a formula that reads other components this can never leak across employees' structures.
+  LOAN_RECOVERY: { kind: 'loan_recovery', method: 'formula', formula: SFL.LOAN_RECOVERY, label: 'Loan / Advance Recovery' },
 };
+
+// Add or remove ONE component on ONE employee's structure, history-safely: the version past
+// assignments point at is never mutated — a new structure_version is created (copy ± the component)
+// and the employee re-assigned to it from today. Returns whether the assignment was versioned.
+async function changeStructureComponent(
+  tx: postgres.TransactionSql, societyId: string, empId: string, code: string,
+  adding: boolean, compIds: Record<string, string>, creator: string, valueMinor: number,
+) {
+  const compId = compIds[code];
+  const [asg] = await tx`select id, structure_version_id, effective_from from pay_config.structure_assignment
+    where employee_id = ${empId} and society_id = ${societyId} and effective_to is null limit 1`;
+  if (!asg) throw new Error('no active salary structure for this employee');
+  const [bound] = await tx`select 1 from pay_config.component_binding where structure_version_id = ${asg.structure_version_id} and component_id = ${compId} limit 1`;
+  if (adding && bound) throw new Error(`'${code}' is already in this employee's structure`);
+  if (!adding && !bound) throw new Error(`'${code}' is not in this employee's structure`);
+  if (!adding) {
+    const [{ n }] = await tx`select count(*)::int as n from pay_config.component_binding where structure_version_id = ${asg.structure_version_id}`;
+    if (Number(n) <= 1) throw new Error('cannot remove the last component — a structure needs at least one');
+  }
+  const [sv] = await tx`select structure_id from pay_config.structure_version where id = ${asg.structure_version_id}`;
+  const [nv] = await tx`insert into pay_config.structure_version(structure_id,version,effective_from,created_by,status)
+    select ${sv.structure_id}, coalesce(max(version),0)+1, current_date, ${creator}, 'active'
+    from pay_config.structure_version where structure_id = ${sv.structure_id} returning id`;
+  await tx`insert into pay_config.component_binding(structure_version_id,component_id,created_by)
+    select ${nv.id}, cb.component_id, ${creator} from pay_config.component_binding cb
+    where cb.structure_version_id = ${asg.structure_version_id}`;
+  if (adding) {
+    await tx`insert into pay_config.component_binding(structure_version_id,component_id,created_by) values(${nv.id},${compId},${creator}) on conflict do nothing`;
+  } else {
+    await tx`delete from pay_config.component_binding where structure_version_id = ${nv.id} and component_id = ${compId}`;
+  }
+  const [{ same }] = await tx`select (${asg.effective_from}::date >= current_date) as same`;
+  let target = asg.id as string;
+  if (same) {
+    await tx`update pay_config.structure_assignment set structure_version_id = ${nv.id}, updated_at = now(), updated_by = ${creator} where id = ${asg.id}`;
+  } else {
+    await tx`update pay_config.structure_assignment set effective_to = current_date, updated_at = now(), updated_by = ${creator} where id = ${asg.id}`;
+    const [nw] = await tx`insert into pay_config.structure_assignment(society_id,employee_id,structure_version_id,effective_from,created_by)
+      values(${societyId},${empId},${nv.id},current_date,${creator}) returning id`;
+    target = nw.id as string;
+    await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,override_formula_ref,reason,created_by)
+      select ${target}, ao.component_id, ao.fixed_minor, coalesce(ao.fixed_currency,'INR'), ao.override_formula_ref, 'carried forward', ${creator}
+      from pay_config.assignment_override ao where ao.assignment_id = ${asg.id}`;
+  }
+  if (!adding) {
+    await tx`delete from pay_config.assignment_override where assignment_id = ${target} and component_id = ${compId}`;
+  } else if (COMPONENTS[code].method === 'fixed') {
+    await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,reason,created_by)
+      values(${target},${compId},${valueMinor},'INR','added',${creator})
+      on conflict (assignment_id,component_id) do update set fixed_minor = ${valueMinor}, override_formula_ref = null`;
+  }
+  return { versioned: !same };
+}
 
 // Each employment TYPE → the components its structure binds + which one the entered amount fills +
 // which extra components default to 0 (editable later). Keys are the seeded pay_core.employment_type
@@ -140,7 +198,7 @@ Deno.serve(async (req: Request) => {
   const { data: { user } } = await createClient(supaUrl, anonKey, { global: { headers: { Authorization: `Bearer ${jwt}` } } }).auth.getUser();
   if (!user?.email) return json(401, { error: 'invalid session' }, CORS);
 
-  let body: { action?: string; name?: string; code?: string; basicMinor?: number; type?: string; employeeId?: string; period?: string; lopDays?: number; key?: string; value?: number; label?: string; source?: string; uan?: string; pan?: string; esicIp?: string };
+  let body: { action?: string; name?: string; code?: string; basicMinor?: number; type?: string; employeeId?: string; period?: string; lopDays?: number; key?: string; value?: number; label?: string; source?: string; uan?: string; pan?: string; esicIp?: string; principal?: number; installment?: number; purpose?: string; loanId?: string };
   try { body = await req.json(); } catch { return json(400, { error: 'bad JSON' }, CORS); }
 
   const sql = postgres(dbUrl, { prepare: false, max: 3 });
@@ -226,9 +284,7 @@ Deno.serve(async (req: Request) => {
       return json(200, { components: rows }, CORS);
     }
 
-    // Add or remove ONE component from ONE employee's structure. History-safe: the bindings of the
-    // version the past assignments point at are never touched — a NEW structure_version is created
-    // (copy ± this component) and the employee is re-assigned to it from today.
+    // Add or remove ONE component from ONE employee's structure (see changeStructureComponent).
     if (body.action === 'structure-add' || body.action === 'structure-remove') {
       const empId = body.employeeId ?? '', code = (body.code ?? '').trim();
       const adding = body.action === 'structure-add';
@@ -236,54 +292,49 @@ Deno.serve(async (req: Request) => {
       if (!COMPONENTS[code]) return json(400, { error: `unknown component '${code}'` }, CORS);
       const out = await sql.begin(async (tx: postgres.TransactionSql) => {
         const compIds = await ensureSocietyComponents(tx, societyId, su.id);
-        const compId = compIds[code];
-        const [asg] = await tx`select id, structure_version_id, effective_from from pay_config.structure_assignment
-          where employee_id = ${empId} and society_id = ${societyId} and effective_to is null limit 1`;
-        if (!asg) throw new Error('no active salary structure for this employee');
-        const [bound] = await tx`select 1 from pay_config.component_binding where structure_version_id = ${asg.structure_version_id} and component_id = ${compId} limit 1`;
-        if (adding && bound) throw new Error(`'${code}' is already in this employee's structure`);
-        if (!adding && !bound) throw new Error(`'${code}' is not in this employee's structure`);
-        if (!adding) {
-          const [{ n }] = await tx`select count(*)::int as n from pay_config.component_binding where structure_version_id = ${asg.structure_version_id}`;
-          if (Number(n) <= 1) throw new Error('cannot remove the last component — a structure needs at least one');
-        }
-        const [sv] = await tx`select structure_id from pay_config.structure_version where id = ${asg.structure_version_id}`;
-        const [nv] = await tx`insert into pay_config.structure_version(structure_id,version,effective_from,created_by,status)
-          select ${sv.structure_id}, coalesce(max(version),0)+1, current_date, ${su.id}, 'active'
-          from pay_config.structure_version where structure_id = ${sv.structure_id} returning id`;
-        await tx`insert into pay_config.component_binding(structure_version_id,component_id,created_by)
-          select ${nv.id}, cb.component_id, ${su.id} from pay_config.component_binding cb
-          where cb.structure_version_id = ${asg.structure_version_id}`;
-        if (adding) {
-          await tx`insert into pay_config.component_binding(structure_version_id,component_id,created_by) values(${nv.id},${compId},${su.id}) on conflict do nothing`;
-        } else {
-          await tx`delete from pay_config.component_binding where structure_version_id = ${nv.id} and component_id = ${compId}`;
-        }
-        // re-assign the employee to the new version (same-day → move in place, else version the assignment)
-        const [{ same }] = await tx`select (${asg.effective_from}::date >= current_date) as same`;
-        let target = asg.id as string;
-        if (same) {
-          await tx`update pay_config.structure_assignment set structure_version_id = ${nv.id}, updated_at = now(), updated_by = ${su.id} where id = ${asg.id}`;
-        } else {
-          await tx`update pay_config.structure_assignment set effective_to = current_date, updated_at = now(), updated_by = ${su.id} where id = ${asg.id}`;
-          const [nw] = await tx`insert into pay_config.structure_assignment(society_id,employee_id,structure_version_id,effective_from,created_by)
-            values(${societyId},${empId},${nv.id},current_date,${su.id}) returning id`;
-          target = nw.id as string;
-          await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,override_formula_ref,reason,created_by)
-            select ${target}, ao.component_id, ao.fixed_minor, coalesce(ao.fixed_currency,'INR'), ao.override_formula_ref, 'carried forward', ${su.id}
-            from pay_config.assignment_override ao where ao.assignment_id = ${asg.id}`;
-        }
-        if (!adding) {
-          await tx`delete from pay_config.assignment_override where assignment_id = ${target} and component_id = ${compId}`;
-        } else if (COMPONENTS[code].method === 'fixed') {
-          // a fixed component must carry an amount, or the calc refuses (PAY-MAP-703)
-          await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,reason,created_by)
-            values(${target},${compId},${valueMinor},'INR','added',${su.id})
-            on conflict (assignment_id,component_id) do update set fixed_minor = ${valueMinor}, override_formula_ref = null`;
-        }
-        return { versioned: !same };
+        return await changeStructureComponent(tx, societyId, empId, code, adding, compIds, su.id, valueMinor);
       });
       return json(200, { ok: true, employeeId: empId, code, action: body.action, versioned: out.versioned }, CORS);
+    }
+
+    // ── Staff advances / loans ──────────────────────────────────────────────────────────────
+    if (body.action === 'loan-list') {
+      const rows = await sql`select id, principal_minor, installment_minor, recovered_minor, purpose, status, started_on, closed_on
+        from pay_calc.employee_loan where society_id = ${societyId} and employee_id = ${body.employeeId ?? ''}
+        order by started_on desc, created_at desc`;
+      return json(200, { loans: rows }, CORS);
+    }
+
+    // Record an advance and make sure the employee's structure carries the recovery line, so the very
+    // next run starts recovering it. One ACTIVE loan per employee (DB partial unique index).
+    if (body.action === 'loan-add') {
+      const empId = body.employeeId ?? '';
+      const principal = Number(body.principal), installment = Number(body.installment);
+      if (!Number.isFinite(principal) || principal <= 0) return json(400, { error: 'principal must be a positive number (paise)' }, CORS);
+      if (!Number.isFinite(installment) || installment <= 0) return json(400, { error: 'installment must be a positive number (paise)' }, CORS);
+      if (installment > principal) return json(400, { error: 'installment cannot exceed the principal' }, CORS);
+      const [owner] = await sql`select 1 from pay_core.employee where id = ${empId} and society_id = ${societyId} limit 1`;
+      if (!owner) return json(404, { error: 'employee not found in your society' }, CORS);
+      const out = await sql.begin(async (tx: postgres.TransactionSql) => {
+        const [existing] = await tx`select 1 from pay_calc.employee_loan where employee_id = ${empId} and status = 'active' limit 1`;
+        if (existing) throw new Error('this employee already has an active advance — close it before adding another');
+        const [loan] = await tx`insert into pay_calc.employee_loan(society_id,employee_id,principal_minor,installment_minor,purpose,created_by)
+          values(${societyId},${empId},${principal},${installment},${body.purpose ?? null},${su.id}) returning id`;
+        const compIds = await ensureSocietyComponents(tx, societyId, su.id);
+        const [bound] = await tx`select 1 from pay_config.component_binding cb
+          join pay_config.structure_assignment sa on sa.structure_version_id = cb.structure_version_id
+          where sa.employee_id = ${empId} and sa.effective_to is null and cb.component_id = ${compIds.LOAN_RECOVERY} limit 1`;
+        if (!bound) await changeStructureComponent(tx, societyId, empId, 'LOAN_RECOVERY', true, compIds, su.id, 0);
+        return { loanId: loan.id as string };
+      });
+      return json(200, { ok: true, loanId: out.loanId, employeeId: empId }, CORS);
+    }
+
+    if (body.action === 'loan-close') {
+      const rows = await sql`update pay_calc.employee_loan set status = 'closed', closed_on = current_date, updated_at = now(), updated_by = ${su.id}
+        where id = ${body.loanId ?? ''} and society_id = ${societyId} and status = 'active' returning id`;
+      if (!rows.length) return json(404, { error: 'no active advance with that id' }, CORS);
+      return json(200, { ok: true, loanId: body.loanId }, CORS);
     }
 
     // The employee's PAY HISTORY: every structure assignment they have ever held, newest first, with
@@ -403,7 +454,7 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, key, value }, CORS);
     }
 
-    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate' / 'identity-set' / 'structure-get' / 'structure-set' / 'structure-add' / 'structure-remove' / 'history-get' / 'statutory-list' / 'statutory-set'" }, CORS);
+    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate' / 'identity-set' / 'structure-get' / 'structure-set' / 'structure-add' / 'structure-remove' / 'history-get' / 'loan-list' / 'loan-add' / 'loan-close' / 'statutory-list' / 'statutory-set'" }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {
