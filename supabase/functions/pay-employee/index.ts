@@ -494,12 +494,25 @@ Deno.serve(async (req: Request) => {
 
     if (body.action === 'deactivate') {
       const empId = body.employeeId ?? '';
-      const [owner] = await sql`select 1 from pay_core.employee where id = ${empId} and society_id = ${societyId} limit 1`;
+      const [owner] = await sql`select date_of_join from pay_core.employee where id = ${empId} and society_id = ${societyId} limit 1`;
       if (!owner) return json(404, { error: 'employee not found in your society' }, CORS);
-      // end the active assignment → excluded from future runs (past runs/payslips are untouched)
-      const rows = await sql`update pay_config.structure_assignment set effective_to = current_date, updated_at = now(), updated_by = ${su.id}
-        where employee_id = ${empId} and society_id = ${societyId} and effective_to is null returning id`;
-      return json(200, { ok: true, employeeId: empId, ended: rows.length }, CORS);
+      // The LAST WORKING DAY, because pay-run pays for the days served up to it — leaving it at
+      // "today" over-pays anyone whose removal is recorded late and under-pays one recorded early.
+      const last = (body.lastDay ?? '').trim();
+      if (last) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(last)) return json(400, { error: 'lastDay must be YYYY-MM-DD' }, CORS);
+        const doj = String(owner.date_of_join instanceof Date
+          ? owner.date_of_join.toLocaleDateString('en-CA') : owner.date_of_join).slice(0, 10);
+        if (last < doj) return json(400, { error: `last working day cannot be before the joining date (${doj})` }, CORS);
+        if (Date.parse(`${last}T00:00:00Z`) > Date.now()) return json(400, { error: 'last working day cannot be in the future' }, CORS);
+      }
+      // end the active assignment → paid up to that day, out of every run after it
+      const rows = last
+        ? await sql`update pay_config.structure_assignment set effective_to = ${last}::date, updated_at = now(), updated_by = ${su.id}
+            where employee_id = ${empId} and society_id = ${societyId} and effective_to is null returning id`
+        : await sql`update pay_config.structure_assignment set effective_to = current_date, updated_at = now(), updated_by = ${su.id}
+            where employee_id = ${empId} and society_id = ${societyId} and effective_to is null returning id`;
+      return json(200, { ok: true, employeeId: empId, ended: rows.length, lastDay: last || null }, CORS);
     }
 
     // Correct a joining date. Every employee added before this shipped carries a hard-coded epoch,
