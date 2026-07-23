@@ -226,6 +226,66 @@ Deno.serve(async (req: Request) => {
       return json(200, { components: rows }, CORS);
     }
 
+    // Add or remove ONE component from ONE employee's structure. History-safe: the bindings of the
+    // version the past assignments point at are never touched — a NEW structure_version is created
+    // (copy ± this component) and the employee is re-assigned to it from today.
+    if (body.action === 'structure-add' || body.action === 'structure-remove') {
+      const empId = body.employeeId ?? '', code = (body.code ?? '').trim();
+      const adding = body.action === 'structure-add';
+      const valueMinor = Number.isFinite(Number(body.basicMinor)) ? Math.max(0, Number(body.basicMinor)) : 0;
+      if (!COMPONENTS[code]) return json(400, { error: `unknown component '${code}'` }, CORS);
+      const out = await sql.begin(async (tx: postgres.TransactionSql) => {
+        const compIds = await ensureSocietyComponents(tx, societyId, su.id);
+        const compId = compIds[code];
+        const [asg] = await tx`select id, structure_version_id, effective_from from pay_config.structure_assignment
+          where employee_id = ${empId} and society_id = ${societyId} and effective_to is null limit 1`;
+        if (!asg) throw new Error('no active salary structure for this employee');
+        const [bound] = await tx`select 1 from pay_config.component_binding where structure_version_id = ${asg.structure_version_id} and component_id = ${compId} limit 1`;
+        if (adding && bound) throw new Error(`'${code}' is already in this employee's structure`);
+        if (!adding && !bound) throw new Error(`'${code}' is not in this employee's structure`);
+        if (!adding) {
+          const [{ n }] = await tx`select count(*)::int as n from pay_config.component_binding where structure_version_id = ${asg.structure_version_id}`;
+          if (Number(n) <= 1) throw new Error('cannot remove the last component — a structure needs at least one');
+        }
+        const [sv] = await tx`select structure_id from pay_config.structure_version where id = ${asg.structure_version_id}`;
+        const [nv] = await tx`insert into pay_config.structure_version(structure_id,version,effective_from,created_by,status)
+          select ${sv.structure_id}, coalesce(max(version),0)+1, current_date, ${su.id}, 'active'
+          from pay_config.structure_version where structure_id = ${sv.structure_id} returning id`;
+        await tx`insert into pay_config.component_binding(structure_version_id,component_id,created_by)
+          select ${nv.id}, cb.component_id, ${su.id} from pay_config.component_binding cb
+          where cb.structure_version_id = ${asg.structure_version_id}`;
+        if (adding) {
+          await tx`insert into pay_config.component_binding(structure_version_id,component_id,created_by) values(${nv.id},${compId},${su.id}) on conflict do nothing`;
+        } else {
+          await tx`delete from pay_config.component_binding where structure_version_id = ${nv.id} and component_id = ${compId}`;
+        }
+        // re-assign the employee to the new version (same-day → move in place, else version the assignment)
+        const [{ same }] = await tx`select (${asg.effective_from}::date >= current_date) as same`;
+        let target = asg.id as string;
+        if (same) {
+          await tx`update pay_config.structure_assignment set structure_version_id = ${nv.id}, updated_at = now(), updated_by = ${su.id} where id = ${asg.id}`;
+        } else {
+          await tx`update pay_config.structure_assignment set effective_to = current_date, updated_at = now(), updated_by = ${su.id} where id = ${asg.id}`;
+          const [nw] = await tx`insert into pay_config.structure_assignment(society_id,employee_id,structure_version_id,effective_from,created_by)
+            values(${societyId},${empId},${nv.id},current_date,${su.id}) returning id`;
+          target = nw.id as string;
+          await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,override_formula_ref,reason,created_by)
+            select ${target}, ao.component_id, ao.fixed_minor, coalesce(ao.fixed_currency,'INR'), ao.override_formula_ref, 'carried forward', ${su.id}
+            from pay_config.assignment_override ao where ao.assignment_id = ${asg.id}`;
+        }
+        if (!adding) {
+          await tx`delete from pay_config.assignment_override where assignment_id = ${target} and component_id = ${compId}`;
+        } else if (COMPONENTS[code].method === 'fixed') {
+          // a fixed component must carry an amount, or the calc refuses (PAY-MAP-703)
+          await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,reason,created_by)
+            values(${target},${compId},${valueMinor},'INR','added',${su.id})
+            on conflict (assignment_id,component_id) do update set fixed_minor = ${valueMinor}, override_formula_ref = null`;
+        }
+        return { versioned: !same };
+      });
+      return json(200, { ok: true, employeeId: empId, code, action: body.action, versioned: out.versioned }, CORS);
+    }
+
     // The employee's PAY HISTORY: every structure assignment they have ever held, newest first, with
     // the amounts that applied in that window. Nothing here is reconstructed — the timeline exists
     // because `structure-set` closes one assignment and opens the next instead of overwriting.
@@ -343,7 +403,7 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, key, value }, CORS);
     }
 
-    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate' / 'identity-set' / 'structure-get' / 'structure-set' / 'history-get' / 'statutory-list' / 'statutory-set'" }, CORS);
+    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate' / 'identity-set' / 'structure-get' / 'structure-set' / 'structure-add' / 'structure-remove' / 'history-get' / 'statutory-list' / 'statutory-set'" }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {

@@ -60,6 +60,21 @@ const EMP_TYPES = [
   { code: 'honorary',   hi: 'मानद',                en: 'Honorary' },
 ];
 const DAILY_TYPES = ['muster', 'casual'];
+// Components an admin can add to one employee's structure (mirrors the server's COMPONENTS catalog).
+// FIXED_COMPONENTS need an amount when added — the calc refuses a fixed component with no value.
+const ADDABLE_COMPONENTS = [
+  { code: 'BASIC', hi: 'मूल वेतन', en: 'Basic' },
+  { code: 'DA', hi: 'महँगाई भत्ता (DA)', en: 'DA' },
+  { code: 'HRA', hi: 'मकान भत्ता (HRA)', en: 'HRA' },
+  { code: 'PF', hi: 'भविष्य निधि (PF)', en: 'PF' },
+  { code: 'LOP', hi: 'बिना-वेतन कटौती (LOP)', en: 'Loss of Pay' },
+  { code: 'DEP_ALLOW', hi: 'प्रतिनियुक्ति भत्ता', en: 'Deputation Allowance' },
+  { code: 'CONSOLIDATED', hi: 'एकमुश्त वेतन', en: 'Consolidated Pay' },
+  { code: 'STIPEND', hi: 'छात्रवृत्ति', en: 'Stipend' },
+  { code: 'DAILY_RATE', hi: 'दैनिक दर', en: 'Daily Rate' },
+  { code: 'DAILY_WAGE', hi: 'दैनिक वेतन', en: 'Daily Wages' },
+];
+const FIXED_COMPONENTS = ['BASIC', 'DEP_ALLOW', 'CONSOLIDATED', 'STIPEND', 'DAILY_RATE'];
 const empTypeLabel = (code: string | null | undefined, hi: boolean) => {
   const t = EMP_TYPES.find((x) => x.code === code);
   return t ? (hi ? t.hi : t.en) : (code || '');
@@ -184,6 +199,23 @@ const Payroll: React.FC = () => {
     const versioned = (data as { versioned?: boolean })?.versioned;
     toast({ title: hi ? 'ढाँचा बदला ✓' : 'Structure updated ✓', description: `${code} = ₹${structVal}` + (versioned ? (hi ? ' · नया संस्करण (पुराना इतिहास सुरक्षित)' : ' · new version (history kept)') : '') });
     setStructEdit(''); loadStructure(attEmp!.id); loadHistory(attEmp!.id); loadEmployees();
+  };
+
+  const [addCode, setAddCode] = useState('');
+  const [addVal, setAddVal] = useState('');
+
+  // Add / remove a component for THIS employee only. The server creates a new structure version so
+  // past periods keep the structure they were paid on.
+  const changeComponent = async (action: 'structure-add' | 'structure-remove', code: string) => {
+    setStructBusy(code);
+    const body: Record<string, unknown> = { action, employeeId: attEmp!.id, code };
+    if (action === 'structure-add' && FIXED_COMPONENTS.includes(code)) body.basicMinor = Math.round(Number(addVal || 0) * 100);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body });
+    setStructBusy('');
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं हुआ' : 'Failed', description: await invokeError(error, data), variant: 'destructive' }); return; }
+    toast({ title: action === 'structure-add' ? (hi ? 'घटक जुड़ा ✓' : 'Component added ✓') : (hi ? 'घटक हटाया ✓' : 'Component removed ✓'), description: code });
+    setAddCode(''); setAddVal('');
+    loadStructure(attEmp!.id); loadHistory(attEmp!.id); loadEmployees();
   };
 
   const saveIdentity = async () => {
@@ -583,11 +615,33 @@ const Payroll: React.FC = () => {
                           {c.fixed_minor != null ? rupees(c.fixed_minor) : (hi ? 'सूत्र से गणना' : 'computed by formula')}
                         </div>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => { setStructEdit(c.code); setStructVal(c.fixed_minor != null ? String(Number(c.fixed_minor) / 100) : ''); }}>{hi ? 'बदलें' : 'Edit'}</Button>
+                      <div className="flex gap-1 shrink-0">
+                        <Button size="sm" variant="outline" onClick={() => { setStructEdit(c.code); setStructVal(c.fixed_minor != null ? String(Number(c.fixed_minor) / 100) : ''); }}>{hi ? 'बदलें' : 'Edit'}</Button>
+                        <Button size="sm" variant="ghost" className="text-destructive px-2" disabled={structBusy === c.code}
+                          onClick={() => { if (window.confirm(hi ? `${nameOf(c.display_name)} को इस कर्मचारी के ढाँचे से हटाएँ?` : `Remove ${nameOf(c.display_name)} from this employee's structure?`)) changeComponent('structure-remove', c.code); }}>
+                          {structBusy === c.code ? <Loader2 className="h-3 w-3 animate-spin" /> : '✕'}
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
               ))}
+              <div className="flex gap-1 items-center">
+                <select className="h-8 flex-1 min-w-0 rounded-md border border-input bg-background px-2 text-xs" value={addCode} onChange={(e) => { setAddCode(e.target.value); setAddVal(''); }}>
+                  <option value="">{hi ? '+ घटक जोड़ें…' : '+ Add component…'}</option>
+                  {ADDABLE_COMPONENTS.filter((a) => !structure.some((s) => s.code === a.code)).map((a) => (
+                    <option key={a.code} value={a.code}>{hi ? a.hi : a.en}</option>
+                  ))}
+                </select>
+                {addCode && FIXED_COMPONENTS.includes(addCode) && (
+                  <Input type="number" className="h-8 w-24" value={addVal} onChange={(e) => setAddVal(e.target.value)} placeholder="₹" />
+                )}
+                {addCode && (
+                  <Button size="sm" onClick={() => changeComponent('structure-add', addCode)} disabled={structBusy === addCode}>
+                    {structBusy === addCode ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'जोड़ें' : 'Add')}
+                  </Button>
+                )}
+              </div>
               <p className="text-[11px] text-muted-foreground">{hi ? 'कोई भी मान इस कर्मचारी के लिए तय कर सकते हैं — सूत्र वाले घटक पर भी। बदलाव इतिहास में सुरक्षित रहता है।' : 'You can pin any amount for THIS employee — even on a formula component. Every change is kept in history.'}</p>
             </div>
 
