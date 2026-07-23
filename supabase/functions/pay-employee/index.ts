@@ -198,7 +198,7 @@ Deno.serve(async (req: Request) => {
   const { data: { user } } = await createClient(supaUrl, anonKey, { global: { headers: { Authorization: `Bearer ${jwt}` } } }).auth.getUser();
   if (!user?.email) return json(401, { error: 'invalid session' }, CORS);
 
-  let body: { action?: string; name?: string; code?: string; basicMinor?: number; type?: string; employeeId?: string; period?: string; lopDays?: number; key?: string; value?: number; label?: string; source?: string; uan?: string; pan?: string; esicIp?: string; principal?: number; installment?: number; purpose?: string; loanId?: string };
+  let body: { action?: string; name?: string; code?: string; basicMinor?: number; type?: string; employeeId?: string; period?: string; lopDays?: number; key?: string; value?: number; label?: string; source?: string; uan?: string; pan?: string; esicIp?: string; principal?: number; installment?: number; purpose?: string; loanId?: string; dateOfJoin?: string };
   try { body = await req.json(); } catch { return json(400, { error: 'bad JSON' }, CORS); }
 
   const sql = postgres(dbUrl, { prepare: false, max: 3 });
@@ -230,6 +230,11 @@ Deno.serve(async (req: Request) => {
       if (!name || !code) return json(400, { error: 'name and code required' }, CORS);
       if (!TYPE_STRUCTURE[type]) return json(400, { error: `type must be one of: ${Object.keys(TYPE_STRUCTURE).join(', ')}` }, CORS);
       if (!Number.isFinite(basicMinor) || basicMinor <= 0) return json(400, { error: 'amount must be a positive number (paise)' }, CORS);
+      // The joining date is a FACT about this person that prints on their payslip and service record —
+      // it must come from the caller, not a fixed epoch. Defaults to today when not supplied.
+      const joinDate = (body.dateOfJoin ?? '').trim() || new Date().toISOString().slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(joinDate)) return json(400, { error: 'dateOfJoin must be YYYY-MM-DD' }, CORS);
+      if (joinDate > new Date().toISOString().slice(0, 10)) return json(400, { error: 'dateOfJoin cannot be in the future' }, CORS);
 
       const out = await sql.begin(async (tx: postgres.TransactionSql) => {
         const compIds = await ensureSocietyComponents(tx, societyId, su.id);
@@ -237,10 +242,11 @@ Deno.serve(async (req: Request) => {
         const [dup] = await tx`select 1 from pay_core.employee where society_id = ${societyId} and employee_code = ${code} limit 1`;
         if (dup) throw new Error(`employee code '${code}' already exists`);
         const [emp] = await tx`insert into pay_core.employee(society_id,employee_code,full_name,date_of_join,employment_type,created_by)
-          values(${societyId},${code},${L(name)},${EFF},${type},${su.id}) returning id`;
+          values(${societyId},${code},${L(name)},${joinDate},${type},${su.id}) returning id`;
         const { versionId, primaryComponentId, zeroComponentIds } = await createEmployeeStructure(tx, societyId, code, type, su.id, compIds);
+        // the salary structure takes effect the day they join, not some fixed epoch
         const [asg] = await tx`insert into pay_config.structure_assignment(society_id,employee_id,structure_version_id,effective_from,created_by)
-          values(${societyId},${emp.id},${versionId},${EFF},${su.id}) returning id`;
+          values(${societyId},${emp.id},${versionId},${joinDate},${su.id}) returning id`;
         await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,reason,created_by)
           values(${asg.id},${primaryComponentId},${basicMinor},'INR','initial salary',${su.id})`;
         for (const zid of zeroComponentIds) {
@@ -474,6 +480,19 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, employeeId: empId, ended: rows.length }, CORS);
     }
 
+    // Correct a joining date. Every employee added before this shipped carries a hard-coded epoch,
+    // which is wrong on their payslip and service record — this is how those get fixed. Only the
+    // employee FACT moves; the salary-assignment timeline is a different thing and is left alone.
+    if (body.action === 'joining-set') {
+      const empId = body.employeeId ?? '', d = (body.dateOfJoin ?? '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return json(400, { error: 'dateOfJoin must be YYYY-MM-DD' }, CORS);
+      if (d > new Date().toISOString().slice(0, 10)) return json(400, { error: 'dateOfJoin cannot be in the future' }, CORS);
+      const rows = await sql`update pay_core.employee set date_of_join = ${d}, updated_at = now(), updated_by = ${su.id}
+        where id = ${empId} and society_id = ${societyId} returning id`;
+      if (!rows.length) return json(404, { error: 'employee not found in your society' }, CORS);
+      return json(200, { ok: true, employeeId: empId, dateOfJoin: d }, CORS);
+    }
+
     if (body.action === 'identity-set') {
       const empId = body.employeeId ?? '';
       const uan = (body.uan ?? '').trim(), pan = (body.pan ?? '').trim().toUpperCase(), esicIp = (body.esicIp ?? '').trim();
@@ -504,7 +523,7 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, key, value }, CORS);
     }
 
-    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'attendance-list' / 'update' / 'deactivate' / 'identity-set' / 'structure-get' / 'structure-set' / 'structure-unset' / 'structure-add' / 'structure-remove' / 'history-get' / 'loan-list' / 'loan-add' / 'loan-close' / 'statutory-list' / 'statutory-set'" }, CORS);
+    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'attendance-list' / 'update' / 'deactivate' / 'identity-set' / 'joining-set' / 'structure-get' / 'structure-set' / 'structure-unset' / 'structure-add' / 'structure-remove' / 'history-get' / 'loan-list' / 'loan-add' / 'loan-close' / 'statutory-list' / 'statutory-set'" }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {

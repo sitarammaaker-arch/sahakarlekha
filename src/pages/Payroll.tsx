@@ -153,6 +153,13 @@ const Payroll: React.FC = () => {
   const [runOpen, setRunOpen] = useState(false);
   const [period, setPeriod] = useState('');
   const [running, setRunning] = useState(false);
+  // who this run would cover, and who has no attendance recorded — shown in the Run dialog itself
+  const [runAtt, setRunAtt] = useState<AttRow[]>([]);
+  const loadRunAtt = async (p: string) => {
+    if (!/^\d{4}-\d{2}$/.test(p)) { setRunAtt([]); return; }
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'attendance-list', period: p } });
+    setRunAtt(!error && data ? ((data as { attendance?: AttRow[] }).attendance || []) : []);
+  };
   const [transitioning, setTransitioning] = useState<string | null>(null);
 
   const [statList, setStatList] = useState<StatSetting[]>([]);
@@ -187,7 +194,20 @@ const Payroll: React.FC = () => {
   const [empCode, setEmpCode] = useState('');
   const [empBasic, setEmpBasic] = useState('');
   const [empType, setEmpType] = useState('permanent');
+  const [empJoin, setEmpJoin] = useState('');    // date of joining — a fact, printed on the payslip
+  const [joinEdit, setJoinEdit] = useState('');  // correcting it for an existing employee
+  const [joinBusy, setJoinBusy] = useState(false);
   const [empSaving, setEmpSaving] = useState(false);
+
+  const saveJoining = async () => {
+    setJoinBusy(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'joining-set', employeeId: attEmp!.id, dateOfJoin: joinEdit } });
+    setJoinBusy(false);
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं बदली' : 'Update failed', description: await invokeError(error, data), variant: 'destructive' }); return; }
+    toast({ title: hi ? 'नियुक्ति तिथि बदली ✓' : 'Joining date updated ✓', description: joinEdit });
+    setAttEmp((e) => (e ? { ...e, date_of_join: joinEdit } : e));
+    loadEmployees();
+  };
 
   const [attEmp, setAttEmp] = useState<Employee | null>(null);
   const [attPeriod, setAttPeriod] = useState('');
@@ -242,37 +262,75 @@ const Payroll: React.FC = () => {
     if (!attEmp) return;
     const w = window.open('', '_blank', 'width=820,height=1000');
     if (!w) { toast({ title: hi ? 'प्रिंट विंडो नहीं खुली' : 'Print window blocked', description: hi ? 'popup की अनुमति दें' : 'Allow popups', variant: 'destructive' }); return; }
-    const row = (k: string, v: string) => `<tr><td class="k">${k}</td><td>${v || '—'}</td></tr>`;
-    const bio = [
-      row(hi ? 'नाम' : 'Name', nameOf(attEmp.full_name)),
-      row(hi ? 'कर्मचारी कोड' : 'Employee code', attEmp.employee_code),
-      row(hi ? 'प्रकार' : 'Employment type', empTypeLabel(attEmp.employment_type, hi)),
-      row(hi ? 'नियुक्ति तिथि' : 'Date of joining', String(attEmp.date_of_join || '').slice(0, 10)),
-    ].join('');
-    const ids = [row('UAN', attEmp.uan || ''), row('PAN', attEmp.pan || ''), row('ESIC IP', attEmp.esic_ip || '')].join('');
-    const struct = structure.map((c) => `<tr><td class="k">${nameOf(c.display_name)} <span class="mut">${isDeduction(c.kind) ? (hi ? 'कटौती' : 'deduction') : c.kind === 'employer_contrib' ? (hi ? 'इनपुट' : 'input') : (hi ? 'आय' : 'earning')}</span></td><td>${c.fixed_minor != null ? rupees(c.fixed_minor) : (hi ? 'सूत्र से गणना' : 'computed by formula')}</td></tr>`).join('')
+    const esc = (s: unknown) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
+    const info = (k: string, v: unknown) => `<div class="f"><span class="fk">${k}</span><span class="fv">${esc(v) || '—'}</span></div>`;
+    const socName = esc(hi ? (society?.nameHi || society?.name) : (society?.name || society?.nameHi));
+    const socAddr = [society?.address, society?.district, society?.state].filter(Boolean).map(esc).join(', ')
+      + (society?.pinCode ? ' – ' + esc(society.pinCode) : '');
+    const socContact = [society?.phone && `${hi ? 'दूरभाष' : 'Ph'}: ${esc(society.phone)}`, society?.email && esc(society.email)].filter(Boolean).join(' · ');
+    const kindLabel = (k: string) => isDeduction(k) ? (hi ? 'कटौती' : 'deduction') : k === 'employer_contrib' ? (hi ? 'इनपुट' : 'input') : (hi ? 'आय' : 'earning');
+    const struct = structure.map((c) => `<tr><td>${esc(nameOf(c.display_name))} <span class="mut">${kindLabel(c.kind)}</span></td><td class="amt">${c.fixed_minor != null ? rupees(c.fixed_minor) : `<span class="mut">${hi ? 'सूत्र से गणना' : 'computed by formula'}</span>`}</td></tr>`).join('')
       || `<tr><td colspan="2" class="mut">—</td></tr>`;
-    const hist = history.map((v) => `<tr><td class="k">${String(v.from).slice(0, 10)} → ${v.to ? String(v.to).slice(0, 10) : (hi ? 'अब तक' : 'current')}</td><td>${v.values.length ? v.values.map((x) => `${nameOf(x.name)} ${rupees(x.minor)}`).join(' · ') : (hi ? '— कोई तय राशि नहीं' : '— no pinned amounts')}</td></tr>`).join('')
+    const hist = history.map((v) => `<tr><td>${String(v.from).slice(0, 10)} → ${v.to ? String(v.to).slice(0, 10) : `<b>${hi ? 'अब तक' : 'current'}</b>`}</td><td class="amt">${v.values.length ? v.values.map((x) => `${esc(nameOf(x.name))} ${rupees(x.minor)}`).join(' · ') : `<span class="mut">${hi ? '— कोई तय राशि नहीं' : '— no pinned amounts'}</span>`}</td></tr>`).join('')
       || `<tr><td colspan="2" class="mut">—</td></tr>`;
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${hi ? 'सेवा पुस्तिका' : 'Service Record'} — ${nameOf(attEmp.full_name)}</title>
-      <style>body{font-family:system-ui,'Segoe UI',sans-serif;color:#111;margin:32px;max-width:720px}
-      h1{font-size:20px;margin:0 0 2px}.sub{color:#555;font-size:12px;margin:0 0 18px}
-      h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#444;margin:20px 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px}
-      table{width:100%;border-collapse:collapse}td{padding:5px 8px;border-bottom:1px solid #f0f0f0;font-size:13px;vertical-align:top}
-      td.k{width:42%;color:#333}.mut{color:#888;font-size:11px}
-      .note{margin-top:26px;padding:10px 12px;background:#fafafa;border:1px solid #eee;border-radius:6px;color:#555;font-size:11px;line-height:1.5}
-      @media print{body{margin:12px}}</style></head><body>
-      <h1>${hi ? 'सेवा पुस्तिका — वेतन अभिलेख' : 'Service Record — Pay'}</h1>
-      <p class="sub">${nameOf(attEmp.full_name)} · ${attEmp.employee_code}</p>
-      <h2>${hi ? 'कर्मचारी विवरण' : 'Employee details'}</h2><table>${bio}</table>
-      <h2>${hi ? 'सांविधिक पहचान' : 'Statutory identity'}</h2><table>${ids}</table>
-      <h2>${hi ? 'वर्तमान वेतन ढाँचा' : 'Current salary structure'}</h2><table>${struct}</table>
-      <h2>${hi ? 'वेतन इतिहास' : 'Pay history'}</h2><table>${hist}</table>
-      <div class="note">${hi
-        ? 'यह अभिलेख सहकार लेखा की पेरोल प्रणाली से स्वतः बना है और सेवा पुस्तिका का <b>वेतन-भाग</b> दर्शाता है। पूर्ण सांविधिक सेवा पुस्तिका में अवकाश-खाता, स्थानांतरण/पदस्थापन, योग्यता तथा प्रमाणन प्रविष्टियाँ भी होती हैं — वे इस प्रणाली में अभी दर्ज़ नहीं होतीं। निर्धारित प्रपत्र अपने नियमों के अनुसार पुष्टि करें।'
-        : 'Generated by the SahakarLekha payroll system; it covers the <b>pay portion</b> of a service book. A full statutory service book also carries the leave account, postings/transfers, qualifications and attestation entries, which this system does not yet record. Confirm the prescribed form against your own rules.'}</div>
-      <p class="mut" style="margin-top:10px">${hi ? 'निर्मित' : 'Generated'}: ${new Date().toLocaleString(hi ? 'hi-IN' : 'en-IN')}</p>
-      <script>window.onload=function(){window.print()}</script></body></html>`);
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${hi ? 'सेवा पुस्तिका' : 'Service Record'} — ${esc(nameOf(attEmp.full_name))}</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:'Segoe UI',system-ui,sans-serif;color:#1a1a1a;margin:0;padding:28px;background:#fff}
+  .sheet{max-width:760px;margin:0 auto;border:1px solid #cfd4da}
+  .head{text-align:center;padding:16px 20px 12px;border-bottom:2px solid #1f3a5f}
+  .soc{font-size:19px;font-weight:700;color:#1f3a5f;letter-spacing:.2px}
+  .addr{font-size:11px;color:#555;margin-top:3px;line-height:1.5}
+  .title{background:#1f3a5f;color:#fff;text-align:center;padding:7px;font-size:13px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase}
+  .sec{background:#eef2f7;color:#1f3a5f;font-size:11px;text-transform:uppercase;letter-spacing:.6px;padding:6px 20px;border-top:1px solid #cfd4da;border-bottom:1px solid #cfd4da;font-weight:600}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:0 24px;padding:12px 20px}
+  .f{display:flex;gap:8px;font-size:12px;padding:3px 0;border-bottom:1px dotted #e8eaed}
+  .fk{color:#666;min-width:112px}
+  .fv{font-weight:600;color:#1a1a1a}
+  table{width:100%;border-collapse:collapse}
+  td{padding:6px 20px;font-size:12.5px;border-bottom:1px solid #f1f3f5;vertical-align:top}
+  td.amt{text-align:right;font-variant-numeric:tabular-nums}
+  .mut{color:#8a8f96;font-size:11px}
+  .note{margin:14px 20px;padding:10px 12px;background:#f7f9fc;border:1px solid #e3e6ea;border-radius:6px;color:#555;font-size:10.5px;line-height:1.6}
+  .foot{padding:0 20px 14px;font-size:10.5px;color:#777}
+  @media print{body{padding:0}.sheet{border:none}}
+</style></head><body>
+  <div class="sheet">
+    <div class="head">
+      <div class="soc">${socName || (hi ? 'सहकारी समिति' : 'Cooperative Society')}</div>
+      ${socAddr ? `<div class="addr">${socAddr}</div>` : ''}
+      <div class="addr">${society?.registrationNo ? `${hi ? 'पंजीकरण संख्या' : 'Reg. No'}: ${esc(society.registrationNo)}` : ''}${socContact ? ' &nbsp;·&nbsp; ' + socContact : ''}</div>
+    </div>
+    <div class="title">${hi ? 'सेवा पुस्तिका — वेतन अभिलेख' : 'Service Record — Pay'}</div>
+
+    <div class="sec">${hi ? 'कर्मचारी विवरण' : 'Employee details'}</div>
+    <div class="meta">
+      <div>
+        ${info(hi ? 'नाम' : 'Name', nameOf(attEmp.full_name))}
+        ${info(hi ? 'कर्मचारी कोड' : 'Employee code', attEmp.employee_code)}
+        ${info(hi ? 'प्रकार' : 'Employment type', empTypeLabel(attEmp.employment_type, hi))}
+      </div>
+      <div>
+        ${info(hi ? 'नियुक्ति तिथि' : 'Date of joining', String(attEmp.date_of_join || '').slice(0, 10))}
+        ${info('UAN', attEmp.uan)}
+        ${info('PAN', attEmp.pan)}
+        ${info('ESIC IP', attEmp.esic_ip)}
+      </div>
+    </div>
+
+    <div class="sec">${hi ? 'वर्तमान वेतन ढाँचा' : 'Current salary structure'}</div>
+    <table>${struct}</table>
+
+    <div class="sec">${hi ? 'वेतन इतिहास' : 'Pay history'}</div>
+    <table>${hist}</table>
+
+    <div class="note">${hi
+      ? 'यह अभिलेख सहकार लेखा की पेरोल प्रणाली से स्वतः बना है और सेवा पुस्तिका का <b>वेतन-भाग</b> दर्शाता है। पूर्ण सांविधिक सेवा पुस्तिका में अवकाश-खाता, स्थानांतरण/पदस्थापन, योग्यता तथा प्रमाणन प्रविष्टियाँ भी होती हैं — वे इस प्रणाली में अभी दर्ज़ नहीं होतीं। निर्धारित प्रपत्र अपने नियमों के अनुसार पुष्टि करें।'
+      : 'Generated by the SahakarLekha payroll system; it covers the <b>pay portion</b> of a service book. A full statutory service book also carries the leave account, postings/transfers, qualifications and attestation entries, which this system does not yet record. Confirm the prescribed form against your own rules.'}</div>
+    <div class="foot">${hi ? 'निर्मित' : 'Generated'}: ${new Date().toLocaleString(hi ? 'hi-IN' : 'en-IN')}</div>
+  </div>
+  <script>window.onload=function(){window.print()}</script>
+</body></html>`);
     w.document.close();
   };
 
@@ -431,14 +489,14 @@ const Payroll: React.FC = () => {
     if (!empName.trim() || !empCode.trim()) { toast({ title: hi ? 'नाम और कोड ज़रूरी' : 'Name and code required', variant: 'destructive' }); return; }
     if (!Number.isFinite(basicMinor) || basicMinor <= 0) { toast({ title: hi ? 'राशि डालें' : 'Enter an amount', variant: 'destructive' }); return; }
     setEmpSaving(true);
-    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'add', name: empName.trim(), code: empCode.trim(), type: empType, basicMinor } });
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'add', name: empName.trim(), code: empCode.trim(), type: empType, basicMinor, dateOfJoin: empJoin } });
     setEmpSaving(false);
     if (error || (data as { error?: string })?.error) {
       toast({ title: hi ? 'कर्मचारी नहीं जुड़ा' : 'Could not add employee', description: await invokeError(error, data), variant: 'destructive' });
       return;
     }
     toast({ title: hi ? 'कर्मचारी जुड़ गया ✓' : 'Employee added ✓', description: `${empName} (${empCode}) · ${empTypeLabel(empType, hi)}` });
-    setEmpOpen(false); setEmpName(''); setEmpCode(''); setEmpBasic(''); setEmpType('permanent');
+    setEmpOpen(false); setEmpName(''); setEmpCode(''); setEmpBasic(''); setEmpType('permanent'); setEmpJoin('');
     loadEmployees();
   };
 
@@ -743,7 +801,7 @@ const Payroll: React.FC = () => {
         <Button size="sm" variant="ghost" onClick={() => { setStatKey(''); setStatOpen(true); }}>
           <Settings2 className="h-4 w-4 mr-1" /> {hi ? 'सांविधिक दरें' : 'Statutory rates'}
         </Button>
-        <Button size="sm" onClick={() => { setPeriod(''); setRunOpen(true); }}>
+        <Button size="sm" onClick={() => { setPeriod(''); setRunAtt([]); setRunOpen(true); }}>
           <Play className="h-4 w-4 mr-1" /> {hi ? 'नया पेरोल चलाएँ' : 'Run payroll'}
         </Button>
       </div>
@@ -837,8 +895,26 @@ const Payroll: React.FC = () => {
           <DialogHeader><DialogTitle>{hi ? 'नया पेरोल चलाएँ' : 'Run payroll'}</DialogTitle></DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="pay-period">{hi ? 'अवधि (माह)' : 'Period (month)'}</Label>
-            <Input id="pay-period" type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
+            <Input id="pay-period" type="month" value={period} onChange={(e) => { setPeriod(e.target.value); loadRunAtt(e.target.value); }} />
             <p className="text-xs text-muted-foreground">{hi ? 'सर्वर इस माह के लिए सभी नियुक्त कर्मचारियों की गणना करके पेस्लिप बनाएगा।' : 'The server computes payslips for all assigned employees for this month.'}</p>
+            {/* The attendance warning belongs HERE — this is where the decision is made. Someone who
+                never opens the Attendance screen would otherwise pay a full month by accident. */}
+            {runAtt.length > 0 && (() => {
+              const missing = runAtt.filter((r) => r.lop_days == null).length;
+              return (
+                <div className={`text-xs px-2 py-1.5 rounded ${missing ? 'bg-amber-500/10 text-amber-700' : 'bg-muted text-muted-foreground'}`}>
+                  {hi ? `${runAtt.length} कर्मचारी इसमें शामिल होंगे।` : `${runAtt.length} employee(s) will be included.`}
+                  {missing > 0 && (
+                    <> {hi ? `⚠ इनमें ${missing} की उपस्थिति दर्ज़ नहीं — उन्हें पूरे 30 दिन का वेतन मिलेगा।` : `⚠ ${missing} of them have no attendance recorded — they will be paid a full 30 days.`}
+                      <button type="button" className="ml-1 underline font-medium"
+                        onClick={() => { setRunOpen(false); setAttListPeriod(period); setAttListOpen(true); loadAttList(period); }}>
+                        {hi ? 'अभी भरें' : 'Fill it now'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRunOpen(false)} disabled={running}>{hi ? 'रद्द' : 'Cancel'}</Button>
@@ -858,7 +934,7 @@ const Payroll: React.FC = () => {
             <Users className="h-4 w-4 text-primary" />
             <span className="font-medium">{hi ? 'कर्मचारी' : 'Employees'}</span>
             <Badge variant="outline">{activeEmployees.length}</Badge>
-            <Button className="ml-auto" size="sm" variant="outline" onClick={() => { setEmpName(''); setEmpCode(''); setEmpBasic(''); setEmpType('permanent'); setEmpOpen(true); }}>
+            <Button className="ml-auto" size="sm" variant="outline" onClick={() => { setEmpName(''); setEmpCode(''); setEmpBasic(''); setEmpType('permanent'); setEmpJoin(new Date().toISOString().slice(0,10)); setEmpOpen(true); }}>
               <UserPlus className="h-4 w-4 mr-1" /> {hi ? 'कर्मचारी जोड़ें' : 'Add employee'}
             </Button>
           </div>
@@ -868,7 +944,7 @@ const Payroll: React.FC = () => {
             <div className="flex flex-wrap gap-2">
               {activeEmployees.map((e) => (
                 <button key={e.id} type="button" className="text-sm border rounded-md px-2 py-1 hover:bg-muted text-left" title={hi ? 'उपस्थिति सेट करें' : 'Set attendance'}
-                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); setStructEdit(''); setHistOpen(false); loadStructure(e.id); loadHistory(e.id); loadLoans(e.id); }}>
+                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); setJoinEdit(String(e.date_of_join || '').slice(0,10)); setStructEdit(''); setHistOpen(false); loadStructure(e.id); loadHistory(e.id); loadLoans(e.id); }}>
                   <span className="font-medium">{nameOf(e.full_name)}</span> <span className="text-xs text-muted-foreground">{e.employee_code}</span>
                   {e.employment_type && <span className="ml-1 text-[10px] px-1 rounded bg-muted text-muted-foreground">{empTypeLabel(e.employment_type, hi)}</span>}
                   {e.basic_minor != null && <span className="ml-1 text-xs text-muted-foreground">· {rupees(e.basic_minor)}</span>}
@@ -885,6 +961,10 @@ const Payroll: React.FC = () => {
           <div className="space-y-3">
             <div className="space-y-1"><Label>{hi ? 'नाम' : 'Name'}</Label><Input value={empName} onChange={(e) => setEmpName(e.target.value)} placeholder={hi ? 'जैसे रमेश कुमार' : 'e.g. Ramesh Kumar'} /></div>
             <div className="space-y-1"><Label>{hi ? 'कर्मचारी कोड' : 'Employee code'}</Label><Input value={empCode} onChange={(e) => setEmpCode(e.target.value)} placeholder="E001" /></div>
+            <div className="space-y-1">
+              <Label>{hi ? 'नियुक्ति तिथि' : 'Date of joining'}</Label>
+              <Input type="date" value={empJoin} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setEmpJoin(e.target.value)} />
+            </div>
             <div className="space-y-1">
               <Label>{hi ? 'प्रकार' : 'Type'}</Label>
               <select className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm" value={empType} onChange={(e) => setEmpType(e.target.value)}>
@@ -1045,6 +1125,17 @@ const Payroll: React.FC = () => {
               <div className="space-y-1"><Label className="text-xs">{hi ? 'अवधि (माह)' : 'Period (month)'}</Label><Input type="month" value={attPeriod} onChange={(e) => setAttPeriod(e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">{hi ? 'बिना-वेतन दिन (LOP)' : 'Loss-of-pay days (LOP)'}</Label><Input type="number" min="0" max="31" value={attLop} onChange={(e) => setAttLop(e.target.value)} placeholder="0" /></div>
               <Button size="sm" variant="outline" onClick={saveAttendance} disabled={attSaving}>{attSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'उपस्थिति सहेजें' : 'Save attendance')}</Button>
+            </div>
+            <div className="border-t pt-3 space-y-2">
+              <Label className="text-sm font-medium">{hi ? 'नियुक्ति तिथि' : 'Date of joining'}</Label>
+              <div className="flex gap-2">
+                <Input type="date" className="h-8 flex-1 min-w-0" max={new Date().toISOString().slice(0, 10)}
+                  value={joinEdit} onChange={(e) => setJoinEdit(e.target.value)} />
+                <Button size="sm" variant="outline" className="shrink-0" onClick={saveJoining} disabled={joinBusy || !joinEdit}>
+                  {joinBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'बदलें' : 'Update')}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">{hi ? 'यह तिथि वेतन-पर्ची और सेवा-अभिलेख पर छपती है।' : 'This date prints on the payslip and the service record.'}</p>
             </div>
             <div className="border-t pt-3 space-y-2">
               <Label className="text-sm font-medium">{hi ? 'सांविधिक पहचान (filing के लिए)' : 'Statutory IDs (for filing)'}</Label>
