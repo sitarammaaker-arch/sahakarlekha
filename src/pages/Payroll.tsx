@@ -243,6 +243,40 @@ const Payroll: React.FC = () => {
     w.document.close();
   };
 
+  interface Loan { id: string; principal_minor: number; installment_minor: number; recovered_minor: number; purpose: string | null; status: string; started_on: string }
+  const [loans, setLoans] = useState<Loan[]>([]);
+  const [loanPrincipal, setLoanPrincipal] = useState('');
+  const [loanInstallment, setLoanInstallment] = useState('');
+  const [loanPurpose, setLoanPurpose] = useState('');
+  const [loanBusy, setLoanBusy] = useState(false);
+
+  const loadLoans = async (empId: string) => {
+    setLoans([]);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'loan-list', employeeId: empId } });
+    if (!error && data) setLoans((data as { loans?: Loan[] }).loans || []);
+  };
+
+  const addLoan = async () => {
+    const principal = Math.round(Number(loanPrincipal) * 100), installment = Math.round(Number(loanInstallment) * 100);
+    if (!(principal > 0) || !(installment > 0)) { toast({ title: hi ? 'राशि और किस्त डालें' : 'Enter amount and instalment', variant: 'destructive' }); return; }
+    setLoanBusy(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'loan-add', employeeId: attEmp!.id, principal, installment, purpose: loanPurpose.trim() || null } });
+    setLoanBusy(false);
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'अग्रिम नहीं जुड़ा' : 'Could not add advance', description: await invokeError(error, data), variant: 'destructive' }); return; }
+    toast({ title: hi ? 'अग्रिम दर्ज़ ✓' : 'Advance recorded ✓', description: hi ? 'अगली पेरोल से वसूली शुरू' : 'Recovery starts from the next run' });
+    setLoanPrincipal(''); setLoanInstallment(''); setLoanPurpose('');
+    loadLoans(attEmp!.id); loadStructure(attEmp!.id);
+  };
+
+  const closeLoan = async (loanId: string) => {
+    setLoanBusy(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'loan-close', loanId } });
+    setLoanBusy(false);
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'बंद नहीं हुआ' : 'Could not close', description: await invokeError(error, data), variant: 'destructive' }); return; }
+    toast({ title: hi ? 'अग्रिम बंद ✓' : 'Advance closed ✓' });
+    loadLoans(attEmp!.id);
+  };
+
   const [addCode, setAddCode] = useState('');
   const [addVal, setAddVal] = useState('');
 
@@ -583,7 +617,7 @@ const Payroll: React.FC = () => {
             <div className="flex flex-wrap gap-2">
               {activeEmployees.map((e) => (
                 <button key={e.id} type="button" className="text-sm border rounded-md px-2 py-1 hover:bg-muted text-left" title={hi ? 'उपस्थिति सेट करें' : 'Set attendance'}
-                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); setStructEdit(''); setHistOpen(false); loadStructure(e.id); loadHistory(e.id); }}>
+                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); setStructEdit(''); setHistOpen(false); loadStructure(e.id); loadHistory(e.id); loadLoans(e.id); }}>
                   <span className="font-medium">{nameOf(e.full_name)}</span> <span className="text-xs text-muted-foreground">{e.employee_code}</span>
                   {e.employment_type && <span className="ml-1 text-[10px] px-1 rounded bg-muted text-muted-foreground">{empTypeLabel(e.employment_type, hi)}</span>}
                   {e.basic_minor != null && <span className="ml-1 text-xs text-muted-foreground">· {rupees(e.basic_minor)}</span>}
@@ -685,6 +719,44 @@ const Payroll: React.FC = () => {
                 )}
               </div>
               <p className="text-[11px] text-muted-foreground">{hi ? 'कोई भी मान इस कर्मचारी के लिए तय कर सकते हैं — सूत्र वाले घटक पर भी। बदलाव इतिहास में सुरक्षित रहता है।' : 'You can pin any amount for THIS employee — even on a formula component. Every change is kept in history.'}</p>
+            </div>
+
+            <div className="border-t pt-3 space-y-2">
+              <Label className="text-sm font-medium">{hi ? 'अग्रिम / ऋण' : 'Advance / loan'}</Label>
+              {loans.filter((l) => l.status === 'active').map((l) => {
+                const outstanding = Number(l.principal_minor) - Number(l.recovered_minor);
+                return (
+                  <div key={l.id} className="border rounded-md p-2 text-xs space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">{rupees(l.principal_minor)} {l.purpose && <span className="text-muted-foreground font-normal">· {l.purpose}</span>}</span>
+                      <Button size="sm" variant="ghost" className="text-destructive h-7" disabled={loanBusy}
+                        onClick={() => { if (window.confirm(hi ? 'यह अग्रिम बंद करें? वसूली रुक जाएगी।' : 'Close this advance? Recovery stops.')) closeLoan(l.id); }}>
+                        {hi ? 'बंद करें' : 'Close'}
+                      </Button>
+                    </div>
+                    <div className="text-muted-foreground">
+                      {hi ? 'किस्त' : 'Instalment'} {rupees(l.installment_minor)}/{hi ? 'माह' : 'mo'} · {hi ? 'वसूल' : 'recovered'} {rupees(l.recovered_minor)} · <span className="font-medium text-foreground">{hi ? 'बकाया' : 'outstanding'} {rupees(outstanding)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {loans.some((l) => l.status === 'active') ? (
+                <p className="text-[11px] text-muted-foreground">{hi ? 'वसूली हर पेरोल में कटती है, पर बकाया तभी घटता है जब run का भुगतान हो जाए।' : 'Recovery is deducted each run, but the outstanding drops only once a run is actually paid.'}</p>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex gap-1">
+                    <Input type="number" className="h-8" value={loanPrincipal} onChange={(e) => setLoanPrincipal(e.target.value)} placeholder={hi ? 'राशि ₹' : 'Amount ₹'} />
+                    <Input type="number" className="h-8" value={loanInstallment} onChange={(e) => setLoanInstallment(e.target.value)} placeholder={hi ? 'किस्त ₹/माह' : 'Instalment ₹/mo'} />
+                  </div>
+                  <div className="flex gap-1">
+                    <Input className="h-8" value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} placeholder={hi ? 'प्रयोजन (वैकल्पिक)' : 'Purpose (optional)'} />
+                    <Button size="sm" onClick={addLoan} disabled={loanBusy}>{loanBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'दर्ज़ करें' : 'Record')}</Button>
+                  </div>
+                </div>
+              )}
+              {loans.filter((l) => l.status !== 'active').length > 0 && (
+                <p className="text-[11px] text-muted-foreground">{hi ? 'पुराने अग्रिम' : 'Past advances'}: {loans.filter((l) => l.status !== 'active').map((l) => `${rupees(l.principal_minor)} (${l.status})`).join(', ')}</p>
+              )}
             </div>
 
             <div className="border-t pt-3 space-y-2">

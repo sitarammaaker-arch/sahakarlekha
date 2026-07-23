@@ -109,7 +109,14 @@ Deno.serve(async (req: Request) => {
       for (const k of Object.keys(spec.fixedComponents)) fixedCodes.add(k);
       const [att] = await sql`select paid_days, lop_days from pay_calc.attendance where society_id = ${societyId} and employee_id = ${emp.id} and period_month = ${periodMonth} limit 1`;
       const paidDays = att ? Number(att.paid_days) : 30, lopDays = att ? Number(att.lop_days) : 0;
-      const facts = { attendance: { paidDays, lopDays, otHours: 0 }, leave: [], loan: [], tax: { ytdByHead: {}, monthsRemaining: 12, regime: 'new' } };
+      // staff advance: recover this month's instalment, never more than what is still outstanding.
+      // Recovery is only CREDITED against the loan when the run is actually paid (pay-pay).
+      const [ln] = await sql`select id, installment_minor, principal_minor, recovered_minor from pay_calc.employee_loan
+        where society_id = ${societyId} and employee_id = ${emp.id} and status = 'active' limit 1`;
+      const loan = ln
+        ? [{ loanId: String(ln.id), amountMinor: Math.max(0, Math.min(Number(ln.installment_minor), Number(ln.principal_minor) - Number(ln.recovered_minor))) }]
+        : [];
+      const facts = { attendance: { paidDays, lopDays, otHours: 0 }, leave: [], loan, tax: { ytdByHead: {}, monthsRemaining: 12, regime: 'new' } };
       emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, paidDays, lopDays, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns: {}, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
     }
 
