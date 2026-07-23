@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Wallet, Users, IndianRupee, Loader2, Play, UserPlus, Printer, Download, Settings2 } from 'lucide-react';
+import { buildEcr, type EcrMember } from '@/lib/pay/filing/ecr';
 
 interface PayRun {
   run_id: string; run_no: string; period: string; period_month: string;
@@ -793,30 +794,39 @@ const Payroll: React.FC = () => {
     const epsRate = rate('eps_rate', 8.33), employerPfRate = rate('employer_pf_rate', 12), ceilingP = Math.round(rate('eps_wage_ceiling', 15000) * 100);
     const uanByCode: Record<string, string> = {};
     employees.forEach((e) => { if (e.uan) uanByCode[e.employee_code] = e.uan; });
-    const R = (p: number) => String(Math.round(p / 100)); // paise → whole rupees
-    const missing: string[] = [];
-    const rows: string[] = [];
+    const members: EcrMember[] = [];
     for (const s of slips) {
       const { data } = await supabase.rpc('pay_payslip_lines', { p_payslip_id: s.payslip_id });
-      const ls = (data as Payline[]) || [];
-      const amt = (code: string) => Number(ls.find((l) => l.code === code)?.computed_minor ?? 0);
-      const epfWagesP = amt('BASIC');                         // EPF wages
-      const empPfP = amt('PF');                               // employee EPF remitted
-      const epsWagesP = Math.min(epfWagesP, ceilingP);        // capped
-      const epsP = Math.round(epsWagesP * epsRate / 100);                       // EPS (employer, of capped wages)
-      const diffP = Math.max(0, Math.round(epfWagesP * employerPfRate / 100) - epsP); // EPF-EPS diff (employer share − EPS)
-      const ncp = Math.max(0, 30 - Number(s.paid_days));
-      const uan = uanByCode[s.employee_code] || '';
-      if (!uan) missing.push(s.employee_code);
-      rows.push([uan, nameOf(s.employee_name), R(Number(s.gross_minor)), R(epfWagesP), R(epsWagesP), R(epsWagesP), R(empPfP), R(epsP), R(diffP), String(ncp), '0'].join('#~#'));
+      members.push({
+        employeeCode: s.employee_code, name: nameOf(s.employee_name), uan: uanByCode[s.employee_code] || '',
+        grossMinor: Number(s.gross_minor), paidDays: Number(s.paid_days),
+        lines: ((data as Payline[]) || []).map((l) => ({ code: l.code, computedMinor: Number(l.computed_minor) })),
+      });
+    }
+    const { rows, missingUan, skippedNoPf, partMonth } = buildEcr(members, {
+      epsRate, employerPfRate, epsWageCeilingMinor: ceilingP,
+    });
+    if (rows.length === 0) {
+      toast({
+        title: hi ? 'कोई EPF सदस्य नहीं' : 'No EPF members',
+        description: hi ? 'इस run में किसी के ढाँचे में PF नहीं है, इसलिए ECR फ़ाइल खाली रहती।' : 'No employee in this run carries PF, so the ECR would be empty.',
+        variant: 'destructive',
+      });
+      return;
     }
     saveText(`ECR-${selected.run_no}.txt`, rows.join('\n') + '\n', 'text/plain');
+    const notes = [
+      missingUan.length ? (hi ? `⚠ ${missingUan.length} बिना UAN (${missingUan.join(', ')}).` : `⚠ ${missingUan.length} without UAN (${missingUan.join(', ')}).`) : '',
+      skippedNoPf.length ? (hi ? `${skippedNoPf.length} कर्मचारी छोड़े गए — उनके ढाँचे में PF नहीं है.` : `${skippedNoPf.length} left out — no PF in their structure.`) : '',
+      // The wage figure for a part-month is the question the society must answer, not one to decide here.
+      partMonth.length ? (hi ? `${partMonth.length} का वेतन पूरे माह से कम है; EPF मज़दूरी में पूरा मूल वेतन ही जा रहा है — आधार की पुष्टि कर लें.` : `${partMonth.length} were paid less than a full month; EPF wages still carry the whole month's basic — confirm the basis.`) : '',
+      hi ? 'अपलोड से पहले वर्तमान EPFO ECR spec से मिलाएँ।' : 'Confirm against the current EPFO ECR spec before upload.',
+    ].filter(Boolean);
     toast({
-      title: hi ? 'PF ECR फ़ाइल डाउनलोड ✓' : 'PF ECR file downloaded ✓',
-      description: (missing.length ? (hi ? `⚠ ${missing.length} कर्मचारी बिना UAN (${missing.join(', ')}). ` : `⚠ ${missing.length} without UAN (${missing.join(', ')}). `) : '')
-        + (hi ? 'अपलोड से पहले वर्तमान EPFO ECR spec से मिलाएँ।' : 'Confirm against the current EPFO ECR spec before upload.'),
-      variant: missing.length ? 'destructive' : 'default',
-      duration: missing.length ? 12000 : 6000,
+      title: hi ? `PF ECR डाउनलोड ✓ (${rows.length} सदस्य)` : `PF ECR downloaded ✓ (${rows.length} members)`,
+      description: notes.join(' '),
+      variant: missingUan.length ? 'destructive' : 'default',
+      duration: missingUan.length || partMonth.length ? 14000 : 8000,
     });
   };
 
