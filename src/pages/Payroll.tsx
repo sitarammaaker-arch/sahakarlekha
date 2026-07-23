@@ -860,8 +860,8 @@ const Payroll: React.FC = () => {
                 {attRows.some((r) => r.lop_days == null) && (
                   <p className="text-xs px-2 py-1.5 rounded bg-amber-500/10 text-amber-700">
                     {hi
-                      ? `⚠ ${attRows.filter((r) => r.lop_days == null).length} कर्मचारियों की उपस्थिति दर्ज़ नहीं — उन्हें पूरे 30 दिन का वेतन मिलेगा।`
-                      : `⚠ ${attRows.filter((r) => r.lop_days == null).length} employee(s) have no attendance recorded — they will be paid a full 30 days.`}
+                      ? `⚠ ${attRows.filter((r) => r.lop_days == null).length} कर्मचारियों की उपस्थिति दर्ज़ नहीं — उन्हें बिना किसी अनुपस्थिति के, पूरी सेवा-अवधि का वेतन मिलेगा।`
+                      : `⚠ ${attRows.filter((r) => r.lop_days == null).length} employee(s) have no attendance recorded — they will be paid for their whole period of service, with no absence.`}
                   </p>
                 )}
                 <div className="space-y-1">
