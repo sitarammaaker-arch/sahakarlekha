@@ -492,6 +492,31 @@ const Payroll: React.FC = () => {
   };
 
   const rate = (k: string, dflt: number) => { const s = statList.find((x) => x.key === k); return s ? Number(s.value_num) : dflt; };
+
+  // What each type will ACTUALLY pay. The PF figure is read from the society's configured rate, never
+  // hard-coded — if it is 0 the hint says so instead of promising a deduction the run will not make.
+  const typeHint = (t: string) => {
+    const pf = rate('pf_rate', 12);
+    const pfWarn = hi
+      ? '⚠ PF दर अभी 0% है — ऊपर "सांविधिक दरें" में सही दर (स्रोत सहित) भरें, वरना PF नहीं कटेगा।'
+      : '⚠ The PF rate is 0% — set it (with its source) under "Statutory rates", or no PF will be deducted.';
+    if (t === 'permanent' || t === 'probation') {
+      const base = hi ? 'DA (मूल का 20%), HRA (40%)' : 'DA (20% of basic), HRA (40%)';
+      return pf > 0
+        ? (hi ? `${base}, PF (${pf}%) अपने-आप जुड़ेंगे।` : `${base}, PF (${pf}%) are added automatically.`)
+        : `${hi ? `${base} अपने-आप जुड़ेंगे।` : `${base} are added automatically.`} ${pfWarn}`;
+    }
+    if (t === 'deputation') return hi ? 'मूल + DA + प्रतिनियुक्ति भत्ता (बाद में सेट करें)। PF नहीं।' : 'Basic + DA + Deputation allowance (set later). No PF.';
+    if (t === 'seasonal' || t === 'fixedterm') {
+      return pf > 0
+        ? (hi ? `मूल + DA + PF (${pf}%) — HRA नहीं।` : `Basic + DA + PF (${pf}%) — no HRA.`)
+        : `${hi ? 'मूल + DA + PF — HRA नहीं।' : 'Basic + DA + PF — no HRA.'} ${pfWarn}`;
+    }
+    if (isDailyType(t)) return hi ? 'वेतन = दैनिक दर × उपस्थिति-दिन (उपस्थिति चिप पर सेट करें)।' : 'Pay = daily rate × days worked (set attendance on the chip).';
+    if (t === 'apprentice') return hi ? 'केवल छात्रवृत्ति, कोई सांविधिक कटौती नहीं।' : 'Stipend only, no statutory deductions.';
+    return hi ? 'केवल एकमुश्त राशि, कोई सांविधिक कटौती नहीं (TDS बाद में)।' : 'Consolidated amount only, no statutory deductions (TDS later).';
+  };
+
   const saveText = (name: string, text: string, mime: string) => {
     const url = URL.createObjectURL(new Blob([text], { type: `${mime};charset=utf-8` }));
     const a = document.createElement('a'); a.href = url; a.download = name;
@@ -570,7 +595,11 @@ const Payroll: React.FC = () => {
                   </div>
                 ) : (
                   <div className="flex items-center justify-between">
-                    <div><span className="font-medium">{s.label || s.key}</span> <span className="text-sm">= {Number(s.value_num)}</span><div className="text-xs text-muted-foreground">{s.source || (hi ? '⚠ स्रोत दर्ज नहीं' : '⚠ no source recorded')}</div></div>
+                    <div>
+                      <span className="font-medium">{s.label || s.key}</span> <span className="text-sm">= {Number(s.value_num)}</span>
+                      {Number(s.value_num) === 0 && <span className="ml-1 text-[10px] px-1 rounded bg-destructive/10 text-destructive">{hi ? '⚠ 0 — कोई कटौती नहीं होगी' : '⚠ 0 — nothing will be deducted'}</span>}
+                      <div className="text-xs text-muted-foreground">{s.source || (hi ? '⚠ स्रोत दर्ज नहीं' : '⚠ no source recorded')}</div>
+                    </div>
                     <Button size="sm" variant="outline" onClick={() => editStat(s)}>{hi ? 'बदलें' : 'Edit'}</Button>
                   </div>
                 )}
@@ -647,14 +676,7 @@ const Payroll: React.FC = () => {
                 : (hi ? 'मूल वेतन (₹/माह)' : 'Basic salary (₹/month)')}</Label>
               <Input type="number" value={empBasic} onChange={(e) => setEmpBasic(e.target.value)} placeholder={isDailyType(empType) ? '500' : '25000'} />
             </div>
-            <p className="text-xs text-muted-foreground">
-              {(empType === 'permanent' || empType === 'probation') ? (hi ? 'DA (मूल का 20%), HRA (40%), PF (12%) अपने-आप जुड़ेंगे।' : 'DA (20% of basic), HRA (40%), PF (12%) are added automatically.')
-                : empType === 'deputation' ? (hi ? 'मूल + DA + प्रतिनियुक्ति भत्ता (बाद में सेट करें)। PF नहीं।' : 'Basic + DA + Deputation allowance (set later). No PF.')
-                : (empType === 'seasonal' || empType === 'fixedterm') ? (hi ? 'मूल + DA + PF (HRA नहीं)।' : 'Basic + DA + PF (no HRA).')
-                : isDailyType(empType) ? (hi ? 'वेतन = दैनिक दर × उपस्थिति-दिन (उपस्थिति चिप पर सेट करें)।' : 'Pay = daily rate × days worked (set attendance on the chip).')
-                : empType === 'apprentice' ? (hi ? 'केवल छात्रवृत्ति, कोई सांविधिक कटौती नहीं।' : 'Stipend only, no statutory deductions.')
-                : (hi ? 'केवल एकमुश्त राशि, कोई सांविधिक कटौती नहीं (TDS बाद में)।' : 'Consolidated amount only, no statutory deductions (TDS later).')}
-            </p>
+            <p className="text-xs text-muted-foreground">{typeHint(empType)}</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEmpOpen(false)} disabled={empSaving}>{hi ? 'रद्द' : 'Cancel'}</Button>
