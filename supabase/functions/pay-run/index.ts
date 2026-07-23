@@ -109,8 +109,36 @@ Deno.serve(async (req: Request) => {
       for (const k of Object.keys(spec.fixedComponents)) fixedCodes.add(k);
       const [att] = await sql`select paid_days, lop_days from pay_calc.attendance where society_id = ${societyId} and employee_id = ${emp.id} and period_month = ${periodMonth} limit 1`;
       const paidDays = att ? Number(att.paid_days) : 30, lopDays = att ? Number(att.lop_days) : 0;
-      const facts = { attendance: { paidDays, lopDays, otHours: 0 }, leave: [], loan: [], tax: { ytdByHead: {}, monthsRemaining: 12, regime: 'new' } };
+      // staff advance: recover this month's instalment, never more than what is still outstanding.
+      // Recovery is only CREDITED against the loan when the run is actually paid (pay-pay).
+      const [ln] = await sql`select id, installment_minor, principal_minor, recovered_minor from pay_calc.employee_loan
+        where society_id = ${societyId} and employee_id = ${emp.id} and status = 'active' limit 1`;
+      const loan = ln
+        ? [{ loanId: String(ln.id), amountMinor: Math.max(0, Math.min(Number(ln.installment_minor), Number(ln.principal_minor) - Number(ln.recovered_minor))) }]
+        : [];
+      const facts = { attendance: { paidDays, lopDays, otHours: 0 }, leave: [], loan, tax: { ytdByHead: {}, monthsRemaining: 12, regime: 'new' } };
       emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, paidDays, lopDays, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns: {}, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
+    }
+
+    // 5b. Employees now have HETEROGENEOUS per-employee structures, but assembleRun compiles ONE shared
+    // plan and runs it for everyone. So an employee who has BASIC but not (say) HRA would still get HRA
+    // computed, and one without BASIC would make a BASIC-referencing formula refuse. Reconcile both:
+    // mark every plan-formula code an employee does NOT own as 'info' (excluded from the payslip, never
+    // PAY-CAL-601), and inject BASIC=0 where the shared plan needs it but the structure omits it (so it
+    // computes 0 and is then excluded — never a PAY-DSL-REF refusal).
+    const planFormulaCodes = Object.keys(sourcesByCode);
+    for (const r of emReqs) {
+      const cls = r.aggregate.classification as Record<string, string>;
+      for (const code of planFormulaCodes) if (cls[code] === undefined) cls[code] = 'info';
+      const fc = r.calc.fixedComponents as Record<string, unknown>;
+      // inject 0 for every fixed component the shared plan might reference (BASIC, DAILY_RATE, …) that
+      // this employee's structure omits, so a cross-structure formula computes 0 instead of refusing.
+      // NEVER inject a code the plan itself computes: another employee may have pinned that component
+      // to a fixed amount (which puts it in fixedCodes), and injecting 0 here would silently zero this
+      // employee's computed value — a fixed value outranks a computed one in the payslip pool.
+      for (const code of fixedCodes) {
+        if (fc[code] === undefined && !planFormulaCodes.includes(code)) fc[code] = makeMoney(0, 'INR');
+      }
     }
 
     // 6. assemble the run (one shared plan; typeBase declares fixed components + fact vars)

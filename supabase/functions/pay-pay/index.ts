@@ -84,6 +84,24 @@ Deno.serve(async (req: Request) => {
       const [{ nextseq }] = await tx`select coalesce(max(sequence),0)+1 as nextseq from pay_calc.pay_event where aggregate_id = ${body.runId}`;
       await tx`insert into pay_calc.pay_event(society_id,aggregate_type,aggregate_id,sequence,event_type,producer_kind,actor_email,payload)
         values(${societyId},'pay_run',${body.runId},${nextseq},'paid'::pay_core.pay_event_type,'human',${user.email},${JSON.stringify({ voucher: vId, net: rup(net) })})`;
+      // Credit staff-advance recovery — ONLY here, where the money actually leaves. A run that is
+      // cancelled or later reversed must never reduce what an employee still owes.
+      await tx`
+        with rec as (
+          select p.employee_id, sum(pl.computed_minor)::bigint as amt
+          from pay_calc.payslip p
+          join pay_calc.payslip_line pl on pl.payslip_id = p.id
+          join pay_config.component_catalog cc on cc.id = pl.component_id and cc.code = 'LOAN_RECOVERY'
+          where p.pay_run_id = ${body.runId}
+          group by p.employee_id
+        )
+        update pay_calc.employee_loan l set
+          recovered_minor = least(l.principal_minor, l.recovered_minor + rec.amt),
+          status    = case when l.recovered_minor + rec.amt >= l.principal_minor then 'closed' else l.status end,
+          closed_on = case when l.recovered_minor + rec.amt >= l.principal_minor then current_date else l.closed_on end,
+          updated_at = now(), updated_by = ${su.id}
+        from rec
+        where l.employee_id = rec.employee_id and l.society_id = ${societyId} and l.status = 'active' and rec.amt > 0`;
       await tx`update pay_calc.payslip set status = 'paid'::pay_core.payslip_status where pay_run_id = ${body.runId}`;
       await tx`update pay_calc.payroll_run set state = 'paid'::pay_core.pay_run_state, updated_at = now(), updated_by = ${su.id} where id = ${body.runId}`;
       return { voucherId: vId };

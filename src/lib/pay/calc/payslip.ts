@@ -82,7 +82,10 @@ export function aggregatePayslip(values: Record<string, Value>, spec: AggregateS
   }
 
   // 2. build lines from the classification; each value comes from a fixed input OR a plan output.
-  const pool: Record<string, Value> = { ...(spec.fixedComponents ?? {}), ...values };
+  // An INJECTED fixed value wins over a computed one: when a run mixes per-employee structures, the
+  // shared plan may still compute a component this employee has pinned to an explicit amount — the
+  // employee's own amount is the truth (that is what a per-employee structure means).
+  const pool: Record<string, Value> = { ...values, ...(spec.fixedComponents ?? {}) };
   for (const [code, side] of Object.entries(spec.classification)) {
     if (side === 'info') continue; // intermediate — deliberately excluded from the payslip
 

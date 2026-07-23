@@ -35,10 +35,54 @@ interface Payline {
 }
 interface Employee {
   id: string; employee_code: string; full_name: { hi?: string; en?: string } | null; date_of_join: string; basic_minor: number | null;
-  uan?: string | null; pan?: string | null; esic_ip?: string | null;
+  employment_type?: string | null; uan?: string | null; pan?: string | null; esic_ip?: string | null;
 }
 interface StatSetting { key: string; value_num: number; label: string | null; source: string | null; }
+interface StructComp {
+  code: string; display_name: { hi?: string; en?: string } | null; kind: string;
+  calc_method: string; expression_text: string | null; fixed_minor: number | null;
+}
 const isDeduction = (kind: string) => kind === 'deduction' || kind === 'loan_recovery';
+
+// Employee types (map to seeded pay_core.employment_type codes).
+const EMP_TYPES = [
+  { code: 'permanent',  hi: 'स्थायी',              en: 'Permanent' },
+  { code: 'probation',  hi: 'परिवीक्षाधीन',        en: 'Probationer' },
+  { code: 'deputation', hi: 'प्रतिनियुक्ति',       en: 'Deputation' },
+  { code: 'fixedterm',  hi: 'नियत-अवधि',           en: 'Fixed-term' },
+  { code: 'seasonal',   hi: 'मौसमी',               en: 'Seasonal' },
+  { code: 'muster',     hi: 'मस्टर / दैनिक श्रमिक', en: 'Daily Wages' },
+  { code: 'casual',     hi: 'आकस्मिक / दिहाड़ी',    en: 'Casual' },
+  { code: 'apprentice', hi: 'प्रशिक्षु',           en: 'Apprentice' },
+  { code: 'parttime',   hi: 'अंशकालिक',            en: 'Part-time' },
+  { code: 'contract',   hi: 'संविदा',              en: 'Contractual' },
+  { code: 'consultant', hi: 'सलाहकार',             en: 'Consultant' },
+  { code: 'honorary',   hi: 'मानद',                en: 'Honorary' },
+];
+const DAILY_TYPES = ['muster', 'casual'];
+// Components an admin can add to one employee's structure (mirrors the server's COMPONENTS catalog).
+// FIXED_COMPONENTS need an amount when added — the calc refuses a fixed component with no value.
+const ADDABLE_COMPONENTS = [
+  { code: 'BASIC', hi: 'मूल वेतन', en: 'Basic' },
+  { code: 'DA', hi: 'महँगाई भत्ता (DA)', en: 'DA' },
+  { code: 'HRA', hi: 'मकान भत्ता (HRA)', en: 'HRA' },
+  { code: 'PF', hi: 'भविष्य निधि (PF)', en: 'PF' },
+  { code: 'LOP', hi: 'बिना-वेतन कटौती (LOP)', en: 'Loss of Pay' },
+  { code: 'DEP_ALLOW', hi: 'प्रतिनियुक्ति भत्ता', en: 'Deputation Allowance' },
+  { code: 'CONSOLIDATED', hi: 'एकमुश्त वेतन', en: 'Consolidated Pay' },
+  { code: 'STIPEND', hi: 'छात्रवृत्ति', en: 'Stipend' },
+  { code: 'DAILY_RATE', hi: 'दैनिक दर', en: 'Daily Rate' },
+  { code: 'DAILY_WAGE', hi: 'दैनिक वेतन', en: 'Daily Wages' },
+];
+const FIXED_COMPONENTS = ['BASIC', 'DEP_ALLOW', 'CONSOLIDATED', 'STIPEND', 'DAILY_RATE'];
+const empTypeLabel = (code: string | null | undefined, hi: boolean) => {
+  const t = EMP_TYPES.find((x) => x.code === code);
+  return t ? (hi ? t.hi : t.en) : (code || '');
+};
+// consolidated (single monthly amount) types; the daily types take a per-day rate; apprentice a
+// stipend; everything else a monthly Basic.
+const isConsolidatedType = (code: string) => ['contract', 'honorary', 'parttime', 'consultant'].includes(code);
+const isDailyType = (code: string) => DAILY_TYPES.includes(code);
 
 // supabase-js resolves an Edge Function's non-2xx as { data: null, error: FunctionsHttpError }, and the
 // JSON body — our friendly { error: "…" } message — lives on error.context, NOT error.message (which is
@@ -109,6 +153,7 @@ const Payroll: React.FC = () => {
   const [empName, setEmpName] = useState('');
   const [empCode, setEmpCode] = useState('');
   const [empBasic, setEmpBasic] = useState('');
+  const [empType, setEmpType] = useState('permanent');
   const [empSaving, setEmpSaving] = useState(false);
 
   const [attEmp, setAttEmp] = useState<Employee | null>(null);
@@ -121,6 +166,133 @@ const Payroll: React.FC = () => {
   const [idPan, setIdPan] = useState('');
   const [idEsic, setIdEsic] = useState('');
   const [idBusy, setIdBusy] = useState(false);
+
+  const [history, setHistory] = useState<{ id: string; from: string; to: string | null; values: { code: string; name: { hi?: string; en?: string } | null; minor: number }[] }[]>([]);
+  const [histOpen, setHistOpen] = useState(false);
+
+  const loadHistory = async (empId: string) => {
+    setHistory([]);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'history-get', employeeId: empId } });
+    if (!error && data) setHistory((data as { history?: typeof history }).history || []);
+  };
+
+  const [structure, setStructure] = useState<StructComp[]>([]);
+  const [structEdit, setStructEdit] = useState('');
+  const [structVal, setStructVal] = useState('');
+  const [structBusy, setStructBusy] = useState('');
+
+  const loadStructure = async (empId: string) => {
+    setStructure([]);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'structure-get', employeeId: empId } });
+    if (!error && data) setStructure((data as { components?: StructComp[] }).components || []);
+  };
+
+  // Editing one component's amount for ONE employee — the server versions the assignment so the
+  // employee's pay history is preserved (nothing is overwritten).
+  const saveStructVal = async (code: string) => {
+    const minor = Math.round(Number(structVal) * 100);
+    if (!Number.isFinite(minor) || minor < 0) { toast({ title: hi ? 'मान डालें' : 'Enter a value', variant: 'destructive' }); return; }
+    setStructBusy(code);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'structure-set', employeeId: attEmp!.id, code, basicMinor: minor } });
+    setStructBusy('');
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं बदला' : 'Update failed', description: await invokeError(error, data), variant: 'destructive' }); return; }
+    const versioned = (data as { versioned?: boolean })?.versioned;
+    toast({ title: hi ? 'ढाँचा बदला ✓' : 'Structure updated ✓', description: `${code} = ₹${structVal}` + (versioned ? (hi ? ' · नया संस्करण (पुराना इतिहास सुरक्षित)' : ' · new version (history kept)') : '') });
+    setStructEdit(''); loadStructure(attEmp!.id); loadHistory(attEmp!.id); loadEmployees();
+  };
+
+  // Service record (सेवा पुस्तिका) — the payroll portion, assembled from what the system already holds:
+  // bio + employment type + statutory identity + the current structure + the full pay timeline. The
+  // official statutory service book also carries leave / postings / attestation, which are not payroll
+  // data — the footer says so rather than implying this is the prescribed form.
+  const printServiceBook = () => {
+    if (!attEmp) return;
+    const w = window.open('', '_blank', 'width=820,height=1000');
+    if (!w) { toast({ title: hi ? 'प्रिंट विंडो नहीं खुली' : 'Print window blocked', description: hi ? 'popup की अनुमति दें' : 'Allow popups', variant: 'destructive' }); return; }
+    const row = (k: string, v: string) => `<tr><td class="k">${k}</td><td>${v || '—'}</td></tr>`;
+    const bio = [
+      row(hi ? 'नाम' : 'Name', nameOf(attEmp.full_name)),
+      row(hi ? 'कर्मचारी कोड' : 'Employee code', attEmp.employee_code),
+      row(hi ? 'प्रकार' : 'Employment type', empTypeLabel(attEmp.employment_type, hi)),
+      row(hi ? 'नियुक्ति तिथि' : 'Date of joining', String(attEmp.date_of_join || '').slice(0, 10)),
+    ].join('');
+    const ids = [row('UAN', attEmp.uan || ''), row('PAN', attEmp.pan || ''), row('ESIC IP', attEmp.esic_ip || '')].join('');
+    const struct = structure.map((c) => `<tr><td class="k">${nameOf(c.display_name)} <span class="mut">${isDeduction(c.kind) ? (hi ? 'कटौती' : 'deduction') : c.kind === 'employer_contrib' ? (hi ? 'इनपुट' : 'input') : (hi ? 'आय' : 'earning')}</span></td><td>${c.fixed_minor != null ? rupees(c.fixed_minor) : (hi ? 'सूत्र से गणना' : 'computed by formula')}</td></tr>`).join('')
+      || `<tr><td colspan="2" class="mut">—</td></tr>`;
+    const hist = history.map((v) => `<tr><td class="k">${String(v.from).slice(0, 10)} → ${v.to ? String(v.to).slice(0, 10) : (hi ? 'अब तक' : 'current')}</td><td>${v.values.length ? v.values.map((x) => `${nameOf(x.name)} ${rupees(x.minor)}`).join(' · ') : (hi ? '— कोई तय राशि नहीं' : '— no pinned amounts')}</td></tr>`).join('')
+      || `<tr><td colspan="2" class="mut">—</td></tr>`;
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${hi ? 'सेवा पुस्तिका' : 'Service Record'} — ${nameOf(attEmp.full_name)}</title>
+      <style>body{font-family:system-ui,'Segoe UI',sans-serif;color:#111;margin:32px;max-width:720px}
+      h1{font-size:20px;margin:0 0 2px}.sub{color:#555;font-size:12px;margin:0 0 18px}
+      h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#444;margin:20px 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px}
+      table{width:100%;border-collapse:collapse}td{padding:5px 8px;border-bottom:1px solid #f0f0f0;font-size:13px;vertical-align:top}
+      td.k{width:42%;color:#333}.mut{color:#888;font-size:11px}
+      .note{margin-top:26px;padding:10px 12px;background:#fafafa;border:1px solid #eee;border-radius:6px;color:#555;font-size:11px;line-height:1.5}
+      @media print{body{margin:12px}}</style></head><body>
+      <h1>${hi ? 'सेवा पुस्तिका — वेतन अभिलेख' : 'Service Record — Pay'}</h1>
+      <p class="sub">${nameOf(attEmp.full_name)} · ${attEmp.employee_code}</p>
+      <h2>${hi ? 'कर्मचारी विवरण' : 'Employee details'}</h2><table>${bio}</table>
+      <h2>${hi ? 'सांविधिक पहचान' : 'Statutory identity'}</h2><table>${ids}</table>
+      <h2>${hi ? 'वर्तमान वेतन ढाँचा' : 'Current salary structure'}</h2><table>${struct}</table>
+      <h2>${hi ? 'वेतन इतिहास' : 'Pay history'}</h2><table>${hist}</table>
+      <div class="note">${hi
+        ? 'यह अभिलेख सहकार लेखा की पेरोल प्रणाली से स्वतः बना है और सेवा पुस्तिका का <b>वेतन-भाग</b> दर्शाता है। पूर्ण सांविधिक सेवा पुस्तिका में अवकाश-खाता, स्थानांतरण/पदस्थापन, योग्यता तथा प्रमाणन प्रविष्टियाँ भी होती हैं — वे इस प्रणाली में अभी दर्ज़ नहीं होतीं। निर्धारित प्रपत्र अपने नियमों के अनुसार पुष्टि करें।'
+        : 'Generated by the SahakarLekha payroll system; it covers the <b>pay portion</b> of a service book. A full statutory service book also carries the leave account, postings/transfers, qualifications and attestation entries, which this system does not yet record. Confirm the prescribed form against your own rules.'}</div>
+      <p class="mut" style="margin-top:10px">${hi ? 'निर्मित' : 'Generated'}: ${new Date().toLocaleString(hi ? 'hi-IN' : 'en-IN')}</p>
+      <script>window.onload=function(){window.print()}</script></body></html>`);
+    w.document.close();
+  };
+
+  interface Loan { id: string; principal_minor: number; installment_minor: number; recovered_minor: number; purpose: string | null; status: string; started_on: string }
+  const [loans, setLoans] = useState<Loan[]>([]);
+  const [loanPrincipal, setLoanPrincipal] = useState('');
+  const [loanInstallment, setLoanInstallment] = useState('');
+  const [loanPurpose, setLoanPurpose] = useState('');
+  const [loanBusy, setLoanBusy] = useState(false);
+
+  const loadLoans = async (empId: string) => {
+    setLoans([]);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'loan-list', employeeId: empId } });
+    if (!error && data) setLoans((data as { loans?: Loan[] }).loans || []);
+  };
+
+  const addLoan = async () => {
+    const principal = Math.round(Number(loanPrincipal) * 100), installment = Math.round(Number(loanInstallment) * 100);
+    if (!(principal > 0) || !(installment > 0)) { toast({ title: hi ? 'राशि और किस्त डालें' : 'Enter amount and instalment', variant: 'destructive' }); return; }
+    setLoanBusy(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'loan-add', employeeId: attEmp!.id, principal, installment, purpose: loanPurpose.trim() || null } });
+    setLoanBusy(false);
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'अग्रिम नहीं जुड़ा' : 'Could not add advance', description: await invokeError(error, data), variant: 'destructive' }); return; }
+    toast({ title: hi ? 'अग्रिम दर्ज़ ✓' : 'Advance recorded ✓', description: hi ? 'अगली पेरोल से वसूली शुरू' : 'Recovery starts from the next run' });
+    setLoanPrincipal(''); setLoanInstallment(''); setLoanPurpose('');
+    loadLoans(attEmp!.id); loadStructure(attEmp!.id);
+  };
+
+  const closeLoan = async (loanId: string) => {
+    setLoanBusy(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'loan-close', loanId } });
+    setLoanBusy(false);
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'बंद नहीं हुआ' : 'Could not close', description: await invokeError(error, data), variant: 'destructive' }); return; }
+    toast({ title: hi ? 'अग्रिम बंद ✓' : 'Advance closed ✓' });
+    loadLoans(attEmp!.id);
+  };
+
+  const [addCode, setAddCode] = useState('');
+  const [addVal, setAddVal] = useState('');
+
+  // Add / remove a component for THIS employee only. The server creates a new structure version so
+  // past periods keep the structure they were paid on.
+  const changeComponent = async (action: 'structure-add' | 'structure-remove', code: string) => {
+    setStructBusy(code);
+    const body: Record<string, unknown> = { action, employeeId: attEmp!.id, code };
+    if (action === 'structure-add' && FIXED_COMPONENTS.includes(code)) body.basicMinor = Math.round(Number(addVal || 0) * 100);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body });
+    setStructBusy('');
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं हुआ' : 'Failed', description: await invokeError(error, data), variant: 'destructive' }); return; }
+    toast({ title: action === 'structure-add' ? (hi ? 'घटक जुड़ा ✓' : 'Component added ✓') : (hi ? 'घटक हटाया ✓' : 'Component removed ✓'), description: code });
+    setAddCode(''); setAddVal('');
+    loadStructure(attEmp!.id); loadHistory(attEmp!.id); loadEmployees();
+  };
 
   const saveIdentity = async () => {
     setIdBusy(true);
@@ -174,16 +346,16 @@ const Payroll: React.FC = () => {
   const addEmployee = async () => {
     const basicMinor = Math.round(Number(empBasic) * 100);
     if (!empName.trim() || !empCode.trim()) { toast({ title: hi ? 'नाम और कोड ज़रूरी' : 'Name and code required', variant: 'destructive' }); return; }
-    if (!Number.isFinite(basicMinor) || basicMinor <= 0) { toast({ title: hi ? 'मूल वेतन डालें' : 'Enter basic salary', variant: 'destructive' }); return; }
+    if (!Number.isFinite(basicMinor) || basicMinor <= 0) { toast({ title: hi ? 'राशि डालें' : 'Enter an amount', variant: 'destructive' }); return; }
     setEmpSaving(true);
-    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'add', name: empName.trim(), code: empCode.trim(), basicMinor } });
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'add', name: empName.trim(), code: empCode.trim(), type: empType, basicMinor } });
     setEmpSaving(false);
     if (error || (data as { error?: string })?.error) {
       toast({ title: hi ? 'कर्मचारी नहीं जुड़ा' : 'Could not add employee', description: await invokeError(error, data), variant: 'destructive' });
       return;
     }
-    toast({ title: hi ? 'कर्मचारी जुड़ गया ✓' : 'Employee added ✓', description: `${empName} (${empCode})` });
-    setEmpOpen(false); setEmpName(''); setEmpCode(''); setEmpBasic('');
+    toast({ title: hi ? 'कर्मचारी जुड़ गया ✓' : 'Employee added ✓', description: `${empName} (${empCode}) · ${empTypeLabel(empType, hi)}` });
+    setEmpOpen(false); setEmpName(''); setEmpCode(''); setEmpBasic(''); setEmpType('permanent');
     loadEmployees();
   };
 
@@ -274,6 +446,8 @@ const Payroll: React.FC = () => {
     } else if (action === 'rollback') {
       const d = data as { reversed?: { rev: string }[] };
       toast({ title: hi ? 'रन उलट दिया गया ✓' : 'Run reversed ✓', description: hi ? `${d.reversed?.length ?? 0} reversing voucher बने (books शून्य पर)` : `${d.reversed?.length ?? 0} reversing voucher(s) — books net to zero` });
+    } else if (action === 'cancel') {
+      toast({ title: hi ? 'रन रद्द ✓' : 'Run cancelled ✓', description: hi ? 'इस अवधि का नया run बनाया जा सकता है' : 'You can start a fresh run for this period' });
     } else {
       toast({ title: hi ? 'हो गया ✓' : 'Done ✓', description: `${(data as { from?: string }).from} → ${(data as { state?: string }).state}` });
     }
@@ -358,6 +532,12 @@ const Payroll: React.FC = () => {
     });
   };
 
+  // The payroll is audit-append-only (records are never hard-deleted). Hide the ones the user has
+  // retired so they don't clutter the working view: cancelled runs (void, no ledger effect) and
+  // deactivated employees (no active salary assignment → basic_minor is null). History still exists.
+  const visibleRuns = runs.filter((r) => r.state !== 'cancelled');
+  const activeEmployees = employees.filter((e) => e.basic_minor != null);
+
   return (
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center gap-2">
@@ -426,20 +606,21 @@ const Payroll: React.FC = () => {
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-primary" />
             <span className="font-medium">{hi ? 'कर्मचारी' : 'Employees'}</span>
-            <Badge variant="outline">{employees.length}</Badge>
-            <Button className="ml-auto" size="sm" variant="outline" onClick={() => { setEmpName(''); setEmpCode(''); setEmpBasic(''); setEmpOpen(true); }}>
+            <Badge variant="outline">{activeEmployees.length}</Badge>
+            <Button className="ml-auto" size="sm" variant="outline" onClick={() => { setEmpName(''); setEmpCode(''); setEmpBasic(''); setEmpType('permanent'); setEmpOpen(true); }}>
               <UserPlus className="h-4 w-4 mr-1" /> {hi ? 'कर्मचारी जोड़ें' : 'Add employee'}
             </Button>
           </div>
-          {employees.length === 0 ? (
+          {activeEmployees.length === 0 ? (
             <p className="text-sm text-muted-foreground">{hi ? 'अभी कोई कर्मचारी नहीं। "कर्मचारी जोड़ें" से शुरू करें, फिर पेरोल चलाएँ।' : 'No employees yet — add one, then run payroll.'}</p>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {employees.map((e) => (
+              {activeEmployees.map((e) => (
                 <button key={e.id} type="button" className="text-sm border rounded-md px-2 py-1 hover:bg-muted text-left" title={hi ? 'उपस्थिति सेट करें' : 'Set attendance'}
-                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); }}>
+                  onClick={() => { setAttEmp(e); setAttPeriod(''); setAttLop('0'); setEditBasic(e.basic_minor != null ? String(Number(e.basic_minor) / 100) : ''); setIdUan(e.uan || ''); setIdPan(e.pan || ''); setIdEsic(e.esic_ip || ''); setStructEdit(''); setHistOpen(false); loadStructure(e.id); loadHistory(e.id); loadLoans(e.id); }}>
                   <span className="font-medium">{nameOf(e.full_name)}</span> <span className="text-xs text-muted-foreground">{e.employee_code}</span>
-                  {e.basic_minor != null && <span className="ml-1 text-xs text-muted-foreground">· {hi ? 'मूल' : 'Basic'} {rupees(e.basic_minor)}</span>}
+                  {e.employment_type && <span className="ml-1 text-[10px] px-1 rounded bg-muted text-muted-foreground">{empTypeLabel(e.employment_type, hi)}</span>}
+                  {e.basic_minor != null && <span className="ml-1 text-xs text-muted-foreground">· {rupees(e.basic_minor)}</span>}
                 </button>
               ))}
             </div>
@@ -453,8 +634,27 @@ const Payroll: React.FC = () => {
           <div className="space-y-3">
             <div className="space-y-1"><Label>{hi ? 'नाम' : 'Name'}</Label><Input value={empName} onChange={(e) => setEmpName(e.target.value)} placeholder={hi ? 'जैसे रमेश कुमार' : 'e.g. Ramesh Kumar'} /></div>
             <div className="space-y-1"><Label>{hi ? 'कर्मचारी कोड' : 'Employee code'}</Label><Input value={empCode} onChange={(e) => setEmpCode(e.target.value)} placeholder="E001" /></div>
-            <div className="space-y-1"><Label>{hi ? 'मूल वेतन (₹/माह)' : 'Basic salary (₹/month)'}</Label><Input type="number" value={empBasic} onChange={(e) => setEmpBasic(e.target.value)} placeholder="25000" /></div>
-            <p className="text-xs text-muted-foreground">{hi ? 'DA (मूल का 20%), HRA (40%), PF (12%) अपने-आप जुड़ेंगे।' : 'DA (20% of basic), HRA (40%), PF (12%) are added automatically.'}</p>
+            <div className="space-y-1">
+              <Label>{hi ? 'प्रकार' : 'Type'}</Label>
+              <select className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm" value={empType} onChange={(e) => setEmpType(e.target.value)}>
+                {EMP_TYPES.map((t) => <option key={t.code} value={t.code}>{hi ? t.hi : t.en}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>{isDailyType(empType) ? (hi ? 'दैनिक दर (₹/दिन)' : 'Daily rate (₹/day)')
+                : empType === 'apprentice' ? (hi ? 'छात्रवृत्ति (₹/माह)' : 'Stipend (₹/month)')
+                : isConsolidatedType(empType) ? (hi ? 'एकमुश्त राशि (₹/माह)' : 'Consolidated amount (₹/month)')
+                : (hi ? 'मूल वेतन (₹/माह)' : 'Basic salary (₹/month)')}</Label>
+              <Input type="number" value={empBasic} onChange={(e) => setEmpBasic(e.target.value)} placeholder={isDailyType(empType) ? '500' : '25000'} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {(empType === 'permanent' || empType === 'probation') ? (hi ? 'DA (मूल का 20%), HRA (40%), PF (12%) अपने-आप जुड़ेंगे।' : 'DA (20% of basic), HRA (40%), PF (12%) are added automatically.')
+                : empType === 'deputation' ? (hi ? 'मूल + DA + प्रतिनियुक्ति भत्ता (बाद में सेट करें)। PF नहीं।' : 'Basic + DA + Deputation allowance (set later). No PF.')
+                : (empType === 'seasonal' || empType === 'fixedterm') ? (hi ? 'मूल + DA + PF (HRA नहीं)।' : 'Basic + DA + PF (no HRA).')
+                : isDailyType(empType) ? (hi ? 'वेतन = दैनिक दर × उपस्थिति-दिन (उपस्थिति चिप पर सेट करें)।' : 'Pay = daily rate × days worked (set attendance on the chip).')
+                : empType === 'apprentice' ? (hi ? 'केवल छात्रवृत्ति, कोई सांविधिक कटौती नहीं।' : 'Stipend only, no statutory deductions.')
+                : (hi ? 'केवल एकमुश्त राशि, कोई सांविधिक कटौती नहीं (TDS बाद में)।' : 'Consolidated amount only, no statutory deductions (TDS later).')}
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEmpOpen(false)} disabled={empSaving}>{hi ? 'रद्द' : 'Cancel'}</Button>
@@ -467,12 +667,122 @@ const Payroll: React.FC = () => {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>{attEmp ? nameOf(attEmp.full_name) : ''} <span className="text-xs text-muted-foreground font-normal">{attEmp?.employee_code}</span></DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1">
-              <Label>{hi ? 'मूल वेतन (₹/माह)' : 'Basic salary (₹/month)'}</Label>
-              <div className="flex gap-2">
-                <Input type="number" value={editBasic} onChange={(e) => setEditBasic(e.target.value)} placeholder="25000" />
-                <Button variant="outline" onClick={updateSalary} disabled={empBusy}>{empBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'बदलें' : 'Update')}</Button>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                {hi ? 'वेतन ढाँचा' : 'Salary structure'}
+                {attEmp?.employment_type && <span className="ml-1 text-[10px] px-1 rounded bg-muted text-muted-foreground font-normal">{empTypeLabel(attEmp.employment_type, hi)}</span>}
+              </Label>
+              {structure.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{hi ? 'लोड हो रहा है…' : 'Loading…'}</p>
+              ) : structure.map((c) => (
+                <div key={c.code} className="border rounded-md p-2 text-sm">
+                  {structEdit === c.code ? (
+                    <div className="flex gap-2 items-center">
+                      <Input type="number" className="h-8" value={structVal} onChange={(e) => setStructVal(e.target.value)} autoFocus />
+                      <Button size="sm" onClick={() => saveStructVal(c.code)} disabled={structBusy === c.code}>{structBusy === c.code ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'सहेजें' : 'Save')}</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setStructEdit('')}>{hi ? 'रद्द' : 'Cancel'}</Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="font-medium">{nameOf(c.display_name)}</span>
+                        <span className="ml-1 text-[10px] text-muted-foreground">{isDeduction(c.kind) ? (hi ? 'कटौती' : 'deduction') : c.kind === 'employer_contrib' ? (hi ? 'इनपुट' : 'input') : (hi ? 'आय' : 'earning')}</span>
+                        <div className="text-xs text-muted-foreground">
+                          {c.fixed_minor != null ? rupees(c.fixed_minor) : (hi ? 'सूत्र से गणना' : 'computed by formula')}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <Button size="sm" variant="outline" onClick={() => { setStructEdit(c.code); setStructVal(c.fixed_minor != null ? String(Number(c.fixed_minor) / 100) : ''); }}>{hi ? 'बदलें' : 'Edit'}</Button>
+                        <Button size="sm" variant="ghost" className="text-destructive px-2" disabled={structBusy === c.code}
+                          onClick={() => { if (window.confirm(hi ? `${nameOf(c.display_name)} को इस कर्मचारी के ढाँचे से हटाएँ?` : `Remove ${nameOf(c.display_name)} from this employee's structure?`)) changeComponent('structure-remove', c.code); }}>
+                          {structBusy === c.code ? <Loader2 className="h-3 w-3 animate-spin" /> : '✕'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div className="flex gap-1 items-center">
+                <select className="h-8 flex-1 min-w-0 rounded-md border border-input bg-background px-2 text-xs" value={addCode} onChange={(e) => { setAddCode(e.target.value); setAddVal(''); }}>
+                  <option value="">{hi ? '+ घटक जोड़ें…' : '+ Add component…'}</option>
+                  {ADDABLE_COMPONENTS.filter((a) => !structure.some((s) => s.code === a.code)).map((a) => (
+                    <option key={a.code} value={a.code}>{hi ? a.hi : a.en}</option>
+                  ))}
+                </select>
+                {addCode && FIXED_COMPONENTS.includes(addCode) && (
+                  <Input type="number" className="h-8 w-24" value={addVal} onChange={(e) => setAddVal(e.target.value)} placeholder="₹" />
+                )}
+                {addCode && (
+                  <Button size="sm" onClick={() => changeComponent('structure-add', addCode)} disabled={structBusy === addCode}>
+                    {structBusy === addCode ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'जोड़ें' : 'Add')}
+                  </Button>
+                )}
               </div>
+              <p className="text-[11px] text-muted-foreground">{hi ? 'कोई भी मान इस कर्मचारी के लिए तय कर सकते हैं — सूत्र वाले घटक पर भी। बदलाव इतिहास में सुरक्षित रहता है।' : 'You can pin any amount for THIS employee — even on a formula component. Every change is kept in history.'}</p>
+            </div>
+
+            <div className="border-t pt-3 space-y-2">
+              <Label className="text-sm font-medium">{hi ? 'अग्रिम / ऋण' : 'Advance / loan'}</Label>
+              {loans.filter((l) => l.status === 'active').map((l) => {
+                const outstanding = Number(l.principal_minor) - Number(l.recovered_minor);
+                return (
+                  <div key={l.id} className="border rounded-md p-2 text-xs space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">{rupees(l.principal_minor)} {l.purpose && <span className="text-muted-foreground font-normal">· {l.purpose}</span>}</span>
+                      <Button size="sm" variant="ghost" className="text-destructive h-7" disabled={loanBusy}
+                        onClick={() => { if (window.confirm(hi ? 'यह अग्रिम बंद करें? वसूली रुक जाएगी।' : 'Close this advance? Recovery stops.')) closeLoan(l.id); }}>
+                        {hi ? 'बंद करें' : 'Close'}
+                      </Button>
+                    </div>
+                    <div className="text-muted-foreground">
+                      {hi ? 'किस्त' : 'Instalment'} {rupees(l.installment_minor)}/{hi ? 'माह' : 'mo'} · {hi ? 'वसूल' : 'recovered'} {rupees(l.recovered_minor)} · <span className="font-medium text-foreground">{hi ? 'बकाया' : 'outstanding'} {rupees(outstanding)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {loans.some((l) => l.status === 'active') ? (
+                <p className="text-[11px] text-muted-foreground">{hi ? 'वसूली हर पेरोल में कटती है, पर बकाया तभी घटता है जब run का भुगतान हो जाए।' : 'Recovery is deducted each run, but the outstanding drops only once a run is actually paid.'}</p>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex gap-1">
+                    <Input type="number" className="h-8" value={loanPrincipal} onChange={(e) => setLoanPrincipal(e.target.value)} placeholder={hi ? 'राशि ₹' : 'Amount ₹'} />
+                    <Input type="number" className="h-8" value={loanInstallment} onChange={(e) => setLoanInstallment(e.target.value)} placeholder={hi ? 'किस्त ₹/माह' : 'Instalment ₹/mo'} />
+                  </div>
+                  <div className="flex gap-1">
+                    <Input className="h-8" value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} placeholder={hi ? 'प्रयोजन (वैकल्पिक)' : 'Purpose (optional)'} />
+                    <Button size="sm" onClick={addLoan} disabled={loanBusy}>{loanBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'दर्ज़ करें' : 'Record')}</Button>
+                  </div>
+                </div>
+              )}
+              {loans.filter((l) => l.status !== 'active').length > 0 && (
+                <p className="text-[11px] text-muted-foreground">{hi ? 'पुराने अग्रिम' : 'Past advances'}: {loans.filter((l) => l.status !== 'active').map((l) => `${rupees(l.principal_minor)} (${l.status})`).join(', ')}</p>
+              )}
+            </div>
+
+            <div className="border-t pt-3 space-y-2">
+              <button type="button" className="flex items-center gap-1 text-sm font-medium hover:underline" onClick={() => setHistOpen((o) => !o)}>
+                {hi ? 'वेतन इतिहास' : 'Pay history'} <Badge variant="outline" className="text-[10px]">{history.length}</Badge>
+                <span className="text-xs text-muted-foreground">{histOpen ? '▲' : '▼'}</span>
+              </button>
+              {histOpen && (history.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{hi ? 'कोई इतिहास नहीं' : 'No history'}</p>
+              ) : (
+                <div className="space-y-1">
+                  {history.map((v) => (
+                    <div key={v.id} className="text-xs border-l-2 border-muted pl-2 py-1">
+                      <div className="font-medium">
+                        {String(v.from).slice(0, 10)} → {v.to ? String(v.to).slice(0, 10) : (hi ? 'अब तक' : 'current')}
+                        {!v.to && <span className="ml-1 text-[10px] px-1 rounded bg-primary/10 text-primary">{hi ? 'चालू' : 'active'}</span>}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {v.values.length === 0 ? (hi ? '— कोई तय राशि नहीं' : '— no pinned amounts')
+                          : v.values.map((x) => `${nameOf(x.name)} ${rupees(x.minor)}`).join(' · ')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              <p className="text-[11px] text-muted-foreground">{hi ? 'हर दर-बदलाव एक नया संस्करण बनाता है — पुराना कभी मिटता नहीं (audit)।' : 'Every rate change opens a new version — the old one is never erased (audit).'}</p>
             </div>
             <div className="border-t pt-3 space-y-2">
               <Label className="text-sm font-medium">{hi ? 'उपस्थिति' : 'Attendance'}</Label>
@@ -490,7 +800,12 @@ const Payroll: React.FC = () => {
           </div>
           <DialogFooter className="sm:justify-between">
             <Button variant="ghost" className="text-destructive" onClick={deactivateEmp} disabled={empBusy}>{hi ? 'कर्मचारी हटाएँ' : 'Remove employee'}</Button>
-            <Button variant="outline" onClick={() => setAttEmp(null)} disabled={attSaving || empBusy}>{hi ? 'बंद करें' : 'Close'}</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={printServiceBook}>
+                <Printer className="h-4 w-4 mr-1" /> {hi ? 'सेवा पुस्तिका' : 'Service record'}
+              </Button>
+              <Button variant="outline" onClick={() => setAttEmp(null)} disabled={attSaving || empBusy}>{hi ? 'बंद करें' : 'Close'}</Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -499,7 +814,7 @@ const Payroll: React.FC = () => {
         <CardContent className="p-0">
           {loading ? (
             <div className="flex items-center gap-2 p-8 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {hi ? 'लोड हो रहा है…' : 'Loading…'}</div>
-          ) : runs.length === 0 ? (
+          ) : visibleRuns.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
               {hi ? 'अभी कोई पेरोल-रन नहीं। (पेरोल इंजन से एक रन बनने पर यहाँ दिखेगा।)' : 'No payroll runs yet. (A run computed by the payroll engine will appear here.)'}
             </div>
@@ -516,7 +831,7 @@ const Payroll: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {runs.map((r) => (
+                {visibleRuns.map((r) => (
                   <TableRow key={r.run_id} className="cursor-pointer" onClick={() => openRun(r)}>
                     <TableCell className="font-medium">{r.run_no}</TableCell>
                     <TableCell>{r.period}</TableCell>
@@ -540,6 +855,18 @@ const Payroll: React.FC = () => {
                             if (window.confirm(msg)) doTransition(r.run_id, 'rollback');
                           }}>
                           {transitioning === r.run_id ? <Loader2 className="h-3 w-3 animate-spin" /> : (hi ? 'उलटें' : 'Reverse')}
+                        </Button>
+                      )}
+                      {(r.state === 'draft' || r.state === 'verified' || r.state === 'approved') && (
+                        <Button size="sm" variant="ghost" className="mr-1 text-destructive" disabled={transitioning === r.run_id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const msg = hi
+                              ? `रन ${r.run_no} रद्द करें? यह post होने से पहले का सुधार है — बही पर कोई असर नहीं। रद्द run दोबारा नहीं चलता; उसी अवधि का नया run बनाया जा सकता है।`
+                              : `Cancel run ${r.run_no}? Pre-post — no ledger impact. A cancelled run can't resume; you can start a fresh run for the same period.`;
+                            if (window.confirm(msg)) doTransition(r.run_id, 'cancel');
+                          }}>
+                          {transitioning === r.run_id ? <Loader2 className="h-3 w-3 animate-spin" /> : (hi ? 'रद्द करें' : 'Cancel')}
                         </Button>
                       )}
                       <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); openRun(r); }}>{hi ? 'देखें' : 'View'}</Button>
