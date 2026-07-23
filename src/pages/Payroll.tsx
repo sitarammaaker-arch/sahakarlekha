@@ -11,6 +11,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -100,11 +101,39 @@ async function invokeError(error: unknown, data: unknown): Promise<string> {
 const rupees = (minor: number | string) =>
   '₹' + (Number(minor) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Amount in words, Indian grouping (crore / lakh / thousand) — a payslip is not complete without it.
+// English wording is the convention on Indian salary slips even on Hindi documents.
+const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve',
+  'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+const under100 = (n: number): string => (n < 20 ? ONES[n] : TENS[Math.floor(n / 10)] + (n % 10 ? ' ' + ONES[n % 10] : ''));
+const under1000 = (n: number): string =>
+  n >= 100 ? ONES[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + under100(n % 100) : '') : under100(n);
+const wholeInWords = (n: number): string => {
+  if (n === 0) return 'Zero';
+  let out = '';
+  const cr = Math.floor(n / 10000000); n %= 10000000;
+  const lakh = Math.floor(n / 100000); n %= 100000;
+  const th = Math.floor(n / 1000); n %= 1000;
+  if (cr) out += under1000(cr) + ' Crore ';
+  if (lakh) out += under1000(lakh) + ' Lakh ';
+  if (th) out += under1000(th) + ' Thousand ';
+  if (n) out += under1000(n);
+  return out.trim();
+};
+/** paise → "Twenty Four Thousand Rupees and Fifty Paise Only" */
+const amountInWords = (minor: number): string => {
+  const m = Math.round(Math.abs(Number(minor)));
+  const rs = Math.floor(m / 100), ps = m % 100;
+  return `${wholeInWords(rs)} Rupees${ps ? ' and ' + wholeInWords(ps) + ' Paise' : ''} Only`;
+};
+
 const stateVariant = (s: string): 'default' | 'secondary' | 'outline' =>
   s === 'posted' || s === 'paid' ? 'default' : s === 'draft' ? 'outline' : 'secondary';
 
 const Payroll: React.FC = () => {
   const { language } = useLanguage();
+  const { society } = useData();   // letterhead for the printed payslip / service record
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -459,20 +488,105 @@ const Payroll: React.FC = () => {
   const printPayslip = (slip: Payslip, slipLines: Payline[]) => {
     const earn = slipLines.filter((l) => !isDeduction(l.kind));
     const ded = slipLines.filter((l) => isDeduction(l.kind));
-    const rows = (arr: Payline[]) => arr.map((l) => `<tr><td>${nameOf(l.name)} <span style="color:#888;font-size:11px">${l.code}</span></td><td style="text-align:right">${rupees(l.computed_minor)}</td></tr>`).join('') || '<tr><td colspan="2" style="color:#888">—</td></tr>';
-    const w = window.open('', '_blank', 'width=720,height=900');
+    const emp = employees.find((e) => e.employee_code === slip.employee_code);
+    const esc = (s: unknown) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
+    // period "2026-06" → "June 2026" / "जून 2026"
+    const [py, pm] = String(selected?.period ?? '').split('-');
+    const MONTHS = hi
+      ? ['जनवरी', 'फ़रवरी', 'मार्च', 'अप्रैल', 'मई', 'जून', 'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर']
+      : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const periodLabel = pm ? `${MONTHS[Number(pm) - 1] ?? pm} ${py}` : String(selected?.period ?? '');
+
+    // pad the shorter column so both tables end level — a payslip that doesn't line up looks amateur
+    const pad = Math.max(earn.length, ded.length);
+    const cell = (l: Payline | undefined) => l
+      ? `<td>${esc(nameOf(l.name))}</td><td class="amt">${rupees(l.computed_minor)}</td>`
+      : '<td>&nbsp;</td><td class="amt">&nbsp;</td>';
+    const bodyRows = Array.from({ length: pad }, (_, i) => `<tr>${cell(earn[i])}${cell(ded[i])}</tr>`).join('')
+      || '<tr><td colspan="4" class="mut">—</td></tr>';
+
+    const info = (k: string, v: unknown) => `<div class="f"><span class="fk">${k}</span><span class="fv">${esc(v) || '—'}</span></div>`;
+    const w = window.open('', '_blank', 'width=900,height=1000');
     if (!w) { toast({ title: hi ? 'प्रिंट विंडो नहीं खुली' : 'Print window blocked', description: hi ? 'popup की अनुमति दें' : 'Allow popups', variant: 'destructive' }); return; }
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${hi ? 'वेतन पर्ची' : 'Payslip'} ${slip.payslip_no}</title>
-      <style>body{font-family:system-ui,'Segoe UI',sans-serif;color:#111;margin:32px;max-width:640px}h1{font-size:20px;margin:0 0 2px}.sub{color:#555;font-size:13px;margin:0 0 16px}table{width:100%;border-collapse:collapse;margin:8px 0}td,th{padding:6px 8px;border-bottom:1px solid #eee;font-size:13px}th{text-align:left;background:#f6f6f6}.tot td{font-weight:600;border-top:2px solid #333}.net{margin-top:16px;padding:10px 12px;background:#f0f7f0;border-radius:8px;font-size:16px;font-weight:700;display:flex;justify-content:space-between}.cols{display:flex;gap:16px}.cols>div{flex:1}@media print{body{margin:12px}}</style></head><body>
-      <h1>${hi ? 'वेतन पर्ची' : 'Salary Slip'}</h1>
-      <p class="sub">${nameOf(slip.employee_name)} · ${slip.employee_code} &nbsp;|&nbsp; ${hi ? 'अवधि' : 'Period'}: ${selected?.period ?? ''} &nbsp;|&nbsp; ${slip.payslip_no}<br>${hi ? 'भुगतान दिन' : 'Paid days'}: ${Number(slip.paid_days)}</p>
-      <div class="cols">
-        <div><table><thead><tr><th>${hi ? 'आय' : 'Earnings'}</th><th style="text-align:right">₹</th></tr></thead><tbody>${rows(earn)}<tr class="tot"><td>${hi ? 'कुल आय' : 'Gross'}</td><td style="text-align:right">${rupees(slip.gross_minor)}</td></tr></tbody></table></div>
-        <div><table><thead><tr><th>${hi ? 'कटौती' : 'Deductions'}</th><th style="text-align:right">₹</th></tr></thead><tbody>${rows(ded)}<tr class="tot"><td>${hi ? 'कुल कटौती' : 'Total'}</td><td style="text-align:right">${rupees(slip.deductions_minor)}</td></tr></tbody></table></div>
+    const socName = esc(hi ? (society?.nameHi || society?.name) : (society?.name || society?.nameHi));
+    const socAddr = [society?.address, society?.district, society?.state].filter(Boolean).map(esc).join(', ')
+      + (society?.pinCode ? ' – ' + esc(society.pinCode) : '');
+    const socContact = [society?.phone && `${hi ? 'दूरभाष' : 'Ph'}: ${esc(society.phone)}`, society?.email && esc(society.email)].filter(Boolean).join(' · ');
+
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${hi ? 'वेतन पर्ची' : 'Salary Slip'} — ${esc(nameOf(slip.employee_name))} — ${esc(periodLabel)}</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:'Segoe UI',system-ui,sans-serif;color:#1a1a1a;margin:0;padding:28px;background:#fff}
+  .sheet{max-width:760px;margin:0 auto;border:1px solid #cfd4da}
+  .head{text-align:center;padding:16px 20px 12px;border-bottom:2px solid #1f3a5f}
+  .soc{font-size:19px;font-weight:700;color:#1f3a5f;letter-spacing:.2px}
+  .addr{font-size:11px;color:#555;margin-top:3px;line-height:1.5}
+  .title{background:#1f3a5f;color:#fff;text-align:center;padding:7px;font-size:13px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:0 24px;padding:14px 20px;border-bottom:1px solid #e3e6ea}
+  .f{display:flex;gap:8px;font-size:12px;padding:3px 0;border-bottom:1px dotted #e8eaed}
+  .fk{color:#666;min-width:112px}
+  .fv{font-weight:600;color:#1a1a1a}
+  table{width:100%;border-collapse:collapse}
+  thead th{background:#eef2f7;color:#1f3a5f;font-size:11px;text-transform:uppercase;letter-spacing:.6px;padding:8px 12px;text-align:left;border-bottom:1px solid #cfd4da}
+  thead th.amt,td.amt{text-align:right}
+  td{padding:6px 12px;font-size:12.5px;border-bottom:1px solid #f1f3f5}
+  td.amt{font-variant-numeric:tabular-nums;white-space:nowrap}
+  th.sep,td.sep{border-left:1px solid #cfd4da}
+  tfoot td{font-weight:700;background:#f7f9fc;border-top:2px solid #1f3a5f;border-bottom:none;padding:9px 12px;font-size:13px}
+  .net{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:#1f3a5f;color:#fff}
+  .net .lbl{font-size:12px;letter-spacing:.8px;text-transform:uppercase;opacity:.9}
+  .net .val{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+  .words{padding:9px 20px;font-size:11.5px;color:#333;background:#f7f9fc;border-bottom:1px solid #e3e6ea}
+  .words b{color:#1f3a5f}
+  .foot{padding:12px 20px;font-size:10.5px;color:#777;line-height:1.6;display:flex;justify-content:space-between;gap:16px}
+  .mut{color:#999}
+  @media print{body{padding:0}.sheet{border:none}}
+</style></head><body>
+  <div class="sheet">
+    <div class="head">
+      <div class="soc">${socName || (hi ? 'सहकारी समिति' : 'Cooperative Society')}</div>
+      ${socAddr ? `<div class="addr">${socAddr}</div>` : ''}
+      <div class="addr">${society?.registrationNo ? `${hi ? 'पंजीकरण संख्या' : 'Reg. No'}: ${esc(society.registrationNo)}` : ''}${socContact ? ' &nbsp;·&nbsp; ' + socContact : ''}</div>
+    </div>
+    <div class="title">${hi ? `वेतन पर्ची — ${periodLabel}` : `Salary Slip — ${periodLabel}`}</div>
+
+    <div class="meta">
+      <div>
+        ${info(hi ? 'कर्मचारी' : 'Employee', nameOf(slip.employee_name))}
+        ${info(hi ? 'कर्मचारी कोड' : 'Employee code', slip.employee_code)}
+        ${info(hi ? 'प्रकार' : 'Type', empTypeLabel(emp?.employment_type, hi))}
+        ${info(hi ? 'नियुक्ति तिथि' : 'Date of joining', String(emp?.date_of_join ?? '').slice(0, 10))}
       </div>
-      <div class="net"><span>${hi ? 'शुद्ध वेतन / Net Pay' : 'Net Pay'}</span><span>${rupees(slip.net_minor)}</span></div>
-      <p style="color:#999;font-size:11px;margin-top:24px">${hi ? 'सहकार लेखा द्वारा गणना' : 'Computed by SahakarLekha'}</p>
-      <script>window.onload=function(){window.print()}</script></body></html>`);
+      <div>
+        ${info(hi ? 'पर्ची संख्या' : 'Payslip no.', slip.payslip_no)}
+        ${info(hi ? 'भुगतान दिन' : 'Paid days', `${Number(slip.paid_days)}${Number(slip.lop_days) ? `  (${hi ? 'अवैतनिक' : 'LOP'} ${Number(slip.lop_days)})` : ''}`)}
+        ${info('UAN', emp?.uan)}
+        ${info('PAN', emp?.pan)}
+      </div>
+    </div>
+
+    <table>
+      <thead><tr>
+        <th>${hi ? 'आय' : 'Earnings'}</th><th class="amt">${hi ? 'राशि (₹)' : 'Amount (₹)'}</th>
+        <th class="sep">${hi ? 'कटौती' : 'Deductions'}</th><th class="amt">${hi ? 'राशि (₹)' : 'Amount (₹)'}</th>
+      </tr></thead>
+      <tbody>${bodyRows}</tbody>
+      <tfoot><tr>
+        <td>${hi ? 'कुल आय' : 'Gross earnings'}</td><td class="amt">${rupees(slip.gross_minor)}</td>
+        <td class="sep">${hi ? 'कुल कटौती' : 'Total deductions'}</td><td class="amt">${rupees(slip.deductions_minor)}</td>
+      </tr></tfoot>
+    </table>
+
+    <div class="net"><span class="lbl">${hi ? 'शुद्ध देय वेतन' : 'Net pay'}</span><span class="val">${rupees(slip.net_minor)}</span></div>
+    <div class="words"><b>${hi ? 'अक्षरे' : 'In words'}:</b> ${amountInWords(Number(slip.net_minor))}</div>
+
+    <div class="foot">
+      <span>${hi ? 'यह कंप्यूटर-जनित वेतन पर्ची है; हस्ताक्षर की आवश्यकता नहीं।' : 'This is a computer-generated payslip and needs no signature.'}</span>
+      <span style="white-space:nowrap">${hi ? 'निर्मित' : 'Generated'}: ${new Date().toLocaleDateString(hi ? 'hi-IN' : 'en-IN')}</span>
+    </div>
+  </div>
+  <script>window.onload=function(){window.print()}</script>
+</body></html>`);
     w.document.close();
   };
 
