@@ -91,6 +91,20 @@ export function mapCatalog(input: MapCatalogInput): MappedCalcSpec {
     if (side === undefined) throw new RangeError(`PAY-MAP-701: component '${c.code}' has unknown kind '${c.kind}'`);
     classification[c.code] = side;
 
+    // A per-employee FIXED override wins over the component's default behaviour — that is what makes a
+    // structure per-employee: the society defines the component once, and one employee's assignment may
+    // pin it to an amount of its own (a flat HRA for this person while everyone else uses the % formula).
+    if (c.overrideFixedMinor != null && c.calcMethod !== 'fixed') {
+      if (!isFiniteNum(c.overrideFixedMinor)) throw new RangeError(`PAY-MAP-705: component '${c.code}' amount is not a finite number`);
+      if (c.overrideCurrency && c.overrideCurrency !== input.currency) {
+        throw new RangeError(`PAY-MAP-706: component '${c.code}' currency ${c.overrideCurrency} ≠ run currency ${input.currency}`);
+      }
+      fixedComponents[c.code] = makeMoney(c.overrideFixedMinor, input.currency);
+      const b0 = input.clamps?.[c.code];
+      if (b0) clamps[c.code] = b0;
+      continue;
+    }
+
     switch (c.calcMethod) {
       case 'formula':
       case 'attendance_derived': // proration etc. is expressed as a formula — same engine path

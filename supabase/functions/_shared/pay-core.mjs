@@ -409,6 +409,16 @@ function mapCatalog(input) {
     const side = KIND_TO_SIDE[c.kind];
     if (side === void 0) throw new RangeError(`PAY-MAP-701: component '${c.code}' has unknown kind '${c.kind}'`);
     classification[c.code] = side;
+    if (c.overrideFixedMinor != null && c.calcMethod !== "fixed") {
+      if (!isFiniteNum(c.overrideFixedMinor)) throw new RangeError(`PAY-MAP-705: component '${c.code}' amount is not a finite number`);
+      if (c.overrideCurrency && c.overrideCurrency !== input.currency) {
+        throw new RangeError(`PAY-MAP-706: component '${c.code}' currency ${c.overrideCurrency} \u2260 run currency ${input.currency}`);
+      }
+      fixedComponents[c.code] = makeMoney(c.overrideFixedMinor, input.currency);
+      const b0 = input.clamps?.[c.code];
+      if (b0) clamps[c.code] = b0;
+      continue;
+    }
     switch (c.calcMethod) {
       case "formula":
       case "attendance_derived":
@@ -1130,7 +1140,7 @@ function aggregatePayslip(values, spec) {
       throw new RangeError(`PAY-CAL-601: component '${code}' is computed but unclassified (earning/deduction/info required)`);
     }
   }
-  const pool = { ...spec.fixedComponents ?? {}, ...values };
+  const pool = { ...values, ...spec.fixedComponents ?? {} };
   for (const [code, side] of Object.entries(spec.classification)) {
     if (side === "info") continue;
     const raw = pool[code];

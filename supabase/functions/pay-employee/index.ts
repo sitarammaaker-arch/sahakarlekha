@@ -209,6 +209,64 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, employeeId: empId, period: body.period, paidDays: paid, lopDays: lop }, CORS);
     }
 
+    // ── Per-employee salary structure: read it, and edit any component's value ──────────────
+    if (body.action === 'structure-get') {
+      const empId = body.employeeId ?? '';
+      const rows = await sql`
+        select cc.code, cc.display_name, cv.kind, cv.calc_method::text as calc_method,
+               fv.expression_text, ao.fixed_minor, sa.effective_from
+        from pay_config.structure_assignment sa
+        join pay_config.component_binding cb on cb.structure_version_id = sa.structure_version_id
+        join pay_config.component_catalog cc on cc.id = cb.component_id
+        join lateral (select * from pay_config.component_version v where v.component_id = cc.id and v.status = 'active' order by v.effective_from desc limit 1) cv on true
+        left join pay_formula.formula_version fv on fv.id = cv.formula_ref
+        left join pay_config.assignment_override ao on ao.assignment_id = sa.id and ao.component_id = cc.id
+        where sa.employee_id = ${empId} and sa.society_id = ${societyId} and sa.effective_to is null
+        order by cv.sequence, cc.code`;
+      return json(200, { components: rows }, CORS);
+    }
+
+    // Change ONE component's value for ONE employee. History-safe: unless the assignment started
+    // today (a same-day correction), the current assignment is CLOSED and a new one opened carrying
+    // every override forward — so the employee's pay timeline is preserved, never overwritten.
+    if (body.action === 'structure-set') {
+      const empId = body.employeeId ?? '', code = (body.code ?? '').trim();
+      const valueMinor = Number(body.basicMinor);
+      if (!code) return json(400, { error: 'component code required' }, CORS);
+      if (!Number.isFinite(valueMinor) || valueMinor < 0) return json(400, { error: 'value must be a non-negative number (paise)' }, CORS);
+      const out = await sql.begin(async (tx: postgres.TransactionSql) => {
+        const [asg] = await tx`select id, structure_version_id, effective_from from pay_config.structure_assignment
+          where employee_id = ${empId} and society_id = ${societyId} and effective_to is null limit 1`;
+        if (!asg) throw new Error('no active salary structure for this employee');
+        const [comp] = await tx`select cc.id from pay_config.component_catalog cc
+          join pay_config.component_binding cb on cb.component_id = cc.id and cb.structure_version_id = ${asg.structure_version_id}
+          where cc.society_id = ${societyId} and cc.code = ${code} limit 1`;
+        if (!comp) throw new Error(`component '${code}' is not in this employee's structure`);
+        const [{ same }] = await tx`select (${asg.effective_from}::date >= current_date) as same`;
+        if (same) {
+          await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,reason,created_by)
+            values(${asg.id},${comp.id},${valueMinor},'INR','edited',${su.id})
+            on conflict (assignment_id,component_id) do update set fixed_minor = ${valueMinor}, override_formula_ref = null`;
+          return { versioned: false };
+        }
+        await tx`update pay_config.structure_assignment set effective_to = current_date, updated_at = now(), updated_by = ${su.id} where id = ${asg.id}`;
+        const [nw] = await tx`insert into pay_config.structure_assignment(society_id,employee_id,structure_version_id,effective_from,created_by)
+          values(${societyId},${empId},${asg.structure_version_id},current_date,${su.id}) returning id`;
+        // carry every override forward (exactly one of fixed_minor / override_formula_ref must be set)
+        await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,override_formula_ref,reason,created_by)
+          select ${nw.id}, ao.component_id,
+                 case when ao.component_id = ${comp.id} then ${valueMinor} else ao.fixed_minor end,
+                 coalesce(ao.fixed_currency,'INR'),
+                 case when ao.component_id = ${comp.id} then null else ao.override_formula_ref end,
+                 'carried forward', ${su.id}
+          from pay_config.assignment_override ao where ao.assignment_id = ${asg.id}`;
+        await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,reason,created_by)
+          values(${nw.id},${comp.id},${valueMinor},'INR','edited',${su.id}) on conflict (assignment_id,component_id) do nothing`;
+        return { versioned: true };
+      });
+      return json(200, { ok: true, employeeId: empId, code, value: valueMinor, versioned: out.versioned }, CORS);
+    }
+
     if (body.action === 'update') {
       const empId = body.employeeId ?? '';
       const basicMinor = Number(body.basicMinor);
@@ -263,7 +321,7 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, key, value }, CORS);
     }
 
-    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate' / 'identity-set' / 'statutory-list' / 'statutory-set'" }, CORS);
+    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate' / 'identity-set' / 'structure-get' / 'structure-set' / 'statutory-list' / 'statutory-set'" }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {
