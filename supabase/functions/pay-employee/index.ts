@@ -359,6 +359,40 @@ Deno.serve(async (req: Request) => {
       return json(200, { history: [...byAsg.values()] }, CORS);
     }
 
+    // UNPIN: drop a pinned amount so the component goes back to being computed by its formula. The
+    // counterpart to structure-set — without it, an admin who pins a formula component by mistake has
+    // no way back except deleting and re-adding it. Same history rules as structure-set.
+    if (body.action === 'structure-unset') {
+      const empId = body.employeeId ?? '', code = (body.code ?? '').trim();
+      if (!code) return json(400, { error: 'component code required' }, CORS);
+      const out = await sql.begin(async (tx: postgres.TransactionSql) => {
+        const [asg] = await tx`select id, structure_version_id, effective_from from pay_config.structure_assignment
+          where employee_id = ${empId} and society_id = ${societyId} and effective_to is null limit 1`;
+        if (!asg) throw new Error('no active salary structure for this employee');
+        const [comp] = await tx`select cc.id, cv.calc_method::text as calc_method from pay_config.component_catalog cc
+          join pay_config.component_binding cb on cb.component_id = cc.id and cb.structure_version_id = ${asg.structure_version_id}
+          join lateral (select * from pay_config.component_version v where v.component_id = cc.id and v.status = 'active' order by v.effective_from desc limit 1) cv on true
+          where cc.society_id = ${societyId} and cc.code = ${code} limit 1`;
+        if (!comp) throw new Error(`component '${code}' is not in this employee's structure`);
+        // a 'fixed' component has no formula to fall back to — it must keep an amount
+        if (String(comp.calc_method) === 'fixed') throw new Error(`'${code}' has no formula — it needs an amount. Edit it instead, or remove the component.`);
+        const [{ same }] = await tx`select (${asg.effective_from}::date >= current_date) as same`;
+        if (same) {
+          await tx`delete from pay_config.assignment_override where assignment_id = ${asg.id} and component_id = ${comp.id}`;
+          return { versioned: false };
+        }
+        await tx`update pay_config.structure_assignment set effective_to = current_date, updated_at = now(), updated_by = ${su.id} where id = ${asg.id}`;
+        const [nw] = await tx`insert into pay_config.structure_assignment(society_id,employee_id,structure_version_id,effective_from,created_by)
+          values(${societyId},${empId},${asg.structure_version_id},current_date,${su.id}) returning id`;
+        await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,override_formula_ref,reason,created_by)
+          select ${nw.id}, ao.component_id, ao.fixed_minor, coalesce(ao.fixed_currency,'INR'), ao.override_formula_ref, 'carried forward', ${su.id}
+          from pay_config.assignment_override ao
+          where ao.assignment_id = ${asg.id} and ao.component_id <> ${comp.id}`;
+        return { versioned: true };
+      });
+      return json(200, { ok: true, employeeId: empId, code, unpinned: true, versioned: out.versioned }, CORS);
+    }
+
     // Change ONE component's value for ONE employee. History-safe: unless the assignment started
     // today (a same-day correction), the current assignment is CLOSED and a new one opened carrying
     // every override forward — so the employee's pay timeline is preserved, never overwritten.
@@ -454,7 +488,7 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, key, value }, CORS);
     }
 
-    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate' / 'identity-set' / 'structure-get' / 'structure-set' / 'structure-add' / 'structure-remove' / 'history-get' / 'loan-list' / 'loan-add' / 'loan-close' / 'statutory-list' / 'statutory-set'" }, CORS);
+    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'update' / 'deactivate' / 'identity-set' / 'structure-get' / 'structure-set' / 'structure-unset' / 'structure-add' / 'structure-remove' / 'history-get' / 'loan-list' / 'loan-add' / 'loan-close' / 'statutory-list' / 'statutory-set'" }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {

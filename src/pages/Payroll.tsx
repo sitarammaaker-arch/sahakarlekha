@@ -306,6 +306,17 @@ const Payroll: React.FC = () => {
     loadLoans(attEmp!.id);
   };
 
+  // Drop a pinned amount so the component goes back to its formula — the way out of pinning something
+  // by mistake (the run computes it again instead of paying the pinned figure).
+  const unpinComponent = async (code: string) => {
+    setStructBusy(code);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'structure-unset', employeeId: attEmp!.id, code } });
+    setStructBusy('');
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं हुआ' : 'Failed', description: await invokeError(error, data), variant: 'destructive' }); return; }
+    toast({ title: hi ? 'सूत्र पर लौटा ✓' : 'Back to formula ✓', description: hi ? `${code} अब सूत्र से गणना होगा` : `${code} is computed by its formula again` });
+    loadStructure(attEmp!.id); loadHistory(attEmp!.id); loadEmployees();
+  };
+
   const [addCode, setAddCode] = useState('');
   const [addVal, setAddVal] = useState('');
 
@@ -827,9 +838,19 @@ const Payroll: React.FC = () => {
                         <span className="ml-1 text-[10px] text-muted-foreground">{isDeduction(c.kind) ? (hi ? 'कटौती' : 'deduction') : c.kind === 'employer_contrib' ? (hi ? 'इनपुट' : 'input') : (hi ? 'आय' : 'earning')}</span>
                         <div className="text-xs text-muted-foreground">
                           {c.fixed_minor != null ? rupees(c.fixed_minor) : (hi ? 'सूत्र से गणना' : 'computed by formula')}
+                          {c.fixed_minor != null && c.calc_method === 'formula' && (
+                            <span className="ml-1 text-[10px] px-1 rounded bg-amber-500/10 text-amber-700">{hi ? 'तय किया हुआ — सूत्र निष्क्रिय' : 'pinned — formula off'}</span>
+                          )}
                         </div>
                       </div>
                       <div className="flex gap-1 shrink-0">
+                        {/* a pinned formula component can go back to being computed */}
+                        {c.fixed_minor != null && c.calc_method === 'formula' && (
+                          <Button size="sm" variant="ghost" className="px-2" title={hi ? 'सूत्र पर लौटाएँ' : 'Back to formula'} disabled={structBusy === c.code}
+                            onClick={() => unpinComponent(c.code)}>
+                            {structBusy === c.code ? <Loader2 className="h-3 w-3 animate-spin" /> : '↺'}
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" onClick={() => { setStructEdit(c.code); setStructVal(c.fixed_minor != null ? String(Number(c.fixed_minor) / 100) : ''); }}>{hi ? 'बदलें' : 'Edit'}</Button>
                         <Button size="sm" variant="ghost" className="text-destructive px-2" disabled={structBusy === c.code}
                           onClick={() => { if (window.confirm(hi ? `${nameOf(c.display_name)} को इस कर्मचारी के ढाँचे से हटाएँ?` : `Remove ${nameOf(c.display_name)} from this employee's structure?`)) changeComponent('structure-remove', c.code); }}>
