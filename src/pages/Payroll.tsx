@@ -400,7 +400,12 @@ const Payroll: React.FC = () => {
     if (error || !data) { toast({ title: hi ? 'लोड नहीं हुआ' : 'Could not load', description: await invokeError(error, data), variant: 'destructive' }); return; }
     const rows = (data as { attendance?: AttRow[] }).attendance || [];
     setAttRows(rows);
-    setAttEdits(Object.fromEntries(rows.map((r) => [r.id, r.lop_days == null ? '' : String(Number(r.lop_days))])));
+    // A daily wager's box means DAYS WORKED, everyone else's means DAYS ABSENT — that is how each is
+    // actually counted on the muster roll, and entering one as the other is how mistakes get made.
+    setAttEdits(Object.fromEntries(rows.map((r) => {
+      const v = isDailyType(r.employment_type ?? '') ? r.paid_days : r.lop_days;
+      return [r.id, v == null ? '' : String(Number(v))];
+    })));
   };
 
   const saveAttList = async () => {
@@ -409,10 +414,14 @@ const Payroll: React.FC = () => {
     for (const r of attRows) {
       const raw = (attEdits[r.id] ?? '').trim();
       if (raw === '') continue;                                        // left blank → leave as it was
-      const lop = Number(raw);
-      if (!Number.isFinite(lop) || lop < 0 || lop > 31) { failed++; continue; }
-      if (r.lop_days != null && Number(r.lop_days) === lop) continue;   // unchanged
-      const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'attendance', employeeId: r.id, period: attListPeriod, lopDays: lop } });
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 0 || n > 31) { failed++; continue; }
+      const daily = isDailyType(r.employment_type ?? '');
+      const was = daily ? r.paid_days : r.lop_days;
+      if (was != null && Number(was) === n) continue;                   // unchanged
+      const { data, error } = await supabase.functions.invoke('pay-employee', {
+        body: { action: 'attendance', employeeId: r.id, period: attListPeriod, ...(daily ? { paidDays: n } : { lopDays: n }) },
+      });
       if (error || (data as { error?: string })?.error) failed++; else saved++;
     }
     setAttListBusy(false);
@@ -472,16 +481,20 @@ const Payroll: React.FC = () => {
 
   const saveAttendance = async () => {
     if (!/^\d{4}-\d{2}$/.test(attPeriod)) { toast({ title: hi ? 'अवधि चुनें' : 'Pick a period', variant: 'destructive' }); return; }
-    const lop = Number(attLop);
-    if (!Number.isFinite(lop) || lop < 0 || lop > 31) { toast({ title: hi ? 'LOP दिन 0–31' : 'LOP days 0–31', variant: 'destructive' }); return; }
+    const n = Number(attLop);
+    if (!Number.isFinite(n) || n < 0 || n > 31) { toast({ title: hi ? 'दिन 0–31' : 'Days 0–31', variant: 'destructive' }); return; }
+    const daily = isDailyType(attEmp?.employment_type ?? '');   // daily wagers enter DAYS WORKED
     setAttSaving(true);
-    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'attendance', employeeId: attEmp!.id, period: attPeriod, lopDays: lop } });
+    const { data, error } = await supabase.functions.invoke('pay-employee', {
+      body: { action: 'attendance', employeeId: attEmp!.id, period: attPeriod, ...(daily ? { paidDays: n } : { lopDays: n }) },
+    });
     setAttSaving(false);
     if (error || (data as { error?: string })?.error) {
       toast({ title: hi ? 'उपस्थिति नहीं सहेजी' : 'Could not save', description: await invokeError(error, data), variant: 'destructive' });
       return;
     }
-    toast({ title: hi ? 'उपस्थिति सहेजी ✓' : 'Attendance saved ✓', description: `${attPeriod}: ${30 - lop} ${hi ? 'दिन' : 'days'} (LOP ${lop})` });
+    const paid = daily ? n : 30 - n;
+    toast({ title: hi ? 'उपस्थिति सहेजी ✓' : 'Attendance saved ✓', description: `${attPeriod}: ${paid} ${hi ? 'दिन' : 'days'}${daily ? '' : ` (LOP ${n})`}` });
     setAttEmp(null);
   };
 
@@ -615,6 +628,14 @@ const Payroll: React.FC = () => {
       : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const periodLabel = pm ? `${MONTHS[Number(pm) - 1] ?? pm} ${py}` : String(selected?.period ?? '');
 
+    // Somebody who joined mid-month is paid only for the days served, so the payslip carries a large
+    // Loss of Pay line. Say WHY on the slip itself — an unexplained half-salary is what generates the
+    // "meri tankhwah kam kyun aayi" question this page exists to prevent.
+    const dim = py && pm ? new Date(Number(py), Number(pm), 0).getDate() : 30;
+    const doj = String(emp?.date_of_join ?? '').slice(0, 10);
+    const joinedMidPeriod = doj > `${py}-${pm}-01` && doj <= `${py}-${pm}-${String(dim).padStart(2, '0')}`;
+    const serviceSpan = `${doj.slice(8)} ${hi ? 'से' : 'to'} ${dim} ${MONTHS[Number(pm) - 1] ?? pm} ${py}`;
+
     // pad the shorter column so both tables end level — a payslip that doesn't line up looks amateur
     const pad = Math.max(earn.length, ded.length);
     const cell = (l: Payline | undefined) => l
@@ -678,6 +699,7 @@ const Payroll: React.FC = () => {
       <div>
         ${info(hi ? 'पर्ची संख्या' : 'Payslip no.', slip.payslip_no)}
         ${info(hi ? 'भुगतान दिन' : 'Paid days', `${Number(slip.paid_days)}${Number(slip.lop_days) ? `  (${hi ? 'अवैतनिक' : 'LOP'} ${Number(slip.lop_days)})` : ''}`)}
+        ${joinedMidPeriod ? info(hi ? 'इस माह सेवा' : 'Service this month', serviceSpan) : ''}
         ${info('UAN', emp?.uan)}
         ${info('PAN', emp?.pan)}
       </div>
@@ -878,7 +900,9 @@ const Payroll: React.FC = () => {
                       <div className="flex items-center gap-1 shrink-0">
                         <Input type="number" min="0" max="31" className="h-8 w-16" placeholder="0"
                           value={attEdits[r.id] ?? ''} onChange={(e) => setAttEdits((m) => ({ ...m, [r.id]: e.target.value }))} />
-                        <span className="text-[11px] text-muted-foreground">{hi ? 'LOP दिन' : 'LOP'}</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {isDailyType(r.employment_type ?? '') ? (hi ? 'काम के दिन' : 'days worked') : (hi ? 'LOP दिन' : 'LOP')}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -1129,7 +1153,14 @@ const Payroll: React.FC = () => {
             <div className="border-t pt-3 space-y-2">
               <Label className="text-sm font-medium">{hi ? 'उपस्थिति' : 'Attendance'}</Label>
               <div className="space-y-1"><Label className="text-xs">{hi ? 'अवधि (माह)' : 'Period (month)'}</Label><Input type="month" value={attPeriod} onChange={(e) => setAttPeriod(e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">{hi ? 'बिना-वेतन दिन (LOP)' : 'Loss-of-pay days (LOP)'}</Label><Input type="number" min="0" max="31" value={attLop} onChange={(e) => setAttLop(e.target.value)} placeholder="0" /></div>
+              <div className="space-y-1">
+                <Label className="text-xs">
+                  {isDailyType(attEmp?.employment_type ?? '')
+                    ? (hi ? 'काम किए दिन' : 'Days worked')
+                    : (hi ? 'बिना-वेतन दिन (LOP)' : 'Loss-of-pay days (LOP)')}
+                </Label>
+                <Input type="number" min="0" max="31" value={attLop} onChange={(e) => setAttLop(e.target.value)} placeholder="0" />
+              </div>
               <Button size="sm" variant="outline" onClick={saveAttendance} disabled={attSaving}>{attSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'उपस्थिति सहेजें' : 'Save attendance')}</Button>
             </div>
             <div className="border-t pt-3 space-y-2">

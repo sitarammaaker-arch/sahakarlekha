@@ -135,9 +135,12 @@ Deno.serve(async (req: Request) => {
       const attLop = att ? Number(att.lop_days) : 0;
       const paidDays = att ? Number(att.paid_days) : Math.min(30, servedDays);
       const lopDays = Math.min(30, attLop + unservedDays);
-      // What the payslip PRINTS. The fact above stays as recorded (daily wages are paid on it);
-      // this is only the days-paid figure, which must never read more than the days served.
-      const paidDaysShown = Math.max(0, Math.min(paidDays, servedDays - attLop));
+      // What the payslip PRINTS — it must agree with the money on that same slip, nothing else.
+      // A daily wager is paid for the days recorded, so print those. A monthly employee is paid on
+      // the 30-day convention every formula here divides by, so print 30 minus what was withheld:
+      // paid + absent then always reads 30, whatever the calendar length of the month.
+      const isDaily = Object.prototype.hasOwnProperty.call(spec.fixedComponents, 'DAILY_RATE');
+      const paidDaysShown = isDaily ? paidDays : Math.round(Math.max(0, 30 - lopDays) * 100) / 100;
       // staff advance: recover this month's instalment, never more than what is still outstanding.
       // Recovery is only CREDITED against the loan when the run is actually paid (pay-pay).
       const [ln] = await sql`select id, installment_minor, principal_minor, recovered_minor from pay_calc.employee_loan
