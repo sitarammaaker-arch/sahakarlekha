@@ -293,10 +293,16 @@ Deno.serve(async (req: Request) => {
     if (body.action === 'attendance') {
       const empId = body.employeeId ?? '';
       if (!/^\d{4}-\d{2}$/.test(body.period ?? '')) return json(400, { error: 'period "YYYY-MM" required' }, CORS);
-      const lop = Number(body.lopDays);
+      // Two ways in, because the two kinds of employee are counted differently in real life: a monthly
+      // employee has DAYS ABSENT, a daily wager has DAYS WORKED. Sending paidDays is the latter.
+      const byPaid = body.paidDays !== undefined && body.paidDays !== null && body.paidDays !== '';
+      const lop = byPaid ? Math.max(0, 30 - Number(body.paidDays)) : Number(body.lopDays);
+      if (byPaid && (!Number.isFinite(Number(body.paidDays)) || Number(body.paidDays) < 0 || Number(body.paidDays) > 31)) {
+        return json(400, { error: 'paidDays must be 0–31' }, CORS);
+      }
       if (!Number.isFinite(lop) || lop < 0 || lop > 31) return json(400, { error: 'lopDays must be 0–31' }, CORS);
       const periodMonth = `${body.period}-01`;
-      const paid = 30 - lop;
+      const paid = byPaid ? Number(body.paidDays) : 30 - lop;
       const [owner] = await sql`select 1 from pay_core.employee where id = ${empId} and society_id = ${societyId} limit 1`;
       if (!owner) return json(404, { error: 'employee not found in your society' }, CORS);
       await sql`insert into pay_calc.attendance(society_id,employee_id,period_month,paid_days,lop_days,created_by)
