@@ -72,7 +72,11 @@ const ADDABLE_COMPONENTS = [
   { code: 'DA', hi: 'महँगाई भत्ता (DA)', en: 'DA' },
   { code: 'HRA', hi: 'मकान भत्ता (HRA)', en: 'HRA' },
   { code: 'PF', hi: 'भविष्य निधि (PF)', en: 'PF' },
-  { code: 'LOP', hi: 'बिना-वेतन कटौती (LOP)', en: 'Loss of Pay' },
+  // three LOP variants — one day of what THAT structure actually earns. The payslip shows them all as
+  // "Loss of Pay"; only this picker spells out which basis, so the right one can be chosen.
+  { code: 'LOP', hi: 'बिना-वेतन कटौती (मूल+DA+HRA)', en: 'Loss of Pay (basic+DA+HRA)' },
+  { code: 'LOP_NOHRA', hi: 'बिना-वेतन कटौती (मूल+DA)', en: 'Loss of Pay (basic+DA)' },
+  { code: 'LOP_DEP', hi: 'बिना-वेतन कटौती (प्रतिनियुक्ति)', en: 'Loss of Pay (deputation)' },
   { code: 'DEP_ALLOW', hi: 'प्रतिनियुक्ति भत्ता', en: 'Deputation Allowance' },
   { code: 'CONSOLIDATED', hi: 'एकमुश्त वेतन', en: 'Consolidated Pay' },
   { code: 'STIPEND', hi: 'छात्रवृत्ति', en: 'Stipend' },
