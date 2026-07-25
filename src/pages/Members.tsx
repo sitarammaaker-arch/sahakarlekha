@@ -86,6 +86,12 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
   const updateNominee = (i: number, patch: Partial<Nominee>) => setForm(prev => ({ ...prev, nominees: (prev.nominees || []).map((n, idx) => idx === i ? { ...n, ...patch } : n) }));
   const removeNominee = (i: number) => setForm(prev => ({ ...prev, nominees: (prev.nominees || []).filter((_, idx) => idx !== i) }));
   const nomTotal = nomineeShareTotal(nominees);
+  // a-3: derive Share Capital from shares x face value so the three fields can't drift.
+  // When both are set, Share Capital is auto-computed and locked; otherwise it stays a
+  // free field (a society may enter a lump-sum capital without a per-share breakdown).
+  const shareCountNum = parseFloat(form.shareCount) || 0;
+  const shareFaceNum = parseFloat(form.shareFaceValue) || 0;
+  const capitalAuto = shareCountNum > 0 && shareFaceNum > 0;
   return (
   <form onSubmit={onSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
     {/* Basic */}
@@ -193,15 +199,18 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'शेयर संख्या' : 'Shares'}</Label>
-        <Input type="number" value={form.shareCount} onChange={e => f('shareCount', e.target.value)} min="0" disabled={isEdit} />
+        <Input type="number" value={form.shareCount} onChange={e => setForm(prev => { const c = parseFloat(e.target.value) || 0; const fv = parseFloat(prev.shareFaceValue) || 0; return { ...prev, shareCount: e.target.value, ...(c > 0 && fv > 0 ? { shareCapital: String(c * fv) } : {}) }; })} min="0" disabled={isEdit} />
       </div>
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'प्रति शेयर' : 'Face Value'}</Label>
-        <Input type="number" value={form.shareFaceValue} onChange={e => f('shareFaceValue', e.target.value)} min="0" step="0.01" disabled={isEdit} />
+        <Input type="number" value={form.shareFaceValue} onChange={e => setForm(prev => { const fv = parseFloat(e.target.value) || 0; const c = parseFloat(prev.shareCount) || 0; return { ...prev, shareFaceValue: e.target.value, ...(c > 0 && fv > 0 ? { shareCapital: String(c * fv) } : {}) }; })} min="0" step="0.01" disabled={isEdit} />
       </div>
       <div className="space-y-1">
         <Label className="text-xs">{t('shareCapital')} (₹)</Label>
-        <Input type="number" value={form.shareCapital} onChange={e => f('shareCapital', e.target.value)} min="0" step="0.01" disabled={isEdit} />
+        <Input type="number" value={form.shareCapital} onChange={e => f('shareCapital', e.target.value)} min="0" step="0.01" disabled={isEdit || capitalAuto} />
+        {!isEdit && capitalAuto && (
+          <p className="text-[10px] text-muted-foreground">{shareCountNum} × ₹{shareFaceNum} = ₹{(shareCountNum * shareFaceNum).toLocaleString('en-IN')}</p>
+        )}
       </div>
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'प्रवेश शुल्क' : 'Adm. Fee'} (₹)</Label>
