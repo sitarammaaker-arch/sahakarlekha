@@ -879,6 +879,32 @@ function calculatorPages(DATA) {
 function staticExtraPages(DATA) {
   const pages = [];
 
+  // Homepage — was CSR-only (empty <div id="root">), so non-JS/AI crawlers got no
+  // body on the highest-priority URL. Emit a real static body (React replaces it on
+  // mount). No jsonLd here: the template <head> already carries the homepage
+  // SoftwareApplication/WebSite/FAQPage, and transform() preserves them for path '/'.
+  pages.push({
+    path: '/',
+    title: 'SahakarLekha — सहकारी समिति लेखा सॉफ्टवेयर | Free Cooperative Society Accounting Software India',
+    description: 'भारत की सहकारी समितियों के लिए मुफ्त क्लाउड-आधारित लेखा सॉफ्टवेयर — ट्रायल बैलेंस, बैलेंस शीट, TDS 26Q, GST व RCS ऑडिट-प्रारूप, सब एक क्लिक में। हिन्दी + English, हमेशा मुफ़्त। India\'s only cooperative-specific accounting software.',
+    lastmod: LASTMOD.static,
+    body: shell({
+      html:
+        `<h1>अपनी समिति का ऑडिट अब हफ़्तों नहीं, केवल दिनों में पूरा करें।</h1>` +
+        `<p>SahakarLekha भारत का <strong>एकमात्र सहकारी-विशेष लेखा सॉफ्टवेयर</strong> है — ट्रायल बैलेंस, बैलेंस शीट, TDS 26Q, GST व RCS ऑडिट-प्रारूप, सब एक क्लिक में। हिन्दी + English। <strong>हमेशा मुफ़्त।</strong></p>` +
+        `<p>India's only cooperative-specific accounting platform — for PACS, dairy, marketing, consumer and housing societies. Vouchers, ledgers and statutory reports (Trial Balance, Balance Sheet, Receipts &amp; Payments, TDS/GST summaries, RCS audit format), free forever, in Hindi and English.</p>` +
+        `<ul>` +
+          `<li>असीमित वाउचर व सदस्य — नकद/बैंक, खरीद-बिक्री, वेतन, ऋण, जमा</li>` +
+          `<li>सभी रिपोर्ट PDF/Excel में — ट्रायल बैलेंस, बैलेंस शीट, आय-व्यय, TDS/GST</li>` +
+          `<li>सहकारी-विशेष — धारा 32 ऋण सीमा, आरक्षित निधि, नामांकन, RCS ऑडिट प्रारूप</li>` +
+          `<li>क्लाउड बैकअप · हिन्दी + English · कोई लॉक-इन नहीं</li>` +
+        `</ul>` +
+        `<p>✓ कोई कार्ड नहीं · ✓ डेटा कभी भी निर्यात करें · ✓ कोई लॉक-इन नहीं</p>` +
+        `<p><a href="/software">अपनी समिति के प्रकार के लिए</a> · <a href="/guide">मुफ्त गाइड व कोर्स</a> · <a href="/blog">ब्लॉग</a> · <a href="/tools">कैलकुलेटर</a> · <a href="/glossary">शब्दकोश</a></p>` +
+        registerCta(),
+    }),
+  });
+
   pages.push({
     path: '/pricing',
     title: 'मूल्य — SahakarLekha हमेशा मुफ़्त | Free Cooperative Accounting',
@@ -1018,8 +1044,11 @@ function transform(template, page) {
 
   // Subpages: drop the homepage-only template schemas (SoftwareApplication + the
   // 5-question FAQPage) so each page carries ONLY its own JSON-LD + Organization.
-  html = html.replace(/<script type="application\/ld\+json">([\s\S]*?)<\/script>\s*/g, (m0, body) =>
-    /"@type":\s*"(SoftwareApplication|FAQPage)"/.test(body) ? '' : m0);
+  // The homepage itself (path '/') KEEPS them — they belong there.
+  if (page.path !== '/') {
+    html = html.replace(/<script type="application\/ld\+json">([\s\S]*?)<\/script>\s*/g, (m0, body) =>
+      /"@type":\s*"(SoftwareApplication|FAQPage)"/.test(body) ? '' : m0);
+  }
 
   const sub = (re, value) => { if (re.test(html)) html = html.replace(re, value); };
   sub(/<title>[\s\S]*?<\/title>/, `<title>${esc(page.title)}</title>`);
