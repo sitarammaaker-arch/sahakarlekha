@@ -34,6 +34,43 @@ export interface BlogPost {
 
 // Reverse-chronological is enforced by sorting on `date` below.
 export const BLOG_POSTS: BlogPost[] = [
+  // ── Socio-economic role of cooperatives ──
+  {
+    slug: 'cooperatives-in-rural-and-agricultural-development',
+    metaTitle: 'ग्रामीण और कृषि विकास में सहकारिता की भूमिका | SahakarLekha',
+    metaDescription: 'सहकारिता ने गाँव को कैसे बदला — सस्ता कर्ज़, कृषि-आदान, विपणन, भंडारण व वित्तीय समावेशन। किसान को साहूकार से मुक्ति की कहानी आसान भाषा में।',
+    date: '2026-07-25',
+    category: 'सहकारी संस्थाएँ',
+    title: 'ग्रामीण और कृषि विकास में सहकारिता की भूमिका',
+    shortTitle: 'ग्रामीण-कृषि विकास में सहकारिता',
+    excerpt: 'सस्ता कर्ज़, आदान, विपणन व वित्तीय पहुँच — जिससे सहकारिता ने गाँव-देहात को बदला।',
+    accent: 'emerald',
+    tags: ['ग्रामीण विकास', 'कृषि', 'वित्तीय समावेशन'],
+  },
+  {
+    slug: 'cooperatives-in-green-and-white-revolution',
+    metaTitle: 'हरित क्रांति और श्वेत क्रांति में सहकारिता का योगदान | SahakarLekha',
+    metaDescription: 'अनाज की हरित क्रांति और दूध की श्वेत क्रांति में सहकारी समितियों की भूमिका — खाद, कर्ज़, भंडारण और आणंद पैटर्न की डेयरी शृंखला, आसान भाषा में।',
+    date: '2026-07-25',
+    category: 'सहकारी संस्थाएँ',
+    title: 'हरित क्रांति और श्वेत क्रांति में सहकारिता का योगदान',
+    shortTitle: 'हरित व श्वेत क्रांति में सहकारिता',
+    excerpt: 'दो क्रांतियों के पीछे सहकारिता — अनाज में आदान-कर्ज़, दूध में आणंद पैटर्न की डेयरी।',
+    accent: 'amber',
+    tags: ['हरित क्रांति', 'श्वेत क्रांति', 'डेयरी'],
+  },
+  {
+    slug: 'women-cooperatives-role',
+    metaTitle: 'महिला सहकारी समितियाँ: भूमिका और महत्व | SahakarLekha',
+    metaDescription: 'महिला सहकारिता क्या है — बचत-साख, SHG और उत्पादन-विपणन के ज़रिये महिलाओं का आर्थिक सशक्तिकरण। लिज्जत पापड़ जैसी मिसालों सहित आसान भाषा में।',
+    date: '2026-07-24',
+    category: 'सहकारी संस्थाएँ',
+    title: 'महिला सहकारी समितियाँ: भूमिका और महत्व',
+    shortTitle: 'महिला सहकारी समितियाँ',
+    excerpt: 'बचत-साख, SHG और सामूहिक उत्पादन — जिनसे सहकारिता ने महिलाओं को आत्मनिर्भर बनाया।',
+    accent: 'rose',
+    tags: ['महिला सहकारिता', 'SHG', 'सशक्तिकरण'],
+  },
   // ── Cooperative structure & society types ──
   {
     slug: 'cooperative-society-tiers-primary-central-state-apex',
