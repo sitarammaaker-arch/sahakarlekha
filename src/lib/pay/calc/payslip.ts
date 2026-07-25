@@ -102,10 +102,15 @@ export function aggregatePayslip(values: Record<string, Value>, spec: AggregateS
 
     const bounds = spec.clamps?.[code];
     const clamp = bounds ? applyClamp(raw.minor, bounds) : { value: raw.minor, clamped: 'none' as ClampKind };
-    const line: PayslipLine = { code, side, amount: makeMoney(clamp.value, spec.currency), clamped: clamp.clamped };
+    // Whole rupees. Proration (a day's pay is gross ÷ 30) and statutory percentages leave sub-rupee
+    // paise; Indian payroll is paid in whole rupees, and EPFO itself rounds each PF figure to the
+    // nearest rupee. Rounding EACH line — not just the total — keeps every displayed line, the gross,
+    // the deductions, the net, and the ledger posting that reads them all tied to the same figure.
+    const minor = Math.round(clamp.value / 100) * 100;
+    const line: PayslipLine = { code, side, amount: makeMoney(minor, spec.currency), clamped: clamp.clamped };
 
-    if (side === 'earning') { earnings.push(line); grossEarningsMinor += clamp.value; }
-    else { deductions.push(line); grossDeductionsMinor += clamp.value; }
+    if (side === 'earning') { earnings.push(line); grossEarningsMinor += minor; }
+    else { deductions.push(line); grossDeductionsMinor += minor; }
   }
 
   return {
