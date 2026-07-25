@@ -608,8 +608,11 @@ Deno.serve(async (req: Request) => {
     if (body.action === 'sync-formulas') {
       if (su.role !== 'admin') return json(403, { error: 'only admin may sync statutory formulas' }, CORS);
       const changed = await sql.begin(async (tx: postgres.TransactionSql) => {
-        await ensureSocietyComponents(tx, societyId, su.id);   // create any missing components too
-        return await syncSocietyFormulas(tx, societyId);
+        // sync FIRST so the drift it heals is what gets reported — ensureSocietyComponents also
+        // self-heals internally, so running it first would leave nothing for this call to report.
+        const c = await syncSocietyFormulas(tx, societyId);
+        await ensureSocietyComponents(tx, societyId, su.id);   // create any components not yet present
+        return c;
       });
       return json(200, { ok: true, changed }, CORS);
     }
