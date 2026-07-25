@@ -23,6 +23,7 @@ import {
 import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import type { EntityLink, Customer, CustomerType, GstRegistrationType } from '@/types';
 import { UserCheck, Plus, Pencil, Trash2, Search, IndianRupee, FileSpreadsheet, Download, User, Building2 } from 'lucide-react';
+import EmptyState from '@/components/EmptyState';
 import { useToast } from '@/hooks/use-toast';
 import { useDeepLinkQuery } from '@/hooks/useDeepLinkQuery';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
@@ -311,8 +312,18 @@ const Customers: React.FC = () => {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
-                      {hi ? 'कोई ग्राहक नहीं मिला' : 'No customers found'}
+                    <TableCell colSpan={8} className="py-4">
+                      {customers.length === 0 ? (
+                        <EmptyState
+                          icon={UserCheck}
+                          title={hi ? 'अभी कोई ग्राहक नहीं' : 'No customers yet'}
+                          description={hi ? 'जिन्हें आप माल/सेवा बेचते हैं, वे यहाँ दिखेंगे। पहला ग्राहक जोड़कर शुरू करें।' : 'Parties you sell to appear here. Add your first customer to begin.'}
+                          actionLabel={hi ? 'नया ग्राहक जोड़ें' : 'Add first customer'}
+                          onAction={openAdd}
+                        />
+                      ) : (
+                        <div className="text-center text-muted-foreground py-6">{hi ? 'खोज से कोई ग्राहक नहीं मिला' : 'No customers match your search'}</div>
+                      )}
                     </TableCell>
                   </TableRow>
                 ) : (
