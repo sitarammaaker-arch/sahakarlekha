@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -24,6 +24,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
   // Capability-Based Navigation: groups + items come from the registry/engine, NOT
   // hardcoded arrays. Role filtering is applied inside the engine (isModuleVisible).
   const groups = useNavigation();
+
+  // Collapsible groups: reduce the ~100-item wall of the full sidebar. Default is
+  // EXPANDED (first-load behaviour is unchanged); a user can collapse the groups they
+  // don't use and the choice persists per browser. Only headed groups (not core/admin,
+  // which have no heading) are collapsible, and only in the full (non-icon) sidebar.
+  const GROUPS_KEY = 'sl.sidebar.collapsedGroups';
+  const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem(GROUPS_KEY) || '{}'); } catch { return {}; }
+  });
+  const toggleGroup = (domain: string) => setCollapsedGroups(prev => {
+    const next = { ...prev, [domain]: !prev[domain] };
+    try { localStorage.setItem(GROUPS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+    return next;
+  });
 
   const renderNavItem = (item: ModuleDefinition) => {
     const isActive = location.pathname === item.route;
@@ -104,19 +118,41 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
       {/* Navigation — rendered from the capability engine (groups in domain order,
           a separator before every group except the first, heading when present). */}
       <nav className="flex flex-col h-[calc(100vh-4rem)] p-3 overflow-y-auto">
-        {groups.map((group, gi) => (
-          <React.Fragment key={group.domain}>
-            {gi > 0 && <Separator className="my-4 bg-sidebar-border" />}
-            {group.headingKey && !collapsed && (
-              <p className="px-3 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-2">
-                {t(group.headingKey)}
-              </p>
-            )}
-            <div className="space-y-1">
-              {group.items.map(renderNavItem)}
-            </div>
-          </React.Fragment>
-        ))}
+        {groups.map((group, gi) => {
+          // A headed group (not core/admin) can be collapsed, but only in the full
+          // sidebar. Headless groups and icon-mode always show their items.
+          const isCollapsible = !!group.headingKey && !collapsed;
+          const isGroupCollapsed = isCollapsible && !!collapsedGroups[group.domain];
+          return (
+            <React.Fragment key={group.domain}>
+              {gi > 0 && <Separator className="my-4 bg-sidebar-border" />}
+              {isCollapsible ? (
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.domain)}
+                  aria-expanded={!isGroupCollapsed}
+                  className="w-full flex items-center justify-between px-3 mb-2 text-xs font-semibold text-sidebar-foreground/50 hover:text-sidebar-foreground/80 uppercase tracking-wider transition-colors"
+                >
+                  <span>{t(group.headingKey!)}</span>
+                  {isGroupCollapsed
+                    ? <ChevronRight className="h-3.5 w-3.5 flex-shrink-0" />
+                    : <ChevronDown className="h-3.5 w-3.5 flex-shrink-0" />}
+                </button>
+              ) : (
+                group.headingKey && !collapsed && (
+                  <p className="px-3 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-2">
+                    {t(group.headingKey)}
+                  </p>
+                )
+              )}
+              {!isGroupCollapsed && (
+                <div className="space-y-1">
+                  {group.items.map(renderNavItem)}
+                </div>
+              )}
+            </React.Fragment>
+          );
+        })}
 
         <div className="flex-1" />
 
