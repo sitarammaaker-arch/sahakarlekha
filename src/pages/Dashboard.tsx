@@ -7,6 +7,7 @@ import { useHousingData } from '@/contexts/HousingDataContext';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { QuickActions } from '@/components/dashboard/QuickActions';
+import OnboardingChecklist from '@/components/dashboard/OnboardingChecklist';
 import { Wallet, Building2, Users, TrendingUp, TrendingDown, CheckCircle, XCircle, AlertTriangle, Lock, ShieldCheck, Lightbulb, AlertCircle, Info, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fmtDate } from '@/lib/dateUtils';
@@ -236,6 +237,9 @@ const Dashboard: React.FC = () => {
           {new Date().toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}
         </p>
       </div>
+
+      {/* First-run onboarding — self-hides once the society has members/vouchers */}
+      <OnboardingChecklist />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
