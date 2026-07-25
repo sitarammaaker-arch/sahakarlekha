@@ -1143,8 +1143,8 @@ const PurchaseManagement: React.FC = () => {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {language === 'hi'
-                ? 'यह खरीद स्थायी रूप से हटा दी जाएगी।'
-                : 'This purchase will be permanently deleted.'}
+                ? 'इस खरीद का बही-वाउचर (और GST/TDS वाउचर) उलट दिया जाएगा और जोड़ा गया स्टॉक वापस घटा दिया जाएगा। वाउचर "हटाए गए वाउचर" में सुरक्षित रहेगा (स्थायी रूप से नहीं मिटता)।'
+                : "This purchase's ledger voucher (and any GST/TDS vouchers) will be reversed and the stock it added will be rolled back. The voucher is kept under Deleted Vouchers (not permanently erased)."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
