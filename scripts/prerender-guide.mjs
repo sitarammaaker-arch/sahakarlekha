@@ -257,7 +257,11 @@ function guidePages() {
           url,
           isPartOf: { '@type': 'Course', name: COURSE, url: `${SITE}/guide` },
           ...(e.section ? { articleSection: e.section } : {}),
-          publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
+          image: `${SITE}/og-image.png`,
+          datePublished: LASTMOD.guide,
+          dateModified: LASTMOD.guide,
+          author: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
+          publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE, logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` } },
         },
         crumb([
           { name: 'गाइड', item: `${SITE}/guide` },
@@ -451,8 +455,9 @@ function blogPages(DATA) {
           mainEntityOfPage: url,
           datePublished: p.date,
           dateModified: p.updated || p.date,
+          image: `${SITE}/og-image.png`,
           author: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
-          publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
+          publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE, logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` } },
         },
         crumb([
           { name: 'ब्लॉग', item: `${SITE}/blog` },
@@ -537,7 +542,7 @@ function helpPages(DATA) {
         lastmod: (t && t.updated) || LASTMOD.help,
         body: t ? helpBody(t, DATA) : undefined,
         jsonLd: [
-          { '@context': 'https://schema.org', '@type': 'Article', headline: title, description, inLanguage: 'hi', url, publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE } },
+          { '@context': 'https://schema.org', '@type': 'Article', headline: title, description, inLanguage: 'hi', url, image: `${SITE}/og-image.png`, datePublished: (t && t.updated) || LASTMOD.help, dateModified: (t && t.updated) || LASTMOD.help, author: { '@type': 'Organization', name: 'SahakarLekha', url: SITE }, publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE, logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` } } },
           crumb([
             { name: 'मदद केंद्र', item: `${SITE}/help` },
             { name: title, item: url },
@@ -629,7 +634,7 @@ function cookbookPages(DATA) {
         lastmod: (e && e.updated) || LASTMOD.cookbook,
         body: e ? cookbookBody(e, DATA) : undefined,
         jsonLd: [
-          { '@context': 'https://schema.org', '@type': 'Article', headline: title, description, inLanguage: 'hi', url, publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE } },
+          { '@context': 'https://schema.org', '@type': 'Article', headline: title, description, inLanguage: 'hi', url, image: `${SITE}/og-image.png`, datePublished: (e && e.updated) || LASTMOD.cookbook, dateModified: (e && e.updated) || LASTMOD.cookbook, author: { '@type': 'Organization', name: 'SahakarLekha', url: SITE }, publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE, logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` } } },
           crumb([
             { name: 'एंट्री कुकबुक', item: `${SITE}/cookbook` },
             { name: title, item: url },
