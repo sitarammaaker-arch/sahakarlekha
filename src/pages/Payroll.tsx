@@ -144,6 +144,14 @@ const amountInWords = (minor: number): string => {
 const stateVariant = (s: string): 'default' | 'secondary' | 'outline' =>
   s === 'posted' || s === 'paid' ? 'default' : s === 'draft' ? 'outline' : 'secondary';
 
+// The pay-run lifecycle state is stored as an English enum; show it in Hindi so a
+// Hindi-first secretary can read the run's status (it was leaking raw draft/verified/…).
+const STATE_LABEL_HI: Record<string, string> = {
+  draft: 'ड्राफ़्ट', verified: 'सत्यापित', approved: 'अनुमोदित',
+  locked: 'लॉक', posted: 'बही में पोस्ट', paid: 'भुगतान हुआ', cancelled: 'रद्द',
+};
+const stateLabel = (s: string, hi: boolean): string => (hi ? (STATE_LABEL_HI[s] ?? s) : s);
+
 const Payroll: React.FC = () => {
   const { language } = useLanguage();
   const { society } = useData();   // letterhead for the printed payslip / service record
@@ -297,7 +305,7 @@ const Payroll: React.FC = () => {
     const socAddr = [society?.address, society?.district, society?.state].filter(Boolean).map(esc).join(', ')
       + (society?.pinCode ? ' – ' + esc(society.pinCode) : '');
     const socContact = [society?.phone && `${hi ? 'दूरभाष' : 'Ph'}: ${esc(society.phone)}`, society?.email && esc(society.email)].filter(Boolean).join(' · ');
-    const kindLabel = (k: string) => isDeduction(k) ? (hi ? 'कटौती' : 'deduction') : k === 'employer_contrib' ? (hi ? 'इनपुट' : 'input') : (hi ? 'आय' : 'earning');
+    const kindLabel = (k: string) => isDeduction(k) ? (hi ? 'कटौती' : 'deduction') : k === 'employer_contrib' ? (hi ? 'नियोक्ता अंशदान' : 'employer contribution') : (hi ? 'आय' : 'earning');
     const struct = structure.map((c) => `<tr><td>${esc(nameOf(c.display_name))} <span class="mut">${kindLabel(c.kind)}</span></td><td class="amt">${c.fixed_minor != null ? rupees(c.fixed_minor) : `<span class="mut">${hi ? 'सूत्र से गणना' : 'computed by formula'}</span>`}</td></tr>`).join('')
       || `<tr><td colspan="2" class="mut">—</td></tr>`;
     const hist = history.map((v) => `<tr><td>${String(v.from).slice(0, 10)} → ${v.to ? String(v.to).slice(0, 10) : `<b>${hi ? 'अब तक' : 'current'}</b>`}</td><td class="amt">${v.values.length ? v.values.map((x) => `${esc(nameOf(x.name))} ${rupees(x.minor)}`).join(' · ') : `<span class="mut">${hi ? '— कोई तय राशि नहीं' : '— no pinned amounts'}</span>`}</td></tr>`).join('')
@@ -1123,7 +1131,7 @@ const Payroll: React.FC = () => {
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <span className="font-medium">{nameOf(c.display_name)}</span>
-                        <span className="ml-1 text-[10px] text-muted-foreground">{isDeduction(c.kind) ? (hi ? 'कटौती' : 'deduction') : c.kind === 'employer_contrib' ? (hi ? 'इनपुट' : 'input') : (hi ? 'आय' : 'earning')}</span>
+                        <span className="ml-1 text-[10px] text-muted-foreground">{isDeduction(c.kind) ? (hi ? 'कटौती' : 'deduction') : c.kind === 'employer_contrib' ? (hi ? 'नियोक्ता अंशदान' : 'employer contribution') : (hi ? 'आय' : 'earning')}</span>
                         <div className="text-xs text-muted-foreground">
                           {c.fixed_minor != null ? rupees(c.fixed_minor) : (hi ? 'सूत्र से गणना' : 'computed by formula')}
                           {c.fixed_minor != null && c.calc_method === 'formula' && (
@@ -1312,7 +1320,7 @@ const Payroll: React.FC = () => {
                   <TableRow key={r.run_id} className="cursor-pointer" onClick={() => openRun(r)}>
                     <TableCell className="font-medium">{r.run_no}</TableCell>
                     <TableCell>{r.period}</TableCell>
-                    <TableCell><Badge variant={stateVariant(r.state)}>{r.state}</Badge></TableCell>
+                    <TableCell><Badge variant={stateVariant(r.state)}>{stateLabel(r.state, hi)}</Badge></TableCell>
                     <TableCell className="text-right">{r.payslip_count}</TableCell>
                     <TableCell className="text-right font-medium">{rupees(r.total_net_minor)}</TableCell>
                     <TableCell className="text-right whitespace-nowrap">
