@@ -730,7 +730,7 @@ const Payroll: React.FC = () => {
       </div>
       <div>
         ${info(hi ? 'पर्ची संख्या' : 'Payslip no.', slip.payslip_no)}
-        ${info(hi ? 'भुगतान दिन' : 'Paid days', `${Number(slip.paid_days)}${Number(slip.lop_days) ? `  (${hi ? 'अवैतनिक' : 'LOP'} ${Number(slip.lop_days)})` : ''}`)}
+        ${info(hi ? 'भुगतान दिन' : 'Paid days', `${Math.round(Number(slip.paid_days))}${Math.round(Number(slip.lop_days)) ? `  (${hi ? 'अवैतनिक' : 'LOP'} ${Math.round(Number(slip.lop_days))})` : ''}`)}
         ${joinedMidPeriod ? info(hi ? 'इस माह सेवा' : 'Service this month', serviceSpan) : ''}
         ${info('UAN', emp?.uan)}
         ${info('PAN', emp?.pan)}
@@ -767,7 +767,7 @@ const Payroll: React.FC = () => {
     const money = (m: number) => (Number(m) / 100).toFixed(2);
     const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
     const head = [hi ? 'कर्मचारी' : 'Employee', hi ? 'कोड' : 'Code', hi ? 'सकल' : 'Gross', hi ? 'कटौती' : 'Deductions', hi ? 'नेट' : 'Net', hi ? 'भुगतान दिन' : 'Paid Days'];
-    const rows = slips.map((s) => [nameOf(s.employee_name), s.employee_code, money(s.gross_minor), money(s.deductions_minor), money(s.net_minor), String(Number(s.paid_days))]);
+    const rows = slips.map((s) => [nameOf(s.employee_name), s.employee_code, money(s.gross_minor), money(s.deductions_minor), money(s.net_minor), String(Math.round(Number(s.paid_days)))]);
     const totals = [hi ? 'कुल' : 'TOTAL', '', money(slips.reduce((a, s) => a + Number(s.gross_minor), 0)), money(slips.reduce((a, s) => a + Number(s.deductions_minor), 0)), money(slips.reduce((a, s) => a + Number(s.net_minor), 0)), ''];
     const csv = '﻿' + [head, ...rows, totals].map((r) => r.map(esc).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -1401,7 +1401,7 @@ const Payroll: React.FC = () => {
                         <TableCell className="text-right">{rupees(s.gross_minor)}</TableCell>
                         <TableCell className="text-right">{rupees(s.deductions_minor)}</TableCell>
                         <TableCell className="text-right font-semibold">{rupees(s.net_minor)}</TableCell>
-                        <TableCell className="text-right text-muted-foreground">{Number(s.paid_days)}</TableCell>
+                        <TableCell className="text-right text-muted-foreground">{Math.round(Number(s.paid_days))}</TableCell>
                       </TableRow>
                       {expanded === s.payslip_id && (
                         <TableRow>
