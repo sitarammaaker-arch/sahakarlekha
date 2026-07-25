@@ -22,6 +22,7 @@ import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import type { EntityLink } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog, Award } from 'lucide-react';
+import EmptyState from '@/components/EmptyState';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MemberType, CasteCategory } from '@/types';
 import { useToast } from '@/hooks/use-toast';
@@ -534,6 +535,17 @@ const Members: React.FC = () => {
   const renderMemberTable = (memberList: Member[], showApprovalActions: boolean) => {
     const filtered = filterBySearch(memberList);
     if (filtered.length === 0) {
+      if (allMembers.length === 0) {
+        return (
+          <EmptyState
+            icon={Users}
+            title={language === 'hi' ? 'अभी कोई सदस्य नहीं' : 'No members yet'}
+            description={language === 'hi' ? 'समिति के सदस्य यहाँ दिखेंगे। पहला सदस्य जोड़कर शुरू करें।' : 'Your society members appear here. Add the first one to begin.'}
+            actionLabel={language === 'hi' ? 'नया सदस्य जोड़ें' : 'Add first member'}
+            onAction={() => { setForm({ ...EMPTY_FORM, memberId: getNextMemberId() }); setIsAddOpen(true); }}
+          />
+        );
+      }
       return <p className="text-center text-muted-foreground py-12">{t('noData')}</p>;
     }
     return (

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
+import EmptyState from '@/components/EmptyState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -367,9 +368,21 @@ const LoanRegister: React.FC = () => {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center text-muted-foreground py-10">
-                    <Landmark className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                    {hi ? 'कोई ऋण नहीं मिला' : 'No loans found'}
+                  <TableCell colSpan={11} className="py-4">
+                    {loans.length === 0 ? (
+                      <EmptyState
+                        icon={Landmark}
+                        title={hi ? 'अभी कोई ऋण दर्ज नहीं' : 'No loans yet'}
+                        description={hi ? 'सदस्यों को दिए गए ऋण यहाँ दिखेंगे। पहला ऋण दर्ज करके शुरू करें।' : 'Loans given to members appear here. Record the first one to begin.'}
+                        actionLabel={hi ? 'नया ऋण दर्ज करें' : 'Record first loan'}
+                        onAction={() => { setForm(EMPTY_FORM); setIsAddOpen(true); }}
+                      />
+                    ) : (
+                      <div className="text-center text-muted-foreground py-6">
+                        <Landmark className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                        {hi ? 'खोज से कोई ऋण नहीं मिला' : 'No loans match your search'}
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
