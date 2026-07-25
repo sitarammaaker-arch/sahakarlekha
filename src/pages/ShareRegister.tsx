@@ -101,10 +101,12 @@ const ShareRegister: React.FC = () => {
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editMember) return;
+    // Only non-financial fields are editable here. shareCount/shareFaceValue are
+    // deliberately NOT written: changing the member's share scalar without a voucher
+    // makes it drift from the ledger control (the "बेमेल" badge). Share quantity/value
+    // changes must go through Add Shares / Transfer / Refund / Ops, which post vouchers.
     updateMember(editMember.id, {
       shareCertNo: form.shareCertNo,
-      shareCount: Number(form.shareCount) || undefined,
-      shareFaceValue: Number(form.shareFaceValue) || undefined,
       nomineeName: form.nomineeName,
       nomineeRelation: form.nomineeRelation,
       nomineePhone: form.nomineePhone,
@@ -341,13 +343,18 @@ const ShareRegister: React.FC = () => {
               </div>
               <div className="space-y-1">
                 <Label>{hi ? 'शेयर संख्या' : 'No. of Shares'}</Label>
-                <Input type="number" min="0" value={form.shareCount} onChange={e => setForm(f => ({ ...f, shareCount: e.target.value }))} placeholder="10" />
+                <Input type="number" min="0" value={form.shareCount} placeholder="10" disabled readOnly />
               </div>
               <div className="space-y-1">
                 <Label>{hi ? 'मूल्य/शेयर (₹)' : 'Face Value (₹)'}</Label>
-                <Input type="number" min="0" value={form.shareFaceValue} onChange={e => setForm(f => ({ ...f, shareFaceValue: e.target.value }))} placeholder="100" />
+                <Input type="number" min="0" value={form.shareFaceValue} placeholder="100" disabled readOnly />
               </div>
             </div>
+            <p className="text-[11px] text-muted-foreground -mt-2">
+              {hi
+                ? 'शेयर संख्या/मूल्य यहाँ से नहीं बदलते — नीचे "शेयर जोड़ें / वापसी / संचालन" से बदलें, ताकि बदलाव बही में दर्ज हो और शेष मेल खाता रहे।'
+                : 'Share count/value can\'t be changed here — use Add Shares / Refund / Ops below so the change posts to the ledger and the balance stays reconciled.'}
+            </p>
             <div className="border-t pt-3">
               <p className="text-sm font-semibold mb-3">{hi ? 'नामांकन विवरण' : 'Nominee Details'}</p>
               <div className="grid grid-cols-2 gap-3">
