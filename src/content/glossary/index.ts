@@ -298,6 +298,16 @@ export const MODULE_TERMS: Record<string, string[]> = {
   '/society-setup': ['society-setup', 'society-types', 'financial-year'],
   '/opening-balances': ['financial-year', 'accounting-equation'],
   '/backup-restore': ['data-backup'],
+  // Transaction screens (KI-000401..408) — vocabulary at the point of work.
+  '/purchases': ['purchase'],
+  '/sales': ['sale'],
+  '/receive-payment': ['receipt-voucher'],
+  '/make-payment': ['payment-voucher'],
+  '/tds-register': ['tds'],
+  '/gst-summary': ['gst'],
+  '/asset-register': ['depreciation'],
+  '/inventory': ['closing-stock'],
+  '/deposits': ['deposit'],
 };
 
 /** Resolve the active glossary terms for a module route (filters out any non-active slugs). */
