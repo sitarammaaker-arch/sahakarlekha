@@ -43,10 +43,10 @@ const SEP = '#~#';
  *    joiner, paidDays can be fractional (14.52), and an un-rounded 15.48 in this field is a file the
  *    portal will not take.
  *
- * NOTE for the caller: EPF wages here are the BASIC line as computed, which for a part-month is
- * still the whole month's basic — whether the wage base should follow the days actually paid is a
- * statutory question for the society to answer, not one to silently decide. `partMonth` names those
- * members so the caller can say so.
+ * EPF wages follow the same base the PF deduction is computed on: basic + DA (EPF & MP Act 1952 §6),
+ * reduced to the paid portion of the month (EPFO counts PF on paid days only, the unpaid days being
+ * the NCP reported alongside). So a part-month member's wages and their NCP tell one consistent
+ * story. `partMonth` still names them, for the eye, not because anything is left undecided.
  */
 export function buildEcr(members: EcrMember[], rates: EcrRates): EcrResult {
   const rows: string[] = [];
@@ -59,7 +59,11 @@ export function buildEcr(members: EcrMember[], rates: EcrRates): EcrResult {
     const pfLine = m.lines.find((l) => l.code === 'PF');
     if (!pfLine) { skippedNoPf.push(m.employeeCode); continue; }
 
-    const epfWagesMinor = Number(m.lines.find((l) => l.code === 'BASIC')?.computedMinor ?? 0);
+    const basicMinor = Number(m.lines.find((l) => l.code === 'BASIC')?.computedMinor ?? 0);
+    const daMinor = Number(m.lines.find((l) => l.code === 'DA')?.computedMinor ?? 0);
+    const paidFraction = Math.max(0, Math.min(30, Number(m.paidDays))) / 30;
+    // basic + DA (the §6 base) for the days actually paid — the wages PF was computed on
+    const epfWagesMinor = Math.round((basicMinor + daMinor) * paidFraction);
     const empPfMinor = Number(pfLine.computedMinor ?? 0);
     const epsWagesMinor = Math.min(epfWagesMinor, rates.epsWageCeilingMinor);
     const epsMinor = Math.round(epsWagesMinor * rates.epsRate / 100);

@@ -185,6 +185,22 @@ const Payroll: React.FC = () => {
 
   const editStat = (s: StatSetting) => { setStatKey(s.key); setStatVal(String(Number(s.value_num))); setStatSrc(s.source || ''); };
 
+  // Bring this society's stored formula text up to the code — needed once for a society created before
+  // the PF base became basic + DA, since the formula text is written at component-creation time.
+  const syncFormulas = async () => {
+    setStatBusy(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'sync-formulas' } });
+    setStatBusy(false);
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नहीं हुआ' : 'Failed', description: await invokeError(error, data), variant: 'destructive' }); return; }
+    const changed = (data as { changed?: string[] }).changed || [];
+    toast({
+      title: hi ? 'सूत्र अद्यतन ✓' : 'Formulas updated ✓',
+      description: changed.length
+        ? (hi ? `बदले: ${changed.join(', ')} — अगली payroll से लागू।` : `Updated: ${changed.join(', ')} — applies from the next run.`)
+        : (hi ? 'सब पहले से नवीनतम थे।' : 'All were already current.'),
+    });
+  };
+
   const saveStatutory = async () => {
     const value = Number(statVal);
     if (!Number.isFinite(value) || value < 0) { toast({ title: hi ? 'मान डालें' : 'Enter a value', variant: 'destructive' }); return; }
@@ -824,8 +840,7 @@ const Payroll: React.FC = () => {
     const notes = [
       missingUan.length ? (hi ? `⚠ ${missingUan.length} बिना UAN (${missingUan.join(', ')}).` : `⚠ ${missingUan.length} without UAN (${missingUan.join(', ')}).`) : '',
       skippedNoPf.length ? (hi ? `${skippedNoPf.length} कर्मचारी छोड़े गए — उनके ढाँचे में PF नहीं है.` : `${skippedNoPf.length} left out — no PF in their structure.`) : '',
-      // The wage figure for a part-month is the question the society must answer, not one to decide here.
-      partMonth.length ? (hi ? `${partMonth.length} का वेतन पूरे माह से कम है; EPF मज़दूरी में पूरा मूल वेतन ही जा रहा है — आधार की पुष्टि कर लें.` : `${partMonth.length} were paid less than a full month; EPF wages still carry the whole month's basic — confirm the basis.`) : '',
+      partMonth.length ? (hi ? `${partMonth.length} का वेतन पूरे माह से कम है — उनकी EPF मज़दूरी और NCP दिन उसी अनुपात में हैं.` : `${partMonth.length} were paid less than a full month — their EPF wages and NCP days reflect that.`) : '',
       hi ? 'अपलोड से पहले वर्तमान EPFO ECR spec से मिलाएँ।' : 'Confirm against the current EPFO ECR spec before upload.',
     ].filter(Boolean);
     toast({
@@ -889,6 +904,14 @@ const Payroll: React.FC = () => {
                 )}
               </div>
             ))}
+          </div>
+          <div className="border-t pt-3 mt-1">
+            <p className="text-xs text-muted-foreground mb-2">
+              {hi ? 'PF अब भविष्य निधि अधिनियम धारा 6 अनुसार मूल + महँगाई भत्ते पर, और केवल भुगतान किए दिनों पर गणित करता है। पुराने सूत्र को अद्यतन करने के लिए एक बार दबाएँ।' : 'PF now computes on basic + DA per EPF Act §6, and on paid days only. Press once to bring an older society’s stored formula up to date.'}
+            </p>
+            <Button size="sm" variant="outline" onClick={syncFormulas} disabled={statBusy}>
+              {statBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : (hi ? 'सांविधिक सूत्र अद्यतन करें' : 'Update statutory formulas')}
+            </Button>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setStatOpen(false)}>{hi ? 'बंद करें' : 'Close'}</Button></DialogFooter>
         </DialogContent>

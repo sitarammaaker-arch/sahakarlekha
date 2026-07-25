@@ -26,7 +26,13 @@ const EFF = '2026-01-01';
 const SFL: Record<string, string> = {
   DA: 'formula "DA" :: Money let b = BASIC in b * 20%',
   HRA: 'formula "HRA" :: Money let b = BASIC in b * 40%',
-  PF: 'formula "PF" :: Money let b = BASIC in b * (pf_rate / 100)',
+  // PF wage base is basic + DA, per EPF & MP Act 1952 §6 ("basic wages, dearness allowance and
+  // retaining allowance") — https://indiankanoon.org/doc/1123739/ — not basic alone. DA is 20% of
+  // basic in this app, so the base is basic × 120%; this references only BASIC (a fixed component,
+  // injected as 0 when absent) so it cannot pick up another structure's DA. And per EPFO practice PF
+  // is on PAID days only — the non-contributory (unpaid) days reduce it proportionately, the same
+  // (30 − lopDays)/30 fraction the LOP lines use. Retaining allowance: no such component here.
+  PF: 'formula "PF" :: Money let b = BASIC in b * 120% * (pf_rate / 100) * ((30 - attendance.lopDays) / 30)',
   // Loss of Pay must deduct ONE DAY OF WHAT THIS EMPLOYEE ACTUALLY EARNS, so it differs by structure:
   //   LOP        basic + DA 20% + HRA 40% = 160% of basic   (permanent, probation)
   //   LOP_NOHRA  basic + DA 20%           = 120% of basic   (seasonal, fixed-term — no HRA)
@@ -187,7 +193,33 @@ async function ensureSocietyComponents(tx: postgres.TransactionSql, societyId: s
       values(${societyId},${k},${v},${lbl},'Statutory default — confirm for your establishment',${creator})
       on conflict (society_id,key) do nothing`;
   }
+  await syncSocietyFormulas(tx, societyId);   // bring any drifted formula text up to the code's definition
   return ids;
+}
+
+// The formula TEXT lives in the DB (one formula_version per society component) and is written once,
+// at component creation. When a formula here in SFL is corrected — as PF was, to basic+DA per §6 — an
+// existing society keeps its old text and quietly computes the old way. This re-points each component's
+// active formula to the current SFL text where it has drifted. In place, because a corrected formula
+// is not a new policy with its own date; runs already locked keep the amounts they stored. Idempotent:
+// once the text matches, it is a no-op. Returns the codes that changed.
+async function syncSocietyFormulas(tx: postgres.TransactionSql, societyId: string): Promise<string[]> {
+  const changed: string[] = [];
+  for (const [code, def] of Object.entries(COMPONENTS)) {
+    if (def.method !== 'formula' || !def.formula) continue;
+    const want = SFL[code];
+    if (!want) continue;
+    const rows = await tx`
+      update pay_formula.formula_version fv
+        set expression_text = ${want}
+      from pay_config.component_catalog cc
+      join pay_config.component_version cv on cv.component_id = cc.id and cv.status = 'active'
+      where cc.society_id = ${societyId} and cc.code = ${code}
+        and fv.id = cv.formula_ref and fv.expression_text is distinct from ${want}
+      returning fv.id`;
+    if (rows.length) changed.push(code);
+  }
+  return changed;
 }
 
 // Create a per-employee salary structure for the type. Each employee gets their OWN template
@@ -571,6 +603,17 @@ Deno.serve(async (req: Request) => {
       return json(200, { settings: rows }, CORS);
     }
 
+    // Bring this society's stored formula text up to the current code definition (e.g. the PF base
+    // becoming basic+DA). Admin-only; idempotent — returns which formulas actually changed.
+    if (body.action === 'sync-formulas') {
+      if (su.role !== 'admin') return json(403, { error: 'only admin may sync statutory formulas' }, CORS);
+      const changed = await sql.begin(async (tx: postgres.TransactionSql) => {
+        await ensureSocietyComponents(tx, societyId, su.id);   // create any missing components too
+        return await syncSocietyFormulas(tx, societyId);
+      });
+      return json(200, { ok: true, changed }, CORS);
+    }
+
     if (body.action === 'statutory-set') {
       const key = (body.key ?? '').trim();
       const value = Number(body.value);
@@ -582,7 +625,7 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, key, value }, CORS);
     }
 
-    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'attendance-list' / 'update' / 'deactivate' / 'identity-set' / 'joining-set' / 'structure-get' / 'structure-set' / 'structure-unset' / 'structure-add' / 'structure-remove' / 'history-get' / 'loan-list' / 'loan-add' / 'loan-close' / 'statutory-list' / 'statutory-set'" }, CORS);
+    return json(400, { error: "action must be 'list' / 'add' / 'attendance' / 'attendance-list' / 'update' / 'deactivate' / 'identity-set' / 'joining-set' / 'structure-get' / 'structure-set' / 'structure-unset' / 'structure-add' / 'structure-remove' / 'history-get' / 'loan-list' / 'loan-add' / 'loan-close' / 'statutory-list' / 'statutory-set' / 'sync-formulas'" }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {
