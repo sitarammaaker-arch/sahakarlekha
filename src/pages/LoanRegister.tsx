@@ -426,16 +426,39 @@ const LoanRegister: React.FC = () => {
       {/* Delete Confirm */}
       <AlertDialog open={!!deleteId} onOpenChange={open => !open && setDeleteId(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{hi ? 'ऋण हटाएं?' : 'Delete loan?'}</AlertDialogTitle>
-            <AlertDialogDescription>{hi ? 'यह कार्य वापस नहीं किया जा सकता।' : 'This action cannot be undone.'}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{hi ? 'रद्द' : 'Cancel'}</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive" onClick={() => { if (deleteId) { deleteLoan(deleteId); setDeleteId(null); toast({ title: hi ? 'हटाया गया' : 'Deleted' }); } }}>
-              {hi ? 'हटाएं' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          {(() => {
+            const loanToDelete = loans.find(l => l.id === deleteId);
+            const repaid = loanToDelete?.repaidAmount || 0;
+            const hasRepayments = repaid > 0;
+            return (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {hasRepayments
+                      ? (hi ? 'यह ऋण नहीं हटाया जा सकता' : 'This loan cannot be deleted')
+                      : (hi ? 'ऋण हटाएं?' : 'Delete loan?')}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {hasRepayments
+                      ? (hi
+                          ? `इस ऋण की ₹${repaid.toLocaleString('en-IN')} चुकौती दर्ज हो चुकी है। पहले "वाउचर" पेज से उन चुकौती रसीदों को रद्द करें, फिर ऋण मिटाएँ — ताकि बही मेल खाती रहे।`
+                          : `Repayments of ₹${repaid.toLocaleString('en-IN')} are recorded against this loan. Cancel those repayment receipts on the Vouchers page first, then delete the loan, so the books stay consistent.`)
+                      : (hi
+                          ? 'इस ऋण की disbursement प्रविष्टि बही से उलट दी जाएगी (soft-cancel — "हटाए गए वाउचर" में उपलब्ध रहेगी)।'
+                          : 'This loan\'s disbursement entry will be reversed in the books (soft-cancelled — still available under Deleted Vouchers).')}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>{hasRepayments ? (hi ? 'ठीक है' : 'OK') : (hi ? 'रद्द' : 'Cancel')}</AlertDialogCancel>
+                  {!hasRepayments && (
+                    <AlertDialogAction className="bg-destructive" onClick={() => { if (deleteId) { deleteLoan(deleteId); setDeleteId(null); toast({ title: hi ? 'हटाया गया' : 'Deleted' }); } }}>
+                      {hi ? 'हटाएं' : 'Delete'}
+                    </AlertDialogAction>
+                  )}
+                </AlertDialogFooter>
+              </>
+            );
+          })()}
         </AlertDialogContent>
       </AlertDialog>
     </div>
