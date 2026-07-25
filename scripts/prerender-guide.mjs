@@ -910,6 +910,52 @@ function staticExtraPages(DATA) {
     }),
   });
 
+  // About + Contact were sitemapped but CSR-only (empty body to non-JS/AI crawlers).
+  pages.push({
+    path: '/about',
+    title: 'हमारे बारे में — SahakarLekha | सहकारी समिति लेखा सॉफ्टवेयर',
+    description: 'SahakarLekha भारत की सहकारी समितियों के लिए मुफ़्त लेखा प्लेटफ़ॉर्म है — हमारा उद्देश्य, दृष्टि व अनुपालन (RCS, TDS, GST, NABARD). Learn about our mission to digitise cooperative society accounting across India.',
+    lastmod: LASTMOD.static,
+    jsonLd: [crumb([{ name: 'हमारे बारे में', item: `${SITE}/about` }])],
+    body: shell({
+      current: 'हमारे बारे में',
+      html:
+        `<h1>हमारे बारे में — About SahakarLekha</h1>` +
+        `<p>SahakarLekha भारत का <strong>पहला सहकारी-विशेष क्लाउड लेखा प्लेटफ़ॉर्म</strong> है। हमारा उद्देश्य — भारत की हर सहकारी समिति को, चाहे गाँव की छोटी समिति हो या राज्य-स्तरीय फेडरेशन, आधुनिक, पारदर्शी व मुफ़्त लेखा प्रणाली देना।</p>` +
+        `<p>India's first cooperative-specific cloud accounting platform — built for PACS, dairy, marketing, consumer and housing societies, in Hindi and English, free forever.</p>` +
+        `<h2>अनुपालन (Compliance)</h2>` +
+        `<ul>` +
+          `<li>राज्य सहकारी अधिनियम (Haryana 1984, Maharashtra 1960) व Multi-State Co-op Societies Act 2002</li>` +
+          `<li>Income Tax — TDS (192 / 194A / 194C / 194H / 194J / 194Q)</li>` +
+          `<li>GST — GSTR-1, GSTR-3B, e-Way Bill</li>` +
+          `<li>NABARD / DCCB रिपोर्टिंग व राज्य-वार RCS ऑडिट प्रारूप</li>` +
+          `<li>ICAI Guidance Note on Cooperative Societies</li>` +
+        `</ul>` +
+        `<p><a href="/contact">संपर्क करें</a> · <a href="/guide">गाइड</a> · <a href="/software">समिति के प्रकार</a></p>` +
+        registerCta(),
+    }),
+  });
+
+  pages.push({
+    path: '/contact',
+    title: 'संपर्क करें — SahakarLekha सहकारी लेखा सॉफ्टवेयर सहायता',
+    description: 'SahakarLekha टीम से संपर्क करें — सहायता, डेमो व अपनी सहकारी समिति को ऑनबोर्ड करने के लिए. Contact us for support, a demo, or to onboard your cooperative society.',
+    lastmod: LASTMOD.static,
+    jsonLd: [crumb([{ name: 'संपर्क', item: `${SITE}/contact` }])],
+    body: shell({
+      current: 'संपर्क',
+      html:
+        `<h1>संपर्क करें — Contact Us</h1>` +
+        `<p>सहायता, डेमो, या अपनी सहकारी समिति को ऑनबोर्ड करने के लिए हमसे संपर्क करें — हिन्दी या English में।</p>` +
+        `<ul>` +
+          `<li><strong>WhatsApp:</strong> +91 94679 18545</li>` +
+          `<li><strong>ईमेल / Email:</strong> support@sahakarlekha.com</li>` +
+        `</ul>` +
+        `<p>अपनी समिति अभी मुफ़्त शुरू करें, या पहले <a href="/guide">गाइड</a> व <a href="/faq">सामान्य प्रश्न</a> देखें।</p>` +
+        registerCta(),
+    }),
+  });
+
   pages.push({
     path: '/pricing',
     title: 'मूल्य — SahakarLekha हमेशा मुफ़्त | Free Cooperative Accounting',
