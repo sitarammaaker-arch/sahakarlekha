@@ -23,6 +23,7 @@ import {
 import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import type { EntityLink, Supplier, SupplierType, GstRegistrationType, TdsSection } from '@/types';
 import { Truck, Plus, Pencil, Trash2, Search, IndianRupee, FileSpreadsheet, Download, User, Building2 } from 'lucide-react';
+import EmptyState from '@/components/EmptyState';
 import { useToast } from '@/hooks/use-toast';
 import { useDeepLinkQuery } from '@/hooks/useDeepLinkQuery';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
@@ -304,8 +305,18 @@ const Suppliers: React.FC = () => {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
-                      {hi ? 'कोई सप्लायर नहीं मिला' : 'No suppliers found'}
+                    <TableCell colSpan={8} className="py-4">
+                      {suppliers.length === 0 ? (
+                        <EmptyState
+                          icon={Truck}
+                          title={hi ? 'अभी कोई सप्लायर नहीं' : 'No suppliers yet'}
+                          description={hi ? 'जिनसे आप माल/सेवा खरीदते हैं, वे यहाँ दिखेंगे। पहला सप्लायर जोड़कर शुरू करें।' : 'Parties you buy from appear here. Add your first supplier to begin.'}
+                          actionLabel={hi ? 'नया सप्लायर जोड़ें' : 'Add first supplier'}
+                          onAction={openAdd}
+                        />
+                      ) : (
+                        <div className="text-center text-muted-foreground py-6">{hi ? 'खोज से कोई सप्लायर नहीं मिला' : 'No suppliers match your search'}</div>
+                      )}
                     </TableCell>
                   </TableRow>
                 ) : (

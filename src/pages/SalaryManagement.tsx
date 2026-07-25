@@ -525,6 +525,7 @@ const SalaryManagement: React.FC = () => {
     toast({ title: hi ? 'वेतन प्रोसेस किया गया' : `Salary processed for ${row.employee.name}` });
   };
 
+  const [confirmProcessAll, setConfirmProcessAll] = useState(false);
   const processAll = () => {
     const pending = processRows.filter(r => !r.processed);
     if (pending.length === 0) {
@@ -535,6 +536,10 @@ const SalaryManagement: React.FC = () => {
     setProcessRows(rows => rows.map(r => ({ ...r, processed: true })));
     toast({ title: hi ? `${pending.length} कर्मचारियों का वेतन प्रोसेस किया गया` : `${pending.length} salaries processed` });
   };
+  // Confirmation summary before the one-click mass post — an accidental "Process All"
+  // would post (or double-post) a whole month's salary to the ledger with no undo.
+  const pendingProcessRows = processRows.filter(r => !r.processed);
+  const pendingProcessNet = pendingProcessRows.reduce((s, r) => s + (salaryRecordFromRow(r).netSalary || 0), 0);
 
   // ── Tab 3 handlers ───────────────────────────────────────────────────────
 
@@ -1024,7 +1029,7 @@ const SalaryManagement: React.FC = () => {
               {processRows.length > 0 && (
                 <div className="flex justify-end">
                   <Button
-                    onClick={processAll}
+                    onClick={() => setConfirmProcessAll(true)}
                     className="gap-2"
                     disabled={processRows.every(r => r.processed)}
                   >
@@ -1033,6 +1038,22 @@ const SalaryManagement: React.FC = () => {
                   </Button>
                 </div>
               )}
+              <AlertDialog open={confirmProcessAll} onOpenChange={setConfirmProcessAll}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{hi ? 'सभी का वेतन प्रोसेस करें?' : 'Process all salaries?'}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {hi
+                        ? `${pendingProcessRows.length} कर्मचारियों का वेतन (कुल शुद्ध ₹${pendingProcessNet.toLocaleString('en-IN')}) बही में दर्ज होगा। सुधारने के लिए बाद में स्लिप हटाकर दोबारा प्रोसेस करना होगा।`
+                        : `Salary for ${pendingProcessRows.length} employee(s) (total net ₹${pendingProcessNet.toLocaleString('en-IN')}) will be posted to the books. To correct it later you must delete the slip and reprocess.`}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{hi ? 'रद्द' : 'Cancel'}</AlertDialogCancel>
+                    <AlertDialogAction onClick={processAll}>{hi ? 'हाँ, प्रोसेस करें' : 'Yes, process'}</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </>
           )}
         </TabsContent>
