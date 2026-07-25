@@ -149,7 +149,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
             </div>
           </div>
           <div className="mt-8 pt-6 border-t text-center text-xs text-muted-foreground">
-            <p>&copy; {new Date().getFullYear()} SahakarLekha (सहकारलेखा) — Bharat ki Cooperative Societies ka Accounting Platform</p>
+            <p>&copy; {new Date().getFullYear()} SahakarLekha (सहकार लेखा) — Bharat ki Cooperative Societies ka Accounting Platform</p>
             <p className="mt-1">सहकारी समिति लेखा सॉफ्टवेयर | Cooperative Society Accounting Software | sahkari samiti software</p>
           </div>
         </div>

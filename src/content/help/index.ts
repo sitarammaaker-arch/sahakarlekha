@@ -341,7 +341,17 @@ export function findHelpTask(slug: string): HelpTask | null {
  * the acquisition↔activation↔support loop from one place (no per-page edits).
  */
 export function helpForRoute(pathname: string): HelpTask | null {
-  return HELP_TASKS.find((t) => t.deepLink.route === pathname) ?? null;
+  // Match the task whose deep-link route is the current route or a parent of it
+  // (so `/members/123` and `/vouchers` sub-routes still resolve). Query strings
+  // are already excluded from react-router's location.pathname. When several
+  // tasks match, prefer the most specific (longest) route.
+  const matches = HELP_TASKS.filter(
+    (t) => pathname === t.deepLink.route || pathname.startsWith(t.deepLink.route + '/'),
+  );
+  if (matches.length === 0) return null;
+  return matches.reduce((best, t) =>
+    t.deepLink.route.length > best.deepLink.route.length ? t : best,
+  );
 }
 
 /** Distinct categories in first-seen order, for the hub. */

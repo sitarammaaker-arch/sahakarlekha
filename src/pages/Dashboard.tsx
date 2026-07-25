@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useCapabilities } from '@/hooks/useCapabilities';
@@ -6,7 +7,7 @@ import { useHousingData } from '@/contexts/HousingDataContext';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { QuickActions } from '@/components/dashboard/QuickActions';
-import { Wallet, Building2, Users, TrendingUp, TrendingDown, CheckCircle, XCircle, AlertTriangle, Lock, ShieldCheck, Lightbulb, AlertCircle, Info } from 'lucide-react';
+import { Wallet, Building2, Users, TrendingUp, TrendingDown, CheckCircle, XCircle, AlertTriangle, Lock, ShieldCheck, Lightbulb, AlertCircle, Info, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fmtDate } from '@/lib/dateUtils';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +24,7 @@ const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b
 
 const Dashboard: React.FC = () => {
   const { t, language } = useLanguage();
+  const navigate = useNavigate();
   const { accounts, getAccountBalance, getShareCapitalReconciliation, getAssetRegisterReconciliation, members, vouchers, getProfitLoss, loans, society, getTrialBalance, getTradingAccount, auditObjections } = useData();
   const { housingFlats, maintenanceBills, complaints } = useHousingData();
   const { has } = useCapabilities();
@@ -107,25 +109,27 @@ const Dashboard: React.FC = () => {
     const healthScore = maxPts > 0 ? Math.round((earned / maxPts) * 100) : 100;
 
     // --- P4-2: Smart Advisories ---
-    type Advisory = { severity: 'critical' | 'warning' | 'info'; en: string; hi: string };
+    // Each advisory carries the route of the page where the user can act on it,
+    // so the Dashboard advisory becomes a one-click jump to the fix (not dead prose).
+    type Advisory = { severity: 'critical' | 'warning' | 'info'; en: string; hi: string; route?: string };
     const advisories: Advisory[] = [];
 
     if (netProfit > 0 && !reservePosted)
-      advisories.push({ severity: 'info', en: `Optional: post a Reserve Fund / Education Fund appropriation on the Reserve Fund page (choose any % or amount)`, hi: `वैकल्पिक: "रिज़र्व फंड" पृष्ठ पर रिज़र्व/शिक्षा फंड आवंटन पोस्ट कर सकते हैं (कोई भी % या राशि)` });
+      advisories.push({ severity: 'info', route: '/reserve-fund', en: `Optional: post a Reserve Fund / Education Fund appropriation on the Reserve Fund page (choose any % or amount)`, hi: `वैकल्पिक: "रिज़र्व फंड" पृष्ठ पर रिज़र्व/शिक्षा फंड आवंटन पोस्ट कर सकते हैं (कोई भी % या राशि)` });
     if (!bsTallied)
-      advisories.push({ severity: 'critical', en: 'Balance Sheet is not balanced — check for missing or duplicate journal entries', hi: 'बैलेंस शीट असंतुलित है — अपूर्ण या दोहरी जर्नल एंट्रियां जांचें' });
+      advisories.push({ severity: 'critical', route: '/trial-balance', en: 'Balance Sheet is not balanced — check for missing or duplicate journal entries', hi: 'बैलेंस शीट असंतुलित है — अपूर्ण या दोहरी जर्नल एंट्रियां जांचें' });
     if (!sec32Ok)
-      advisories.push({ severity: 'critical', en: `Loan portfolio exceeds Sec 32 limit (${sec32Pct.toFixed(0)}% utilized) — pause new loans or increase member share capital`, hi: `ऋण पोर्टफोलियो धारा 32 सीमा से अधिक (${sec32Pct.toFixed(0)}% उपयोग) — नए ऋण रोकें या शेयर कैपिटल बढ़ाएं` });
+      advisories.push({ severity: 'critical', route: '/loan-register', en: `Loan portfolio exceeds Sec 32 limit (${sec32Pct.toFixed(0)}% utilized) — pause new loans or increase member share capital`, hi: `ऋण पोर्टफोलियो धारा 32 सीमा से अधिक (${sec32Pct.toFixed(0)}% उपयोग) — नए ऋण रोकें या शेयर कैपिटल बढ़ाएं` });
     else if (sec32Pct >= 80 && loanLimit > 0)
-      advisories.push({ severity: 'warning', en: `Loan utilisation at ${sec32Pct.toFixed(0)}% of Sec 32 limit — approaching regulatory ceiling`, hi: `ऋण उपयोग धारा 32 सीमा का ${sec32Pct.toFixed(0)}% — नियामक सीमा के निकट` });
+      advisories.push({ severity: 'warning', route: '/loan-register', en: `Loan utilisation at ${sec32Pct.toFixed(0)}% of Sec 32 limit — approaching regulatory ceiling`, hi: `ऋण उपयोग धारा 32 सीमा का ${sec32Pct.toFixed(0)}% — नियामक सीमा के निकट` });
     if (overdueCount > 0)
-      advisories.push({ severity: 'warning', en: `${overdueCount} overdue loan${overdueCount > 1 ? 's' : ''} — initiate recovery proceedings promptly`, hi: `${overdueCount} अतिदेय ऋण — तत्काल वसूली कार्यवाही प्रारंभ करें` });
+      advisories.push({ severity: 'warning', route: '/loan-register', en: `${overdueCount} overdue loan${overdueCount > 1 ? 's' : ''} — initiate recovery proceedings promptly`, hi: `${overdueCount} अतिदेय ऋण — तत्काल वसूली कार्यवाही प्रारंभ करें` });
     if (pendingObjections > 0)
-      advisories.push({ severity: 'warning', en: `${pendingObjections} pending audit objection${pendingObjections > 1 ? 's' : ''} — resolve before locking the financial year`, hi: `${pendingObjections} लंबित ऑडिट आपत्तियां — वित्त वर्ष लॉक से पूर्व निराकरण करें` });
+      advisories.push({ severity: 'warning', route: '/audit-register', en: `${pendingObjections} pending audit objection${pendingObjections > 1 ? 's' : ''} — resolve before locking the financial year`, hi: `${pendingObjections} लंबित ऑडिट आपत्तियां — वित्त वर्ष लॉक से पूर्व निराकरण करें` });
     if (!fyLocked) {
       const endYY = society.financialYear.split('-')[1];
       if (new Date() > new Date(`20${endYY}-03-31`))
-        advisories.push({ severity: 'info', en: `FY ${society.financialYear} has ended — lock the financial year after audit completion`, hi: `वित्त वर्ष ${society.financialYear} समाप्त — ऑडिट के बाद वित्त वर्ष लॉक करें` });
+        advisories.push({ severity: 'info', route: '/society-setup', en: `FY ${society.financialYear} has ended — lock the financial year after audit completion`, hi: `वित्त वर्ष ${society.financialYear} समाप्त — ऑडिट के बाद वित्त वर्ष लॉक करें` });
     }
     if (netProfit > 0 && reservePosted) {
       const divPosted = activeVouchers.some(v =>
@@ -134,7 +138,7 @@ const Dashboard: React.FC = () => {
         v.narration.includes(fy)
       );
       if (!divPosted)
-        advisories.push({ severity: 'info', en: `Net profit of ₹${netProfit.toLocaleString('en-IN')} is available — consider distributing dividend to members`, hi: `₹${netProfit.toLocaleString('en-IN')} शुद्ध लाभ उपलब्ध — सदस्यों को डिविडेंड वितरण पर विचार करें` });
+        advisories.push({ severity: 'info', route: '/profit-distribution', en: `Net profit of ₹${netProfit.toLocaleString('en-IN')} is available — consider distributing dividend to members`, hi: `₹${netProfit.toLocaleString('en-IN')} शुद्ध लाभ उपलब्ध — सदस्यों को डिविडेंड वितरण पर विचार करें` });
     }
     // P0 #4 / ECR-05 (MS-03): share capital control (ledger) must equal Σ member scalars (subsidiary).
     // Drift means dividend (member-scalar based) no longer matches the audited Balance Sheet.
@@ -572,8 +576,17 @@ const Dashboard: React.FC = () => {
             {complianceChecks.advisories.map((adv, i) => {
               const isCritical = adv.severity === 'critical';
               const isWarning = adv.severity === 'warning';
+              const clickable = !!adv.route;
               return (
-                <div key={i} className={`flex items-start gap-3 p-3 rounded-lg border text-sm ${isCritical ? 'bg-destructive/5 border-destructive/20' : isWarning ? 'bg-amber-500/5 border-amber-500/20' : 'bg-success/5 border-success/20'}`}>
+                <div
+                  key={i}
+                  role={clickable ? 'button' : undefined}
+                  tabIndex={clickable ? 0 : undefined}
+                  onClick={clickable ? () => navigate(adv.route!) : undefined}
+                  onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(adv.route!); } } : undefined}
+                  title={clickable ? (language === 'hi' ? 'ठीक करने के लिए खोलें' : 'Open to fix') : undefined}
+                  className={`flex items-start gap-3 p-3 rounded-lg border text-sm ${isCritical ? 'bg-destructive/5 border-destructive/20' : isWarning ? 'bg-amber-500/5 border-amber-500/20' : 'bg-success/5 border-success/20'} ${clickable ? 'cursor-pointer hover:brightness-95 transition' : ''}`}
+                >
                   {isCritical ? (
                     <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
                   ) : isWarning ? (
@@ -581,9 +594,12 @@ const Dashboard: React.FC = () => {
                   ) : (
                     <Info className="h-4 w-4 text-success mt-0.5 shrink-0" />
                   )}
-                  <span className={isCritical ? 'text-destructive' : isWarning ? 'text-amber-600' : 'text-success'}>
+                  <span className={`flex-1 ${isCritical ? 'text-destructive' : isWarning ? 'text-amber-600' : 'text-success'}`}>
                     {language === 'hi' ? adv.hi : adv.en}
                   </span>
+                  {clickable && (
+                    <ChevronRight className={`h-4 w-4 mt-0.5 shrink-0 ${isCritical ? 'text-destructive' : isWarning ? 'text-amber-500' : 'text-success'}`} />
+                  )}
                 </div>
               );
             })}
