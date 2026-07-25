@@ -34,6 +34,19 @@ export interface BlogPost {
 
 // Reverse-chronological is enforced by sorting on `date` below.
 export const BLOG_POSTS: BlogPost[] = [
+  // ── Cooperative structure & society types ──
+  {
+    slug: 'cooperative-society-tiers-primary-central-state-apex',
+    metaTitle: 'प्राथमिक, केंद्रीय व राज्य सहकारी समिति: तीन-स्तरीय ढाँचा | SahakarLekha',
+    metaDescription: 'सहकारिता का तीन-स्तरीय ढाँचा — प्राथमिक (व्यक्ति सदस्य), केंद्रीय/ज़िला और राज्य/शीर्ष समिति। PACS, DCCB, StCB व दुग्ध संघ के उदाहरण सहित आसान भाषा में।',
+    date: '2026-07-25',
+    category: 'सहकारी संस्थाएँ',
+    title: 'प्राथमिक, केंद्रीय और राज्य सहकारी समिति: तीन-स्तरीय ढाँचा',
+    shortTitle: 'तीन-स्तरीय सहकारी ढाँचा',
+    excerpt: 'प्राथमिक → केंद्रीय/ज़िला → राज्य/शीर्ष — हर ऊपरी स्तर का सदस्य व्यक्ति नहीं, नीचे की समिति होती है।',
+    accent: 'indigo',
+    tags: ['समिति के प्रकार', 'PACS', 'सहकारी ढाँचा'],
+  },
   // ── Cooperative institutions (NABARD / NCDC / IFFCO / KRIBHCO / Amul) ──
   {
     slug: 'nabard-role-in-cooperatives',
