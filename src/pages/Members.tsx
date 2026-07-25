@@ -71,9 +71,12 @@ interface MemberFormProps {
   onSubmit: (e: React.FormEvent) => void;
   submitLabel: string;
   onCancel: () => void;
+  /** Edit mode locks the share fields — share changes must go through Share Register
+   *  (which posts a voucher) so the member scalar never drifts from the ledger control. */
+  isEdit?: boolean;
 }
 
-const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onSubmit, submitLabel, onCancel }) => {
+const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onSubmit, submitLabel, onCancel, isEdit }) => {
   const hi = language === 'hi';
   const f = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
   // ECR-16: multiple-nominee editor helpers (functional updates → no stale-closure lost writes)
@@ -186,21 +189,28 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'शेयर संख्या' : 'Shares'}</Label>
-        <Input type="number" value={form.shareCount} onChange={e => f('shareCount', e.target.value)} min="0" />
+        <Input type="number" value={form.shareCount} onChange={e => f('shareCount', e.target.value)} min="0" disabled={isEdit} />
       </div>
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'प्रति शेयर' : 'Face Value'}</Label>
-        <Input type="number" value={form.shareFaceValue} onChange={e => f('shareFaceValue', e.target.value)} min="0" step="0.01" />
+        <Input type="number" value={form.shareFaceValue} onChange={e => f('shareFaceValue', e.target.value)} min="0" step="0.01" disabled={isEdit} />
       </div>
       <div className="space-y-1">
         <Label className="text-xs">{t('shareCapital')} (₹)</Label>
-        <Input type="number" value={form.shareCapital} onChange={e => f('shareCapital', e.target.value)} min="0" step="0.01" />
+        <Input type="number" value={form.shareCapital} onChange={e => f('shareCapital', e.target.value)} min="0" step="0.01" disabled={isEdit} />
       </div>
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'प्रवेश शुल्क' : 'Adm. Fee'} (₹)</Label>
         <Input type="number" value={form.admissionFee} onChange={e => f('admissionFee', e.target.value)} min="0" step="0.01" />
       </div>
     </div>
+    {isEdit && (
+      <p className="text-[11px] text-muted-foreground -mt-2">
+        {hi
+          ? 'शेयर संख्या/मूल्य यहाँ से नहीं बदलते — "शेयर रजिस्टर" पेज पर जाएँ, ताकि बदलाव बही में सही दर्ज हो और शेष मेल खाता रहे।'
+          : 'Share count/value can\'t be changed here — use the Share Register page so the change posts to the ledger and the balance stays reconciled.'}
+      </p>
+    )}
     {/* Nominee */}
     <p className="text-xs font-semibold text-muted-foreground pt-1">{hi ? 'नामांकित (Nominee)' : 'Nominee Details'}</p>
     <div className="grid grid-cols-2 gap-3">
@@ -777,7 +787,7 @@ const Members: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'सदस्य संपादित करें' : 'Edit Member'}</DialogTitle>
           </DialogHeader>
-          <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleEdit} submitLabel={hi ? 'अपडेट करें' : 'Update'} onCancel={() => setEditMember(null)} />
+          <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleEdit} submitLabel={hi ? 'अपडेट करें' : 'Update'} onCancel={() => setEditMember(null)} isEdit />
         </DialogContent>
       </Dialog>
 

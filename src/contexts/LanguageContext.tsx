@@ -173,7 +173,7 @@ export const translations: Translations = {
   date: { hi: 'तिथि', en: 'Date' },
   particulars: { hi: 'विवरण', en: 'Particulars' },
   voucherNo: { hi: 'वाउचर नं.', en: 'Voucher No.' },
-  narration: { hi: 'विवरण', en: 'Narration' },
+  narration: { hi: 'टिप्पणी', en: 'Narration' },
   openingBalance: { hi: 'ओपनिंग बैलेंस', en: 'Opening Balance' },
   closingBalance: { hi: 'अंतिम शेष', en: 'Closing Balance' },
   

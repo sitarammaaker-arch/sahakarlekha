@@ -1,9 +1,12 @@
 /**
  * Compound (Multi-line) Voucher Entry
  *
- * Supports N debit lines + N credit lines (journal only).
+ * Supports N debit lines + M credit lines (journal only).
  * ΣDebits must equal ΣCredits before saving.
- * Each row is stored as a separate Voucher with a shared groupId.
+ * Posts ONE multi-line journal voucher carrying every line (reports read it via
+ * getVoucherLines — RULE 2). NOTE: the earlier implementation exploded the entry
+ * into min(dr,cr) pairs, which silently DROPPED any amount where a debit line
+ * didn't equal its paired credit line even though the entry showed "Balanced ✓".
  *
  * Tally-style layout: top narration, then debit table, then credit table,
  * with live balance diff indicator.
@@ -25,8 +28,8 @@ import { Separator } from '@/components/ui/separator';
 import { Plus, Trash2, Save, RotateCcw, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { getNextVoucherNo } from '@/lib/storage';
 import { AccountPicker } from '@/components/AccountPicker';
+import type { VoucherLine } from '@/types';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -142,7 +145,7 @@ const LineTable: React.FC<{
 const CompoundVoucher: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { accounts, vouchers, society, addVoucher } = useData();
+  const { accounts, addVoucher } = useData();
   const { toast } = useToast();
 
   const hi = language === 'hi';
@@ -188,53 +191,28 @@ const CompoundVoucher: React.FC = () => {
       }
     }
 
-    const groupId = crypto.randomUUID();
-    const fy = society.financialYear;
-    let allVouchers = [...vouchers];
-
-    // For compound entries we create one voucher per debit-credit pair in order.
-    // If lines are unequal, we pair sequentially and let the last line absorb the remainder.
-    // Simplest correct approach: create individual journal vouchers for each line pair.
-    // With N debit + M credit lines, we need max(N, M) vouchers.
-    // Each voucher takes one debit line amount and one credit line amount.
-    // For asymmetric splits, the last smaller side repeats its final line.
-
-    const maxLen = Math.max(debitLines.length, creditLines.length);
-    for (let i = 0; i < maxLen; i++) {
-      const dr = debitLines[Math.min(i, debitLines.length - 1)];
-      const cr = creditLines[Math.min(i, creditLines.length - 1)];
-
-      // Only create if this index isn't a duplicate (avoid double posting)
-      const isDrDup = i >= debitLines.length;
-      const isCrDup = i >= creditLines.length;
-      if (isDrDup || isCrDup) continue;
-
-      const amount = Math.min(parseFloat(dr.amount) || 0, parseFloat(cr.amount) || 0);
-      if (amount <= 0) continue;
-
-      const voucherNo = getNextVoucherNo('journal', fy, allVouchers);
-      const v = {
-        id: crypto.randomUUID(),
-        voucherNo,
-        type: 'journal' as const,
-        date,
-        debitAccountId: dr.accountId,
-        creditAccountId: cr.accountId,
-        amount,
-        narration: narration || (dr.narration || cr.narration || 'Compound Journal Entry'),
-        createdBy: user?.name ?? 'System',
-        createdAt: new Date().toISOString(),
-        groupId,
-      };
-      addVoucher(v);
-      allVouchers = [...allVouchers, v];
-    }
-
-    toast({
-      title: hi
-        ? `${Math.max(debitLines.length, creditLines.length)} वाउचर पोस्ट किए गए`
-        : `${Math.max(debitLines.length, creditLines.length)} vouchers posted`,
+    // Post ONE multi-line journal voucher carrying every debit and credit line.
+    // The full amounts post exactly as entered (ΣDr = ΣCr, already validated), so no
+    // line is dropped. debit/creditAccountId keep the first line of each side for
+    // legacy single-line consumers; `lines` is the source of truth for reports.
+    const vLines: VoucherLine[] = [
+      ...debitLines.map((l) => ({ id: l.id, accountId: l.accountId, type: 'Dr' as const, amount: parseFloat(l.amount), narration: l.narration || undefined })),
+      ...creditLines.map((l) => ({ id: l.id, accountId: l.accountId, type: 'Cr' as const, amount: parseFloat(l.amount), narration: l.narration || undefined })),
+    ];
+    const v = addVoucher({
+      type: 'journal',
+      date,
+      lines: vLines,
+      debitAccountId: debitLines[0].accountId,
+      creditAccountId: creditLines[0].accountId,
+      amount: totalDebit,
+      narration: narration || 'Compound Journal Entry',
+      createdBy: user?.name ?? 'System',
+      origin: 'manual',
     });
+    if (!v?.id) return; // addVoucher shows the reason on failure (FY lock / rollback)
+
+    toast({ title: hi ? `वाउचर पोस्ट किया गया · ${v.voucherNo}` : `Voucher posted · ${v.voucherNo}` });
 
     // Reset
     setDebitLines([emptyLine()]);
@@ -356,8 +334,8 @@ const CompoundVoucher: React.FC = () => {
         <p><strong>{hi ? 'नोट:' : 'Note:'}</strong></p>
         <ul className="list-disc list-inside space-y-0.5 ml-2">
           <li>{hi ? 'डेबिट और क्रेडिट का कुल बराबर होना अनिवार्य है।' : 'Debit total must equal credit total.'}</li>
-          <li>{hi ? 'प्रत्येक पंक्ति युगल के लिए एक अलग जर्नल वाउचर बनेगा (समूह ID सहित)।' : 'One journal voucher is created per debit-credit pair, all sharing a group ID.'}</li>
-          <li>{hi ? 'असमान पंक्तियाँ (3 Dr + 2 Cr) — न्यूनतम pair count तक ही वाउचर बनेंगे।' : 'Unequal lines (3 Dr + 2 Cr) — vouchers created up to min pair count.'}</li>
+          <li>{hi ? 'पूरी प्रविष्टि एक ही बहु-पंक्ति जर्नल वाउचर के रूप में दर्ज होती है — कोई राशि नहीं छूटती।' : 'The whole entry is posted as one multi-line journal voucher — no amount is dropped.'}</li>
+          <li>{hi ? 'असमान पंक्तियाँ (जैसे 3 Dr + 2 Cr) भी ठीक हैं, बशर्ते कुल Dr = कुल Cr हो।' : 'Unequal line counts (e.g. 3 Dr + 2 Cr) are fine, as long as ΣDr = ΣCr.'}</li>
         </ul>
       </div>
     </div>

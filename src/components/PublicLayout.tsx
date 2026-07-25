@@ -2,10 +2,11 @@
  * PublicLayout — Shared navbar + footer for all public pages.
  * Extracted from LandingPage.tsx to avoid duplicating nav/footer across 7+ pages.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowRight } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from '@/components/ui/sheet';
+import { ArrowRight, Menu } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { SOCIAL_CHANNELS, SocialIcon } from '@/lib/socials';
 import WhatsAppFab from '@/components/WhatsAppFab';
@@ -15,13 +16,34 @@ interface PublicLayoutProps {
   children: React.ReactNode;
 }
 
+// Primary public destinations, surfaced in the mobile drawer (desktop users reach
+// these from the footer / in-page sections). Kept in one place so the list stays honest.
+const MOBILE_NAV_LINKS: { to: string; label: string }[] = [
+  { to: '/pricing', label: 'मूल्य / Pricing' },
+  { to: '/guide', label: 'गाइड / Guide' },
+  { to: '/cookbook', label: 'एंट्री कुकबुक' },
+  { to: '/help', label: 'मदद केंद्र / Help' },
+  { to: '/tools', label: 'कैलकुलेटर / Calculators' },
+  { to: '/blog', label: 'ब्लॉग / Blog' },
+  { to: '/faq', label: 'सामान्य प्रश्न / FAQ' },
+  { to: '/ask', label: 'पूछें / Ask' },
+  { to: '/about', label: 'हमारे बारे में / About' },
+  { to: '/contact', label: 'संपर्क / Contact' },
+];
+
 const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
   const { pathname } = useLocation();
   const { isAuthenticated } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Scroll to top on route change
   useEffect(() => {
     window.scrollTo(0, 0);
+  }, [pathname]);
+
+  // Close the mobile drawer whenever the route changes.
+  useEffect(() => {
+    setMenuOpen(false);
   }, [pathname]);
 
   return (
@@ -67,6 +89,33 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                 </Link>
               </>
             )}
+
+            {/* Mobile menu — the public site had no hamburger, so nav links were
+                reachable only by scrolling to the footer of every page (MOBILE_AUDIT M-5). */}
+            <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="md:hidden" aria-label="मेन्यू / Menu">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-72">
+                <SheetHeader>
+                  <SheetTitle className="text-left">सहकार लेखा</SheetTitle>
+                </SheetHeader>
+                <nav className="mt-4 flex flex-col">
+                  {MOBILE_NAV_LINKS.map((l) => (
+                    <SheetClose asChild key={l.to}>
+                      <Link
+                        to={l.to}
+                        className="py-3 px-1 border-b text-foreground hover:text-primary transition-colors"
+                      >
+                        {l.label}
+                      </Link>
+                    </SheetClose>
+                  ))}
+                </nav>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </nav>
@@ -149,7 +198,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
             </div>
           </div>
           <div className="mt-8 pt-6 border-t text-center text-xs text-muted-foreground">
-            <p>&copy; {new Date().getFullYear()} SahakarLekha (सहकारलेखा) — Bharat ki Cooperative Societies ka Accounting Platform</p>
+            <p>&copy; {new Date().getFullYear()} SahakarLekha (सहकार लेखा) — Bharat ki Cooperative Societies ka Accounting Platform</p>
             <p className="mt-1">सहकारी समिति लेखा सॉफ्टवेयर | Cooperative Society Accounting Software | sahkari samiti software</p>
           </div>
         </div>

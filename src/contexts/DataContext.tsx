@@ -4871,6 +4871,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardPermission('delete', 'ऋण मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const loan = loansRef.current.find(l => l.id === id);
+    // Data-integrity guard: a loan with posted repayments carries real receipt vouchers
+    // (Dr Cash/Bank / Cr Loans & Advances + interest income). Deleting it here would only
+    // reverse the disbursement, leaving those repayment receipts live and the books
+    // inconsistent. Refuse — the user must cancel the repayment vouchers first.
+    if (loan && (loan.repaidAmount || 0) > 0) {
+      toastRef.current({
+        title: 'ऋण नहीं हटाया जा सकता',
+        description: `इस ऋण की ₹${(loan.repaidAmount || 0).toLocaleString('en-IN')} चुकौती दर्ज है। पहले "वाउचर" पेज से चुकौती रसीदें रद्द करें, फिर ऋण मिटाएँ — ताकि बही मेल खाती रहे।`,
+        variant: 'destructive', duration: 10000,
+      });
+      return;
+    }
     setLoansState(prev => { const updated = prev.filter(l => l.id !== id); return updated; });
     // Soft-delete (ECR-02 / RULE-5): retain the loan register row (isDeleted=true) for audit; the
     // loader filters it out. The linked disbursement voucher is still soft-cancelled below (RULE-3).
