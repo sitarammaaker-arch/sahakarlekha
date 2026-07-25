@@ -542,6 +542,14 @@ function helpPages(DATA) {
             { name: 'मदद केंद्र', item: `${SITE}/help` },
             { name: title, item: url },
           ]),
+          // FAQPage was client-only (HelpArticle) — mirror into static HTML so the
+          // help Q&A is machine-readable for FAQ rich results + AI extraction.
+          ...(t && Array.isArray(t.faqs) && t.faqs.length
+            ? [{
+                '@context': 'https://schema.org', '@type': 'FAQPage',
+                mainEntity: t.faqs.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+              }]
+            : []),
         ],
       });
     }
@@ -840,6 +848,25 @@ function calculatorPages(DATA) {
             { name: 'कैलकुलेटर', item: `${SITE}/tools` },
             { name: title, item: url },
           ]),
+          // HowTo + FAQPage were client-only (CalculatorShell) — mirror them into the
+          // static HTML so non-JS/AI crawlers get the step-by-step + Q&A (the highest-
+          // value AI-citation surface for a calculator).
+          ...(c && Array.isArray(c.inputs)
+            ? [{
+                '@context': 'https://schema.org', '@type': 'HowTo',
+                name: `${c.hindiName} कैसे इस्तेमाल करें`, inLanguage: 'hi',
+                step: [
+                  ...c.inputs.map((inp, i) => ({ '@type': 'HowToStep', position: i + 1, name: `${inp.label} भरें`, text: `${inp.label}${inp.sub ? ' — ' + inp.sub : ''}।` })),
+                  { '@type': 'HowToStep', position: c.inputs.length + 1, name: 'परिणाम देखें', text: 'परिणाम तुरंत दिख जाता है — कोई बटन दबाने की ज़रूरत नहीं।' },
+                ],
+              }]
+            : []),
+          ...(c && Array.isArray(c.faqs) && c.faqs.length
+            ? [{
+                '@context': 'https://schema.org', '@type': 'FAQPage',
+                mainEntity: c.faqs.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+              }]
+            : []),
         ],
       });
     }
