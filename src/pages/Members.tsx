@@ -224,8 +224,9 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
           : 'Share count/value can\'t be changed here — use the Share Register page so the change posts to the ledger and the balance stays reconciled.'}
       </p>
     )}
-    {/* Nominee */}
-    <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide border-t border-border pt-3">{hi ? 'नामांकित (Nominee)' : 'Nominee Details'}</p>
+    {/* Nominee — primary (drives the statutory nomination form / Form-1) */}
+    <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide border-t border-border pt-3">{hi ? 'मुख्य नामांकित' : 'Primary Nominee'}</p>
+    <p className="text-[11px] text-muted-foreground -mt-1">{hi ? 'यही विवरण नामांकन फॉर्म व Form-1 पर छपता है — पूरा भरें।' : 'These details print on the nomination form & Form-1 — fill them in full.'}</p>
     <div className="grid grid-cols-2 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'नामांकित का नाम' : 'Nominee Name'}</Label>
@@ -293,13 +294,14 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
     </div>
 
     {/* ECR-16: Multiple nominees with benefit share % */}
-    <div className="pt-2 border-t">
+    <div className="pt-3 border-t border-border">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-muted-foreground">{hi ? 'नामांकित सूची (एक से ज़्यादा · हिस्सा %)' : 'Nominees (multiple · share %)'}</p>
+        <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide">{hi ? 'अतिरिक्त नामांकित — लाभ-हिस्सा % (वैकल्पिक)' : 'Additional Nominees — benefit share % (optional)'}</p>
         <Button type="button" variant="outline" size="sm" className="h-7 gap-1" onClick={addNominee}>
           <Plus className="h-3.5 w-3.5" />{hi ? 'नामांकित जोड़ें' : 'Add nominee'}
         </Button>
       </div>
+      <p className="text-[11px] text-muted-foreground mt-1">{hi ? 'सिर्फ़ तब भरें जब एक से ज़्यादा नामांकित हों और लाभ %-वार बाँटना हो (कुल 100% तक)। एक ही नामांकित हो तो ऊपर "मुख्य नामांकित" काफ़ी है।' : 'Only if there is more than one nominee and benefits are split by % (up to 100% total). For a single nominee, the Primary Nominee above is enough.'}</p>
       {nominees.map((n, i) => (
         <div key={n.id} className="grid grid-cols-12 gap-2 mt-2 items-end">
           <div className="col-span-4 space-y-1">
