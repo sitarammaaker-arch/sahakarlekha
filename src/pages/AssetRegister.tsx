@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Download, Search, Edit, Trash2, Package, RefreshCw, CheckCircle, Banknote, AlertTriangle, Clock } from 'lucide-react';
+import EmptyState from '@/components/EmptyState';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { generateAssetRegisterPDF } from '@/lib/pdf';
@@ -495,9 +496,21 @@ const AssetRegister: React.FC = () => {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={12} className="text-center text-muted-foreground py-10">
-                    <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                    {hi ? 'कोई संपत्ति नहीं मिली' : 'No assets found'}
+                  <TableCell colSpan={12} className="py-4">
+                    {assets.length === 0 ? (
+                      <EmptyState
+                        icon={Package}
+                        title={hi ? 'अभी कोई संपत्ति दर्ज नहीं' : 'No assets yet'}
+                        description={hi ? 'भवन, फर्नीचर, वाहन जैसी स्थायी संपत्तियाँ यहाँ दिखेंगी। पहली संपत्ति जोड़कर शुरू करें।' : 'Fixed assets like buildings, furniture and vehicles appear here. Add the first one to begin.'}
+                        actionLabel={hi ? 'नई संपत्ति जोड़ें' : 'Add first asset'}
+                        onAction={() => { setForm(EMPTY_FORM); setIsAddOpen(true); }}
+                      />
+                    ) : (
+                      <div className="text-center text-muted-foreground py-6">
+                        <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                        {hi ? 'खोज से कोई संपत्ति नहीं मिली' : 'No assets match your search'}
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
