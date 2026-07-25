@@ -19,6 +19,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Boxes, Plus, Pencil, Trash2, Search, PackageMinus, PackagePlus, ScanLine, X, FileSpreadsheet, Download, RotateCcw } from 'lucide-react';
+import EmptyState from '@/components/EmptyState';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
@@ -982,9 +983,19 @@ const Inventory: React.FC = () => {
             </CardHeader>
             <CardContent>
               {filteredItems.length === 0 ? (
-                <p className="text-center text-muted-foreground py-12">
-                  {hi ? 'कोई डेटा नहीं' : 'No data available'}
-                </p>
+                stockItems.length === 0 ? (
+                  <EmptyState
+                    icon={Boxes}
+                    title={hi ? 'अभी कोई स्टॉक वस्तु नहीं' : 'No stock items yet'}
+                    description={hi ? 'बिक्री/खरीद में इस्तेमाल होने वाली वस्तुएँ यहाँ दिखेंगी। पहली वस्तु जोड़कर शुरू करें।' : 'Items used in sales/purchases appear here. Add your first item to begin.'}
+                    actionLabel={hi ? 'नई वस्तु जोड़ें' : 'Add first item'}
+                    onAction={openAddItem}
+                  />
+                ) : (
+                  <p className="text-center text-muted-foreground py-12">
+                    {hi ? 'खोज से कोई वस्तु नहीं मिली' : 'No items match your search'}
+                  </p>
+                )
               ) : (
                 <div className="rounded-lg border overflow-hidden overflow-x-auto">
                   <Table>

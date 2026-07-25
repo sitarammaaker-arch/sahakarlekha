@@ -23,6 +23,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, CheckCircle, RotateCcw, EyeOff, Eye, Pencil, Printer, Zap, Settings2, ArrowLeft, ArrowLeftRight, Search, FileSpreadsheet, Download, HandCoins } from 'lucide-react';
+import EmptyState from '@/components/EmptyState';
 import BillWiseSettlement from '@/components/BillWiseSettlement';
 import { generateVoucherPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
@@ -1056,7 +1057,17 @@ const Vouchers: React.FC = () => {
           </CardHeader>
           <CardContent>
             {sortedVouchers.length === 0 ? (
-              <p className="text-center text-muted-foreground py-12">{t('noData')}</p>
+              vouchers.filter(v => !v.isDeleted).length === 0 ? (
+                <EmptyState
+                  icon={FileText}
+                  title={language === 'hi' ? 'अभी कोई वाउचर नहीं' : 'No vouchers yet'}
+                  description={language === 'hi' ? "ऊपर 'पैसा आया (रसीद) / पैसा गया (भुगतान)' टेम्पलेट से अपना पहला वाउचर बनाएँ।" : "Use the 'Money in (Receipt) / Money out (Payment)' templates above to make your first voucher."}
+                  actionLabel={language === 'hi' ? 'ऊपर जाएँ' : 'Go to entry'}
+                  onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                />
+              ) : (
+                <p className="text-center text-muted-foreground py-12">{language === 'hi' ? 'इस फ़िल्टर में कोई वाउचर नहीं' : 'No vouchers match this filter'}</p>
+              )
             ) : (
               <div className="rounded-lg border overflow-hidden">
                 <Table>
