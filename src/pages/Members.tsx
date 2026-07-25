@@ -408,6 +408,32 @@ const Members: React.FC = () => {
     setDeleteGuard({ open: true, id: member.id, name: `${member.name} (${member.memberId})`, links });
   };
 
+  // Compose the canonical nominees[] = [primary, ...additional]. The primary is built
+  // from the "Primary Nominee" block (role-marked + enriched with father/age/etc.); the
+  // additional list comes from the editor. Legacy flat fields are still written
+  // separately (below) so the statutory PDFs keep reading them unchanged (no pdf.ts
+  // change needed). `role` makes the split deterministic — existing data (no role) is
+  // treated as additional and never dropped.
+  const buildCanonicalNominees = (): Nominee[] => {
+    const additional = form.nominees.filter(n => n.name?.trim() && n.role !== 'primary');
+    const name = form.nomineeName.trim();
+    if (!name) return additional;
+    const primary: Nominee = {
+      id: crypto.randomUUID(),
+      role: 'primary',
+      name,
+      relation: form.nomineeRelation || '',
+      phone: form.nomineePhone || undefined,
+      sharePercent: 0,
+      fatherName: form.nomineeFatherName || undefined,
+      age: form.nomineeAge ? Number(form.nomineeAge) : undefined,
+      occupation: form.nomineeOccupation || undefined,
+      address: form.nomineeAddress || undefined,
+      shares: form.nomineeShares ? Number(form.nomineeShares) : undefined,
+    };
+    return [primary, ...additional];
+  };
+
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.phone) {
@@ -443,7 +469,7 @@ const Members: React.FC = () => {
       nomineeAge: form.nomineeAge ? Number(form.nomineeAge) : undefined,
       nomineeOccupation: form.nomineeOccupation || undefined, nomineeAddress: form.nomineeAddress || undefined,
       nomineeShares: form.nomineeShares ? Number(form.nomineeShares) : undefined,
-      nominees: cleanNominees,
+      nominees: buildCanonicalNominees(),
       aadhaar: form.aadhaar.replace(/\s/g, '') || undefined, pan: form.pan.toUpperCase().trim() || undefined,
       kycStatus: form.kycStatus || undefined,
       shareCount: form.shareCount ? Number(form.shareCount) : undefined,
@@ -476,7 +502,7 @@ const Members: React.FC = () => {
       nomineeAge: form.nomineeAge ? Number(form.nomineeAge) : undefined,
       nomineeOccupation: form.nomineeOccupation || undefined, nomineeAddress: form.nomineeAddress || undefined,
       nomineeShares: form.nomineeShares ? Number(form.nomineeShares) : undefined,
-      nominees: cleanNominees,
+      nominees: buildCanonicalNominees(),
       aadhaar: form.aadhaar.replace(/\s/g, '') || undefined, pan: form.pan.toUpperCase().trim() || undefined,
       kycStatus: form.kycStatus || undefined,
       shareCount: form.shareCount ? Number(form.shareCount) : undefined,
@@ -500,7 +526,7 @@ const Members: React.FC = () => {
       nomineeAge: m.nomineeAge ? String(m.nomineeAge) : '', nomineeOccupation: m.nomineeOccupation || '',
       nomineeAddress: m.nomineeAddress || '', nomineeShares: m.nomineeShares ? String(m.nomineeShares) : '',
       shareCount: m.shareCount ? String(m.shareCount) : '', shareFaceValue: m.shareFaceValue ? String(m.shareFaceValue) : '',
-      nominees: m.nominees || [],
+      nominees: (m.nominees || []).filter(n => n.role !== 'primary'),   // additional-only in the editor; primary lives in the block above
       aadhaar: m.aadhaar || '', pan: m.pan || '', kycStatus: m.kycStatus || '',
     });
   };

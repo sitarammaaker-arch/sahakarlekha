@@ -163,6 +163,17 @@ export interface Nominee {
   relation: string;
   phone?: string;
   sharePercent: number;   // share of benefits (%); across nominees must not exceed 100
+  // Nominee unification: `role: 'primary'` marks the member's main nominee — the one the
+  // statutory forms (Form-1 / nomination form / share certificate) print. It is derived
+  // from, and dual-written back to, the legacy flat nominee fields, so PDFs keep working
+  // unchanged. `role` is deterministic (no name-matching heuristic), so existing data —
+  // whose nominees[] carry no role and are all treated as additional — is never lost.
+  role?: 'primary' | 'additional';
+  fatherName?: string;
+  age?: number;
+  occupation?: string;
+  address?: string;
+  shares?: number;
 }
 
 export interface Member {
