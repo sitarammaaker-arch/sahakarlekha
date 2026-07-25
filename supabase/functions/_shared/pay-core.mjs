@@ -1155,13 +1155,14 @@ function aggregatePayslip(values, spec) {
     }
     const bounds = spec.clamps?.[code];
     const clamp = bounds ? applyClamp(raw.minor, bounds) : { value: raw.minor, clamped: "none" };
-    const line = { code, side, amount: makeMoney(clamp.value, spec.currency), clamped: clamp.clamped };
+    const minor = Math.round(clamp.value / 100) * 100;
+    const line = { code, side, amount: makeMoney(minor, spec.currency), clamped: clamp.clamped };
     if (side === "earning") {
       earnings.push(line);
-      grossEarningsMinor += clamp.value;
+      grossEarningsMinor += minor;
     } else {
       deductions.push(line);
-      grossDeductionsMinor += clamp.value;
+      grossDeductionsMinor += minor;
     }
   }
   return {
