@@ -288,6 +288,16 @@
   ],
   "headers": [
     {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+      ]
+    },
+    {
       "source": "/(dashboard|society-setup|backup-restore|user-management|super-admin|vouchers|compound-voucher|cash-book|bank-book|bank-reconciliation|ledger|ledger-heads|day-book|trial-balance|balance-sheet|profit-loss|trading-account|receipts-payments|reports|members|member-application|share-register|opening-balances|sales|purchases|features|depreciation-schedule)",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
     },
