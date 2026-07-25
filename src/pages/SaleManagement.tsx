@@ -1093,8 +1093,8 @@ const SaleManagement: React.FC = () => {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {language === 'hi'
-                ? 'यह बिक्री स्थायी रूप से हटा दी जाएगी।'
-                : 'This sale will be permanently deleted.'}
+                ? 'इस बिक्री का बही-वाउचर (और GST वाउचर) उलट दिया जाएगा और घटाया गया स्टॉक वापस जोड़ दिया जाएगा। वाउचर "हटाए गए वाउचर" में सुरक्षित रहेगा (स्थायी रूप से नहीं मिटता)।'
+                : "This sale's ledger voucher (and any GST vouchers) will be reversed and the stock it reduced will be added back. The voucher is kept under Deleted Vouchers (not permanently erased)."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
