@@ -25,6 +25,7 @@ import { pigmyAgents, pigmyAccountsForAgent, collectionTotal } from '@/lib/pigmy
 import { useToast } from '@/hooks/use-toast';
 import type { DepositType, DepositAccount } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import EmptyState from '@/components/EmptyState';
 
 const TYPE_LABELS: Record<DepositType, { hi: string; en: string }> = {
   SB: { hi: 'बचत (SB)', en: 'Savings (SB)' },
@@ -202,7 +203,17 @@ const Deposits: React.FC = () => {
       <Card>
         <CardContent className="p-0 overflow-x-auto">
           {filtered.length === 0 ? (
-            <p className="p-8 text-center text-gray-500 text-sm">{hi ? 'कोई जमा खाता नहीं।' : 'No deposit accounts yet.'}</p>
+            depositAccounts.length === 0 ? (
+              <EmptyState
+                icon={PiggyBank}
+                title={hi ? 'अभी कोई जमा खाता नहीं' : 'No deposit accounts yet'}
+                description={hi ? 'सदस्यों के SB/FD/RD/पिग्मी खाते यहाँ दिखेंगे। पहला खाता खोलकर शुरू करें।' : "Members' SB/FD/RD/Pigmy accounts appear here. Open the first one to begin."}
+                actionLabel={canEdit ? (hi ? 'नया खाता खोलें' : 'Open first account') : undefined}
+                onAction={canEdit ? () => setOpenNew(true) : undefined}
+              />
+            ) : (
+              <p className="p-8 text-center text-gray-500 text-sm">{hi ? 'खोज से कोई खाता नहीं मिला।' : 'No accounts match your search.'}</p>
+            )
           ) : (
             <Table>
               <TableHeader>
