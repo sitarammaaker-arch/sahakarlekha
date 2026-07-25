@@ -89,6 +89,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
   return (
   <form onSubmit={onSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
     {/* Basic */}
+    <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide">{hi ? 'मूल जानकारी' : 'Basic details'}</p>
     <div className="grid grid-cols-2 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{t('memberId')} <span className="text-muted-foreground">({hi ? 'स्वचालित' : 'auto'})</span></Label>
@@ -131,6 +132,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
       </div>
     </div>
     {/* Address */}
+    <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide border-t border-border pt-3">{hi ? 'पता' : 'Address'}</p>
     <div className="space-y-1">
       <Label className="text-xs">{t('address')}</Label>
       <Textarea value={form.address} onChange={e => f('address', e.target.value)} placeholder={hi ? 'पूरा पता' : 'Full address'} className="h-16" />
@@ -164,6 +166,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
       </div>
     </div>
     {/* Member type & Finance */}
+    <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide border-t border-border pt-3">{hi ? 'सदस्यता व शेयर' : 'Membership & shares'}</p>
     <div className="grid grid-cols-2 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'सदस्यता प्रकार' : 'Member Type'}</Label>
@@ -213,7 +216,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
       </p>
     )}
     {/* Nominee */}
-    <p className="text-xs font-semibold text-muted-foreground pt-1">{hi ? 'नामांकित (Nominee)' : 'Nominee Details'}</p>
+    <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide border-t border-border pt-3">{hi ? 'नामांकित (Nominee)' : 'Nominee Details'}</p>
     <div className="grid grid-cols-2 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'नामांकित का नाम' : 'Nominee Name'}</Label>
@@ -254,8 +257,8 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
     </div>
 
     {/* ECR-16: KYC (Aadhaar / PAN) */}
-    <div className="pt-2 border-t">
-      <p className="text-xs font-semibold text-muted-foreground">{hi ? 'KYC (आधार / पैन)' : 'KYC (Aadhaar / PAN)'}</p>
+    <div className="pt-3 border-t border-border">
+      <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide">{hi ? 'KYC (आधार / पैन)' : 'KYC (Aadhaar / PAN)'}</p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
         <div className="space-y-1">
           <Label className="text-xs">{hi ? 'आधार नंबर' : 'Aadhaar No.'}</Label>
