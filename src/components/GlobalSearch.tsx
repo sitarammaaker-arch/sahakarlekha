@@ -1,5 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { SearchResult } from '@/lib/siteSearch';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useHousingData } from '@/contexts/HousingDataContext';
@@ -63,6 +64,18 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
     navigate(path);
   }, [navigate, onOpenChange]);
 
+  // Knowledge results (help / cookbook / glossary / guide / blog / FAQ) — the in-app
+  // Ctrl+K used to reach only entities + pages, never the knowledge corpus. Lazy-load
+  // siteSearch on first real query so the public content isn't bundled into the eager
+  // authenticated app; it deep-links into /help, /cookbook, /glossary, etc.
+  const [knowledge, setKnowledge] = useState<SearchResult[]>([]);
+  useEffect(() => {
+    if (q.trim().length < 2) { setKnowledge([]); return; }
+    let cancelled = false;
+    import('@/lib/siteSearch').then(({ search }) => { if (!cancelled) setKnowledge(search(q, 5)); }).catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
+  }, [q]);
+
   const typeLabel = (type: string) => {
     const map: Record<string, [string, string]> = {
       receipt: ['रसीद', 'Receipt'], payment: ['भुगतान', 'Payment'], journal: ['जर्नल', 'Journal'],
@@ -73,13 +86,13 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
   const entityCount = filteredMembers.length + filteredVouchers.length + filteredAccounts.length + filteredSuppliers.length +
     filteredCustomers.length + filteredSales.length + filteredPurchases.length + filteredItems.length + filteredEmployees.length +
     filteredLoans.length + filteredAssets.length + filteredFlats.length + filteredBills.length + filteredComplaints.length;
-  const hasResults = entityCount + filteredPages.length > 0;
+  const hasResults = entityCount + filteredPages.length + knowledge.length > 0;
   const short = q.trim().length < 2;
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange} shouldFilter={false}>
       <CommandInput
-        placeholder={hi ? 'खोजें — सदस्य, वाउचर, खाता, पेज…' : 'Search members, vouchers, accounts, pages…'}
+        placeholder={hi ? 'खोजें — सदस्य, वाउचर, पेज, या "GST एंट्री कैसे"…' : 'Search members, vouchers, pages, or "how to record GST"…'}
         value={query}
         onValueChange={setQuery}
       />
@@ -290,6 +303,21 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
                   <MessageSquareWarning className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span className="font-mono text-sm">{c.complaintNo}</span>
                   <span className="text-muted-foreground text-xs truncate">{c.title}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
+
+        {knowledge.length > 0 && (
+          <>
+            {(entityCount + filteredPages.length) > 0 && <CommandSeparator />}
+            <CommandGroup heading={hi ? 'मदद / सीखें' : 'Help / Learn'}>
+              {knowledge.map(r => (
+                <CommandItem key={r.id} value={`kb-${r.id}`} onSelect={() => go(r.url)} className="gap-2">
+                  <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="truncate">{r.title}</span>
+                  <span className="text-muted-foreground text-xs ml-auto shrink-0 capitalize">{r.type}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
