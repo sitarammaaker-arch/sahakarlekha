@@ -34,6 +34,43 @@ export interface BlogPost {
 
 // Reverse-chronological is enforced by sorting on `date` below.
 export const BLOG_POSTS: BlogPost[] = [
+  // ── Registration & cooperative law ──
+  {
+    slug: 'how-to-register-a-cooperative-society',
+    metaTitle: 'सहकारी समिति का पंजीकरण कैसे करें — स्टेप बाय स्टेप | SahakarLekha',
+    metaDescription: 'सहकारी समिति का पंजीकरण कैसे होता है — RCS के पास उपविधि व दस्तावेज़ सहित आवेदन, न्यूनतम सदस्य, जाँच व पंजीकरण प्रमाणपत्र। बहु-राज्य 2002 अधिनियम सहित, आसान भाषा में।',
+    date: '2026-07-26',
+    category: 'पंजीकरण व कानून',
+    title: 'सहकारी समिति का पंजीकरण कैसे करें',
+    shortTitle: 'समिति का पंजीकरण',
+    excerpt: 'RCS के पास उपविधि व दस्तावेज़ सहित आवेदन → जाँच → पंजीकरण प्रमाणपत्र = अलग क़ानूनी पहचान।',
+    accent: 'emerald',
+    tags: ['पंजीकरण', 'RCS', 'कानून'],
+  },
+  {
+    slug: 'cooperative-society-byelaws',
+    metaTitle: 'उपविधि (Bye-laws) क्या हैं — सहकारी समिति का नियम-पुस्तक | SahakarLekha',
+    metaDescription: 'सहकारी समिति की उपविधि (bye-laws) क्या हैं — सदस्यता, अंश, बैठकें, निधियाँ, ऑडिट के आंतरिक नियम; मॉडल उपविधि व संशोधन। अधिनियम के दायरे में, आसान भाषा में।',
+    date: '2026-07-26',
+    category: 'पंजीकरण व कानून',
+    title: 'उपविधि (Bye-laws): समिति का अपना नियम-पुस्तक',
+    shortTitle: 'उपविधि (Bye-laws)',
+    excerpt: 'समिति के आंतरिक नियम — सदस्यता, अंश, बैठकें, निधियाँ; अधिनियम के दायरे में, RCS की मंज़ूरी से संशोधन।',
+    accent: 'sky',
+    tags: ['उपविधि', 'bye-laws', 'कानून'],
+  },
+  {
+    slug: 'cooperative-law-framework',
+    metaTitle: 'सहकारी कानून का ढाँचा: राज्य अधिनियम, बहु-राज्य 2002 व 97वाँ संशोधन | SahakarLekha',
+    metaDescription: 'कौन-सा कानून सहकारी समिति पर लागू होता है — राज्य सहकारी अधिनियम, बहु-राज्य अधिनियम 2002, उपविधि, RCS की भूमिका व 97वाँ संविधान संशोधन, आसान भाषा में।',
+    date: '2026-07-25',
+    category: 'पंजीकरण व कानून',
+    title: 'सहकारी कानून का ढाँचा: कौन-सा कानून लागू होता है',
+    shortTitle: 'सहकारी कानून का ढाँचा',
+    excerpt: 'राज्य अधिनियम + बहु-राज्य अधिनियम 2002 + उपविधि — तीन परतें जो तय करती हैं समिति कैसे चले।',
+    accent: 'violet',
+    tags: ['सहकारी कानून', 'राज्य अधिनियम', 'RCS'],
+  },
   // ── Governance, elections & office-bearers ──
   {
     slug: 'cooperative-society-elections',
