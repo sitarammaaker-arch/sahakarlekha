@@ -34,6 +34,43 @@ export interface BlogPost {
 
 // Reverse-chronological is enforced by sorting on `date` below.
 export const BLOG_POSTS: BlogPost[] = [
+  // ── Audit, classification & internal control ──
+  {
+    slug: 'how-cooperative-society-audit-works',
+    metaTitle: 'सहकारी समिति का ऑडिट कैसे होता है — पूरी प्रक्रिया | SahakarLekha',
+    metaDescription: 'सहकारी समिति का वार्षिक ऑडिट कैसे होता है — RCS-नियुक्त ऑडिटर, बही की जाँच, आपत्ति, ऑडिट रिपोर्ट, वर्गीकरण व निराकरण की पूरी प्रक्रिया आसान भाषा में।',
+    date: '2026-07-26',
+    category: 'ऑडिट व अनुपालन',
+    title: 'सहकारी समिति का ऑडिट कैसे होता है',
+    shortTitle: 'ऑडिट कैसे होता है',
+    excerpt: 'RCS-नियुक्त ऑडिटर बही जाँचता है → आपत्ति → रिपोर्ट → वर्गीकरण → निराकरण।',
+    accent: 'amber',
+    tags: ['ऑडिट', 'RCS', 'अनुपालन'],
+  },
+  {
+    slug: 'cooperative-audit-classification',
+    metaTitle: 'ऑडिट वर्गीकरण (A/B/C/D): सहकारी समिति की ग्रेडिंग | SahakarLekha',
+    metaDescription: 'सहकारी समिति का ऑडिट वर्गीकरण (A/B/C/D) क्या है — वित्तीय स्थिति, वसूली, अनुपालन व रिकॉर्ड से तय ग्रेड; ग्रेड क्यों मायने रखता है व कैसे सुधारें, आसान भाषा में।',
+    date: '2026-07-26',
+    category: 'ऑडिट व अनुपालन',
+    title: 'ऑडिट वर्गीकरण (A/B/C/D): समिति की ग्रेडिंग',
+    shortTitle: 'ऑडिट वर्गीकरण (A/B/C/D)',
+    excerpt: 'ऑडिट के बाद मिलने वाला ग्रेड — समिति की सेहत का रिपोर्ट कार्ड; साफ़ बही व वसूली से सुधरता है।',
+    accent: 'rose',
+    tags: ['ऑडिट वर्गीकरण', 'ग्रेडिंग', 'अनुपालन'],
+  },
+  {
+    slug: 'internal-control-in-cooperatives',
+    metaTitle: 'आंतरिक नियंत्रण (Internal Control): गड़बड़ी कैसे रोकें | SahakarLekha',
+    metaDescription: 'सहकारी समिति में आंतरिक नियंत्रण — Maker–Checker, कर्तव्यों का बँटवारा, नियमित मिलान व पहुँच-नियंत्रण — गलती व धोखाधड़ी कैसे रोकते हैं, आसान भाषा में।',
+    date: '2026-07-25',
+    category: 'ऑडिट व अनुपालन',
+    title: 'आंतरिक नियंत्रण: गड़बड़ी व धोखाधड़ी कैसे रोकें',
+    shortTitle: 'आंतरिक नियंत्रण',
+    excerpt: 'Maker–Checker, कर्तव्य-बँटवारा, नियमित मिलान व पहुँच-नियंत्रण — रोज़ की गड़बड़ी-रोकथाम।',
+    accent: 'indigo',
+    tags: ['आंतरिक नियंत्रण', 'Maker-Checker', 'ऑडिट'],
+  },
   // ── Registration & cooperative law ──
   {
     slug: 'how-to-register-a-cooperative-society',
