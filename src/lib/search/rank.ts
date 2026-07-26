@@ -178,13 +178,20 @@ export function tokenize(query: string): string[] {
     .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
 }
 
-/* On an EXACT score tie, prefer the definition. A KI glossary entry IS the answer to
-   "X क्या है", but its display title carries "· English Name", so it is longer than a blog
-   that merely mentions X — and the title-length tiebreak then handed the slot to the blog
-   ("सहकारी समिति क्या है?" surfaced a blog over the cooperative-society KI). Definitional
-   intent cannot be read here (the question word is stripped upstream), but on a tie the
-   definition is the safe pick; procedural queries score glossary LOWER, so they never
-   reach this tie. Only ties are affected. Measured by npm run eval:ask. */
+/* Definitional intent — the ONE piece of intent the stopword strip discards. When a user
+   asks "X क्या है" / "X kya hai" / "X का मतलब", the answer they want is the DEFINITION, and
+   a KI glossary entry IS the definition. We read it from the RAW query (before tokenize
+   removes the frame) and use it to break EXACT score ties toward glossary.
+
+   This is deliberately INTENT-GATED, not a blanket glossary boost. The golden set is 95/95
+   glossary-wanting, so any unconditional glossary thumb would raise eval:ask tautologically
+   (the eval cannot even see harm to non-glossary queries — there are none). Gating on the
+   definitional frame keeps the preference honest: it fires only when the user's own words
+   signal "define this", which is exactly when a definition should win. Procedural /
+   quantitative queries ("X कैसे करें", "X कितना") get NO preference. This is the ranker-level
+   realisation of the blueprint's "classify on the question frame, retrieve on the rest". */
+const DEFINITIONAL = /क्या\s*(है|हैं|होता|होती|होते)|किसे\s*कहते|मतलब|परिभाषा|\b(kya|matlab|meaning|definition)\b/u;
+export const isDefinitional = (query: string): boolean => DEFINITIONAL.test(norm(query));
 const typeTiebreak = (d: SearchDoc): number => (d.type === 'glossary' ? 0 : 1);
 
 /** Rank `docs` against `query`. The scoring function of record — see the module note. */
@@ -238,8 +245,10 @@ export function searchIndex(docs: SearchDoc[], query: string, limit = 30): Searc
   }
 
   if (results.length) {
+    // Definitional queries prefer the KI on an exact tie; all others keep the old order.
+    const def = isDefinitional(query);
     return results
-      .sort((a, b) => b.score - a.score || typeTiebreak(a) - typeTiebreak(b) || a.title.length - b.title.length)
+      .sort((a, b) => b.score - a.score || (def ? typeTiebreak(a) - typeTiebreak(b) : 0) || a.title.length - b.title.length)
       .slice(0, limit);
   }
 

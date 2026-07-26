@@ -212,6 +212,8 @@ function tokenize(query) {
   if (q.length < 2) return [];
   return q.split(/\s+/).map((t) => t.replace(/^[^\p{L}\p{N}\p{M}]+|[^\p{L}\p{N}\p{M}]+$/gu, "")).filter((t) => t.length >= 2 && !STOPWORDS.has(t));
 }
+var DEFINITIONAL = /क्या\s*(है|हैं|होता|होती|होते)|किसे\s*कहते|मतलब|परिभाषा|\b(kya|matlab|meaning|definition)\b/u;
+var isDefinitional = (query) => DEFINITIONAL.test(norm(query));
 var typeTiebreak = (d) => d.type === "glossary" ? 0 : 1;
 function searchIndex(docs, query, limit = 30) {
   const tokens = tokenize(query);
@@ -257,7 +259,8 @@ function searchIndex(docs, query, limit = 30) {
     }
   }
   if (results.length) {
-    return results.sort((a, b) => b.score - a.score || typeTiebreak(a) - typeTiebreak(b) || a.title.length - b.title.length).slice(0, limit);
+    const def = isDefinitional(query);
+    return results.sort((a, b) => b.score - a.score || (def ? typeTiebreak(a) - typeTiebreak(b) : 0) || a.title.length - b.title.length).slice(0, limit);
   }
   return partial.sort((a, b) => b.matched - a.matched || b.score - a.score || a.title.length - b.title.length).slice(0, limit).map(({ matched: _matched, ...doc }) => doc);
 }
@@ -361,7 +364,7 @@ var PROCEDURAL = [
   "\u0916\u094B\u0932\u0947\u0902",
   "kaha"
 ];
-var DEFINITIONAL = [
+var DEFINITIONAL2 = [
   "\u0915\u094D\u092F\u093E \u0939\u0948",
   "\u0915\u094D\u092F\u093E \u0939\u0948\u0902",
   "\u0915\u094D\u092F\u093E \u0939\u094B\u0924\u093E",
@@ -404,7 +407,7 @@ function classify(text, hasSociety) {
   if (has(t, PROCEDURAL)) {
     return { lane: "N", corpus: ["help", "cookbook", "guide", "glossary"], reason: "procedural \u2014 the DO layer" };
   }
-  if (has(t, DEFINITIONAL)) {
+  if (has(t, DEFINITIONAL2)) {
     return { lane: "K", corpus: ["glossary", "guide", "faq"], reason: "definitional \u2014 the KI corpus" };
   }
   return { lane: "K", corpus: [], reason: "bare term \u2014 no frame given, no corpus opinion" };
