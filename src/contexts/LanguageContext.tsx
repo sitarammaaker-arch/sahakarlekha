@@ -13,6 +13,7 @@ interface Translations {
 export const translations: Translations = {
   // Navigation
   dashboard: { hi: 'डैशबोर्ड', en: 'Dashboard' },
+  nextStep: { hi: 'अगला कदम', en: 'Next step' },
   cashBook: { hi: 'कैश बुक', en: 'Cash Book' },
   bankBook: { hi: 'बैंक बुक', en: 'Bank Book' },
   dayBook: { hi: 'डे बुक', en: 'Day Book' },

@@ -7,6 +7,7 @@ import { KeyboardShortcutsHelp } from '@/components/KeyboardShortcutsHelp';
 import FeedbackFab from '@/components/FeedbackFab';
 import ModuleGlossaryBar from '@/components/glossary/ModuleGlossaryBar';
 import Breadcrumbs from './Breadcrumbs';
+import NextSteps from './NextSteps';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -54,6 +55,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           <Breadcrumbs />
           <ModuleGlossaryBar />
           {children}
+          <NextSteps />
         </div>
       </main>
 
