@@ -34,6 +34,43 @@ export interface BlogPost {
 
 // Reverse-chronological is enforced by sorting on `date` below.
 export const BLOG_POSTS: BlogPost[] = [
+  // ── Financial analysis & MIS ──
+  {
+    slug: 'financial-ratios-for-cooperatives',
+    metaTitle: 'वित्तीय अनुपात (Financial Ratios): समिति की सेहत | SahakarLekha',
+    metaDescription: 'सहकारी समिति के काम के वित्तीय अनुपात — तरलता, वसूली %, NPA, लागत-आय व रिज़र्व अनुपात — समिति की सेहत एक नज़र में; रुझान कैसे पढ़ें, आसान भाषा में।',
+    date: '2026-07-26',
+    category: 'वित्तीय विश्लेषण',
+    title: 'वित्तीय अनुपात: समिति की सेहत एक नज़र में',
+    shortTitle: 'वित्तीय अनुपात (Ratios)',
+    excerpt: 'तरलता, वसूली %, NPA, लागत-आय व रिज़र्व — पाँच काम के अनुपात; रुझान देखें, एक साल नहीं।',
+    accent: 'sky',
+    tags: ['वित्तीय अनुपात', 'विश्लेषण', 'MIS'],
+  },
+  {
+    slug: 'mis-reports-for-management',
+    metaTitle: 'प्रबंधन के लिए MIS रिपोर्ट: कौन-सी, कब देखें | SahakarLekha',
+    metaDescription: 'सहकारी समिति की MIS रिपोर्ट — नकद रोज़, वसूली साप्ताहिक, आय-व्यय मासिक, बजट-तुलना तिमाही; प्रबंध समिति की बैठक में क्या देखें व डैशबोर्ड की भूमिका, आसान भाषा में।',
+    date: '2026-07-26',
+    category: 'वित्तीय विश्लेषण',
+    title: 'प्रबंधन के लिए MIS रिपोर्ट',
+    shortTitle: 'MIS रिपोर्ट',
+    excerpt: 'निर्णय के काम की छोटी, नियमित रिपोर्ट — नकद रोज़, वसूली साप्ताहिक, आय-व्यय मासिक।',
+    accent: 'emerald',
+    tags: ['MIS', 'डैशबोर्ड', 'प्रबंधन'],
+  },
+  {
+    slug: 'budget-vs-actual-analysis',
+    metaTitle: 'बजट बनाम वास्तविक (Budget vs Actual): भटकाव विश्लेषण | SahakarLekha',
+    metaDescription: 'सहकारी समिति में बजट बनाम वास्तविक की तुलना (variance analysis) — भटकाव कैसे निकालें व पढ़ें, कब करें, और मिले तो क्या करें; आसान भाषा में उदाहरण सहित।',
+    date: '2026-07-25',
+    category: 'वित्तीय विश्लेषण',
+    title: 'बजट बनाम वास्तविक: भटकाव समय पर पकड़ें',
+    shortTitle: 'बजट बनाम वास्तविक',
+    excerpt: 'भटकाव = वास्तविक − बजट; तिमाही तुलना से योजना का भटकाव समय पर पकड़ें।',
+    accent: 'violet',
+    tags: ['बजट', 'variance', 'विश्लेषण'],
+  },
   // ── Audit, classification & internal control ──
   {
     slug: 'how-cooperative-society-audit-works',
