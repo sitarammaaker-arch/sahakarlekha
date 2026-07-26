@@ -34,6 +34,43 @@ export interface BlogPost {
 
 // Reverse-chronological is enforced by sorting on `date` below.
 export const BLOG_POSTS: BlogPost[] = [
+  // ── Governance, elections & office-bearers ──
+  {
+    slug: 'cooperative-society-elections',
+    metaTitle: 'सहकारी समिति के चुनाव कैसे होते हैं — एक सदस्य एक वोट | SahakarLekha',
+    metaDescription: 'सहकारी समिति में चुनाव कैसे होते हैं — एक सदस्य एक वोट, आम सभा प्रबंध समिति चुनती है, नामांकन-मतदान-परिणाम की प्रक्रिया, कार्यकाल व राज्य चुनाव प्राधिकरण, आसान भाषा में।',
+    date: '2026-07-26',
+    category: 'बैठक व प्रशासन',
+    title: 'सहकारी समिति के चुनाव कैसे होते हैं',
+    shortTitle: 'सहकारी समिति के चुनाव',
+    excerpt: 'एक सदस्य एक वोट — आम सभा प्रबंध समिति चुनती है; नामांकन → मतदान → परिणाम की प्रक्रिया।',
+    accent: 'indigo',
+    tags: ['चुनाव', 'शासन', 'प्रबंध समिति'],
+  },
+  {
+    slug: 'managing-committee-role',
+    metaTitle: 'प्रबंध समिति (Managing Committee): गठन, भूमिका व कार्यकाल | SahakarLekha',
+    metaDescription: 'प्रबंध समिति क्या है — आम सभा द्वारा चुनी कार्यकारिणी जो समिति का रोज़मर्रा संचालन करती है; गठन, भूमिका, कार्यकाल व जवाबदेही आसान भाषा में।',
+    date: '2026-07-26',
+    category: 'बैठक व प्रशासन',
+    title: 'प्रबंध समिति: गठन, भूमिका और कार्यकाल',
+    shortTitle: 'प्रबंध समिति की भूमिका',
+    excerpt: 'आम सभा की चुनी कार्यकारिणी — रोज़मर्रा संचालन, वित्त-निगरानी, और आम सभा को जवाबदेही।',
+    accent: 'sky',
+    tags: ['प्रबंध समिति', 'शासन', 'संचालक मंडल'],
+  },
+  {
+    slug: 'office-bearers-chairman-secretary-treasurer',
+    metaTitle: 'अध्यक्ष, सचिव व कोषाध्यक्ष की भूमिकाएँ — सहकारी समिति | SahakarLekha',
+    metaDescription: 'सहकारी समिति के पदाधिकारी — अध्यक्ष (अध्यक्षता/प्रतिनिधित्व), सचिव (रिकॉर्ड/रोज़मर्रा प्रशासन/अनुपालन), कोषाध्यक्ष (कोष) — की भूमिकाएँ आसान भाषा में।',
+    date: '2026-07-25',
+    category: 'बैठक व प्रशासन',
+    title: 'समिति के पदाधिकारी: अध्यक्ष, सचिव और कोषाध्यक्ष',
+    shortTitle: 'अध्यक्ष, सचिव व कोषाध्यक्ष',
+    excerpt: 'हर पदाधिकारी की अलग भूमिका — अध्यक्षता, रोज़मर्रा प्रशासन/रिकॉर्ड, और कोष की निगरानी।',
+    accent: 'violet',
+    tags: ['पदाधिकारी', 'सचिव', 'शासन'],
+  },
   // ── Socio-economic role of cooperatives ──
   {
     slug: 'cooperatives-in-rural-and-agricultural-development',
