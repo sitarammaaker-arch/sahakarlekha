@@ -527,37 +527,36 @@ function helpPages(DATA) {
         : undefined,
     },
   ];
-  if (existsSync(HELP_FILE)) {
-    const src = readFileSync(HELP_FILE, 'utf-8');
-    const re = /slug:\s*'([^']+)'[\s\S]*?metaTitle:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?metaDescription:\s*'((?:[^'\\]|\\.)*)'/g;
-    let m;
-    while ((m = re.exec(src))) {
-      const [, slug, title, description] = m;
-      const url = `${SITE}/help/${slug}`;
-      const t = tasks.find((x) => x.slug === slug);
-      pages.push({
-        path: `/help/${slug}`,
-        title,
-        description,
-        lastmod: (t && t.updated) || LASTMOD.help,
-        body: t ? helpBody(t, DATA) : undefined,
-        jsonLd: [
-          { '@context': 'https://schema.org', '@type': 'Article', headline: title, description, inLanguage: 'hi', url, image: `${SITE}/og-image.png`, datePublished: (t && t.updated) || LASTMOD.help, dateModified: (t && t.updated) || LASTMOD.help, author: { '@type': 'Organization', name: 'SahakarLekha', url: SITE }, publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE, logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` } } },
-          crumb([
-            { name: 'मदद केंद्र', item: `${SITE}/help` },
-            { name: title, item: url },
-          ]),
-          // FAQPage was client-only (HelpArticle) — mirror into static HTML so the
-          // help Q&A is machine-readable for FAQ rich results + AI extraction.
-          ...(t && Array.isArray(t.faqs) && t.faqs.length
-            ? [{
-                '@context': 'https://schema.org', '@type': 'FAQPage',
-                mainEntity: t.faqs.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
-              }]
-            : []),
-        ],
-      });
-    }
+  // Iterate the loaded registry array directly. (Previously this regex-scraped the source
+  // for slug→metaTitle→metaDescription, but a quoted `slug:` inside a task's `prerequisites`
+  // desynced the stateful regex and silently dropped the FOLLOWING task from prerender +
+  // sitemap — record-sale/receive-payment/distribute-profit were all lost this way. The
+  // registry already carries every field, so there is no reason to parse text.)
+  for (const t of tasks) {
+    const { slug, metaTitle: title, metaDescription: description } = t;
+    const url = `${SITE}/help/${slug}`;
+    pages.push({
+      path: `/help/${slug}`,
+      title,
+      description,
+      lastmod: t.updated || LASTMOD.help,
+      body: helpBody(t, DATA),
+      jsonLd: [
+        { '@context': 'https://schema.org', '@type': 'Article', headline: title, description, inLanguage: 'hi', url, image: `${SITE}/og-image.png`, datePublished: t.updated || LASTMOD.help, dateModified: t.updated || LASTMOD.help, author: { '@type': 'Organization', name: 'SahakarLekha', url: SITE }, publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE, logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` } } },
+        crumb([
+          { name: 'मदद केंद्र', item: `${SITE}/help` },
+          { name: title, item: url },
+        ]),
+        // FAQPage was client-only (HelpArticle) — mirror into static HTML so the
+        // help Q&A is machine-readable for FAQ rich results + AI extraction.
+        ...(Array.isArray(t.faqs) && t.faqs.length
+          ? [{
+              '@context': 'https://schema.org', '@type': 'FAQPage',
+              mainEntity: t.faqs.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+            }]
+          : []),
+      ],
+    });
   }
   return pages;
 }
