@@ -60,8 +60,13 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'suppliers',      titleKey: 'suppliers',      icon: Truck,           route: '/suppliers',       domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 2 },
   { id: 'customers',      titleKey: 'customers',      icon: UserCheck,       route: '/customers',       domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant'], order: 3 },
   { id: 'sales',          titleKey: 'sales',          icon: ShoppingCart,    route: '/sales',           domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant'], order: 4 },
+  // Credit Note (sales return) sits right under Sales; Debit Note (purchase return) under Purchases.
+  // Same shared sales/inventory engine as consumer returns — generic to any society that buys/sells,
+  // so gated by inventory_sales (not the consumer-only pos_billing) and placed in Operations.
+  { id: 'salesReturn',    titleKey: 'salesReturn',    icon: Undo2,           route: '/sales-return',    domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant'], order: 4.5 },
   { id: 'receivePayment', titleKey: 'receivePayment', icon: HandCoins,       route: '/receive-payment', domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 5 },
   { id: 'purchases',      titleKey: 'purchases',      icon: PackagePlus,     route: '/purchases',       domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 6 },
+  { id: 'purchaseReturn', titleKey: 'purchaseReturn', icon: Undo2,           route: '/purchase-return', domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant'], order: 6.5 },
   { id: 'makePayment',    titleKey: 'makePayment',    icon: Banknote,        route: '/make-payment',    domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 7 },
   { id: 'salary',         titleKey: 'salary',         icon: BadgeDollarSign, route: '/salary',          domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 8 },
   { id: 'payroll',        titleKey: 'payroll',        icon: Wallet,          route: '/payroll',         domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 8.5 },
@@ -76,12 +81,10 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   // and (future slices) member credit sales, multi-tier pricing, patronage rebate. Reuses the
   // shared sales/inventory engines; only consumer-specific screens live in this group. ──
   { id: 'retailCounter', titleKey: 'retailCounter', icon: ScanBarcode,       route: '/retail-counter', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 0 },
-  { id: 'salesReturn',   titleKey: 'salesReturn',   icon: Undo2,             route: '/sales-return',   domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 0.5 },
   { id: 'priceLists',    titleKey: 'priceLists',    icon: Tags,              route: '/price-lists',    domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 1 },
   { id: 'memberCredit',  titleKey: 'memberCredit',  icon: HandCoins,         route: '/member-credit',  domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2 },
   { id: 'expiryDamage',  titleKey: 'expiryDamage',  icon: PackageX,          route: '/expiry-damage',  domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2.5 },
   { id: 'purchaseOrders', titleKey: 'purchaseOrders', icon: ClipboardList,   route: '/purchase-orders', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2.7 },
-  { id: 'purchaseReturn', titleKey: 'purchaseReturn', icon: Undo2,           route: '/purchase-return', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2.75 },
   { id: 'barcodeLabels', titleKey: 'barcodeLabels', icon: ScanBarcode,       route: '/barcode-labels', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2.8 },
   { id: 'patronage',     titleKey: 'patronage',     icon: Coins,             route: '/patronage',      domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 3 },
   { id: 'consumerDividend', titleKey: 'consumerDividend', icon: Landmark, route: '/consumer-dividend', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 4 },
