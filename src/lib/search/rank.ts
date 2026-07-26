@@ -163,8 +163,36 @@ export function editDistance(a: string, b: string): number {
 export function tokenize(query: string): string[] {
   const q = norm(query);
   if (q.length < 2) return [];
-  return q.split(/\s+/).filter((t) => t.length >= 2 && !STOPWORDS.has(t));
+  // Strip surrounding punctuation BEFORE the stopword check. Without this, "है?" (query
+  // ends in a question mark) is not the stopword "है", so it survives as a token — and
+  // then matches any rhetorical-question title that ends in "…है?" at title weight (+10),
+  // burying the real answer. norm() lowercases/strips nukta but keeps punctuation, so a
+  // trailing ? ! । , ) etc. must be trimmed here. Internal punctuation (26q, gst/tds) is
+  // left intact — only the leading/trailing run is removed.
+  // \p{M} (combining marks) MUST stay in the keep-class: Devanagari vowel signs (मात्रा,
+  // e.g. the ि in समिति) are marks, not letters — trimming them corrupts nearly every
+  // Hindi word. Only true punctuation (? ! । , ) …) is stripped.
+  return q
+    .split(/\s+/)
+    .map((t) => t.replace(/^[^\p{L}\p{N}\p{M}]+|[^\p{L}\p{N}\p{M}]+$/gu, ''))
+    .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
 }
+
+/* Definitional intent — the ONE piece of intent the stopword strip discards. When a user
+   asks "X क्या है" / "X kya hai" / "X का मतलब", the answer they want is the DEFINITION, and
+   a KI glossary entry IS the definition. We read it from the RAW query (before tokenize
+   removes the frame) and use it to break EXACT score ties toward glossary.
+
+   This is deliberately INTENT-GATED, not a blanket glossary boost. The golden set is 95/95
+   glossary-wanting, so any unconditional glossary thumb would raise eval:ask tautologically
+   (the eval cannot even see harm to non-glossary queries — there are none). Gating on the
+   definitional frame keeps the preference honest: it fires only when the user's own words
+   signal "define this", which is exactly when a definition should win. Procedural /
+   quantitative queries ("X कैसे करें", "X कितना") get NO preference. This is the ranker-level
+   realisation of the blueprint's "classify on the question frame, retrieve on the rest". */
+const DEFINITIONAL = /क्या\s*(है|हैं|होता|होती|होते)|किसे\s*कहते|मतलब|परिभाषा|\b(kya|matlab|meaning|definition)\b/u;
+export const isDefinitional = (query: string): boolean => DEFINITIONAL.test(norm(query));
+const typeTiebreak = (d: SearchDoc): number => (d.type === 'glossary' ? 0 : 1);
 
 /** Rank `docs` against `query`. The scoring function of record — see the module note. */
 export function searchIndex(docs: SearchDoc[], query: string, limit = 30): SearchResult[] {
@@ -217,8 +245,10 @@ export function searchIndex(docs: SearchDoc[], query: string, limit = 30): Searc
   }
 
   if (results.length) {
+    // Definitional queries prefer the KI on an exact tie; all others keep the old order.
+    const def = isDefinitional(query);
     return results
-      .sort((a, b) => b.score - a.score || a.title.length - b.title.length)
+      .sort((a, b) => b.score - a.score || (def ? typeTiebreak(a) - typeTiebreak(b) : 0) || a.title.length - b.title.length)
       .slice(0, limit);
   }
 
