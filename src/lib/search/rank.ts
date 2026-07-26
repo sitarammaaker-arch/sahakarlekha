@@ -163,8 +163,29 @@ export function editDistance(a: string, b: string): number {
 export function tokenize(query: string): string[] {
   const q = norm(query);
   if (q.length < 2) return [];
-  return q.split(/\s+/).filter((t) => t.length >= 2 && !STOPWORDS.has(t));
+  // Strip surrounding punctuation BEFORE the stopword check. Without this, "है?" (query
+  // ends in a question mark) is not the stopword "है", so it survives as a token — and
+  // then matches any rhetorical-question title that ends in "…है?" at title weight (+10),
+  // burying the real answer. norm() lowercases/strips nukta but keeps punctuation, so a
+  // trailing ? ! । , ) etc. must be trimmed here. Internal punctuation (26q, gst/tds) is
+  // left intact — only the leading/trailing run is removed.
+  // \p{M} (combining marks) MUST stay in the keep-class: Devanagari vowel signs (मात्रा,
+  // e.g. the ि in समिति) are marks, not letters — trimming them corrupts nearly every
+  // Hindi word. Only true punctuation (? ! । , ) …) is stripped.
+  return q
+    .split(/\s+/)
+    .map((t) => t.replace(/^[^\p{L}\p{N}\p{M}]+|[^\p{L}\p{N}\p{M}]+$/gu, ''))
+    .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
 }
+
+/* On an EXACT score tie, prefer the definition. A KI glossary entry IS the answer to
+   "X क्या है", but its display title carries "· English Name", so it is longer than a blog
+   that merely mentions X — and the title-length tiebreak then handed the slot to the blog
+   ("सहकारी समिति क्या है?" surfaced a blog over the cooperative-society KI). Definitional
+   intent cannot be read here (the question word is stripped upstream), but on a tie the
+   definition is the safe pick; procedural queries score glossary LOWER, so they never
+   reach this tie. Only ties are affected. Measured by npm run eval:ask. */
+const typeTiebreak = (d: SearchDoc): number => (d.type === 'glossary' ? 0 : 1);
 
 /** Rank `docs` against `query`. The scoring function of record — see the module note. */
 export function searchIndex(docs: SearchDoc[], query: string, limit = 30): SearchResult[] {
@@ -218,7 +239,7 @@ export function searchIndex(docs: SearchDoc[], query: string, limit = 30): Searc
 
   if (results.length) {
     return results
-      .sort((a, b) => b.score - a.score || a.title.length - b.title.length)
+      .sort((a, b) => b.score - a.score || typeTiebreak(a) - typeTiebreak(b) || a.title.length - b.title.length)
       .slice(0, limit);
   }
 

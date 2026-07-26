@@ -210,8 +210,9 @@ function editDistance(a, b) {
 function tokenize(query) {
   const q = norm(query);
   if (q.length < 2) return [];
-  return q.split(/\s+/).filter((t) => t.length >= 2 && !STOPWORDS.has(t));
+  return q.split(/\s+/).map((t) => t.replace(/^[^\p{L}\p{N}\p{M}]+|[^\p{L}\p{N}\p{M}]+$/gu, "")).filter((t) => t.length >= 2 && !STOPWORDS.has(t));
 }
+var typeTiebreak = (d) => d.type === "glossary" ? 0 : 1;
 function searchIndex(docs, query, limit = 30) {
   const tokens = tokenize(query);
   if (!tokens.length) return [];
@@ -256,7 +257,7 @@ function searchIndex(docs, query, limit = 30) {
     }
   }
   if (results.length) {
-    return results.sort((a, b) => b.score - a.score || a.title.length - b.title.length).slice(0, limit);
+    return results.sort((a, b) => b.score - a.score || typeTiebreak(a) - typeTiebreak(b) || a.title.length - b.title.length).slice(0, limit);
   }
   return partial.sort((a, b) => b.matched - a.matched || b.score - a.score || a.title.length - b.title.length).slice(0, limit).map(({ matched: _matched, ...doc }) => doc);
 }
