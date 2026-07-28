@@ -9,6 +9,7 @@ import { ArrowLeftRight, Download, FileSpreadsheet } from 'lucide-react';
 import { generateReceiptsPaymentsPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import type { ReceiptsPaymentsItem } from '@/types';
+import { rpParticulars } from '@/lib/ledger/rpLabel';
 
 const ReceiptsPayments: React.FC = () => {
   const { language } = useLanguage();
@@ -55,7 +56,7 @@ const ReceiptsPayments: React.FC = () => {
           </TableRow>
           {arr.map((r, i) => (
             <TableRow key={labelEn + i}>
-              <TableCell className="pl-4">{prefix} {hi ? (r.accountNameHi || r.accountName) : r.accountName}</TableCell>
+              <TableCell className="pl-4">{prefix} {rpParticulars(r, prefix, hi)}</TableCell>
               {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{getPY(r.accountName) ? fmt(getPY(r.accountName)) : '—'}</TableCell>}
               <TableCell className="text-right font-medium">{fmt(r.amount)}</TableCell>
             </TableRow>

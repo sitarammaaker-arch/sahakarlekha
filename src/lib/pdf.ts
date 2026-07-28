@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { RowInput } from 'jspdf-autotable';
+import { rpParticulars } from '@/lib/ledger/rpLabel';
 import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord, Voucher, HousingFlat, MaintenanceBill } from '@/types';
 import { ACCOUNT_IDS } from '@/lib/storage';
 import { getVoucherLines } from '@/lib/voucherUtils';
@@ -574,8 +575,8 @@ export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society:
     const cap = items.filter(i => i.nature === 'capital');
     const rev = items.filter(i => i.nature === 'revenue');
     const out: RowInput[] = [];
-    if (cap.length) { out.push(natureBand('Capital')); cap.forEach(i => out.push([`${prefix} ${i.accountName}`, fmt(i.amount)])); }
-    if (rev.length) { out.push(natureBand('Revenue')); rev.forEach(i => out.push([`${prefix} ${i.accountName}`, fmt(i.amount)])); }
+    if (cap.length) { out.push(natureBand('Capital')); cap.forEach(i => out.push([`${prefix} ${rpParticulars(i, prefix, false)}`, fmt(i.amount)])); }
+    if (rev.length) { out.push(natureBand('Revenue')); rev.forEach(i => out.push([`${prefix} ${rpParticulars(i, prefix, false)}`, fmt(i.amount)])); }
     return out;
   };
 
