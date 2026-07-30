@@ -3740,10 +3740,31 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const rollback = prev;
       const updated = { ...prev, ...data };
       const failToast = (msg: string) => toastRef.current({ title: 'सेटिंग सेव नहीं हुई', description: `Cloud save fail — refresh par badlav nahi rahega. Society settings sirf admin badal sakta hai. (${msg})`, variant: 'destructive', duration: 12000 });
-      supabase.from('society_settings').upsert({ id: societyIdRef.current, society_id: societyIdRef.current, ...updated }).then(
-        ({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); setSocietyState(rollback); failToast(error.message); } },
-        () => { setSocietyState(rollback); failToast('network'); },
-      );
+      // RULE 1: society_settings is one flat row whose column set has grown over many
+      // migrations. The whole state object rides in the upsert, so a SINGLE un-migrated
+      // column (e.g. "fyLocked" before its migration runs) makes PostgREST reject the ENTIRE
+      // save — the user then can't save ANY setting. Trim the offending column and retry so
+      // every column the DB DOES have still lands; the base row is safe. Only roll back on a
+      // real failure (RLS reject / network). A migrated DB succeeds on the first call.
+      const attempt = (payload: Record<string, unknown>, dropped: string[]): void => {
+        supabase.from('society_settings').upsert(payload).then(
+          ({ error }) => {
+            if (!error) {
+              if (dropped.length) toastRef.current({ title: 'सहेजा गया — पर कुछ कॉलम इस DB में नहीं हैं', description: `बाक़ी सब सेव हुआ; ye column is DB mein missing hain — pending migration chalayein: ${dropped.join(', ')}.`, duration: 12000 });
+              return;
+            }
+            const trimmed = dropped.length < 24 ? payloadWithoutMissingColumn(error, payload) : null;
+            if (trimmed && Object.keys(trimmed).length > 0) {
+              const col = Object.keys(payload).find(k => !(k in trimmed))!;
+              attempt(trimmed, [...dropped, col]);
+              return;
+            }
+            console.error('DB sync error:', error.message); reportError('db-sync', error.message); setSocietyState(rollback); failToast(error.message);
+          },
+          () => { setSocietyState(rollback); failToast('network'); },
+        );
+      };
+      attempt({ id: societyIdRef.current, society_id: societyIdRef.current, ...updated }, []);
       return updated;
     });
   }, []);
