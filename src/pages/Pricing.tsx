@@ -8,6 +8,10 @@
  * Free limit is on SIZE (1 society · 1 user · 200 members) + convenience, not on
  * the core accounting job. Billing is not yet wired, so paid CTAs route to /contact
  * (offline/manual activation) rather than a checkout that does not exist.
+ *
+ * Layout follows the common SaaS pricing pattern: equal-height cards, tinted header
+ * band, CTA aligned above the feature list, reassurance row, comparison table with
+ * the featured column highlighted, and an FAQ.
  */
 import React from 'react';
 import { Link } from 'react-router-dom';
@@ -15,10 +19,7 @@ import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import {
   Card,
-  CardHeader,
-  CardTitle,
   CardContent,
-  CardFooter,
 } from '@/components/ui/card';
 import {
   Table,
@@ -29,7 +30,17 @@ import {
   TableCell,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, X, ArrowRight, Star, Info, Users, Plus } from 'lucide-react';
+import {
+  CheckCircle2,
+  X,
+  ArrowRight,
+  Info,
+  Users,
+  Plus,
+  ShieldCheck,
+  CreditCard,
+  RefreshCw,
+} from 'lucide-react';
 
 /* ────────────────────────── Data ────────────────────────── */
 
@@ -59,8 +70,8 @@ const PLANS: Plan[] = [
     name: 'Free / मुफ्त',
     tagline: 'छोटी समिति के लिए / For small societies',
     price: '₹0',
-    priceNote: '',
-    period: 'हमेशा मुफ़्त / Forever free',
+    priceNote: 'हमेशा मुफ़्त / Forever free',
+    period: '',
     features: [
       { text: 'Double-Entry Accounting (दोहरी एंट्री)' },
       { text: 'सभी वित्तीय रिपोर्ट (TB · BS · P&L · R&P)' },
@@ -77,8 +88,8 @@ const PLANS: Plan[] = [
     name: 'Plus / प्लस',
     tagline: 'staff वाली सक्रिय समिति / Active society with staff',
     price: '₹3,999',
-    priceNote: '≈ ₹333/माह · प्रति समिति',
-    period: '/ साल (per society / year)',
+    priceNote: '≈ ₹333/माह · प्रति समिति / साल',
+    period: '/ साल',
     highlight: true,
     badge: 'सबसे लोकप्रिय / Most popular',
     inheritNote: 'Free का सब कुछ, और— / Everything in Free, plus:',
@@ -95,8 +106,8 @@ const PLANS: Plan[] = [
     name: 'Pro / प्रो',
     tagline: 'बड़ी / multi-branch समिति / Large or multi-branch',
     price: '₹6,999',
-    priceNote: '≈ ₹583/माह · प्रति समिति',
-    period: '/ साल (per society / year)',
+    priceNote: '≈ ₹583/माह · प्रति समिति / साल',
+    period: '/ साल',
     inheritNote: 'Plus का सब कुछ, और— / Everything in Plus, plus:',
     features: [
       { text: 'Multi-Branch Accounting · असीमित users' },
@@ -132,6 +143,30 @@ const COMPARISON: ComparisonRow[] = [
   { feature: 'White-Label Reports · API', free: false, plus: false, pro: true },
 ];
 
+interface Faq {
+  q: string;
+  a: string;
+}
+
+const FAQS: Faq[] = [
+  {
+    q: 'क्या Free सच में हमेशा मुफ़्त है? / Is Free really forever?',
+    a: 'हाँ. छोटी समिति (1 समिति · 1 user · 200 सदस्य तक) के लिए Free हमेशा मुफ़्त है — बिना क्रेडिट कार्ड. सभी statutory रिपोर्ट (GST/TDS/audit) और export कभी बंद नहीं होते. / Yes — free forever for small societies, no credit card. Statutory reports and export are never locked.',
+  },
+  {
+    q: 'भुगतान कैसे और कब होता है? / How and when do I pay?',
+    a: 'Plus व Pro सालाना (अप्रैल FY renewal) प्रति समिति हैं. अभी upgrade के लिए हमसे संपर्क करें — हम activation कर देते हैं. / Plus and Pro are billed annually per society, aligned to the April financial year. Contact us to upgrade for now.',
+  },
+  {
+    q: 'क्या मेरा डेटा सुरक्षित रहता है? / Is my data safe?',
+    a: 'हाँ. हर plan में cloud backup और पूरा data export (PDF/Excel/CSV) मिलता है — आपका डेटा हमेशा आपका है. / Yes. Every plan includes cloud backup and full data export. Your data is always yours.',
+  },
+  {
+    q: 'क्या मैं बाद में upgrade/downgrade कर सकता/सकती हूँ? / Can I change plans later?',
+    a: 'हाँ, कभी भी. समिति बढ़ने पर Plus या Pro लें; ज़रूरत बदले तो घटा भी सकते हैं. / Yes, anytime. Move up as your society grows, or down if needs change.',
+  },
+];
+
 /* ────────────────────────── Helpers ────────────────────────── */
 
 const Cell: React.FC<{ value: boolean | string }> = ({ value }) => {
@@ -141,7 +176,7 @@ const Cell: React.FC<{ value: boolean | string }> = ({ value }) => {
   return value ? (
     <CheckCircle2 className="h-5 w-5 text-green-600 inline-block" />
   ) : (
-    <X className="h-5 w-5 text-muted-foreground inline-block" />
+    <X className="h-5 w-5 text-muted-foreground/60 inline-block" />
   );
 };
 
@@ -157,8 +192,11 @@ const Pricing: React.FC = () => {
   return (
     <PublicLayout>
       {/* Hero Header */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-primary/10 py-16 sm:py-24">
+      <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-primary/10 py-16 sm:py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <span className="inline-block bg-primary/10 text-primary rounded-full px-4 py-1 text-sm font-medium mb-4">
+            सालाना billing · अप्रैल FY renewal
+          </span>
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-foreground leading-tight">
             मूल्य निर्धारण — Pricing
           </h1>
@@ -170,31 +208,36 @@ const Pricing: React.FC = () => {
       </section>
 
       {/* Section 1: Pricing Cards */}
-      <section className="py-16 bg-white">
+      <section className="pb-12 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-3 gap-8 items-stretch">
+          <div className="grid md:grid-cols-3 gap-6 lg:gap-8 items-stretch -mt-8 relative z-10">
             {PLANS.map((plan) => (
               <Card
                 key={plan.id}
-                className={`flex flex-col relative ${
+                className={`flex flex-col overflow-hidden ${
                   plan.highlight
-                    ? 'border-primary border-2 shadow-lg'
+                    ? 'border-primary border-2 shadow-xl md:-translate-y-2'
                     : 'border-2 border-border shadow-sm'
                 }`}
               >
-                {plan.badge && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap">
-                    {plan.badge}
-                  </span>
-                )}
-                <CardHeader
-                  className={`text-center rounded-t-lg ${
-                    plan.highlight ? 'bg-primary/10' : 'bg-muted/50'
+                {/* Tinted header band: badge row + name + tagline + price */}
+                <div
+                  className={`px-6 pt-6 pb-6 text-center ${
+                    plan.highlight ? 'bg-primary/10' : 'bg-muted/40'
                   }`}
                 >
-                  <CardTitle className="text-xl">{plan.name}</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-1">{plan.tagline}</p>
-                  <div className="mt-4">
+                  <div className="h-6 mb-2 flex items-center justify-center">
+                    {plan.badge && (
+                      <span className="inline-block bg-primary text-primary-foreground rounded-full px-3 py-0.5 text-xs font-medium whitespace-nowrap">
+                        {plan.badge}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-lg font-bold">{plan.name}</h3>
+                  <p className="text-xs text-muted-foreground mt-1 min-h-[2rem]">
+                    {plan.tagline}
+                  </p>
+                  <div className="mt-4 flex items-baseline justify-center gap-1">
                     <span
                       className={`text-4xl font-extrabold ${
                         plan.highlight ? 'text-primary' : 'text-foreground'
@@ -203,20 +246,32 @@ const Pricing: React.FC = () => {
                       {plan.price}
                     </span>
                     {plan.period && (
-                      <span className="text-muted-foreground text-sm ml-1">{plan.period}</span>
+                      <span className="text-muted-foreground text-sm">{plan.period}</span>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 min-h-[1rem]">
                     {plan.priceNote}
                   </p>
-                </CardHeader>
-                <CardContent className="flex-1">
+                </div>
+
+                {/* White body: CTA aligned first, then feature list */}
+                <div className="flex flex-1 flex-col p-6">
+                  <Link to={plan.cta.to} className="w-full">
+                    <Button
+                      className="w-full gap-2"
+                      size="lg"
+                      variant={plan.highlight ? 'default' : 'outline'}
+                    >
+                      {plan.cta.label} <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </Link>
+
                   {plan.inheritNote && (
-                    <p className="text-xs text-muted-foreground mb-3 font-medium">
+                    <p className="text-xs text-muted-foreground mt-5 font-medium">
                       {plan.inheritNote}
                     </p>
                   )}
-                  <ul className="space-y-3">
+                  <ul className="space-y-3 mt-4 flex-1">
                     {plan.features.map((feat) => (
                       <li key={feat.text} className="flex items-start gap-2 text-sm">
                         {feat.icon === 'info' ? (
@@ -230,24 +285,26 @@ const Pricing: React.FC = () => {
                       </li>
                     ))}
                   </ul>
-                </CardContent>
-                <CardFooter>
-                  <Link to={plan.cta.to} className="w-full">
-                    <Button
-                      className="w-full gap-2"
-                      size="lg"
-                      variant={plan.highlight ? 'default' : 'outline'}
-                    >
-                      {plan.cta.label} <ArrowRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                </CardFooter>
+                </div>
               </Card>
             ))}
           </div>
 
+          {/* Reassurance row */}
+          <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 mt-10 text-sm text-muted-foreground">
+            <span className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-primary" /> Free के लिए बिना क्रेडिट कार्ड
+            </span>
+            <span className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-primary" /> कभी भी upgrade / downgrade
+            </span>
+            <span className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-primary" /> डेटा हमेशा आपका — पूरा export
+            </span>
+          </div>
+
           {/* Federation + Add-ons strip */}
-          <div className="grid sm:grid-cols-2 gap-4 mt-8">
+          <div className="grid sm:grid-cols-2 gap-4 mt-10">
             <div className="flex items-center gap-3 rounded-lg border border-muted bg-muted/30 p-4">
               <Users className="h-6 w-6 text-primary shrink-0" />
               <div>
@@ -267,10 +324,6 @@ const Pricing: React.FC = () => {
               </div>
             </div>
           </div>
-
-          <p className="text-xs text-muted-foreground text-center mt-6">
-            सभी दाम प्रति समिति, सालाना (अप्रैल FY renewal) · Free हमेशा मुफ़्त — 1 समिति · 1 user · 200 सदस्य तक
-          </p>
         </div>
       </section>
 
@@ -280,7 +333,7 @@ const Pricing: React.FC = () => {
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-8">
             फीचर तुलना — Feature Comparison
           </h2>
-          <Card>
+          <Card className="overflow-hidden">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <Table>
@@ -288,7 +341,9 @@ const Pricing: React.FC = () => {
                     <TableRow>
                       <TableHead className="min-w-[220px]">Feature</TableHead>
                       <TableHead className="text-center w-24">Free</TableHead>
-                      <TableHead className="text-center w-28">Plus</TableHead>
+                      <TableHead className="text-center w-28 bg-primary/5 text-primary font-semibold">
+                        Plus
+                      </TableHead>
                       <TableHead className="text-center w-24">Pro</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -299,7 +354,7 @@ const Pricing: React.FC = () => {
                         <TableCell className="text-center">
                           <Cell value={row.free} />
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center bg-primary/5">
                           <Cell value={row.plus} />
                         </TableCell>
                         <TableCell className="text-center">
@@ -312,10 +367,32 @@ const Pricing: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+          <p className="text-xs text-muted-foreground text-center mt-6">
+            सभी दाम प्रति समिति, सालाना (अप्रैल FY renewal) · Free हमेशा मुफ़्त — 1 समिति · 1 user · 200 सदस्य तक
+          </p>
         </div>
       </section>
 
-      {/* Section 3: CTA */}
+      {/* Section 3: FAQ */}
+      <section className="py-16 bg-white">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8">
+            सामान्य प्रश्न — Frequently Asked
+          </h2>
+          <div className="space-y-4">
+            {FAQS.map((faq) => (
+              <Card key={faq.q} className="border-muted">
+                <CardContent className="p-5">
+                  <p className="font-medium text-sm mb-2">{faq.q}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{faq.a}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Section 4: CTA */}
       <section className="py-16 bg-primary text-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-2xl md:text-3xl font-bold mb-4">
