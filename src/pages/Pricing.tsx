@@ -177,7 +177,9 @@ const Pricing: React.FC = () => {
               <Card
                 key={plan.id}
                 className={`flex flex-col relative ${
-                  plan.highlight ? 'border-primary border-2 shadow-lg' : 'border-muted'
+                  plan.highlight
+                    ? 'border-primary border-2 shadow-lg'
+                    : 'border-2 border-border shadow-sm'
                 }`}
               >
                 {plan.badge && (
