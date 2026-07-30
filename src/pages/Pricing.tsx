@@ -78,7 +78,7 @@ const PLANS: Plan[] = [
       { text: 'GST Summary + TDS Register (26Q)' },
       { text: 'Member, Share & Loan Register' },
       { text: 'PDF / Excel / CSV Export + Cloud Backup' },
-      { text: '1 समिति · 1 user · 200 सदस्य तक', icon: 'info' },
+      { text: '1 समिति · 1 user · असीमित सदस्य', icon: 'info' },
       { text: 'Report watermark · Community support', icon: 'info' },
     ],
     cta: { label: 'मुफ्त में शुरू करें / Start Free', to: '/register' },
@@ -130,7 +130,7 @@ const COMPARISON: ComparisonRow[] = [
   { feature: 'Double-Entry Accounting + सभी रिपोर्ट', free: true, plus: true, pro: true },
   { feature: 'GST · TDS · Audit Certificate', free: true, plus: true, pro: true },
   { feature: 'Export (PDF/Excel/CSV) + Backup', free: true, plus: true, pro: true },
-  { feature: 'सदस्य सीमा / Member limit', free: '200', plus: 'असीमित', pro: 'असीमित' },
+  { feature: 'सदस्य सीमा / Member limit', free: 'असीमित', plus: 'असीमित', pro: 'असीमित' },
   { feature: 'Users', free: '1', plus: '5 +ऑडिटर', pro: 'असीमित' },
   { feature: 'समिति / Societies', free: '1', plus: '1', pro: 'Multi' },
   { feature: 'Watermark हटता / Removed', free: false, plus: true, pro: true },
@@ -151,7 +151,7 @@ interface Faq {
 const FAQS: Faq[] = [
   {
     q: 'क्या Free सच में हमेशा मुफ़्त है? / Is Free really forever?',
-    a: 'हाँ. छोटी समिति (1 समिति · 1 user · 200 सदस्य तक) के लिए Free हमेशा मुफ़्त है — बिना क्रेडिट कार्ड. सभी statutory रिपोर्ट (GST/TDS/audit) और export कभी बंद नहीं होते. / Yes — free forever for small societies, no credit card. Statutory reports and export are never locked.',
+    a: 'हाँ. छोटी समिति (1 समिति · 1 user · असीमित सदस्य) के लिए Free हमेशा मुफ़्त है — बिना क्रेडिट कार्ड. सभी statutory रिपोर्ट (GST/TDS/audit) और export कभी बंद नहीं होते. / Yes — free forever for small societies, no credit card. Statutory reports and export are never locked.',
   },
   {
     q: 'भुगतान कैसे और कब होता है? / How and when do I pay?',
@@ -368,7 +368,7 @@ const Pricing: React.FC = () => {
             </CardContent>
           </Card>
           <p className="text-xs text-muted-foreground text-center mt-6">
-            सभी दाम प्रति समिति, सालाना (अप्रैल FY renewal) · Free हमेशा मुफ़्त — 1 समिति · 1 user · 200 सदस्य तक
+            सभी दाम प्रति समिति, सालाना (अप्रैल FY renewal) · Free हमेशा मुफ़्त — 1 समिति · 1 user · असीमित सदस्य
           </p>
         </div>
       </section>
