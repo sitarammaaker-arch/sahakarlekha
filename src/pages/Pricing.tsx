@@ -78,7 +78,7 @@ const PLANS: Plan[] = [
       { text: 'GST Summary + TDS Register (26Q)' },
       { text: 'Member, Share & Loan Register' },
       { text: 'PDF / Excel / CSV Export + Cloud Backup' },
-      { text: '1 समिति · 1 user · 200 सदस्य तक', icon: 'info' },
+      { text: '1 समिति · 1 user · असीमित सदस्य', icon: 'info' },
       { text: 'Report watermark · Community support', icon: 'info' },
     ],
     cta: { label: 'मुफ्त में शुरू करें / Start Free', to: '/register' },
@@ -99,7 +99,7 @@ const PLANS: Plan[] = [
       { text: 'Auto-Backup Schedule · Payroll Automation' },
       { text: 'Watermark हटता · Priority Support' },
     ],
-    cta: { label: 'अपग्रेड — संपर्क करें / Contact to upgrade', to: '/contact' },
+    cta: { label: 'अपग्रेड करें / Upgrade', to: '/contact' },
   },
   {
     id: 'pro',
@@ -115,7 +115,7 @@ const PLANS: Plan[] = [
       { text: 'White-Label Reports · API Access' },
       { text: 'Custom COA · डेटा-migration सहायता' },
     ],
-    cta: { label: 'अपग्रेड — संपर्क करें / Contact to upgrade', to: '/contact' },
+    cta: { label: 'अपग्रेड करें / Upgrade', to: '/contact' },
   },
 ];
 
@@ -130,7 +130,7 @@ const COMPARISON: ComparisonRow[] = [
   { feature: 'Double-Entry Accounting + सभी रिपोर्ट', free: true, plus: true, pro: true },
   { feature: 'GST · TDS · Audit Certificate', free: true, plus: true, pro: true },
   { feature: 'Export (PDF/Excel/CSV) + Backup', free: true, plus: true, pro: true },
-  { feature: 'सदस्य सीमा / Member limit', free: '200', plus: 'असीमित', pro: 'असीमित' },
+  { feature: 'सदस्य सीमा / Member limit', free: 'असीमित', plus: 'असीमित', pro: 'असीमित' },
   { feature: 'Users', free: '1', plus: '5 +ऑडिटर', pro: 'असीमित' },
   { feature: 'समिति / Societies', free: '1', plus: '1', pro: 'Multi' },
   { feature: 'Watermark हटता / Removed', free: false, plus: true, pro: true },
@@ -151,7 +151,7 @@ interface Faq {
 const FAQS: Faq[] = [
   {
     q: 'क्या Free सच में हमेशा मुफ़्त है? / Is Free really forever?',
-    a: 'हाँ. छोटी समिति (1 समिति · 1 user · 200 सदस्य तक) के लिए Free हमेशा मुफ़्त है — बिना क्रेडिट कार्ड. सभी statutory रिपोर्ट (GST/TDS/audit) और export कभी बंद नहीं होते. / Yes — free forever for small societies, no credit card. Statutory reports and export are never locked.',
+    a: 'हाँ. छोटी समिति (1 समिति · 1 user · असीमित सदस्य) के लिए Free हमेशा मुफ़्त है — बिना क्रेडिट कार्ड. सभी statutory रिपोर्ट (GST/TDS/audit) और export कभी बंद नहीं होते. / Yes — free forever for small societies, no credit card. Statutory reports and export are never locked.',
   },
   {
     q: 'भुगतान कैसे और कब होता है? / How and when do I pay?',
@@ -210,13 +210,13 @@ const Pricing: React.FC = () => {
       {/* Section 1: Pricing Cards */}
       <section className="pb-12 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-3 gap-6 lg:gap-8 items-stretch -mt-8 relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-stretch -mt-8 relative z-10">
             {PLANS.map((plan) => (
               <Card
                 key={plan.id}
                 className={`flex flex-col overflow-hidden ${
                   plan.highlight
-                    ? 'border-primary border-2 shadow-xl md:-translate-y-2'
+                    ? 'border-primary border-2 shadow-xl lg:-translate-y-2'
                     : 'border-2 border-border shadow-sm'
                 }`}
               >
@@ -258,11 +258,11 @@ const Pricing: React.FC = () => {
                 <div className="flex flex-1 flex-col p-6">
                   <Link to={plan.cta.to} className="w-full">
                     <Button
-                      className="w-full gap-2"
+                      className="w-full gap-2 h-auto min-h-11 whitespace-normal text-sm leading-tight py-2.5"
                       size="lg"
                       variant={plan.highlight ? 'default' : 'outline'}
                     >
-                      {plan.cta.label} <ArrowRight className="h-4 w-4" />
+                      {plan.cta.label} <ArrowRight className="h-4 w-4 shrink-0" />
                     </Button>
                   </Link>
 
@@ -368,7 +368,7 @@ const Pricing: React.FC = () => {
             </CardContent>
           </Card>
           <p className="text-xs text-muted-foreground text-center mt-6">
-            सभी दाम प्रति समिति, सालाना (अप्रैल FY renewal) · Free हमेशा मुफ़्त — 1 समिति · 1 user · 200 सदस्य तक
+            सभी दाम प्रति समिति, सालाना (अप्रैल FY renewal) · Free हमेशा मुफ़्त — 1 समिति · 1 user · असीमित सदस्य
           </p>
         </div>
       </section>
