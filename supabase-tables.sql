@@ -869,6 +869,16 @@ alter table society_settings add column if not exists "statutoryAppropriation" b
 alter table society_settings add column if not exists "fyCloseAuthorityRequired" boolean default false;
 alter table society_settings add column if not exists "fyCloseAuthority" text;
 
+-- RULE 1 fix: the FY audit-lock STATE itself. These three were used in state + the
+-- Society Setup UI (Lock FY / unlock flow, fyLocked guard on every mutation) and even
+-- had their auxiliary columns (fyCloseAuthority, fyUnlockRequested*) migrated — but the
+-- primary lock columns were never added. Result: society_settings.upsert carried an
+-- unknown "fyLocked" column and PostgREST rejected the ENTIRE save, so NO society setting
+-- (name, financial year, period lock, approval rules) could be saved. Add them here.
+alter table society_settings add column if not exists "fyLocked" boolean default false;
+alter table society_settings add column if not exists "fyLockedAt" text;
+alter table society_settings add column if not exists "fyLockedBy" text;
+
 -- ECR-07 dual-control: FY unlock must be requested by one admin and approved by
 -- another. These hold the open request until a second admin finalises it.
 alter table society_settings add column if not exists "fyUnlockRequestedBy" text;
