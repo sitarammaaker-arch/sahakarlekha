@@ -187,7 +187,11 @@ const Pricing: React.FC = () => {
                     {plan.badge}
                   </span>
                 )}
-                <CardHeader className="text-center">
+                <CardHeader
+                  className={`text-center rounded-t-lg ${
+                    plan.highlight ? 'bg-primary/10' : 'bg-muted/50'
+                  }`}
+                >
                   <CardTitle className="text-xl">{plan.name}</CardTitle>
                   <p className="text-xs text-muted-foreground mt-1">{plan.tagline}</p>
                   <div className="mt-4">
