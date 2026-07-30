@@ -99,7 +99,7 @@ const PLANS: Plan[] = [
       { text: 'Auto-Backup Schedule · Payroll Automation' },
       { text: 'Watermark हटता · Priority Support' },
     ],
-    cta: { label: 'अपग्रेड — संपर्क करें / Contact to upgrade', to: '/contact' },
+    cta: { label: 'अपग्रेड करें / Upgrade', to: '/contact' },
   },
   {
     id: 'pro',
@@ -115,7 +115,7 @@ const PLANS: Plan[] = [
       { text: 'White-Label Reports · API Access' },
       { text: 'Custom COA · डेटा-migration सहायता' },
     ],
-    cta: { label: 'अपग्रेड — संपर्क करें / Contact to upgrade', to: '/contact' },
+    cta: { label: 'अपग्रेड करें / Upgrade', to: '/contact' },
   },
 ];
 
@@ -210,13 +210,13 @@ const Pricing: React.FC = () => {
       {/* Section 1: Pricing Cards */}
       <section className="pb-12 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-3 gap-6 lg:gap-8 items-stretch -mt-8 relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-stretch -mt-8 relative z-10">
             {PLANS.map((plan) => (
               <Card
                 key={plan.id}
                 className={`flex flex-col overflow-hidden ${
                   plan.highlight
-                    ? 'border-primary border-2 shadow-xl md:-translate-y-2'
+                    ? 'border-primary border-2 shadow-xl lg:-translate-y-2'
                     : 'border-2 border-border shadow-sm'
                 }`}
               >
@@ -258,11 +258,11 @@ const Pricing: React.FC = () => {
                 <div className="flex flex-1 flex-col p-6">
                   <Link to={plan.cta.to} className="w-full">
                     <Button
-                      className="w-full gap-2"
+                      className="w-full gap-2 h-auto min-h-11 whitespace-normal text-sm leading-tight py-2.5"
                       size="lg"
                       variant={plan.highlight ? 'default' : 'outline'}
                     >
-                      {plan.cta.label} <ArrowRight className="h-4 w-4" />
+                      {plan.cta.label} <ArrowRight className="h-4 w-4 shrink-0" />
                     </Button>
                   </Link>
 
