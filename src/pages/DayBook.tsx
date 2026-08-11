@@ -49,7 +49,7 @@ const DayBook: React.FC = () => {
       toast({ title: language === 'hi' ? 'डेबिट और क्रेडिट खाता अलग होना चाहिए' : 'Debit and Credit accounts must be different', variant: 'destructive' });
       return;
     }
-    updateVoucher(editId, {
+    const ok = updateVoucher(editId, {
       type: editType,
       date: editDate,
       debitAccountId: editDebit,
@@ -57,6 +57,10 @@ const DayBook: React.FC = () => {
       amount: Number(editAmount),
       narration: editNarration,
     });
+    // A guard (FY-lock / period-lock / approved→use-reversal / unbalanced / no-permission)
+    // already showed the real reason — don't show a misleading "success" over it, and keep
+    // the dialog open so the user can adjust and retry.
+    if (!ok) return;
     toast({ title: language === 'hi' ? 'वाउचर अपडेट किया गया' : 'Voucher updated successfully' });
     setEditId(null);
   };
