@@ -230,7 +230,7 @@ const Vouchers: React.FC = () => {
     if (eResult.warnings.length > 0) {
       toast({ title: language === 'hi' ? 'चेतावनी' : 'Warning', description: eResult.warnings[0] });
     }
-    updateVoucher(editId, {
+    const ok = updateVoucher(editId, {
       type: editType,
       date: editDate,
       debitAccountId: editDebit,
@@ -239,6 +239,9 @@ const Vouchers: React.FC = () => {
       narration: editNarration,
       memberId: editMemberId || undefined,
     });
+    // A guard (FY-lock / period-lock / approved→use-reversal / unbalanced / no-permission)
+    // already showed the real reason — don't paper over it with a false "success".
+    if (!ok) return;
     toast({ title: language === 'hi' ? 'वाउचर अपडेट किया गया' : 'Voucher updated successfully' });
     setEditId(null);
   };

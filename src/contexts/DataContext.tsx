@@ -142,7 +142,11 @@ interface DataContextType {
   assets: Asset[];
 
   addVoucher: (data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }) => Voucher;
-  updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => void;
+  // Returns true only when the edit passed every guard and was applied. Returns false
+  // when a guard blocked it (FY-lock / period-lock / approved-under-maker-checker /
+  // engine voucher / unbalanced) — the guard already showed the real reason, so callers
+  // must NOT show a success toast on false (mirrors cancelVoucher's contract).
+  updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => boolean;
   cancelVoucher: (id: string, reason: string, deletedBy: string) => boolean;
   reverseVoucher: (id: string, reason: string) => Voucher | null;
   /** T-20: post the year-end statutory appropriation of net surplus as ONE balanced voucher through
@@ -2011,13 +2015,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return v && v.id ? v : null;
   }, [suppliers, accounts, addVoucher, user?.name]);
 
-  const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => {
-    if (guardPermission('update', 'वाउचर बदलने')) return;   // ECR-06: role gate
-    if (guardFYLocked()) return;
+  const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>): boolean => {
+    if (guardPermission('update', 'वाउचर बदलने')) return false;   // ECR-06: role gate
+    if (guardFYLocked()) return false;
     const current = vouchersRef.current.find(v => v.id === id);
-    if (!current) return;
+    if (!current) return false;
     // ECR-07: can neither edit a voucher within a locked period nor move one into it.
-    if (guardPeriodLock(current.date, data.date)) return;
+    if (guardPeriodLock(current.date, data.date)) return false;
     // ECR-08: a reversed voucher — or an approved one under maker-checker — is edit-locked;
     // corrections must go through a reversal, not an in-place edit.
     if (isEditLocked(current, !!societyRef.current?.approvalRequired)) {
@@ -2028,9 +2032,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           : 'Approved voucher सीधे edit नहीं होता — correction के लिए इसे reverse करें (Reversal voucher बनेगा)।',
         variant: 'destructive', duration: 9000,
       });
-      return;
+      return false;
     }
-    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
+    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
     // Capture edit audit snapshot — only track the fields that actually changed
     const changedFields = (Object.keys(data) as (keyof typeof data)[]).filter(
       k => data[k] !== current[k]
@@ -2079,7 +2083,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           variant: 'destructive',
           duration: 12000,
         });
-        return;
+        return false;
       }
     }
 
@@ -2153,7 +2157,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
         syncEntries(updatedVoucher);
       });
-      return;
+      // The edit passed all guards and was applied to local state above (the async journal
+      // append/table projection surface their own failure toast + revert). Report success.
+      return true;
     }
 
     // ── Default (flag OFF, or a postings-neutral edit): two-step persist + rollback. BYTE-IDENTICAL. ──
@@ -2169,6 +2175,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Note: persistVoucher already handles the timing — entries land on a slight delay,
     // which is acceptable for SQL-side reports.
     syncEntries(updatedVoucher);
+    // Edit applied to local state + persistence initiated (a base-write failure reverts and
+    // toasts on its own). Success from the caller's toast perspective — mirrors cancelVoucher.
+    return true;
   }, []);
 
   // Returns true if the voucher was actually cancelled, false if blocked (a guard fired
