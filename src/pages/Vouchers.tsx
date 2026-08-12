@@ -151,6 +151,17 @@ const Vouchers: React.FC = () => {
   const [editAmount, setEditAmount] = useState('');
   const [editNarration, setEditNarration] = useState('');
   const [editMemberId, setEditMemberId] = useState('');
+  // Compound (>2-line) edit — populated by openEdit only for multi-line vouchers, else [].
+  const [editLines, setEditLines] = useState<LineEntry[]>([]);
+  const editIsCompound = editLines.length > 0;
+  const editDrTotal = editLines.filter(l => l.type === 'Dr').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  const editCrTotal = editLines.filter(l => l.type === 'Cr').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  const editLineDiff = Math.abs(editDrTotal - editCrTotal);
+  const editLinesBalanced = editDrTotal > 0 && editCrTotal > 0 && editLineDiff < 0.001;
+  const handleEditAddLine = (type: 'Dr' | 'Cr') => setEditLines(prev => [...prev, makeBlankLine(type)]);
+  const handleEditRemoveLine = (id: string) => setEditLines(prev => prev.filter(l => l.id !== id));
+  const handleEditLineChange = (id: string, field: keyof LineEntry, value: string) =>
+    setEditLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
 
   // ── Print voucher PDF (A5, Tally-style narrative) ──────────────────────────
   const handlePrintVoucher = (voucherId: string) => {
@@ -201,7 +212,7 @@ const Vouchers: React.FC = () => {
     }
   };
 
-  const openEdit = (v: { id: string; date: string; type: VoucherType; debitAccountId: string; creditAccountId: string; amount: number; narration?: string; memberId?: string; refType?: string }) => {
+  const openEdit = (v: typeof vouchers[number]) => {
     if (v.refType === 'purchase') {
       toast({ title: language === 'hi' ? 'वाउचर यहाँ से edit नहीं होगा' : 'Cannot edit here', description: language === 'hi' ? 'Purchase Management से edit करें' : 'Edit from Purchase Management', variant: 'destructive' });
       return;
@@ -218,10 +229,42 @@ const Vouchers: React.FC = () => {
     setEditAmount(String(v.amount));
     setEditNarration(v.narration || '');
     setEditMemberId(v.memberId || '');
+    // Multi-line (>2) voucher → edit its lines directly; a simple voucher clears this and uses the Dr/Cr/amount fields.
+    const vLines = getVoucherLines(v);
+    setEditLines(vLines.length > 2
+      ? vLines.map(l => ({ id: l.id, accountId: l.accountId, type: l.type, amount: String(l.amount), narration: l.narration || '' }))
+      : []);
   };
 
   const handleEditSave = () => {
     if (!editId) return;
+    // Compound (>2-line) voucher: validate + save the full line set (single-entry form can't represent it).
+    if (editIsCompound) {
+      if (editLines.some(l => !l.accountId || !(parseFloat(l.amount) > 0))) {
+        toast({ title: language === 'hi' ? 'सभी पंक्तियों में खाता और राशि भरें' : 'All lines must have an account and amount', variant: 'destructive' });
+        return;
+      }
+      if (!editLinesBalanced) {
+        toast({ title: language === 'hi' ? 'डेबिट और क्रेडिट का योग बराबर होना चाहिए' : 'Debit and Credit totals must be equal', variant: 'destructive' });
+        return;
+      }
+      const vLines: VoucherLine[] = editLines.map(l => ({ id: l.id, accountId: l.accountId, type: l.type, amount: parseFloat(l.amount), narration: l.narration || undefined }));
+      const ok = updateVoucher(editId, {
+        type: editType,
+        date: editDate,
+        lines: vLines,
+        debitAccountId: editLines.find(l => l.type === 'Dr')?.accountId || '',
+        creditAccountId: editLines.find(l => l.type === 'Cr')?.accountId || '',
+        amount: editDrTotal,
+        narration: editNarration,
+        memberId: editMemberId || undefined,
+      });
+      // A guard already surfaced the real reason on failure — don't mask it with a false success.
+      if (!ok) return;
+      toast({ title: language === 'hi' ? 'वाउचर अपडेट किया गया' : 'Voucher updated successfully' });
+      setEditId(null);
+      return;
+    }
     const eResult = validateVoucher(editDebit, editCredit, editAmount, editDate, accounts, society, editType);
     if (!eResult.valid) {
       toast({ title: eResult.errors[0], variant: 'destructive' });
@@ -1195,18 +1238,81 @@ const Vouchers: React.FC = () => {
                 </Select>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label><span className="text-destructive font-bold">Dr.</span> {language === 'hi' ? 'नाम खाता' : 'Debit Account'}</Label>
-              <AccountPicker value={editDebit} onChange={setEditDebit} triggerClassName="h-9" />
-            </div>
-            <div className="space-y-1.5">
-              <Label><span className="text-success font-bold">Cr.</span> {language === 'hi' ? 'जमा खाता' : 'Credit Account'}</Label>
-              <AccountPicker value={editCredit} onChange={setEditCredit} triggerClassName="h-9" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>{t('amount')} (₹)</Label>
-              <Input type="number" step="any" value={editAmount} onChange={e => setEditAmount(e.target.value)} min="1" className="h-10 text-lg font-bold text-center" />
-            </div>
+            {!editIsCompound && (
+              <>
+                <div className="space-y-1.5">
+                  <Label><span className="text-destructive font-bold">Dr.</span> {language === 'hi' ? 'नाम खाता' : 'Debit Account'}</Label>
+                  <AccountPicker value={editDebit} onChange={setEditDebit} triggerClassName="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label><span className="text-success font-bold">Cr.</span> {language === 'hi' ? 'जमा खाता' : 'Credit Account'}</Label>
+                  <AccountPicker value={editCredit} onChange={setEditCredit} triggerClassName="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{t('amount')} (₹)</Label>
+                  <Input type="number" step="any" value={editAmount} onChange={e => setEditAmount(e.target.value)} min="1" className="h-10 text-lg font-bold text-center" />
+                </div>
+              </>
+            )}
+            {editIsCompound && (
+              <div className="space-y-3">
+                <Label className="text-sm font-semibold">{language === 'hi' ? 'नाम-जमा पंक्तियाँ (Compound)' : 'Debit / Credit Lines (Compound)'}</Label>
+                <div className="rounded-lg border overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-muted/40 border-b">
+                        <th className="text-xs font-medium text-left px-2 py-2">{language === 'hi' ? 'खाता' : 'Account'}</th>
+                        <th className="w-16 text-xs font-medium text-left px-1 py-2">Dr/Cr</th>
+                        <th className="w-28 text-xs font-medium text-left px-1 py-2">{language === 'hi' ? 'राशि' : 'Amount'}</th>
+                        <th className="w-8"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {editLines.map(line => (
+                        <tr key={line.id} className={`border-b last:border-0 ${line.type === 'Dr' ? 'bg-blue-50/30' : 'bg-green-50/30'}`}>
+                          <td className="py-1 px-1"><AccountPicker value={line.accountId} onChange={id => handleEditLineChange(line.id, 'accountId', id)} triggerClassName="h-9" /></td>
+                          <td className="py-1 px-1">
+                            <Select value={line.type} onValueChange={v => handleEditLineChange(line.id, 'type', v)}>
+                              <SelectTrigger className="h-9 w-16"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Dr"><span className="font-bold text-blue-700">Dr</span></SelectItem>
+                                <SelectItem value="Cr"><span className="font-bold text-green-700">Cr</span></SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="py-1 px-1"><Input type="number" step="any" value={line.amount} onChange={e => handleEditLineChange(line.id, 'amount', e.target.value)} min="0" className="h-9 text-right font-mono" /></td>
+                          <td className="py-1 px-1">
+                            {editLines.length > 2 && (
+                              <Button type="button" variant="ghost" size="icon" className="h-9 w-9 text-destructive" onClick={() => handleEditRemoveLine(line.id)}>
+                                <Minus className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" className="gap-1.5 text-blue-700 border-blue-300" onClick={() => handleEditAddLine('Dr')}>
+                    <Plus className="h-3.5 w-3.5" />{language === 'hi' ? 'डेबिट पंक्ति' : 'Add Dr'}
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" className="gap-1.5 text-green-700 border-green-300" onClick={() => handleEditAddLine('Cr')}>
+                    <Plus className="h-3.5 w-3.5" />{language === 'hi' ? 'क्रेडिट पंक्ति' : 'Add Cr'}
+                  </Button>
+                </div>
+                <div className={cn('flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium',
+                  editLinesBalanced ? 'bg-success/10 border border-success/30 text-success' : 'bg-amber-50 border border-amber-300 text-amber-700')}>
+                  <div className="flex gap-4">
+                    <span>Dr: <strong>₹{editDrTotal.toLocaleString('hi-IN')}</strong></span>
+                    <span>Cr: <strong>₹{editCrTotal.toLocaleString('hi-IN')}</strong></span>
+                  </div>
+                  {editLinesBalanced
+                    ? <span>{language === 'hi' ? 'संतुलित' : 'Balanced'} ✓</span>
+                    : <span>{language === 'hi' ? 'अंतर' : 'Diff'}: ₹{editLineDiff.toLocaleString('hi-IN')}</span>}
+                </div>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>{t('narration')}</Label>
               <Textarea value={editNarration} onChange={e => setEditNarration(e.target.value)} rows={2} placeholder={language === 'hi' ? 'विवरण...' : 'Narration...'} />
