@@ -72,7 +72,7 @@ const LabourDataContext = createContext<LabourDataContextValue | undefined>(unde
 export function LabourProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   // Compose core (never fork): FY-lock from society; sub-ledger via the core account engine.
-  const { society, accounts, vouchers, musterEntries, addAccount, updateAccount, deleteAccount, addVoucher, cancelVoucher } = useData();
+  const { society, accounts, vouchers, musterEntries, addAccount, updateAccount, deleteAccount, addVoucher, cancelVoucher, getAccountBalance } = useData();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   useEffect(() => { toastRef.current = toast; }, [toast]);
@@ -229,6 +229,16 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       toastRef.current({ title: 'विभाग डिलीट नहीं हो सकता', description: `इस विभाग के ${liveBills} live bill(s) हैं — पहले Department Billing में वे delete करें, फिर विभाग हटाएँ।`, variant: 'destructive', duration: 10000 });
       return;
     }
+    // Tally-style (परत 1): if the sub-ledger is NOT referenced by any live voucher but still carries
+    // a balance, deleting it would drop that balance (an opening-only orphan). Block the whole delete
+    // so the department + its account never partial-delete. A referenced account is fine — it is
+    // rename-retained below (RULE-3), which preserves the balance for audit.
+    const referenced = vouchers.some(v => !v.isDeleted && (v.debitAccountId === old.accountId || v.creditAccountId === old.accountId || (v.lines || []).some(l => l.accountId === old.accountId)));
+    if (!referenced && Math.abs(getAccountBalance(old.accountId)) >= 0.005) {
+      const abs = Math.abs(getAccountBalance(old.accountId)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      toastRef.current({ title: 'पहले बैलेंस settle करें', description: `विभाग "${old.name}" के खाते पर ₹${abs} बाकी है — पहले इसे settle करें या journal से दूसरे खाते में भेजें, तभी delete होगा।`, variant: 'destructive', duration: 12000 });
+      return;
+    }
     setDepartmentsState(prev => { const u = prev.filter(d => d.id !== id); storage.setDepartments(u); return u; });
     supabase.from('departments').delete().eq('id', id).then(({ error }) => {
       if (error) {
@@ -238,11 +248,10 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         return;
       }
       // Preserve audit tie-out: rename the sub-ledger if any voucher references it, else drop it.
-      const referenced = vouchers.some(v => !v.isDeleted && (v.debitAccountId === old.accountId || v.creditAccountId === old.accountId || (v.lines || []).some(l => l.accountId === old.accountId)));
       if (referenced) updateAccount(old.accountId, { name: `${old.name} [Department deleted]`, isSystem: false });
       else deleteAccount(old.accountId);
     });
-  }, [departments, departmentBills, society, user, vouchers, updateAccount, deleteAccount]);
+  }, [departments, departmentBills, society, user, vouchers, updateAccount, deleteAccount, getAccountBalance]);
 
   // ── Department Bills (income side) — compose the core voucher engine ──────────
   // Bill: Dr department receivable / Cr 4203 Labour Charges (income), tagged workOrderId.
