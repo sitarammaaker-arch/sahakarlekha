@@ -206,7 +206,7 @@ interface DataContextType {
 
   addAccount: (data: Omit<LedgerAccount, 'id'>) => LedgerAccount;
   updateAccount: (id: string, data: Partial<LedgerAccount>) => void;
-  deleteAccount: (id: string) => void;
+  deleteAccount: (id: string) => boolean;
   mergeAccounts: (keepId: string, removeId: string) => number;
   resetAccounts: (templateAccounts: LedgerAccount[]) => void;
   updateSociety: (data: Partial<SocietySettings>) => void;
@@ -343,6 +343,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const { toast } = useToast();
   const toastRef = useRef(toast);
   useEffect(() => { toastRef.current = toast; }, [toast]);
+  // Tally-style ledger-balance guard reads the live account balance through this ref. It is kept
+  // in sync further below (right after getAccountBalance is defined), so the early-declared delete
+  // guards — deleteAccount/deleteSupplier/deleteCustomer — can all consult the same source.
+  const accountBalanceFnRef = useRef<(accountId: string) => number>(() => 0);
   const societyIdRef = useRef(user?.societyId || 'SOC001');
   // Keep ref updated when user changes
   useEffect(() => { societyIdRef.current = user?.societyId || 'SOC001'; }, [user?.societyId]);
@@ -746,6 +750,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const role = userRef.current?.role;
     if (role && rbacCan(role, permission)) return false; // allowed
     toastRef.current({ title: 'अनुमति नहीं', description: `आपकी भूमिका को ${actionHi} की अनुमति नहीं है। (Your role cannot ${permission}.)`, variant: 'destructive', duration: 8000 });
+    return true; // blocked
+  }, []);
+  // Tally-style ledger safety (परत 1 / RULE-3): a ledger or party whose account still carries a
+  // NON-ZERO balance can never be removed or orphaned — otherwise that balance strands in reports
+  // as a "[…deleted]" / orphan row (the very leak we are closing). Mirrors Tally's "Cannot delete.
+  // Ledger is used in transactions." An epsilon (₹0.005) prevents a rounding-paisa false block.
+  // Returns TRUE when BLOCKED (same convention as guardFYLocked / guardPermission).
+  const guardAccountBalance = useCallback((accountId: string | undefined, labelHi: string): boolean => {
+    if (!accountId) return false;
+    const bal = accountBalanceFnRef.current(accountId);
+    if (Math.abs(bal) < 0.005) return false; // zero within rounding → safe to remove
+    const abs = Math.abs(bal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    toastRef.current({
+      title: 'पहले बैलेंस settle करें',
+      description: `${labelHi} के खाते पर ₹${abs} बाकी है — पहले इसे settle करें या journal से दूसरे खाते में भेजें, तभी delete होगा। (Ledger has a non-zero balance.)`,
+      variant: 'destructive',
+      duration: 12000,
+    });
     return true; // blocked
   }, []);
   const [loans, setLoansState] = useState<Loan[]>([]);
@@ -3586,17 +3608,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, []);
 
-  const deleteAccount = useCallback((id: string) => {
-    if (guardPermission('delete', 'खाता मिटाने')) return;   // ECR-06: role gate
-    if (guardFYLocked()) return;
+  // Returns true only when the account was actually removed; false on any guard bail. Callers
+  // (e.g. LedgerHeads) must gate their "deleted" success toast on this, or a blocked delete
+  // would still read as success (the false-success-toast class fixed for vouchers in 3f734c8).
+  const deleteAccount = useCallback((id: string): boolean => {
+    if (guardPermission('delete', 'खाता मिटाने')) return false;   // ECR-06: role gate
+    if (guardFYLocked()) return false;
 
     // H11: Block deletion of built-in system accounts (CASH, BANK, 5101, 3403, etc.)
     const account = accounts.find(a => a.id === id);
-    if (!account) { toastRef.current({ title: 'Account not found', variant: 'destructive' }); return; }
+    if (!account) { toastRef.current({ title: 'Account not found', variant: 'destructive' }); return false; }
     if (account.isSystem) {
       toastRef.current({ title: 'System account', description: `"${account.name}" is a built-in system account — cannot be deleted (used by Sales/Purchases/Closing Stock posting).`, variant: 'destructive' });
-      return;
+      return false;
     }
+
+    // Tally-style: an account with a non-zero balance (incl. opening-only) can never be deleted.
+    if (guardAccountBalance(id, `खाता "${account.name}"`)) return false;
 
     // H10: Block if account is referenced by active vouchers or by a supplier/customer sub-ledger
     const activeV = vouchersRef.current.filter(v => !v.isDeleted);
@@ -3606,17 +3634,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     );
     if (usedInLines) {
       toastRef.current({ title: 'Cannot delete account', description: `"${account.name}" is used in active vouchers. Cancel/delete those vouchers first.`, variant: 'destructive' });
-      return;
+      return false;
     }
     const supLinked = suppliersRef.current.find(s => s.accountId === id);
     if (supLinked) {
       toastRef.current({ title: 'Cannot delete account', description: `"${account.name}" is Supplier "${supLinked.name}"'s account. Delete the supplier instead.`, variant: 'destructive' });
-      return;
+      return false;
     }
     const cusLinked = customersRef.current.find(c => c.accountId === id);
     if (cusLinked) {
       toastRef.current({ title: 'Cannot delete account', description: `"${account.name}" is Customer "${cusLinked.name}"'s account. Delete the customer instead.`, variant: 'destructive' });
-      return;
+      return false;
     }
 
     setAccountsState(prev => prev.filter(a => a.id !== id));
@@ -3632,6 +3660,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else if (zeroEvent) persistLedgerEvent(zeroEvent);
     });
     console.info(`[AUDIT-DELETE] Account id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    return true;
   }, [accounts, society.fyLocked]);
 
   // Merge duplicate accounts: move all voucher references from removeId → keepId, then delete removeId
@@ -4462,6 +4491,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const m = src.get(accountId);   // undefined ⇒ unknown account (was `if (!account) return 0`)
     return m === undefined ? 0 : toRupees(m);
   }, [accountBalanceMinorMap, ledgerBalanceMinorMap]);
+  // Keep the Tally-style balance guard pointed at the live balance function (declared far above,
+  // before the delete guards). Effects run after render, so no temporal-dead-zone concern.
+  useEffect(() => { accountBalanceFnRef.current = getAccountBalance; }, [getAccountBalance]);
 
   // P0 #4 / ECR-05 (MS-03): detect drift between the member scalar (subsidiary) and the
   // Share-Capital ledger account (control). getAccountBalance returns a signed (Dr−Cr)
@@ -6957,6 +6989,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'Cannot delete supplier', description: `${livePurchases} purchase(s) linked. Delete those purchases first from Purchase Management.`, variant: 'destructive' });
       return;
     }
+    // Tally-style: block if the linked Sundry Creditor account still carries a balance.
+    if (guardAccountBalance(sup.accountId, `आपूर्तिकर्ता "${sup.name}"`)) return;
     setSuppliersState(prev => prev.filter(s => s.id !== id));
     supabase.from('suppliers').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     // Only hard-delete the linked Sundry Creditor account if NO vouchers (even soft-deleted) reference it
@@ -7117,6 +7151,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'Cannot delete customer', description: `${liveSales} sale(s) linked. Delete those sales first from Sale Management.`, variant: 'destructive' });
       return;
     }
+    // Tally-style: block if the linked Sundry Debtor account still carries a balance.
+    if (guardAccountBalance(cus.accountId, `ग्राहक "${cus.name}"`)) return;
     setCustomersState(prev => prev.filter(c => c.id !== id));
     supabase.from('customers').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     if (cus.accountId) {

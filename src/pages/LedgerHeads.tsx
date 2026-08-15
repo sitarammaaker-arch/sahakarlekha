@@ -703,8 +703,12 @@ const LedgerHeads: React.FC = () => {
         language={hi ? 'hi' : 'en'}
         onConfirmDelete={() => {
           if (deleteGuard.id) {
-            deleteAccount(deleteGuard.id);
-            toast({ title: hi ? 'खाता हटाया गया' : 'Account deleted' });
+            // Only announce success when the delete actually happened — deleteAccount bails (with
+            // its own toast) on a balance/voucher/system/FY guard, and a blind success toast here
+            // would contradict that block (the false-success-toast class fixed for vouchers).
+            if (deleteAccount(deleteGuard.id)) {
+              toast({ title: hi ? 'खाता हटाया गया' : 'Account deleted' });
+            }
           }
         }}
       />
