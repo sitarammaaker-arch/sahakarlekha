@@ -36,6 +36,7 @@ import type { LedgerAccount } from '@/types';
 import { validateVoucher } from '@/lib/validation';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { isEngineVoucher } from '@/lib/accounting/voucherImmutability';
 
 type EntryMode = 'aasan' | 'expert';
 
@@ -124,6 +125,19 @@ const Vouchers: React.FC = () => {
   const [reverseReason, setReverseReason] = useState('');
   const [showCancelled, setShowCancelled] = useState(false);
   const [savedVoucherNo, setSavedVoucherNo] = useState<string | null>(null);
+  // ── Admin-only bulk cancel ────────────────────────────────────────────────
+  // Multi-select cancellation of vouchers. ADMIN role only (this is the most
+  // destructive bulk op). Everything routes through the same guarded cancelVoucher
+  // (soft-cancel + cascade + engine/linked/FY guards), never a hard delete, and is
+  // capped so a stray "select all" can't nuke thousands at once.
+  const isAdmin = user?.role === 'admin';
+  const BULK_CANCEL_CAP = 50;
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkReason, setBulkReason] = useState('');
+  const [bulkConfirm, setBulkConfirm] = useState('');
+  // Selection is meaningful only for the active list — clear it whenever the view flips.
+  useEffect(() => { setSelectedIds(new Set()); }, [showCancelled]);
 
   // Multi-line expert mode state
   type LineEntry = { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: string; narration: string };
@@ -457,6 +471,36 @@ const Vouchers: React.FC = () => {
     (cancelTarget.refType === 'sale' && sales.find(s => s.id === cancelTarget.refId)?.voucherId === cancelTarget.id) ||
     (cancelTarget.refType === 'purchase' && purchases.find(p => p.id === cancelTarget.refId)?.voucherId === cancelTarget.id)
   );
+
+  // ── Admin-only bulk cancel: which vouchers may be selected ─────────────────
+  // Mirrors cancelVoucher's own refusals so only genuinely-cancellable rows get a
+  // checkbox (no toast-spam from the guarded loop, and the count the user sees is honest).
+  const bulkCancellable = (v: typeof vouchers[0]): boolean => {
+    if (v.isDeleted || isEngineVoucher(v) || v.reversedBy) return false;
+    if (v.refType === 'purchase' && purchases.find(p => p.id === v.refId)?.voucherId === v.id) return false;
+    if (v.refType === 'sale' && sales.find(s => s.id === v.refId)?.voucherId === v.id) return false;
+    return true;
+  };
+  const selectableVouchers = isAdmin && !showCancelled ? sortedVouchers.filter(bulkCancellable) : [];
+  const allSelected = selectableVouchers.length > 0 && selectableVouchers.every(v => selectedIds.has(v.id));
+  const toggleOne = (id: string) => setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleAll = () => setSelectedIds(prev => prev.size >= selectableVouchers.length && selectableVouchers.every(v => prev.has(v.id))
+    ? new Set() : new Set(selectableVouchers.map(v => v.id)));
+  const runBulkCancel = () => {
+    const ids = Array.from(selectedIds);
+    let ok = 0, skipped = 0;
+    for (const id of ids) {
+      if (cancelVoucher(id, bulkReason.trim(), user?.name || 'System')) ok++; else skipped++;
+    }
+    toast({
+      title: language === 'hi' ? 'बल्क रद्द पूरा' : 'Bulk cancel done',
+      description: language === 'hi'
+        ? `${ok} वाउचर रद्द${skipped ? ` · ${skipped} छोड़े गए (system/linked)` : ''}. Cancelled सूची से restore हो सकते हैं।`
+        : `${ok} cancelled${skipped ? ` · ${skipped} skipped (system/linked)` : ''}. Restorable from the Cancelled list.`,
+    });
+    setSelectedIds(new Set());
+    setBulkOpen(false); setBulkReason(''); setBulkConfirm('');
+  };
 
   const typeBadgeClass = (type: VoucherType) => {
     if (type === 'receipt') return 'bg-success/20 text-success border-success/30';
@@ -1102,6 +1146,30 @@ const Vouchers: React.FC = () => {
             )}
           </CardHeader>
           <CardContent>
+            {/* Admin-only bulk-cancel action bar — appears once rows are selected */}
+            {isAdmin && !showCancelled && selectedIds.size > 0 && (
+              <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-2.5">
+                <span className="text-sm font-medium">
+                  {language === 'hi' ? `${selectedIds.size} वाउचर चुने गए` : `${selectedIds.size} selected`}
+                </span>
+                {selectedIds.size > BULK_CANCEL_CAP && (
+                  <span className="text-xs text-destructive font-medium">
+                    {language === 'hi' ? `एक बार में अधिकतम ${BULK_CANCEL_CAP}` : `Max ${BULK_CANCEL_CAP} at a time`}
+                  </span>
+                )}
+                <div className="ml-auto flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                    {language === 'hi' ? 'हटाएँ' : 'Clear'}
+                  </Button>
+                  <Button variant="destructive" size="sm" className="gap-2"
+                    disabled={selectedIds.size === 0 || selectedIds.size > BULK_CANCEL_CAP}
+                    onClick={() => { setBulkReason(''); setBulkConfirm(''); setBulkOpen(true); }}>
+                    <Trash2 className="h-4 w-4" />
+                    {language === 'hi' ? `चुने हुए रद्द करें (${selectedIds.size})` : `Cancel selected (${selectedIds.size})`}
+                  </Button>
+                </div>
+              </div>
+            )}
             {sortedVouchers.length === 0 ? (
               vouchers.filter(v => !v.isDeleted).length === 0 ? (
                 <EmptyState
@@ -1119,6 +1187,15 @@ const Vouchers: React.FC = () => {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50">
+                      {isAdmin && !showCancelled && (
+                        <TableHead className="w-10">
+                          <input type="checkbox" className="h-4 w-4 cursor-pointer align-middle"
+                            checked={allSelected}
+                            onChange={toggleAll}
+                            title={language === 'hi' ? 'सभी चुनें' : 'Select all'}
+                            disabled={selectableVouchers.length === 0} />
+                        </TableHead>
+                      )}
                       <TableHead className="font-semibold">{t('voucherNo')}</TableHead>
                       <TableHead className="font-semibold">{t('date')}</TableHead>
                       <TableHead className="font-semibold">{language === 'hi' ? 'प्रकार' : 'Type'}</TableHead>
@@ -1139,7 +1216,18 @@ const Vouchers: React.FC = () => {
                       // ECR-08: reversed / reversal entries are edit-locked; correct via reversal.
                       const editLocked = !!v.reversedBy || (!!society.approvalRequired && v.approvalStatus === 'approved');
                       return (
-                        <TableRow key={v.id} className={cn('hover:bg-muted/30', cancelled && 'opacity-50 bg-red-50/30 dark:bg-red-900/10')}>
+                        <TableRow key={v.id} className={cn('hover:bg-muted/30', cancelled && 'opacity-50 bg-red-50/30 dark:bg-red-900/10', selectedIds.has(v.id) && 'bg-destructive/5')}>
+                          {isAdmin && !showCancelled && (
+                            <TableCell className="w-10">
+                              {bulkCancellable(v) ? (
+                                <input type="checkbox" className="h-4 w-4 cursor-pointer align-middle"
+                                  checked={selectedIds.has(v.id)}
+                                  onChange={() => toggleOne(v.id)} />
+                              ) : (
+                                <span className="inline-block h-4 w-4" title={language === 'hi' ? 'System/linked — bulk में नहीं' : 'System/linked — not bulk-cancellable'} />
+                              )}
+                            </TableCell>
+                          )}
                           <TableCell>
                             <Badge variant="outline" className={cn('font-mono text-xs', cancelled && 'line-through opacity-60')}>{v.voucherNo}</Badge>
                             {cancelled && <Badge variant="destructive" className="ml-1 text-xs py-0">{language === 'hi' ? 'रद्द' : 'Cancelled'}</Badge>}
@@ -1422,6 +1510,45 @@ const Vouchers: React.FC = () => {
               disabled={!cancelReason.trim() || cancelLinkedActive}
             >
               {language === 'hi' ? 'रद्द करें' : 'Cancel Voucher'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Admin-only bulk cancel — reason + typed confirmation */}
+      <AlertDialog open={bulkOpen} onOpenChange={open => { if (!open) { setBulkOpen(false); setBulkConfirm(''); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">
+              {language === 'hi' ? `${selectedIds.size} वाउचर रद्द करें?` : `Cancel ${selectedIds.size} vouchers?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {language === 'hi'
+                ? 'चुने हुए सभी वाउचर soft-cancel होंगे (उनकी entries/stock/sale सहित)। ये Cancelled सूची में जाएँगे और ज़रूरत पड़ने पर restore हो सकते हैं — hard-delete नहीं होता।'
+                : 'All selected vouchers will be soft-cancelled (with their entries/stock/sale). They move to the Cancelled list and can be restored — nothing is hard-deleted.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="px-4 pb-2 space-y-3">
+            <div>
+              <Label className="text-sm font-medium">{language === 'hi' ? 'रद्द करने का कारण *' : 'Cancellation Reason *'}</Label>
+              <Textarea className="mt-1" rows={2}
+                placeholder={language === 'hi' ? 'कारण लिखें...' : 'Enter reason...'}
+                value={bulkReason} onChange={e => setBulkReason(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">
+                {language === 'hi' ? 'पुष्टि हेतु "CANCEL" लिखें *' : 'Type "CANCEL" to confirm *'}
+              </Label>
+              <Input className="mt-1" value={bulkConfirm} onChange={e => setBulkConfirm(e.target.value)} placeholder="CANCEL" />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setBulkOpen(false); setBulkConfirm(''); }}>{language === 'hi' ? 'वापस' : 'Back'}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              disabled={!bulkReason.trim() || bulkConfirm.trim().toUpperCase() !== 'CANCEL' || selectedIds.size === 0 || selectedIds.size > BULK_CANCEL_CAP}
+              onClick={runBulkCancel}>
+              {language === 'hi' ? `हाँ, ${selectedIds.size} रद्द करें` : `Yes, cancel ${selectedIds.size}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
