@@ -801,13 +801,21 @@ export function generateBalanceSheetPDF(
 
   const amtCols = hasPY ? [1, 2, 3] : [1, 2];
 
-  // Left half — Liabilities
+  // VERTICAL (stacked) format — Capital & Liabilities full width, then Assets full width
+  // below it. The old side-by-side half-width layout broke on long sheets: a liabilities
+  // list that overflowed one page repeated its GRAND TOTAL footer on every page (double
+  // total), and the assets table then started on whichever page the cursor had reached,
+  // offset into the right half with large empty gaps. Full-width stacking paginates cleanly,
+  // and showFoot:'lastPage' prints each GRAND TOTAL exactly once.
+
+  // Capital & Liabilities — full width
   autoTable(doc, {
     startY,
-    margin: { left: 15, right: 158 },
+    margin: { left: 15, right: 15 },
     head: liabHead,
     body: liab.body,
     foot: [hasPY ? ['GRAND TOTAL', fmt(liab.pyTotal), fmt(totalLiabilities), fmt(totalLiabilities)] : ['GRAND TOTAL', fmt(totalLiabilities), fmt(totalLiabilities)]],
+    showFoot: 'lastPage',
     styles: { fontSize: 7.5, cellPadding: 1.5, font },
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
@@ -821,13 +829,14 @@ export function generateBalanceSheetPDF(
   });
   const liabFinalY = (doc as any).lastAutoTable.finalY;
 
-  // Right half — Assets
+  // Assets — full width, stacked directly below Liabilities
   autoTable(doc, {
-    startY,
-    margin: { left: 154, right: 15 },
+    startY: liabFinalY + 8,
+    margin: { left: 15, right: 15 },
     head: assetHead,
     body: asset.body,
     foot: [hasPY ? ['GRAND TOTAL', fmt(asset.pyTotal), fmt(totalAssets), fmt(totalAssets)] : ['GRAND TOTAL', fmt(totalAssets), fmt(totalAssets)]],
+    showFoot: 'lastPage',
     styles: { fontSize: 7.5, cellPadding: 1.5, font },
     headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
@@ -841,7 +850,7 @@ export function generateBalanceSheetPDF(
   });
   const assetFinalY = (doc as any).lastAutoTable.finalY;
 
-  const bsFinalY = Math.max(liabFinalY, assetFinalY) + 10;
+  const bsFinalY = assetFinalY + 10;   // Assets is now the lower (last) table
   addAuditorCertificate(doc, font, society, 'Balance Sheet', bsFinalY);
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('BalanceSheet', society));

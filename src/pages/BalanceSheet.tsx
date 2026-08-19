@@ -300,6 +300,9 @@ const BalanceSheet: React.FC = () => {
       <h3 className="text-lg font-semibold text-primary pb-2 border-b">
         {hi ? sideLabelHi : sideLabel}
       </h3>
+      {/* Contain any residual overflow inside the table's own box so a tight column never
+          forces the whole page to scroll horizontally. */}
+      <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
@@ -415,6 +418,7 @@ const BalanceSheet: React.FC = () => {
           </TableRow>
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 
@@ -487,7 +491,10 @@ const BalanceSheet: React.FC = () => {
           </p>
         </CardHeader>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Stack the two sides until xl: on a laptop, side-by-side + the prior-year/Change
+              comparative columns overflowed the width and forced horizontal scrollbars.
+              Each side stacks full-width below xl; side-by-side only on wide monitors. */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {renderSide(liabilityGroups, 'Capital & Liabilities', 'कैपिटल एवं लायबिलिटीज़', totalLiabilities, pyTotalLiab, true)}
             {renderSide(assetGroups, 'Assets', 'संपत्तियां', totalAssets, pyTotalAsset, false)}
           </div>
