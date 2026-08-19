@@ -66,6 +66,11 @@ export default function OpeningBalances() {
   const totalCredit = Object.values(balances).filter(e => e.type === 'credit').reduce((s, e) => s + e.amount, 0);
   const isBalanced = Math.abs(totalDebit - totalCredit) < 1;
 
+  // Group (parent) accounts that currently carry a non-zero opening (pending edits included).
+  // Reports ignore these, so they are a silent source of a Trial-Balance gap — surface them
+  // loudly so the user moves the amount onto a ledger (leaf) account.
+  const groupsWithOpening = balanceAccounts.filter(a => a.isGroup && (balances[a.id]?.amount || 0) > 0);
+
   const handleCSV = () => {
     const headers = ['Account Name', 'Type', 'Opening Balance', 'Balance Type'];
     const rows = filtered.map(a => [a.name, a.type, a.openingBalance || 0, a.openingBalanceType || 'debit']);
@@ -79,6 +84,25 @@ export default function OpeningBalances() {
 
   // Save: update each account's openingBalance in Supabase via DataContext
   const handleSave = useCallback(() => {
+    // GUARD: an opening balance on a GROUP (parent) account is silently ignored by the Trial
+    // Balance and Balance Sheet — both count LEDGER (leaf) accounts only. Money entered on a
+    // group vanishes from every report (a real ₹58L funding was lost this way), leaving the
+    // sheet out of balance with no warning. Block it so funding lands on a real ledger account.
+    const groupWithOpening = Object.values(balances).find(e => {
+      const acc = accounts.find(a => a.id === e.accountId);
+      return acc?.isGroup && e.amount > 0;
+    });
+    if (groupWithOpening) {
+      const acc = accounts.find(a => a.id === groupWithOpening.accountId);
+      toast({
+        title: hi ? 'समूह खाते पर प्रारंभिक शेष नहीं डाल सकते' : 'Cannot set an opening on a group account',
+        description: hi
+          ? `"${acc?.name}" एक समूह (parent) खाता है — रिपोर्ट (Trial Balance/Balance Sheet) इसकी opening नहीं गिनतीं, इसलिए यह गायब हो जाती है। इसे 0 करें और यह रकम किसी लेजर (leaf) खाते पर डालें।`
+          : `"${acc?.name}" is a group (parent) account — reports (Trial Balance/Balance Sheet) do not count its opening, so it silently disappears. Set it to 0 and enter the amount on a ledger (leaf) account instead.`,
+        variant: 'destructive', duration: 12000,
+      });
+      return;
+    }
     // Update accounts that have balances set
     Object.values(balances).forEach(entry => {
       updateAccount(entry.accountId, { openingBalance: entry.amount, openingBalanceType: entry.type });
@@ -90,7 +114,7 @@ export default function OpeningBalances() {
       }
     });
     toast({ title: hi ? 'प्रारंभिक शेष सहेजा गया' : 'Opening balances saved' });
-  }, [balances, balanceAccounts, updateAccount, hi, toast]);
+  }, [balances, balanceAccounts, accounts, updateAccount, hi, toast]);
 
   // Carry forward: compute closing balance from vouchers and set as opening
   const handleCarryForward = useCallback(() => {
@@ -190,6 +214,24 @@ export default function OpeningBalances() {
         </CardContent></Card>
       </div>
 
+      {groupsWithOpening.length > 0 && (
+        <div className="p-3 bg-destructive/5 border border-destructive/30 rounded-lg text-destructive text-sm space-y-1">
+          <p className="font-semibold">
+            {hi ? '⚠️ समूह खातों पर opening — रिपोर्ट इन्हें नहीं गिनतीं' : '⚠️ Opening on group accounts — reports ignore these'}
+          </p>
+          <p className="text-xs">
+            {hi
+              ? 'नीचे लाल "समूह" टैग वाले खातों की opening Trial Balance / Balance Sheet में नहीं जाती (वे केवल लेजर खाते गिनते हैं)। इन्हें 0 करें और यह रकम किसी लेजर (leaf) खाते पर डालें — तभी sheet संतुलित होगी:'
+              : 'The opening on the accounts tagged "GROUP" below never reaches the Trial Balance / Balance Sheet (they count ledger accounts only). Set each to 0 and move the amount onto a ledger (leaf) account so the sheet ties:'}
+          </p>
+          <ul className="text-xs list-disc pl-5">
+            {groupsWithOpening.map(a => (
+              <li key={a.id}>{hi ? (a.nameHi || a.name) : a.name} — ₹{fmt(balances[a.id]?.amount || 0)}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="flex items-center gap-3 flex-wrap">
         <Select value={filterType} onValueChange={v => setFilterType(v as 'all' | 'asset' | 'liability' | 'equity')}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
@@ -228,7 +270,15 @@ export default function OpeningBalances() {
                   return (
                     <TableRow key={acct.id}>
                       <TableCell className="font-mono text-xs">{acct.id}</TableCell>
-                      <TableCell className="font-medium text-sm">{acct.name}</TableCell>
+                      <TableCell className="font-medium text-sm">
+                        {acct.name}
+                        {acct.isGroup && (
+                          <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/30 align-middle"
+                            title={hi ? 'समूह खाता — रिपोर्ट इसकी opening नहीं गिनतीं' : 'Group account — reports ignore its opening'}>
+                            {hi ? 'समूह' : 'GROUP'}
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <span className={`px-1.5 py-0.5 rounded text-xs ${
                           acct.type === 'asset' ? 'bg-blue-100 text-blue-700' :
