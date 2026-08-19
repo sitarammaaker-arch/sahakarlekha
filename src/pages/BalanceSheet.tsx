@@ -96,11 +96,28 @@ const BalanceSheet: React.FC = () => {
   const hasPY = !!pyYear && Object.keys(pyBalances).length > 0;
   const getPY = (id: string) => pyBalances[id] ?? 0;
 
-  // All leaf balances by type (same as original flat BS)
-  const allEquityLeaf = trialBalance.filter(b => b.account.type === 'equity' && !b.account.isGroup);
-  const allLiabilityLeaf = trialBalance.filter(b => b.account.type === 'liability' && !b.account.isGroup);
-  const allCapLiabLeaf = [...allEquityLeaf, ...allLiabilityLeaf];
-  const allAssetLeaf = trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup);
+  // ── Auto-reclassify by balance SIGN (Tally-style net Dr/Cr grouping) ──────────
+  // A control / party account whose LIVE balance is opposite to its stored type — an asset
+  // gone Cr (e.g. आढ़तिया "ARTHIYA A/C", a net creditor the society owes for years), or a
+  // liability/equity gone Dr — is shown on the side its BALANCE dictates, not its fixed
+  // type. This stops the sheet showing negative assets/liabilities, and it self-corrects
+  // when a swinging party account flips side next period (no manual re-typing, which the
+  // app can't do for an account that already carries transactions).
+  // Balance-preserving: moving a Cr-balance asset off the asset side and onto the liability
+  // side raises BOTH totals by the same amount, so Assets = Liabilities still holds exactly
+  // (this fixes presentation, NOT a genuine opening-balance gap).
+  // netBalance = Dr − Cr: > 0 belongs on Assets, < 0 belongs on Liabilities. A zero-balance
+  // row keeps its natural side (and is filtered out of the display anyway).
+  const typeAssetLeaf = trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup);
+  const typeCapLiabLeaf = trialBalance.filter(b => (b.account.type === 'liability' || b.account.type === 'equity') && !b.account.isGroup);
+  const allAssetLeaf = [
+    ...typeAssetLeaf.filter(b => b.netBalance >= 0),   // assets with a normal Dr balance
+    ...typeCapLiabLeaf.filter(b => b.netBalance > 0),  // a liability/equity gone Dr → shown as an asset
+  ];
+  const allCapLiabLeaf = [
+    ...typeCapLiabLeaf.filter(b => b.netBalance <= 0), // liabilities/equity with a normal Cr balance
+    ...typeAssetLeaf.filter(b => b.netBalance < 0),    // an asset gone Cr (e.g. ARTHIYA) → shown as a liability
+  ];
   // When the closing-stock journal is NOT posted but inventory items DO carry a physical
   // closing stock, the Inventory ledger (group 3400) still shows the stale OPENING stock
   // (already consumed into gross profit). In that case drop the 3400 leaves and show the
@@ -255,7 +272,7 @@ const BalanceSheet: React.FC = () => {
     }
     generateBalanceSheetPDF(
       assetLeaves,
-      [...trialBalance.filter(b => b.account.type === 'equity' && !b.account.isGroup), ...trialBalance.filter(b => b.account.type === 'liability' && !b.account.isGroup)],
+      allCapLiabLeaf,   // reclassified-by-sign, same as the on-screen sheet (ARTHIYA etc. on the liability side)
       netProfit, society, language, 0, accounts, stockItems, showLedgers, unpostedStock
     );
   };
