@@ -32,8 +32,8 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
       },
       {
         q: 'क्या यह सच में मुफ्त है? / Is it really free?',
-        aHi: 'हां, 100% मुफ्त। कोई छिपा शुल्क नहीं, कोई ट्रायल अवधि नहीं। सभी फीचर्स — वाउचर, रिपोर्ट, TDS, GST, ऑडिट — सब मुफ्त में उपलब्ध हैं।',
-        aEn: 'Yes, 100% free. No hidden charges, no trial period. All features — vouchers, reports, TDS, GST, audit — are available for free.',
+        aHi: 'Core accounting हमेशा मुफ्त है — Free plan पर वाउचर, रिपोर्ट, TDS, GST व ऑडिट सब उपलब्ध, बिना क्रेडिट कार्ड, बिना ट्रायल। Staff के लिए multiple users, role-based access, payroll व multi-branch चाहिए तो किफायती Plus (₹3,999/वर्ष) या Pro (₹9,999/वर्ष) चुनें।',
+        aEn: 'Core accounting is always free — the Free plan includes vouchers, reports, TDS, GST and audit, with no credit card and no trial. For staff users, role-based access, payroll and multi-branch, choose the affordable Plus (₹3,999/yr) or Pro (₹9,999/yr).',
       },
       {
         q: 'कौन-कौन सी समितियों के लिए है? / Which society types are supported?',
