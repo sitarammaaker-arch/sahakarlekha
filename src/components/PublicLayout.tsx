@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose 
 import { ArrowRight, Menu } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { SOCIAL_CHANNELS, SocialIcon } from '@/lib/socials';
-import WhatsAppFab from '@/components/WhatsAppFab';
+// import WhatsAppFab from '@/components/WhatsAppFab'; // temporarily hidden per user request (2026-08-20) — re-enable with the JSX below
 import { SOCIETY_TYPES } from '@/content/societyTypes';
 
 interface PublicLayoutProps {
@@ -204,8 +204,9 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
         </div>
       </footer>
 
-      {/* Floating WhatsApp contact — shown on every public page */}
-      <WhatsAppFab />
+      {/* Floating WhatsApp contact — TEMPORARILY HIDDEN per user request (2026-08-20).
+          Re-enable: uncomment the import at the top of this file AND the line below. */}
+      {/* <WhatsAppFab /> */}
     </div>
   );
 };
