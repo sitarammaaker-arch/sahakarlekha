@@ -889,14 +889,14 @@ function staticExtraPages(DATA) {
   // SoftwareApplication/WebSite/FAQPage, and transform() preserves them for path '/'.
   pages.push({
     path: '/',
-    title: 'SahakarLekha — सहकारी समिति लेखा सॉफ्टवेयर | Free Cooperative Society Accounting Software India',
-    description: 'भारत की सहकारी समितियों के लिए मुफ्त क्लाउड-आधारित लेखा सॉफ्टवेयर — ट्रायल बैलेंस, बैलेंस शीट, TDS 26Q, GST व RCS ऑडिट-प्रारूप, सब एक क्लिक में। हिन्दी + English, हमेशा मुफ़्त। India\'s only cooperative-specific accounting software.',
+    title: 'SahakarLekha — Cooperative Accounting & Management Platform for India',
+    description: 'भारतीय cooperative societies के लिए accounting, GST/TDS, member records, reports और audit-ready workflows — PACS, Dairy, Marketing, Consumer व अन्य। SahakarLekha Core Accounting के साथ मुफ्त शुरू करें, Hindi + English।',
     lastmod: LASTMOD.static,
     body: shell({
       html:
-        `<h1>अपनी समिति का ऑडिट अब हफ़्तों नहीं, केवल दिनों में पूरा करें।</h1>` +
-        `<p>SahakarLekha भारत का <strong>एकमात्र सहकारी-विशेष लेखा सॉफ्टवेयर</strong> है — ट्रायल बैलेंस, बैलेंस शीट, TDS 26Q, GST व RCS ऑडिट-प्रारूप, सब एक क्लिक में। हिन्दी + English। <strong>हमेशा मुफ़्त।</strong></p>` +
-        `<p>India's only cooperative-specific accounting platform — for PACS, dairy, marketing, consumer and housing societies. Vouchers, ledgers and statutory reports (Trial Balance, Balance Sheet, Receipts &amp; Payments, TDS/GST summaries, RCS audit format), free forever, in Hindi and English.</p>` +
+        `<h1>सहकारी समिति का Accounting, Compliance और Control — एक ही जगह।</h1>` +
+        `<p>PACS, dairy, marketing, consumer और अन्य cooperative societies के लिए बनाया गया SahakarLekha — जहाँ vouchers से लेकर financial statements, GST/TDS और audit-ready reports तक एक connected system में रहते हैं। हिन्दी + English। <strong>Core accounting हमेशा मुफ्त।</strong></p>` +
+        `<p>Purpose-built for Indian cooperative societies — PACS, dairy, marketing, consumer and housing. Vouchers, ledgers and statutory reports (Trial Balance, Balance Sheet, Receipts &amp; Payments, TDS/GST summaries, RCS / statutory audit-ready formats). Core accounting free; Plus and Pro plans for staff and multi-branch operations.</p>` +
         `<ul>` +
           `<li>असीमित वाउचर व सदस्य — नकद/बैंक, खरीद-बिक्री, वेतन, ऋण, जमा</li>` +
           `<li>सभी रिपोर्ट PDF/Excel में — ट्रायल बैलेंस, बैलेंस शीट, आय-व्यय, TDS/GST</li>` +
