@@ -31,6 +31,7 @@ import {
 /* ─── Config (set these as assets become available) ─── */
 const DEMO_VIDEO_ID = '';                 // e.g. 'dQw4w9WgXcQ'
 const WHATSAPP = WHATSAPP_NUMBER;          // central number from socials.tsx
+const SHOW_COMMUNITY = false;              // temporarily hide the homepage community/social section (user request 2026-08-20) — flip to true to re-enable
 // Sample report is generated on-demand from a fictional demo society — no static asset.
 const handleSampleReport = async () => {
   trackEvent('sample_report_generated', { source: 'landing' });
@@ -537,7 +538,8 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* ───────── COMMUNITY ───────── */}
+      {/* ───────── COMMUNITY ───────── (temporarily hidden per user request 2026-08-20 — flip SHOW_COMMUNITY to re-enable) */}
+      {SHOW_COMMUNITY && (
       <section className="py-12 bg-muted/30 border-t">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h3 className="text-xl font-bold text-foreground">हमारे समुदाय से जुड़ें / Join our community</h3>
@@ -553,6 +555,7 @@ const LandingPage: React.FC = () => {
           </div>
         </div>
       </section>
+      )}
     </PublicLayout>
   );
 };
