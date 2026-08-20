@@ -1014,6 +1014,50 @@ function staticExtraPages(DATA) {
   return pages;
 }
 
+/* ---------------- blog RSS 2.0 feed (lightweight — latest 30 live posts) ---------------- */
+// Re-parses the blog registry (same proven per-post regex as blogPages / the sitemap)
+// and emits a minimal RSS 2.0 feed to dist/rss.xml. No dependencies, no bodies —
+// just title, link, guid, pubDate and the meta description per post.
+function buildBlogRss() {
+  if (!existsSync(BLOG_FILE)) return null;
+  const src = readFileSync(BLOG_FILE, 'utf-8');
+  const today = new Date().toISOString().slice(0, 10);
+  const re = /slug:\s*'([^']+)'[\s\S]*?metaTitle:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?metaDescription:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?date:\s*'([^']+)'(?:,\s*\r?\n\s*updated:\s*'([^']+)')?/g;
+  const posts = [];
+  let m;
+  while ((m = re.exec(src))) {
+    const [, slug, title, description, date, updated] = m;
+    if (date > today) continue; // scheduled (future-dated) post — not published yet
+    posts.push({ slug, title, description, date, updated });
+  }
+  if (!posts.length) return null;
+  posts.sort((a, b) => (a.date < b.date ? 1 : -1));
+  const rfc822 = (d) => new Date(`${d}T00:00:00Z`).toUTCString();
+  const cleanTitle = (t) => t.replace(/\s*\|\s*SahakarLekha\s*$/, ''); // drop the SEO suffix in feed titles
+  const lastBuild = rfc822(maxDate(posts.map((p) => p.updated || p.date), today));
+  const items = posts.slice(0, 30).map((p) => {
+    const url = `${SITE}/blog/${p.slug}`;
+    return `  <item>\n` +
+      `    <title>${esc(cleanTitle(p.title))}</title>\n` +
+      `    <link>${url}</link>\n` +
+      `    <guid isPermaLink="true">${url}</guid>\n` +
+      `    <pubDate>${rfc822(p.date)}</pubDate>\n` +
+      `    <description>${esc(p.description)}</description>\n` +
+      `  </item>`;
+  });
+  return `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n` +
+    `<channel>\n` +
+    `  <title>सहकार लेखा ब्लॉग — SahakarLekha Blog</title>\n` +
+    `  <link>${SITE}/blog</link>\n` +
+    `  <atom:link href="${SITE}/rss.xml" rel="self" type="application/rss+xml" />\n` +
+    `  <description>सहकारी समितियों के लिए डिजिटल लेखांकन, वाउचर एंट्री, ऑडिट, अनुपालन व प्रबंधन पर सरल हिन्दी लेख।</description>\n` +
+    `  <language>hi</language>\n` +
+    `  <lastBuildDate>${lastBuild}</lastBuildDate>\n` +
+    items.join('\n') + `\n` +
+    `</channel>\n</rss>\n`;
+}
+
 /* ---------------- sitemap index + per-family child sitemaps (GOS-02) ---------------- */
 
 function familyOf(path) {
@@ -1183,6 +1227,16 @@ try {
       perFamily.map((e) => `${e.name.replace('sitemap-', '').replace('.xml', '')}=${e.count}`).join(', '));
   } catch (e) {
     console.warn('[prerender] sitemap generation skipped:', e && e.message ? e.message : e);
+  }
+
+  try {
+    const rss = buildBlogRss();
+    if (rss) {
+      writeFileSync(resolve(DIST, 'rss.xml'), rss, 'utf-8');
+      console.log('[prerender] wrote rss.xml (blog feed).');
+    }
+  } catch (e) {
+    console.warn('[prerender] rss generation skipped:', e && e.message ? e.message : e);
   }
 } catch (err) {
   console.warn('[prerender] skipped due to error:', err && err.message ? err.message : err);
