@@ -56,7 +56,7 @@ const LASTMOD = {
   cookbook: '2026-06-27',
   calc: '2026-06-27',
   faq: '2026-06-19',
-  pricing: '2026-06-19',
+  pricing: '2026-08-20',
   static: '2026-06-19',
 };
 
@@ -957,17 +957,24 @@ function staticExtraPages(DATA) {
 
   pages.push({
     path: '/pricing',
-    title: 'मूल्य — SahakarLekha हमेशा मुफ़्त | Free Cooperative Accounting',
-    description: 'SahakarLekha सहकारी समितियों के लिए हमेशा मुफ़्त — कोई छिपा शुल्क नहीं. मुफ़्त बनाम प्रीमियम सुविधाओं की तुलना देखें. Free forever for cooperative societies; compare free vs premium features.',
+    title: 'SahakarLekha Pricing — Free, Plus & Pro Cooperative Accounting Plans',
+    description: 'SahakarLekha Free से cooperative accounting शुरू करें। Staff, role-based access, payroll, multi-branch accounting और advanced features के लिए Plus या Pro चुनें।',
     lastmod: LASTMOD.pricing,
     jsonLd: [crumb([{ name: 'मूल्य', item: `${SITE}/pricing` }])],
     body: shell({
       current: 'मूल्य',
       html:
-        `<h1>SahakarLekha हमेशा मुफ़्त है</h1>` +
-        `<p>सहकारी समितियों के लिए पूरा लेखा सॉफ्टवेयर — वाउचर, लेजर, ट्रायल बैलेंस, बैलेंस शीट, TDS/GST सारांश, ऑडिट रिपोर्ट — <strong>100% मुफ़्त</strong>। कोई छिपा शुल्क नहीं, कोई ट्रायल अवधि नहीं, कोई क्रेडिट कार्ड नहीं।</p>` +
-        `<ul><li>असीमित वाउचर व सदस्य</li><li>सभी रिपोर्ट PDF/Excel में</li><li>हिन्दी + English</li><li>क्लाउड बैकअप</li></ul>` +
-        `<p><a href="/faq">अक्सर पूछे जाने वाले प्रश्न देखें</a></p>` +
+        `<h1>SahakarLekha मूल्य — Free, Plus व Pro</h1>` +
+        `<p>Core accounting हमेशा मुफ्त। आपकी समिति छोटी हो या बढ़ रही हो — SahakarLekha उसके साथ बढ़ता है। Staff, automation और advanced control की ज़रूरत हो तो Plus या Pro चुनें।</p>` +
+        `<h2>Free — ₹0 (हमेशा मुफ्त)</h2>` +
+        `<p>छोटी, single-user समिति के लिए असली core accounting — demo नहीं। 1 समिति · 1 user · असीमित vouchers व सदस्य। Ledger, Trial Balance, Balance Sheet, P&amp;L, Receipts &amp; Payments, GST/TDS सारांश, Member/Share/Loan register, PDF/Excel/CSV export व secure cloud backup। बिना ट्रायल, बिना क्रेडिट कार्ड — आपका डेटा आपका।</p>` +
+        `<h2>Plus — ₹3,999 / वित्त वर्ष (≈ ₹333/माह) · सबसे लोकप्रिय</h2>` +
+        `<p>staff के साथ चलने वाली समिति के लिए। Free का सब कुछ, और: <strong>5 Staff Users + 1 Auditor/CA शामिल</strong>, Role-Based Access व staff activity controls, payroll automation, scheduled backup/export, report branding हटता व priority support।</p>` +
+        `<h2>Pro — ₹9,999 / वित्त वर्ष (≈ ₹833/माह)</h2>` +
+        `<p>multi-branch व advanced संचालन के लिए। Plus का सब कुछ, और: Unlimited Users, Multi-Branch Accounting व branch-wise reporting, Multi-Society Consolidation, Custom Chart of Accounts, API Access, Data-Migration सहायता व Custom-Branded Reports।</p>` +
+        `<h2>Enterprise / Federation — ₹49,000/साल से</h2>` +
+        `<p>Federations, unions, clusters व बड़े deployments के लिए — bulk society deployment, central administration, organisation-wide reporting, integrations/API, bulk migration व dedicated onboarding/support। <a href="/contact">हमसे बात करें</a>।</p>` +
+        `<p>सभी दाम प्रति समिति, प्रति वित्त वर्ष (अप्रैल renewal)। <a href="/faq">अक्सर पूछे जाने वाले प्रश्न देखें</a></p>` +
         registerCta(),
     }),
   });

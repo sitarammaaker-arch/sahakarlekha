@@ -2,16 +2,17 @@
  * SahakarLekha Pricing Page — Bilingual Hindi+English
  * Public page, no auth required.
  *
- * 3-tier structure (locked): Free ₹0 / Plus ₹3,999 / Pro ₹6,999 per society/year,
- * plus a Federation tier (societies' union / auditors) and one-time add-ons.
- * Free stays genuinely usable — statutory reports & export are NEVER gated; the
- * Free limit is on SIZE (1 society · 1 user · 200 members) + convenience, not on
- * the core accounting job. Billing is not yet wired, so paid CTAs route to /contact
- * (offline/manual activation) rather than a checkout that does not exist.
+ * 3-tier structure (locked): Free ₹0 / Plus ₹3,999 / Pro ₹9,999 per society / FY,
+ * plus a compact Enterprise/Federation section and one-time add-ons.
+ * Positioning: Free = Accounting · Plus = Team · Pro = Scale · Enterprise = Network.
+ * Free stays real core accounting (NOT a trial) — statutory reports & export are
+ * NEVER gated; Free limit is on team size (1 society · 1 user), never on vouchers/
+ * members/data. Billing is not yet wired, so paid CTAs route to /contact (manual
+ * activation); no proration is claimed because none is implemented.
  *
  * Layout follows the common SaaS pricing pattern: equal-height cards, tinted header
- * band, CTA aligned above the feature list, reassurance row, comparison table with
- * the featured column highlighted, and an FAQ.
+ * band, CTA aligned above the feature list, trust row, comparison table with the
+ * featured column highlighted, and an FAQ.
  */
 import React from 'react';
 import { Link } from 'react-router-dom';
@@ -36,10 +37,11 @@ import {
   ArrowRight,
   Info,
   Users,
-  Plus,
   ShieldCheck,
   CreditCard,
   RefreshCw,
+  FileText,
+  Infinity as InfinityIcon,
 } from 'lucide-react';
 
 /* ────────────────────────── Data ────────────────────────── */
@@ -68,54 +70,53 @@ const PLANS: Plan[] = [
   {
     id: 'free',
     name: 'Free / मुफ्त',
-    tagline: 'छोटी समिति के लिए / For small societies',
+    tagline: 'छोटी · single-user समिति के लिए / For a small, single-user society',
     price: '₹0',
-    priceNote: 'हमेशा मुफ़्त / Forever free',
+    priceNote: 'हमेशा मुफ़्त · No trial / Forever free',
     period: '',
     features: [
-      { text: 'Double-Entry Accounting (दोहरी एंट्री)' },
-      { text: 'सभी वित्तीय रिपोर्ट (TB · BS · P&L · R&P)' },
-      { text: 'GST Summary + TDS Register (26Q)' },
-      { text: 'Member, Share & Loan Register' },
-      { text: 'PDF / Excel / CSV Export + Cloud Backup' },
-      { text: '1 समिति · 1 user · असीमित सदस्य', icon: 'info' },
-      { text: 'Report watermark · Community support', icon: 'info' },
+      { text: 'पूरा Double-Entry Accounting (दोहरी एंट्री)' },
+      { text: 'Ledger · Trial Balance · BS · P&L · R&P' },
+      { text: 'GST + TDS सारांश · Member/Share/Loan Register' },
+      { text: 'PDF/Excel/CSV Export · Secure Cloud Backup' },
+      { text: '1 समिति · 1 user · असीमित vouchers व सदस्य', icon: 'info' },
+      { text: 'Report branding · Community support', icon: 'info' },
     ],
-    cta: { label: 'मुफ्त में शुरू करें / Start Free', to: '/register' },
+    cta: { label: 'मुफ्त शुरू करें / Start Free', to: '/register' },
   },
   {
     id: 'plus',
     name: 'Plus / प्लस',
-    tagline: 'staff वाली सक्रिय समिति / Active society with staff',
+    tagline: 'staff के साथ चलने वाली सक्रिय समिति / Active society with staff',
     price: '₹3,999',
-    priceNote: '≈ ₹333/माह · प्रति समिति / साल',
+    priceNote: '≈ ₹333/माह · प्रति समिति / FY',
     period: '/ साल',
     highlight: true,
-    badge: 'सबसे लोकप्रिय / Most popular',
+    badge: 'सबसे लोकप्रिय / Most Popular',
     inheritNote: 'Free का सब कुछ, और— / Everything in Free, plus:',
     features: [
-      { text: 'असीमित सदस्य · 5 users (+ऑडिटर मुफ़्त)' },
-      { text: 'पूरा 17-role RBAC · MFA' },
-      { text: 'Auto-Backup Schedule · Payroll Automation' },
-      { text: 'Watermark हटता · Priority Support' },
+      { text: '5 Staff Users + 1 Auditor/CA — शामिल' },
+      { text: 'Role-Based Access · staff activity controls' },
+      { text: 'Payroll automation · Scheduled backup/export' },
+      { text: 'Free report branding हटता · Priority Support' },
     ],
-    cta: { label: 'अपग्रेड करें / Upgrade', to: '/contact' },
+    cta: { label: 'Plus चुनें / Choose Plus', to: '/contact' },
   },
   {
     id: 'pro',
     name: 'Pro / प्रो',
-    tagline: 'बड़ी / multi-branch समिति / Large or multi-branch',
-    price: '₹6,999',
-    priceNote: '≈ ₹583/माह · प्रति समिति / साल',
+    tagline: 'Multi-branch व advanced संचालन के लिए / For multi-branch & advanced ops',
+    price: '₹9,999',
+    priceNote: '≈ ₹833/माह · प्रति समिति / FY',
     period: '/ साल',
     inheritNote: 'Plus का सब कुछ, और— / Everything in Plus, plus:',
     features: [
-      { text: 'Multi-Branch Accounting · असीमित users' },
-      { text: 'Multi-Society Consolidation' },
-      { text: 'White-Label Reports · API Access' },
-      { text: 'Custom COA · डेटा-migration सहायता' },
+      { text: 'Unlimited Users · Multi-Branch Accounting' },
+      { text: 'Branch-wise + Consolidated (Multi-Society) reporting' },
+      { text: 'Custom Chart of Accounts · API Access' },
+      { text: 'Data-Migration · Custom-Branded Reports · Advanced Support' },
     ],
-    cta: { label: 'अपग्रेड करें / Upgrade', to: '/contact' },
+    cta: { label: 'Pro चुनें / Choose Pro', to: '/contact' },
   },
 ];
 
@@ -129,18 +130,18 @@ interface ComparisonRow {
 const COMPARISON: ComparisonRow[] = [
   { feature: 'Double-Entry Accounting + सभी रिपोर्ट', free: true, plus: true, pro: true },
   { feature: 'GST · TDS · Audit Certificate', free: true, plus: true, pro: true },
-  { feature: 'Export (PDF/Excel/CSV) + Backup', free: true, plus: true, pro: true },
-  { feature: 'सदस्य सीमा / Member limit', free: 'असीमित', plus: 'असीमित', pro: 'असीमित' },
-  { feature: 'Users', free: '1', plus: '5 +ऑडिटर', pro: 'असीमित' },
+  { feature: 'असीमित Vouchers व सदस्य', free: true, plus: true, pro: true },
+  { feature: 'Export (PDF/Excel/CSV) + Cloud Backup', free: true, plus: true, pro: true },
+  { feature: 'Users', free: '1', plus: '5 + 1 CA', pro: 'असीमित' },
   { feature: 'समिति / Societies', free: '1', plus: '1', pro: 'Multi' },
-  { feature: 'Watermark हटता / Removed', free: false, plus: true, pro: true },
-  { feature: '17-role RBAC · MFA', free: false, plus: true, pro: true },
+  { feature: 'Report branding हटता / Removed', free: false, plus: true, pro: true },
+  { feature: 'Role-Based Access + staff controls', free: false, plus: true, pro: true },
   { feature: 'Payroll Automation', free: false, plus: true, pro: true },
-  { feature: 'Auto-Backup Schedule', free: false, plus: true, pro: true },
+  { feature: 'Scheduled Backup / Export', free: false, plus: true, pro: true },
   { feature: 'Priority Support', free: false, plus: true, pro: true },
-  { feature: 'Multi-Branch Accounting', free: false, plus: false, pro: true },
+  { feature: 'Multi-Branch Accounting + branch-wise reporting', free: false, plus: false, pro: true },
   { feature: 'Multi-Society Consolidation', free: false, plus: false, pro: true },
-  { feature: 'White-Label Reports · API', free: false, plus: false, pro: true },
+  { feature: 'Custom Chart of Accounts · API · Custom branding', free: false, plus: false, pro: true },
 ];
 
 interface Faq {
@@ -150,20 +151,20 @@ interface Faq {
 
 const FAQS: Faq[] = [
   {
-    q: 'क्या Free सच में हमेशा मुफ़्त है? / Is Free really forever?',
-    a: 'हाँ. छोटी समिति (1 समिति · 1 user · असीमित सदस्य) के लिए Free हमेशा मुफ़्त है — बिना क्रेडिट कार्ड. सभी statutory रिपोर्ट (GST/TDS/audit) और export कभी बंद नहीं होते. / Yes — free forever for small societies, no credit card. Statutory reports and export are never locked.',
+    q: 'क्या Free सच में मुफ़्त है, या सिर्फ़ demo? / Is Free real or a demo?',
+    a: 'Free असली, पूरा core accounting है — demo नहीं. छोटी (1 समिति · 1 user) समिति के लिए हमेशा मुफ़्त, बिना क्रेडिट कार्ड, बिना ट्रायल. असीमित vouchers/सदस्य, सभी statutory रिपोर्ट (GST/TDS/audit) और export कभी बंद नहीं होते. / Free is real, complete core accounting — not a demo. Forever free for a small single-user society; unlimited vouchers, and statutory reports and export are never locked.',
+  },
+  {
+    q: 'कब upgrade करूँ? / When should I upgrade?',
+    a: 'जब staff के लिए कई users व role-based access चाहिए, payroll/scheduled-backup automation चाहिए → Plus. जब multi-branch, consolidation या API चाहिए → Pro. / Move to Plus when you need staff users, roles and automation; Pro when you need multi-branch, consolidation or API.',
   },
   {
     q: 'भुगतान कैसे और कब होता है? / How and when do I pay?',
-    a: 'Plus व Pro सालाना (अप्रैल FY renewal) प्रति समिति हैं. अभी upgrade के लिए हमसे संपर्क करें — हम activation कर देते हैं. / Plus and Pro are billed annually per society, aligned to the April financial year. Contact us to upgrade for now.',
+    a: 'Plus व Pro प्रति समिति, प्रति वित्त वर्ष (अप्रैल FY renewal) हैं. अभी चुनने के लिए हमसे संपर्क करें — हम activation कर देते हैं. / Plus and Pro are billed per society, per financial year (April renewal). Contact us to choose a plan for now.',
   },
   {
-    q: 'क्या मेरा डेटा सुरक्षित रहता है? / Is my data safe?',
-    a: 'हाँ. हर plan में cloud backup और पूरा data export (PDF/Excel/CSV) मिलता है — आपका डेटा हमेशा आपका है. / Yes. Every plan includes cloud backup and full data export. Your data is always yours.',
-  },
-  {
-    q: 'क्या मैं बाद में upgrade/downgrade कर सकता/सकती हूँ? / Can I change plans later?',
-    a: 'हाँ, कभी भी. समिति बढ़ने पर Plus या Pro लें; ज़रूरत बदले तो घटा भी सकते हैं. / Yes, anytime. Move up as your society grows, or down if needs change.',
+    q: 'क्या मेरा डेटा सुरक्षित और मेरा रहता है? / Is my data safe and mine?',
+    a: 'हाँ. हर plan में secure cloud backup और पूरा export (PDF/Excel/CSV) — आपका डेटा हमेशा आपका है. / Yes. Every plan includes secure cloud backup and full export. Your data is always yours.',
   },
 ];
 
@@ -184,16 +185,16 @@ const Cell: React.FC<{ value: boolean | string }> = ({ value }) => {
 
 const Pricing: React.FC = () => {
   useDocumentMeta({
-    title: 'मूल्य — Free, Plus, Pro | सहकार लेखा Pricing',
+    title: 'SahakarLekha Pricing — Free, Plus & Pro Cooperative Accounting Plans',
     description:
-      'सहकार लेखा: छोटी समितियों के लिए हमेशा मुफ़्त. Plus ₹3,999 और Pro ₹6,999/साल में advanced सुविधाएँ (RBAC, multi-branch, consolidation). Free forever for small cooperative societies; affordable Plus & Pro for growing ones.',
+      'SahakarLekha Free से cooperative accounting शुरू करें। Staff, role-based access, payroll, multi-branch accounting और advanced features के लिए Plus या Pro चुनें।',
     canonicalPath: '/pricing',
   });
   return (
     <PublicLayout>
       {/* Hero Header */}
       <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-primary/10 py-16 sm:py-20">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <span className="inline-block bg-primary/10 text-primary rounded-full px-4 py-1 text-sm font-medium mb-4">
             सालाना billing · अप्रैल FY renewal
           </span>
@@ -201,8 +202,11 @@ const Pricing: React.FC = () => {
             मूल्य निर्धारण — Pricing
           </h1>
           <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-            छोटी समिति के लिए हमेशा मुफ़्त — बढ़ती समिति के लिए किफायती Plus व Pro /
-            Free forever for small societies; affordable Plus &amp; Pro as you grow
+            आपकी समिति छोटी हो या बढ़ रही हो — SahakarLekha उसके साथ बढ़ता है।
+          </p>
+          <p className="mt-3 text-base text-foreground/80 max-w-2xl mx-auto">
+            Core accounting हमेशा मुफ्त। Staff, automation और advanced control की ज़रूरत हो तो
+            Plus या Pro चुनें।
           </p>
         </div>
       </section>
@@ -290,10 +294,10 @@ const Pricing: React.FC = () => {
             ))}
           </div>
 
-          {/* Reassurance row */}
+          {/* Trust row */}
           <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 mt-10 text-sm text-muted-foreground">
             <span className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-primary" /> Free के लिए बिना क्रेडिट कार्ड
+              <CreditCard className="h-4 w-4 text-primary" /> बिना ट्रायल · बिना क्रेडिट कार्ड
             </span>
             <span className="flex items-center gap-2">
               <RefreshCw className="h-4 w-4 text-primary" /> कभी भी upgrade / downgrade
@@ -303,32 +307,68 @@ const Pricing: React.FC = () => {
             </span>
           </div>
 
-          {/* Federation + Add-ons strip */}
-          <div className="grid sm:grid-cols-2 gap-4 mt-10">
-            <div className="flex items-center gap-3 rounded-lg border border-muted bg-muted/30 p-4">
-              <Users className="h-6 w-6 text-primary shrink-0" />
-              <div>
-                <p className="text-sm font-medium">Federation — संघ / ऑडिटर</p>
-                <p className="text-xs text-muted-foreground">
-                  ₹25,000+/साल या ₹999/समिति · कई समितियाँ एक dashboard से
+          {/* Enterprise / Federation — compact, NOT a fourth card */}
+          <div className="mt-10 rounded-xl border border-primary/30 bg-primary/5 p-6 sm:p-8">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Users className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-bold">Enterprise / Federation</h3>
+                  <span className="text-xs font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5">
+                    Network
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Federations, unions, clusters व बड़े deployments के लिए — bulk society
+                  deployment, central administration, organisation-wide reporting,
+                  integrations/API, bulk migration, custom branding व dedicated onboarding/support.
                 </p>
+                <p className="mt-2 text-sm font-medium">₹49,000/साल से शुरू / Starting at ₹49,000/year</p>
               </div>
+              <Link to="/contact" className="shrink-0">
+                <Button size="lg" className="gap-2">
+                  हमसे बात करें / Talk to SahakarLekha <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
             </div>
-            <div className="flex items-center gap-3 rounded-lg border border-muted bg-muted/30 p-4">
-              <Plus className="h-6 w-6 text-primary shrink-0" />
-              <div>
-                <p className="text-sm font-medium">Add-ons</p>
-                <p className="text-xs text-muted-foreground">
-                  अतिरिक्त user ₹500/साल · Onboarding / डेटा-migration ₹1,999
-                </p>
+          </div>
+
+          <p className="text-xs text-muted-foreground text-center mt-6">
+            Add-ons: अतिरिक्त staff user ₹500/साल · Onboarding / डेटा-migration ₹1,999 ·
+            सभी दाम प्रति समिति, प्रति वित्त वर्ष (अप्रैल renewal)
+          </p>
+        </div>
+      </section>
+
+      {/* Section 2: Trust — Free is not a demo */}
+      <section className="py-14 bg-muted/30">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-3">
+            Free एक demo नहीं — असली accounting
+          </h2>
+          <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-8">
+            छोटी समिति अपना पूरा साल का हिसाब Free पर ही रख सकती है। Upgrade तब — जब staff,
+            automation या multi-branch की ज़रूरत बढ़े।
+          </p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { icon: FileText, t: 'असली accounting', d: 'पूरा double-entry, रिपोर्ट व audit — Free पर' },
+              { icon: InfinityIcon, t: 'कोई data सीमा नहीं', d: 'असीमित vouchers, सदस्य व FY' },
+              { icon: ShieldCheck, t: 'डेटा आपका', d: 'कभी भी PDF/Excel/CSV export' },
+              { icon: Users, t: 'Upgrade तब', d: 'जब team, automation या branch चाहिए' },
+            ].map((it) => (
+              <div key={it.t} className="rounded-lg bg-white border border-muted p-5">
+                <it.icon className="h-6 w-6 text-primary mb-3" />
+                <p className="font-medium text-sm mb-1">{it.t}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{it.d}</p>
               </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Section 2: Feature Comparison Table */}
-      <section className="py-16 bg-muted/30">
+      {/* Section 3: Feature Comparison Table */}
+      <section className="py-16 bg-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-8">
             फीचर तुलना — Feature Comparison
@@ -339,7 +379,7 @@ const Pricing: React.FC = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="min-w-[220px]">Feature</TableHead>
+                      <TableHead className="min-w-[240px]">Feature</TableHead>
                       <TableHead className="text-center w-24">Free</TableHead>
                       <TableHead className="text-center w-28 bg-primary/5 text-primary font-semibold">
                         Plus
@@ -368,13 +408,13 @@ const Pricing: React.FC = () => {
             </CardContent>
           </Card>
           <p className="text-xs text-muted-foreground text-center mt-6">
-            सभी दाम प्रति समिति, सालाना (अप्रैल FY renewal) · Free हमेशा मुफ़्त — 1 समिति · 1 user · असीमित सदस्य
+            Free: core accounting हमेशा मुफ्त · 1 समिति · 1 user · असीमित vouchers व सदस्य
           </p>
         </div>
       </section>
 
-      {/* Section 3: FAQ */}
-      <section className="py-16 bg-white">
+      {/* Section 4: FAQ */}
+      <section className="py-16 bg-muted/30">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-8">
             सामान्य प्रश्न — Frequently Asked
@@ -392,20 +432,21 @@ const Pricing: React.FC = () => {
         </div>
       </section>
 
-      {/* Section 4: CTA */}
+      {/* Section 5: CTA */}
       <section className="py-16 bg-primary text-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-2xl md:text-3xl font-bold mb-4">
-            आज ही मुफ्त में शुरू करें / Start Free Today
+            आज ही मुफ्त शुरू करें / Start Free Today
           </h2>
           <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">
-            छोटी समिति के लिए बिना क्रेडिट कार्ड, हमेशा मुफ़्त. बड़ी ज़रूरत पर Plus व Pro. /
-            No credit card for small societies — free forever. Upgrade to Plus or Pro as you grow.
+            Core accounting हमेशा मुफ्त — बिना क्रेडिट कार्ड, बिना ट्रायल. Staff, automation या
+            multi-branch चाहिए तो Plus या Pro. / Core accounting is always free; choose Plus or
+            Pro when your team, automation or branches grow.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
             <Link to="/register">
               <Button size="lg" variant="secondary" className="gap-2">
-                मुफ्त में शुरू करें / Start Free <ArrowRight className="h-4 w-4" />
+                मुफ्त शुरू करें / Start Free <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <Link to="/contact">
