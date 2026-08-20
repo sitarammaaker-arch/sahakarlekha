@@ -62,7 +62,7 @@ const STATS = [
   { value: '8', label: 'Society Types', labelHi: 'समिति प्रकार' },
   { value: '36', label: 'States & UTs', labelHi: 'राज्य/केंद्रशासित' },
   { value: '150+', label: 'Account Heads', labelHi: 'लेजर हेड' },
-  { value: '100%', label: 'Free', labelHi: 'मुफ्त' },
+  { value: '₹0', label: 'Start Free', labelHi: 'से शुरू' },
 ];
 
 const TOUR = [
@@ -81,7 +81,7 @@ const TALLY_ROWS = [
   { f: 'Hindi-first, fully bilingual / हिंदी-प्रथम', tally: 'partial', zoho: 'partial', sl: true },
   { f: 'Cloud + automatic backup', tally: 'add-on', zoho: true, sl: true },
   { f: 'Free learning + certification / मुफ्त कोर्स + प्रमाणपत्र', tally: false, zoho: false, sl: true },
-  { f: 'Price / मूल्य', tally: '₹ licence/yr', zoho: '₹/month', sl: 'Free' },
+  { f: 'Price / मूल्य', tally: '₹ licence/yr', zoho: '₹/month', sl: 'Core free' },
 ];
 
 const SECURITY = [
@@ -167,29 +167,31 @@ const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
           <div className="text-center lg:text-left min-w-0">
             <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-4">
-              <Sparkles className="h-3.5 w-3.5" /> भारत की सहकारी समितियों के लिए · 100% मुफ्त
+              <Sparkles className="h-3.5 w-3.5" /> Cooperative-first Accounting Platform
             </span>
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-foreground leading-tight">
-              अपनी समिति का ऑडिट अब हफ़्तों नहीं, <span className="text-primary">केवल दिनों में पूरा करें</span>।
+              सहकारी समिति का <span className="text-primary">Accounting, Compliance और Control</span> — एक ही जगह।
             </h1>
             <p className="mt-4 text-base lg:text-lg text-muted-foreground max-w-xl mx-auto lg:mx-0">
-              भारत का <strong className="text-foreground">एकमात्र सहकारी-विशेष</strong> लेखा सॉफ्टवेयर — ट्रायल बैलेंस, बैलेंस शीट, TDS 26Q, GST व RCS ऑडिट-प्रारूप, सब एक क्लिक में।
-              <br /><span className="text-sm">India's only cooperative-specific accounting platform. Hindi + English. Free forever.</span>
+              PACS, dairy, marketing, consumer और अन्य cooperative societies के लिए बनाया गया — जहाँ vouchers से लेकर financial statements, GST/TDS और audit-ready reports तक एक connected system में रहते हैं।
+            </p>
+            <p className="mt-3 text-sm text-foreground/80 max-w-xl mx-auto lg:mx-0">
+              Core accounting हमेशा मुफ्त। Team और operations बढ़ें तो Plus या Pro के साथ आगे बढ़ें।
             </p>
             <div className="mt-7 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <Link to="/register">
                 <Button size="lg" className="gap-2 text-base px-8 w-full sm:w-auto">
-                  मुफ्त में शुरू करें / Start Free <ArrowRight className="h-5 w-5" />
+                  मुफ्त शुरू करें / Start Free <ArrowRight className="h-5 w-5" />
                 </Button>
               </Link>
               <a href="#demo">
                 <Button size="lg" variant="outline" className="gap-2 text-base px-6 w-full sm:w-auto">
-                  <Play className="h-4 w-4" /> 90-सेकंड डेमो देखें
+                  <Play className="h-4 w-4" /> देखें कैसे काम करता है
                 </Button>
               </a>
             </div>
             <p className="mt-3 text-xs text-muted-foreground text-center lg:text-left">
-              ✓ कोई कार्ड नहीं · ✓ डेटा कभी भी निर्यात करें · ✓ कोई लॉक-इन नहीं
+              ✓ 1 Society Free · ✓ Unlimited Vouchers · ✓ No Credit Card · ✓ Data Export Anytime
             </p>
             {/* Ask entry — grounded answers from help/cookbook/guide, no signup needed */}
             <Link to="/ask" className="mt-5 flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors max-w-xl mx-auto lg:mx-0">
@@ -219,7 +221,7 @@ const LandingPage: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-center text-sm">
           {[
             ['🏛️', 'सहकारी-विशेष', 'Built for cooperatives'],
-            ['🆓', 'हमेशा मुफ्त', 'Free forever'],
+            ['🆓', 'Core accounting मुफ्त', 'Core accounting free'],
             ['🔒', 'आपका डेटा सुरक्षित', 'Your data, exportable'],
             ['🇮🇳', 'हिंदी + English', '36 states'],
           ].map(([e, hi, en]) => (
@@ -236,7 +238,7 @@ const LandingPage: React.FC = () => {
       <section className="py-16 bg-white" id="features">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">सम्पूर्ण लेखा प्रणाली — Complete Accounting System</h2>
-          <p className="mt-2 text-center text-muted-foreground">Tally + Zoho + Auditor — सब एक जगह</p>
+          <p className="mt-2 text-center text-muted-foreground">Accounting → Compliance → Control — एक connected system</p>
           <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map(f => (
               <Card key={f.title} className="hover:shadow-lg transition-shadow">
@@ -426,7 +428,7 @@ const LandingPage: React.FC = () => {
       <section className="py-16 bg-muted/30" id="compliance">
         <div className="max-w-3xl mx-auto px-4">
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">कानूनी अनुपालन बिल्ट-इन — Compliance Built-in</h2>
-          <p className="mt-2 text-center text-muted-foreground">Tally aur Zoho mein yeh features nahi milte.</p>
+          <p className="mt-2 text-center text-muted-foreground">पूरे वर्ष books व्यवस्थित रखें — ताकि audit के समय हफ़्तों का काम दिनों में सिमट सके।</p>
           <div className="mt-8 space-y-3">
             {[
               'Haryana / Maharashtra / Multi-State Co-op Societies Acts',
@@ -456,9 +458,25 @@ const LandingPage: React.FC = () => {
           <h2 className="text-2xl sm:text-3xl font-bold text-foreground">यह मुफ्त क्यों है?</h2>
           <p className="mt-4 text-muted-foreground leading-relaxed">
             भारत की 8 लाख से ज़्यादा सहकारी समितियाँ ग्रामीण भारत की रीढ़ हैं — पर इनके लिए कभी कोई सॉफ्टवेयर नहीं बना; सब Tally जैसे सामान्य औज़ार को ज़बरदस्ती सहकारी प्रारूप में ढालते रहे।
-            <strong className="text-foreground"> SahakarLekha इसी को बदलने के लिए बना है</strong> — और छोटी समितियों के लिए यह हमेशा मुफ्त रहेगा।
+            <strong className="text-foreground"> SahakarLekha इसी को बदलने के लिए बना है</strong> — और इसका core accounting छोटी समितियों के लिए हमेशा मुफ्त रहेगा।
             <br /><span className="text-sm">We sustain it through optional premium features for large multi-branch societies — the core stays free, forever.</span>
           </p>
+        </div>
+      </section>
+
+      {/* ───────── PRICING TEASER ───────── */}
+      <section className="py-12 bg-white border-t">
+        <div className="max-w-4xl mx-auto px-4 text-center">
+          <h2 className="text-xl sm:text-2xl font-bold text-foreground">आपकी ज़रूरत के हिसाब से plan</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Free = Accounting · Plus = Team · Pro = Scale · Enterprise = Network
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Core accounting हमेशा मुफ्त — team, automation या scale बढ़े तो upgrade करें।</p>
+          <div className="mt-5">
+            <Link to="/pricing">
+              <Button variant="outline" className="gap-2">मूल्य देखें / See pricing <ArrowRight className="h-4 w-4" /></Button>
+            </Link>
+          </div>
         </div>
       </section>
 
