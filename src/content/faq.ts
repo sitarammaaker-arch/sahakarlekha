@@ -31,9 +31,9 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
         aEn: 'Visit the Register page, enter your email and society name. Registration completes in 2 minutes. No credit card needed.',
       },
       {
-        q: 'क्या यह सच में मुफ्त है? / Is it really free?',
-        aHi: 'Core accounting हमेशा मुफ्त है — Free plan पर वाउचर, रिपोर्ट, TDS, GST व ऑडिट सब उपलब्ध, बिना क्रेडिट कार्ड, बिना ट्रायल। Staff के लिए multiple users, role-based access, payroll व multi-branch चाहिए तो किफायती Plus (₹3,999/वर्ष) या Pro (₹9,999/वर्ष) चुनें।',
-        aEn: 'Core accounting is always free — the Free plan includes vouchers, reports, TDS, GST and audit, with no credit card and no trial. For staff users, role-based access, payroll and multi-branch, choose the affordable Plus (₹3,999/yr) or Pro (₹9,999/yr).',
+        q: 'कीमत क्या है? / How much does it cost?',
+        aHi: 'कोई स्थायी सार्वजनिक free plan नहीं है — professional accounting Starter ₹1,499/वित्त वर्ष (≈ ₹125/माह) से शुरू होता है, जिसमें असीमित वाउचर/सदस्य, सभी रिपोर्ट, TDS, GST व ऑडिट शामिल हैं। Staff के लिए multiple users, role-based access, payroll व multi-branch चाहिए तो Plus (₹3,999/वर्ष) या Pro (₹9,999/वर्ष) चुनें।',
+        aEn: 'There is no permanent public free plan. Professional accounting starts at Starter — ₹1,499/FY (about ₹125/month) — including unlimited vouchers and members, all reports, TDS, GST and audit. Choose Plus (₹3,999/yr) or Pro (₹9,999/yr) for staff users, role-based access, payroll and multi-branch.',
       },
       {
         q: 'कौन-कौन सी समितियों के लिए है? / Which society types are supported?',
