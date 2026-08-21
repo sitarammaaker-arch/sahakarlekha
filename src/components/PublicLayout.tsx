@@ -82,7 +82,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                 </Link>
                 <Link to="/register">
                   <Button size="sm" className="gap-1">
-                    <span className="hidden lg:inline">Free Registration</span>
+                    <span className="hidden lg:inline">Get Started</span>
                     <span className="lg:hidden">Register</span>
                     <ArrowRight className="h-4 w-4" />
                   </Button>
