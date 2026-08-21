@@ -53,16 +53,19 @@ interface Society {
 
 interface SubEditState {
   plan: string;
-  plan_expires_at: string;
+  months: string;
   is_locked: boolean;
   subscription_notes: string;
 }
 
+// Canonical tiers (mirror src/lib/plans.ts + the subscriptions.plan enum, migration 055).
 const PLAN_OPTIONS = [
-  { value: 'trial',   label: 'Trial',   color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'active',  label: 'Active',  color: 'bg-green-100  text-green-800'  },
-  { value: 'expired', label: 'Expired', color: 'bg-red-100    text-red-800'    },
-  { value: 'free',    label: 'Free',    color: 'bg-blue-100   text-blue-800'   },
+  { value: 'starter',    label: 'Starter',    color: 'bg-blue-100   text-blue-800'   },
+  { value: 'plus',       label: 'Plus',       color: 'bg-green-100  text-green-800'  },
+  { value: 'pro',        label: 'Pro',        color: 'bg-purple-100 text-purple-800' },
+  { value: 'enterprise', label: 'Enterprise', color: 'bg-indigo-100 text-indigo-800' },
+  { value: 'legacy',     label: 'Legacy',     color: 'bg-gray-100   text-gray-800'   },
+  { value: 'trial',      label: 'Trial',      color: 'bg-yellow-100 text-yellow-800' },
 ];
 
 const SOCIETY_TYPE_LABEL: Record<string, string> = {
@@ -90,6 +93,8 @@ const SuperAdminDashboard: React.FC = () => {
   const { toast } = useToast();
 
   const [societies, setSocieties] = useState<Society[]>([]);
+  // Canonical subscriptions (055), keyed by society_id — the source of truth for tier/status/seats.
+  const [subMap, setSubMap] = useState<Record<string, { plan: string; status: string; seats_limit: number | null; period_end: string | null }>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterPlan, setFilterPlan] = useState('all');
@@ -97,7 +102,7 @@ const SuperAdminDashboard: React.FC = () => {
   // Subscription edit dialog
   const [editSociety, setEditSociety] = useState<Society | null>(null);
   const [editForm, setEditForm] = useState<SubEditState>({
-    plan: 'trial', plan_expires_at: '', is_locked: false, subscription_notes: '',
+    plan: 'starter', months: '12', is_locked: false, subscription_notes: '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -119,10 +124,17 @@ const SuperAdminDashboard: React.FC = () => {
   const loadSocieties = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: societyData }, { data: userCounts }] = await Promise.all([
+      const [{ data: societyData }, { data: userCounts }, { data: subs }] = await Promise.all([
         supabase.rpc('get_all_societies'),
         supabase.rpc('get_society_user_counts'),
+        supabase.rpc('admin_list_subscriptions'),
       ]);
+
+      const sm: Record<string, { plan: string; status: string; seats_limit: number | null; period_end: string | null }> = {};
+      (subs ?? []).forEach((r: { society_id: string; plan: string; status: string; seats_limit: number | null; period_end: string | null }) => {
+        sm[r.society_id] = { plan: r.plan, status: r.status, seats_limit: r.seats_limit, period_end: r.period_end };
+      });
+      setSubMap(sm);
 
       const countMap: Record<string, number> = {};
       (userCounts ?? []).forEach((r: { society_id: string; user_count: number }) => {
@@ -176,10 +188,10 @@ const SuperAdminDashboard: React.FC = () => {
   // ── Stats ──────────────────────────────────────────────────────────────────
   const stats = {
     total:   societies.length,
-    active:  societies.filter(s => s.plan === 'active').length,
-    trial:   societies.filter(s => s.plan === 'trial').length,
+    active:  societies.filter(s => subMap[s.society_id]?.status === 'active').length,
+    trial:   societies.filter(s => subMap[s.society_id]?.status === 'trialing').length,
     locked:  societies.filter(s => s.is_locked).length,
-    expired: societies.filter(s => s.plan === 'expired').length,
+    expired: societies.filter(s => subMap[s.society_id]?.status === 'expired').length,
   };
 
   // ── Filtered list ──────────────────────────────────────────────────────────
@@ -196,8 +208,8 @@ const SuperAdminDashboard: React.FC = () => {
   const openEdit = (s: Society) => {
     setEditSociety(s);
     setEditForm({
-      plan: s.plan ?? 'trial',
-      plan_expires_at: s.plan_expires_at ? s.plan_expires_at.slice(0, 10) : '',
+      plan: subMap[s.society_id]?.plan ?? 'starter',
+      months: '12',
       is_locked: s.is_locked ?? false,
       subscription_notes: s.subscription_notes ?? '',
     });
@@ -208,14 +220,22 @@ const SuperAdminDashboard: React.FC = () => {
     if (!editSociety) return;
     setSaving(true);
     try {
-      const { error } = await supabase.rpc('update_society_subscription', {
+      // Canonical: set the tier in `subscriptions` (seats + period derived by the RPC).
+      const { error: actErr } = await supabase.rpc('admin_activate_subscription', {
+        p_society_id: editSociety.society_id,
+        p_plan:       editForm.plan,
+        p_months:     Number(editForm.months) || 12,
+      });
+      if (actErr) throw actErr;
+      // Society-level lock + internal notes stay on the societies row (orthogonal to tier).
+      const { error: socErr } = await supabase.rpc('update_society_subscription', {
         p_society_id:      editSociety.society_id,
-        p_plan:            editForm.plan,
-        p_plan_expires_at: editForm.plan_expires_at ? new Date(editForm.plan_expires_at).toISOString() : null,
+        p_plan:            editSociety.plan ?? 'active',
+        p_plan_expires_at: editSociety.plan_expires_at ?? null,
         p_is_locked:       editForm.is_locked,
         p_notes:           editForm.subscription_notes,
       });
-      if (error) throw error;
+      if (socErr) throw socErr;
       toast({ title: 'Subscription updated', description: editSociety.name });
       setEditSociety(null);
       loadSocieties();
@@ -393,7 +413,7 @@ const SuperAdminDashboard: React.FC = () => {
                             {s.user_count ?? 0}
                           </span>
                         </TableCell>
-                        <TableCell>{planBadge(s.plan)}</TableCell>
+                        <TableCell>{planBadge(subMap[s.society_id]?.plan ?? 'legacy')}</TableCell>
                         <TableCell className="text-xs text-gray-600">
                           {s.plan === 'trial'
                             ? <span className="text-yellow-700">Trial ends {fmtDate(s.trial_ends_at)}</span>
@@ -429,7 +449,7 @@ const SuperAdminDashboard: React.FC = () => {
                 <CardHeader className="py-3 pb-2">
                   <CardTitle className="text-sm flex items-center justify-between">
                     <span className="truncate">{s.name}</span>
-                    {planBadge(s.plan)}
+                    {planBadge(subMap[s.society_id]?.plan ?? 'legacy')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0 space-y-1.5 text-xs text-gray-600">
@@ -594,13 +614,14 @@ const SuperAdminDashboard: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>Plan Expiry Date</Label>
+                <Label>Period (months)</Label>
                 <Input
-                  type="date"
-                  value={editForm.plan_expires_at}
-                  onChange={e => setEditForm(f => ({ ...f, plan_expires_at: e.target.value }))}
+                  type="number"
+                  min="1"
+                  value={editForm.months}
+                  onChange={e => setEditForm(f => ({ ...f, months: e.target.value }))}
                 />
-                <p className="text-xs text-gray-400">Leave blank for no expiry (free/lifetime)</p>
+                <p className="text-xs text-gray-400">Renewal = today + months. Legacy = no expiry; seats set from plan.</p>
               </div>
 
               <div className="flex items-center gap-3">
