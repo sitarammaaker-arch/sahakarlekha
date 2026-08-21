@@ -104,7 +104,7 @@ export default function UserManagement() {
   const isFullAdmin = currentUser?.role === 'admin';
   const { language } = useLanguage();
   const { branches } = useData();
-  const { seatsLimit } = useSubscription(); // Phase 2a-2: plan seat cap (null = unlimited / legacy)
+  const { plan, status, seatsLimit, periodEnd } = useSubscription(); // Phase 2a-2/5b: plan + seat cap
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -351,6 +351,10 @@ export default function UserManagement() {
     downloadExcelSingle(headers, rows, 'users.xlsx', 'Users');
   };
 
+  const activeUsers = users.filter(u => u.isActive).length;
+  const planLabel = ({ starter: 'Starter', plus: 'Plus', pro: 'Pro', enterprise: 'Enterprise', legacy: 'Legacy', trial: 'Trial' } as Record<string, string>)[plan] ?? plan;
+  const renewal = periodEnd ? new Date(periodEnd).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -376,6 +380,27 @@ export default function UserManagement() {
           </Button>
         </div>
       </div>
+
+      {/* Plan / Subscription summary (Phase 2a-5b) */}
+      <Card>
+        <CardContent className="p-4 flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
+          <div>
+            <p className="text-xs text-muted-foreground">{hi ? 'प्लान' : 'Plan'}</p>
+            <p className="font-semibold flex items-center gap-2">
+              {planLabel}
+              <Badge variant={status === 'active' ? 'default' : status === 'trialing' ? 'secondary' : 'destructive'}>{status}</Badge>
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Users (seats)</p>
+            <p className="font-semibold">{activeUsers} / {seatsLimit ?? '∞'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">{hi ? 'नवीनीकरण' : 'Renewal'}</p>
+            <p className="font-semibold">{renewal}</p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
