@@ -200,7 +200,7 @@ const SuperAdminDashboard: React.FC = () => {
       s.name.toLowerCase().includes(search.toLowerCase()) ||
       s.registrationNo?.toLowerCase().includes(search.toLowerCase()) ||
       s.district?.toLowerCase().includes(search.toLowerCase());
-    const matchPlan = filterPlan === 'all' || s.plan === filterPlan;
+    const matchPlan = filterPlan === 'all' || (subMap[s.society_id]?.plan ?? 'legacy') === filterPlan;
     return matchSearch && matchPlan;
   });
 
