@@ -63,7 +63,7 @@ const STATS = [
   { value: '8', label: 'Society Types', labelHi: 'समिति प्रकार' },
   { value: '36', label: 'States & UTs', labelHi: 'राज्य/केंद्रशासित' },
   { value: '150+', label: 'Account Heads', labelHi: 'लेजर हेड' },
-  { value: '₹0', label: 'Start Free', labelHi: 'से शुरू' },
+  { value: '₹1,499', label: 'Starter / FY', labelHi: 'से शुरू' },
 ];
 
 const TOUR = [
@@ -82,7 +82,7 @@ const TALLY_ROWS = [
   { f: 'Hindi-first, fully bilingual / हिंदी-प्रथम', tally: 'partial', zoho: 'partial', sl: true },
   { f: 'Cloud + automatic backup', tally: 'add-on', zoho: true, sl: true },
   { f: 'Free learning + certification / मुफ्त कोर्स + प्रमाणपत्र', tally: false, zoho: false, sl: true },
-  { f: 'Price / मूल्य', tally: '₹ licence/yr', zoho: '₹/month', sl: 'Core free' },
+  { f: 'Price / मूल्य', tally: '₹ licence/yr', zoho: '₹/month', sl: '₹1,499/FY से' },
 ];
 
 const SECURITY = [
@@ -177,12 +177,12 @@ const LandingPage: React.FC = () => {
               PACS, dairy, marketing, consumer और अन्य cooperative societies के लिए बनाया गया — जहाँ vouchers से लेकर financial statements, GST/TDS और audit-ready reports तक एक connected system में रहते हैं।
             </p>
             <p className="mt-3 text-sm text-foreground/80 max-w-xl mx-auto lg:mx-0">
-              Core accounting हमेशा मुफ्त। Team और operations बढ़ें तो Plus या Pro के साथ आगे बढ़ें।
+              Professional cooperative accounting ₹1,499/FY से। Team व operations बढ़ें तो Plus या Pro के साथ आगे बढ़ें।
             </p>
             <div className="mt-7 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <Link to="/register">
                 <Button size="lg" className="gap-2 text-base px-8 w-full sm:w-auto">
-                  मुफ्त शुरू करें / Start Free <ArrowRight className="h-5 w-5" />
+                  शुरू करें / Get Started <ArrowRight className="h-5 w-5" />
                 </Button>
               </Link>
               <a href="#demo">
@@ -192,7 +192,7 @@ const LandingPage: React.FC = () => {
               </a>
             </div>
             <p className="mt-3 text-xs text-muted-foreground text-center lg:text-left">
-              ✓ 1 Society Free · ✓ Unlimited Vouchers · ✓ No Credit Card · ✓ Data Export Anytime
+              ✓ Unlimited Vouchers · ✓ Unlimited Members · ✓ Data Export Anytime · ✓ ₹1,499/FY से
             </p>
             {/* Ask entry — grounded answers from help/cookbook/guide, no signup needed */}
             <Link to="/ask" className="mt-5 flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors max-w-xl mx-auto lg:mx-0">
@@ -222,7 +222,7 @@ const LandingPage: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-center text-sm">
           {[
             ['🏛️', 'सहकारी-विशेष', 'Built for cooperatives'],
-            ['🆓', 'Core accounting मुफ्त', 'Core accounting free'],
+            ['💳', '₹1,499/FY से', 'Transparent pricing'],
             ['🔒', 'आपका डेटा सुरक्षित', 'Your data, exportable'],
             ['🇮🇳', 'हिंदी + English', '36 states'],
           ].map(([e, hi, en]) => (
@@ -456,11 +456,11 @@ const LandingPage: React.FC = () => {
       <section className="py-16 bg-white">
         <div className="max-w-3xl mx-auto px-4 text-center">
           <Heart className="h-9 w-9 text-primary mx-auto mb-3" />
-          <h2 className="text-2xl sm:text-3xl font-bold text-foreground">यह मुफ्त क्यों है?</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-foreground">यह किसके लिए बना है?</h2>
           <p className="mt-4 text-muted-foreground leading-relaxed">
             भारत की 8 लाख से ज़्यादा सहकारी समितियाँ ग्रामीण भारत की रीढ़ हैं — पर इनके लिए कभी कोई सॉफ्टवेयर नहीं बना; सब Tally जैसे सामान्य औज़ार को ज़बरदस्ती सहकारी प्रारूप में ढालते रहे।
-            <strong className="text-foreground"> SahakarLekha इसी को बदलने के लिए बना है</strong> — और इसका core accounting छोटी समितियों के लिए हमेशा मुफ्त रहेगा।
-            <br /><span className="text-sm">We sustain it through optional premium features for large multi-branch societies — the core stays free, forever.</span>
+            <strong className="text-foreground"> SahakarLekha इसी को बदलने के लिए बना है</strong> — और इसे सहकारी समितियों के लिए किफायती रखा गया है, professional accounting ₹1,499/FY से।
+            <br /><span className="text-sm">Purpose-built for cooperative societies and priced to be affordable — professional accounting from ₹1,499/FY, with Plus and Pro as you grow.</span>
           </p>
         </div>
       </section>
@@ -470,9 +470,9 @@ const LandingPage: React.FC = () => {
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-xl sm:text-2xl font-bold text-foreground">आपकी ज़रूरत के हिसाब से plan</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Free = Accounting · Plus = Team · Pro = Scale · Enterprise = Network
+            Starter = Accounting · Plus = Team · Pro = Scale · Enterprise = Network
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">Core accounting हमेशा मुफ्त — team, automation या scale बढ़े तो upgrade करें।</p>
+          <p className="mt-1 text-xs text-muted-foreground">Professional accounting ₹1,499/FY से — team, automation या scale बढ़े तो upgrade करें।</p>
           <div className="mt-5">
             <Link to="/pricing">
               <Button variant="outline" className="gap-2">मूल्य देखें / See pricing <ArrowRight className="h-4 w-4" /></Button>
@@ -489,7 +489,7 @@ const LandingPage: React.FC = () => {
           <p className="mt-1 text-sm text-muted-foreground">अपनी जान-पहचान की समिति, लेखाकार या ऑडिटर को SahakarLekha के बारे में बताएँ — मिलकर सहकारिता को डिजिटल बनाएँ।</p>
           <div className="mt-4 flex flex-wrap justify-center gap-3">
             <a
-              href={`https://wa.me/?text=${encodeURIComponent('SahakarLekha — सहकारी समितियों के लिए मुफ्त लेखा सॉफ्टवेयर। देखें: https://sahakarlekha.com')}`}
+              href={`https://wa.me/?text=${encodeURIComponent('SahakarLekha — सहकारी समितियों के लिए बना accounting platform। देखें: https://sahakarlekha.com')}`}
               target="_blank" rel="noopener noreferrer"
             >
               <Button variant="outline" className="gap-2"><MessageCircle className="h-4 w-4" /> WhatsApp पर शेयर करें</Button>
@@ -511,14 +511,14 @@ const LandingPage: React.FC = () => {
       {/* ───────── FINAL CTA ───────── */}
       <section className="py-16 bg-primary text-white">
         <div className="max-w-4xl mx-auto px-4 text-center">
-          <h2 className="text-2xl sm:text-3xl font-bold">आज ही मुफ्त में शुरू करें</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold">आज ही शुरू करें</h2>
           <p className="mt-3 text-lg text-primary-foreground/80">
-            Start Free Today — No credit card, no hidden charges. आपका डेटा कभी भी निर्यात करें; कोई लॉक-इन नहीं।
+            Get Started — Professional accounting ₹1,499/FY से, कोई छिपा शुल्क नहीं। आपका डेटा कभी भी निर्यात करें; कोई लॉक-इन नहीं।
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/register">
               <Button size="lg" variant="secondary" className="gap-2 text-base px-8">
-                मुफ्त पंजीकरण / Free Registration <ArrowRight className="h-5 w-5" />
+                पंजीकरण / Register <ArrowRight className="h-5 w-5" />
               </Button>
             </Link>
             {WHATSAPP ? (

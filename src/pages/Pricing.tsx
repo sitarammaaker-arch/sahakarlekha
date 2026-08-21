@@ -2,13 +2,13 @@
  * SahakarLekha Pricing Page — Bilingual Hindi+English
  * Public page, no auth required.
  *
- * 3-tier structure (locked): Free ₹0 / Plus ₹3,999 / Pro ₹9,999 per society / FY,
+ * 3-tier structure: Starter ₹1,499 / Plus ₹3,999 / Pro ₹9,999 per society / FY,
  * plus a compact Enterprise/Federation section and one-time add-ons.
- * Positioning: Free = Accounting · Plus = Team · Pro = Scale · Enterprise = Network.
- * Free stays real core accounting (NOT a trial) — statutory reports & export are
- * NEVER gated; Free limit is on team size (1 society · 1 user), never on vouchers/
- * members/data. Billing is not yet wired, so paid CTAs route to /contact (manual
- * activation); no proration is claimed because none is implemented.
+ * Positioning: Starter = Accounting · Plus = Team · Pro = Scale · Enterprise = Network.
+ * No permanent public free plan. Starter is full professional accounting — statutory
+ * reports & export are NEVER gated, unlimited vouchers/members; its limit is team size
+ * (1 society · 1 user). Billing is not yet wired, so paid CTAs route to /contact
+ * (manual activation); annual FY billing only, no proration is claimed.
  *
  * Layout follows the common SaaS pricing pattern: equal-height cards, tinted header
  * band, CTA aligned above the feature list, trust row, comparison table with the
@@ -68,21 +68,21 @@ interface Plan {
 
 const PLANS: Plan[] = [
   {
-    id: 'free',
-    name: 'Free / मुफ्त',
+    id: 'starter',
+    name: 'Starter / स्टार्टर',
     tagline: 'छोटी · single-user समिति के लिए / For a small, single-user society',
-    price: '₹0',
-    priceNote: 'हमेशा मुफ़्त · No trial / Forever free',
-    period: '',
+    price: '₹1,499',
+    priceNote: '≈ ₹125/माह · प्रति समिति / FY',
+    period: '/ साल',
     features: [
       { text: 'पूरा Double-Entry Accounting (दोहरी एंट्री)' },
       { text: 'Ledger · Trial Balance · BS · P&L · R&P' },
       { text: 'GST + TDS सारांश · Member/Share/Loan Register' },
       { text: 'PDF/Excel/CSV Export · Secure Cloud Backup' },
       { text: '1 समिति · 1 user · असीमित vouchers व सदस्य', icon: 'info' },
-      { text: 'Report branding · Community support', icon: 'info' },
+      { text: 'Core security · basic audit trail · self-service support', icon: 'info' },
     ],
-    cta: { label: 'मुफ्त शुरू करें / Start Free', to: '/register' },
+    cta: { label: 'शुरू करें / Get Started', to: '/register' },
   },
   {
     id: 'plus',
@@ -93,12 +93,12 @@ const PLANS: Plan[] = [
     period: '/ साल',
     highlight: true,
     badge: 'सबसे लोकप्रिय / Most Popular',
-    inheritNote: 'Free का सब कुछ, और— / Everything in Free, plus:',
+    inheritNote: 'Starter का सब कुछ, और— / Everything in Starter, plus:',
     features: [
       { text: '5 Staff Users + 1 Auditor/CA — शामिल' },
       { text: 'Role-Based Access · staff activity controls' },
       { text: 'Payroll automation · Scheduled backup/export' },
-      { text: 'Free report branding हटता · Priority Support' },
+      { text: 'Starter report branding हटता · Priority Support' },
     ],
     cta: { label: 'Plus चुनें / Choose Plus', to: '/contact' },
   },
@@ -151,8 +151,8 @@ interface Faq {
 
 const FAQS: Faq[] = [
   {
-    q: 'क्या Free सच में मुफ़्त है, या सिर्फ़ demo? / Is Free real or a demo?',
-    a: 'Free असली, पूरा core accounting है — demo नहीं. छोटी (1 समिति · 1 user) समिति के लिए हमेशा मुफ़्त, बिना क्रेडिट कार्ड, बिना ट्रायल. असीमित vouchers/सदस्य, सभी statutory रिपोर्ट (GST/TDS/audit) और export कभी बंद नहीं होते. / Free is real, complete core accounting — not a demo. Forever free for a small single-user society; unlimited vouchers, and statutory reports and export are never locked.',
+    q: 'क्या कोई permanent free plan है? / Is there a permanent free plan?',
+    a: 'कोई स्थायी सार्वजनिक free plan नहीं है — professional accounting Starter ₹1,499/वित्त वर्ष (≈ ₹125/माह) से शुरू होता है. असीमित vouchers/सदस्य, सभी statutory रिपोर्ट (GST/TDS/audit) और export हर plan में शामिल. / There is no permanent public free plan — professional accounting starts at Starter ₹1,499/FY (about ₹125/month), with unlimited vouchers/members, statutory reports and export included in every plan.',
   },
   {
     q: 'कब upgrade करूँ? / When should I upgrade?',
@@ -160,7 +160,7 @@ const FAQS: Faq[] = [
   },
   {
     q: 'भुगतान कैसे और कब होता है? / How and when do I pay?',
-    a: 'Plus व Pro प्रति समिति, प्रति वित्त वर्ष (अप्रैल FY renewal) हैं. अभी चुनने के लिए हमसे संपर्क करें — हम activation कर देते हैं. / Plus and Pro are billed per society, per financial year (April renewal). Contact us to choose a plan for now.',
+    a: 'सभी plan प्रति समिति, प्रति वित्त वर्ष (अप्रैल renewal) पर हैं — कोई monthly billing नहीं (per-month राशि सिर्फ़ दिखाने के लिए). अभी plan चुनने के लिए हमसे संपर्क करें. / All plans are billed per society, per financial year (April renewal); there is no monthly billing (the per-month figure is display-only). Contact us to choose a plan.',
   },
   {
     q: 'क्या मेरा डेटा सुरक्षित और मेरा रहता है? / Is my data safe and mine?',
@@ -185,9 +185,9 @@ const Cell: React.FC<{ value: boolean | string }> = ({ value }) => {
 
 const Pricing: React.FC = () => {
   useDocumentMeta({
-    title: 'SahakarLekha Pricing — Free, Plus & Pro Cooperative Accounting Plans',
+    title: 'SahakarLekha Pricing — Starter, Plus & Pro Cooperative Accounting Plans',
     description:
-      'SahakarLekha Free से cooperative accounting शुरू करें। Staff, role-based access, payroll, multi-branch accounting और advanced features के लिए Plus या Pro चुनें।',
+      'SahakarLekha cooperative accounting ₹1,499/FY से शुरू करें। Staff, role-based access, payroll, multi-branch accounting और advanced operations के लिए Plus या Pro चुनें।',
     canonicalPath: '/pricing',
   });
   return (
@@ -202,11 +202,11 @@ const Pricing: React.FC = () => {
             मूल्य निर्धारण — Pricing
           </h1>
           <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-            आपकी समिति छोटी हो या बढ़ रही हो — SahakarLekha उसके साथ बढ़ता है।
+            सरल शुरुआत। साफ कीमत। जरूरत के साथ Scale करें।
           </p>
           <p className="mt-3 text-base text-foreground/80 max-w-2xl mx-auto">
-            Core accounting हमेशा मुफ्त। Staff, automation और advanced control की ज़रूरत हो तो
-            Plus या Pro चुनें।
+            सहकारी समितियों के लिए professional accounting ₹1,499/FY से। अपनी जरूरत के अनुसार
+            Starter, Plus या Pro चुनें।
           </p>
         </div>
       </section>
@@ -297,7 +297,7 @@ const Pricing: React.FC = () => {
           {/* Trust row */}
           <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 mt-10 text-sm text-muted-foreground">
             <span className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-primary" /> बिना ट्रायल · बिना क्रेडिट कार्ड
+              <CreditCard className="h-4 w-4 text-primary" /> पारदर्शी कीमत · कोई छिपा शुल्क नहीं
             </span>
             <span className="flex items-center gap-2">
               <RefreshCw className="h-4 w-4 text-primary" /> कभी भी upgrade / downgrade
@@ -344,15 +344,15 @@ const Pricing: React.FC = () => {
       <section className="py-14 bg-muted/30">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-3">
-            Free एक demo नहीं — असली accounting
+            ₹1,499/FY में पूरा professional accounting
           </h2>
           <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-8">
-            छोटी समिति अपना पूरा साल का हिसाब Free पर ही रख सकती है। Upgrade तब — जब staff,
-            automation या multi-branch की ज़रूरत बढ़े।
+            Starter एक demo नहीं — छोटी समिति अपना पूरे साल का हिसाब इसी पर रख सकती है। Upgrade तब —
+            जब staff, automation या multi-branch की ज़रूरत बढ़े।
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { icon: FileText, t: 'असली accounting', d: 'पूरा double-entry, रिपोर्ट व audit — Free पर' },
+              { icon: FileText, t: 'असली accounting', d: 'पूरा double-entry, रिपोर्ट व audit — Starter पर' },
               { icon: InfinityIcon, t: 'कोई data सीमा नहीं', d: 'असीमित vouchers, सदस्य व FY' },
               { icon: ShieldCheck, t: 'डेटा आपका', d: 'कभी भी PDF/Excel/CSV export' },
               { icon: Users, t: 'Upgrade तब', d: 'जब team, automation या branch चाहिए' },
@@ -380,7 +380,7 @@ const Pricing: React.FC = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="min-w-[240px]">Feature</TableHead>
-                      <TableHead className="text-center w-24">Free</TableHead>
+                      <TableHead className="text-center w-24">Starter</TableHead>
                       <TableHead className="text-center w-28 bg-primary/5 text-primary font-semibold">
                         Plus
                       </TableHead>
@@ -408,7 +408,7 @@ const Pricing: React.FC = () => {
             </CardContent>
           </Card>
           <p className="text-xs text-muted-foreground text-center mt-6">
-            Free: core accounting हमेशा मुफ्त · 1 समिति · 1 user · असीमित vouchers व सदस्य
+            Starter ₹1,499/FY: 1 समिति · 1 user · असीमित vouchers व सदस्य · सभी रिपोर्ट व export
           </p>
         </div>
       </section>
@@ -436,17 +436,17 @@ const Pricing: React.FC = () => {
       <section className="py-16 bg-primary text-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-2xl md:text-3xl font-bold mb-4">
-            आज ही मुफ्त शुरू करें / Start Free Today
+            आज ही शुरू करें / Get Started Today
           </h2>
           <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">
-            Core accounting हमेशा मुफ्त — बिना क्रेडिट कार्ड, बिना ट्रायल. Staff, automation या
-            multi-branch चाहिए तो Plus या Pro. / Core accounting is always free; choose Plus or
-            Pro when your team, automation or branches grow.
+            Professional cooperative accounting ₹1,499/FY से — कोई छिपा शुल्क नहीं. Staff, automation
+            या multi-branch चाहिए तो Plus या Pro. / Professional cooperative accounting from ₹1,499/FY —
+            no hidden charges. Choose Plus or Pro for staff, automation or multi-branch.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
             <Link to="/register">
               <Button size="lg" variant="secondary" className="gap-2">
-                मुफ्त शुरू करें / Start Free <ArrowRight className="h-4 w-4" />
+                शुरू करें / Get Started <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <Link to="/contact">

@@ -890,12 +890,12 @@ function staticExtraPages(DATA) {
   pages.push({
     path: '/',
     title: 'SahakarLekha — Cooperative Accounting & Management Platform for India',
-    description: 'भारतीय cooperative societies के लिए accounting, GST/TDS, member records, reports और audit-ready workflows — PACS, Dairy, Marketing, Consumer व अन्य। SahakarLekha Core Accounting के साथ मुफ्त शुरू करें, Hindi + English।',
+    description: 'भारतीय cooperative societies के लिए accounting, GST/TDS, member records, reports और audit-ready workflows — PACS, Dairy, Marketing, Consumer व अन्य। SahakarLekha ₹1,499/FY से शुरू करें, Hindi + English।',
     lastmod: LASTMOD.static,
     body: shell({
       html:
         `<h1>सहकारी समिति का Accounting, Compliance और Control — एक ही जगह।</h1>` +
-        `<p>PACS, dairy, marketing, consumer और अन्य cooperative societies के लिए बनाया गया SahakarLekha — जहाँ vouchers से लेकर financial statements, GST/TDS और audit-ready reports तक एक connected system में रहते हैं। हिन्दी + English। <strong>Core accounting हमेशा मुफ्त।</strong></p>` +
+        `<p>PACS, dairy, marketing, consumer और अन्य cooperative societies के लिए बनाया गया SahakarLekha — जहाँ vouchers से लेकर financial statements, GST/TDS और audit-ready reports तक एक connected system में रहते हैं। हिन्दी + English। <strong>Professional accounting ₹1,499/FY से।</strong></p>` +
         `<p>Purpose-built for Indian cooperative societies — PACS, dairy, marketing, consumer and housing. Vouchers, ledgers and statutory reports (Trial Balance, Balance Sheet, Receipts &amp; Payments, TDS/GST summaries, RCS / statutory audit-ready formats). Core accounting free; Plus and Pro plans for staff and multi-branch operations.</p>` +
         `<ul>` +
           `<li>असीमित वाउचर व सदस्य — नकद/बैंक, खरीद-बिक्री, वेतन, ऋण, जमा</li>` +
@@ -957,19 +957,19 @@ function staticExtraPages(DATA) {
 
   pages.push({
     path: '/pricing',
-    title: 'SahakarLekha Pricing — Free, Plus & Pro Cooperative Accounting Plans',
-    description: 'SahakarLekha Free से cooperative accounting शुरू करें। Staff, role-based access, payroll, multi-branch accounting और advanced features के लिए Plus या Pro चुनें।',
+    title: 'SahakarLekha Pricing — Starter, Plus & Pro Cooperative Accounting Plans',
+    description: 'SahakarLekha cooperative accounting ₹1,499/FY से शुरू करें। Staff, role-based access, payroll, multi-branch accounting और advanced operations के लिए Plus या Pro चुनें।',
     lastmod: LASTMOD.pricing,
     jsonLd: [crumb([{ name: 'मूल्य', item: `${SITE}/pricing` }])],
     body: shell({
       current: 'मूल्य',
       html:
-        `<h1>SahakarLekha मूल्य — Free, Plus व Pro</h1>` +
-        `<p>Core accounting हमेशा मुफ्त। आपकी समिति छोटी हो या बढ़ रही हो — SahakarLekha उसके साथ बढ़ता है। Staff, automation और advanced control की ज़रूरत हो तो Plus या Pro चुनें।</p>` +
-        `<h2>Free — ₹0 (हमेशा मुफ्त)</h2>` +
-        `<p>छोटी, single-user समिति के लिए असली core accounting — demo नहीं। 1 समिति · 1 user · असीमित vouchers व सदस्य। Ledger, Trial Balance, Balance Sheet, P&amp;L, Receipts &amp; Payments, GST/TDS सारांश, Member/Share/Loan register, PDF/Excel/CSV export व secure cloud backup। बिना ट्रायल, बिना क्रेडिट कार्ड — आपका डेटा आपका।</p>` +
+        `<h1>SahakarLekha मूल्य — Starter, Plus व Pro</h1>` +
+        `<p>Professional cooperative accounting ₹1,499/FY से। आपकी समिति छोटी हो या बढ़ रही हो — SahakarLekha उसके साथ बढ़ता है। Staff, automation और advanced control की ज़रूरत हो तो Plus या Pro चुनें।</p>` +
+        `<h2>Starter — ₹1,499 / वित्त वर्ष (≈ ₹125/माह)</h2>` +
+        `<p>छोटी, single-user समिति के लिए पूरा professional accounting — demo नहीं। 1 समिति · 1 user · असीमित vouchers व सदस्य। Ledger, Trial Balance, Balance Sheet, P&amp;L, Receipts &amp; Payments, GST/TDS सारांश, Member/Share/Loan register, PDF/Excel/CSV export, secure cloud backup, core security व basic audit trail — आपका डेटा आपका।</p>` +
         `<h2>Plus — ₹3,999 / वित्त वर्ष (≈ ₹333/माह) · सबसे लोकप्रिय</h2>` +
-        `<p>staff के साथ चलने वाली समिति के लिए। Free का सब कुछ, और: <strong>5 Staff Users + 1 Auditor/CA शामिल</strong>, Role-Based Access व staff activity controls, payroll automation, scheduled backup/export, report branding हटता व priority support।</p>` +
+        `<p>staff के साथ चलने वाली समिति के लिए। Starter का सब कुछ, और: <strong>5 Staff Users + 1 Auditor/CA शामिल</strong>, Role-Based Access व staff activity controls, payroll automation, scheduled backup/export, report branding हटता व priority support।</p>` +
         `<h2>Pro — ₹9,999 / वित्त वर्ष (≈ ₹833/माह)</h2>` +
         `<p>multi-branch व advanced संचालन के लिए। Plus का सब कुछ, और: Unlimited Users, Multi-Branch Accounting व branch-wise reporting, Multi-Society Consolidation, Custom Chart of Accounts, API Access, Data-Migration सहायता व Custom-Branded Reports।</p>` +
         `<h2>Enterprise / Federation — ₹49,000/साल से</h2>` +
