@@ -8,6 +8,7 @@ import FeedbackFab from '@/components/FeedbackFab';
 import ModuleGlossaryBar from '@/components/glossary/ModuleGlossaryBar';
 import Breadcrumbs from './Breadcrumbs';
 import NextSteps from './NextSteps';
+import SubscriptionBanner from '@/components/SubscriptionBanner';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -52,6 +53,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       >
         {/* pb-24 keeps bottom content (Save buttons etc.) clear of the fixed FeedbackFab (bottom-5, ~3rem tall). */}
         <div className="p-4 md:p-6 pb-24 md:pb-24">
+          <SubscriptionBanner />
           <Breadcrumbs />
           <ModuleGlossaryBar />
           {children}
