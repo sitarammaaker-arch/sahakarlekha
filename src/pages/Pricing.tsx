@@ -75,14 +75,14 @@ const PLANS: Plan[] = [
     priceNote: '≈ ₹125/माह · प्रति समिति / FY',
     period: '/ साल',
     features: [
-      { text: 'पूरा Double-Entry Accounting (दोहरी एंट्री)' },
-      { text: 'Ledger · Trial Balance · BS · P&L · R&P' },
-      { text: 'GST + TDS सारांश · Member/Share/Loan Register' },
-      { text: 'PDF/Excel/CSV Export · Secure Cloud Backup' },
-      { text: '1 समिति · 1 user · असीमित vouchers व सदस्य', icon: 'info' },
-      { text: 'Core security · basic audit trail · self-service support', icon: 'info' },
+      { text: '1 Society · 1 User · Unlimited Vouchers & Members' },
+      { text: 'Double-Entry Accounting · Ledger' },
+      { text: 'Trial Balance, P&L & Balance Sheet · Receipts & Payments' },
+      { text: 'GST/TDS Summaries · Member, Share & Loan Registers' },
+      { text: 'PDF / Excel / CSV Export' },
+      { text: 'Cloud Backup & Basic Audit Trail · self-service support', icon: 'info' },
     ],
-    cta: { label: 'शुरू करें / Get Started', to: '/register' },
+    cta: { label: 'Starter से शुरू करें', to: '/register' },
   },
   {
     id: 'plus',
@@ -98,7 +98,7 @@ const PLANS: Plan[] = [
       { text: '5 Staff Users + 1 Auditor/CA — शामिल' },
       { text: 'Role-Based Access · staff activity controls' },
       { text: 'Payroll automation · Scheduled backup/export' },
-      { text: 'Starter report branding हटता · Priority Support' },
+      { text: 'Reports से basic branding हटाएँ · Priority Support' },
     ],
     cta: { label: 'Plus चुनें / Choose Plus', to: '/contact' },
   },
@@ -114,7 +114,7 @@ const PLANS: Plan[] = [
       { text: 'Unlimited Users · Multi-Branch Accounting' },
       { text: 'Branch-wise + Consolidated (Multi-Society) reporting' },
       { text: 'Custom Chart of Accounts · API Access' },
-      { text: 'Data-Migration · Custom-Branded Reports · Advanced Support' },
+      { text: 'Data Migration सहायता · Custom-Branded Reports · Advanced Support' },
     ],
     cta: { label: 'Pro चुनें / Choose Pro', to: '/contact' },
   },
@@ -335,7 +335,7 @@ const Pricing: React.FC = () => {
 
           <p className="text-xs text-muted-foreground text-center mt-6">
             Add-ons: अतिरिक्त staff user ₹500/साल · Onboarding / डेटा-migration ₹1,999 ·
-            सभी दाम प्रति समिति, प्रति वित्त वर्ष (अप्रैल renewal)
+            Starter, Plus और Pro मूल्य प्रति समिति, प्रति वित्त वर्ष हैं (अप्रैल renewal)। Enterprise pricing deployment requirements के अनुसार है।
           </p>
         </div>
       </section>
