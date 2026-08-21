@@ -81,7 +81,7 @@ const crumb = (items) => ({
 /* ---------------- static body shell (GOS-01) ---------------- */
 
 const HUB_LINKS = [
-  ['/', 'होम'], ['/register', 'मुफ्त रजिस्टर करें'], ['/guide', 'गाइड'], ['/blog', 'ब्लॉग'],
+  ['/', 'होम'], ['/register', 'रजिस्टर करें'], ['/guide', 'गाइड'], ['/blog', 'ब्लॉग'],
   ['/help', 'मदद केंद्र'], ['/cookbook', 'एंट्री कुकबुक'], ['/glossary', 'शब्दकोश'],
   ['/tools', 'कैलकुलेटर'], ['/software', 'सॉफ्टवेयर'], ['/faq', 'FAQ'],
 ];
@@ -110,7 +110,7 @@ function shell({ crumbs = [], current = '', html }) {
 }
 
 const registerCta = (next) =>
-  `<p style="margin-top:24px"><a href="/register${next ? `?next=${encodeURIComponent(next)}` : ''}"><strong>अपनी समिति का खाता मुफ्त में डिजिटल कीजिए — रजिस्टर करें →</strong></a></p>`;
+  `<p style="margin-top:24px"><a href="/register${next ? `?next=${encodeURIComponent(next)}` : ''}"><strong>अपनी समिति का खाता डिजिटल कीजिए — रजिस्टर करें →</strong></a></p>`;
 
 /** Routes worth linking in CRAWLER-facing static bodies (public surfaces only —
     app-module deep links are noindexed and would just leak crawl signals). */
