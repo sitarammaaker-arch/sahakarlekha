@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { useSubscription } from '@/hooks/useSubscription';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -103,6 +104,7 @@ export default function UserManagement() {
   const isFullAdmin = currentUser?.role === 'admin';
   const { language } = useLanguage();
   const { branches } = useData();
+  const { seatsLimit } = useSubscription(); // Phase 2a-2: plan seat cap (null = unlimited / legacy)
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -178,6 +180,18 @@ export default function UserManagement() {
   const handleSave = async () => {
     if (!validate()) return;
     setSaveError('');
+
+    // Phase 2a-2: enforce the plan's seat cap on NEW users (client affordance; the
+    // server RPC hardens this in a later slice). null = unlimited (legacy/pro).
+    if (!editing && seatsLimit != null) {
+      const activeCount = users.filter(u => u.isActive).length;
+      if (activeCount >= seatsLimit) {
+        setSaveError(hi
+          ? `आपके plan में ${seatsLimit} user तक की सीमा है। और user जोड़ने के लिए Plus या Pro में upgrade करें।`
+          : `Your plan allows up to ${seatsLimit} user(s). Upgrade to Plus or Pro to add more.`);
+        return;
+      }
+    }
 
     const societyId = currentUser?.societyId || 'SOC001';
 
