@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useSubscription } from '@/hooks/useSubscription';
+import { startCheckout } from '@/lib/razorpayCheckout';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -354,6 +355,17 @@ export default function UserManagement() {
   const activeUsers = users.filter(u => u.isActive).length;
   const planLabel = ({ starter: 'Starter', plus: 'Plus', pro: 'Pro', enterprise: 'Enterprise', legacy: 'Legacy', trial: 'Trial' } as Record<string, string>)[plan] ?? plan;
   const renewal = periodEnd ? new Date(periodEnd).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  // Phase 2b-3: Razorpay checkout. Order + activation are server-side; this only opens checkout.
+  const handlePay = async (targetPlan: string) => {
+    const r = await startCheckout(targetPlan, currentUser?.societyId || '', {
+      name: currentUser?.name,
+      onDone: () => {
+        toast({ title: hi ? 'भुगतान मिला' : 'Payment received', description: hi ? 'आपका plan activate हो रहा है…' : 'Activating your plan…' });
+        setTimeout(() => window.location.reload(), 2500);
+      },
+    });
+    if (!r.ok) toast({ title: hi ? 'भुगतान त्रुटि' : 'Payment error', description: r.error, variant: 'destructive' });
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -398,6 +410,10 @@ export default function UserManagement() {
           <div>
             <p className="text-xs text-muted-foreground">{hi ? 'नवीनीकरण' : 'Renewal'}</p>
             <p className="font-semibold">{renewal}</p>
+          </div>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => handlePay('plus')}>Pay Plus ₹3,999</Button>
+            <Button size="sm" onClick={() => handlePay('pro')}>Pay Pro ₹9,999</Button>
           </div>
         </CardContent>
       </Card>
