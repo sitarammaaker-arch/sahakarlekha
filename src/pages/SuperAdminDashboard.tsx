@@ -415,9 +415,9 @@ const SuperAdminDashboard: React.FC = () => {
                         </TableCell>
                         <TableCell>{planBadge(subMap[s.society_id]?.plan ?? 'legacy')}</TableCell>
                         <TableCell className="text-xs text-gray-600">
-                          {s.plan === 'trial'
-                            ? <span className="text-yellow-700">Trial ends {fmtDate(s.trial_ends_at)}</span>
-                            : fmtDate(s.plan_expires_at)}
+                          {subMap[s.society_id]?.status === 'trialing'
+                            ? <span className="text-yellow-700">Trial ends {fmtDate(subMap[s.society_id]?.period_end ?? null)}</span>
+                            : fmtDate(subMap[s.society_id]?.period_end ?? null)}
                         </TableCell>
                         <TableCell>
                           <Switch
@@ -461,16 +461,16 @@ const SuperAdminDashboard: React.FC = () => {
                     <span>Users</span>
                     <span>{s.user_count ?? 0}</span>
                   </div>
-                  {s.plan === 'trial' && (
+                  {subMap[s.society_id]?.status === 'trialing' && (
                     <div className="flex justify-between text-yellow-700">
                       <span>Trial ends</span>
-                      <span>{fmtDate(s.trial_ends_at)}</span>
+                      <span>{fmtDate(subMap[s.society_id]?.period_end ?? null)}</span>
                     </div>
                   )}
-                  {s.plan_expires_at && s.plan !== 'trial' && (
+                  {subMap[s.society_id]?.period_end && subMap[s.society_id]?.status !== 'trialing' && (
                     <div className="flex justify-between">
-                      <span>Expires</span>
-                      <span>{fmtDate(s.plan_expires_at)}</span>
+                      <span>Renewal</span>
+                      <span>{fmtDate(subMap[s.society_id]?.period_end ?? null)}</span>
                     </div>
                   )}
                   {s.is_locked && (
