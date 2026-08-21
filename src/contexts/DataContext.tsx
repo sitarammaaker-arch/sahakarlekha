@@ -716,6 +716,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // T-01: keep the jurisdiction code in sync with the society's state, via the SSOT.
     jurisdictionRef.current = resolveJurisdiction(society.state);
   }, [society]);
+  // Phase 2a-4c: subscription read-only flag. The SELECT is RLS-scoped to the caller's
+  // society (055 policy), so no id is needed. true ONLY when status='expired' → false for
+  // legacy / active / trialing, i.e. never blocks the 19 grandfathered societies.
+  const subExpiredRef = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    supabase.from('subscriptions').select('status').maybeSingle().then(({ data }) => {
+      if (!cancelled) subExpiredRef.current = (data as { status?: string } | null)?.status === 'expired';
+    });
+    return () => { cancelled = true; };
+  }, []);
   // FY-lock guard — reads the LATEST society via ref, so it is never stale even
   // inside useCallbacks declared with empty deps. Returns true (and toasts) when locked.
   const guardFYLocked = useCallback((): boolean => {
@@ -1716,6 +1727,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         variant: 'destructive',
       });
       // Return a dummy voucher object to satisfy the return type — caller must handle gracefully
+      return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    }
+    // Phase 2a-4c: block NEW entries when the subscription has expired (read-only).
+    // Reads/reports/export stay available and data is never deleted (RULE-1).
+    if (subExpiredRef.current) {
+      toastRef.current({
+        title: 'Plan expired / प्लान समाप्त',
+        description: 'Subscription expired — new entries are paused. Please renew; your data is safe. कृपया renew करें, डेटा सुरक्षित है।',
+        variant: 'destructive',
+      });
       return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     }
     // ECR-07: block back-dating a new voucher into a locked period.
