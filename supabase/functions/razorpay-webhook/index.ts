@@ -64,22 +64,20 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
-    // Trust OUR record for society_id + plan (not the payload).
+    // Trust OUR record for society_id + plan + the target period_end (not the payload).
     const { data: order } = await supa
-      .from('orders').select('society_id, plan, status').eq('id', orderId).maybeSingle();
+      .from('orders').select('society_id, plan, status, set_period_end').eq('id', orderId).maybeSingle();
     if (!order) return new Response('unknown order', { status: 200 });
     if (order.status === 'paid') return new Response('already processed', { status: 200 }); // idempotent
 
     await supa.from('orders').update({ status: 'paid', payment_id: payment.id, updated_at: new Date().toISOString() }).eq('id', orderId);
 
-    // EXTEND from the later of (now, current period_end) so an early renewal/upgrade
-    // never loses the remaining paid time — the new year is added on top of what's left.
-    const { data: current } = await supa
-      .from('subscriptions').select('period_end').eq('society_id', order.society_id).maybeSingle();
+    // period_end was decided at order time in create-order (proration/renew/new). Older
+    // orders without it fall back to now + 12mo.
     const now = new Date();
-    const currentEnd = current?.period_end ? new Date(current.period_end) : null;
-    const base = currentEnd && currentEnd > now ? currentEnd : now;
-    const end = new Date(base); end.setMonth(end.getMonth() + PERIOD_MONTHS);
+    const end = order.set_period_end
+      ? new Date(order.set_period_end)
+      : (() => { const e = new Date(now); e.setMonth(e.getMonth() + PERIOD_MONTHS); return e; })();
     await supa.from('subscriptions').upsert({
       society_id:   order.society_id,
       plan:         order.plan,
