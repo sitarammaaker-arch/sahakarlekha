@@ -356,7 +356,15 @@ export default function UserManagement() {
   const planLabel = ({ starter: 'Starter', plus: 'Plus', pro: 'Pro', enterprise: 'Enterprise', legacy: 'Legacy', trial: 'Trial' } as Record<string, string>)[plan] ?? plan;
   const renewal = periodEnd ? new Date(periodEnd).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
   // Phase 2b-3: Razorpay checkout. Order + activation are server-side; this only opens checkout.
-  const handlePay = async (targetPlan: string) => {
+  // Phase 2b — plan pricing/ranking for the checkout buttons (mirrors src/lib/plans.ts).
+  const PLAN_PRICE: Record<string, string> = { starter: '₹1,499', plus: '₹3,999', pro: '₹9,999' };
+  const PLAN_RANK: Record<string, number> = { starter: 1, plus: 2, pro: 3 };
+  const handlePay = async (targetPlan: string, action: string) => {
+    const label = targetPlan[0].toUpperCase() + targetPlan.slice(1);
+    const ok = window.confirm(hi
+      ? `${action}: ${label} (${PLAN_PRICE[targetPlan]}/वर्ष) — भुगतान करें?`
+      : `${action}: ${label} (${PLAN_PRICE[targetPlan]}/yr) — proceed to pay?`);
+    if (!ok) return;
     const r = await startCheckout(targetPlan, currentUser?.societyId || '', {
       name: currentUser?.name,
       onDone: () => {
@@ -412,9 +420,17 @@ export default function UserManagement() {
             <p className="font-semibold">{renewal}</p>
           </div>
           <div className="ml-auto flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => handlePay('starter')}>Pay Starter ₹1,499</Button>
-            <Button size="sm" variant="outline" onClick={() => handlePay('plus')}>Pay Plus ₹3,999</Button>
-            <Button size="sm" onClick={() => handlePay('pro')}>Pay Pro ₹9,999</Button>
+            {(['starter', 'plus', 'pro'] as const).map((p) => {
+              const cur = PLAN_RANK[plan] ?? 0; // legacy/trial → 0 (any plan is a fresh choice)
+              if (PLAN_RANK[p] < cur) return null; // no self-serve downgrade — hide lower plans
+              const label = p[0].toUpperCase() + p.slice(1);
+              const action = PLAN_RANK[p] === cur ? 'Renew' : cur === 0 ? (hi ? 'चुनें' : 'Choose') : 'Upgrade';
+              return (
+                <Button key={p} size="sm" variant={PLAN_RANK[p] === cur ? 'default' : 'outline'} onClick={() => handlePay(p, action)}>
+                  {action} {label} {PLAN_PRICE[p]}
+                </Button>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
