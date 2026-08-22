@@ -70,7 +70,11 @@ Deno.serve(async (req) => {
 
     if (tgtRank > curRank && curRank > 0 && remainingDays > 0 && PRICE_INR[curPlan!] != null) {
       kind = 'upgrade';
-      rupees = Math.max(1, Math.round((PRICE_INR[plan] - PRICE_INR[curPlan!]) * remainingDays / 365));
+      // Cap at one year: an upgrade never costs more than the annual price difference,
+      // even if the society pre-paid multiple years. They keep all remaining time at the
+      // higher tier (a small upgrade perk) while the charge stays intuitive.
+      const days = Math.min(remainingDays, 365);
+      rupees = Math.max(1, Math.round((PRICE_INR[plan] - PRICE_INR[curPlan!]) * days / 365));
       setEnd = curEnd!; // keep the same renewal date — only the plan level changes now
     } else if (tgtRank === curRank && curRank > 0) {
       kind = 'renew';
