@@ -361,9 +361,12 @@ export default function UserManagement() {
   const PLAN_RANK: Record<string, number> = { starter: 1, plus: 2, pro: 3 };
   const handlePay = async (targetPlan: string, action: string) => {
     const label = targetPlan[0].toUpperCase() + targetPlan.slice(1);
+    const proNote = action === 'Upgrade'
+      ? (hi ? ' बचे दिनों का credit घटाकर सिर्फ़ अंतर लिया जाएगा।' : ' Only the prorated difference for your remaining period is charged.')
+      : '';
     const ok = window.confirm(hi
-      ? `${action}: ${label} (${PLAN_PRICE[targetPlan]}/वर्ष) — भुगतान करें?`
-      : `${action}: ${label} (${PLAN_PRICE[targetPlan]}/yr) — proceed to pay?`);
+      ? `${action}: ${label} (${PLAN_PRICE[targetPlan]}/वर्ष)।${proNote} आगे बढ़ें?`
+      : `${action}: ${label} (${PLAN_PRICE[targetPlan]}/yr).${proNote} Proceed?`);
     if (!ok) return;
     const r = await startCheckout(targetPlan, currentUser?.societyId || '', {
       name: currentUser?.name,
