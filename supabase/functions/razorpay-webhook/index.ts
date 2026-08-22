@@ -72,8 +72,14 @@ Deno.serve(async (req) => {
 
     await supa.from('orders').update({ status: 'paid', payment_id: payment.id, updated_at: new Date().toISOString() }).eq('id', orderId);
 
+    // EXTEND from the later of (now, current period_end) so an early renewal/upgrade
+    // never loses the remaining paid time — the new year is added on top of what's left.
+    const { data: current } = await supa
+      .from('subscriptions').select('period_end').eq('society_id', order.society_id).maybeSingle();
     const now = new Date();
-    const end = new Date(now); end.setMonth(end.getMonth() + PERIOD_MONTHS);
+    const currentEnd = current?.period_end ? new Date(current.period_end) : null;
+    const base = currentEnd && currentEnd > now ? currentEnd : now;
+    const end = new Date(base); end.setMonth(end.getMonth() + PERIOD_MONTHS);
     await supa.from('subscriptions').upsert({
       society_id:   order.society_id,
       plan:         order.plan,
