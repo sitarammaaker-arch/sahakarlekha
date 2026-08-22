@@ -412,6 +412,7 @@ export default function UserManagement() {
             <p className="font-semibold">{renewal}</p>
           </div>
           <div className="ml-auto flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => handlePay('starter')}>Pay Starter ₹1,499</Button>
             <Button size="sm" variant="outline" onClick={() => handlePay('plus')}>Pay Plus ₹3,999</Button>
             <Button size="sm" onClick={() => handlePay('pro')}>Pay Pro ₹9,999</Button>
           </div>
