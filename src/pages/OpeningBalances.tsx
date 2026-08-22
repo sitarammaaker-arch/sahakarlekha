@@ -291,7 +291,25 @@ export default function OpeningBalances() {
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
-                        {user?.role === 'admin' && !fyLocked ? (
+                        {acct.isGroup ? (
+                          // Tally-parity: a GROUP is only a classification container — it cannot
+                          // hold an opening (reports sum its child ledgers), so no entry field is
+                          // offered. A legacy/stray group opening can still be cleared to 0.
+                          (entry?.amount || 0) > 0 ? (
+                            <span className="inline-flex items-center gap-2 justify-end">
+                              <span className="font-mono text-sm text-destructive">₹{fmt(entry.amount)}</span>
+                              {user?.role === 'admin' && !fyLocked && (
+                                <Button variant="outline" size="sm" className="h-6 px-2 text-xs text-destructive border-destructive/40"
+                                  title={hi ? 'समूह पर opening नहीं होती (Tally की तरह) — इसे लेजर खाते पर डालें' : "A group can't hold an opening (like Tally) — move it to a ledger account"}
+                                  onClick={() => setBalances(p => { const n = { ...p }; delete n[acct.id]; return n; })}>
+                                  {hi ? '0 करें' : 'Clear'}
+                                </Button>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )
+                        ) : user?.role === 'admin' && !fyLocked ? (
                           <Input
                             type="number" min="0" step="0.01" className="w-36 text-right h-7 text-sm"
                             value={amt} placeholder="0.00"
@@ -309,7 +327,9 @@ export default function OpeningBalances() {
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        {user?.role === 'admin' && !fyLocked ? (
+                        {acct.isGroup ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : user?.role === 'admin' && !fyLocked ? (
                           <Select
                             value={type}
                             onValueChange={v => setBalances(p => ({
