@@ -54,7 +54,7 @@ const EmailCapture: React.FC<{ magnet?: MagnetKey; className?: string }> = ({
     // 1) Deliver value FIRST — generate the PDF locally (no network needed).
     try {
       generateMagnet(magnet);
-      trackEvent('lead_magnet_download', { source: magnet });
+      trackEvent('lead_magnet_download', { magnet });
     } catch {
       toast({ title: 'डाउनलोड नहीं हो सका', description: 'कृपया फिर कोशिश करें।', variant: 'destructive' });
       setSubmitting(false);
@@ -68,7 +68,7 @@ const EmailCapture: React.FC<{ magnet?: MagnetKey; className?: string }> = ({
     const page = typeof window !== 'undefined' ? window.location.href : null;
     supabase.from('leads')
       .insert([{ email: mail, source: magnet, marketing_consent: true, page_url: page }])
-      .then(({ error }) => { if (!error) trackEvent('email_signup', { source: magnet }); }, () => {});
+      .then(({ error }) => { if (!error) trackEvent('email_signup', { magnet }); }, () => {});
     fetch('/api/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
