@@ -12,6 +12,7 @@ import GuideMarkdown, { slugifyHeading } from '@/components/guide/GuideMarkdown'
 import HelpfulWidget from '@/components/HelpfulWidget';
 import EmailCapture from '@/components/EmailCapture';
 import { magnetForCategory } from '@/lib/leadMagnets';
+import { trackEvent } from '@/lib/analytics';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findPost, loadBlogRaw, readingMinutes, relatedPosts, publishedOrder, isPublished } from '@/content/blog';
 import { guideForBlog } from '@/content/crossLinks';
@@ -255,8 +256,8 @@ const BlogPost: React.FC = () => {
                   वाउचर से बैलेंस शीट तक, सब एक क्लिक पर। सहकारी समितियों के लिए ही बना, हिन्दी-केंद्रित प्लेटफ़ॉर्म।
                 </p>
                 <div className="flex flex-wrap gap-3 justify-center mt-4">
-                  <Link to="/register"><Button className="gap-2">मुफ्त रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
-                  <Link to="/guide"><Button variant="outline">संपूर्ण गाइड पढ़ें</Button></Link>
+                  <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'register', post: slug })}><Button className="gap-2">मुफ्त रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
+                  <Link to="/guide" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'guide', post: slug })}><Button variant="outline">संपूर्ण गाइड पढ़ें</Button></Link>
                 </div>
               </CardContent>
             </Card>
