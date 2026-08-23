@@ -716,6 +716,12 @@ function glossaryPages(DATA) {
     const s = t.sections;
     const name = t.hindi ? `${t.hindi} (${t.en})` : t.en;
     const def = kiPlain(s['definition']);
+    // SERP snippet + schema description in HINDI. The KI `definition` field is English, but
+    // this is a Hindi-first product and these pages rank on "…meaning in hindi / क्या है"
+    // queries — an English snippet under a Hindi title was killing CTR (e.g. passbook: 334
+    // impressions, 0 clicks). The KI's own `hindi explanation` is the natural snippet; fall
+    // back to the English definition only when a term has no Hindi explanation.
+    const hindiDef = kiPlain(s['hindi explanation']) || def;
     const url = `${SITE}/glossary/${t.slug}`;
 
     // related-concept links (only to other ACTIVE terms)
@@ -735,7 +741,7 @@ function glossaryPages(DATA) {
     pages.push({
       path: `/glossary/${t.slug}`,
       title: `${name} — सहकारी लेखांकन शब्दकोश | SahakarLekha`,
-      description: def.slice(0, 158),
+      description: hindiDef.slice(0, 158),
       lastmod: t.lastUpdated || LASTMOD.static,
       body: shell({
         crumbs: [['/glossary', 'शब्दकोश']],
@@ -760,7 +766,7 @@ function glossaryPages(DATA) {
       }),
       jsonLd: [
         {
-          '@context': 'https://schema.org', '@type': 'DefinedTerm', name, description: def,
+          '@context': 'https://schema.org', '@type': 'DefinedTerm', name, description: hindiDef,
           inLanguage: 'hi', url, termCode: t.id,
           inDefinedTermSet: { '@type': 'DefinedTermSet', name: 'SahakarLekha Glossary', url: `${SITE}/glossary` },
         },
