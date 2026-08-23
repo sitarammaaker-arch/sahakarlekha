@@ -27,7 +27,10 @@ export function installErrorTracking() {
   window.addEventListener('error', (e) => {
     trackEvent('app_error', {
       message: String(e.message || '').slice(0, 150),
-      source: (e.filename || '').split('/').pop(),
+      // NOT `source`: that is a GA4 reserved traffic-source parameter, so a filename here
+      // (chunk-*.js) — or the route when e.filename is the page URL (/vouchers) — was
+      // overriding the session's traffic source and polluting acquisition reports.
+      error_source: (e.filename || '').split('/').pop(),
       page_path: window.location.pathname,
     });
     // Durable, full-detail sink (message + stack) — the operator-visible error log.

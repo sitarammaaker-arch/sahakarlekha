@@ -34,7 +34,7 @@ const WHATSAPP = WHATSAPP_NUMBER;          // central number from socials.tsx
 const SHOW_COMMUNITY = false;              // temporarily hide the homepage community/social section (user request 2026-08-20) — flip to true to re-enable
 // Sample report is generated on-demand from a fictional demo society — no static asset.
 const handleSampleReport = async () => {
-  trackEvent('sample_report_generated', { source: 'landing' });
+  trackEvent('sample_report_generated', { location: 'landing' });
   const { generateSampleReportPDF } = await import('@/lib/sampleReport');
   generateSampleReportPDF();
 };
