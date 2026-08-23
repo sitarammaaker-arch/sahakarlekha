@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import GuideMarkdown from '@/components/guide/GuideMarkdown';
 import HelpfulWidget from '@/components/HelpfulWidget';
+import { trackEvent } from '@/lib/analytics';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findTerm, learningPath, allGlossary } from '@/content/glossary';
 import { calculatorsForGlossary } from '@/content/calculators';
@@ -259,8 +260,8 @@ const GlossaryTerm: React.FC = () => {
             <p className="font-bold text-lg text-foreground">अपनी समिति का खाता डिजिटल कीजिए — मुफ्त</p>
             <p className="text-sm text-muted-foreground mt-1">सहकारी समितियों के लिए ही बना, हिन्दी-केंद्रित प्लेटफ़ॉर्म।</p>
             <div className="flex flex-wrap gap-3 justify-center mt-4">
-              <Link to="/register"><Button className="gap-2">मुफ्त रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
-              <Link to="/glossary"><Button variant="outline">पूरा शब्दकोश</Button></Link>
+              <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'glossary_footer', target: 'register', term: slug })}><Button className="gap-2">मुफ्त रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
+              <Link to="/glossary" onClick={() => trackEvent('cta_click', { location: 'glossary_footer', target: 'glossary', term: slug })}><Button variant="outline">पूरा शब्दकोश</Button></Link>
             </div>
           </CardContent>
         </Card>
