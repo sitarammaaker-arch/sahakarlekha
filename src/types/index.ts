@@ -1544,6 +1544,8 @@ export interface Purchase {
   createdBy: string;
   isDeleted?: boolean;      // P0 #2 soft-delete: archived purchase (retained in DB, hidden from app)
   rcmApplicable?: boolean;  // ECR-22: inward supply liable to GST under Reverse Charge (recipient pays) — self-assessed GST + matching ITC
+  supplierBillNo?: string;  // supplier's own invoice / bill number (their document ref, printed on the paper bill)
+  supplierBillDate?: string;// date printed on the supplier's bill (may differ from our entry date)
   branchId?: string;        // ECR-17 Phase 4: branch this purchase belongs to (unset = head office)
 }
 
