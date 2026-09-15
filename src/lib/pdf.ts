@@ -3126,6 +3126,8 @@ export function generateVoucherPDF(input: VoucherPDFInput, society: SocietySetti
 export interface PurchaseRecordInput {
   purchaseNo: string;
   date: string;
+  supplierBillNo?: string;
+  supplierBillDate?: string;
   supplier: {
     legalName?: string;
     name?: string;
@@ -3315,6 +3317,8 @@ export function generatePurchaseRecordPDF(input: PurchaseRecordInput, society: S
   doc.setFontSize(8.5);
   const metaPairs: [string, string][] = [
     ['Purchase No.', input.purchaseNo],
+    ...(input.supplierBillNo ? [['Bill No.', input.supplierBillNo] as [string, string]] : []),
+    ...(input.supplierBillDate ? [['Bill Date', fmtDate(input.supplierBillDate)] as [string, string]] : []),
     ['Date', fmtDate(input.date)],
     ['Place of Supply', input.supplier.placeOfSupply || input.supplier.state || '—'],
     ['Payment Mode', input.paymentMode.toUpperCase()],

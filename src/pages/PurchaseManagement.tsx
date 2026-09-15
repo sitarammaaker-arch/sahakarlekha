@@ -70,6 +70,8 @@ const PurchaseManagement: React.FC = () => {
   const [supplierId, setSupplierId] = useState('');
   const [supplierName, setSupplierName] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
+  const [supplierBillNo, setSupplierBillNo] = useState('');    // supplier's own invoice/bill no.
+  const [supplierBillDate, setSupplierBillDate] = useState(''); // date printed on that bill
   const [items, setItems] = useState<PurchaseItem[]>([EMPTY_ITEM()]);
   const [discount, setDiscount] = useState<number>(0);
   // GST / TDS / TCS rates (%)
@@ -182,6 +184,8 @@ const PurchaseManagement: React.FC = () => {
     setSupplierId('');
     setSupplierName('');
     setSupplierPhone('');
+    setSupplierBillNo('');
+    setSupplierBillDate('');
     setItems([EMPTY_ITEM()]);
     setDiscount(0);
     setCgstPct(0); setSgstPct(0); setIgstPct(0); setTdsPct(0); setTcsPct(0); setRcmApplicable(false);
@@ -198,6 +202,8 @@ const PurchaseManagement: React.FC = () => {
     setSupplierId(purchase.supplierId || '');
     setSupplierName(purchase.supplierName);
     setSupplierPhone(purchase.supplierPhone || '');
+    setSupplierBillNo(purchase.supplierBillNo || '');
+    setSupplierBillDate(purchase.supplierBillDate || '');
     setItems(purchase.items.length ? purchase.items.map(it => ({ ...it })) : [EMPTY_ITEM()]);
     setDiscount(purchase.discount || 0);
     setCgstPct(purchase.cgstPct || 0);
@@ -231,11 +237,23 @@ const PurchaseManagement: React.FC = () => {
       return;
     }
 
+    // Soft duplicate check: same supplier already has a purchase with this exact bill no.
+    // We warn but never block — a genuine re-billing or correction must still save (RULE 1).
+    const billNo = supplierBillNo.trim();
+    const duplicateBill = !!billNo && purchases.some(p =>
+      !(p as { isDeleted?: boolean }).isDeleted &&
+      p.id !== editingId &&
+      (supplierId ? p.supplierId === supplierId : p.supplierName === supplierName.trim()) &&
+      (p.supplierBillNo || '').trim().toLowerCase() === billNo.toLowerCase()
+    );
+
     const payload = {
       date: purchaseDate,
       supplierName: supplierName.trim(),
       supplierPhone: supplierPhone.trim() || undefined,
       supplierId: supplierId || undefined,
+      supplierBillNo: billNo || undefined,
+      supplierBillDate: supplierBillDate || undefined,
       items: validItems,
       totalAmount,
       discount,
@@ -260,6 +278,15 @@ const PurchaseManagement: React.FC = () => {
               ? `खरीद अपडेट हुई: ${updated.purchaseNo}`
               : `Purchase updated: ${updated.purchaseNo}`,
           });
+          if (duplicateBill) {
+            toast({
+              title: language === 'hi' ? '⚠️ यह बिल नंबर पहले से मौजूद है' : '⚠️ Bill number already exists',
+              description: language === 'hi'
+                ? `इसी आपूर्तिकर्ता का बिल "${billNo}" पहले भी दर्ज है — फिर भी सहेज दिया गया।`
+                : `Bill "${billNo}" from this supplier is already recorded — saved anyway.`,
+              duration: 8000,
+            });
+          }
           resetForm();
           setActiveTab('purchase-list');
         }
@@ -271,6 +298,15 @@ const PurchaseManagement: React.FC = () => {
             ? `खरीद सहेजी गई: ${newPurchase.purchaseNo}`
             : `Purchase saved: ${newPurchase.purchaseNo}`,
         });
+        if (duplicateBill) {
+          toast({
+            title: language === 'hi' ? '⚠️ यह बिल नंबर पहले से मौजूद है' : '⚠️ Bill number already exists',
+            description: language === 'hi'
+              ? `इसी आपूर्तिकर्ता का बिल "${billNo}" पहले भी दर्ज है — फिर भी सहेज दिया गया।`
+              : `Bill "${billNo}" from this supplier is already recorded — saved anyway.`,
+            duration: 8000,
+          });
+        }
         resetForm();
       }
     } catch (err) {
@@ -338,6 +374,8 @@ const PurchaseManagement: React.FC = () => {
       generatePurchaseRecordPDF({
         purchaseNo: purchase.purchaseNo,
         date: purchase.date,
+        supplierBillNo: purchase.supplierBillNo,
+        supplierBillDate: purchase.supplierBillDate,
         supplier: recordSupplier,
         items: enrichedItems,
         totalAmount: purchase.totalAmount,
@@ -380,13 +418,13 @@ const PurchaseManagement: React.FC = () => {
   }, [purchases, filterFrom, filterTo, filterSupplier, filterMode]);
 
   const handleCSV = () => {
-    const headers = ['Purchase No', 'Date', 'Supplier', 'Phone', 'Items', 'Net Amount', 'Payment Mode'];
-    const rows = filteredPurchases.map(p => [p.purchaseNo || '', p.date, p.supplierName || '', p.supplierPhone || '', p.items?.length || 0, p.netAmount || 0, p.paymentMode || '']);
+    const headers = ['Purchase No', 'Bill No', 'Bill Date', 'Date', 'Supplier', 'Phone', 'Items', 'Net Amount', 'Payment Mode'];
+    const rows = filteredPurchases.map(p => [p.purchaseNo || '', p.supplierBillNo || '', p.supplierBillDate || '', p.date, p.supplierName || '', p.supplierPhone || '', p.items?.length || 0, p.netAmount || 0, p.paymentMode || '']);
     downloadCSV(headers, rows, 'purchases.csv');
   };
   const handleExcel = () => {
-    const headers = ['Purchase No', 'Date', 'Supplier', 'Phone', 'Items', 'Net Amount', 'Payment Mode'];
-    const rows = filteredPurchases.map(p => [p.purchaseNo || '', p.date, p.supplierName || '', p.supplierPhone || '', p.items?.length || 0, p.netAmount || 0, p.paymentMode || '']);
+    const headers = ['Purchase No', 'Bill No', 'Bill Date', 'Date', 'Supplier', 'Phone', 'Items', 'Net Amount', 'Payment Mode'];
+    const rows = filteredPurchases.map(p => [p.purchaseNo || '', p.supplierBillNo || '', p.supplierBillDate || '', p.date, p.supplierName || '', p.supplierPhone || '', p.items?.length || 0, p.netAmount || 0, p.paymentMode || '']);
     downloadExcelSingle(headers, rows, 'purchases.xlsx', 'Purchases');
   };
 
@@ -512,6 +550,22 @@ const PurchaseManagement: React.FC = () => {
                   readOnly
                   placeholder={language === 'hi' ? 'स्वतः भरेगा' : 'Auto-filled'}
                   className="bg-muted/50"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>{language === 'hi' ? 'बिल / इनवॉइस नं. (आपूर्तिकर्ता का)' : 'Bill / Invoice No. (supplier’s)'}</Label>
+                <Input
+                  value={supplierBillNo}
+                  onChange={e => setSupplierBillNo(e.target.value)}
+                  placeholder={language === 'hi' ? 'जैसे INV-2026/154' : 'e.g. INV-2026/154'}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>{language === 'hi' ? 'बिल तिथि' : 'Bill Date'}</Label>
+                <Input
+                  type="date"
+                  value={supplierBillDate}
+                  onChange={e => setSupplierBillDate(e.target.value)}
                 />
               </div>
             </CardContent>
@@ -916,7 +970,14 @@ const PurchaseManagement: React.FC = () => {
                       .sort((a, b) => b.date.localeCompare(a.date))
                       .map(purchase => (
                         <TableRow key={purchase.id}>
-                          <TableCell className="font-mono text-sm">{purchase.purchaseNo}</TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {purchase.purchaseNo}
+                            {purchase.supplierBillNo && (
+                              <div className="text-xs text-gray-400 font-sans">
+                                {language === 'hi' ? 'बिल: ' : 'Bill: '}{purchase.supplierBillNo}
+                              </div>
+                            )}
+                          </TableCell>
                           <TableCell>{fmtDate(purchase.date)}</TableCell>
                           <TableCell>
                             <div>{purchase.supplierName}</div>
@@ -999,6 +1060,18 @@ const PurchaseManagement: React.FC = () => {
                   <p className="text-gray-500">{language === 'hi' ? 'आपूर्तिकर्ता' : 'Supplier'}</p>
                   <p className="font-medium">{viewPurchase.supplierName}</p>
                 </div>
+                {viewPurchase.supplierBillNo && (
+                  <div>
+                    <p className="text-gray-500">{language === 'hi' ? 'बिल / इनवॉइस नं.' : 'Bill / Invoice No.'}</p>
+                    <p className="font-medium">{viewPurchase.supplierBillNo}</p>
+                  </div>
+                )}
+                {viewPurchase.supplierBillDate && (
+                  <div>
+                    <p className="text-gray-500">{language === 'hi' ? 'बिल तिथि' : 'Bill Date'}</p>
+                    <p className="font-medium">{fmtDate(viewPurchase.supplierBillDate)}</p>
+                  </div>
+                )}
                 {viewPurchase.supplierPhone && (
                   <div>
                     <p className="text-gray-500">{language === 'hi' ? 'फोन' : 'Phone'}</p>

@@ -494,6 +494,9 @@ alter table purchases add column if not exists "supplierId" text;
 alter table purchases add column if not exists "taxVoucherIds" jsonb default '[]';
 -- Migration 054: which bank a bank-mode purchase payment hits (null → default bank, as before).
 alter table purchases add column if not exists "bankAccountId" text;
+-- Supplier's own bill/invoice number + its printed date (their document ref, distinct from our PUR/ no.).
+alter table purchases add column if not exists "supplierBillNo" text;
+alter table purchases add column if not exists "supplierBillDate" text;
 
 -- Vouchers: multi-line support (Phase 1 - Path B)
 alter table vouchers add column if not exists lines jsonb default '[]';
