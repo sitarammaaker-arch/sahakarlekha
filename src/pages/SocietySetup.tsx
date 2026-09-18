@@ -113,6 +113,7 @@ const SocietySetup: React.FC = () => {
     bankAccountNo: society.bankAccountNo || '',
     bankIfsc: society.bankIfsc || '',
     bankBranch: society.bankBranch || '',
+    upiId: society.upiId || '',
   });
 
   // T-14 (ADR-0002): gate the maintenance-GST block on the `housing` CAPABILITY, not the type literal.
@@ -728,6 +729,20 @@ const SocietySetup: React.FC = () => {
                       placeholder={language === 'hi' ? 'शाखा का नाम' : 'Branch name'}
                       className="h-11"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{language === 'hi' ? 'UPI आईडी (Scan-to-Pay QR)' : 'UPI ID (Scan-to-Pay QR)'}</Label>
+                    <Input
+                      value={form.upiId}
+                      onChange={e => setForm(f => ({ ...f, upiId: e.target.value.trim() }))}
+                      placeholder="society@okhdfcbank"
+                      className="h-11 font-mono"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {language === 'hi'
+                        ? 'भरने पर बिल पर "Scan to Pay" QR छपेगा — ग्राहक स्कैन करके सीधे UPI से भुगतान कर सकता है।'
+                        : 'When set, a "Scan to Pay" QR is printed on the bill so customers can pay via UPI.'}
+                    </p>
                   </div>
                 </div>
               </div>
