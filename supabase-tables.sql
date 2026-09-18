@@ -897,6 +897,8 @@ alter table society_settings add column if not exists "bankName" text;
 alter table society_settings add column if not exists "bankAccountNo" text;
 alter table society_settings add column if not exists "bankIfsc" text;
 alter table society_settings add column if not exists "bankBranch" text;
+-- UPI VPA — printed as a Scan-to-Pay QR on sale invoices.
+alter table society_settings add column if not exists "upiId" text;
 
 -- ── P0 #2: Soft-delete parent records ───────────────────────────────────────
 -- Members / purchases / assets / audit-objections are now ARCHIVED (isDeleted=true)
