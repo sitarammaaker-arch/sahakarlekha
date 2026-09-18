@@ -42,8 +42,11 @@ const PurchaseReturn: React.FC = () => {
 
   const matches = useMemo(() => {
     const raw = q.trim().toLowerCase();
-    if (!raw) return activePurchases.slice().sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 10);
-    return activePurchases.filter(p => (p.purchaseNo || '').toLowerCase().includes(raw) || (p.supplierName || '').toLowerCase().includes(raw)).slice(0, 12);
+    const sorted = activePurchases.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+    // No query: show the recent 50 (list scrolls). With a query: show ALL matches —
+    // capping at 12 hid older bills the user was searching for (reported bug).
+    if (!raw) return sorted.slice(0, 50);
+    return sorted.filter(p => (p.purchaseNo || '').toLowerCase().includes(raw) || (p.supplierName || '').toLowerCase().includes(raw));
   }, [activePurchases, q]);
 
   const purchase = selectedPurchaseId ? activePurchases.find(p => p.id === selectedPurchaseId) : undefined;

@@ -540,8 +540,15 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return null;
     const sale = sales.find(s => s.id === data.originalSaleId && !(s as { isDeleted?: boolean }).isDeleted);
     if (!sale) { toastRef.current({ title: 'मूल बिक्री नहीं मिली', variant: 'destructive' }); return null; }
-    const salesReturnAccId = resolveSalesReturnAccountId(accounts);
-    if (!salesReturnAccId) { toastRef.current({ title: 'बिक्री वापसी खाता नहीं मिला', description: 'Sales Return account missing — reload once.', variant: 'destructive', duration: 12000 }); return null; }
+    // Self-heal: the chart seeder (above) only runs for pos_billing societies, so a
+    // non-consumer society (e.g. marketing) using Sales Return can lack this account —
+    // which used to make every sale-return bail here. Create it on demand instead.
+    let salesReturnAccId = resolveSalesReturnAccountId(accounts);
+    if (!salesReturnAccId) {
+      const created = addAccount({ name: 'Sales Return', nameHi: 'बिक्री वापसी', type: 'income', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '4100', subtype: SALES_RETURN_SUBTYPE });
+      salesReturnAccId = created?.id || null;
+    }
+    if (!salesReturnAccId) { toastRef.current({ title: 'बिक्री वापसी खाता नहीं बना', description: 'Sales Return account could not be created — reload once.', variant: 'destructive', duration: 12000 }); return null; }
     const items = data.items.filter(i => i.itemId && i.qty > 0).map(i => ({ ...i, amount: round2(i.qty * i.rate) }));
     if (items.length === 0) { toastRef.current({ title: 'कोई मात्रा नहीं', description: 'कम-से-कम एक वस्तु की वापसी मात्रा डालें।', variant: 'destructive' }); return null; }
     // Cap: returned qty (incl. prior returns) must not exceed sold qty.
@@ -595,7 +602,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     });
     toastRef.current({ title: `✅ वापसी दर्ज — ${returnNo}`, description: `स्टॉक वापस + ₹${grandTotal.toLocaleString('en-IN')}` });
     return ret;
-  }, [sales, salesReturns, accounts, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitSalesReturn, user]);
+  }, [sales, salesReturns, accounts, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, user]);
 
   const deleteSalesReturn = useCallback((id: string) => {
     if (guardFYLocked()) return;

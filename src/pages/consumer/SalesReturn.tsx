@@ -40,8 +40,11 @@ const SalesReturn: React.FC = () => {
 
   const matches = useMemo(() => {
     const raw = q.trim().toLowerCase();
-    if (!raw) return sales.slice().sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 10);
-    return sales.filter(s => (s.saleNo || '').toLowerCase().includes(raw) || (s.customerName || '').toLowerCase().includes(raw)).slice(0, 12);
+    const sorted = sales.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+    // No query: show the recent 50 (list scrolls). With a query: show ALL matches —
+    // capping at 12 hid older bills the user was searching for (reported bug).
+    if (!raw) return sorted.slice(0, 50);
+    return sorted.filter(s => (s.saleNo || '').toLowerCase().includes(raw) || (s.customerName || '').toLowerCase().includes(raw));
   }, [sales, q]);
 
   const sale = selectedSaleId ? sales.find(s => s.id === selectedSaleId) : undefined;
