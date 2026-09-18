@@ -14,12 +14,12 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Undo2, Search, Trash2, Download } from 'lucide-react';
+import { Undo2, Search, Trash2, Download, Pencil } from 'lucide-react';
 import { downloadCSV } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import type { SalesReturnRefund } from '@/types';
+import type { SalesReturnRefund, SalesReturn } from '@/types';
 
 const TODAY = () => new Date().toISOString().split('T')[0];
 const fmt = (amount: number) =>
@@ -29,9 +29,11 @@ const SalesReturn: React.FC = () => {
   const { language } = useLanguage();
   const hi = language === 'hi';
   const { sales, society } = useData();
-  const { salesReturns, addSalesReturn, deleteSalesReturn } = useConsumerData();
+  const { salesReturns, addSalesReturn, updateSalesReturn, deleteSalesReturn } = useConsumerData();
   const { toast } = useToast();
 
+  const [tab, setTab] = useState('new');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [selectedSaleId, setSelectedSaleId] = useState('');
   const [retQty, setRetQty] = useState<Record<string, number>>({});
@@ -52,9 +54,10 @@ const SalesReturn: React.FC = () => {
   // Already-returned qty per item on the selected sale (to cap).
   const priorByItem = useMemo(() => {
     const m = new Map<string, number>();
-    if (sale) salesReturns.filter(r => !r.isDeleted && r.originalSaleId === sale.id).forEach(r => r.items.forEach(it => m.set(it.itemId, (m.get(it.itemId) || 0) + it.qty)));
+    // Exclude the return being edited so its own qty doesn't count against the cap.
+    if (sale) salesReturns.filter(r => !r.isDeleted && r.originalSaleId === sale.id && r.id !== editingId).forEach(r => r.items.forEach(it => m.set(it.itemId, (m.get(it.itemId) || 0) + it.qty)));
     return m;
-  }, [salesReturns, sale]);
+  }, [salesReturns, sale, editingId]);
 
   const selectSale = (id: string) => {
     setSelectedSaleId(id);
@@ -68,14 +71,27 @@ const SalesReturn: React.FC = () => {
     return sale.items.reduce((sum, it) => sum + (retQty[it.itemId] || 0) * it.rate, 0);
   }, [sale, retQty]);
 
+  const resetForm = () => { setSelectedSaleId(''); setRetQty({}); setQ(''); setEditingId(null); setRefundMode('cash'); setDate(TODAY()); };
   const handleReturn = () => {
     if (!sale) { toast({ title: hi ? 'बिक्री चुनें' : 'Select a sale', variant: 'destructive' }); return; }
     const items = sale.items
       .filter(it => (retQty[it.itemId] || 0) > 0)
       .map(it => ({ itemId: it.itemId, itemName: it.itemName, unit: it.unit, qty: retQty[it.itemId], rate: it.rate, amount: retQty[it.itemId] * it.rate }));
     if (items.length === 0) { toast({ title: hi ? 'कोई वापसी मात्रा नहीं' : 'No return quantity', variant: 'destructive' }); return; }
-    const r = addSalesReturn({ originalSaleId: sale.id, items, refundMode, date });
-    if (r) { setSelectedSaleId(''); setRetQty({}); setQ(''); }
+    const payload = { originalSaleId: sale.id, items, refundMode, date };
+    const r = editingId ? updateSalesReturn(editingId, payload) : addSalesReturn(payload);
+    if (r) { resetForm(); setTab('register'); }
+  };
+
+  // Load a posted return into the form to fix a wrong quantity/refund.
+  const startEdit = (ret: SalesReturn) => {
+    setEditingId(ret.id);
+    setSelectedSaleId(ret.originalSaleId);
+    setRetQty(Object.fromEntries(ret.items.map(it => [it.itemId, it.qty])));
+    setRefundMode(ret.refundMode);
+    setDate(ret.date);
+    setQ('');
+    setTab('new');
   };
 
   const register = useMemo(() => salesReturns.filter(r => !r.isDeleted).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)), [salesReturns]);
@@ -99,9 +115,9 @@ const SalesReturn: React.FC = () => {
         </div>
       </div>
 
-      <Tabs defaultValue="new">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="new">{hi ? 'नई वापसी' : 'New Return'}</TabsTrigger>
+          <TabsTrigger value="new">{editingId ? (hi ? 'वापसी संशोधन' : 'Edit Return') : (hi ? 'नई वापसी' : 'New Return')}</TabsTrigger>
           <TabsTrigger value="register">{hi ? 'वापसी रजिस्टर' : 'Returns Register'}</TabsTrigger>
         </TabsList>
 
@@ -132,8 +148,11 @@ const SalesReturn: React.FC = () => {
           {sale && (
             <Card>
               <CardHeader className="py-3 flex flex-row items-center justify-between">
-                <CardTitle className="text-base">{sale.saleNo} — {sale.customerName}</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => { setSelectedSaleId(''); setRetQty({}); }}>{hi ? 'बदलें' : 'Change'}</Button>
+                <CardTitle className="text-base">
+                  {editingId && <span className="text-amber-700 mr-1">{hi ? '✎ संशोधन:' : '✎ Editing:'}</span>}
+                  {sale.saleNo} — {sale.customerName}
+                </CardTitle>
+                <Button variant="ghost" size="sm" onClick={resetForm}>{editingId ? (hi ? 'रद्द करें' : 'Cancel') : (hi ? 'बदलें' : 'Change')}</Button>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="overflow-x-auto">
@@ -191,7 +210,7 @@ const SalesReturn: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex justify-end">
-                  <Button onClick={handleReturn} disabled={returnNet <= 0} className="gap-1 bg-rose-600 hover:bg-rose-700"><Undo2 className="h-4 w-4" />{hi ? 'वापसी दर्ज करें' : 'Post Return'}</Button>
+                  <Button onClick={handleReturn} disabled={returnNet <= 0} className="gap-1 bg-rose-600 hover:bg-rose-700"><Undo2 className="h-4 w-4" />{editingId ? (hi ? 'वापसी अपडेट करें' : 'Update Return') : (hi ? 'वापसी दर्ज करें' : 'Post Return')}</Button>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
                   {hi ? 'माल स्टॉक में वापस जाएगा, बिक्री घटेगी, GST उलटेगा, और उधार/नकद समायोजित होगा।' : 'Goods go back to stock, sales reduce, GST reverses, and cash/credit is adjusted.'}
@@ -215,26 +234,35 @@ const SalesReturn: React.FC = () => {
                     <TableHead>{hi ? 'तिथि' : 'Date'}</TableHead>
                     <TableHead>{hi ? 'बिक्री नं.' : 'Sale No.'}</TableHead>
                     <TableHead>{hi ? 'ग्राहक' : 'Customer'}</TableHead>
+                    <TableHead>{hi ? 'लौटाई वस्तुएँ' : 'Items Returned'}</TableHead>
                     <TableHead className="text-right">{hi ? 'राशि' : 'Total'}</TableHead>
                     <TableHead>{hi ? 'विधि' : 'Refund'}</TableHead>
-                    <TableHead className="w-10" />
+                    <TableHead className="w-20 text-center">{hi ? 'क्रिया' : 'Action'}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {register.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">{hi ? 'कोई वापसी नहीं' : 'No returns'}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400">{hi ? 'कोई वापसी नहीं' : 'No returns'}</TableCell></TableRow>
                   ) : register.map(r => (
                     <TableRow key={r.id}>
                       <TableCell className="font-mono text-sm">{r.returnNo}</TableCell>
                       <TableCell>{fmtDate(r.date)}</TableCell>
                       <TableCell className="font-mono text-xs">{r.saleNo}</TableCell>
                       <TableCell>{r.customerName}</TableCell>
+                      <TableCell className="text-xs max-w-[220px]">
+                        {r.items.map(it => `${it.itemName} × ${it.qty} ${it.unit}`).join(', ')}
+                      </TableCell>
                       <TableCell className="text-right font-semibold">{fmt(r.grandTotal)}</TableCell>
                       <TableCell><Badge variant="outline" className="text-[10px]">{REFUND_LABEL[r.refundMode]}</Badge></TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700" onClick={() => { deleteSalesReturn(r.id); toast({ title: hi ? 'वापसी रद्द' : 'Return reversed' }); }}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-center gap-1">
+                          <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-800" title={hi ? 'संशोधित करें' : 'Edit'} onClick={() => startEdit(r)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700" title={hi ? 'रद्द करें' : 'Reverse'} onClick={() => { if (window.confirm(hi ? `वापसी ${r.returnNo} रद्द करें?` : `Reverse return ${r.returnNo}?`)) { deleteSalesReturn(r.id); toast({ title: hi ? 'वापसी रद्द' : 'Return reversed' }); } }}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
