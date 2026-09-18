@@ -63,11 +63,11 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const SaleManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { sales, stockItems, stockMovements, customers, accounts, addSale, updateSale, deleteSale, addStockItem, society } = useData();
-  // Available qty is ALWAYS movement-based (RULE 2). Never read stockItem.currentStock
-  // here — that cache drifts when a purchase voucher is edited/deleted and caused the
-  // "sale shows 120 but stock report shows 0" bug.
-  const stockMap = useMemo(() => computeStockMap(stockItems, stockMovements), [stockItems, stockMovements]);
+  const { sales, stockItems, reconciledStockMovements, customers, accounts, addSale, updateSale, deleteSale, addStockItem, society } = useData();
+  // Available qty is ALWAYS movement-based (RULE 2), reconciled to live docs (RULE 3). Never read
+  // stockItem.currentStock here — that cache drifts when a purchase voucher is edited/deleted and
+  // caused the "sale shows 120 but stock report shows 0" bug.
+  const stockMap = useMemo(() => computeStockMap(stockItems, reconciledStockMovements), [stockItems, reconciledStockMovements]);
   const { toast } = useToast();
 
   // ── New Sale form state ───────────────────────────────────────────────────

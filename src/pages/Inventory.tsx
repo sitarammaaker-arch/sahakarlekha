@@ -483,6 +483,7 @@ const Inventory: React.FC = () => {
   const {
     stockItems,
     stockMovements,
+    reconciledStockMovements,
     accounts,
     addStockItem,
     updateStockItem,
@@ -608,13 +609,13 @@ const Inventory: React.FC = () => {
 
   // Compute current stock from movements (openingStock + purchases - sales/adjustments)
   // This is the authoritative quantity — same formula as Stock Valuation uses.
-  const computedStockMap = useMemo(() => computeStockMap(stockItems, stockMovements), [stockItems, stockMovements]);
+  const computedStockMap = useMemo(() => computeStockMap(stockItems, reconciledStockMovements), [stockItems, reconciledStockMovements]);
 
   // Derived data
   // Value at weighted-average COST from movements (RULE 2) — same as Stock Valuation /
   // Trading A/c / Balance Sheet — NOT the stale purchaseRate field (0 for some items).
   const totalStockValue = stockItems.reduce(
-    (sum, item) => sum + computeStockValue(item, stockMovements),
+    (sum, item) => sum + computeStockValue(item, reconciledStockMovements),
     0,
   );
   const lowStockCount = stockItems.filter(item => (computedStockMap[item.id] ?? 0) < 5).length;
@@ -795,7 +796,7 @@ const Inventory: React.FC = () => {
     if (!item) return;
     // Value the adjustment at current weighted-average cost (RULE 2), not the stale
     // purchaseRate field — so an adjustment doesn't dilute the item's stock value to 0.
-    const adjRate = computeStockCostRate(item, stockMovements);
+    const adjRate = computeStockCostRate(item, reconciledStockMovements);
     addStockMovement({
       date: adjForm.date,
       itemId: adjForm.itemId,
@@ -819,12 +820,12 @@ const Inventory: React.FC = () => {
 
   const handleCSV = () => {
     const headers = ['Item Code', 'Name', 'Name (Hindi)', 'Unit', 'Opening Stock', 'Current Stock', 'Purchase Rate', 'Sale Rate', 'Stock Value', 'Status', 'Barcode'];
-    const rows = filteredItems.map(i => { const cs = computedStockMap[i.id] ?? 0; return [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, cs, i.purchaseRate || 0, i.saleRate || 0, computeStockValue(i, stockMovements), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']; });
+    const rows = filteredItems.map(i => { const cs = computedStockMap[i.id] ?? 0; return [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, cs, i.purchaseRate || 0, i.saleRate || 0, computeStockValue(i, reconciledStockMovements), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']; });
     downloadCSV(headers, rows, 'inventory.csv');
   };
   const handleExcel = () => {
     const headers = ['Item Code', 'Name', 'Name (Hindi)', 'Unit', 'Opening Stock', 'Current Stock', 'Purchase Rate', 'Sale Rate', 'Stock Value', 'Status', 'Barcode'];
-    const rows = filteredItems.map(i => { const cs = computedStockMap[i.id] ?? 0; return [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, cs, i.purchaseRate || 0, i.saleRate || 0, computeStockValue(i, stockMovements), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']; });
+    const rows = filteredItems.map(i => { const cs = computedStockMap[i.id] ?? 0; return [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, cs, i.purchaseRate || 0, i.saleRate || 0, computeStockValue(i, reconciledStockMovements), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']; });
     downloadExcelSingle(headers, rows, 'inventory.xlsx', 'Inventory');
   };
 
@@ -1032,7 +1033,7 @@ const Inventory: React.FC = () => {
                         const effectiveStock = computedStockMap[item.id] ?? 0;
                         // Weighted-average cost rate so the row is self-consistent (rate × qty = value)
                         // and matches Stock Valuation / Trading A/c even when purchaseRate is 0/unset.
-                        const costRate = computeStockCostRate(item, stockMovements);
+                        const costRate = computeStockCostRate(item, reconciledStockMovements);
                         const stockValue = effectiveStock * costRate;
                         const isLow = effectiveStock < 5;
                         return (

@@ -33,13 +33,13 @@ type CounterTender = Extract<PaymentMode, 'cash' | 'bank' | 'credit'>;
 const RetailCounter: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { sales, stockItems, stockMovements, customers, members, addSale, society } = useData();
+  const { sales, stockItems, reconciledStockMovements, customers, members, addSale, society } = useData();
   const { resolvePrice, memberReceivableAccountId, getMemberOutstanding } = useConsumerData();
 
   const { toast } = useToast();
 
   // Available qty is ALWAYS movement-based (RULE 2) — never stockItem.currentStock.
-  const stockMap = useMemo(() => computeStockMap(stockItems, stockMovements), [stockItems, stockMovements]);
+  const stockMap = useMemo(() => computeStockMap(stockItems, reconciledStockMovements), [stockItems, reconciledStockMovements]);
 
   // ── Cart + tender state ────────────────────────────────────────────────────
   const [cart, setCart] = useState<SaleItem[]>([]);

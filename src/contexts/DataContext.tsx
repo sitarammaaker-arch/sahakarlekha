@@ -30,7 +30,7 @@ import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount 
 import { issueOfficialNumber } from '@/lib/numbering';
 import { reverseEntryLines, isEditLocked } from '@/lib/voucherReversal';
 import { canTransitionMember } from '@/lib/memberLifecycle';
-import { computeStock, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
+import { computeStock, computeStockValue, computeStockCostRate, reconcileMovements } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
 import * as storage from '@/lib/storage';
@@ -227,6 +227,9 @@ interface DataContextType {
   // Inventory
   stockItems: StockItem[];
   stockMovements: StockMovement[];
+  /** RULE 2/3: movements reconciled to live purchase/sale records — use for stock QUANTITY/VALUE
+   *  (Inventory, Sale availability, Valuation, Closing Stock). Raw `stockMovements` is for history display only. */
+  reconciledStockMovements: StockMovement[];
   addStockItem: (data: Omit<StockItem, 'id' | 'itemCode'>) => StockItem;
   updateStockItem: (id: string, data: Partial<StockItem>) => void;
   deleteStockItem: (id: string) => void;
@@ -846,6 +849,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [purchases, setPurchasesState] = useState<Purchase[]>([]);
   const purchasesRef = useRef<Purchase[]>(purchases);
   useEffect(() => { purchasesRef.current = purchases; }, [purchases]);
+  // RULE 2/3: stock quantity is derived from LIVE purchase/sale records (not from
+  // stock_movements, which can drift — orphan movements from deleted docs, or a live
+  // doc with no movement). Every stock read (Inventory, Sale availability, Valuation,
+  // Closing Stock, Trading A/c) uses THIS, not raw stockMovements. No-op for synced data.
+  const reconciledStockMovements = useMemo(
+    () => reconcileMovements(stockMovements, sales, purchases),
+    [stockMovements, sales, purchases],
+  );
   const [employees, setEmployeesState] = useState<Employee[]>([]);
   const employeesRef = useRef<Employee[]>(employees);
   useEffect(() => { employeesRef.current = employees; }, [employees]);
@@ -5404,7 +5415,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Physical closing stock — use movement-based qty (same formula as Inventory/Stock Valuation)
     // so that orphan currentStock left over from old buggy edits/deletes doesn't show as phantom stock.
     // M15: Filter movements by effDate so historical Trading A/c matches its date window.
-    const movementsToUse = stockMovements.filter(m => m.date <= effDate);
+    // RULE 2/3: reconcile against live purchase/sale records first, so orphan/missing
+    // movements from edited/deleted docs can't distort closing stock.
+    const movementsToUse = reconcileMovements(stockMovementsRef.current, salesRef.current, purchasesRef.current).filter(m => m.date <= effDate);
     // Value closing stock at weighted-average COST from movements (NOT the stale
     // purchaseRate field, which is 0 after some imports → silently zeroed closing stock).
     // ECR-17: stock items/movements carry no branchId (they are godown-scoped), so physical stock
@@ -5550,7 +5563,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { salesItems, closingStockItems, openingStockItems, purchaseItems, directExpItems,
       totalSales, totalClosingStock, totalOpeningStock, totalPurchases, totalDirectExp, grossProfit,
       physicalClosingStock, closingStockPosted, activities, unallocated };
-  }, [getTrialBalance, stockItems, stockMovements, activeVouchers, society.financialYear, openingsInScope]);
+  }, [getTrialBalance, stockItems, stockMovements, sales, purchases, activeVouchers, society.financialYear, openingsInScope]);
 
   const postClosingStock = useCallback((fy?: string): { posted: boolean; amount: number; alreadyPosted: boolean } => {
     if (guardFYLocked()) return { posted: false, amount: 0, alreadyPosted: false };
@@ -5564,9 +5577,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (alreadyPosted) return { posted: false, amount: 0, alreadyPosted: true };
 
     // Use movement-based qty (same formula as Inventory / Stock Valuation / Trading Account)
-    // so the journal posts the same number user sees in reports.
+    // so the journal posts the same number user sees in reports. RULE 2/3: reconcile first.
+    const recMovs = reconcileMovements(stockMovementsRef.current, salesRef.current, purchasesRef.current);
     const amount = toRupees(sumMinor(
-      stockItems.filter(s => s.isActive).map(s => toMinor(Number(computeStockValue(s, stockMovements)) || 0)),
+      stockItems.filter(s => s.isActive).map(s => toMinor(Number(computeStockValue(s, recMovs)) || 0)),
     ));
 
     if (amount <= 0) return { posted: false, amount: 0, alreadyPosted: false };
@@ -5581,7 +5595,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       createdBy: user?.name ?? 'System',
     });
     return { posted: true, amount, alreadyPosted: false };
-  }, [stockItems, stockMovements, activeVouchers, society.financialYear, addVoucher, user?.name]);
+  }, [stockItems, stockMovements, sales, purchases, activeVouchers, society.financialYear, addVoucher, user?.name]);
 
   const getProfitLoss = useCallback((asOnDate?: string) => {
     // BS-tie fix: default to the FINANCIAL-YEAR END so a voucher mis-dated into the
@@ -5793,11 +5807,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Write-off uses the AUTHORITATIVE movement-based qty (RULE 2), not the cached
       // currentStock field — which can be stale after a purchase edit/delete and would
       // otherwise create a phantom write-off journal for stock that no longer exists.
-      const realQty = item ? computeStock(item, stockMovementsRef.current) : 0;
+      const recMovs = reconcileMovements(stockMovementsRef.current, salesRef.current, purchasesRef.current);
+      const realQty = item ? computeStock(item, recMovs) : 0;
       // Value the write-off at weighted-average COST from movements (RULE 2), not the
       // stale purchaseRate field — else deleting an item whose purchaseRate is 0 would
       // post a ₹0 write-off and leave its closing-stock asset on the books forever.
-      const costRate = item ? computeStockCostRate(item, stockMovementsRef.current) : 0;
+      const costRate = item ? computeStockCostRate(item, recMovs) : 0;
       if (item && item.isActive && realQty > 0) {
         const amount = toRupees(toMinor(realQty * costRate));
         if (amount > 0) {
@@ -7363,7 +7378,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     vouchers, members, accounts, society, loans, assets, auditObjections,
     depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,
     markComplianceFiled, unmarkComplianceFiled, getComplianceFiledIds,
-    stockItems, stockMovements, sales, purchases, employees, salaryRecords,
+    stockItems, stockMovements, reconciledStockMovements, sales, purchases, employees, salaryRecords,
     suppliers, customers, kccLoans, societyCapabilities, societyActivities, setCapabilityHidden,
     procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
     procurementQualityTests, procurementMoistureRecords, recordQualityInspection,
@@ -7402,7 +7417,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     vouchers, members, accounts, society, loans, assets, auditObjections,
     depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions,
     markComplianceFiled, unmarkComplianceFiled, getComplianceFiledIds,
-    stockItems, stockMovements, sales, purchases, employees, salaryRecords,
+    stockItems, stockMovements, reconciledStockMovements, sales, purchases, employees, salaryRecords,
     suppliers, customers, kccLoans, societyCapabilities, societyActivities, setCapabilityHidden,
     procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
     procurementQualityTests, procurementMoistureRecords, recordQualityInspection,

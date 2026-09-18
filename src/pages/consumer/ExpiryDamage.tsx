@@ -29,7 +29,7 @@ type Reason = 'expiry' | 'damage' | 'theft' | 'other';
 const ExpiryDamage: React.FC = () => {
   const { language } = useLanguage();
   const hi = language === 'hi';
-  const { stockItems, stockMovements, addStockMovement, society } = useData();
+  const { stockItems, stockMovements, reconciledStockMovements, addStockMovement, society } = useData();
   const { toast } = useToast();
 
   const REASON: Record<Reason, { hi: string; en: string }> = {
@@ -39,7 +39,7 @@ const ExpiryDamage: React.FC = () => {
     other: { hi: 'अन्य', en: 'Other' },
   };
 
-  const stockMap = useMemo(() => computeStockMap(stockItems, stockMovements), [stockItems, stockMovements]);
+  const stockMap = useMemo(() => computeStockMap(stockItems, reconciledStockMovements), [stockItems, reconciledStockMovements]);
   const register = useMemo(() => buildWriteoffRegister(stockMovements), [stockMovements]);
 
   const [itemId, setItemId] = useState('');
@@ -61,7 +61,7 @@ const ExpiryDamage: React.FC = () => {
     if (!item) { toast({ title: hi ? 'वस्तु चुनें' : 'Select an item', variant: 'destructive' }); return; }
     if (!(qty > 0)) { toast({ title: hi ? 'मान्य मात्रा दर्ज करें' : 'Enter a valid quantity', variant: 'destructive' }); return; }
     if (qty > avail) { toast({ title: hi ? 'स्टॉक से अधिक बट्टे नहीं' : 'Cannot write off more than stock', description: `${hi ? 'उपलब्ध' : 'Available'}: ${avail}`, variant: 'destructive' }); return; }
-    const costRate = computeStockCostRate(item, stockMovements);
+    const costRate = computeStockCostRate(item, reconciledStockMovements);
     const value = Math.round(qty * costRate * 100) / 100;
     addStockMovement({
       date,

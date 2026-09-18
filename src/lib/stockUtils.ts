@@ -1,4 +1,49 @@
-import type { StockItem, StockMovement } from '@/types';
+import type { StockItem, StockMovement, Sale, Purchase } from '@/types';
+
+/**
+ * RULE 2 / RULE 3 — reconcile stock movements against the AUTHORITATIVE live records.
+ *
+ * Stock for purchases/sales is derived from the live purchase/sale RECORDS, not from
+ * stock_movements, because a movement can drift out of sync with its record: a deleted
+ * purchase/sale can leave an ORPHAN movement, and an edit/create can leave a live record
+ * with NO (or a mis-numbered) movement. Trusting movements then shows wrong stock — the
+ * real "5 bought, 8 sold, closing 0" defect (a live purchase's inward missing + a deleted
+ * sale's outward lingering).
+ *
+ * This returns a movement list where every `purchase`/`sale` movement is REPLACED by
+ * movements synthesised from the live (non-deleted) purchase/sale records, while every
+ * OTHER movement (adjustment / return / transfer / write-off / opening) is kept as-is —
+ * those have no parent purchase/sale row, so they stay the source of truth for themselves.
+ *
+ * For correctly-synced data this is a no-op: the synthesised set equals the real one, so
+ * healthy societies get a byte-identical quantity. Only drifted data is corrected. Feed the
+ * result into computeStock / computeStockMap / computeStockValue exactly as before.
+ *
+ * NOTE: synthesised movements carry no godownId, so per-godown views (computeGodownStock)
+ * still read the raw movements — society-wide stock is what this fixes.
+ */
+export function reconcileMovements(
+  movements: StockMovement[],
+  sales: Sale[],
+  purchases: Purchase[],
+): StockMovement[] {
+  // Everything that is NOT a purchase/sale keeps its real movement (returns are `adjustment`).
+  const kept = movements.filter(m => m.type !== 'purchase' && m.type !== 'sale');
+  const synth: StockMovement[] = [];
+  for (const p of purchases) {
+    if ((p as { isDeleted?: boolean }).isDeleted) continue;
+    for (const it of p.items) {
+      synth.push({ id: `syn:${p.purchaseNo}:${it.itemId}`, date: p.date, itemId: it.itemId, type: 'purchase', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: p.purchaseNo, narration: '', createdAt: p.date });
+    }
+  }
+  for (const s of sales) {
+    if ((s as { isDeleted?: boolean }).isDeleted) continue;
+    for (const it of s.items) {
+      synth.push({ id: `syn:${s.saleNo}:${it.itemId}`, date: s.date, itemId: it.itemId, type: 'sale', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: s.saleNo, narration: '', createdAt: s.date });
+    }
+  }
+  return [...synth, ...kept];
+}
 
 /**
  * THE single canonical stock-quantity formula (CLAUDE.md RULE 2).

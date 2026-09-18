@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { computeStockMap, computeStockValue } from '@/lib/stockUtils';
 import { Card, CardContent } from '@/components/ui/card';
 import { LayoutDashboard } from 'lucide-react';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
@@ -26,7 +27,7 @@ const RoleDashboard: React.FC = () => {
   const {
     getProfitLoss, getTrialBalance, getAccountBalance, getShareCapitalReconciliation,
     members, loans, vouchers, auditObjections, employees, society, accounts,
-    stockItems, purchases,
+    stockItems, purchases, reconciledStockMovements,
   } = useData();
   const navigate = useNavigate();
   const hi = language === 'hi';
@@ -54,11 +55,14 @@ const RoleDashboard: React.FC = () => {
       hasEmployees: (employees || []).some(e => e.status === 'active'),
       tan: !!society.tan?.trim(), gstin: !!society.gstin?.trim(),
     })).length;
-    const stockValue = (stockItems || []).reduce((s, it) => s + Math.max(0, it.currentStock || 0) * (it.purchaseRate || 0), 0);
-    const outOfStock = (stockItems || []).filter(it => (it.currentStock || 0) <= 0).length;
+    // RULE 2/3: qty/value from the reconciled movement formula (matches Inventory/reports),
+    // never the drift-prone currentStock cache.
+    const stockQtyMap = computeStockMap(stockItems || [], reconciledStockMovements);
+    const stockValue = (stockItems || []).reduce((s, it) => s + computeStockValue(it, reconciledStockMovements), 0);
+    const outOfStock = (stockItems || []).filter(it => (stockQtyMap[it.id] ?? 0) <= 0).length;
     const purchasesCount = (purchases || []).filter(p => !p.isDeleted).length;
     return { netProfit, tbBalanced, activeMembers, loanOutstanding, overdueLoans, pendingVouchers, rejectedVouchers, pendingObjections, rec, cash, bank, complianceDue, stockValue, outOfStock, purchasesCount };
-  }, [getProfitLoss, getTrialBalance, getAccountBalance, getShareCapitalReconciliation, members, loans, vouchers, auditObjections, employees, society, accounts, stockItems, purchases]);
+  }, [getProfitLoss, getTrialBalance, getAccountBalance, getShareCapitalReconciliation, members, loans, vouchers, auditObjections, employees, society, accounts, stockItems, purchases, reconciledStockMovements]);
 
   const widget = (id: WidgetId): { label: string; value: string; sub?: string; tone: Tone; route: string } => {
     switch (id) {

@@ -50,7 +50,7 @@ interface GroupSummary {
 
 const ClosingStockReport: React.FC = () => {
   const { language } = useLanguage();
-  const { society, stockItems, stockMovements } = useData();
+  const { society, stockItems, reconciledStockMovements } = useData();
   const hi = language === 'hi';
   const fy = society.financialYear;
   const fyDates = parseFY(fy);
@@ -77,7 +77,7 @@ const ClosingStockReport: React.FC = () => {
     return stockItems
       .filter(item => item.isActive)
       .map(item => {
-        const fyMovements = stockMovements.filter(m => m.itemId === item.id && m.date >= fyDates.start && m.date <= fyDates.end);
+        const fyMovements = reconciledStockMovements.filter(m => m.itemId === item.id && m.date >= fyDates.start && m.date <= fyDates.end);
 
         const inwardMoves = fyMovements.filter(m => m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0));
         const outwardMoves = fyMovements.filter(m => m.type === 'sale' || (m.type === 'adjustment' && m.qty < 0));
@@ -97,7 +97,7 @@ const ClosingStockReport: React.FC = () => {
         // Closing must equal the Trading A/c / Balance Sheet figure for this item — both
         // use WHOLE-HISTORY (up to FY end) qty × weighted-average cost. Using only FY-scoped
         // movements gave a different WA rate (and qty) when prior-FY movements exist (Audit #11).
-        const histMovements = stockMovements.filter(m => m.itemId === item.id && m.date <= fyDates.end);
+        const histMovements = reconciledStockMovements.filter(m => m.itemId === item.id && m.date <= fyDates.end);
         const closingQty = computeStock(item, histMovements);
         const closingRate = computeStockCostRate(item, histMovements);
         const closingValue = closingQty * closingRate;
@@ -114,7 +114,7 @@ const ClosingStockReport: React.FC = () => {
         };
       })
       .filter(r => r.openingQty > 0 || r.inwardQty > 0 || r.outwardQty > 0 || r.closingQty > 0);
-  }, [stockItems, stockMovements, fyDates]);
+  }, [stockItems, reconciledStockMovements, fyDates]);
 
   // Group by stockGroup
   const groupedData = useMemo((): GroupSummary[] => {

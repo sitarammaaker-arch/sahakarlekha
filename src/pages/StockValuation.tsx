@@ -78,7 +78,7 @@ interface ValuationRow {
 }
 
 export default function StockValuation() {
-  const { stockItems, stockMovements, society } = useData();
+  const { stockItems, reconciledStockMovements, society } = useData();
   const { language } = useLanguage();
   const [method, setMethod] = useState<'fifo' | 'weighted_avg'>('weighted_avg');
 
@@ -90,7 +90,7 @@ export default function StockValuation() {
 
   const rows: ValuationRow[] = useMemo(() => {
     return activeItems.map(item => {
-      const movs = stockMovements.filter(m => m.itemId === item.id);
+      const movs = reconciledStockMovements.filter(m => m.itemId === item.id);
       // Quantity is the ONE canonical movement formula (computeStock) used by every other
       // report — it nets purchases − sales and clamps at 0. The old FIFO/WA valuers were
       // order-sensitive: processing a sale BEFORE its purchase (same date) silently dropped
@@ -106,7 +106,7 @@ export default function StockValuation() {
         method: 'WA',
       };
     });
-  }, [activeItems, stockMovements, method]);
+  }, [activeItems, reconciledStockMovements, method]);
 
   const totalValue = useMemo(() => rows.reduce((s, r) => s + r.value, 0), [rows]);
   const totalItems = rows.filter(r => r.qty > 0).length;
@@ -115,8 +115,8 @@ export default function StockValuation() {
   // — identical to getTradingAccount.physicalClosingStock and the BS closing stock.
   // Shown for reconciliation since the table above can use FIFO/WA per item.
   const currentCostTotal = useMemo(() =>
-    activeItems.reduce((sum, item) => sum + computeStockValue(item, stockMovements), 0),
-    [activeItems, stockMovements]);
+    activeItems.reduce((sum, item) => sum + computeStockValue(item, reconciledStockMovements), 0),
+    [activeItems, reconciledStockMovements]);
 
   const stockHeaders = ['Sr.', 'Code', 'Item Name', 'HSN/SAC', 'Unit', 'GST %', 'Method', 'Qty', 'Rate (Rs.)', 'Value (Rs.)'];
 
