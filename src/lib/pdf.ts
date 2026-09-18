@@ -2785,23 +2785,52 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
   ty += 7;
 
   // ── Bank details (if seller has them in society settings) ───────────────────
-  // Printed so the customer can pay directly. Shown only when an account number
-  // is present; each sub-field is added only if set.
+  // Printed in a bordered panel so the customer can read the account and pay
+  // directly. Shown only when an account number is present; each sub-field is
+  // added only if set. Kept prominent (not footer-small) as it's the pay-to info.
   if (society.bankAccountNo) {
-    const bankParts: string[] = [];
-    if (society.bankName) bankParts.push(society.bankName);
-    bankParts.push(`A/c No: ${society.bankAccountNo}`);
-    if (society.bankIfsc) bankParts.push(`IFSC: ${society.bankIfsc}`);
-    if (society.bankBranch) bankParts.push(`Branch: ${society.bankBranch}`);
-    doc.setFontSize(8);
+    // Build the label/value rows, skipping any unset sub-field.
+    const bankRows: [string, string][] = [];
+    if (society.bankName) bankRows.push(['Bank', society.bankName]);
+    bankRows.push(['A/c No.', society.bankAccountNo]);
+    if (society.bankIfsc) bankRows.push(['IFSC', society.bankIfsc]);
+    if (society.bankBranch) bankRows.push(['Branch', society.bankBranch]);
+
+    const panelW = 108;                 // left-half panel, leaves room on the right
+    const headH = 6;
+    const rowH = 5.2;
+    const panelH = headH + bankRows.length * rowH + 2.5;
+
+    // Panel border + tinted header strip
+    doc.setDrawColor(41, 82, 163);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(left, ty, panelW, panelH, 1.2, 1.2, 'S');
+    doc.setFillColor(41, 82, 163);
+    doc.rect(left, ty, panelW, headH, 'F');
+    doc.setTextColor(255);
     doc.setFont(font, 'bold');
-    doc.text('Bank Details:', left, ty);
-    doc.setFont(font, 'normal');
-    doc.setTextColor(60);
-    const bankLines: string[] = doc.splitTextToSize(bankParts.join('   |   '), pageW - left - 32 - 12);
-    doc.text(bankLines, left + 24, ty, { maxWidth: pageW - left - 24 - 12 });
+    doc.setFontSize(8.5);
+    doc.text('Bank Details for Payment', left + 3, ty + 4.2);
     doc.setTextColor(0);
-    ty += Math.max(6, bankLines.length * 4 + 2);
+
+    let bry = ty + headH + 4.2;
+    const labelX = left + 3;
+    const valueX = left + 26;
+    for (const [k, v] of bankRows) {
+      const emphasise = k === 'A/c No.' || k === 'IFSC';   // the numbers customers copy
+      doc.setFont(font, 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(90);
+      doc.text(k, labelX, bry);
+      doc.setTextColor(0);
+      doc.setFont(font, emphasise ? 'bold' : 'normal');
+      doc.setFontSize(emphasise ? 10 : 9);
+      doc.text(doc.splitTextToSize(v, panelW - 26)[0] || v, valueX, bry);
+      bry += rowH;
+    }
+    doc.setFont(font, 'normal');
+    doc.setTextColor(0);
+    ty += panelH + 4;
   }
 
   // ── Notes ──────────────────────────────────────────────────────────────────
