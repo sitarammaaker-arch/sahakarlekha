@@ -109,6 +109,10 @@ const SocietySetup: React.FC = () => {
     gstin: society.gstin || '',
     tan: society.tan || '',
     entityPan: society.entityPan || '',
+    bankName: society.bankName || '',
+    bankAccountNo: society.bankAccountNo || '',
+    bankIfsc: society.bankIfsc || '',
+    bankBranch: society.bankBranch || '',
   });
 
   // T-14 (ADR-0002): gate the maintenance-GST block on the `housing` CAPABILITY, not the type literal.
@@ -673,6 +677,58 @@ const SocietySetup: React.FC = () => {
                     onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                     className="h-11"
                   />
+                </div>
+              </div>
+
+              {/* Bank account — printed on sale invoices/bills */}
+              <div className="pt-4 border-t">
+                <div className="flex items-center gap-2 mb-1">
+                  <Wallet className="h-4 w-4 text-primary" />
+                  <h3 className="font-semibold">{language === 'hi' ? 'बैंक खाता विवरण' : 'Bank Account Details'}</h3>
+                </div>
+                <p className="text-xs text-muted-foreground mb-4">
+                  {language === 'hi'
+                    ? 'ये विवरण बिक्री बिल / इनवॉइस पर छपते हैं ताकि ग्राहक सीधे भुगतान कर सके। खाता संख्या भरने पर ही बिल पर बैंक ब्लॉक दिखेगा।'
+                    : 'These details are printed on sale bills / invoices so customers can pay directly. The bank block appears on the bill only when an account number is entered.'}
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label>{language === 'hi' ? 'बैंक का नाम' : 'Bank Name'}</Label>
+                    <Input
+                      value={form.bankName}
+                      onChange={e => setForm(f => ({ ...f, bankName: e.target.value }))}
+                      placeholder={language === 'hi' ? 'जैसे: पंजाब नेशनल बैंक' : 'e.g. Punjab National Bank'}
+                      className="h-11"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{language === 'hi' ? 'खाता संख्या' : 'Account Number'}</Label>
+                    <Input
+                      value={form.bankAccountNo}
+                      onChange={e => setForm(f => ({ ...f, bankAccountNo: e.target.value }))}
+                      placeholder="0000000000000"
+                      className="h-11 font-mono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>IFSC</Label>
+                    <Input
+                      value={form.bankIfsc}
+                      onChange={e => setForm(f => ({ ...f, bankIfsc: e.target.value.toUpperCase() }))}
+                      placeholder="PUNB0000000"
+                      maxLength={11}
+                      className="h-11 font-mono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{language === 'hi' ? 'शाखा' : 'Branch'}</Label>
+                    <Input
+                      value={form.bankBranch}
+                      onChange={e => setForm(f => ({ ...f, bankBranch: e.target.value }))}
+                      placeholder={language === 'hi' ? 'शाखा का नाम' : 'Branch name'}
+                      className="h-11"
+                    />
+                  </div>
                 </div>
               </div>
 

@@ -890,6 +890,14 @@ alter table society_settings add column if not exists "fyUnlockRequestedAt" text
 -- ECR-13: which external notification channels the society enabled (in-app always on).
 alter table society_settings add column if not exists "notificationChannels" jsonb;
 
+-- Bank account details — captured in Society Setup, printed on sale invoices/bills so
+-- customers can pay directly. Until this runs, updateSociety's trim-and-retry drops these
+-- columns and saves the rest (with a "pending migration" toast); no data is lost.
+alter table society_settings add column if not exists "bankName" text;
+alter table society_settings add column if not exists "bankAccountNo" text;
+alter table society_settings add column if not exists "bankIfsc" text;
+alter table society_settings add column if not exists "bankBranch" text;
+
 -- ── P0 #2: Soft-delete parent records ───────────────────────────────────────
 -- Members / purchases / assets / audit-objections are now ARCHIVED (isDeleted=true)
 -- instead of hard-deleted, so statutory registers persist and deletes are auditable

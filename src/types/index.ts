@@ -1072,6 +1072,12 @@ export interface SocietySettings {
   gstin?: string;              // GSTIN (15 chars — state code + PAN + entity code + check digit)
   tan?: string;                // Tax Deduction Account Number (10 chars)
   entityPan?: string;          // Society PAN (10 chars)
+  // Bank account — printed on sale invoices / bills so customers can pay directly.
+  // All optional; the invoice only shows the block when an account number is present.
+  bankName?: string;           // Bank name (e.g. "Punjab National Bank")
+  bankAccountNo?: string;      // Account number
+  bankIfsc?: string;           // IFSC code (11 chars)
+  bankBranch?: string;         // Branch name / address
   fyLocked?: boolean;          // true = FY is audit-locked; no new vouchers or edits allowed
   fyLockedAt?: string;         // ISO date when lock was applied
   fyLockedBy?: string;         // Name of user who locked the FY

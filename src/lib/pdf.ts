@@ -2784,9 +2784,25 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
   doc.text(words, left + 32, ty, { maxWidth: pageW - left - 32 - 12 });
   ty += 7;
 
-  // ── Bank details (if seller has them in society settings) — extension point ──
-  // Society type currently doesn't carry bank details so this is a placeholder
-  // for a future field. Skipped if not present.
+  // ── Bank details (if seller has them in society settings) ───────────────────
+  // Printed so the customer can pay directly. Shown only when an account number
+  // is present; each sub-field is added only if set.
+  if (society.bankAccountNo) {
+    const bankParts: string[] = [];
+    if (society.bankName) bankParts.push(society.bankName);
+    bankParts.push(`A/c No: ${society.bankAccountNo}`);
+    if (society.bankIfsc) bankParts.push(`IFSC: ${society.bankIfsc}`);
+    if (society.bankBranch) bankParts.push(`Branch: ${society.bankBranch}`);
+    doc.setFontSize(8);
+    doc.setFont(font, 'bold');
+    doc.text('Bank Details:', left, ty);
+    doc.setFont(font, 'normal');
+    doc.setTextColor(60);
+    const bankLines: string[] = doc.splitTextToSize(bankParts.join('   |   '), pageW - left - 32 - 12);
+    doc.text(bankLines, left + 24, ty, { maxWidth: pageW - left - 24 - 12 });
+    doc.setTextColor(0);
+    ty += Math.max(6, bankLines.length * 4 + 2);
+  }
 
   // ── Notes ──────────────────────────────────────────────────────────────────
   if (input.narration) {
