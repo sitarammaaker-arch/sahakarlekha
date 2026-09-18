@@ -1078,6 +1078,7 @@ export interface SocietySettings {
   bankAccountNo?: string;      // Account number
   bankIfsc?: string;           // IFSC code (11 chars)
   bankBranch?: string;         // Branch name / address
+  upiId?: string;              // UPI VPA (e.g. "society@okhdfcbank") — printed as a Scan-to-Pay QR on invoices
   fyLocked?: boolean;          // true = FY is audit-locked; no new vouchers or edits allowed
   fyLockedAt?: string;         // ISO date when lock was applied
   fyLockedBy?: string;         // Name of user who locked the FY

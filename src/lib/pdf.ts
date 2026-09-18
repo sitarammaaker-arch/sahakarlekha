@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { RowInput } from 'jspdf-autotable';
+import QRCode from 'qrcode';
 import { rpParticulars } from '@/lib/ledger/rpLabel';
 import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord, Voucher, HousingFlat, MaintenanceBill } from '@/types';
 import { ACCOUNT_IDS } from '@/lib/storage';
@@ -2784,17 +2785,19 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
   doc.text(words, left + 32, ty, { maxWidth: pageW - left - 32 - 12 });
   ty += 7;
 
-  // ── Bank details (if seller has them in society settings) ───────────────────
+  // ── Bank / UPI details (if seller has them in society settings) ─────────────
   // Printed in a bordered panel so the customer can read the account and pay
-  // directly. Shown only when an account number is present; each sub-field is
-  // added only if set. Kept prominent (not footer-small) as it's the pay-to info.
-  if (society.bankAccountNo) {
+  // directly, with a Scan-to-Pay UPI QR beside it when a UPI ID is set. Shown
+  // only when a bank account or UPI ID exists; each sub-field is added only if
+  // set. Kept prominent (not footer-small) as it's the pay-to info.
+  if (society.bankAccountNo || society.upiId) {
     // Build the label/value rows, skipping any unset sub-field.
     const bankRows: [string, string][] = [];
     if (society.bankName) bankRows.push(['Bank', society.bankName]);
-    bankRows.push(['A/c No.', society.bankAccountNo]);
+    if (society.bankAccountNo) bankRows.push(['A/c No.', society.bankAccountNo]);
     if (society.bankIfsc) bankRows.push(['IFSC', society.bankIfsc]);
     if (society.bankBranch) bankRows.push(['Branch', society.bankBranch]);
+    if (society.upiId) bankRows.push(['UPI', society.upiId]);
 
     const panelW = 108;                 // left-half panel, leaves room on the right
     const headH = 6;
@@ -2830,7 +2833,59 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
     }
     doc.setFont(font, 'normal');
     doc.setTextColor(0);
-    ty += panelH + 4;
+
+    // ── Scan-to-Pay UPI QR (vector, drawn to the right of the panel) ──────────
+    // UPI deep link with the invoice amount pre-filled. Vector modules (no async
+    // image) keep the function synchronous and the QR crisp at any zoom. Wrapped
+    // so a QR failure can never break the invoice.
+    let qrBottom = ty;
+    if (society.upiId) {
+      try {
+        const upiUri =
+          `upi://pay?pa=${encodeURIComponent(society.upiId)}` +
+          `&pn=${encodeURIComponent(society.name || 'Society')}` +
+          `&am=${input.grandTotal.toFixed(2)}&cu=INR` +
+          `&tn=${encodeURIComponent(`Invoice ${input.saleNo}`)}`;
+        const qr = QRCode.create(upiUri, { errorCorrectionLevel: 'M' });
+        const size = qr.modules.size;
+        const qrRender = 26;             // QR matrix side in mm
+        const pad = 2;                   // white quiet-zone
+        const boxSize = qrRender + pad * 2;
+        const qrX = left + panelW + 8;
+        const qrY = ty;
+        const cell = qrRender / size;
+
+        // White backing + border so the QR scans on any paper
+        doc.setDrawColor(180);
+        doc.setLineWidth(0.3);
+        doc.setFillColor(255, 255, 255);
+        doc.roundedRect(qrX, qrY, boxSize, boxSize, 1, 1, 'FD');
+
+        doc.setFillColor(0, 0, 0);
+        for (let r = 0; r < size; r++) {
+          for (let c = 0; c < size; c++) {
+            if (qr.modules.data[r * size + c]) {
+              // tiny overlap avoids hairline white seams between modules
+              doc.rect(qrX + pad + c * cell, qrY + pad + r * cell, cell + 0.05, cell + 0.05, 'F');
+            }
+          }
+        }
+
+        // Caption under the QR
+        doc.setTextColor(41, 82, 163);
+        doc.setFont(font, 'bold');
+        doc.setFontSize(8);
+        doc.text('Scan to Pay (UPI)', qrX + boxSize / 2, qrY + boxSize + 4, { align: 'center' });
+        doc.setTextColor(90);
+        doc.setFont(font, 'normal');
+        doc.setFontSize(7);
+        doc.text(doc.splitTextToSize(society.upiId, boxSize + 8)[0] || society.upiId, qrX + boxSize / 2, qrY + boxSize + 8, { align: 'center' });
+        doc.setTextColor(0);
+        qrBottom = qrY + boxSize + 10;
+      } catch { /* QR generation failed — bank text panel still prints */ }
+    }
+
+    ty = Math.max(ty + panelH, qrBottom) + 4;
   }
 
   // ── Notes ──────────────────────────────────────────────────────────────────
