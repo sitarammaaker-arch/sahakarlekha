@@ -95,10 +95,12 @@ interface ConsumerDataContextValue {
   // GST output reversed, refund by cash/bank or adjusted against member/customer credit.
   salesReturns: SalesReturn[];
   addSalesReturn: (data: { originalSaleId: string; items: SalesReturnItem[]; refundMode: SalesReturnRefund; bankAccountId?: string; date: string }) => SalesReturn | null;
+  updateSalesReturn: (id: string, data: { originalSaleId: string; items: SalesReturnItem[]; refundMode: SalesReturnRefund; bankAccountId?: string; date: string }) => SalesReturn | null;
   deleteSalesReturn: (id: string) => void;
 
   purchaseReturns: PurchaseReturn[];
   addPurchaseReturn: (data: { originalPurchaseId: string; items: PurchaseReturnItem[]; refundMode: PurchaseReturnRefund; bankAccountId?: string; date: string }) => PurchaseReturn | null;
+  updatePurchaseReturn: (id: string, data: { originalPurchaseId: string; items: PurchaseReturnItem[]; refundMode: PurchaseReturnRefund; bankAccountId?: string; date: string }) => PurchaseReturn | null;
   deletePurchaseReturn: (id: string) => void;
 }
 
@@ -604,6 +606,71 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     return ret;
   }, [sales, salesReturns, accounts, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, user]);
 
+  // Edit a posted sales return (fix a wrong quantity/refund). Reverses the old return's
+  // voucher + stock, then re-posts the new one under the SAME return number & id. RULE 1/2/3.
+  const updateSalesReturn = useCallback((id: string, data: { originalSaleId: string; items: SalesReturnItem[]; refundMode: SalesReturnRefund; bankAccountId?: string; date: string }): SalesReturn | null => {
+    if (guardFYLocked()) return null;
+    const cur = salesReturns.find(r => r.id === id);
+    if (!cur || cur.isDeleted) { toastRef.current({ title: 'वापसी नहीं मिली', variant: 'destructive' }); return null; }
+    const sale = sales.find(s => s.id === data.originalSaleId && !(s as { isDeleted?: boolean }).isDeleted);
+    if (!sale) { toastRef.current({ title: 'मूल बिक्री नहीं मिली', variant: 'destructive' }); return null; }
+    let salesReturnAccId = resolveSalesReturnAccountId(accounts);
+    if (!salesReturnAccId) {
+      const created = addAccount({ name: 'Sales Return', nameHi: 'बिक्री वापसी', type: 'income', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '4100', subtype: SALES_RETURN_SUBTYPE });
+      salesReturnAccId = created?.id || null;
+    }
+    if (!salesReturnAccId) { toastRef.current({ title: 'बिक्री वापसी खाता नहीं बना', variant: 'destructive', duration: 12000 }); return null; }
+    const items = data.items.filter(i => i.itemId && i.qty > 0).map(i => ({ ...i, amount: round2(i.qty * i.rate) }));
+    if (items.length === 0) { toastRef.current({ title: 'कोई मात्रा नहीं', description: 'कम-से-कम एक वस्तु की वापसी मात्रा डालें।', variant: 'destructive' }); return null; }
+    // Cap: total returned (OTHER live returns of this sale, excluding THIS one) + new qty ≤ sold.
+    const priorByItem = new Map<string, number>();
+    salesReturns.filter(r => !r.isDeleted && r.originalSaleId === sale.id && r.id !== id).forEach(r => r.items.forEach(it => priorByItem.set(it.itemId, (priorByItem.get(it.itemId) || 0) + it.qty)));
+    for (const it of items) {
+      const sold = sale.items.find(si => si.itemId === it.itemId)?.qty || 0;
+      if (it.qty + (priorByItem.get(it.itemId) || 0) > sold) { toastRef.current({ title: 'बेची गई मात्रा से अधिक वापसी नहीं', description: it.itemName, variant: 'destructive' }); return null; }
+    }
+    const netAmount = round2(items.reduce((s, i) => s + i.amount, 0));
+    const ratio = (sale.netAmount || 0) > 0 ? netAmount / sale.netAmount : 0;
+    const cgstAmount = round2((sale.cgstAmount || 0) * ratio);
+    const sgstAmount = round2((sale.sgstAmount || 0) * ratio);
+    const igstAmount = round2((sale.igstAmount || 0) * ratio);
+    const taxAmount = round2(cgstAmount + sgstAmount + igstAmount);
+    const grandTotal = round2(netAmount + taxAmount);
+    if (!(grandTotal > 0)) { toastRef.current({ title: 'वापसी राशि शून्य', variant: 'destructive' }); return null; }
+
+    // 1) Reverse the OLD return: cancel its voucher + compensating −qty stock (mirrors delete).
+    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Sales return edited', user?.name || 'System');
+    cur.items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: `${cur.returnNo}/EDIT`, narration: `Sales return edited — reverse old ${cur.saleNo}` }));
+
+    // 2) Post the NEW voucher (same return no. kept on the record).
+    const creditAccId = data.refundMode === 'cash' ? '3301'
+      : data.refundMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || '3302')
+      : (sale.memberId ? (resolveMemberReceivableAccountId(accounts) || '3303') : '3303');
+    const lid = () => crypto.randomUUID();
+    const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: salesReturnAccId, type: 'Dr', amount: netAmount }];
+    if (taxAmount > 0) lines.push({ id: lid(), accountId: '2201', type: 'Dr', amount: taxAmount });
+    lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: grandTotal });
+    const voucher = addVoucher({
+      type: 'credit_note', date: data.date,
+      debitAccountId: salesReturnAccId, creditAccountId: creditAccId, amount: grandTotal, lines,
+      narration: `बिक्री वापसी (संशोधित) — ${sale.saleNo}`, refType: 'sale.return', refId: sale.id,
+      createdBy: user?.name ?? 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+    if (!voucher?.id) return null;
+    // 3) New goods-back-in-stock movements under the original return no.
+    items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: cur.returnNo, narration: `Sales return (edited) ${sale.saleNo}` }));
+
+    const updated: SalesReturn = {
+      ...cur, date: data.date, originalSaleId: sale.id, saleNo: sale.saleNo,
+      customerName: sale.customerName, memberId: sale.memberId, customerId: sale.customerId,
+      items, netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal,
+      refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: voucher.id,
+    };
+    commitSalesReturn(updated, cur);
+    toastRef.current({ title: `✅ वापसी संशोधित — ${cur.returnNo}`, description: `नई राशि ₹${grandTotal.toLocaleString('en-IN')}` });
+    return updated;
+  }, [sales, salesReturns, accounts, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, user]);
+
   const deleteSalesReturn = useCallback((id: string) => {
     if (guardFYLocked()) return;
     const cur = salesReturns.find(r => r.id === id);
@@ -711,6 +778,75 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     return ret;
   }, [purchases, purchaseReturns, suppliers, stockItems, accounts, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitPurchaseReturn, user]);
 
+  // Edit a posted purchase return. Reverses the old return's voucher + stock, then re-posts
+  // the new one under the SAME return number & id. RULE 1/2/3.
+  const updatePurchaseReturn = useCallback((id: string, data: { originalPurchaseId: string; items: PurchaseReturnItem[]; refundMode: PurchaseReturnRefund; bankAccountId?: string; date: string }): PurchaseReturn | null => {
+    if (guardFYLocked()) return null;
+    const cur = purchaseReturns.find(r => r.id === id);
+    if (!cur || cur.isDeleted) { toastRef.current({ title: 'वापसी नहीं मिली', variant: 'destructive' }); return null; }
+    const purchase = purchases.find(p => p.id === data.originalPurchaseId && !(p as { isDeleted?: boolean }).isDeleted);
+    if (!purchase) { toastRef.current({ title: 'मूल खरीद नहीं मिली', variant: 'destructive' }); return null; }
+    const items = data.items.filter(i => i.itemId && i.qty > 0).map(i => ({ ...i, amount: round2(i.qty * i.rate) }));
+    if (items.length === 0) { toastRef.current({ title: 'कोई मात्रा नहीं', description: 'कम-से-कम एक वस्तु की वापसी मात्रा डालें।', variant: 'destructive' }); return null; }
+    // Cap: OTHER live returns of this purchase (excluding THIS one) + new qty ≤ purchased.
+    const priorByItem = new Map<string, number>();
+    purchaseReturns.filter(r => !r.isDeleted && r.originalPurchaseId === purchase.id && r.id !== id).forEach(r => r.items.forEach(it => priorByItem.set(it.itemId, (priorByItem.get(it.itemId) || 0) + it.qty)));
+    for (const it of items) {
+      const bought = purchase.items.find(pi => pi.itemId === it.itemId)?.qty || 0;
+      if (it.qty + (priorByItem.get(it.itemId) || 0) > bought) { toastRef.current({ title: 'खरीदी गई मात्रा से अधिक वापसी नहीं', description: it.itemName, variant: 'destructive' }); return null; }
+    }
+    const netAmount = round2(items.reduce((s, i) => s + i.amount, 0));
+    const ratio = (purchase.netAmount || 0) > 0 ? netAmount / purchase.netAmount : 0;
+    const cgstAmount = round2((purchase.cgstAmount || 0) * ratio);
+    const sgstAmount = round2((purchase.sgstAmount || 0) * ratio);
+    const igstAmount = round2((purchase.igstAmount || 0) * ratio);
+    const taxAmount = round2(cgstAmount + sgstAmount + igstAmount);
+    const grandTotal = round2(netAmount + taxAmount);
+    if (!(grandTotal > 0)) { toastRef.current({ title: 'वापसी राशि शून्य', variant: 'destructive' }); return null; }
+
+    // 1) Reverse the OLD return: cancel its voucher + restore the stock it removed (+qty).
+    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Purchase return edited', user?.name || 'System');
+    cur.items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: `${cur.returnNo}/EDIT`, narration: `Purchase return edited — restore old ${cur.purchaseNo}` }));
+
+    // 2) Post the NEW voucher (same return no. kept on the record).
+    const supplierAccId = purchase.supplierId ? (suppliers.find(s => s.id === purchase.supplierId)?.accountId || '2101') : '2101';
+    const debitAccId = data.refundMode === 'cash' ? '3301'
+      : data.refundMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || '3302')
+      : supplierAccId;
+    const lid = () => crypto.randomUUID();
+    const totalItemAmount = items.reduce((s, i) => s + i.amount, 0) || 1;
+    const purchaseAccBuckets = new Map<string, number>();
+    items.forEach(it => {
+      const acc = stockItems.find(s => s.id === it.itemId)?.purchaseAccountId || '5101';
+      const itemNet = (it.amount / totalItemAmount) * netAmount;
+      purchaseAccBuckets.set(acc, (purchaseAccBuckets.get(acc) || 0) + itemNet);
+    });
+    const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [];
+    purchaseAccBuckets.forEach((amt, accId) => { const r = round2(amt); if (r > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: r }); });
+    if (taxAmount > 0) lines.push({ id: lid(), accountId: '3310', type: 'Cr', amount: taxAmount });
+    lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
+    const primaryCrAcc = purchaseAccBuckets.size > 0 ? [...purchaseAccBuckets.keys()][0] : '5101';
+    const voucher = addVoucher({
+      type: 'debit_note', date: data.date,
+      debitAccountId: debitAccId, creditAccountId: primaryCrAcc, amount: grandTotal, lines,
+      narration: `खरीद वापसी (संशोधित) — ${purchase.purchaseNo}`, refType: 'purchase.return', refId: purchase.id,
+      createdBy: user?.name ?? 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+    if (!voucher?.id) return null;
+    // 3) New goods-leave-stock movements under the original return no.
+    items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: cur.returnNo, narration: `Purchase return (edited) ${purchase.purchaseNo}` }));
+
+    const updated: PurchaseReturn = {
+      ...cur, date: data.date, originalPurchaseId: purchase.id, purchaseNo: purchase.purchaseNo,
+      supplierName: purchase.supplierName, supplierId: purchase.supplierId,
+      items, netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal,
+      refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: voucher.id,
+    };
+    commitPurchaseReturn(updated, cur);
+    toastRef.current({ title: `✅ खरीद वापसी संशोधित — ${cur.returnNo}`, description: `नई राशि ₹${grandTotal.toLocaleString('en-IN')}` });
+    return updated;
+  }, [purchases, purchaseReturns, suppliers, stockItems, accounts, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitPurchaseReturn, user]);
+
   const deletePurchaseReturn = useCallback((id: string) => {
     if (guardFYLocked()) return;
     const cur = purchaseReturns.find(r => r.id === id);
@@ -730,8 +866,8 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       getMemberOutstanding, getMemberAgeing, setMemberCreditLimit,
       patronageRuns, createPatronageRun, createDividendRun, approvePatronageRun, recordPatronagePayment, deletePatronageRun,
       purchaseOrders, createPurchaseOrder, approvePurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder, deletePurchaseOrder,
-      salesReturns, addSalesReturn, deleteSalesReturn,
-      purchaseReturns, addPurchaseReturn, deletePurchaseReturn,
+      salesReturns, addSalesReturn, updateSalesReturn, deleteSalesReturn,
+      purchaseReturns, addPurchaseReturn, updatePurchaseReturn, deletePurchaseReturn,
     }}>
       {children}
     </ConsumerDataContext.Provider>
