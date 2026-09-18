@@ -1,7 +1,8 @@
 /**
- * Closing Stock Report — Category-wise grouped with 4-section format:
- * Opening Balance → Inwards → Outwards → Closing Balance
- * Each section: Quantity, Rate, Value
+ * Closing Stock Report — Category-wise grouped with 6-section format:
+ * Opening → Purchase → Sales Return → Sale → Purchase Return → Closing
+ * Each section: Quantity, Value. Returns are broken out of Inward/Outward so the
+ * statement is transparent: Closing = Opening + Purchase + Sales Return − Sale − Purchase Return.
  */
 import React, { useMemo, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -26,16 +27,16 @@ interface StockRow {
   unit: string;
   stockGroup: string;
   openingQty: number;
-  openingRate: number;
   openingValue: number;
-  inwardQty: number;
-  inwardRate: number;
-  inwardValue: number;
-  outwardQty: number;
-  outwardRate: number;
-  outwardValue: number;
+  purchaseQty: number;
+  purchaseValue: number;
+  salesReturnQty: number;      // goods returned BY customers → back into stock (inward)
+  salesReturnValue: number;
+  saleQty: number;
+  saleValue: number;
+  purchaseReturnQty: number;   // goods returned TO suppliers → out of stock (outward)
+  purchaseReturnValue: number;
   closingQty: number;
-  closingRate: number;
   closingValue: number;
 }
 
@@ -43,8 +44,10 @@ interface GroupSummary {
   group: string;
   items: StockRow[];
   openingValue: number;
-  inwardValue: number;
-  outwardValue: number;
+  purchaseValue: number;
+  salesReturnValue: number;
+  saleValue: number;
+  purchaseReturnValue: number;
   closingValue: number;
 }
 
@@ -79,16 +82,20 @@ const ClosingStockReport: React.FC = () => {
       .map(item => {
         const fyMovements = reconciledStockMovements.filter(m => m.itemId === item.id && m.date >= fyDates.start && m.date <= fyDates.end);
 
-        const inwardMoves = fyMovements.filter(m => m.type === 'purchase' || (m.type === 'adjustment' && m.qty > 0));
-        const outwardMoves = fyMovements.filter(m => m.type === 'sale' || (m.type === 'adjustment' && m.qty < 0));
+        // Four distinct flows (returns are `adjustment` movements: +qty = sales return / inward,
+        // −qty = purchase return / outward). Splitting the old Inward/Outward buckets this way keeps
+        // the identity exact: Closing = Opening + Purchase + Sales Return − Sale − Purchase Return.
+        const purchaseMoves = fyMovements.filter(m => m.type === 'purchase');
+        const salesReturnMoves = fyMovements.filter(m => m.type === 'adjustment' && m.qty > 0);
+        const saleMoves = fyMovements.filter(m => m.type === 'sale');
+        const purchaseReturnMoves = fyMovements.filter(m => m.type === 'adjustment' && m.qty < 0);
+        const sumQ = (arr: typeof fyMovements) => arr.reduce((s, m) => s + Math.abs(m.qty), 0);
+        const sumV = (arr: typeof fyMovements) => arr.reduce((s, m) => s + Math.abs(m.amount), 0);
 
-        const inwardQty = inwardMoves.reduce((s, m) => s + Math.abs(m.qty), 0);
-        const inwardValue = inwardMoves.reduce((s, m) => s + Math.abs(m.amount), 0);
-        const inwardRate = inwardQty > 0 ? inwardValue / inwardQty : 0;
-
-        const outwardQty = outwardMoves.reduce((s, m) => s + Math.abs(m.qty), 0);
-        const outwardValue = outwardMoves.reduce((s, m) => s + Math.abs(m.amount), 0);
-        const outwardRate = outwardQty > 0 ? outwardValue / outwardQty : 0;
+        const purchaseQty = sumQ(purchaseMoves), purchaseValue = sumV(purchaseMoves);
+        const salesReturnQty = sumQ(salesReturnMoves), salesReturnValue = sumV(salesReturnMoves);
+        const saleQty = sumQ(saleMoves), saleValue = sumV(saleMoves);
+        const purchaseReturnQty = sumQ(purchaseReturnMoves), purchaseReturnValue = sumV(purchaseReturnMoves);
 
         const openingQty = item.openingStock || 0;
         const openingRate = item.purchaseRate || 0;
@@ -107,13 +114,15 @@ const ClosingStockReport: React.FC = () => {
           name: item.name,
           unit: item.unit,
           stockGroup: item.stockGroup || 'General',
-          openingQty, openingRate, openingValue,
-          inwardQty, inwardRate, inwardValue,
-          outwardQty, outwardRate, outwardValue,
-          closingQty, closingRate, closingValue,
+          openingQty, openingValue,
+          purchaseQty, purchaseValue,
+          salesReturnQty, salesReturnValue,
+          saleQty, saleValue,
+          purchaseReturnQty, purchaseReturnValue,
+          closingQty, closingValue,
         };
       })
-      .filter(r => r.openingQty > 0 || r.inwardQty > 0 || r.outwardQty > 0 || r.closingQty > 0);
+      .filter(r => r.openingQty > 0 || r.purchaseQty > 0 || r.salesReturnQty > 0 || r.saleQty > 0 || r.purchaseReturnQty > 0 || r.closingQty > 0);
   }, [stockItems, reconciledStockMovements, fyDates]);
 
   // Group by stockGroup
@@ -130,16 +139,20 @@ const ClosingStockReport: React.FC = () => {
         group,
         items,
         openingValue: items.reduce((s, r) => s + r.openingValue, 0),
-        inwardValue: items.reduce((s, r) => s + r.inwardValue, 0),
-        outwardValue: items.reduce((s, r) => s + r.outwardValue, 0),
+        purchaseValue: items.reduce((s, r) => s + r.purchaseValue, 0),
+        salesReturnValue: items.reduce((s, r) => s + r.salesReturnValue, 0),
+        saleValue: items.reduce((s, r) => s + r.saleValue, 0),
+        purchaseReturnValue: items.reduce((s, r) => s + r.purchaseReturnValue, 0),
         closingValue: items.reduce((s, r) => s + r.closingValue, 0),
       }));
   }, [itemRows]);
 
   const grandTotals = useMemo(() => ({
     openingValue: groupedData.reduce((s, g) => s + g.openingValue, 0),
-    inwardValue: groupedData.reduce((s, g) => s + g.inwardValue, 0),
-    outwardValue: groupedData.reduce((s, g) => s + g.outwardValue, 0),
+    purchaseValue: groupedData.reduce((s, g) => s + g.purchaseValue, 0),
+    salesReturnValue: groupedData.reduce((s, g) => s + g.salesReturnValue, 0),
+    saleValue: groupedData.reduce((s, g) => s + g.saleValue, 0),
+    purchaseReturnValue: groupedData.reduce((s, g) => s + g.purchaseReturnValue, 0),
     closingValue: groupedData.reduce((s, g) => s + g.closingValue, 0),
   }), [groupedData]);
 
@@ -152,8 +165,8 @@ const ClosingStockReport: React.FC = () => {
 
   const flatTotals = useMemo(() => ({
     openingQty: flatRows.reduce((s, r) => s + r.openingQty, 0),
-    purchaseQty: flatRows.reduce((s, r) => s + r.inwardQty, 0),
-    saleQty: flatRows.reduce((s, r) => s + r.outwardQty, 0),
+    purchaseQty: flatRows.reduce((s, r) => s + r.purchaseQty, 0),
+    saleQty: flatRows.reduce((s, r) => s + r.saleQty, 0),
     adjustmentQty: 0,
     closingQty: flatRows.reduce((s, r) => s + r.closingQty, 0),
     openingValue: grandTotals.openingValue,
@@ -161,13 +174,15 @@ const ClosingStockReport: React.FC = () => {
   }), [flatRows, grandTotals]);
 
   // Exports
-  const csvHeaders = ['Group', 'Item Code', 'Item Name', 'Unit', 'Open Qty', 'Open Rate', 'Open Value', 'Inward Qty', 'Inward Rate', 'Inward Value', 'Outward Qty', 'Outward Rate', 'Outward Value', 'Close Qty', 'Close Rate', 'Close Value'];
+  const csvHeaders = ['Group', 'Item Code', 'Item Name', 'Unit', 'Open Qty', 'Open Value', 'Purchase Qty', 'Purchase Value', 'Sales Return Qty', 'Sales Return Value', 'Sale Qty', 'Sale Value', 'Purchase Return Qty', 'Purchase Return Value', 'Close Qty', 'Close Value'];
   const csvRows = () => flatRows.map(r => [
     r.stockGroup, r.itemCode, r.name, r.unit,
-    r.openingQty, r.openingRate, r.openingValue,
-    r.inwardQty, r.inwardRate, r.inwardValue,
-    r.outwardQty, r.outwardRate, r.outwardValue,
-    r.closingQty, r.closingRate, r.closingValue,
+    r.openingQty, r.openingValue,
+    r.purchaseQty, r.purchaseValue,
+    r.salesReturnQty, r.salesReturnValue,
+    r.saleQty, r.saleValue,
+    r.purchaseReturnQty, r.purchaseReturnValue,
+    r.closingQty, r.closingValue,
   ]);
 
   const handleCSV = () => downloadCSV(csvHeaders, csvRows(), `closing-stock-${fy}`);
@@ -177,13 +192,15 @@ const ClosingStockReport: React.FC = () => {
       group: g.group,
       items: g.items.map(r => ({
         name: r.name, unit: r.unit, stockGroup: r.stockGroup,
-        openingQty: r.openingQty, openingRate: r.openingRate, openingValue: r.openingValue,
-        inwardQty: r.inwardQty, inwardRate: r.inwardRate, inwardValue: r.inwardValue,
-        outwardQty: r.outwardQty, outwardRate: r.outwardRate, outwardValue: r.outwardValue,
-        closingQty: r.closingQty, closingRate: r.closingRate, closingValue: r.closingValue,
+        openingQty: r.openingQty, openingValue: r.openingValue,
+        purchaseQty: r.purchaseQty, purchaseValue: r.purchaseValue,
+        salesReturnQty: r.salesReturnQty, salesReturnValue: r.salesReturnValue,
+        saleQty: r.saleQty, saleValue: r.saleValue,
+        purchaseReturnQty: r.purchaseReturnQty, purchaseReturnValue: r.purchaseReturnValue,
+        closingQty: r.closingQty, closingValue: r.closingValue,
       })),
-      openingValue: g.openingValue, inwardValue: g.inwardValue,
-      outwardValue: g.outwardValue, closingValue: g.closingValue,
+      openingValue: g.openingValue, purchaseValue: g.purchaseValue, salesReturnValue: g.salesReturnValue,
+      saleValue: g.saleValue, purchaseReturnValue: g.purchaseReturnValue, closingValue: g.closingValue,
     })),
     grandTotals, society, language
   );
@@ -221,11 +238,13 @@ const ClosingStockReport: React.FC = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {[
           { label: hi ? 'प्रारंभिक माल' : 'Opening Stock', value: fmtV(grandTotals.openingValue), color: 'text-blue-700' },
-          { label: hi ? 'अंतर्वाह (क्रय)' : 'Inwards (Purchases)', value: fmtV(grandTotals.inwardValue), color: 'text-green-700' },
-          { label: hi ? 'बहिर्वाह (बिक्री)' : 'Outwards (Sales)', value: fmtV(grandTotals.outwardValue), color: 'text-red-600' },
+          { label: hi ? 'क्रय' : 'Purchases', value: fmtV(grandTotals.purchaseValue), color: 'text-green-700' },
+          { label: hi ? 'बिक्री वापसी' : 'Sales Return', value: fmtV(grandTotals.salesReturnValue), color: 'text-teal-700' },
+          { label: hi ? 'बिक्री' : 'Sales', value: fmtV(grandTotals.saleValue), color: 'text-red-600' },
+          { label: hi ? 'क्रय वापसी' : 'Purchase Return', value: fmtV(grandTotals.purchaseReturnValue), color: 'text-amber-700' },
           { label: hi ? 'समापन माल' : 'Closing Stock', value: fmtV(grandTotals.closingValue), color: 'text-emerald-700' },
         ].map(c => (
           <Card key={c.label}>
@@ -256,27 +275,22 @@ const ClosingStockReport: React.FC = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead rowSpan={2} className="border-r align-bottom">{hi ? 'विवरण' : 'Particulars'}</TableHead>
-                    <TableHead colSpan={3} className="text-center border-r bg-blue-50 dark:bg-blue-900/20">{hi ? 'प्रारंभिक शेष' : 'Opening Balance'}</TableHead>
-                    <TableHead colSpan={3} className="text-center border-r bg-green-50 dark:bg-green-900/20">{hi ? 'अंतर्वाह' : 'Inwards'}</TableHead>
-                    <TableHead colSpan={3} className="text-center border-r bg-red-50 dark:bg-red-900/20">{hi ? 'बहिर्वाह' : 'Outwards'}</TableHead>
-                    <TableHead colSpan={3} className="text-center bg-emerald-50 dark:bg-emerald-900/20">{hi ? 'समापन शेष' : 'Closing Balance'}</TableHead>
+                    <TableHead colSpan={2} className="text-center border-r bg-blue-50 dark:bg-blue-900/20">{hi ? 'प्रारंभिक शेष' : 'Opening'}</TableHead>
+                    <TableHead colSpan={2} className="text-center border-r bg-green-50 dark:bg-green-900/20">{hi ? 'क्रय' : 'Purchase'}</TableHead>
+                    <TableHead colSpan={2} className="text-center border-r bg-teal-50 dark:bg-teal-900/20">{hi ? 'बिक्री वापसी' : 'Sales Return'}</TableHead>
+                    <TableHead colSpan={2} className="text-center border-r bg-red-50 dark:bg-red-900/20">{hi ? 'बिक्री' : 'Sales'}</TableHead>
+                    <TableHead colSpan={2} className="text-center border-r bg-amber-50 dark:bg-amber-900/20">{hi ? 'क्रय वापसी' : 'Purchase Return'}</TableHead>
+                    <TableHead colSpan={2} className="text-center bg-emerald-50 dark:bg-emerald-900/20">{hi ? 'समापन शेष' : 'Closing'}</TableHead>
                   </TableRow>
                   <TableRow>
-                    {/* Opening */}
-                    <TableHead className="text-right border-r text-xs">{hi ? 'मात्रा' : 'Quantity'}</TableHead>
-                    <TableHead className="text-right text-xs">{hi ? 'दर' : 'Rate'}</TableHead>
-                    <TableHead className="text-right border-r text-xs">{hi ? 'मूल्य' : 'Value'}</TableHead>
-                    {/* Inwards */}
-                    <TableHead className="text-right text-xs">{hi ? 'मात्रा' : 'Quantity'}</TableHead>
-                    <TableHead className="text-right text-xs">{hi ? 'दर' : 'Rate'}</TableHead>
-                    <TableHead className="text-right border-r text-xs">{hi ? 'मूल्य' : 'Value'}</TableHead>
-                    {/* Outwards */}
-                    <TableHead className="text-right text-xs">{hi ? 'मात्रा' : 'Quantity'}</TableHead>
-                    <TableHead className="text-right text-xs">{hi ? 'दर' : 'Rate'}</TableHead>
-                    <TableHead className="text-right border-r text-xs">{hi ? 'मूल्य' : 'Value'}</TableHead>
-                    {/* Closing */}
-                    <TableHead className="text-right text-xs">{hi ? 'मात्रा' : 'Quantity'}</TableHead>
-                    <TableHead className="text-right text-xs">{hi ? 'दर' : 'Rate'}</TableHead>
+                    {[0, 1, 2, 3, 4].map(i => (
+                      <React.Fragment key={i}>
+                        <TableHead className="text-right text-xs">{hi ? 'मात्रा' : 'Qty'}</TableHead>
+                        <TableHead className="text-right border-r text-xs">{hi ? 'मूल्य' : 'Value'}</TableHead>
+                      </React.Fragment>
+                    ))}
+                    {/* Closing (no trailing border) */}
+                    <TableHead className="text-right text-xs">{hi ? 'मात्रा' : 'Qty'}</TableHead>
                     <TableHead className="text-right text-xs">{hi ? 'मूल्य' : 'Value'}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -289,35 +303,29 @@ const ClosingStockReport: React.FC = () => {
                         onClick={() => toggleGroup(group.group)}
                       >
                         <TableCell className="border-r font-bold">{group.group}</TableCell>
-                        <TableCell className="border-r"></TableCell>
-                        <TableCell></TableCell>
-                        <TableCell className="text-right border-r font-semibold">{fmtV(group.openingValue)}</TableCell>
-                        <TableCell></TableCell>
-                        <TableCell></TableCell>
-                        <TableCell className="text-right border-r font-semibold">{fmtV(group.inwardValue)}</TableCell>
-                        <TableCell></TableCell>
-                        <TableCell></TableCell>
-                        <TableCell className="text-right border-r font-semibold">{fmtV(group.outwardValue)}</TableCell>
-                        <TableCell></TableCell>
-                        <TableCell></TableCell>
-                        <TableCell className="text-right font-semibold text-emerald-700">{fmtV(group.closingValue)}</TableCell>
+                        <TableCell></TableCell><TableCell className="text-right border-r font-semibold">{fmtV(group.openingValue)}</TableCell>
+                        <TableCell></TableCell><TableCell className="text-right border-r font-semibold">{fmtV(group.purchaseValue)}</TableCell>
+                        <TableCell></TableCell><TableCell className="text-right border-r font-semibold">{fmtV(group.salesReturnValue)}</TableCell>
+                        <TableCell></TableCell><TableCell className="text-right border-r font-semibold">{fmtV(group.saleValue)}</TableCell>
+                        <TableCell></TableCell><TableCell className="text-right border-r font-semibold">{fmtV(group.purchaseReturnValue)}</TableCell>
+                        <TableCell></TableCell><TableCell className="text-right font-semibold text-emerald-700">{fmtV(group.closingValue)}</TableCell>
                       </TableRow>
 
                       {/* Expanded Items */}
                       {expandedGroups.has(group.group) && group.items.map(r => (
                         <TableRow key={r.itemCode} className="hover:bg-muted/30 text-sm">
                           <TableCell className="border-r pl-6 text-muted-foreground">{r.name}</TableCell>
-                          <TableCell className="text-right border-r">{fmtQ(r.openingQty)} {r.unit}</TableCell>
-                          <TableCell className="text-right">{r.openingRate > 0 ? fmtV(r.openingRate) : ''}</TableCell>
+                          <TableCell className="text-right">{fmtQ(r.openingQty)} {r.openingQty > 0 ? r.unit : ''}</TableCell>
                           <TableCell className="text-right border-r">{r.openingValue > 0 ? fmtV(r.openingValue) : ''}</TableCell>
-                          <TableCell className="text-right">{fmtQ(r.inwardQty)} {r.inwardQty > 0 ? r.unit : ''}</TableCell>
-                          <TableCell className="text-right">{r.inwardRate > 0 ? fmtV(r.inwardRate) : ''}</TableCell>
-                          <TableCell className="text-right border-r">{r.inwardValue > 0 ? fmtV(r.inwardValue) : ''}</TableCell>
-                          <TableCell className="text-right">{fmtQ(r.outwardQty)} {r.outwardQty > 0 ? r.unit : ''}</TableCell>
-                          <TableCell className="text-right">{r.outwardRate > 0 ? fmtV(r.outwardRate) : ''}</TableCell>
-                          <TableCell className="text-right border-r">{r.outwardValue > 0 ? fmtV(r.outwardValue) : ''}</TableCell>
+                          <TableCell className="text-right">{fmtQ(r.purchaseQty)} {r.purchaseQty > 0 ? r.unit : ''}</TableCell>
+                          <TableCell className="text-right border-r">{r.purchaseValue > 0 ? fmtV(r.purchaseValue) : ''}</TableCell>
+                          <TableCell className="text-right text-teal-700">{fmtQ(r.salesReturnQty)} {r.salesReturnQty > 0 ? r.unit : ''}</TableCell>
+                          <TableCell className="text-right border-r text-teal-700">{r.salesReturnValue > 0 ? fmtV(r.salesReturnValue) : ''}</TableCell>
+                          <TableCell className="text-right">{fmtQ(r.saleQty)} {r.saleQty > 0 ? r.unit : ''}</TableCell>
+                          <TableCell className="text-right border-r">{r.saleValue > 0 ? fmtV(r.saleValue) : ''}</TableCell>
+                          <TableCell className="text-right text-amber-700">{fmtQ(r.purchaseReturnQty)} {r.purchaseReturnQty > 0 ? r.unit : ''}</TableCell>
+                          <TableCell className="text-right border-r text-amber-700">{r.purchaseReturnValue > 0 ? fmtV(r.purchaseReturnValue) : ''}</TableCell>
                           <TableCell className="text-right">{fmtQ(r.closingQty)} {r.closingQty > 0 ? r.unit : ''}</TableCell>
-                          <TableCell className="text-right">{r.closingRate > 0 ? fmtV(r.closingRate) : ''}</TableCell>
                           <TableCell className="text-right font-medium text-emerald-700">{r.closingValue > 0 ? fmtV(r.closingValue) : ''}</TableCell>
                         </TableRow>
                       ))}
@@ -325,20 +333,14 @@ const ClosingStockReport: React.FC = () => {
                   ))}
 
                   {/* Grand Total */}
-                  <TableRow className="bg-primary/20 font-bold text-base">
+                  <TableRow className="bg-primary/20 font-bold text-sm">
                     <TableCell className="border-r">{hi ? 'कुल योग' : 'Grand Total'}</TableCell>
-                    <TableCell className="border-r"></TableCell>
-                    <TableCell></TableCell>
-                    <TableCell className="text-right border-r">{fmtV(grandTotals.openingValue)}</TableCell>
-                    <TableCell></TableCell>
-                    <TableCell></TableCell>
-                    <TableCell className="text-right border-r">{fmtV(grandTotals.inwardValue)}</TableCell>
-                    <TableCell></TableCell>
-                    <TableCell></TableCell>
-                    <TableCell className="text-right border-r">{fmtV(grandTotals.outwardValue)}</TableCell>
-                    <TableCell></TableCell>
-                    <TableCell></TableCell>
-                    <TableCell className="text-right text-emerald-700">{fmtV(grandTotals.closingValue)}</TableCell>
+                    <TableCell></TableCell><TableCell className="text-right border-r">{fmtV(grandTotals.openingValue)}</TableCell>
+                    <TableCell></TableCell><TableCell className="text-right border-r">{fmtV(grandTotals.purchaseValue)}</TableCell>
+                    <TableCell></TableCell><TableCell className="text-right border-r text-teal-700">{fmtV(grandTotals.salesReturnValue)}</TableCell>
+                    <TableCell></TableCell><TableCell className="text-right border-r">{fmtV(grandTotals.saleValue)}</TableCell>
+                    <TableCell></TableCell><TableCell className="text-right border-r text-amber-700">{fmtV(grandTotals.purchaseReturnValue)}</TableCell>
+                    <TableCell></TableCell><TableCell className="text-right text-emerald-700">{fmtV(grandTotals.closingValue)}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
@@ -352,8 +354,8 @@ const ClosingStockReport: React.FC = () => {
         <Info className="h-4 w-4 mt-0.5 shrink-0" />
         <span>
           {hi
-            ? 'श्रेणी पंक्ति पर क्लिक करें मदों को देखने/छुपाने के लिए। समापन शेष = प्रारंभिक + अंतर्वाह - बहिर्वाह। मदों की श्रेणी इन्वेंटरी में "Stock Group" फ़ील्ड से आती है।'
-            : 'Click category row to expand/collapse items. Closing = Opening + Inwards - Outwards. Item categories come from the "Stock Group" field in Inventory.'}
+            ? 'श्रेणी पंक्ति पर क्लिक करें मदों को देखने/छुपाने के लिए। समापन शेष = प्रारंभिक + क्रय + बिक्री वापसी − बिक्री − क्रय वापसी। मदों की श्रेणी इन्वेंटरी में "Stock Group" फ़ील्ड से आती है।'
+            : 'Click a category row to expand/collapse items. Closing = Opening + Purchase + Sales Return − Sales − Purchase Return. Item categories come from the "Stock Group" field in Inventory.'}
         </span>
       </div>
 

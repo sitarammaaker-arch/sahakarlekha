@@ -2023,18 +2023,21 @@ export function generatePurchaseRegisterPDF(
 
 export interface ClosingStockItemRow {
   name: string; unit: string; stockGroup: string;
-  openingQty: number; openingRate: number; openingValue: number;
-  inwardQty: number; inwardRate: number; inwardValue: number;
-  outwardQty: number; outwardRate: number; outwardValue: number;
-  closingQty: number; closingRate: number; closingValue: number;
+  openingQty: number; openingValue: number;
+  purchaseQty: number; purchaseValue: number;
+  salesReturnQty: number; salesReturnValue: number;
+  saleQty: number; saleValue: number;
+  purchaseReturnQty: number; purchaseReturnValue: number;
+  closingQty: number; closingValue: number;
 }
 
 export interface ClosingStockGroupTotals {
-  openingValue: number; inwardValue: number; outwardValue: number; closingValue: number;
+  openingValue: number; purchaseValue: number; salesReturnValue: number;
+  saleValue: number; purchaseReturnValue: number; closingValue: number;
 }
 
 export function generateClosingStockPDF(
-  groups: { group: string; items: ClosingStockItemRow[]; openingValue: number; inwardValue: number; outwardValue: number; closingValue: number }[],
+  groups: { group: string; items: ClosingStockItemRow[]; openingValue: number; purchaseValue: number; salesReturnValue: number; saleValue: number; purchaseReturnValue: number; closingValue: number }[],
   grandTotals: ClosingStockGroupTotals,
   society: SocietySettings, _language: string,
 ): void {
@@ -2046,23 +2049,25 @@ export function generateClosingStockPDF(
   const fQ = (n: number) => n > 0 ? n.toFixed(2) : '';
   const fV = (n: number) => n > 0 ? fmt(n) : '';
 
-  // Build body rows: group headers (bold) + item rows (indented)
+  // Build body rows: group headers (bold) + item rows (indented).
+  // Six flows: Opening | Purchase | Sales Return | Sale | Purchase Return | Closing (Qty, Value each).
   const body: string[][] = [];
   const groupRowIndices: number[] = [];
 
   groups.forEach(g => {
     groupRowIndices.push(body.length);
-    // Group header row — show only values, not qty/rate
-    body.push([g.group, '', '', fV(g.openingValue), '', '', fV(g.inwardValue), '', '', fV(g.outwardValue), '', '', fV(g.closingValue)]);
+    // Group header row — show only values, not qty
+    body.push([g.group, '', '', fV(g.openingValue), '', fV(g.purchaseValue), '', fV(g.salesReturnValue), '', fV(g.saleValue), '', fV(g.purchaseReturnValue), '', fV(g.closingValue)]);
 
-    // Item rows
     g.items.forEach(r => {
       body.push([
         `  ${r.name}`, r.unit,
         fQ(r.openingQty), fV(r.openingValue),
-        fQ(r.inwardQty), fV(r.inwardRate), fV(r.inwardValue),
-        fQ(r.outwardQty), fV(r.outwardRate), fV(r.outwardValue),
-        fQ(r.closingQty), fV(r.closingRate), fV(r.closingValue),
+        fQ(r.purchaseQty), fV(r.purchaseValue),
+        fQ(r.salesReturnQty), fV(r.salesReturnValue),
+        fQ(r.saleQty), fV(r.saleValue),
+        fQ(r.purchaseReturnQty), fV(r.purchaseReturnValue),
+        fQ(r.closingQty), fV(r.closingValue),
       ]);
     });
   });
@@ -2071,24 +2076,20 @@ export function generateClosingStockPDF(
     startY: startY + 2,
     head: [[
       'Particulars', 'Unit',
-      'Open Qty', 'Open Value',
-      'Inward Qty', 'Inward Rate', 'Inward Value',
-      'Outward Qty', 'Outward Rate', 'Outward Value',
-      'Close Qty', 'Close Rate', 'Close Value',
+      'Open Qty', 'Open Val',
+      'Purch Qty', 'Purch Val',
+      'Sale Ret Qty', 'Sale Ret Val',
+      'Sale Qty', 'Sale Val',
+      'Purch Ret Qty', 'Purch Ret Val',
+      'Close Qty', 'Close Val',
     ]],
     body,
-    foot: [['Grand Total', '', '', fV(grandTotals.openingValue), '', '', fV(grandTotals.inwardValue), '', '', fV(grandTotals.outwardValue), '', '', fV(grandTotals.closingValue)]],
-    styles: { fontSize: 7, cellPadding: 1.5, font },
-    headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+    foot: [['Grand Total', '', '', fV(grandTotals.openingValue), '', fV(grandTotals.purchaseValue), '', fV(grandTotals.salesReturnValue), '', fV(grandTotals.saleValue), '', fV(grandTotals.purchaseReturnValue), '', fV(grandTotals.closingValue)]],
+    styles: { fontSize: 6.5, cellPadding: 1.2, font },
+    headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold', fontSize: 6.5 },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
-    columnStyles: {
-      2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
-      5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' },
-      8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right' },
-      11: { halign: 'right' }, 12: { halign: 'right' },
-    },
     didParseCell: (data) => {
-      // Right-align amount columns across head/body/foot
+      // Right-align every numeric column across head/body/foot
       if (data.column.index >= 2) data.cell.styles.halign = 'right';
       // Bold group header rows
       if (data.section === 'body' && groupRowIndices.includes(data.row.index)) {
