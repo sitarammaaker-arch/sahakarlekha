@@ -749,6 +749,16 @@
       "source": "/gaurav-mehla-supreme-court-cooperative-society-appointment",
       "destination": "/blog/gaurav-mehla-supreme-court-cooperative-recruitment-case",
       "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-society-membership-application-form",
+      "destination": "/blog/haryana-cooperative-society-membership-application-guide",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-society-board-resolution-format",
+      "destination": "/blog/haryana-cooperative-society-board-resolution-guide",
+      "permanent": true
     }
   ],
   "headers": [
