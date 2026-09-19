@@ -15,6 +15,7 @@ import { magnetForCategory } from '@/lib/leadMagnets';
 import { trackEvent } from '@/lib/analytics';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findPost, loadBlogRaw, readingMinutes, relatedPosts, publishedOrder, isPublished } from '@/content/blog';
+import { getAuthor, authorInitials } from '@/content/blog/authors';
 import { guideForBlog } from '@/content/crossLinks';
 import { calculatorForArticle } from '@/content/calculators';
 import { helpForBlog } from '@/content/relatedContent';
@@ -176,6 +177,9 @@ const BlogPost: React.FC = () => {
   const faqExtra = parsedFaq.extra;
   const cleanBody = faqs.length ? faqSlice.rest : bodyAfterTk;
 
+  // Byline author (defaults to the site's author; per-post `author` slug later).
+  const author = getAuthor((post as { author?: string } | undefined)?.author);
+
   React.useEffect(() => { window.scrollTo({ top: 0 }); }, [slug]);
 
   // Reading-progress bar.
@@ -206,7 +210,7 @@ const BlogPost: React.FC = () => {
       dateModified: post.updated || post.date,
       articleSection: post.category,
       keywords: post.tags.join(', '),
-      author: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
+      author: { '@type': 'Person', name: author.name, jobTitle: author.designation, url: `${SITE}/author/${author.slug}` },
       publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
     },
     {
@@ -294,11 +298,15 @@ const BlogPost: React.FC = () => {
 
           {/* Author + meta (E-E-A-T trust signals) */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-6 pt-5 border-t text-sm">
-            <Link to="/about" className="inline-flex items-center gap-2 group">
-              <span className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">स</span>
+            <Link to={`/author/${author.slug}`} className="inline-flex items-center gap-2 group">
+              {author.photo ? (
+                <img src={author.photo} alt={author.name} className="h-9 w-9 rounded-full object-cover" />
+              ) : (
+                <span className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">{authorInitials(author.name)}</span>
+              )}
               <span className="leading-tight">
-                <span className="block font-medium text-foreground group-hover:text-primary transition-colors">सहकार लेखा संपादकीय टीम</span>
-                <span className="block text-xs text-muted-foreground">सहकारी लेखांकन व अनुपालन</span>
+                <span className="block font-medium text-foreground group-hover:text-primary transition-colors">{author.name}</span>
+                <span className="block text-xs text-muted-foreground">{author.designation} · सहकार लेखा</span>
               </span>
             </Link>
             <span className="inline-flex items-center gap-1 text-muted-foreground"><Calendar className="h-4 w-4" /> {formatDate(post.date)}</span>
