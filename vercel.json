@@ -684,6 +684,56 @@
       "source": "/pacs-grain-storage-scheme-ami-aif-nabard-2026",
       "destination": "/blog/pacs-godown-grain-storage-scheme-ami-aif-nabard",
       "permanent": true
+    },
+    {
+      "source": "/sewa-safalta-ki-kahani",
+      "destination": "/blog/cooperative-success-stories-sewa-ulccs-lijjat-papad",
+      "permanent": true
+    },
+    {
+      "source": "/ulccs-safalta-ki-kahani-kerala",
+      "destination": "/blog/cooperative-success-stories-sewa-ulccs-lijjat-papad",
+      "permanent": true
+    },
+    {
+      "source": "/lijjat-papad-safalta-ki-kahani",
+      "destination": "/blog/cooperative-success-stories-sewa-ulccs-lijjat-papad",
+      "permanent": true
+    },
+    {
+      "source": "/ignou-swayam-free-course-cooperatives",
+      "destination": "/blog/cooperative-management-courses-career-guide",
+      "permanent": true
+    },
+    {
+      "source": "/irma-anand-pgdm-rural-management",
+      "destination": "/blog/cooperative-management-courses-career-guide",
+      "permanent": true
+    },
+    {
+      "source": "/hdcm-higher-diploma-cooperative-management-ricm",
+      "destination": "/blog/cooperative-management-courses-career-guide",
+      "permanent": true
+    },
+    {
+      "source": "/vamnicom-pune-pgdm-agribusiness-course",
+      "destination": "/blog/cooperative-management-courses-career-guide",
+      "permanent": true
+    },
+    {
+      "source": "/tribhuvan-sahkari-university-course-admission",
+      "destination": "/blog/cooperative-management-courses-career-guide",
+      "permanent": true
+    },
+    {
+      "source": "/nddb-kya-hai-shwet-kranti-sahkari-sanstha",
+      "destination": "/blog/nddb-white-revolution-dairy-cooperative",
+      "permanent": true
+    },
+    {
+      "source": "/bharat-taxi-cooperative-model-driver-owner",
+      "destination": "/blog/bharat-taxi-cooperative-model-driver-ownership",
+      "permanent": true
     }
   ],
   "headers": [
