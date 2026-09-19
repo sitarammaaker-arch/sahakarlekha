@@ -59,7 +59,7 @@ CM-PACS हरियाणा सहकारी समिति अधिनि
 **सदस्य बनने की क्या शर्तें हैं?** — उम्र 18+, 10+2 योग्यता, 5 एकड़ से कम ज़मीन, समिति के कार्यक्षेत्र का निवासी, और पहले किसी अन्य CM-PACS का सदस्य न होना।
 **हर गतिविधि तुरंत शुरू की जा सकती है?** — बाइलॉज में objective होना लाइसेंस नहीं है; regulated गतिविधियों (पेट्रोल, LPG, इंश्योरेंस, फूड) के लिए अलग से approval चाहिए।
 
-**जुड़ी पढ़ाई:** [हरियाणा अधिनियम 1984 व नियम 1989: पूरी गाइड](/blog/haryana-cooperative-act-1984-rules-1989-guide) · [समिति का पंजीकरण कैसे करें](/blog/how-to-register-a-cooperative-society) · [सहकारी संस्थाओं के प्रकार](/blog/cooperative-society-types-guide)
+**जुड़ी पढ़ाई:** [हरियाणा अधिनियम 1984 व नियम 1989: पूरी गाइड](/blog/haryana-cooperative-act-1984-rules-1989-guide) · [CM-PACS रजिस्ट्रेशन: प्रक्रिया, दस्तावेज़ व खर्च](/blog/cm-pacs-registration-process-haryana) · [CM-PACS हिसाब-किताब, ऑडिट व टैक्स गाइड](/blog/cm-pacs-accounting-tax-audit-guide) · [CM-PACS शुरू करने में ये 10 गलतियां न करें](/blog/cm-pacs-common-mistakes)
 
 ## तीन बातें याद रखें
 

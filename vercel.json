@@ -594,6 +594,41 @@
       "source": "/haryana-cooperative-society-member-rights-guide",
       "destination": "/blog/membership-rights-and-duties",
       "permanent": true
+    },
+    {
+      "source": "/cm-pacs-registration-process-haryana",
+      "destination": "/blog/cm-pacs-registration-process-haryana",
+      "permanent": true
+    },
+    {
+      "source": "/cm-pacs-documents-checklist-registration",
+      "destination": "/blog/cm-pacs-registration-process-haryana",
+      "permanent": true
+    },
+    {
+      "source": "/cm-pacs-registration-time-fees-haryana",
+      "destination": "/blog/cm-pacs-registration-process-haryana",
+      "permanent": true
+    },
+    {
+      "source": "/cm-pacs-accounting-audit-basics",
+      "destination": "/blog/cm-pacs-accounting-tax-audit-guide",
+      "permanent": true
+    },
+    {
+      "source": "/cm-pacs-income-tax-section-80p-exemption",
+      "destination": "/blog/cm-pacs-accounting-tax-audit-guide",
+      "permanent": true
+    },
+    {
+      "source": "/cm-pacs-common-mistakes-haryana",
+      "destination": "/blog/cm-pacs-common-mistakes",
+      "permanent": true
+    },
+    {
+      "source": "/pm-kusum-pacs-haryana-solar-income-model",
+      "destination": "/blog/pm-kusum-pacs-solar-power-haryana",
+      "permanent": true
     }
   ],
   "headers": [
