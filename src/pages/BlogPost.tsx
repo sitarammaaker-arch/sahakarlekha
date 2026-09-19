@@ -404,8 +404,10 @@ const BlogPost: React.FC = () => {
             {/* Was this helpful? */}
             <HelpfulWidget />
 
-            {/* Lead magnet — topic-matched checklist */}
-            <EmailCapture magnet={mag} className="my-8" />
+            {/* Lead magnet — topic-matched checklist. Only when the mid-article
+                capture did NOT render, so a post never shows the same magnet twice
+                (long posts get it mid-read; short posts get it here). */}
+            {midPos <= 0 && <EmailCapture magnet={mag} className="my-8" />}
 
             {/* Share again */}
             <div className="mt-8 flex justify-center"><ShareBar url={url} title={post.title} /></div>
