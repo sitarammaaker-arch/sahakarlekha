@@ -47,7 +47,7 @@
 **97वें संशोधन ने क्या किया?** — सहकारिता को संवैधानिक मान्यता दी व लोकतांत्रिक कामकाज पर ज़ोर।
 **सहकारिता राज्य का विषय है या केंद्र का?** — मुख्यतः राज्य का; बहु-राज्य मामलों में केंद्र का।
 
-**जुड़ी पढ़ाई:** [समिति का पंजीकरण](/blog/how-to-register-a-cooperative-society) · [उपविधि](/blog/cooperative-society-byelaws) · [सहकारी संस्थाएँ (NABARD/NCDC)](/blog/ncdc-role-in-cooperatives)
+**जुड़ी पढ़ाई:** [समिति का पंजीकरण](/blog/how-to-register-a-cooperative-society) · [उपविधि](/blog/cooperative-society-byelaws) · [सहकारी संस्थाएँ (NABARD/NCDC)](/blog/ncdc-role-in-cooperatives) · [हरियाणा अधिनियम 1984 व नियम 1989: पूरी गाइड](/blog/haryana-cooperative-act-1984-rules-1989-guide)
 
 ## तीन बातें याद रखें
 - 🏛️ सहकारिता मुख्यतः राज्य का विषय — राज्य अधिनियम सबसे आम।

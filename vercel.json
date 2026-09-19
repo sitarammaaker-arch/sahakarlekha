@@ -539,6 +539,61 @@
       "source": "/sahakari-samiti-rti-dhara-2h-registrar-adhikar",
       "destination": "/blog/rti-and-cooperative-societies",
       "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-society-complaint-where-to-go",
+      "destination": "/blog/cooperative-society-dispute-resolution-haryana",
+      "permanent": true
+    },
+    {
+      "source": "/section-27-haryana-cooperative-societies-act-registrar-resolution-suspend",
+      "destination": "/blog/cooperative-society-dispute-resolution-haryana",
+      "permanent": true
+    },
+    {
+      "source": "/section-102-haryana-cooperative-societies-act-civil-court-jurisdiction",
+      "destination": "/blog/cooperative-society-dispute-resolution-haryana",
+      "permanent": true
+    },
+    {
+      "source": "/cooperative-society-government-body-high-court-article-226-haryana",
+      "destination": "/blog/cooperative-society-writ-jurisdiction-article-226",
+      "permanent": true
+    },
+    {
+      "source": "/cm-pacs-legal-status-section-4-object-test",
+      "destination": "/blog/cm-pacs-kya-hai",
+      "permanent": true
+    },
+    {
+      "source": "/cm-pacs-kya-hai-haryana-sahkari-samiti",
+      "destination": "/blog/cm-pacs-kya-hai",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cm-pacs-activities-business-opportunities",
+      "destination": "/blog/cm-pacs-kya-hai",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-societies-act-1984-complete-guide",
+      "destination": "/blog/haryana-cooperative-act-1984-rules-1989-guide",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-societies-rules-1989-guide",
+      "destination": "/blog/haryana-cooperative-act-1984-rules-1989-guide",
+      "permanent": true
+    },
+    {
+      "source": "/multi-state-cooperative-society-member-rights-ombudsman-election",
+      "destination": "/blog/multi-state-cooperative-society-member-rights",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-society-member-rights-guide",
+      "destination": "/blog/membership-rights-and-duties",
+      "permanent": true
     }
   ],
   "headers": [
