@@ -654,6 +654,36 @@
       "source": "/haryana-pacs-cms-epf-esi-ehs-exemption-rules",
       "destination": "/blog/haryana-pacs-cms-epf-esi-exemption-rules",
       "permanent": true
+    },
+    {
+      "source": "/nandini-sahakar-yojana-mahila",
+      "destination": "/blog/ncdc-cooperative-credit-schemes-nandini-yuva-chini-mill",
+      "permanent": true
+    },
+    {
+      "source": "/yuva-sahakar-yojana-ncdc",
+      "destination": "/blog/ncdc-cooperative-credit-schemes-nandini-yuva-chini-mill",
+      "permanent": true
+    },
+    {
+      "source": "/sahakari-chini-mill-adhunikikaran-rin",
+      "destination": "/blog/ncdc-cooperative-credit-schemes-nandini-yuva-chini-mill",
+      "permanent": true
+    },
+    {
+      "source": "/dalhan-tilhan-msp-kharid-nafed-nccf",
+      "destination": "/blog/dalhan-tilhan-msp-procurement-nafed-nccf",
+      "permanent": true
+    },
+    {
+      "source": "/pacs-godown-yojana-anna-bhandaran",
+      "destination": "/blog/pacs-godown-grain-storage-scheme-ami-aif-nabard",
+      "permanent": true
+    },
+    {
+      "source": "/pacs-grain-storage-scheme-ami-aif-nabard-2026",
+      "destination": "/blog/pacs-godown-grain-storage-scheme-ami-aif-nabard",
+      "permanent": true
     }
   ],
   "headers": [
