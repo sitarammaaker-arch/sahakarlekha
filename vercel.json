@@ -629,6 +629,31 @@
       "source": "/pm-kusum-pacs-haryana-solar-income-model",
       "destination": "/blog/pm-kusum-pacs-solar-power-haryana",
       "permanent": true
+    },
+    {
+      "source": "/haryana-pacs-employees-job-security-act-2024",
+      "destination": "/blog/haryana-pacs-job-security-act-eligibility",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-pacs-service-rules-recruitment-disputes",
+      "destination": "/blog/haryana-pacs-cms-service-rules-recruitment-guide",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-pacs-cms-recruitment-rules",
+      "destination": "/blog/haryana-pacs-cms-service-rules-recruitment-guide",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-societies-ex-gratia-policy-guide",
+      "destination": "/blog/haryana-cms-ex-gratia-compassionate-policy",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-pacs-cms-epf-esi-ehs-exemption-rules",
+      "destination": "/blog/haryana-pacs-cms-epf-esi-exemption-rules",
+      "permanent": true
     }
   ],
   "headers": [
