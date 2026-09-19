@@ -284,26 +284,306 @@
       "source": "/guide/quiz/bhag-10",
       "destination": "/guide/quiz/part-10",
       "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-society-cash-book-format",
+      "destination": "/blog/cash-book-vs-bank-book",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-society-agm-notice-agenda-minutes-format",
+      "destination": "/blog/agm-preparation-checklist",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-society-member-register-rule-22-format",
+      "destination": "/blog/member-and-share-accounting",
+      "permanent": true
+    },
+    {
+      "source": "/cm-pacs-bye-laws-amendment-dissolution",
+      "destination": "/blog/cooperative-society-byelaws",
+      "permanent": true
+    },
+    {
+      "source": "/cm-pacs-reserve-fund-rule-74",
+      "destination": "/blog/profit-distribution-and-reserves",
+      "permanent": true
+    },
+    {
+      "source": "/section-28-haryana-cooperative-societies-act-election-rules",
+      "destination": "/blog/cooperative-society-elections",
+      "permanent": true
+    },
+    {
+      "source": "/amul-safalta-ki-kahani-anand-pattern",
+      "destination": "/blog/amul-anand-pattern-dairy-cooperative",
+      "permanent": true
+    },
+    {
+      "source": "/iffco-safalta-ki-kahani",
+      "destination": "/blog/iffco-fertiliser-cooperative",
+      "permanent": true
+    },
+    {
+      "source": "/cm-pacs-gst-mutuality-members-supply",
+      "destination": "/blog/gst-for-cooperatives",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-society-registration-documents-checklist",
+      "destination": "/blog/how-to-register-a-cooperative-society",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-society-registration-process-online-guide",
+      "destination": "/blog/how-to-register-a-cooperative-society",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-society-audit-records-guide",
+      "destination": "/blog/how-cooperative-society-audit-works",
+      "permanent": true
+    },
+    {
+      "source": "/epfo-wage-ceiling-25000-haryana-cooperative-employees",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/hafed-cms-employees-union-reminder-7-demands-sept-2026",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/vamnicom-pune-faculty-recruitment-2026",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/hafed-194q-tds-cooperative-marketing-societies-dispute",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-marketing-cooperative-societies-data-letter-performa-guide-2026",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/belagavi-dcc-bank-recruitment-2026",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/apcob-recruitment-338-posts-2026",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/upcisb-bharti-pariksha-2026",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/kribhco-senior-manager-junior-accounts-assistant-job",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/hpscb-cooperative-intern-bharti-2026",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/rbi-urban-co-operative-banks-idpic-equity-shares",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-group-housing-society-rti-registrar-sic",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-employees-sanyukt-morcha-kurukshetra-sept-2026",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-pacs-count-discrepancy-622-to-804-analysis",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/palwal-cooperative-seminar-gaurav-gautam-fact-check",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-pacs-profitable-33-to-51-scdc-review-2026",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/hafed-work-allocation-policy-cooperative-societies-2026",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/telangana-pacs-elections-nominated-committee-dispute",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/bholath-cooperative-society-property-sale-dispute",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/%e0%a4%9d%e0%a4%9c%e0%a5%8d%e0%a4%9c%e0%a4%b0-%e0%a4%b8%e0%a4%b9%e0%a4%95%e0%a4%be%e0%a4%b0%e0%a5%80-%e0%a4%ac%e0%a5%88%e0%a4%82%e0%a4%95-%e0%a4%a8%e0%a4%bf%e0%a4%b2%e0%a4%82%e0%a4%ac%e0%a4%a8",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-banks-vacant-posts-recruitment-2026",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cm-pacs-804-pacs-33-profitable-budget-analysis",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/ncui-cyber-security-fraud-prevention-training-cooperative-banks",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cotton-farmers-subsidy-pacs-cooperative-2026",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/hafed-paddy-commission-union-struggle-analysis",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/national-cooperation-policy-implementation-roadmap",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/sahakarita-mantralay-5-saal-uplabdhiyan",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-pacs-rural-cooperatives-strengthening",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/hafed-paddy-commission-haryana",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/assam-cooperative-society-online-registration",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/ncdc-cooperative-handloom-sector-roadmap",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/nafed-fpo-bizconnect-market-linkages",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/ncui-students-mother-dairy-cooperative-education",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/ncdc-amendment-bill-2026-cooperative-direct-finance",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/nucfdc-bank-in-a-box-urban-cooperative-banks",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/pacs-model-hr-policy-2026-staffing-recruitment",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/national-cooperation-policy-2025-cooperative-law-impact",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-society-agm-rules-deadline-2026",
+      "destination": "/blog/agm-preparation-checklist",
+      "permanent": true
+    },
+    {
+      "source": "/sahakari-samiti-rti-dhara-2h-registrar-adhikar",
+      "destination": "/blog/rti-and-cooperative-societies",
+      "permanent": true
     }
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
       ]
     },
     {
       "source": "/(dashboard|society-setup|backup-restore|user-management|super-admin|vouchers|compound-voucher|cash-book|bank-book|bank-reconciliation|ledger|ledger-heads|day-book|trial-balance|balance-sheet|profit-loss|trading-account|receipts-payments|reports|members|member-application|share-register|opening-balances|sales|purchases|features|depreciation-schedule)",
-      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        }
+      ]
     },
     {
       "source": "/(dashboard|society-setup|backup-restore|user-management|super-admin|vouchers|compound-voucher|cash-book|bank-book|bank-reconciliation|ledger|ledger-heads|day-book|trial-balance|balance-sheet|profit-loss|trading-account|receipts-payments|reports|members|member-application|share-register|opening-balances|sales|purchases|features|depreciation-schedule)/:path*",
-      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        }
+      ]
     }
   ],
   "rewrites": [
