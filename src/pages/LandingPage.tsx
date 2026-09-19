@@ -21,6 +21,8 @@ import Testimonials from '@/components/Testimonials';
 import EmailCapture from '@/components/EmailCapture';
 import { SOCIAL_CHANNELS, SocialIcon, WHATSAPP_NUMBER } from '@/lib/socials';
 import { trackEvent } from '@/lib/analytics';
+import { publishedOrder, readingMinutes } from '@/content/blog';
+import { formatDate } from '@/components/blog/blogTheme';
 import {
   BookOpen, Shield, Users, BarChart3, FileText, Globe,
   CheckCircle2, XCircle, ArrowRight, Building2, Milk, Home, Factory,
@@ -507,6 +509,44 @@ const LandingPage: React.FC = () => {
 
       {/* ───────── TESTIMONIALS / REVIEWS ───────── */}
       <Testimonials />
+
+      {/* ───────── LATEST FROM BLOG ───────── */}
+      <section className="py-16 bg-muted/30 border-t" id="blog">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="flex items-end justify-between gap-4 mb-8">
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-foreground">ब्लॉग से नवीनतम</h2>
+              <p className="mt-1 text-muted-foreground">सहकारी लेखांकन, ऑडिट व अनुपालन पर आसान हिन्दी लेख।</p>
+            </div>
+            <Link to="/blog" className="hidden sm:inline-flex items-center gap-1 text-primary font-medium hover:gap-2 transition-all whitespace-nowrap">
+              सभी लेख देखें <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {publishedOrder().slice(0, 3).map((post) => (
+              <Link key={post.slug} to={`/blog/${post.slug}`} className="group block h-full">
+                <Card className="h-full flex flex-col transition-all hover:shadow-md hover:border-primary/40">
+                  <CardContent className="p-5 flex flex-col flex-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">{post.category}</span>
+                    <h3 className="font-bold text-foreground leading-snug group-hover:text-primary transition-colors">{post.shortTitle}</h3>
+                    <p className="text-sm text-muted-foreground mt-2 line-clamp-2 flex-1">{post.excerpt}</p>
+                    <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{formatDate(post.date)}</span>
+                      <span>·</span>
+                      <span>{readingMinutes(post.slug)} मिनट पढ़ें</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+          <div className="mt-8 text-center sm:hidden">
+            <Link to="/blog" className="inline-flex items-center gap-1 text-primary font-medium">
+              सभी लेख देखें <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
 
       {/* ───────── FINAL CTA ───────── */}
       <section className="py-16 bg-primary text-white">

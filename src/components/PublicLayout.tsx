@@ -31,6 +31,15 @@ const MOBILE_NAV_LINKS: { to: string; label: string }[] = [
   { to: '/contact', label: 'संपर्क / Contact' },
 ];
 
+// Desktop top-nav — the public site had NO top menu on desktop; blog/guide/pricing
+// were reachable only by scrolling to the footer. Kept short so the bar stays clean.
+const DESKTOP_NAV_LINKS: { to: string; label: string }[] = [
+  { to: '/pricing', label: 'मूल्य' },
+  { to: '/guide', label: 'गाइड' },
+  { to: '/blog', label: 'ब्लॉग' },
+  { to: '/help', label: 'मदद' },
+];
+
 const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
   const { pathname } = useLocation();
   const { isAuthenticated } = useAuth();
@@ -58,6 +67,25 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
               <p className="text-xs text-muted-foreground">सहकार लेखा</p>
             </div>
           </Link>
+
+          {/* Desktop primary nav (md+). Mobile users get the same via the drawer below. */}
+          <nav className="hidden md:flex items-center gap-1">
+            {DESKTOP_NAV_LINKS.map((l) => {
+              const active = pathname === l.to || pathname.startsWith(l.to + '/');
+              return (
+                <Link
+                  key={l.to}
+                  to={l.to}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    active ? 'text-primary' : 'text-foreground/80 hover:text-primary'
+                  }`}
+                >
+                  {l.label}
+                </Link>
+              );
+            })}
+          </nav>
+
           {/* A logged-in user must never be shown "Login / Free Registration". /ask lives on
               this layout, so the founder watched it answer from his OWN ledger while the
               navbar invited him to register — and reasonably concluded his session was gone.
