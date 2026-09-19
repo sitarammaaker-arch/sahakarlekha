@@ -210,7 +210,7 @@ const BlogPost: React.FC = () => {
       dateModified: post.updated || post.date,
       articleSection: post.category,
       keywords: post.tags.join(', '),
-      author: { '@type': 'Person', name: author.name, jobTitle: author.designation, url: `${SITE}/author/${author.slug}` },
+      author: { '@type': 'Person', name: author.name, jobTitle: author.designation, url: `${SITE}/author/${author.slug}`, ...(author.photo ? { image: `${SITE}${author.photo}` } : {}) },
       publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
     },
     {

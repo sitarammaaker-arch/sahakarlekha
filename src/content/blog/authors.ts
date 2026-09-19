@@ -46,6 +46,7 @@ export const AUTHORS: Record<string, Author> = {
     knowsAbout: [
       'सहकारी लेखांकन', 'Cooperative Law', 'ऑडिट व अनुपालन', 'GST', 'TDS', 'RTI Act 2005',
     ],
+    photo: '/authors/sitaram.webp',
   },
 };
 
