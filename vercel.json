@@ -734,6 +734,21 @@
       "source": "/bharat-taxi-cooperative-model-driver-owner",
       "destination": "/blog/bharat-taxi-cooperative-model-driver-ownership",
       "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-development-history-1947-2026",
+      "destination": "/blog/haryana-cooperative-movement-history-1947-2026",
+      "permanent": true
+    },
+    {
+      "source": "/haryana-cooperative-schemes-eligibility-application-record",
+      "destination": "/blog/haryana-cooperative-department-schemes-guide",
+      "permanent": true
+    },
+    {
+      "source": "/gaurav-mehla-supreme-court-cooperative-society-appointment",
+      "destination": "/blog/gaurav-mehla-supreme-court-cooperative-recruitment-case",
+      "permanent": true
     }
   ],
   "headers": [
