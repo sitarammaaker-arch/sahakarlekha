@@ -78,6 +78,37 @@ const crumb = (items) => ({
   itemListElement: items.map((it, i) => ({ '@type': 'ListItem', position: i + 1, name: it.name, item: it.item })),
 });
 
+// Blog author for BlogPosting schema (E-E-A-T). Keep in sync with the default
+// author in src/content/blog/authors.ts so the STATIC (crawled) HTML matches the
+// runtime Person byline instead of the old Organization author.
+const BLOG_AUTHOR = {
+  '@type': 'Person',
+  name: 'Sitaram',
+  jobTitle: 'Editor',
+  url: `${SITE}/author/sitaram`,
+  image: `${SITE}/authors/sitaram.webp`,
+};
+
+// Strip markdown to plain text for schema answer strings.
+const plain = (s) =>
+  String(s).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[#*_`>]/g, '').replace(/\s+/g, ' ').trim();
+
+// Parse a post's "## अक्सर पूछे जाने वाले प्रश्न" block into Q/A pairs — mirrors
+// parseFaqs() in src/pages/BlogPost.tsx so the FAQPage schema is emitted statically.
+function blogFaqs(raw) {
+  const m = raw.match(/##\s+(अक्सर पूछे जाने वाले प्रश्न|सामान्य सवाल|प्रश्नोत्तर|FAQ)[^\n]*\r?\n/);
+  if (!m || m.index == null) return [];
+  const after = m.index + m[0].length;
+  const rel = raw.slice(after).search(/\n##\s/);
+  const inner = rel === -1 ? raw.slice(after) : raw.slice(after, after + rel);
+  const faqs = [];
+  inner.split('\n').forEach((line) => {
+    const mm = line.trim().match(/^\*\*(.+?)\*\*\s*[—–-]\s*(.+)$/);
+    if (mm) faqs.push({ q: mm[1].replace(/\*/g, '').trim(), a: mm[2].trim() });
+  });
+  return faqs;
+}
+
 /* ---------------- static body shell (GOS-01) ---------------- */
 
 const HUB_LINKS = [
@@ -425,16 +456,19 @@ function blogPages(DATA) {
   for (const p of posts) {
     const url = `${SITE}/blog/${p.slug}`;
     let body;
+    let faqs = [];
     try {
       const mdFile = resolve(BLOG_DIR, `${p.slug}.md`);
       if (existsSync(mdFile)) {
+        const raw = readFileSync(mdFile, 'utf-8');
+        faqs = blogFaqs(raw);
         // GOS-11: narrative → task edge into the static body too
         const helpSlugs = (DATA.rel && DATA.rel.BLOG_HELP && DATA.rel.BLOG_HELP[p.slug]) || [];
         const helpLinks = surfaceLinksHtml({ help: helpSlugs }, DATA, 'अभी करें (मदद केंद्र)');
         body = shell({
           crumbs: [['/blog', 'ब्लॉग']],
           current: p.title,
-          html: md(readFileSync(mdFile, 'utf-8')) + helpLinks + registerCta(),
+          html: md(raw) + helpLinks + registerCta(),
         });
       }
     } catch { /* body optional */ }
@@ -456,13 +490,18 @@ function blogPages(DATA) {
           datePublished: p.date,
           dateModified: p.updated || p.date,
           image: `${SITE}/og-image.png`,
-          author: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
+          author: BLOG_AUTHOR,
           publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE, logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` } },
         },
         crumb([
           { name: 'ब्लॉग', item: `${SITE}/blog` },
           { name: p.title, item: url },
         ]),
+        ...(faqs.length ? [{
+          '@context': 'https://schema.org',
+          '@type': 'FAQPage',
+          mainEntity: faqs.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: plain(f.a) } })),
+        }] : []),
       ],
     });
   }
