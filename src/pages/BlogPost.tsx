@@ -21,11 +21,105 @@ import { helpForBlog } from '@/content/relatedContent';
 import { HELP_TASKS } from '@/content/help';
 import { ACCENTS, formatDate } from '@/components/blog/blogTheme';
 import {
-  Home, ChevronRight, ChevronLeft, Calendar, Clock, List, ArrowRight,
-  Share2, Check, Newspaper,
+  Home, ChevronRight, ChevronLeft, ChevronDown, Calendar, Clock, List, ArrowRight,
+  Share2, Check, Newspaper, Lightbulb,
 } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
+
+/**
+ * Pull a "## <heading>" section out of the markdown body. Returns the section's
+ * inner text (heading line removed) and the body with that section stripped, so
+ * structured blocks (मुख्य बातें, सामान्य सवाल) can render as real UI + schema
+ * instead of plain prose — and never appear twice. Content-driven: a post only
+ * gets the block if its .md carries the section, so authors opt in per article.
+ */
+function sliceSection(md: string, headingRe: RegExp): { inner: string; rest: string } {
+  const m = md.match(headingRe);
+  if (!m || m.index == null) return { inner: '', rest: md };
+  const start = m.index;
+  const after = start + m[0].length;
+  const nextRel = md.slice(after).search(/\n##\s/);
+  const end = nextRel === -1 ? md.length : after + nextRel;
+  const inner = md.slice(after, end).trim();
+  const rest = (md.slice(0, start) + md.slice(end)).replace(/\n{3,}/g, '\n\n').trim();
+  return { inner, rest };
+}
+
+/** Bullet lines (`- ` / `* `) → trimmed strings. */
+function parseBullets(inner: string): string[] {
+  return inner
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => /^[-*]\s+/.test(l))
+    .map((l) => l.replace(/^[-*]\s+/, '').trim())
+    .filter(Boolean);
+}
+
+/**
+ * Blog FAQ convention: `**question?** — answer` one per line, then a trailing
+ * `**जुड़े शब्द:** ...` glossary line. Split Q/A pairs from that leftover so the
+ * accordion + schema get real questions and the glossary links still render.
+ */
+function parseFaqs(inner: string): { faqs: { q: string; a: string }[]; extra: string } {
+  const faqs: { q: string; a: string }[] = [];
+  const extra: string[] = [];
+  inner.split('\n').forEach((line) => {
+    const l = line.trim();
+    if (!l) return;
+    const m = l.match(/^\*\*(.+?)\*\*\s*[—–-]\s*(.+)$/);
+    if (m) faqs.push({ q: m[1].replace(/\*/g, '').trim(), a: m[2].trim() });
+    else extra.push(l);
+  });
+  return { faqs, extra: extra.join('\n\n') };
+}
+
+/** Strip markdown syntax to plain text for FAQPage schema. */
+function toPlain(md: string): string {
+  return md
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[#*_`>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Accordion FAQ block — one open at a time; `extra` holds trailing glossary links. */
+const FaqList: React.FC<{ items: { q: string; a: string }[]; extra?: string }> = ({ items, extra }) => {
+  const [open, setOpen] = React.useState<number | null>(0);
+  return (
+    <section className="mt-12 pt-8 border-t" id="faq">
+      <h2 className="text-xl font-bold text-foreground mb-4">अक्सर पूछे जाने वाले प्रश्न</h2>
+      <div className="space-y-2">
+        {items.map((f, i) => {
+          const isOpen = open === i;
+          return (
+            <div key={i} className="border rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setOpen(isOpen ? null : i)}
+                aria-expanded={isOpen}
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left font-medium text-foreground hover:bg-muted/40 transition-colors"
+              >
+                <span>{f.q}</span>
+                <ChevronDown className={`h-4 w-4 flex-shrink-0 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {isOpen && (
+                <div className="px-4 pb-4">
+                  <GuideMarkdown source={f.a} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {extra && (
+        <div className="mt-5 text-sm text-muted-foreground">
+          <GuideMarkdown source={extra} />
+        </div>
+      )}
+    </section>
+  );
+};
 
 /* Inline X / WhatsApp / LinkedIn glyphs (no extra deps). */
 const XIcon = (p: { className?: string }) => (
@@ -65,6 +159,22 @@ const BlogPost: React.FC = () => {
   const { slug = '' } = useParams();
   const post = findPost(slug);
   const raw = loadBlogRaw(slug);
+
+  // Parse structured blocks out of the body (H1 stripped first) so the summary
+  // and FAQ render as real UI + FAQ schema, not duplicated prose. A section is
+  // lifted out only when it parses cleanly — otherwise it stays in the body, so
+  // an off-convention post never silently loses content.
+  const rawBody = (raw ?? '').replace(/^#\s+.*(\r?\n)+/, '');
+
+  const tkSlice = sliceSection(rawBody, /##\s+तीन बातें याद रखें[^\n]*\r?\n/);
+  const keyTakeaways = parseBullets(tkSlice.inner);
+  const bodyAfterTk = keyTakeaways.length ? tkSlice.rest : rawBody;
+
+  const faqSlice = sliceSection(bodyAfterTk, /##\s+(अक्सर पूछे जाने वाले प्रश्न|सामान्य सवाल|प्रश्नोत्तर|FAQ)[^\n]*\r?\n/);
+  const parsedFaq = parseFaqs(faqSlice.inner);
+  const faqs = parsedFaq.faqs;
+  const faqExtra = parsedFaq.extra;
+  const cleanBody = faqs.length ? faqSlice.rest : bodyAfterTk;
 
   React.useEffect(() => { window.scrollTo({ top: 0 }); }, [slug]);
 
@@ -107,6 +217,15 @@ const BlogPost: React.FC = () => {
         { '@type': 'ListItem', position: 2, name: post.shortTitle, item: url },
       ],
     },
+    ...(faqs.length ? [{
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: faqs.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: toPlain(f.a) },
+      })),
+    }] : []),
   ] : undefined;
 
   useDocumentMeta({
@@ -123,10 +242,9 @@ const BlogPost: React.FC = () => {
   }
 
   const a = ACCENTS[post.accent];
-  const Icon = a.icon;
 
-  // strip leading H1 (the hero already shows the title)
-  const body = raw.replace(/^#\s+.*(\r?\n)+/, '');
+  // body = article prose with the H1, मुख्य बातें and FAQ sections already removed.
+  const body = cleanBody;
   const sections = Array.from(body.matchAll(/^##\s+(.+)$/gm)).map((m) => {
     const text = m[1].trim();
     return { text, id: slugifyHeading(text) };
@@ -158,33 +276,34 @@ const BlogPost: React.FC = () => {
         <div className="h-full bg-primary transition-[width] duration-75" style={{ width: `${readPct}%` }} />
       </div>
 
-      {/* Gradient hero */}
-      <header className={`relative overflow-hidden bg-gradient-to-br ${a.cover}`}>
-        <div
-          className="absolute inset-0 opacity-20"
-          style={{ backgroundImage: 'radial-gradient(currentColor 1px, transparent 1px)', backgroundSize: '18px 18px', color: '#fff' }}
-          aria-hidden="true"
-        />
-        <Icon className="absolute -bottom-10 -right-6 h-56 w-56 text-white/15" aria-hidden="true" />
-        <div className="relative mx-auto max-w-3xl px-4 py-12 md:py-16">
-          <nav className="flex flex-wrap items-center gap-1.5 text-sm text-white/80 mb-5">
-            <Link to="/" className="inline-flex items-center gap-1 hover:text-white"><Home className="h-3.5 w-3.5" /> होम</Link>
+      {/* Clean editorial header (Medium/Ahrefs-style, replaces the gradient hero) */}
+      <header className="border-b bg-background">
+        <div className="mx-auto max-w-3xl px-4 pt-8 md:pt-12 pb-6">
+          <nav className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground mb-5">
+            <Link to="/" className="inline-flex items-center gap-1 hover:text-primary"><Home className="h-3.5 w-3.5" /> होम</Link>
             <ChevronRight className="h-3.5 w-3.5" />
-            <Link to="/blog" className="hover:text-white">ब्लॉग</Link>
+            <Link to="/blog" className="hover:text-primary">ब्लॉग</Link>
+            <ChevronRight className="h-3.5 w-3.5" />
+            <span className="text-foreground/70 line-clamp-1">{post.category}</span>
           </nav>
-          <span className="inline-flex items-center rounded-full bg-white/20 backdrop-blur px-3 py-1 text-xs font-semibold text-white">
+          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${a.chip}`}>
             {post.category}
           </span>
-          <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight mt-4">{post.title}</h1>
-          <p className="text-white/90 text-lg mt-4 max-w-2xl">{post.excerpt}</p>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-white/85 mt-6">
-            <Link to="/about" className="inline-flex items-center gap-1.5 font-medium hover:text-white underline-offset-2 hover:underline">
-              <span className="h-7 w-7 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">स</span>
-              SahakarLekha टीम
+          <h1 className="font-serif text-3xl md:text-4xl font-bold text-foreground leading-tight mt-4">{post.title}</h1>
+          <p className="text-lg text-muted-foreground mt-4">{post.excerpt}</p>
+
+          {/* Author + meta (E-E-A-T trust signals) */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-6 pt-5 border-t text-sm">
+            <Link to="/about" className="inline-flex items-center gap-2 group">
+              <span className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">स</span>
+              <span className="leading-tight">
+                <span className="block font-medium text-foreground group-hover:text-primary transition-colors">सहकार लेखा संपादकीय टीम</span>
+                <span className="block text-xs text-muted-foreground">सहकारी लेखांकन व अनुपालन</span>
+              </span>
             </Link>
-            <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" /> {formatDate(post.date)}</span>
-            {post.updated && <span className="inline-flex items-center gap-1">अपडेट: {formatDate(post.updated)}</span>}
-            <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4" /> {readingMinutes(slug)} मिनट</span>
+            <span className="inline-flex items-center gap-1 text-muted-foreground"><Calendar className="h-4 w-4" /> {formatDate(post.date)}</span>
+            {post.updated && <span className="text-muted-foreground">अपडेट: {formatDate(post.updated)}</span>}
+            <span className="inline-flex items-center gap-1 text-muted-foreground"><Clock className="h-4 w-4" /> {readingMinutes(slug)} मिनट</span>
           </div>
         </div>
       </header>
@@ -202,9 +321,29 @@ const BlogPost: React.FC = () => {
               <ShareBar url={url} title={post.title} />
             </div>
 
+            {/* मुख्य बातें — scannable summary + featured-snippet bait (content-driven) */}
+            {keyTakeaways.length > 0 && (
+              <div className="mb-8 rounded-xl bg-primary/5 border border-primary/20 p-5">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-primary mb-3">
+                  <Lightbulb className="h-4 w-4" /> मुख्य बातें
+                </p>
+                <ul className="space-y-2">
+                  {keyTakeaways.map((t, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-foreground/90">
+                      <Check className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                      <span>{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <GuideMarkdown source={bodyTop} linkGlossary />
             {midPos > 0 && <EmailCapture magnet={mag} className="my-8" />}
             {bodyBottom && <GuideMarkdown source={bodyBottom} linkGlossary />}
+
+            {/* FAQ — accordion + FAQPage schema (content-driven) */}
+            {faqs.length > 0 && <FaqList items={faqs} extra={faqExtra} />}
 
             {/* Canonical-by-intent: link to the in-depth guide chapter (L7) */}
             {deepGuide && (
