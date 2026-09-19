@@ -40,6 +40,7 @@ const AuthorProfile: React.FC = () => {
           jobTitle: author.designation,
           description: author.tagline,
           url: `${SITE}/author/${author.slug}`,
+          ...(author.photo ? { image: `${SITE}${author.photo}` } : {}),
           worksFor: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
           alumniOf: author.alumniOf.map((a) => ({ '@type': 'Organization', name: a })),
           knowsAbout: author.knowsAbout,
