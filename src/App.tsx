@@ -67,6 +67,7 @@ const SoftwareLanding = lazyWithRetry(() => import("./pages/SoftwareLanding"));
 const StateLanding = lazyWithRetry(() => import("./pages/StateLanding"));
 const BlogIndex = lazyWithRetry(() => import("./pages/BlogIndex"));
 const BlogPost = lazyWithRetry(() => import("./pages/BlogPost"));
+const AuthorProfile = lazyWithRetry(() => import("./pages/AuthorProfile"));
 const Glossary = lazyWithRetry(() => import("./pages/Glossary"));
 const GlossaryTerm = lazyWithRetry(() => import("./pages/GlossaryTerm"));
 const CalculatorHub = lazyWithRetry(() => import("./pages/CalculatorHub"));
@@ -304,6 +305,7 @@ const AppRoutes = () => {
       <Route path="/cooperative-software/:state" element={<StateLanding />} />
       <Route path="/blog" element={<BlogIndex />} />
       <Route path="/blog/:slug" element={<BlogPost />} />
+      <Route path="/author/:slug" element={<AuthorProfile />} />
       <Route path="/glossary" element={<Glossary />} />
       <Route path="/glossary/:slug" element={<GlossaryTerm />} />
       <Route path="/tools" element={<CalculatorHub />} />
