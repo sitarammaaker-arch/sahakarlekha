@@ -55,29 +55,29 @@ const BlogIndex: React.FC = () => {
 
   return (
     <PublicLayout>
-      {/* Hero */}
+      {/* Hero — compact on mobile, full on desktop */}
       <div className="border-b">
-        <div className="mx-auto max-w-3xl px-4 py-12 md:py-16 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
+        <div className="mx-auto max-w-3xl px-4 py-8 md:py-16 text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs sm:text-sm font-medium mb-3">
             <Newspaper className="h-4 w-4" /> सहकार लेखा ब्लॉग
           </div>
-          <h1 className="font-serif text-3xl md:text-5xl font-bold text-foreground mb-3">
+          <h1 className="font-serif text-2xl sm:text-3xl md:text-5xl font-bold text-foreground mb-2 md:mb-3 leading-tight">
             सहकारी समिति का हिसाब, <span className="text-primary">आसान भाषा में</span>
           </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-sm sm:text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
             डिजिटल लेखांकन, वाउचर एंट्री, ऑडिट व अनुपालन पर व्यावहारिक लेख — सचिव, लेखाकार, ऑडिटर व बोर्ड सदस्यों के लिए।
           </p>
         </div>
       </div>
 
-      <div className="mx-auto max-w-3xl px-4 py-10">
-        {/* Category filter */}
-        <div className="flex flex-wrap justify-center gap-2 mb-10">
+      <div className="mx-auto max-w-3xl px-4 py-6 md:py-10">
+        {/* Category filter — single scrollable row on mobile, wraps + centered on desktop */}
+        <div className="flex flex-nowrap md:flex-wrap md:justify-center gap-2 mb-6 md:mb-8 overflow-x-auto md:overflow-visible -mx-4 px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {categories.map((c) => (
             <button
               key={c}
               onClick={() => setActive(c)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors border ${
+              className={`flex-shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-colors border ${
                 active === c
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-primary'
