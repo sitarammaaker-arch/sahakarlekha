@@ -16,6 +16,7 @@ import { trackEvent } from '@/lib/analytics';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findPost, loadBlogRaw, readingMinutes, relatedPosts, publishedOrder, isPublished } from '@/content/blog';
 import { getAuthor, authorInitials } from '@/content/blog/authors';
+import { incrementBlogView, fetchBlogViewCount, formatViews } from '@/lib/blogViews';
 import { guideForBlog } from '@/content/crossLinks';
 import { calculatorForArticle } from '@/content/calculators';
 import { helpForBlog } from '@/content/relatedContent';
@@ -23,7 +24,7 @@ import { HELP_TASKS } from '@/content/help';
 import { ACCENTS, formatDate } from '@/components/blog/blogTheme';
 import {
   Home, ChevronRight, ChevronLeft, ChevronDown, Calendar, Clock, List, ArrowRight,
-  Share2, Check, Newspaper, Lightbulb,
+  Share2, Check, Newspaper, Lightbulb, Eye,
 } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
@@ -182,6 +183,13 @@ const BlogPost: React.FC = () => {
 
   React.useEffect(() => { window.scrollTo({ top: 0 }); }, [slug]);
 
+  // View count — bump once per session, then show the total (best-effort).
+  const [views, setViews] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    incrementBlogView(slug);
+    fetchBlogViewCount(slug).then(setViews);
+  }, [slug]);
+
   // Reading-progress bar.
   const [readPct, setReadPct] = React.useState(0);
   React.useEffect(() => {
@@ -312,6 +320,9 @@ const BlogPost: React.FC = () => {
             <span className="inline-flex items-center gap-1 text-muted-foreground"><Calendar className="h-4 w-4" /> {formatDate(post.date)}</span>
             {post.updated && <span className="text-muted-foreground">अपडेट: {formatDate(post.updated)}</span>}
             <span className="inline-flex items-center gap-1 text-muted-foreground"><Clock className="h-4 w-4" /> {readingMinutes(slug)} मिनट</span>
+            {views != null && views > 0 && (
+              <span className="inline-flex items-center gap-1 text-muted-foreground"><Eye className="h-4 w-4" /> {formatViews(views)} बार पढ़ा</span>
+            )}
           </div>
         </div>
       </header>
