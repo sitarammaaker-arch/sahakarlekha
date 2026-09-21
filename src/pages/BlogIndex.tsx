@@ -57,14 +57,15 @@ const BlogIndex: React.FC = () => {
     <PublicLayout>
       {/* Hero — compact on mobile, full on desktop */}
       <div className="border-b">
-        <div className="mx-auto max-w-3xl px-4 py-8 md:py-16 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs sm:text-sm font-medium mb-3">
+        <div className="mx-auto max-w-3xl px-4 py-5 md:py-16 text-center">
+          {/* Badge + subtitle are decorative — hidden on mobile so content shows sooner; the H1 stays for SEO + clarity. */}
+          <div className="hidden md:inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-3">
             <Newspaper className="h-4 w-4" /> सहकार लेखा ब्लॉग
           </div>
-          <h1 className="font-serif text-2xl sm:text-3xl md:text-5xl font-bold text-foreground mb-2 md:mb-3 leading-tight">
+          <h1 className="font-serif text-2xl sm:text-3xl md:text-5xl font-bold text-foreground mb-0 md:mb-3 leading-tight">
             सहकारी समिति का हिसाब, <span className="text-primary">आसान भाषा में</span>
           </h1>
-          <p className="text-sm sm:text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
+          <p className="hidden md:block text-lg text-muted-foreground max-w-2xl mx-auto">
             डिजिटल लेखांकन, वाउचर एंट्री, ऑडिट व अनुपालन पर व्यावहारिक लेख — सचिव, लेखाकार, ऑडिटर व बोर्ड सदस्यों के लिए।
           </p>
         </div>
