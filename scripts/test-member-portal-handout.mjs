@@ -21,8 +21,8 @@ for (const plan of ['starter', 'plus', 'pro', 'enterprise', 'legacy', 'trial', '
 }
 
 // ── portal URL ──
-ok(h.portalUrl('https://sahakarlekha.com', '/sadasya/SOC001') === 'https://sahakarlekha.com/sadasya/SOC001', 'url joins origin + path');
-ok(h.portalUrl('https://sahakarlekha.com/', 'sadasya/SOC001') === 'https://sahakarlekha.com/sadasya/SOC001', 'url normalises slashes');
+ok(h.portalUrl('https://sahakarlekha.com', '/member/SOC001') === 'https://sahakarlekha.com/member/SOC001', 'url joins origin + path');
+ok(h.portalUrl('https://sahakarlekha.com/', 'member/SOC001') === 'https://sahakarlekha.com/member/SOC001', 'url normalises slashes');
 
 // ── WhatsApp number ──
 ok(h.whatsappPhone('9876543210') === '919876543210', '10-digit mobile → 91 prefix');
@@ -32,9 +32,9 @@ ok(h.whatsappPhone('919876543210') === '919876543210', 'already 91-prefixed');
 for (const bad of ['', undefined, '12345', '1234567890', '01722212345']) ok(h.whatsappPhone(bad) === '', `invalid/landline "${bad}" → empty (WhatsApp lets admin pick)`);
 
 // ── message ──
-const msg = h.handoutMessage({ memberName: 'रामलाल', societyName: 'असंध PACS', memberNo: 'M-001', pin: '482913', url: 'https://sahakarlekha.com/sadasya/SOC001' });
+const msg = h.handoutMessage({ memberName: 'रामलाल', societyName: 'असंध PACS', memberNo: 'M-001', pin: '482913', url: 'https://sahakarlekha.com/member/SOC001' });
 ok(msg.includes('रामलाल') && msg.includes('असंध PACS'), 'message names member + society');
-ok(msg.includes('https://sahakarlekha.com/sadasya/SOC001') && msg.includes('M-001') && msg.includes('482913'), 'message carries link, member no, PIN');
+ok(msg.includes('https://sahakarlekha.com/member/SOC001') && msg.includes('M-001') && msg.includes('482913'), 'message carries link, member no, PIN');
 ok(/किसी को न बताएँ/.test(msg), 'message warns not to share the PIN');
 ok(!h.handoutMessage({ memberName: 'x', memberNo: '1', pin: '1', url: 'u' }).includes('undefined'), 'no "undefined" when society name missing');
 const link = h.whatsappLink('9876543210', 'PIN: 1&2');
