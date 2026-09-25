@@ -10,11 +10,15 @@
 | B | Standalone solar agricultural pumps |
 | C | मौजूदा grid-connected कृषि पंप व फ़ीडर का solarisation |
 
-PACS के लिए इनमें से दो मॉडल ख़ासतौर पर उपयोगी हो सकते हैं — ख़ुद या डेवलपर के ज़रिए solar power plant लगाकर बिजली बेचना (Component-A), और सदस्यों के लिए collective/cluster-based solar irrigation विकसित करना (Component-B)।
+PACS के लिए इनमें से दो मॉडल ख़ासतौर पर उपयोगी हो सकते हैं — ख़ुद या डेवलपर के ज़रिए solar power plant लगाकर बिजली बेचना (Component-A), और सदस्यों के लिए collective/cluster-based solar irrigation विकसित करना (Component-B)। यह लेख दोनों को हरियाणा के संदर्भ में, फ़ाइनेंसिंग-मॉडल, सब्सिडी-भ्रम व व्यावहारिक कदमों सहित समझाता है।
+
+## PACS के लिए यह मौका क्यों मायने रखता है
+
+एक बड़ी संख्या में PACS सालों से घाटे या कमज़ोर आय से जूझती रही हैं, क्योंकि उनकी कमाई मुख्यतः एक ही स्रोत — ऋण-ब्याज — पर टिकी थी। PM-KUSUM जैसी पहल इस तस्वीर को बदल सकती है: यह PACS को आय का एक बिल्कुल **नया, ऋण से स्वतंत्र स्रोत** (बिजली-बिक्री या ज़मीन-लीज़ आय) देती है, जो 25 साल तक स्थिर रह सकता है। साथ ही, सदस्यों के लिए solar irrigation से सिंचाई-लागत घटती है, जिससे समिति व सदस्य दोनों को लाभ। यानी यह सिर्फ़ एक सरकारी योजना नहीं, बल्कि एक कमज़ोर PACS को आत्मनिर्भर बनाने का एक संभावित रास्ता है — बशर्ते उसे पेशेवर योजना के साथ अपनाया जाए।
 
 ## Component-A: PACS ख़ुद बन सकती है Renewable Power Generator
 
-MNRE के फ़्रेमवर्क में individual farmers के साथ-साथ groups of farmers, cooperatives, Panchayats, FPOs और Water User Associations eligible हैं — और PM-KUSUM के आधिकारिक FAQs विशेष रूप से PACS को भी eligible entities में शामिल करते हैं। यानी कोई financially व technically सक्षम PACS चुने जाने पर solar plant स्थापित कर सकती है और DISCOM को बिजली बेच सकती है — traditional lending business से बिल्कुल अलग एक नया revenue vertical।
+MNRE (नवीन एवं नवीकरणीय ऊर्जा मंत्रालय) के फ़्रेमवर्क में individual farmers के साथ-साथ groups of farmers, cooperatives, Panchayats, FPOs और Water User Associations eligible हैं — और PM-KUSUM के आधिकारिक FAQs विशेष रूप से PACS को भी eligible entities में शामिल करते हैं। यानी कोई financially व technically सक्षम PACS चुने जाने पर solar plant स्थापित कर सकती है और DISCOM को बिजली बेच सकती है — traditional lending business से बिल्कुल अलग एक नया revenue vertical।
 
 हरियाणा में Component-A के plants **notified distribution substation के लगभग 5 km के भीतर** स्थापित करने होते हैं, ताकि evacuation infrastructure की लागत और transmission losses कम रहें। इसलिए सिर्फ़ ज़मीन होना काफ़ी नहीं — पहले यह देखना होगा:
 
@@ -58,11 +62,19 @@ Haryana में standalone solar agriculture pumps पर सब्सिड�
 
 ## किसी PACS को सबसे पहले क्या करना चाहिए
 
-1. **प्रबंध समिति का प्रारंभिक प्रस्ताव** — feasibility study की अनुमति दें।
+1. **प्रबंध समिति का प्रारंभिक प्रस्ताव** — feasibility study कराने की औपचारिक अनुमति दें।
 2. **ज़मीन पहचानें** — society-owned या members की इच्छुक ज़मीन, और नज़दीकी substation की जानकारी DISCOM से लें।
 3. **DISCOM से पूछें** — Component-A की fresh capacity, spare capacity, EOI कब खुला है, applicable tariff, PPA की शर्तें।
 4. **HAREDA/District Renewable Energy Officer से पूछें** (Component-B के लिए) — PACS/group आवेदन अभी अनुमत है या नहीं, मौजूदा सब्सिडी पैटर्न, empanelled vendors।
-5. **DPR तैयार कराएँ** — इन सबके बाद ही।
+5. **DPR तैयार कराएँ** — इन सबके बाद ही, techno-financial appraisal सहित; तीनों मॉडल की तुलना कराएँ।
+
+## लेखांकन का पहलू — नया revenue vertical
+
+अगर कोई PACS solar plant या lease-income मॉडल अपनाती है, तो यह उसके लिए एक बिल्कुल नई तरह की आय है, जिसका अलग व सटीक हिसाब रखना ज़रूरी है — बिजली-बिक्री/लीज़ आय, plant की लागत व मूल्यह्रास, लोन-चुकौती, और O&M खर्च। यह पारंपरिक ऋण-ब्याज के हिसाब से अलग है, इसलिए इसे एक अलग परियोजना-लेखा के रूप में संभालना बेहतर है, ताकि इसकी असली लाभप्रदता साफ़ दिखे और ऑडिट सहज रहे। एक अच्छा डिजिटल लेखा-सिस्टम इस नई आय-धारा को बाक़ी कारोबार से अलग, पारदर्शी ढंग से ट्रैक करने में मदद करता है।
+
+## तीनों मॉडल — सारांश में
+
+फ़ैसला आसान करने के लिए, तीनों रास्तों को एक साथ देखें: **ख़ुद plant लगाना** — सबसे ज़्यादा संभावित रिटर्न, पर सबसे ज़्यादा पूँजी, जोखिम व ज़िम्मेदारी (उपयुक्त: मज़बूत, पूँजी-सक्षम PACS)। **ज़मीन लीज़ देना** — कम जोखिम, स्थिर किराया-आय, पर सीमित रिटर्न (उपयुक्त: जिसके पास ज़मीन है पर पूँजी नहीं)। **सदस्यों के लिए solar irrigation (Component-B)** — बिजली बेचना नहीं, बल्कि सदस्यों की सिंचाई-लागत घटाना (उपयुक्त: छोटे-किसान-बहुल PACS)। सही मॉडल वह है जो आपकी PACS की पूँजी, ज़मीन, सदस्य-प्रोफ़ाइल व जोखिम-क्षमता से मेल खाए — इसलिए DPR में तीनों की तुलना करवाना समझदारी है।
 
 ## एक ज़रूरी क़ानूनी सावधानी
 
@@ -74,11 +86,27 @@ PM-KUSUM में eligibility मिल जाना अपने-आप PACS �
 **क्या Component-A पर 75% सब्सिडी मिलती है?** — नहीं; यह सब्सिडी सिर्फ़ Component-B (standalone solar pumps) पर है। Component-A में DISCOM tariff पर बिजली ख़रीदता है।
 **PACS को कितना जोखिम लेना पड़ेगा?** — यह चुनी गई मॉडल पर निर्भर है — ख़ुद plant लगाना ज़्यादा risk व ज़्यादा संभावित रिटर्न, ज़मीन लीज़ देना कम risk व स्थिर rental income।
 **शुरू करने से पहले सबसे पहला क़दम क्या है?** — DISCOM/HAREDA से लिखित रूप में मौजूदा scheme window और capacity की पुष्टि, और प्रबंध समिति का प्रारंभिक प्रस्ताव।
-
-**जुड़ी पढ़ाई:** [CM-PACS क्या है](/blog/cm-pacs-kya-hai) · [CM-PACS हिसाब-किताब, ऑडिट व टैक्स गाइड](/blog/cm-pacs-accounting-tax-audit-guide) · [सहकारी कानून का ढाँचा](/blog/cooperative-law-framework)
+**क्या eligibility मिलते ही PACS project लगा सकती है?** — नहीं; पहले अपने bye-laws, सहकारी अधिनियम, borrowing/investment limits व General Body/Board की शक्तियाँ भी जाँचनी होंगी।
+**PM-KUSUM PACS के लिए क्यों अहम है?** — यह ऋण-ब्याज से अलग, एक नया व स्थिर आय-स्रोत देती है, जो कमज़ोर PACS को आत्मनिर्भर बनाने में मदद कर सकता है।
+**Component-A व Component-B में मुख्य फ़र्क़?** — A में बिजली बेचकर आय (DISCOM tariff पर); B में सदस्यों के लिए solar pump से सिंचाई-लागत घटाना (सब्सिडी-सहित)।
+**कौन-सा फ़ाइनेंसिंग मॉडल चुनें?** — पूँजी हो तो ख़ुद plant; ज़मीन हो पर पूँजी नहीं तो लीज़; छोटे-किसान-बहुल हो तो Component-B — DPR में तुलना कराएँ।
+**क्या solar plant का अलग हिसाब रखना ज़रूरी है?** — हाँ; यह नई आय-धारा है, इसे अलग परियोजना-लेखा में रखना पारदर्शिता व ऑडिट के लिए बेहतर।
 
 ## तीन बातें याद रखें
 
-- ⚡ PACS और CM-PACS अलग संस्थाएँ हैं — दोनों को मिलाकर न समझें।
+- ⚡ PACS और CM-PACS अलग संस्थाएँ हैं — दोनों को मिलाकर न समझें; यह पहल PACS के लिए एक नया आय-स्रोत खोल सकती है।
 - 💰 75% सब्सिडी सिर्फ़ Component-B (solar pumps) पर है, Component-A (power plant) पर नहीं।
 - 📝 किसी भी ख़र्च से पहले DISCOM/HAREDA से मौजूदा scheme window लिखित में verify करें — शर्तें समय के साथ बदलती हैं।
+- 🧮 सही मॉडल (ख़ुद plant / ज़मीन लीज़ / Component-B) अपनी पूँजी, ज़मीन व सदस्य-प्रोफ़ाइल के अनुसार चुनें; DPR में तुलना कराएँ।
+
+## आख़िर में
+
+PM-KUSUM एक PACS के लिए परंपरागत भूमिका से आगे बढ़ने का एक असली अवसर है — बिजली-उत्पादक बनकर, ज़मीन-लीज़ से, या सदस्यों की सिंचाई-लागत घटाकर। पर इस अवसर के साथ सावधानी भी उतनी ही ज़रूरी है: यह पैनल ख़रीदकर लगाने भर का काम नहीं, बल्कि ज़मीन, ग्रिड, वित्त, PPA व approvals की पेशेवर योजना का मामला है। इसलिए सही रास्ता है — पहले प्रबंध समिति का प्रस्ताव, फिर DISCOM/HAREDA से लिखित पुष्टि, फिर DPR व techno-financial appraisal — और उसके बाद ही निवेश। सबसे बड़ी सीख यही है: eligibility एक शुरुआत है, सफलता तैयारी में है, और हर आँकड़ा/window ख़र्च से पहले verify करना अनिवार्य है।
+
+> ✅ नई आय-धारा (solar/lease) का अलग, पारदर्शी हिसाब रखें — [SahakarLekha पर मुफ्त शुरू करें](/register)।
+
+**जुड़ी पढ़ाई:** [CM-PACS क्या है](/blog/cm-pacs-kya-hai) · [CM-PACS हिसाब-किताब, ऑडिट व टैक्स गाइड](/blog/cm-pacs-accounting-tax-audit-guide) · [PACS गोदाम व अन्न-भंडारण योजना](/blog/pacs-godown-grain-storage-scheme-ami-aif-nabard) · [सहकारी कानून का ढाँचा](/blog/cooperative-law-framework)
+
+**जुड़े शब्द:** [PM-KUSUM](/glossary/pm-kusum) · [Component-A](/glossary/kusum-component-a) · [Component-B](/glossary/kusum-component-b) · [PPA](/glossary/ppa) · [DISCOM](/glossary/discom) · [HAREDA](/glossary/hareda)
+
+> 📘 नोट: यह जानकारी MNRE/PM-KUSUM फ़्रेमवर्क, HERC/HPPC रिकॉर्ड व सार्वजनिक स्रोतों पर आधारित है। tariff, सब्सिडी पैटर्न, EOI/window व पात्रता समय-समय पर बदलते हैं — किसी भी निर्णय/ख़र्च से पहले DISCOM (UHBVN/DHBVN), HAREDA व HERC के नवीनतम आदेश से पुष्टि करें। Evidence Level A (शैक्षिक)।
