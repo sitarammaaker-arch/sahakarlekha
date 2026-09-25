@@ -3430,11 +3430,9 @@ create table if not exists society_activities (
   unique (society_id, activity)
 );
 alter table society_activities enable row level security;
-do $$ begin
-  if not exists (select 1 from pg_policies where tablename='society_activities' and policyname='allow_all') then
-    create policy "allow_all" on society_activities for all using (true) with check (true);
-  end if;
-end $$;
+-- No policy here on purpose (deny-all until migration 063 adds the tenant-scoped policies). The old
+-- placeholder `allow_all` was a cross-tenant hole once T-12 filled the table; re-running this file
+-- must never recreate it.
 create index if not exists idx_society_activities_society on society_activities(society_id);
 
 -- ── T-06 (ADR-0001 / INV-1): the append-only EVENT JOURNAL — the system of record ────
