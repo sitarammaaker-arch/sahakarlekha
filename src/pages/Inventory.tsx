@@ -604,6 +604,52 @@ const Inventory: React.FC = () => {
     });
   }, []);
 
+  // ── Slice 2: group → item HSN/SAC/GST inheritance ───────────────────────────
+  // A stock group's HSN is defined by convention — its existing items. Return the
+  // group's most-common HSN/SAC code + GST rate so a new item can inherit it (a
+  // 500-item society sets HSN once per group). Item can still override.
+  const groupHsnDefault = useCallback((group: string): Partial<typeof EMPTY_ITEM_FORM> | null => {
+    const g = group.trim();
+    if (!g) return null;
+    const sibs = stockItems.filter(s => (s.stockGroup || '') === g && (s.hsnCode || s.sacCode));
+    if (sibs.length === 0) return null;
+    // Most-common code (mode) wins; ties resolve to the first seen.
+    const freq = new Map<string, { count: number; item: StockItem }>();
+    for (const s of sibs) {
+      const key = s.hsnCode ? `H:${s.hsnCode}` : `S:${s.sacCode}`;
+      const cur = freq.get(key);
+      if (cur) cur.count++; else freq.set(key, { count: 1, item: s });
+    }
+    let best: { count: number; item: StockItem } | null = null;
+    for (const v of freq.values()) if (!best || v.count > best.count) best = v;
+    if (!best) return null;
+    const it = best.item;
+    return {
+      hsnCode: it.hsnCode || '',
+      sacCode: it.sacCode || '',
+      gstRate: it.gstRate != null ? String(it.gstRate) : '',
+    };
+  }, [stockItems]);
+
+  // Apply inheritance while ADDING a new item: when the group changes and no HSN/SAC
+  // has been entered yet, prefill from the group default (once — the empty-guard stops
+  // re-fire and never overwrites a code the user chose).
+  useEffect(() => {
+    if (!isItemAddOpen) return;
+    if (itemForm.hsnCode || itemForm.sacCode) return;
+    const def = groupHsnDefault(itemForm.stockGroup);
+    if (def && (def.hsnCode || def.sacCode)) {
+      setItemFormWithRef(f => ({ ...f, ...def }));
+      toast({
+        title: hi ? 'HSN समूह से लिया गया' : 'HSN inherited from group',
+        description: hi
+          ? `"${itemForm.stockGroup}" समूह की सामान्य HSN/GST भर दी — ज़रूरत हो तो बदलें।`
+          : `Filled this group's usual HSN/GST — change it if needed.`,
+        duration: 5000,
+      });
+    }
+  }, [itemForm.stockGroup, isItemAddOpen, itemForm.hsnCode, itemForm.sacCode, groupHsnDefault, setItemFormWithRef, hi, toast]);
+
   // Movement tab state
   const [movDateFrom, setMovDateFrom] = useState('');
   const [movDateTo, setMovDateTo] = useState('');
