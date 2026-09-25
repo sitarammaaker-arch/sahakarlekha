@@ -10,6 +10,7 @@ import { fmtDate } from '@/lib/dateUtils';
 import { INDIAN_STATES } from '@/lib/constants';
 import { getStateAuditFormat } from '@/lib/stateAuditFormats';
 import { trackEvent } from '@/lib/analytics';
+import { loanOutstanding } from '@/lib/memberSnapshot';
 
 
 // G1 FIX: Use Rs. prefix — Helvetica font lacks the ₹ glyph, causing garbled output
@@ -1199,7 +1200,7 @@ export function generateLoanRegisterPDF(loans: Loan[], members: Member[], societ
     fmtDate(l.disbursementDate),
     fmtDate(l.dueDate),
     fmt(l.repaidAmount),
-    fmt(l.amount - l.repaidAmount),
+    fmt(loanOutstanding(l)),
     l.status.toUpperCase(),
   ]);
 
@@ -1216,7 +1217,7 @@ export function generateLoanRegisterPDF(loans: Loan[], members: Member[], societ
 
   const finalY = (doc as any).lastAutoTable.finalY + 10;
   const totalDisbursed = loans.reduce((s, l) => s + l.amount, 0);
-  const totalOutstanding = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + (l.amount - l.repaidAmount), 0);
+  const totalOutstanding = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + loanOutstanding(l), 0);
   doc.setFontSize(10);
   doc.setFont(font, 'bold');
   doc.text(`Total Loans: ${loans.length}   |   Total Disbursed: ${fmt(totalDisbursed)}   |   Outstanding: ${fmt(totalOutstanding)}`, 15, finalY);

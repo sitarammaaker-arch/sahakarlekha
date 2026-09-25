@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fmtDate } from '@/lib/dateUtils';
 import { Badge } from '@/components/ui/badge';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { loanOutstanding } from '@/lib/memberSnapshot';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
@@ -87,7 +88,7 @@ const Dashboard: React.FC = () => {
     const reserves = tb.filter(b => b.account.parentId === '1200' && !b.account.isGroup).reduce((s, b) => s + Math.abs(b.netBalance), 0);
     const loanBase = shareCapital + reserves;
     const loanLimit = loanBase * 10;
-    const totalOutstandingLoans = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + (l.amount - l.repaidAmount), 0);
+    const totalOutstandingLoans = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + loanOutstanding(l), 0);
     const sec32Ok = loanLimit === 0 || totalOutstandingLoans <= loanLimit;
     const sec32Pct = loanLimit > 0 ? (totalOutstandingLoans / loanLimit) * 100 : 0;
 
@@ -208,7 +209,7 @@ const Dashboard: React.FC = () => {
   const activeLoans = loans.filter(l => l.status === 'active');
   const overdueLoans = loans.filter(l => l.status === 'overdue');
   const clearedLoans = loans.filter(l => l.status === 'cleared');
-  const totalOutstanding = loans.reduce((s, l) => s + (l.amount - l.repaidAmount), 0);
+  const totalOutstanding = loans.reduce((s, l) => s + loanOutstanding(l), 0);
 
   const typeBadgeClass = (type: string) => {
     if (type === 'receipt') return 'bg-success/20 text-success border-success/30';

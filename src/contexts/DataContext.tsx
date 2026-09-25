@@ -25,6 +25,7 @@ import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { inventoryProcurementCost } from '@/lib/tradingAccount';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
+import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
 import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
@@ -4814,46 +4815,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const member = members.find(m => m.id === memberId);
     if (!member) return [];
 
-    // Only show Share Capital related vouchers (exclude ADM_FEE and others)
-    const memberVouchers = activeVouchers
-      .filter(v => v.memberId === memberId && (v.creditAccountId === ACCOUNT_IDS.SHARE_CAP || v.debitAccountId === ACCOUNT_IDS.SHARE_CAP))
-      // Deterministic tie-break — same key as projectMemberLedger.
-      .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || '').localeCompare(b.voucherNo || '') || a.id.localeCompare(b.id));
-
-    const hasShareCapVoucher = memberVouchers.some(v => v.creditAccountId === ACCOUNT_IDS.SHARE_CAP);
-    // If a proper voucher exists, start at 0 (voucher covers it). Otherwise show OB row.
-    // T-02: member ledger running balance in exact integer paise (RULE 2); rupees at each row.
-    let balanceMinor = toMinor(hasShareCapVoucher ? 0 : (member.shareCapital || 0));
-    const result: MemberLedgerEntry[] = [];
-
-    // Show Opening Balance row only if no proper voucher exists (backward compatibility)
-    if (!hasShareCapVoucher && (member.shareCapital || 0) > 0) {
-      result.push({
-        id: 'ob',
-        date: member.joinDate,
-        voucherNo: 'OB',
-        particulars: 'Opening Share Capital',
-        credit: member.shareCapital,
-        debit: 0,
-        balance: toRupees(balanceMinor),
-      });
-    }
-
-    memberVouchers.forEach(v => {
-      const isCredit = v.creditAccountId === ACCOUNT_IDS.SHARE_CAP;
-      const credit = isCredit ? v.amount : 0;
-      const debit = !isCredit ? v.amount : 0;
-      balanceMinor = addMinor(balanceMinor, toMinor(credit), -toMinor(debit));
-      result.push({
-        id: v.id,
-        date: v.date,
-        voucherNo: v.voucherNo,
-        particulars: v.narration || (isCredit ? 'Share deposit received' : 'Share withdrawal'),
-        credit,
-        debit,
-        balance: toRupees(balanceMinor),
-      });
-    });
+    // Member Portal S0: the voucher-path khata lives in lib/memberSnapshot so the member's own view
+    // runs the SAME formula (RULE 2).
+    const result = buildMemberShareLedger(member, activeVouchers, ACCOUNT_IDS.SHARE_CAP);
 
     return ledgerReport<MemberLedgerEntry[]>(
       `memberLedger:${memberId}`,

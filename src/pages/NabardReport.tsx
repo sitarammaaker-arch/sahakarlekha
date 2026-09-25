@@ -16,6 +16,7 @@ import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcel } from '@/lib/exportUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
+import { loanOutstanding, kccOutstanding } from '@/lib/memberSnapshot';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -57,7 +58,7 @@ const NabardReport: React.FC = () => {
       const due = new Date(loan.dueDate);
       due.setHours(0, 0, 0, 0);
       const overdueDays = daysBetween(due, today);
-      const outstanding = loan.outstandingAmount ?? (loan.drawnAmount - loan.repaidAmount);
+      const outstanding = kccOutstanding(loan);
       const overdueAmt = overdueDays > 0 ? outstanding : 0;
 
       let cls: NpaClass;
@@ -106,14 +107,14 @@ const NabardReport: React.FC = () => {
   // ── Section B: Loan Portfolio Summary ───────────────────────────────────────
   const loanStats = useMemo(() => {
     const disbursed = loans.reduce((s, l) => s + l.amount, 0);
-    const outstanding = loans.reduce((s, l) => s + (l.amount - l.repaidAmount), 0);
+    const outstanding = loans.reduce((s, l) => s + loanOutstanding(l), 0);
     const overdue = loans
       .filter(l => {
         const due = new Date(l.dueDate);
         due.setHours(0, 0, 0, 0);
         return due < today && l.status !== 'cleared';
       })
-      .reduce((s, l) => s + (l.amount - l.repaidAmount), 0);
+      .reduce((s, l) => s + loanOutstanding(l), 0);
     const recovered = disbursed - outstanding;
     const recoveryPct = disbursed > 0 ? (recovered / disbursed) * 100 : 0;
     return { disbursed, outstanding, overdue, recovered, recoveryPct };
