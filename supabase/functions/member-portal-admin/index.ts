@@ -20,7 +20,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import {
   memberLoginEmail, normalizeMemberNo, generatePin, canManagePortal, portalPlanAllowed,
-  memberEligible, parseRequest, MESSAGES,
+  memberEligible, parseRequest, orphanReclaimable, MESSAGES,
 } from '../_shared/member-portal-core.mjs';
 
 const CORS = {
@@ -35,6 +35,21 @@ function json(body: unknown, status = 200): Response {
 }
 function fail(reason: keyof typeof MESSAGES, status: number): Response {
   return json({ ok: false, reason, message: MESSAGES[reason] }, status);
+}
+
+// The admin API has no get-by-email; page through users. Only reached on the rare sign-up
+// conflict, and the project has few hundred auth users — capped so it can never run away.
+// deno-lint-ignore no-explicit-any
+async function findAuthUserByEmail(svc: any, email: string): Promise<{ id: string; email_confirmed_at?: string | null } | null> {
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await svc.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) return null;
+    const users = (data?.users ?? []) as { id: string; email?: string; email_confirmed_at?: string | null }[];
+    const hit = users.find((u) => (u.email ?? '').toLowerCase() === email);
+    if (hit) return hit;
+    if (users.length < 1000) return null;
+  }
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -136,13 +151,23 @@ Deno.serve(async (req) => {
     }
 
     const email = await memberLoginEmail(societyId, memberNo);
-    const { data: created, error: createErr } = await svc.auth.admin.createUser({
+    const create = () => svc.auth.admin.createUser({
       email, password: pin, email_confirm: true, user_metadata: { member_portal: true },
     });
-    if (createErr || !created?.user) {
-      const exists = /already|registered|exists/i.test(createErr?.message ?? '');
-      return fail(exists ? 'login_exists' : 'server_error', exists ? 409 : 500);
+    let { data: created, error: createErr } = await create();
+    if (createErr && /already|registered|exists/i.test(createErr.message ?? '')) {
+      // Someone pre-registered this address via public sign-up. Reclaim it only if it is an
+      // unconfirmed, unlinked account (see orphanReclaimable); otherwise refuse.
+      const existing = await findAuthUserByEmail(svc, email);
+      const { data: linkedRow } = existing
+        ? await svc.from('member_portal_users').select('auth_user_id').eq('auth_user_id', existing.id).maybeSingle()
+        : { data: null };
+      if (!orphanReclaimable(existing, !!linkedRow)) return fail('login_exists', 409);
+      const { error: delErr } = await svc.auth.admin.deleteUser(existing!.id);
+      if (delErr) return fail('server_error', 500);
+      ({ data: created, error: createErr } = await create());
     }
+    if (createErr || !created?.user) return fail('server_error', 500);
     const { error: linkErr } = await svc.from('member_portal_users').insert({
       auth_user_id: created.user.id, society_id: societyId, member_id: memberId, created_by: callerEmail,
     });

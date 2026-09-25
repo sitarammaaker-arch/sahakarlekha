@@ -92,6 +92,16 @@ export function memberEligible(member) {
   return { ok: true };
 }
 
+/**
+ * Public sign-up is on and the email scheme is in the repo, so anyone can pre-register a member's
+ * login email to block its issue. Such an account can never be confirmed (nobody receives mail at
+ * the members-only domain) and is linked to no member. Only THAT account may be reclaimed —
+ * a confirmed or linked one is ours and must never be deleted.
+ */
+export function orphanReclaimable(authUser, isLinked) {
+  return !!authUser && !authUser.email_confirmed_at && !isLinked;
+}
+
 /** Validates the body. Anything identifying the society is ignored — it comes from the verified caller. */
 export function parseRequest(body) {
   const action = body?.action;

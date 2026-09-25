@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import type { EntityLink } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog, Award } from 'lucide-react';
+import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog, Award, KeyRound } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MemberType, CasteCategory } from '@/types';
@@ -33,6 +33,9 @@ import type { Member, MemberStatus, Nominee, KycStatus, ShareCertStatus } from '
 import { validateNominees, nomineeShareTotal } from '@/lib/nomineeUtils';
 import { validateKyc } from '@/lib/kycUtils';
 import { validateCertificate } from '@/lib/shareCertUtils';
+import { useSubscription } from '@/hooks/useSubscription';
+import { MemberPortalDialog } from '@/components/members/MemberPortalDialog';
+import { callMemberPortalAdmin, portalPlanAllowed, type PortalLoginRow } from '@/lib/memberPortalAdmin';
 
 // ECR-16: member lifecycle status → label + badge colour per state.
 const STATUS_META: Record<MemberStatus, { hi: string; en: string; cls: string }> = {
@@ -344,7 +347,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
 
 const Members: React.FC = () => {
   const { t, language } = useLanguage();
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const { members: allMembers, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks, matchesActiveBranch } = useData();
   // ECR-17 Phase 4: scope the member list to the active branch ('all' → every member).
   const members = allMembers.filter(m => matchesActiveBranch(m.branchId));
@@ -367,6 +370,18 @@ const Members: React.FC = () => {
   const [viewMember, setViewMember] = useState<Member | null>(null);
   const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
   const [ledgerMember, setLedgerMember] = useState<Member | null>(null);
+  // Member Portal S2b: admin-only portal-login management (the Edge Function re-checks admin + plan).
+  const isAdmin = user?.role === 'admin';
+  const { plan, status: subStatus } = useSubscription();
+  const portalAllowed = portalPlanAllowed(plan, subStatus);
+  const [portalMember, setPortalMember] = useState<Member | null>(null);
+  const [portalLogins, setPortalLogins] = useState<Record<string, PortalLoginRow>>({});
+  const loadPortalLogins = useCallback(async () => {
+    if (!isAdmin) return;
+    const res = await callMemberPortalAdmin<{ logins: PortalLoginRow[] }>('list');
+    if (res.ok) setPortalLogins(Object.fromEntries(res.data.logins.map(l => [l.member_id, l])));
+  }, [isAdmin]);
+  useEffect(() => { void loadPortalLogins(); }, [loadPortalLogins]);
   // ECR-16: lifecycle status-change dialog
   const [statusMember, setStatusMember] = useState<Member | null>(null);
   const [statusNew, setStatusNew] = useState<MemberStatus>('inactive');
@@ -615,6 +630,9 @@ const Members: React.FC = () => {
                     <div>
                       <p className="font-medium">{member.name}</p>
                       {member.fatherName && <p className="text-xs text-muted-foreground">{member.fatherName}</p>}
+                      {portalLogins[member.id]?.is_active && (
+                        <Badge variant="outline" className="mt-0.5 h-5 px-1.5 text-[10px] border-green-600 text-green-700">{hi ? 'Portal ✓' : 'Portal ✓'}</Badge>
+                      )}
                     </div>
                   </div>
                 </TableCell>
@@ -675,6 +693,13 @@ const Members: React.FC = () => {
                         title={hi ? 'शेयर प्रमाणपत्र (जारी/पुनः/रद्द)' : 'Share certificate (issue/reissue/cancel)'}
                         onClick={() => openCert(member)}>
                         <Award className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {isAdmin && !showApprovalActions && !['resigned', 'expelled', 'deceased'].includes(member.status) && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-teal-600 hover:text-teal-700 hover:bg-teal-50"
+                        title={hi ? 'सदस्य portal login' : 'Member portal login'}
+                        onClick={() => setPortalMember(member)}>
+                        <KeyRound className="h-4 w-4" />
                       </Button>
                     )}
                     {canEdit && (
@@ -1089,6 +1114,17 @@ const Members: React.FC = () => {
           })()}
         </SheetContent>
       </Sheet>
+
+      {/* Member Portal S2b */}
+      <MemberPortalDialog
+        member={portalMember}
+        login={portalMember ? portalLogins[portalMember.id] : undefined}
+        societyName={(hi ? society.nameHi : society.name) || society.name || ''}
+        planAllowed={portalAllowed}
+        hi={hi}
+        onClose={() => setPortalMember(null)}
+        onChanged={loadPortalLogins}
+      />
 
       {/* Delete Guard */}
       <LinkedDeleteDialog
