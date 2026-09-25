@@ -16,6 +16,7 @@ import { Plus, Download, Search, Edit, Trash2, Landmark, AlertTriangle, CheckCir
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { generateLoanRegisterPDF } from '@/lib/pdf';
+import { loanOutstanding } from '@/lib/memberSnapshot';
 import type { Loan, LoanType, LoanStatus } from '@/types';
 
 const EMPTY_FORM = {
@@ -164,7 +165,7 @@ const LoanRegister: React.FC = () => {
   });
 
   const totalDisbursed = loans.reduce((s, l) => s + l.amount, 0);
-  const totalOutstanding = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + (l.amount - l.repaidAmount), 0);
+  const totalOutstanding = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + loanOutstanding(l), 0);
   const overdueCount = loans.filter(l => l.status === 'overdue').length;
   const activeCount = loans.filter(l => l.status === 'active').length;
 
@@ -387,7 +388,7 @@ const LoanRegister: React.FC = () => {
                 </TableRow>
               ) : (
                 filtered.map(l => {
-                  const outstanding = l.amount - l.repaidAmount;
+                  const outstanding = loanOutstanding(l);
                   return (
                     <TableRow key={l.id} className="hover:bg-muted/30">
                       <TableCell className="font-mono text-sm">{l.loanNo}</TableCell>
@@ -487,7 +488,7 @@ function LoanRepayButton({ loan, hi, onRepay }: { loan: Loan; hi: boolean; onRep
   const total = Number(amt) || 0;
   const int = Number(interest) || 0;
   const principal = Math.max(0, total - int);
-  const outstanding = loan.amount - loan.repaidAmount;
+  const outstanding = loanOutstanding(loan);
 
   return (
     <>

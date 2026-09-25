@@ -18,6 +18,7 @@ import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
+import { loanOutstanding, kccOutstanding } from '@/lib/memberSnapshot';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -120,7 +121,7 @@ const FederationReport: React.FC = () => {
         due.setHours(0, 0, 0, 0);
         return due < today && l.status !== 'cleared';
       })
-      .reduce((s, l) => s + (l.amount - l.repaidAmount), 0);
+      .reduce((s, l) => s + loanOutstanding(l), 0);
 
     // NPA (regular loans): overdue > 90 days, same standard period as KCC. A 1-day-overdue
     // loan is 'overdue' but NOT NPA — counting it inflated the NPA reported to the registrar (Audit #16).
@@ -130,7 +131,7 @@ const FederationReport: React.FC = () => {
         due.setHours(0, 0, 0, 0);
         return l.status !== 'cleared' && daysBetween(due, today) > 90;
       })
-      .reduce((s, l) => s + (l.amount - l.repaidAmount), 0);
+      .reduce((s, l) => s + loanOutstanding(l), 0);
 
     // KCC NPA amounts
     const kccNpa = kccLoans
@@ -140,10 +141,10 @@ const FederationReport: React.FC = () => {
         due.setHours(0, 0, 0, 0);
         return daysBetween(due, today) > 90;
       })
-      .reduce((s, l) => s + (l.outstandingAmount ?? (l.drawnAmount - l.repaidAmount)), 0);
+      .reduce((s, l) => s + kccOutstanding(l), 0);
 
     const npaAmt = regularNpa + kccNpa;
-    const totalOutstanding = outstanding + kccLoans.reduce((s, l) => s + (l.outstandingAmount ?? (l.drawnAmount - l.repaidAmount)), 0);
+    const totalOutstanding = outstanding + kccLoans.reduce((s, l) => s + kccOutstanding(l), 0);
     const npaPct = totalOutstanding > 0 ? (npaAmt / totalOutstanding) * 100 : 0;
 
     return { sanctioned, disbursed, recovered, outstanding, overdue, npaAmt, npaPct };
