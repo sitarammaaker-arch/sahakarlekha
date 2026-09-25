@@ -256,6 +256,29 @@ const SaleManagement: React.FC = () => {
       return; // block the sale
     }
 
+    // ⛔ HSN/SAC conditional-mandatory (Slice 3): only when GST is actually charged on
+    // this invoice. GST law requires an HSN/SAC on a GST invoice; a non-GST sale is
+    // unaffected. Blocks here (before posting) instead of silently emitting no HSN.
+    const invoiceHasGst = cgstPct > 0 || sgstPct > 0 || igstPct > 0;
+    if (invoiceHasGst) {
+      const missingHsn = validItems.filter(i => {
+        const si = stockItems.find(s => s.id === i.itemId);
+        return si && !si.hsnCode && !si.sacCode;
+      });
+      if (missingHsn.length > 0) {
+        const names = missingHsn.map(i => i.itemName).join(', ');
+        toast({
+          title: language === 'hi' ? 'HSN/SAC कोड आवश्यक है' : 'HSN/SAC code required',
+          description: language === 'hi'
+            ? `GST बिल के लिए इन वस्तुओं का HSN/SAC कोड ज़रूरी है — पहले इन्वेंटरी में उस वस्तु पर सेट करें: ${names}`
+            : `A GST invoice needs an HSN/SAC code for these items — set it on the item in Inventory first: ${names}`,
+          variant: 'destructive',
+          duration: 12000,
+        });
+        return; // block the sale
+      }
+    }
+
     const payload = {
       date: saleDate,
       customerName: customerName.trim(),
