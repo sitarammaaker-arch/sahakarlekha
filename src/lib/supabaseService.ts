@@ -32,6 +32,15 @@ export async function dbInsert<T extends object>(
   return { error: error?.message ?? null };
 }
 
+export async function dbBulkInsert<T extends object>(
+  table: string,
+  records: T[],
+): Promise<{ error: string | null }> {
+  if (records.length === 0) return { error: null };
+  const { error } = await supabase.from(table).insert(records);
+  return { error: error?.message ?? null };
+}
+
 export async function dbUpdate<T extends object>(
   table: string,
   id: string,
@@ -69,6 +78,7 @@ export const ewayBillUpdate = (id: string, updates: object) => dbUpdate('eway_bi
 // hsn_master
 export const hsnSelect  = (societyId: string) => dbSelect('hsn_master', societyId, { orderBy: 'code', ascending: true });
 export const hsnInsert  = (record: object) => dbInsert('hsn_master', record);
+export const hsnBulkInsert = (records: object[]) => dbBulkInsert('hsn_master', records);
 export const hsnUpdate  = (id: string, updates: object) => dbUpdate('hsn_master', id, updates);
 export const hsnDelete  = (id: string) => dbDelete('hsn_master', id);
 

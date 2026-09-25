@@ -10,9 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Hash, Plus, Pencil, Trash2, Search, Download, FileSpreadsheet } from 'lucide-react';
-import { hsnSelect, hsnInsert, hsnUpdate, hsnDelete } from '@/lib/supabaseService';
+import { Hash, Plus, Pencil, Trash2, Search, Download, FileSpreadsheet, PackagePlus, AlertTriangle } from 'lucide-react';
+import { hsnSelect, hsnInsert, hsnUpdate, hsnDelete, hsnBulkInsert } from '@/lib/supabaseService';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { HSN_SAC_SEED } from '@/data/hsnSeed';
 
 interface HsnCode {
   id: string;
@@ -47,6 +48,8 @@ export default function HsnMaster() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM());
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   // Load from Supabase
   useEffect(() => {
@@ -142,6 +145,50 @@ export default function HsnMaster() {
     downloadExcelSingle(headers, rows, 'hsn-master.xlsx', 'HSN Master');
   };
 
+  // Import the cooperative starter set (Slice 6). Skips codes already present
+  // (matched by type+code). Rates are INDICATIVE — the confirm dialog warns the
+  // user to verify each against the official notification before filing.
+  const handleImportSeed = async () => {
+    setImporting(true);
+    const existing = new Set(codes.map(c => `${c.type}:${c.code}`));
+    const toAdd = HSN_SAC_SEED.filter(s => !existing.has(`${s.type}:${s.code}`));
+    if (toAdd.length === 0) {
+      setImporting(false);
+      setImportOpen(false);
+      toast({ title: hi ? 'सभी सुझाए कोड पहले से मौजूद हैं' : 'All suggested codes already present' });
+      return;
+    }
+    const now = new Date().toISOString();
+    const records = toAdd.map((s, i) => ({
+      id: `hsn_seed_${Date.now()}_${i}`,
+      society_id: societyId,
+      code: s.code,
+      description: s.description,
+      type: s.type,
+      gstRate: s.gstRate,
+      cess: s.cess,
+      createdAt: now,
+    }));
+    const { error } = await hsnBulkInsert(records);
+    setImporting(false);
+    if (error) {
+      toast({ title: hi ? 'आयात विफल' : 'Import failed', description: error, variant: 'destructive', duration: 10000 });
+      return;
+    }
+    setCodes(prev => [
+      ...prev,
+      ...records.map(r => ({ id: r.id, code: r.code, description: r.description, type: r.type as 'HSN' | 'SAC', gstRate: r.gstRate, cess: r.cess })),
+    ]);
+    setImportOpen(false);
+    toast({
+      title: hi ? `${toAdd.length} कोड आयात हुए` : `${toAdd.length} codes imported`,
+      description: hi
+        ? 'दरें indicative हैं — हर कोड की GST दर आधिकारिक नोटिफ़िकेशन से सत्यापित करें व ज़रूरत हो तो बदलें।'
+        : 'Rates are indicative — verify each GST rate against the official notification and edit if needed.',
+      duration: 9000,
+    });
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -156,6 +203,9 @@ export default function HsnMaster() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" className="gap-1" onClick={() => setImportOpen(true)}>
+            <PackagePlus className="h-4 w-4" /> {hi ? 'सहकारी कोड आयात' : 'Import cooperative codes'}
+          </Button>
           <Button variant="outline" size="sm" className="gap-1" onClick={handleExcel}>
             <FileSpreadsheet className="h-4 w-4" /> Excel
           </Button>
@@ -355,6 +405,39 @@ export default function HsnMaster() {
             </Button>
             <Button variant="destructive" onClick={() => deleteId && handleDelete(deleteId)} className="flex-1">
               {hi ? 'हटाएं' : 'Delete'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import cooperative starter set (Slice 6) */}
+      <Dialog open={importOpen} onOpenChange={o => { if (!o && !importing) setImportOpen(false); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{hi ? 'सहकारी HSN/SAC कोड आयात करें' : 'Import cooperative HSN/SAC codes'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1 text-sm">
+            <p className="text-muted-foreground">
+              {hi
+                ? `सहकारी समितियों के लिए आम ${HSN_SAC_SEED.length} HSN/SAC कोड (खाद, बीज, कृषि-आदान, उपभोक्ता वस्तुएँ, डेयरी व सेवाएँ) आपके मास्टर में जुड़ेंगे। पहले से मौजूद कोड छोड़ दिए जाएँगे।`
+                : `Adds ${HSN_SAC_SEED.length} common HSN/SAC codes for cooperatives (fertilizer, seeds, agri-inputs, consumer goods, dairy & services) to your master. Codes already present are skipped.`}
+            </p>
+            <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+              <p className="text-[13px] text-amber-800 dark:text-amber-200">
+                {hi
+                  ? 'GST दरें सिर्फ़ indicative हैं (branded/loose व अंतिम-उपयोग पर निर्भर)। फ़ाइल करने से पहले हर दर आधिकारिक CBIC नोटिफ़िकेशन से सत्यापित करें व ज़रूरत हो तो बदलें।'
+                  : 'GST rates are indicative only (they depend on branded/loose status and end-use). Verify each rate against the official CBIC notification before filing, and edit if needed.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3 pt-3">
+            <Button variant="outline" onClick={() => setImportOpen(false)} className="flex-1" disabled={importing}>
+              {hi ? 'रद्द करें' : 'Cancel'}
+            </Button>
+            <Button onClick={handleImportSeed} className="flex-1 gap-1" disabled={importing}>
+              <PackagePlus className="h-4 w-4" />
+              {importing ? (hi ? 'आयात हो रहा है…' : 'Importing…') : (hi ? 'आयात करें' : 'Import')}
             </Button>
           </div>
         </DialogContent>
