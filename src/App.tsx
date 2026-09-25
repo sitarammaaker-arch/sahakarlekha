@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DataProvider, useData } from "@/contexts/DataContext";
@@ -24,6 +24,12 @@ import { useNoIndex } from "@/lib/useDocumentMeta";
 // page ONCE (sessionStorage-guarded against loops) to fetch the fresh index.html +
 // chunk map, so the user never has to refresh by hand. The flag resets on the next
 // successful chunk load, so a later deploy can recover the same way.
+// Early hand-outs used /sadasya/<id>; the portal now lives at /member/<id>.
+function SadasyaRedirect() {
+  const { societyId = '' } = useParams();
+  return <Navigate to={`/member/${encodeURIComponent(societyId)}`} replace />;
+}
+
 function lazyWithRetry<T extends ComponentType<unknown>>(
   factory: () => Promise<{ default: T }>,
 ) {
@@ -66,6 +72,8 @@ const Pricing = lazyWithRetry(() => import("./pages/Pricing"));
 const SoftwareLanding = lazyWithRetry(() => import("./pages/SoftwareLanding"));
 const StateLanding = lazyWithRetry(() => import("./pages/StateLanding"));
 const BlogIndex = lazyWithRetry(() => import("./pages/BlogIndex"));
+// Member Portal S3 — the member's own login + read-only dashboard (outside staff auth).
+const MemberPortal = lazyWithRetry(() => import("./pages/MemberPortal"));
 const BlogPost = lazyWithRetry(() => import("./pages/BlogPost"));
 const AuthorProfile = lazyWithRetry(() => import("./pages/AuthorProfile"));
 const Glossary = lazyWithRetry(() => import("./pages/Glossary"));
@@ -303,6 +311,9 @@ const AppRoutes = () => {
       <Route path="/software" element={<SoftwareLanding />} />
       <Route path="/software/:type" element={<SoftwareLanding />} />
       <Route path="/cooperative-software/:state" element={<StateLanding />} />
+      {/* Member Portal S3: public route — the page authenticates with its OWN client, never ProtectedRoute. */}
+      <Route path="/member/:societyId" element={<MemberPortal />} />
+      <Route path="/sadasya/:societyId" element={<SadasyaRedirect />} />
       <Route path="/blog" element={<BlogIndex />} />
       <Route path="/blog/:slug" element={<BlogPost />} />
       <Route path="/author/:slug" element={<AuthorProfile />} />

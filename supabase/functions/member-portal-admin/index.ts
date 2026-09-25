@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
     if (!elig.ok) return fail(elig.reason as keyof typeof MESSAGES, elig.reason === 'member_not_found' ? 404 : 409);
     const memberNo = normalizeMemberNo(member!.memberId);
     const pin = generatePin();
-    const handout = { ok: true, pin, memberNo, societyId, portalPath: `/sadasya/${encodeURIComponent(societyId)}` };
+    const handout = { ok: true, pin, memberNo, societyId, portalPath: `/member/${encodeURIComponent(societyId)}` };
 
     if (parsed.action === 'reset_pin') {
       if (!link || !link.is_active) return fail('not_issued', 404);

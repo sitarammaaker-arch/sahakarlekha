@@ -17,6 +17,7 @@ import {
   callMemberPortalAdmin, handoutMessage, portalUrl, whatsappLink,
   type PortalHandout, type PortalLoginRow,
 } from '@/lib/memberPortalAdmin';
+import { memberPortalPath } from '@/lib/memberPortalLogin';
 
 interface Props {
   member: Member | null;
@@ -57,7 +58,7 @@ export function MemberPortalDialog({ member, login, societyName, planAllowed, hi
     }
   };
 
-  const url = handout ? portalUrl(window.location.origin, handout.portalPath) : '';
+  const url = handout ? portalUrl(window.location.origin, memberPortalPath(handout.societyId)) : '';
   const message = handout ? handoutMessage({ memberName: member.name, societyName, memberNo: handout.memberNo, pin: handout.pin, url }) : '';
   const copy = async () => {
     try {

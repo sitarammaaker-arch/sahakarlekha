@@ -11,7 +11,7 @@ export function portalPlanAllowed(plan: string, status: string): boolean {
   return ['plus', 'pro', 'enterprise', 'legacy', 'trial'].includes(plan) && ['active', 'trialing', 'grace'].includes(status);
 }
 
-/** Absolute portal URL for this society, e.g. https://sahakarlekha.com/sadasya/SOC001. */
+/** Absolute portal URL for this society, e.g. https://sahakarlekha.com/member/SOC001. */
 export function portalUrl(origin: string, portalPath: string): string {
   return origin.replace(/\/+$/, '') + (portalPath.startsWith('/') ? portalPath : `/${portalPath}`);
 }
