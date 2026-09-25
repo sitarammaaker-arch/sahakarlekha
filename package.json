@@ -198,6 +198,7 @@
     "test:restore-commit-live": "node scripts/test-restore-commit-live.mjs",
     "test:import-fylock": "node scripts/test-import-fylock.mjs",
     "test:rls-coverage": "node scripts/test-rls-coverage.mjs",
+    "test:society-activities-rls": "node scripts/test-society-activities-rls.mjs",
     "test:cross-tenant-isolation": "node scripts/test-cross-tenant-isolation.mjs",
     "test:depreciation-rate-master": "node scripts/test-depreciation-rate-master.mjs",
     "test:farmer-payment-mode": "node scripts/test-farmer-payment-mode.mjs",
