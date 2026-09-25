@@ -1072,6 +1072,9 @@ export interface SocietySettings {
   gstin?: string;              // GSTIN (15 chars — state code + PAN + entity code + check digit)
   tan?: string;                // Tax Deduction Account Number (10 chars)
   entityPan?: string;          // Society PAN (10 chars)
+  aato?: number;               // Aggregate Annual Turnover of the PRECEDING FY (₹). Drives the
+                               // HSN digit requirement: > ₹5 cr ⇒ 6-digit HSN, else 4-digit.
+                               // Entered by the society (from its GST return), not derived.
   // Bank account — printed on sale invoices / bills so customers can pay directly.
   // All optional; the invoice only shows the block when an account number is present.
   bankName?: string;           // Bank name (e.g. "Punjab National Bank")

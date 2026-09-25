@@ -109,6 +109,7 @@ const SocietySetup: React.FC = () => {
     gstin: society.gstin || '',
     tan: society.tan || '',
     entityPan: society.entityPan || '',
+    aato: society.aato ?? 0,
     bankName: society.bankName || '',
     bankAccountNo: society.bankAccountNo || '',
     bankIfsc: society.bankIfsc || '',
@@ -572,6 +573,22 @@ const SocietySetup: React.FC = () => {
                   <Label>{language === 'hi' ? 'समिति PAN' : 'Society PAN'}</Label>
                   <Input value={form.entityPan} onChange={e => setForm(f => ({ ...f, entityPan: e.target.value.toUpperCase() }))} placeholder="ABCDE1234F" maxLength={10} className="h-11 font-mono" />
                   <p className="text-xs text-muted-foreground">{language === 'hi' ? 'स्थायी खाता संख्या' : 'Permanent Account Number'}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>{language === 'hi' ? 'वार्षिक कुल टर्नओवर (AATO, ₹)' : 'Aggregate Turnover (AATO, ₹)'}</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.aato}
+                    onChange={e => setForm(f => ({ ...f, aato: Number(e.target.value) || 0 }))}
+                    placeholder="0"
+                    className="h-11"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'hi'
+                      ? 'पिछले वित्तीय वर्ष का कुल टर्नओवर — ₹5 करोड़ से अधिक पर 6-अंकी HSN अनिवार्य (वरना 4-अंकी)।'
+                      : "Preceding FY's aggregate turnover — above ₹5 cr requires 6-digit HSN (else 4-digit)."}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>{language === 'hi' ? 'रिज़र्व फंड (%)' : 'Reserve Fund %'}</Label>
