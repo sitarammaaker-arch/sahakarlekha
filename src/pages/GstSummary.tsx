@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Download, TrendingUp, TrendingDown, Percent, ClipboardList, FileSpreadsheet, Undo2 } from 'lucide-react';
+import { FileText, Download, TrendingUp, TrendingDown, Percent, ClipboardList, FileSpreadsheet, Undo2, AlertTriangle } from 'lucide-react';
+import { checkHsnDigits, requiredHsnDigits } from '@/lib/hsn/validity';
 import { generateGstSummaryPDF } from '@/lib/pdf';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -228,6 +229,29 @@ export default function GstSummary() {
     }
     return Array.from(map.values()).sort((a, b) => a.rate - b.rate);
   }, [activeSales, b2bIds, returnClassification]);
+
+  // ── Slice 5: HSN gaps — fix BEFORE filing GSTR-1 ─────────────────────────
+  // Sales items whose stock item has NO HSN/SAC, or whose code has too few digits
+  // for the society's turnover (> ₹5 cr ⇒ 6-digit). Derived from live data (RULE 2).
+  const hsnGaps = useMemo(() => {
+    const missing = new Map<string, string>();  // itemId -> name
+    const insufficient = new Map<string, { name: string; code: string; actual: number }>();
+    for (const s of activeSales) {
+      for (const it of s.items) {
+        const si = stockItems.find(x => x.id === it.itemId);
+        if (!si) continue;
+        const code = si.hsnCode || si.sacCode || '';
+        if (!code) { missing.set(si.id, si.name); continue; }
+        const chk = checkHsnDigits(code, society?.aato);
+        if (chk.insufficient) insufficient.set(si.id, { name: si.name, code, actual: chk.actual });
+      }
+    }
+    return {
+      missing: [...missing.values()],
+      insufficient: [...insufficient.values()],
+      required: requiredHsnDigits(society?.aato),
+    };
+  }, [activeSales, stockItems, society?.aato]);
 
   // ── GSTR-1: HSN Summary (from sale items with hsnCode) ───────────────────
   const hsnSummary = useMemo(() => {
@@ -1137,6 +1161,45 @@ export default function GstSummary() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Slice 5: HSN gaps — fix before filing */}
+            {(hsnGaps.missing.length > 0 || hsnGaps.insufficient.length > 0) && (
+              <Card className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2 text-amber-800 dark:text-amber-200">
+                    <AlertTriangle className="h-4 w-4" />
+                    {hi ? 'फ़ाइल करने से पहले ठीक करें — HSN/SAC में कमी' : 'Fix before filing — HSN/SAC gaps'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  {hsnGaps.missing.length > 0 && (
+                    <div>
+                      <p className="font-medium text-amber-800 dark:text-amber-200">
+                        {hi ? `HSN/SAC सेट नहीं (${hsnGaps.missing.length}):` : `HSN/SAC not set (${hsnGaps.missing.length}):`}
+                      </p>
+                      <p className="text-muted-foreground">{hsnGaps.missing.join(', ')}</p>
+                    </div>
+                  )}
+                  {hsnGaps.insufficient.length > 0 && (
+                    <div>
+                      <p className="font-medium text-amber-800 dark:text-amber-200">
+                        {hi
+                          ? `${hsnGaps.required}-अंक से कम HSN (${hsnGaps.insufficient.length}) — आपके टर्नओवर पर ${hsnGaps.required} अंक चाहिए:`
+                          : `HSN shorter than ${hsnGaps.required} digits (${hsnGaps.insufficient.length}) — your turnover needs ${hsnGaps.required} digits:`}
+                      </p>
+                      <p className="text-muted-foreground">
+                        {hsnGaps.insufficient.map(i => `${i.name} (${i.code} — ${i.actual})`).join(', ')}
+                      </p>
+                    </div>
+                  )}
+                  <p className="text-[12px] text-muted-foreground">
+                    {hi
+                      ? 'इन्हें इन्वेंटरी में उस वस्तु पर सही HSN/SAC सेट करके ठीक करें, फिर GSTR-1 निर्यात करें।'
+                      : 'Fix by setting the correct HSN/SAC on the item in Inventory, then export GSTR-1.'}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
             {/* HSN Summary */}
             <Card>
