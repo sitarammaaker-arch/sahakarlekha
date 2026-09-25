@@ -1,12 +1,16 @@
-जब कोई व्यक्ति या संस्था हरियाणा की किसी पंजीकृत cooperative society — जैसे PACS, CM-PACS, या अन्य cooperative society — का सदस्य बनना चाहता है, तो उसे एक लिखित आवेदन-पत्र समिति को देना होता है। यह पूरी प्रक्रिया Haryana Co-operative Societies Act, 1984 और उसके अंतर्गत बने Haryana Co-operative Societies Rules, 1989 से संचालित होती है — पर कई सदस्यों और समितियों को यह नहीं पता कि इस आवेदन में असल में क्या-क्या होना चाहिए, और किन नियमों का पालन ज़रूरी है। यह गाइड वही बताती है।
+जब कोई व्यक्ति या संस्था हरियाणा की किसी पंजीकृत cooperative society — जैसे PACS, CM-PACS, या अन्य cooperative society — का सदस्य बनना चाहता है, तो उसे एक लिखित आवेदन-पत्र समिति को देना होता है। यह पूरी प्रक्रिया Haryana Co-operative Societies Act, 1984 और उसके अंतर्गत बने Haryana Co-operative Societies Rules, 1989 से संचालित होती है — पर कई सदस्यों और समितियों को यह नहीं पता कि इस आवेदन में असल में क्या-क्या होना चाहिए, और किन नियमों (Section 16, Rules 14-22) का पालन ज़रूरी है। यह गाइड वही — आवेदन के हिस्से, पात्रता, समय-सीमा, nomination व register-entry — आसान भाषा में बताती है।
 
 > ⚠️ हरियाणा में सदस्यता के लिए कोई एक "official" राज्य-स्तरीय prescribed membership form नहीं है। Haryana Co-operative Societies Rules, 1989 सदस्यता से जुड़ी eligibility, disqualification, timing व record-keeping की शर्तें तय करते हैं (Rules 14-22), पर व्यवहार में हर society अपनी registered bye-laws या विभागीय निर्देशों के अनुसार अपना application format इस्तेमाल करती है। अगर आपकी society के पास अपना अलग निर्धारित प्रारूप है, तो वही इस्तेमाल करें — यहाँ दी गई जानकारी सिर्फ़ यह समझने के लिए है कि एक सही आवेदन में क्या शामिल होना चाहिए।
 
+## सदस्यता क्यों मायने रखती है
+
+सदस्य बनना सिर्फ़ एक फ़ॉर्म भरना नहीं — यह समिति का सह-मालिक व हिस्सेदार बनना है। सदस्य को समिति की सेवाओं (ऋण, आदान, भंडारण आदि) तक पहुँच, लाभ में हिस्सा, मतदान का अधिकार व आम सभा में आवाज़ मिलती है। इसीलिए सदस्यता-आवेदन को सही, पूरा व नियमानुसार भरना ज़रूरी है — क्योंकि यही वह दस्तावेज़ है जिससे ये सारे अधिकार शुरू होते हैं। एक अधूरा या नियम-विरुद्ध आवेदन बाद में सदस्यता, अधिकार या ऑडिट में उलझन पैदा कर सकता है।
+
 ## कौन सदस्य बन सकता है — Section 16 और bye-laws
 
-Haryana Co-operative Societies Act, 1984 की Section 16 उन categories/persons की पहचान करती है जो Act व society की bye-laws के अधीन सदस्य के रूप में admit किए जा सकते हैं। Membership applications, eligibility, rights और disqualifications से जुड़े मामले Act की Sections 16-24 और Rules के Rules 14-22 में कवर होते हैं। Eligibility disputes (जैसे area of operation, class, occupation से जुड़े विवाद) पर Registrar को निर्णय की शक्ति प्राप्त है।
+Haryana Co-operative Societies Act, 1984 की Section 16 उन categories/persons की पहचान करती है जो Act व society की bye-laws के अधीन सदस्य के रूप में admit किए जा सकते हैं। Membership applications, eligibility, rights और disqualifications से जुड़े मामले Act की Sections 16-24 और Rules के Rules 14-22 में विस्तार से कवर होते हैं। Eligibility disputes (जैसे area of operation, class, occupation से जुड़े विवाद) पर Registrar को निर्णय की शक्ति प्राप्त है।
 
-Rule 14 में सदस्यता से जुड़ी disqualifications दी गई हैं — जिनमें insolvency (दिवालियापन) और सज़ा (sentence) से संबंधित disqualification शामिल है। जहाँ Rule 15 लागू होता है, वहाँ किसी अन्य cooperative credit/service society की सदस्यता या समान उद्देश्य वाली society में officer होने की स्थिति कानून/Registrar की अनुमति के अनुरूप होनी चाहिए। आवेदन स्वीकार करने से पहले committee को इन बातों की जांच करनी चाहिए।
+Rule 14 में सदस्यता से जुड़ी disqualifications दी गई हैं — यानी वे स्थितियाँ जिनमें व्यक्ति सदस्य नहीं बन सकता — जिनमें insolvency (दिवालियापन) और सज़ा (sentence) से संबंधित disqualification शामिल है। जहाँ Rule 15 लागू होता है, वहाँ किसी अन्य cooperative credit/service society की सदस्यता या समान उद्देश्य वाली society में officer होने की स्थिति कानून/Registrar की अनुमति के अनुरूप होनी चाहिए। आवेदन स्वीकार करने से पहले committee को इन बातों की जांच करनी चाहिए।
 
 ## एक सही आवेदन में क्या-क्या शामिल होना चाहिए
 
@@ -26,7 +30,9 @@ Rule 14 में सदस्यता से जुड़ी disqualifications
 
 ## Nomination क्यों ज़रूरी है — Rule 21
 
-Rule 21 nomination का प्रावधान करता है — यानी सदस्य अपनी shares/interest के लिए एक या अधिक nominee तय कर सकता है। यदि एक से अधिक nominee हों, तो Rule 21 और society की bye-laws के अनुसार share/interest का स्पष्ट बंटवारा दर्ज करना चाहिए। यह जानकारी बाद में सदस्य की मृत्यु या अन्य स्थिति में shares के हस्तांतरण के लिए इस्तेमाल होती है।
+Rule 21 nomination का प्रावधान करता है — यानी सदस्य अपनी shares/interest के लिए एक या अधिक nominee (उत्तराधिकारी) तय कर सकता है। यदि एक से अधिक nominee हों, तो Rule 21 और society की bye-laws के अनुसार share/interest का स्पष्ट बंटवारा दर्ज करना चाहिए। यह जानकारी बाद में सदस्य की मृत्यु या अन्य स्थिति में shares के हस्तांतरण के लिए इस्तेमाल होती है।
+
+> 💡 nomination को अक्सर "बाद की बात" समझकर टाल दिया जाता है, पर यह सदस्य के परिवार के लिए सबसे अहम हिस्सों में से एक है — इसके बिना सदस्य की मृत्यु पर shares/interest के हस्तांतरण में कानूनी उलझन आ सकती है। इसलिए आवेदन के समय ही nominee ज़रूर भरवाएँ।
 
 ## Committee आवेदन पर कब तक निर्णय ले — Rule 17
 
@@ -38,22 +44,59 @@ Rule 17 के अनुसार, producer society को छोड़कर �
 
 सदस्य के रूप में स्वीकृति के बाद, Rule 22 के अनुसार society को अपने Member Register में सदस्य की name, address, occupation, shares, admission/cessation dates और nominee details दर्ज करनी होती हैं — ताकि पूरी प्रक्रिया एक ही रिकॉर्ड में trace हो सके।
 
+## पूरी प्रक्रिया — कदम-दर-कदम
+
+ऊपर के नियमों को एक क्रम में देखें, तो सदस्यता-प्रक्रिया इस तरह चलती है:
+
+1. **आवेदन:** इच्छुक व्यक्ति/संस्था समिति की bye-laws के प्रारूप में लिखित आवेदन दे (भुगतान-रसीद व संलग्नक सहित)।
+2. **पात्रता-जाँच:** committee Section 16 (पात्रता) व Rule 14/15 (disqualification) जाँचे।
+3. **timing-जाँच:** Rule 16 के तहत देखे कि AGM 14 दिन के भीतर तो नहीं।
+4. **निर्णय:** Rule 17 के तहत अधिकतम एक महीने में निर्णय; refuse हो तो कारण-सहित सूचना।
+5. **register-entry:** स्वीकृति पर Rule 22 के तहत Member Register में तुरंत entry।
+6. **प्रमाण:** सदस्य को शेयर-प्रमाण/सदस्यता-प्रमाण व भुगतान की रसीद दें, और अपनी प्रति संभालें।
+
+इस क्रम का पालन करने से हर सदस्यता विधिवत, trace-योग्य व ऑडिट-रेडी रहती है — और सदस्य को शुरू से ही अपने अधिकार व दस्तावेज़ स्पष्ट रहते हैं, जिससे बाद के विवाद टलते हैं।
+
+## गैर-व्यक्तिगत आवेदक — समिति/संस्था/फर्म
+
+सदस्य सिर्फ़ व्यक्ति ही नहीं होते — Section 16 के तहत कोई अन्य सहकारी समिति, सरकार, या अधिसूचित निकाय भी सदस्य बन सकते हैं। जब आवेदक कोई संस्था/समिति/फर्म हो, तो कुछ अतिरिक्त बातें ज़रूरी हैं: उसके अधिकृत प्रतिनिधि का नाम, और उस संस्था का एक **Authorization/Resolution** जो यह साबित करे कि उसने इस समिति का सदस्य बनने व प्रतिनिधि नियुक्त करने का निर्णय विधिवत लिया है। इसके बिना गैर-व्यक्तिगत आवेदन अधूरा माना जाता है। इसलिए ऐसे आवेदन में व्यक्ति-आवेदक की तुलना में यह अतिरिक्त दस्तावेज़ ज़रूर लें। (Resolution का सही प्रारूप: [Board Resolution गाइड](/blog/haryana-cooperative-society-board-resolution-guide)।)
+
 ## आम गलतियां जो ऑडिट/निरीक्षण में आपत्ति बनती हैं
 
 > 📘 AGM की तारीख से 14 दिन के भीतर member admit कर लेना (Rule 16 का उल्लंघन); application को एक महीने से अधिक समय तक बिना कारण pending रखना (Rule 17 का उल्लंघन); refusal के कारण applicant को communicate न करना; एक से अधिक nominee होने पर share/interest का स्पष्ट allocation दर्ज न करना; Member Register में entry समय पर अपडेट न करना; और share value/admission fee को अपनी bye-laws देखे बिना किसी दूसरी society के आंकड़ों से भर देना — ये सभी सामान्य चूकें बाद में गंभीर ऑडिट-आपत्ति बन सकती हैं।
+
+## डिजिटल सदस्य-रिकॉर्ड — क्यों उपयोगी
+
+जब समिति के सैकड़ों सदस्य हों, तो Member Register, shares, nominee व admission/cessation तारीख़ें हाथ से संभालना कठिन व त्रुटि-प्रवण होता है। एक अच्छा डिजिटल सिस्टम यह पूरा रिकॉर्ड व्यवस्थित, खोज-योग्य व अद्यतन रखता है — जिससे Rule 22 का पालन आसान होता है, ऑडिट सहज रहता है, और किसी सदस्य की जानकारी तुरंत मिल जाती है। साथ ही शेयर-राशि व शुल्क का सदस्य-वार हिसाब भी पारदर्शी रहता है। (देखें: [सदस्य व शेयर लेखांकन](/blog/member-and-share-accounting)।)
 
 ## अक्सर पूछे जाने वाले प्रश्न
 
 **क्या हरियाणा में कोई एक official prescribed membership form है?** — नहीं। हर society अपनी registered bye-laws या विभागीय निर्देशों के अनुसार अपना application format इस्तेमाल करती है; Act व Rules सिर्फ़ eligibility, disqualification व प्रक्रिया की शर्तें तय करते हैं।
 **Membership application कितने समय में decide करनी चाहिए?** — Rule 17 के अनुसार, producer society को छोड़कर, यथाशीघ्र और अधिकतम एक महीने में; refusal के कारण applicant को communicate किए जाने चाहिए।
 **क्या AGM से ठीक पहले नया सदस्य admit किया जा सकता है?** — नहीं। Rule 16 के अनुसार AGM की तारीख से 14 दिन पहले तक किसी सदस्य को admit नहीं किया जाना चाहिए।
-**क्या nominee देना ज़रूरी है?** — Rule 21 nomination का प्रावधान करता है; member-nomination का रिकॉर्ड society की bye-laws के अनुसार maintain किया जाता है।
-**सदस्य बनने के बाद कौन-सा रिकॉर्ड अपडेट होता है?** — Rule 22 के अनुसार Member Register में सदस्य की particulars, shares, admission/cessation dates और nominee details maintain की जाती हैं।
-
-**जुड़ी पढ़ाई:** [हरियाणा सहकारी समिति अधिनियम 1984 व नियम 1989 गाइड](/blog/haryana-cooperative-act-1984-rules-1989-guide) · [शेयर ट्रांसफर की प्रक्रिया](/blog/member-and-share-accounting) · [हरियाणा सहकारी समिति अधिनियम व सदस्य अधिकार](/blog/cooperative-law-framework)
+**क्या nominee देना ज़रूरी है?** — Rule 21 nomination का प्रावधान करता है; इसका रिकॉर्ड society की bye-laws के अनुसार maintain होता है — यह सदस्य के परिवार के लिए बहुत अहम है।
+**सदस्य बनने के बाद कौन-सा रिकॉर्ड अपडेट होता है?** — Rule 22 के अनुसार Member Register में सदस्य की particulars, shares, admission/cessation dates और nominee details तुरंत maintain की जाती हैं।
+**शेयर-राशि व admission fee कितनी है?** — यह हर society की bye-laws पर निर्भर; किसी दूसरी society के आँकड़े न भरें — अपनी bye-laws से लें (विस्तार: [CM-PACS शेयर राशि](/blog/cm-pacs-share-amount-haryana-membership-cost))।
+**आवेदन refuse हो तो?** — Rule 17 के तहत कारण-सहित निर्णय applicant को communicate किया जाना चाहिए — मनमाना/बिना-कारण refusal नहीं।
+**क्या कोई संस्था/समिति भी सदस्य बन सकती है?** — हाँ (Section 16); पर उसके साथ अधिकृत प्रतिनिधि व Authorization/Resolution देना ज़रूरी है।
+**सदस्यता से क्या अधिकार मिलते हैं?** — सेवाओं तक पहुँच, लाभ में हिस्सा, मतदान व आम सभा में आवाज़ — यानी सह-मालिकाना।
+**nomination न भरने का जोखिम क्या है?** — सदस्य की मृत्यु पर shares/interest के हस्तांतरण में कानूनी उलझन; इसलिए आवेदन के समय ही भरवाएँ।
 
 ## तीन बातें याद रखें
 
-- 📋 कोई एक राज्य-व्यापी "official" membership form नहीं है — हर society की अपनी bye-laws या विभागीय निर्देश ही तय करते हैं कि उनका आवेदन-प्रारूप कैसा होगा।
+- 📋 कोई एक राज्य-व्यापी "official" membership form नहीं है — हर society की अपनी bye-laws या विभागीय निर्देश ही उसका आवेदन-प्रारूप तय करते हैं।
 - ⏰ Rule 17 (एक महीने में निर्णय) और Rule 16 (AGM से 14 दिन पहले admission-रोक) — दोनों की अनदेखी ऑडिट में सबसे आम आपत्तियां बनती हैं।
 - 📝 सदस्यता स्वीकृति के बाद Rule 22 के तहत Member Register में तुरंत entry — यह प्रक्रिया की अंतिम और सबसे ज़रूरी कड़ी है।
+- 👪 nomination (Rule 21) आवेदन के समय ही भरवाएँ — यह परिवार के लिए shares-हस्तांतरण की सबसे अहम सुरक्षा है।
+
+## आख़िर में
+
+सदस्यता-आवेदन समिति व सदस्य के रिश्ते की पहली, बुनियादी व सबसे अहम कड़ी है — इसलिए इसे सही, पूरा व नियमानुसार भरना ज़रूरी है। मुख्य बातें याद रखें: कोई एक "official form" नहीं (अपनी bye-laws का प्रारूप); पात्रता (Section 16) व disqualification (Rule 14/15) जाँचें; समय-सीमा (Rule 17 का एक महीना, Rule 16 का AGM-14-दिन नियम) का पालन करें; nomination (Rule 21) ज़रूर भरवाएँ; और स्वीकृति पर Member Register में तुरंत entry (Rule 22) करें। इन सबका पालन करने वाली समिति की सदस्यता-प्रक्रिया पारदर्शी, विवाद-रहित व ऑडिट-रेडी रहती है — और सदस्य को उसके सारे अधिकार बिना उलझन मिलते हैं।
+
+> ✅ सदस्य, शेयर, nominee व शुल्क का रिकॉर्ड व्यवस्थित व ऑडिट-रेडी रखें — [SahakarLekha पर मुफ्त शुरू करें](/register)।
+
+**जुड़ी पढ़ाई:** [हरियाणा अधिनियम 1984 व नियम 1989 गाइड](/blog/haryana-cooperative-act-1984-rules-1989-guide) · [सदस्य व शेयर लेखांकन](/blog/member-and-share-accounting) · [सहकारी कानून का ढाँचा](/blog/cooperative-law-framework) · [Board Resolution गाइड](/blog/haryana-cooperative-society-board-resolution-guide)
+
+**जुड़े शब्द:** [सदस्यता](/glossary/membership) · [Section 16](/glossary/section-16) · [nomination](/glossary/nomination) · [Member Register](/glossary/member-register) · [admission fee](/glossary/admission-fee) · [Rule 17](/glossary/rule-17)
+
+> 📘 नोट: यह जानकारी Haryana Co-operative Societies Act 1984 (Sections 16-24) व Rules 1989 (Rules 14-22, ख़ासकर 14/15/16/17/21/22) के संदर्भ में सामान्य मार्गदर्शन है। सही प्रारूप, शेयर-राशि, शुल्क व प्रक्रिया अपनी society की registered bye-laws व विभागीय निर्देशों से पुष्टि करें। Evidence Level A (शैक्षिक)।
