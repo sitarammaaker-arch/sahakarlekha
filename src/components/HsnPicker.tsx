@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useData } from '@/contexts/DataContext';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { hsnSelect } from '@/lib/supabaseService';
-import { Search, Info } from 'lucide-react';
+import { checkHsnDigits } from '@/lib/hsn/validity';
+import { Search, Info, AlertTriangle } from 'lucide-react';
 
 // ── HSN / SAC picker for the item form (Slice 1) ─────────────────────────────
 // OPTIONAL at item creation by design — HSN/SAC is only legally required when the
@@ -33,6 +35,7 @@ interface HsnPickerProps {
 
 export function HsnPicker({ value, onChange, hi }: HsnPickerProps) {
   const { user } = useAuth();
+  const { society } = useData();
   const societyId = user?.societyId || 'SOC001';
 
   const [rows, setRows] = useState<HsnRow[]>(() => cache.get(societyId) || []);
@@ -106,6 +109,9 @@ export function HsnPicker({ value, onChange, hi }: HsnPickerProps) {
   };
 
   const notSet = !value.hsnCode && !value.sacCode;
+  // Slice 4: warn (not block) when the chosen code has too few digits for the
+  // society's turnover — e.g. a > ₹5 cr society needs a 6-digit HSN.
+  const digitCheck = checkHsnDigits(currentCode, society?.aato);
 
   return (
     <div className="space-y-2 p-3 rounded-lg border bg-amber-50/40 dark:bg-amber-950/20">
@@ -186,6 +192,17 @@ export function HsnPicker({ value, onChange, hi }: HsnPickerProps) {
           </Select>
         </div>
       </div>
+
+      {digitCheck.insufficient && (
+        <p className="flex items-start gap-1.5 text-[11px] font-medium text-red-700 dark:text-red-300">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>
+            {hi
+              ? `आपके टर्नओवर (₹5 करोड़+) पर ${digitCheck.required}-अंकी HSN चाहिए — यह कोड ${digitCheck.actual}-अंकी है।`
+              : `Your turnover (₹5 cr+) needs a ${digitCheck.required}-digit HSN — this code has ${digitCheck.actual} digits.`}
+          </span>
+        </p>
+      )}
 
       <p className="flex items-start gap-1.5 text-[11px] text-amber-800/80 dark:text-amber-200/80">
         <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />

@@ -1972,6 +1972,8 @@ create unique index if not exists housing_complaints_no_uniq on public.housing_c
 -- and governance resolution reference on transfers. RUN once.
 alter table public.society_settings add column if not exists "maintenanceGstEnabled" boolean default false;
 alter table public.society_settings add column if not exists "maintenanceGstRate" numeric default 18;
+-- Aggregate Annual Turnover (preceding FY, ₹) — drives HSN 4-vs-6-digit requirement.
+alter table public.society_settings add column if not exists "aato" numeric default 0;
 alter table public.housing_charge_heads add column if not exists gstable boolean default false;
 alter table public.housing_charge_heads add column if not exists kind text;
 alter table public.housing_transfers add column if not exists "resolutionNo" text;
