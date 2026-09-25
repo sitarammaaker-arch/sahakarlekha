@@ -12,6 +12,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
+import { HsnPicker } from '@/components/HsnPicker';
 import type { EntityLink } from '@/types';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -61,6 +62,9 @@ const EMPTY_ITEM_FORM = {
   stockGroup: '',
   salesAccountId: '',     // empty → '4101' default at posting time
   purchaseAccountId: '',  // empty → '5101' default at posting time
+  hsnCode: '',            // optional at creation; required on GST invoice / GSTR-1
+  sacCode: '',
+  gstRate: '',            // '' = unset; suggested from the picked HSN/SAC code
 };
 
 const EMPTY_ADJUSTMENT_FORM = {
@@ -280,6 +284,12 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
           : 'Assigning both a Sales A/c and a Purchase A/c (group) to every item is mandatory — e.g. "Wheat" → Sales 4103 / Purchase 5112 — so it shows under the right group and feeds activity-wise Trading Accounts (NCDC Annexure V). Sales or purchases of an item without the relevant A/c will be blocked.'}
       </p>
     </div>
+
+    <HsnPicker
+      value={{ hsnCode: itemForm.hsnCode, sacCode: itemForm.sacCode, gstRate: itemForm.gstRate }}
+      onChange={patch => setItemForm(f => ({ ...f, ...patch }))}
+      hi={hi}
+    />
 
     <div className="space-y-2">
       <Label>{hi ? 'बारकोड / EAN' : 'Barcode / EAN'}</Label>
@@ -679,6 +689,9 @@ const Inventory: React.FC = () => {
       stockGroup: item.stockGroup || '',
       salesAccountId: item.salesAccountId || '',
       purchaseAccountId: item.purchaseAccountId || '',
+      hsnCode: item.hsnCode || '',
+      sacCode: item.sacCode || '',
+      gstRate: item.gstRate != null ? String(item.gstRate) : '',
     });
   };
 
@@ -723,6 +736,9 @@ const Inventory: React.FC = () => {
       ...(itemForm.stockGroup.trim() ? { stockGroup: itemForm.stockGroup.trim() } : {}),
       ...(itemForm.salesAccountId ? { salesAccountId: itemForm.salesAccountId } : {}),
       ...(itemForm.purchaseAccountId ? { purchaseAccountId: itemForm.purchaseAccountId } : {}),
+      ...(itemForm.hsnCode.trim() ? { hsnCode: itemForm.hsnCode.trim() } : {}),
+      ...(itemForm.sacCode.trim() ? { sacCode: itemForm.sacCode.trim() } : {}),
+      ...(itemForm.gstRate !== '' ? { gstRate: Number(itemForm.gstRate) || 0 } : {}),
     });
     toast({ title: hi ? 'वस्तु जोड़ी गई' : 'Item added successfully' });
     resetItemForm();
@@ -769,6 +785,10 @@ const Inventory: React.FC = () => {
       stockGroup: f.stockGroup.trim() || undefined,
       salesAccountId: f.salesAccountId || undefined,
       purchaseAccountId: f.purchaseAccountId || undefined,
+      // Send trimmed strings (not undefined) so clearing an HSN/SAC persists to null too.
+      hsnCode: f.hsnCode.trim(),
+      sacCode: f.sacCode.trim(),
+      gstRate: f.gstRate !== '' ? (Number(f.gstRate) || 0) : undefined,
     });
     toast({ title: hi ? 'वस्तु अपडेट की गई' : 'Item updated successfully' });
     editItemRef.current = null;
