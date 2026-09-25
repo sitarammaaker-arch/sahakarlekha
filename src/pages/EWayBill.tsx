@@ -119,6 +119,16 @@ export default function EWayBill() {
     if (!toAddr1) problems.push(hi ? 'प्राप्तकर्ता का पता' : "recipient's address");
     if (transportMode === 'Road' && !(parseInt(distance) > 0)) problems.push(hi ? 'दूरी (km) — सड़क परिवहन के लिए आवश्यक' : 'distance (km) — required for road');
     if (transporterGstin && !stateCodeFromGstin(transporterGstin)) problems.push(hi ? 'ट्रांसपोर्टर GSTIN सही नहीं है' : 'transporter GSTIN is not valid');
+    // HSN/SAC is mandatory on an e-Way Bill (Slice 3) — refuse rather than emit a
+    // placeholder '9999' the portal would reject. Set the code on the item in Inventory.
+    const itemsMissingHsn = ((s.items || []) as Array<{ itemId?: string; itemName?: string }>).filter(item => {
+      const si = stockItems.find(x => x.id === item.itemId);
+      return !si?.hsnCode && !si?.sacCode;
+    });
+    if (itemsMissingHsn.length > 0) {
+      const names = itemsMissingHsn.map(i => i.itemName).join(', ');
+      problems.push(hi ? `इन वस्तुओं का HSN/SAC (इन्वेंटरी में सेट करें): ${names}` : `HSN/SAC for these items (set in Inventory): ${names}`);
+    }
     if (problems.length > 0) {
       toast({ title: hi ? 'e-Way Bill अधूरा है' : 'e-Way Bill is incomplete', description: (hi ? 'भरें: ' : 'Missing: ') + problems.join(' · '), variant: 'destructive', duration: 12000 });
       return;
