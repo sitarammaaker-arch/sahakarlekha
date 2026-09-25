@@ -142,6 +142,7 @@
     "test:audit": "node scripts/test-audit-log.mjs",
     "test:share-recon": "node scripts/test-share-reconciliation.mjs",
     "test:member-snapshot": "node scripts/test-member-snapshot.mjs",
+    "test:member-portal-sql": "node scripts/test-member-portal-sql.mjs",
     "test:asset-reconciliation": "node scripts/test-asset-reconciliation.mjs",
     "test:approval-matrix": "node scripts/test-approval-matrix.mjs",
     "test:activities-resolver": "node scripts/test-activities-resolver.mjs",
