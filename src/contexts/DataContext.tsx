@@ -5718,10 +5718,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Two-step stock_items save pattern (same as purchases for GST/TDS columns):
   // Step 1: upsert base columns only — schema cache always knows these, never fails.
   // Step 2: update the late-added columns (stockGroup, salesAccountId, purchaseAccountId,
-  // p4Category, valuationMethod) separately. If user hasn't run the ALTER TABLE migration
-  // yet, only step 2 fails — local state stays consistent and base save still works.
+  // p4Category, valuationMethod, hsnCode, sacCode, gstRate) separately. If user hasn't run
+  // the ALTER TABLE migration yet, only step 2 fails — local state stays consistent and base
+  // save still works. RULE 1: hsnCode/sacCode/gstRate are NOT in the base stock_items table
+  // (added by the HSN-picker migration), so they MUST stay in this extras bucket — otherwise
+  // a schema-cache miss would fail the whole item save the moment an HSN is entered.
   const persistStockItem = (item: StockItem, opts?: { onBaseFail?: () => void }) => {
-    const { salesAccountId, purchaseAccountId, stockGroup, p4Category, valuationMethod, ...baseCols } = item;
+    const { salesAccountId, purchaseAccountId, stockGroup, p4Category, valuationMethod, hsnCode, sacCode, gstRate, ...baseCols } = item;
     supabase.from('stock_items').upsert(withSoc(baseCols)).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
@@ -5735,15 +5738,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (stockGroup !== undefined) extras.stockGroup = stockGroup || null;
       if (p4Category !== undefined) extras.p4Category = p4Category || null;
       if (valuationMethod !== undefined) extras.valuationMethod = valuationMethod || null;
+      if (hsnCode !== undefined) extras.hsnCode = hsnCode || null;
+      if (sacCode !== undefined) extras.sacCode = sacCode || null;
+      if (gstRate !== undefined) extras.gstRate = gstRate ?? null;
       if (Object.keys(extras).length === 0) return;
       supabase.from('stock_items').update(extras).eq('id', item.id)
         .then(({ error: extraErr }) => {
           if (extraErr) {
             console.warn('Stock item extras update (run ALTER TABLE if column missing):', extraErr.message);
-            // Show a milder warning instead of "Save failed" so the user knows save partially worked
+            // Show a milder warning instead of "Save failed" so the user knows save partially worked.
+            // Base row (name/qty/rate) is safe; only extras (A/c routing, HSN/SAC/GST) didn't persist.
             toastRef.current({
-              title: 'Saved, but A/c routing not persisted',
-              description: `${extraErr.message}. Run the latest supabase-tables.sql migration to enable A/c routing columns.`,
+              title: 'Saved, but HSN/A-c routing not persisted',
+              description: `${extraErr.message}. Run the latest supabase-tables.sql migration to enable the HSN/SAC/GST & A/c routing columns.`,
               variant: 'default',
             });
           }

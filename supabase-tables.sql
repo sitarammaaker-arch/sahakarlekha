@@ -966,6 +966,14 @@ alter table stock_items add column if not exists "stockGroup" text default 'Gene
 alter table stock_items add column if not exists "salesAccountId" text;
 alter table stock_items add column if not exists "purchaseAccountId" text;
 
+-- ── STEP 17e-2: Per-item HSN / SAC / GST tax classification ──────────────────
+-- Backs the item-form HSN/SAC picker. These are written via persistStockItem's
+-- STEP-2 extras bucket (RULE 1), so the base stock_items upsert still succeeds
+-- even before this migration runs — only HSN/SAC/GST persistence waits for it.
+alter table stock_items add column if not exists "hsnCode" text;
+alter table stock_items add column if not exists "sacCode" text;
+alter table stock_items add column if not exists "gstRate" numeric default 0;
+
 -- ── STEP 17f: Tally-style comprehensive Customer master ─────────────────────
 -- Lets the user register both simple individual customers and full B2B / society
 -- customers with complete GST + address + banking + credit-term info, so Sale
