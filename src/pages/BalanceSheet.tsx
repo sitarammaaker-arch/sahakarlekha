@@ -6,6 +6,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { balanceSheetLeaves } from '@/lib/balanceSheetLeaves';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -66,7 +67,6 @@ const BalanceSheet: React.FC = () => {
   const trialBalance = getTrialBalance(asOnDate);
   const { netProfit } = getProfitLoss(asOnDate);
   const { physicalClosingStock, closingStockPosted } = getTradingAccount(asOnDate);
-  const unpostedStock = !closingStockPosted && physicalClosingStock > 0 ? physicalClosingStock : 0;
 
   // Audit C-10: the Balance Sheet reads the ACTUAL journalled Statutory Reserve
   // Fund (1201) balance via the equity group below — it never re-computes a
@@ -96,46 +96,10 @@ const BalanceSheet: React.FC = () => {
   const hasPY = !!pyYear && Object.keys(pyBalances).length > 0;
   const getPY = (id: string) => pyBalances[id] ?? 0;
 
-  // ── Auto-reclassify by balance SIGN (Tally-style net Dr/Cr grouping) ──────────
-  // A control / party account whose LIVE balance is opposite to its stored type — an asset
-  // gone Cr (e.g. आढ़तिया "ARTHIYA A/C", a net creditor the society owes for years), or a
-  // liability/equity gone Dr — is shown on the side its BALANCE dictates, not its fixed
-  // type. This stops the sheet showing negative assets/liabilities, and it self-corrects
-  // when a swinging party account flips side next period (no manual re-typing, which the
-  // app can't do for an account that already carries transactions).
-  // Balance-preserving: moving a Cr-balance asset off the asset side and onto the liability
-  // side raises BOTH totals by the same amount, so Assets = Liabilities still holds exactly
-  // (this fixes presentation, NOT a genuine opening-balance gap).
-  // netBalance = Dr − Cr: > 0 belongs on Assets, < 0 belongs on Liabilities. A zero-balance
-  // row keeps its natural side (and is filtered out of the display anyway).
-  const typeAssetLeaf = trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup);
-  const typeCapLiabLeaf = trialBalance.filter(b => (b.account.type === 'liability' || b.account.type === 'equity') && !b.account.isGroup);
-  const allAssetLeaf = [
-    ...typeAssetLeaf.filter(b => b.netBalance >= 0),   // assets with a normal Dr balance
-    ...typeCapLiabLeaf.filter(b => b.netBalance > 0),  // a liability/equity gone Dr → shown as an asset
-  ];
-  const allCapLiabLeaf = [
-    ...typeCapLiabLeaf.filter(b => b.netBalance <= 0), // liabilities/equity with a normal Cr balance
-    ...typeAssetLeaf.filter(b => b.netBalance < 0),    // an asset gone Cr (e.g. ARTHIYA) → shown as a liability
-  ];
-  // When the closing-stock journal is NOT posted but inventory items DO carry a physical
-  // closing stock, the Inventory ledger (group 3400) still shows the stale OPENING stock
-  // (already consumed into gross profit). In that case drop the 3400 leaves and show the
-  // real closing stock once via the injected "Closing Stock (from Inventory)" row
-  // (= physicalClosingStock), else the sheet carried BOTH opening and closing stock and
-  // was out by the opening amount (Audit #3).
-  // BUT when there are no inventory items (unpostedStock === 0), the 3400 ledger balance
-  // IS the closing stock (opening == closing, nothing moved) and nothing gets injected to
-  // replace it — so KEEP the 3400 leaves, else the sheet drops the stock and is out of
-  // balance by that amount (RULE 2: BS closing stock must match the Trading A/c, which
-  // reads the same 3400 ledger balance).
-  const assetLeaves = (closingStockPosted || unpostedStock === 0)
-    ? allAssetLeaf
-    : allAssetLeaf.filter(b => b.account.id !== '3400' && b.account.parentId !== '3400');
-
-  // Original total calculations (guaranteed correct — same as old flat BS)
-  const totalAssets = assetLeaves.reduce((s, b) => s + b.netBalance, 0) + unpostedStock;
-  const totalLiabilities = allCapLiabLeaf.reduce((s, b) => s + (-b.netBalance), 0) + netProfit;
+  // Auto-reclassify by balance SIGN + the closing-stock rule — the ONE shared rule
+  // (src/lib/balanceSheetLeaves.ts), also used by the NABARD CAS Balance Sheet (RULE 2).
+  const { assetLeaves, capLiabLeaves: allCapLiabLeaf, unpostedStock, totalAssets, totalLiabilities } =
+    balanceSheetLeaves(trialBalance, { closingStockPosted, physicalClosingStock, netProfit });
 
   // ── Balance health diagnostic ──────────────────────────────────────────────
   // When the sheet doesn't tie, the root cause is almost always a ledger that
