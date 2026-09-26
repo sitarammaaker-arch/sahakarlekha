@@ -11,11 +11,12 @@ import type { VerticalViews, DistributionItem } from '@/lib/memberPortalVertical
 const money = (n: number) => `₹${(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const qtyFmt = (n: number) => (n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-lg border p-3">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="font-semibold">{value}</p>
+      {hint && <p className="text-[11px] leading-tight text-muted-foreground mt-1">{hint}</p>}
     </div>
   );
 }
@@ -52,10 +53,17 @@ export function PortalVerticals({ views, hi }: { views: VerticalViews; hi: boole
         <Card>
           <CardHeader><CardTitle className="text-base">{hi ? 'दूध का हिसाब' : 'Milk account'}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Stat label={hi ? 'भुगतान बाकी' : 'Payment due'} value={money(dairy.passbook.totalOutstanding)} />
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {/* Dues exist only once a settlement cycle is made (same as the staff passbook) — say so, so a
+                  member who delivered milk does not read "₹0 due" as "nothing owed to me". */}
+              <Stat label={hi ? 'भुगतान बाकी' : 'Payment due'} value={money(dairy.passbook.totalOutstanding)}
+                hint={dairy.passbook.collections.length > 0 && dairy.passbook.settlements.length === 0
+                  ? (hi ? 'भुगतान चक्र बनने पर यहाँ जुड़ेगा' : 'Added here once a payment cycle is made')
+                  : undefined} />
               <Stat label={hi ? 'कुल भुगतान मिला' : 'Total paid'} value={money(dairy.passbook.totalPaid)} />
               <Stat label={hi ? `दूध (${dairy.milkFrom ? fmtDate(dairy.milkFrom) + ' से' : 'इस वर्ष'})` : `Milk (since ${dairy.milkFrom ? fmtDate(dairy.milkFrom) : 'this year'})`} value={`${qtyFmt(dairy.passbook.totalQty)} ${hi ? 'लीटर' : 'L'}`} />
+              {/* totalGross — the staff passbook's "सकल / Gross" figure, from the same buildMemberPassbook. */}
+              <Stat label={hi ? `दूध का मूल्य (${dairy.milkFrom ? fmtDate(dairy.milkFrom) + ' से' : 'इस वर्ष'})` : `Milk value (since ${dairy.milkFrom ? fmtDate(dairy.milkFrom) : 'this year'})`} value={money(dairy.passbook.totalGross)} />
               <Stat label={hi ? 'आहार/आदान बाकी' : 'Inputs due'} value={money(dairy.inputs.outstanding)} />
             </div>
 
