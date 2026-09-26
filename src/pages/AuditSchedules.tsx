@@ -25,6 +25,8 @@ import {
   type ResolverContext,
 } from '@/lib/stateAuditFormats';
 import { generateAuditSchedulesPDF } from '@/lib/pdf';
+import { CasStatements } from '@/components/cas/CasStatements';
+import { statutoryLimits, hasVerifiedLimits } from '@/lib/rules/statutoryLimits';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(n));
@@ -217,6 +219,12 @@ const AuditSchedules: React.FC = () => {
 
   // ── Tab state ───────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('all');
+  // PACS only: the NABARD CAS formats (Annexure II / III / IV) as an alternative view (founder D1).
+  const isPacs = society.societyType === 'pacs';
+  const [view, setView] = useState<'state' | 'cas'>('state');
+  // The statutory figures shown here come from the ONE rules source (#508) when checked against the
+  // State Act's text — not the format's hard-coded defaults (RULE 2).
+  const limits = useMemo(() => statutoryLimits(society.state, new Date().toISOString().slice(0, 10)), [society.state]);
 
   // ── Export helpers ──────────────────────────────────────────────────────
   const exportRows = (schedule: ResolvedSchedule) =>
@@ -304,7 +312,9 @@ const AuditSchedules: React.FC = () => {
           {' · '}
           {hi ? 'रिज़र्व फंड' : 'Reserve Fund'}: {society.reserveFundPct ?? 25}%
           {' · '}
-          {hi ? 'शिक्षा फंड' : 'Education Fund'}: {format.educationFundPct}%
+          {hasVerifiedLimits(limits)
+            ? <>{hi ? `न्यूनतम संचय ${limits.reserveMin.pct}% · शिक्षा फंड अधिकतम ${limits.educationMax.pct}%` : `Minimum reserve ${limits.reserveMin.pct}% · Education Fund at most ${limits.educationMax.pct}%`}</>
+            : <>{hi ? 'शिक्षा फंड' : 'Education Fund'}: {format.educationFundPct}%</>}
           {' · '}
           {hi ? 'सहकारी विकास फंड' : 'Coop Dev Fund'}: {format.coopDevFundPct}%
         </div>
@@ -321,6 +331,14 @@ const AuditSchedules: React.FC = () => {
         )}
       </div>
 
+      {isPacs && (
+        <div className="inline-flex rounded-lg border p-1 gap-1">
+          <Button size="sm" variant={view === 'state' ? 'default' : 'ghost'} onClick={() => setView('state')}>{hi ? 'राज्य प्रारूप' : 'State format'}</Button>
+          <Button size="sm" variant={view === 'cas' ? 'default' : 'ghost'} onClick={() => setView('cas')}>NABARD CAS</Button>
+        </div>
+      )}
+
+      {isPacs && view === 'cas' ? <CasStatements hi={hi} /> : (<>
       {/* Tabbed schedules */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="overflow-x-auto">
@@ -372,6 +390,7 @@ const AuditSchedules: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+      </>)}
 
       {/* Signature block */}
       <div className="mt-8 pt-8 border-t grid grid-cols-3 gap-4 text-center text-sm">
