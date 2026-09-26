@@ -17,6 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import { generateLoanRegisterPDF } from '@/lib/pdf';
 import { loanOutstanding } from '@/lib/memberSnapshot';
+import { interestIncomeAccountId, memberLoanAccountId } from '@/lib/loans/accounts';
 import type { Loan, LoanType, LoanStatus } from '@/types';
 
 const EMPTY_FORM = {
@@ -133,12 +134,12 @@ const LoanRegister: React.FC = () => {
       return;
     }
     const newRepaid = round2(loan.repaidAmount + principal);
-    const loanAccId = accounts.find(a => a.id === '3304' || (a.parentId === '3300' && /loan/i.test(a.name)))?.id || '3304';
+    const loanAccId = memberLoanAccountId(accounts);   // exact 3304 first; never the KCC head
     const debitAccId = mode === 'bank' ? (accounts.find(a => a.id === '3302')?.id || '3302') : '3301';
     const lid = () => crypto.randomUUID();
     const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: debitAccId, type: 'Dr', amount: totalAmt }];
     if (principal > 0) lines.push({ id: lid(), accountId: loanAccId, type: 'Cr', amount: principal });
-    if (interest > 0) lines.push({ id: lid(), accountId: accounts.find(a => a.id === '4408' || /interest/i.test(a.name))?.id || '4408', type: 'Cr', amount: interest });
+    if (interest > 0) lines.push({ id: lid(), accountId: interestIncomeAccountId(accounts), type: 'Cr', amount: interest });   // income, never 2208 Interest Payable
     const member = members.find(m => m.id === loan.memberId);
     // The receipt voucher is the record of the cash — if it was refused (permission / FY lock /
     // expired plan → empty id) or threw, the loan must NOT be marked repaid.
