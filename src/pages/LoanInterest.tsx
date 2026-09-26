@@ -31,6 +31,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { loanOutstanding } from '@/lib/memberSnapshot';
 
 // ── Account IDs ───────────────────────────────────────────────────────────────
 const ACC_INTEREST_REC  = '3313'; // Member Loan Interest Receivable (asset)
@@ -108,6 +109,8 @@ const LoanInterest: React.FC = () => {
   const days = useMemo(() => daysBetween(fromDate, toDate), [fromDate, toDate]);
 
   // ── Active loans only ──────────────────────────────────────────────────────
+  // Founder decision (2026-09-26): overdue loans do NOT accrue here until the governing rule is
+  // sourced — the page says so openly (see the info note).
   const activeLoans = useMemo(
     () => loans.filter(l => l.status === 'active'),
     [loans]
@@ -142,7 +145,8 @@ const LoanInterest: React.FC = () => {
   const rows: InterestRow[] = useMemo(() => {
     return activeLoans.map(loan => {
       const member   = members.find(m => m.id === loan.memberId);
-      const outstanding = Math.max(0, loan.amount - (loan.repaidAmount || 0));
+      // The one outstanding formula (RULE 2); clamped at 0 ONLY for interest — never negative interest.
+      const outstanding = Math.max(0, loanOutstanding(loan));
       const interest = calcInterest(outstanding, loan.interestRate, days);
       return {
         loanId: loan.id,
@@ -165,9 +169,14 @@ const LoanInterest: React.FC = () => {
 
   const handlePost = () => {
     if (totalInterest <= 0) return;
+    if (society.fyLocked) {
+      setConfirmOpen(false);
+      toast({ title: hi ? 'FY लॉक है' : 'FY Locked', description: hi ? 'वित्त वर्ष ऑडिट-लॉक है — ब्याज जर्नल पोस्ट नहीं हो सकता।' : 'Cannot post while the Financial Year is audit-locked.', variant: 'destructive' });
+      return;
+    }
 
     // Post one consolidated journal for the total period interest
-    addVoucher({
+    const v = addVoucher({
       type: 'journal',
       date: toDate,
       debitAccountId: ACC_INTEREST_REC,
@@ -178,6 +187,17 @@ const LoanInterest: React.FC = () => {
     });
 
     setConfirmOpen(false);
+    // addVoucher refuses (permission / FY lock / expired plan) by returning an empty voucher — never
+    // claim success for a journal that was not created.
+    if (!v?.id) {
+      toast({
+        title: hi ? 'ब्याज जर्नल पोस्ट नहीं हुआ' : 'Interest journal NOT posted',
+        description: hi ? 'वाउचर नहीं बना — ऊपर वाला संदेश देखें (अनुमति / FY लॉक / प्लान)।' : 'No voucher was created — see the message above (permission / FY lock / plan).',
+        variant: 'destructive',
+        duration: 10000,
+      });
+      return;
+    }
     toast({
       title: hi
         ? `ब्याज जर्नल पोस्ट हो गया — ${fmt(totalInterest)}`
@@ -278,6 +298,10 @@ const LoanInterest: React.FC = () => {
           {hi
             ? 'सूत्र: ब्याज = (बकाया × दर × दिन) / (365 × 100) | Dr 3313 ब्याज प्राप्य / Cr 4408 ब्याज आय'
             : 'Formula: Interest = (Outstanding × Rate × Days) / (365 × 100) | Dr 3313 Interest Receivable / Cr 4408 Interest Income'}
+          <br />
+          {hi
+            ? 'ब्याज केवल "सक्रिय" ऋणों पर गिना जाता है — "ओवरड्यू" ऋणों पर यहाँ ब्याज नहीं जुड़ता। कुल बकाया (सभी ऋण) ऋण रजिस्टर में देखें।'
+            : 'Interest is computed on "active" loans only — "overdue" loans do not accrue here. See the Loan Register for total outstanding (all loans).'}
         </span>
       </div>
 
@@ -337,8 +361,8 @@ const LoanInterest: React.FC = () => {
           value={fmt(activeLoans.reduce((s, l) => s + l.amount, 0))}
         />
         <SummaryCard
-          label={hi ? 'कुल बकाया' : 'Total Outstanding'}
-          value={fmt(activeLoans.reduce((s, l) => s + Math.max(0, l.amount - (l.repaidAmount || 0)), 0))}
+          label={hi ? 'ब्याज योग्य बकाया' : 'Interest-bearing Outstanding'}
+          value={fmt(rows.reduce((s, r) => s + r.outstanding, 0))}
         />
         <SummaryCard
           label={hi ? 'कुल ब्याज' : 'Total Interest'}

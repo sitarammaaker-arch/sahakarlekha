@@ -127,6 +127,11 @@ const LoanRegister: React.FC = () => {
     const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
     const interest = round2(Math.max(0, Math.min(interestAmt, totalAmt)));
     const principal = round2(totalAmt - interest);
+    // Principal can never exceed what is outstanding (a negative balance hides a data error).
+    if (principal > loanOutstanding(loan) + 0.005) {
+      toast({ title: hi ? 'मूलधन बकाया से ज़्यादा है' : 'Principal exceeds outstanding', description: hi ? 'अतिरिक्त राशि ब्याज में लिखें या चुकौती कम करें।' : 'Enter the extra as interest or reduce the repayment.', variant: 'destructive' });
+      return;
+    }
     const newRepaid = round2(loan.repaidAmount + principal);
     const loanAccId = accounts.find(a => a.id === '3304' || (a.parentId === '3300' && /loan/i.test(a.name)))?.id || '3304';
     const debitAccId = mode === 'bank' ? (accounts.find(a => a.id === '3302')?.id || '3302') : '3301';
@@ -135,13 +140,21 @@ const LoanRegister: React.FC = () => {
     if (principal > 0) lines.push({ id: lid(), accountId: loanAccId, type: 'Cr', amount: principal });
     if (interest > 0) lines.push({ id: lid(), accountId: accounts.find(a => a.id === '4408' || /interest/i.test(a.name))?.id || '4408', type: 'Cr', amount: interest });
     const member = members.find(m => m.id === loan.memberId);
+    // The receipt voucher is the record of the cash — if it was refused (permission / FY lock /
+    // expired plan → empty id) or threw, the loan must NOT be marked repaid.
+    let posted = false;
     try {
-      addVoucher({
+      const v = addVoucher({
         type: 'receipt', date, debitAccountId: debitAccId, creditAccountId: loanAccId, amount: totalAmt, lines,
         narration: `Loan repayment — ${member?.name || loan.memberId} (${loan.loanNo})${interest > 0 ? ` incl. interest ₹${interest.toLocaleString('en-IN')}` : ''}`,
         createdBy: user?.name ?? 'System', memberId: loan.memberId,
       } as Parameters<typeof addVoucher>[0]);
-    } catch { /* best-effort ledger post; loan record still updates */ }
+      posted = !!v?.id;
+    } catch { posted = false; }
+    if (!posted) {
+      toast({ title: hi ? 'चुकौती दर्ज नहीं हुई' : 'Repayment NOT recorded', description: hi ? 'रसीद वाउचर नहीं बना, इसलिए ऋण में कोई बदलाव नहीं किया गया।' : 'The receipt voucher was not created, so the loan was left unchanged.', variant: 'destructive', duration: 10000 });
+      return;
+    }
     updateLoan(loan.id, { repaidAmount: newRepaid, status: (loan.amount - newRepaid) <= 0.005 ? 'cleared' : loan.status });
     toast({ title: hi ? '✅ चुकौती दर्ज (बही में पोस्ट)' : '✅ Repayment recorded & posted', description: `₹${totalAmt.toLocaleString('en-IN')}${interest > 0 ? ` · ${hi ? 'ब्याज' : 'interest'} ₹${interest.toLocaleString('en-IN')}` : ''}` });
   };
@@ -190,6 +203,10 @@ const LoanRegister: React.FC = () => {
       toast({ title: hi ? 'कृपया आवश्यक फ़ील्ड भरें' : 'Please fill required fields', variant: 'destructive' });
       return;
     }
+    if ((Number(form.repaidAmount) || 0) > Number(form.amount) + 0.005) {
+      toast({ title: hi ? 'चुकाई गई राशि ऋण राशि से ज़्यादा नहीं हो सकती' : 'Repaid amount cannot exceed the loan amount', variant: 'destructive' });
+      return;
+    }
     addLoan({
       memberId: form.memberId,
       loanType: form.loanType,
@@ -210,6 +227,10 @@ const LoanRegister: React.FC = () => {
   const handleEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editLoan) return;
+    if ((Number(form.repaidAmount) || 0) > Number(form.amount) + 0.005) {
+      toast({ title: hi ? 'चुकाई गई राशि ऋण राशि से ज़्यादा नहीं हो सकती' : 'Repaid amount cannot exceed the loan amount', variant: 'destructive' });
+      return;
+    }
     updateLoan(editLoan.id, {
       memberId: form.memberId,
       loanType: form.loanType,
@@ -489,6 +510,7 @@ function LoanRepayButton({ loan, hi, onRepay }: { loan: Loan; hi: boolean; onRep
   const int = Number(interest) || 0;
   const principal = Math.max(0, total - int);
   const outstanding = loanOutstanding(loan);
+  const overPrincipal = principal > outstanding + 0.005;
 
   return (
     <>
@@ -506,6 +528,7 @@ function LoanRepayButton({ loan, hi, onRepay }: { loan: Loan; hi: boolean; onRep
               <Label>{hi ? 'इसमें ब्याज (वैकल्पिक)' : 'Of which interest (optional)'}</Label>
               <Input type="number" value={interest} onChange={e => setInterest(e.target.value)} max={total} placeholder="0" />
               {total > 0 && <p className="text-xs text-muted-foreground mt-1">{hi ? 'मूलधन' : 'Principal'}: ₹{principal.toLocaleString('en-IN')} · {hi ? 'ब्याज' : 'Interest'}: ₹{int.toLocaleString('en-IN')}</p>}
+              {overPrincipal && <p className="text-xs text-destructive mt-1">{hi ? 'मूलधन बकाया से ज़्यादा है — अतिरिक्त राशि ब्याज में लिखें या चुकौती कम करें।' : 'Principal exceeds outstanding — enter the extra as interest or reduce the repayment.'}</p>}
             </div>
             <div>
               <Label>{hi ? 'भुगतान विधि' : 'Payment mode'}</Label>
@@ -520,7 +543,7 @@ function LoanRepayButton({ loan, hi, onRepay }: { loan: Loan; hi: boolean; onRep
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
-              <Button disabled={!(total > 0) || int > total} onClick={() => { onRepay(loan, total, int, mode, date); setOpen(false); setAmt(''); setInterest(''); }}>
+              <Button disabled={!(total > 0) || int > total || overPrincipal} onClick={() => { onRepay(loan, total, int, mode, date); setOpen(false); setAmt(''); setInterest(''); }}>
                 {hi ? 'सहेजें व पोस्ट करें' : 'Save & Post'}
               </Button>
             </div>
