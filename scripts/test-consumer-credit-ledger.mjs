@@ -95,8 +95,8 @@ ok(!/rows\.push\(/.test(page), 'no hand-built ledger left on the staff page');
 const ui = strip('src/components/member-portal/PortalVerticals.tsx');
 ok(/consumer\.ledger\.map/.test(ui), 'portal renders the shared ledger');
 ok(/'Patronage rebate'/.test(ui) && /'संरक्षण छूट \/ लाभांश \(स्वीकृत\)'/.test(ui), 'consumer heading + English patronage label');
-const portal = strip('src/pages/MemberPortal.tsx');
-ok(/addEventListener\('beforeprint'/.test(portal) && /addEventListener\('afterprint'/.test(portal), 'print opens collapsed sections and restores them');
+const portal = strip('src/components/member-portal/MemberAccountView.tsx'); // shared by portal + staff Member-360
+ok(/addEventListener\('beforeprint'/.test(portal) && /addEventListener\('afterprint'/.test(portal), 'print opens collapsed sections and restores them (shared MemberAccountView)');
 
 console.log(`consumer credit ledger: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

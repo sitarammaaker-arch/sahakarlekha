@@ -7,20 +7,25 @@
  * the same figures (RULE 2). Access follows the Members page: CapabilityGuard maps /members/:id to
  * the /members module (lib/navigation/routeModule.ts).
  */
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useSubscription } from '@/hooks/useSubscription';
 import { useDairyData } from '@/contexts/DairyDataContext';
 import { useHousingData } from '@/contexts/HousingDataContext';
 import { useConsumerData } from '@/contexts/ConsumerDataContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, Printer, ContactRound } from 'lucide-react';
+import { ArrowLeft, Printer, ContactRound, KeyRound } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
 import { buildMember360 } from '@/lib/member360';
 import { MemberAccountView } from '@/components/member-portal/MemberAccountView';
+import type { SectionLinks } from '@/components/member-portal/SectionHeader';
+import { MemberPortalDialog } from '@/components/members/MemberPortalDialog';
+import { callMemberPortalAdmin, portalPlanAllowed, type PortalLoginRow } from '@/lib/memberPortalAdmin';
 
 const STATUS_HI: Record<string, string> = { active: 'सक्रिय', inactive: 'निष्क्रिय', resigned: 'त्यागपत्र', expelled: 'निष्कासित', deceased: 'मृत' };
 
@@ -36,6 +41,32 @@ export default function Member360() {
   const { memberRecoveries, salesReturns, patronageRuns } = useConsumerData();
 
   const member = members.find((m) => m.id === id);
+
+  // Admin only: the member's portal-login state + the same issue/reset/revoke dialog as the Members list.
+  // (The Edge Function re-checks admin + plan; non-admins never call it.)
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const { plan, status: subStatus } = useSubscription();
+  const [portalLogin, setPortalLogin] = useState<PortalLoginRow | null | undefined>(undefined);
+  const [portalOpen, setPortalOpen] = useState(false);
+  const loadPortalLogin = useCallback(async () => {
+    if (!isAdmin || !id) return;
+    const res = await callMemberPortalAdmin<{ logins: PortalLoginRow[] }>('list');
+    if (res.ok) setPortalLogin(res.data.logins.find((l) => l.member_id === id) ?? null);
+  }, [isAdmin, id]);
+  useEffect(() => { void loadPortalLogin(); }, [loadPortalLogin]);
+
+  // Source pages — where staff act on each part of the account (this page is read-only).
+  const open = (hiName: string, enName: string) => (hi ? `${hiName} में खोलें` : `Open in ${enName}`);
+  const links: SectionLinks = {
+    share: { to: '/share-register', label: open('शेयर रजिस्टर', 'Share Register') },
+    loans: { to: '/loan-register', label: open('ऋण रजिस्टर', 'Loan Register') },
+    deposits: { to: '/deposits', label: open('जमा', 'Deposits') },
+    kcc: { to: '/kcc-loan', label: open('KCC', 'KCC') },
+    dairy: { to: '/dairy-registers', label: open('डेयरी रजिस्टर', 'Dairy Registers') },
+    housing: { to: '/member-statement', label: open('सदस्य विवरण', 'Member Statement') },
+    consumer: { to: '/member-credit', label: open('सदस्य उधार', 'Member Credit') },
+  };
 
   const m360 = useMemo(() => {
     if (!member) return null;
@@ -92,12 +123,37 @@ export default function Member360() {
           </p>
           <p className="text-xs text-muted-foreground">{hi ? 'सदस्य का पूरा हिसाब — वही जो सदस्य portal पर देखता है।' : 'The member’s whole account — exactly what they see on the member portal.'}</p>
         </div>
-        <Button variant="outline" size="sm" className="gap-1 print:hidden" onClick={() => window.print()}>
-          <Printer className="h-4 w-4" />Print / PDF
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
+          {isAdmin && portalLogin !== undefined && (
+            <Button variant="outline" size="sm" className="gap-1" onClick={() => setPortalOpen(true)}>
+              <KeyRound className="h-4 w-4" />
+              {hi ? 'सदस्य portal:' : 'Member portal:'}{' '}
+              {portalLogin?.is_active
+                ? <Badge className="bg-green-600">{hi ? 'चालू' : 'Active'}</Badge>
+                : portalLogin
+                  ? <Badge variant="outline" className="border-destructive text-destructive">{hi ? 'बंद' : 'Revoked'}</Badge>
+                  : <Badge variant="outline">{hi ? 'नहीं दिया' : 'Not issued'}</Badge>}
+            </Button>
+          )}
+          <Button variant="outline" size="sm" className="gap-1" onClick={() => window.print()}>
+            <Printer className="h-4 w-4" />Print / PDF
+          </Button>
+        </div>
       </div>
 
-      <MemberAccountView member={snapshot.member} view={view} verticals={verticals} hi={hi} />
+      <MemberAccountView member={snapshot.member} view={view} verticals={verticals} hi={hi} links={links} />
+
+      {isAdmin && (
+        <MemberPortalDialog
+          member={portalOpen ? member : null}
+          login={portalLogin ?? undefined}
+          societyName={(hi ? society.nameHi : society.name) || society.name || ''}
+          planAllowed={portalPlanAllowed(plan, subStatus)}
+          hi={hi}
+          onClose={() => setPortalOpen(false)}
+          onChanged={loadPortalLogin}
+        />
+      )}
     </div>
   );
 }

@@ -67,7 +67,7 @@ export const FeedbackFab: React.FC = () => {
       <button
         onClick={() => setOpen(true)}
         aria-label="सुझाव या समस्या बताएँ"
-        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-3 shadow-lg hover:shadow-xl transition-shadow"
+        className="print:hidden fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-3 shadow-lg hover:shadow-xl transition-shadow"
       >
         <MessageSquarePlus className="h-5 w-5" />
         <span className="hidden sm:inline text-sm font-medium">सुझाव / समस्या</span>
