@@ -157,8 +157,10 @@ interface DataContextType {
   restoreVoucher: (id: string) => void;
   clearVoucher: (id: string, clearedDate?: string) => void;
   unclearVoucher: (id: string) => void;
-  approveVoucher: (id: string, approvedBy: string) => void;
-  rejectVoucher: (id: string, rejectedBy: string, reason: string) => void;
+  /** true = approved; false = a guard blocked it (it already toasted why) — never toast success on false. */
+  approveVoucher: (id: string, approvedBy: string) => boolean;
+  /** true = rejected; false = a guard blocked it (it already toasted why). */
+  rejectVoucher: (id: string, rejectedBy: string, reason: string) => boolean;
   auditObjections: AuditObjection[];
   addAuditObjection: (data: Omit<AuditObjection, 'id' | 'objectionNo' | 'createdAt'>) => AuditObjection;
   updateAuditObjection: (id: string, data: Partial<AuditObjection>) => void;
@@ -2538,24 +2540,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, []);
 
-  const approveVoucher = useCallback((id: string, approvedBy: string) => {
-    if (guardFYLocked()) return;
-    if (guardPermission('approve', 'वाउचर अप्रूव करने')) return; // SL-06: segregation of duties
+  // Returns true only when every guard passed and the change was applied (a later cloud failure
+  // rolls back with its own destructive toast). false = a guard blocked it and already said why —
+  // callers must NOT toast success (the false-success pattern, fixed for updateVoucher in #345).
+  const approveVoucher = useCallback((id: string, approvedBy: string): boolean => {
+    if (guardFYLocked()) return false;
+    if (guardPermission('approve', 'वाउचर अप्रूव करने')) return false; // SL-06: segregation of duties
     const current = vouchersRef.current.find(v => v.id === id);
-    if (!current) return;
-    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
+    if (!current) return false;
+    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
     // ECR-11: uniform state machine — only a PENDING voucher may be approved. Blocks flipping a
     // rejected voucher straight to approved (which would re-post it) or double-approving.
     if (!canApprovalTransition(current.approvalStatus, 'approved')) {
       toastRef.current({ title: 'कार्रवाई संभव नहीं', description: `वाउचर ${current.voucherNo} ${current.approvalStatus === 'approved' ? 'पहले से स्वीकृत' : current.approvalStatus === 'rejected' ? 'अस्वीकृत' : 'अनुमोदन-workflow से बाहर'} है — केवल लम्बित (pending) वाउचर ही approve किए जा सकते हैं।`, variant: 'destructive', duration: 10000 });
-      return;
+      return false;
     }
     // ECR-06: identity-level SoD — maker ≠ checker. A user may not approve their OWN voucher.
     // Only ever reached for opted-in maker-checker societies (pending vouchers), so it can't
     // stall a society that never enabled approval.
     if (isSelfApproval(current.createdBy, approvedBy)) {
       toastRef.current({ title: 'स्व-अनुमोदन मना है', description: `आप अपना ही बनाया वाउचर (${current.voucherNo}) approve नहीं कर सकते। किसी अन्य अधिकृत सदस्य से approve कराएँ, या Society Setup में approval-required बंद करें।`, variant: 'destructive', duration: 12000 });
-      return;
+      return false;
     }
     const updated = { ...current, approvalStatus: 'approved' as const, approvedBy, approvedAt: new Date().toISOString() };
     emitAudit({ entityType: 'voucher', entityId: id, action: 'approve', before: { approvalStatus: current.approvalStatus ?? null }, after: { approvalStatus: 'approved' } });
@@ -2568,18 +2573,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       else syncEntries(updated); // mirror to voucher_entries so SQL reports see the approved entries
     });
+    return true;
   }, [society.fyLocked]);
 
-  const rejectVoucher = useCallback((id: string, rejectedBy: string, reason: string) => {
-    if (guardFYLocked()) return;
-    if (guardPermission('reject', 'वाउचर रिजेक्ट करने')) return; // SL-06: segregation of duties
+  const rejectVoucher = useCallback((id: string, rejectedBy: string, reason: string): boolean => {
+    if (guardFYLocked()) return false;
+    if (guardPermission('reject', 'वाउचर रिजेक्ट करने')) return false; // SL-06: segregation of duties
     const current = vouchersRef.current.find(v => v.id === id);
-    if (!current) return;
-    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
+    if (!current) return false;
+    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
     // ECR-11: uniform state machine — only a PENDING voucher may be rejected.
     if (!canApprovalTransition(current.approvalStatus, 'rejected')) {
       toastRef.current({ title: 'कार्रवाई संभव नहीं', description: `वाउचर ${current.voucherNo} ${current.approvalStatus === 'approved' ? 'पहले से स्वीकृत' : current.approvalStatus === 'rejected' ? 'पहले से अस्वीकृत' : 'अनुमोदन-workflow से बाहर'} है — केवल लम्बित (pending) वाउचर ही reject किए जा सकते हैं।`, variant: 'destructive', duration: 10000 });
-      return;
+      return false;
     }
     const updated = { ...current, approvalStatus: 'rejected' as const, approvalRemarks: reason, approvedBy: rejectedBy, approvedAt: new Date().toISOString() };
     emitAudit({ entityType: 'voucher', entityId: id, action: 'reject', before: { approvalStatus: current.approvalStatus ?? null }, after: { approvalStatus: 'rejected' }, reason });
@@ -2592,6 +2598,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       else deleteEntries(id); // rejected vouchers shouldn't impact SQL reports
     });
+    return true;
   }, [society.fyLocked]);
 
   const addAuditObjection = useCallback((data: Omit<AuditObjection, 'id' | 'objectionNo' | 'createdAt'>): AuditObjection => {

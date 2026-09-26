@@ -53,7 +53,7 @@ const CashBook: React.FC = () => {
       toast({ title: language === 'hi' ? 'कृपया सभी फ़ील्ड भरें' : 'Please fill all fields', variant: 'destructive' });
       return;
     }
-    addVoucher({
+    const v = addVoucher({
       type: entryType === 'receipt' ? 'receipt' : 'payment',
       date: entryDate,
       debitAccountId: entryType === 'receipt' ? ACCOUNT_IDS.CASH : otherAccount,
@@ -62,6 +62,11 @@ const CashBook: React.FC = () => {
       narration: entryNarration,
       createdBy: user?.name || 'System',
     });
+    // addVoucher refuses (permission / FY lock / expired plan) with an empty id — never claim "saved".
+    if (!v?.id) {
+      toast({ title: language === 'hi' ? 'एंट्री सेव नहीं हुई' : 'Entry NOT saved', description: language === 'hi' ? 'वाउचर नहीं बना — ऊपर वाला संदेश देखें (अनुमति / FY लॉक / प्लान)।' : 'No voucher was created — see the message above (permission / FY lock / plan).', variant: 'destructive', duration: 10000 });
+      return;
+    }
     toast({ title: language === 'hi' ? 'एंट्री सहेजी गई' : 'Entry saved' });
     setOtherAccount('');
     setEntryAmount('');
