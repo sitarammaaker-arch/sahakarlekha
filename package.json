@@ -238,7 +238,8 @@
     "test:backup-core-bundle": "node scripts/test-backup-core-bundle.mjs",
     "build:rehearsal-core": "esbuild supabase/functions/_shared/rehearsal-core.entry.ts --bundle --format=esm --platform=neutral --alias:@=./src --outfile=supabase/functions/_shared/rehearsal-core.mjs --log-level=warning",
     "test:rehearsal-core-bundle": "node scripts/test-rehearsal-core-bundle.mjs",
-    "build:pay-core": "esbuild supabase/functions/_shared/pay-core.entry.ts --bundle --format=esm --platform=neutral --alias:@=./src --outfile=supabase/functions/_shared/pay-core.mjs --log-level=warning"
+    "build:pay-core": "esbuild supabase/functions/_shared/pay-core.entry.ts --bundle --format=esm --platform=neutral --alias:@=./src --outfile=supabase/functions/_shared/pay-core.mjs --log-level=warning",
+    "test:member-portal-sql-067": "node scripts/test-member-portal-sql-067.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

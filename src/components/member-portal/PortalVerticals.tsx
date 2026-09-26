@@ -225,7 +225,7 @@ export function PortalVerticals({ views, hi, links }: { views: VerticalViews; hi
                 </div>
               </details>
             )}
-            <Distributions items={consumer.distributions} hi={hi} title={hi ? 'संरक्षण छूट / लाभांश (स्वीकृत)' : 'Patronage rebate / dividend (approved)'} />
+            <Distributions items={consumer.distributions} hi={hi} title={hi ? 'दुकान से बँटवारा — छूट / लाभांश (स्वीकृत)' : 'Store distributions — rebate / dividend (approved)'} />
           </CardContent>
         </Card>
       )}

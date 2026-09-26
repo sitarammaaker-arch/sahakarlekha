@@ -106,7 +106,7 @@ export function toMemberSnapshot(member: Member, src: Member360Sources): PortalS
     // General dividend — runs carry ONLY this member's line (other members never leave), plus the
     // appropriation vouchers (Dr 1208 / Cr 1211) and this member's dividend payments (Dr 1211).
     dividendRuns: (src.distributionRuns ?? [])
-      .filter((r) => !r.isDeleted && r.kind === 'dividend')
+      .filter((r) => !r.isDeleted && r.kind === 'dividend' && r.status === 'approved')
       .map((r) => ({ ...r, lines: r.lines.filter((l) => l.memberId === id) })) as unknown as Record<string, unknown>[],
     dividendVouchers: activeVouchers.filter((v) => {
       const lines = getVoucherLines(v);
