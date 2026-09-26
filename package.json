@@ -246,7 +246,8 @@
     "test:loan-account-resolution": "node scripts/test-loan-account-resolution.mjs",
     "test:loan-interest-accrual": "node scripts/test-loan-interest-accrual.mjs",
     "test:loan-repayment-accrual": "node scripts/test-loan-repayment-accrual.mjs",
-    "test:kcc-interest-accrual": "node scripts/test-kcc-interest-accrual.mjs"
+    "test:kcc-interest-accrual": "node scripts/test-kcc-interest-accrual.mjs",
+    "test:member-loan-interest": "node scripts/test-member-loan-interest.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

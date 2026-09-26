@@ -46,6 +46,7 @@ export function MemberAccountView({ member: m, view: v, verticals: vv, hi, links
     { icon: HandCoins, label: hi ? 'ऋण बकाया' : 'Loan outstanding', value: v.loanOutstandingTotal, show: v.loans.length > 0 },
     { icon: PiggyBank, label: hi ? 'कुल जमा' : 'Total deposits', value: v.depositTotal, show: v.deposits.length > 0 },
     { icon: Wheat, label: hi ? 'KCC बकाया' : 'KCC outstanding', value: v.kccOutstandingTotal, show: v.kccLoans.length > 0 },
+    { icon: HandCoins, label: hi ? 'ऋण पर प्राप्य ब्याज' : 'Interest due on loans', value: v.interestDueTotal, show: v.interestDueTotal > 0 },
     { icon: Milk, label: hi ? 'दूध भुगतान बाकी' : 'Milk payment due', value: vv.dairy?.passbook.totalOutstanding ?? 0, show: !!vv.dairy },
     { icon: Home, label: hi ? 'रखरखाव बकाया' : 'Maintenance due', value: vv.housing?.statement.outstanding ?? 0, show: !!vv.housing },
     { icon: ShoppingBasket, label: hi ? 'दुकान उधार' : 'Store credit due', value: vv.consumer?.outstanding ?? 0, show: !!vv.consumer },
@@ -95,13 +96,20 @@ export function MemberAccountView({ member: m, view: v, verticals: vv, hi, links
                 <TableHeader><TableRow>
                   <TableHead>{hi ? 'ऋण संख्या' : 'Loan no.'}</TableHead><TableHead>{hi ? 'उद्देश्य' : 'Purpose'}</TableHead>
                   <TableHead className="text-right">{hi ? 'राशि' : 'Amount'}</TableHead><TableHead className="text-right">{hi ? 'चुकाया' : 'Repaid'}</TableHead>
-                  <TableHead className="text-right">{hi ? 'बकाया' : 'Outstanding'}</TableHead><TableHead>{hi ? 'देय तिथि' : 'Due'}</TableHead><TableHead>{hi ? 'स्थिति' : 'Status'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'बकाया' : 'Outstanding'}</TableHead>
+                  {v.loans.some((l) => l.interestDue > 0) && <TableHead className="text-right">{hi ? 'प्राप्य ब्याज' : 'Interest due'}</TableHead>}
+                  <TableHead>{hi ? 'देय तिथि' : 'Due'}</TableHead><TableHead>{hi ? 'स्थिति' : 'Status'}</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>{v.loans.map((l) => (
                   <TableRow key={l.id}>
                     <TableCell className="font-mono">{l.loanNo}</TableCell><TableCell>{l.purpose || '—'}</TableCell>
                     <TableCell className="text-right">{money(l.amount)}</TableCell><TableCell className="text-right">{money(l.repaidAmount)}</TableCell>
                     <TableCell className="text-right font-semibold">{money(l.outstanding)}</TableCell>
+                    {v.loans.some((x) => x.interestDue > 0) && (
+                      <TableCell className="text-right">{l.interestDue > 0 ? money(l.interestDue) : '—'}
+                        {l.interestOverdue > 0 && <span className="block text-[11px] text-destructive">{hi ? 'अतिदेय' : 'overdue'} {money(l.interestOverdue)}</span>}
+                      </TableCell>
+                    )}
                     <TableCell className="whitespace-nowrap">{l.dueDate ? fmtDate(l.dueDate) : '—'}</TableCell>
                     <TableCell><Badge variant="outline" className={l.status === 'overdue' ? 'border-destructive text-destructive' : ''}>
                       {hi ? ({ active: 'चालू', cleared: 'चुकता', overdue: 'अतिदेय' } as Record<string, string>)[l.status] ?? l.status : l.status}
@@ -161,13 +169,20 @@ export function MemberAccountView({ member: m, view: v, verticals: vv, hi, links
                 <TableHeader><TableRow>
                   <TableHead>{hi ? 'ऋण संख्या' : 'Loan no.'}</TableHead><TableHead>{hi ? 'फ़सल' : 'Crop'}</TableHead>
                   <TableHead className="text-right">{hi ? 'स्वीकृत' : 'Sanctioned'}</TableHead><TableHead className="text-right">{hi ? 'निकाला' : 'Drawn'}</TableHead>
-                  <TableHead className="text-right">{hi ? 'बकाया' : 'Outstanding'}</TableHead><TableHead>{hi ? 'देय तिथि' : 'Due'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'बकाया' : 'Outstanding'}</TableHead>
+                  {v.kccLoans.some((k) => k.interestDue > 0) && <TableHead className="text-right">{hi ? 'प्राप्य ब्याज' : 'Interest due'}</TableHead>}
+                  <TableHead>{hi ? 'देय तिथि' : 'Due'}</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>{v.kccLoans.map((k) => (
                   <TableRow key={k.id}>
                     <TableCell className="font-mono">{k.loanNo}</TableCell><TableCell>{[k.cropName, k.cropSeason].filter(Boolean).join(' · ') || '—'}</TableCell>
                     <TableCell className="text-right">{money(Number(k.sanctionedAmount) || 0)}</TableCell><TableCell className="text-right">{money(k.drawnAmount)}</TableCell>
                     <TableCell className="text-right font-semibold">{money(k.outstanding)}</TableCell>
+                    {v.kccLoans.some((x) => x.interestDue > 0) && (
+                      <TableCell className="text-right">{k.interestDue > 0 ? money(k.interestDue) : '—'}
+                        {k.interestOverdue > 0 && <span className="block text-[11px] text-destructive">{hi ? 'अतिदेय' : 'overdue'} {money(k.interestOverdue)}</span>}
+                      </TableCell>
+                    )}
                     <TableCell className="whitespace-nowrap">{k.dueDate ? fmtDate(k.dueDate) : '—'}</TableCell>
                   </TableRow>
                 ))}</TableBody>

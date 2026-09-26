@@ -18,6 +18,7 @@ import { buildPortalView, SHARE_CAP_ACCOUNT_ID, type PortalSnapshot, type Portal
 import { buildVerticalViews, type PortalVerticalPayload, type VerticalViews } from './memberPortalVerticals';
 import { ACC_DIVIDEND, ACC_NET_SURPLUS, type DistributionRun } from './distribution/dividendRuns';
 import { getVoucherLines } from './voucherUtils';
+import { REF_LOAN_REPAYMENT, REF_LOAN_INTEREST_RELEASE, type LoanInterestAccrual } from './loans/interestAccrual';
 
 export interface Member360Sources {
   society?: { name?: string; nameHi?: string; address?: string };
@@ -39,6 +40,8 @@ export interface Member360Sources {
   patronageRuns?: readonly PatronageRun[];
   /** member_distribution_runs (066). */
   distributionRuns?: readonly DistributionRun[];
+  /** loan_interest_accruals (069). */
+  loanAccruals?: readonly LoanInterestAccrual[];
 }
 
 export interface Member360 { snapshot: PortalSnapshot & PortalVerticalPayload; view: PortalView; verticals: VerticalViews }
@@ -80,6 +83,24 @@ export function toMemberSnapshot(member: Member, src: Member360Sources): PortalS
     deposits: myDeposits,
     depositTransactions: src.depositTransactions.filter((t) => myDepositIds.has(t.depositAccountId)),
     kccLoans: live(src.kccLoans as readonly (KccLoan & { isDeleted?: boolean })[]).filter((k) => k.memberId === id),
+    // Accrued interest (069) of THIS member's loans + KCC, and only the vouchers the due rule reads:
+    // their accrual journals (id only — those journals are society-level) and the live repayment /
+    // reserve-release vouchers of these loans. Mirrors member_portal_snapshot() 070.
+    ...(() => {
+      const loanIds = new Set([...live(src.loans).filter((l) => l.memberId === id).map((l) => l.id),
+        ...(src.kccLoans as readonly (KccLoan & { isDeleted?: boolean })[]).filter((k) => k.memberId === id).map((k) => k.id)]);
+      const rows = live(src.loanAccruals).filter((a) => loanIds.has(a.loanId));
+      const journalIds = new Set(rows.map((a) => a.voucherId).filter(Boolean) as string[]);
+      return {
+        loanAccruals: rows.map((a) => ({ id: a.id, loanId: a.loanId, amount: a.amount, overdue: a.overdue, voucherId: a.voucherId ?? null })),
+        loanInterestVouchers: [
+          ...activeVouchers.filter((v) => journalIds.has(v.id)).map((v) => ({ id: v.id, amount: 0, lines: [] })),
+          ...activeVouchers.filter((v) => (v.refType === REF_LOAN_REPAYMENT || v.refType === REF_LOAN_INTEREST_RELEASE) && !!v.refId && loanIds.has(v.refId))
+            .map((v) => ({ id: v.id, refType: v.refType, refId: v.refId, debitAccountId: v.debitAccountId, creditAccountId: v.creditAccountId, amount: v.amount,
+              lines: getVoucherLines(v).map((l) => ({ accountId: l.accountId, type: l.type, amount: l.amount })) })),
+        ],
+      };
+    })(),
 
     // Dairy — full history for staff (the portal windows milk to FY + previous month).
     milkEntries: (src.milkEntries ?? []).filter((e) => e.memberId === id) as unknown as Record<string, unknown>[],
