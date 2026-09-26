@@ -16,6 +16,7 @@ import {
 import { HandCoins, Trash2, Wallet } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
+import { memberCreditLedger } from '@/lib/consumer/credit';
 import { useToast } from '@/hooks/use-toast';
 
 const TODAY = () => new Date().toISOString().split('T')[0];
@@ -26,7 +27,7 @@ const MemberCredit: React.FC = () => {
   const { language } = useLanguage();
   const hi = language === 'hi';
   const { members, sales, society } = useData();
-  const { getMemberOutstanding, getMemberAgeing, memberRecoveries, recordMemberRecovery, deleteMemberRecovery, setMemberCreditLimit } = useConsumerData();
+  const { getMemberOutstanding, getMemberAgeing, memberRecoveries, salesReturns, recordMemberRecovery, deleteMemberRecovery, setMemberCreditLimit } = useConsumerData();
   const { toast } = useToast();
 
   const [memberId, setMemberId] = useState('');
@@ -54,18 +55,19 @@ const MemberCredit: React.FC = () => {
   const outstanding = memberId ? getMemberOutstanding(memberId) : 0;
   const ageing = memberId ? getMemberAgeing(memberId) : null;
 
-  // Member ledger: credit sales (Dr) + recoveries (Cr), chronological with running balance.
+  // Member ledger: credit sales (Dr), recoveries + credit-adjusted returns (Cr), running balance —
+  // the shared memberCreditLedger, so its last balance equals `outstanding` above (RULE 2). The old
+  // hand-built ledger omitted returns and ended ₹-for-₹ higher than Outstanding.
   const ledger = useMemo(() => {
-    if (!memberId) return [] as Array<{ date: string; label: string; ref: string; dr: number; cr: number; recoveryId?: string; balance: number }>;
-    const rows: Array<{ date: string; label: string; ref: string; dr: number; cr: number; recoveryId?: string }> = [];
-    sales.filter(s => s.memberId === memberId && s.paymentMode === 'credit')
-      .forEach(s => rows.push({ date: s.date, label: hi ? 'उधार बिक्री' : 'Credit sale', ref: s.saleNo, dr: s.grandTotal || s.netAmount, cr: 0 }));
-    memberRecoveries.filter(v => v.memberId === memberId && !v.isDeleted)
-      .forEach(v => rows.push({ date: v.date, label: hi ? 'वसूली' : 'Recovery', ref: v.voucherNo || '—', dr: 0, cr: v.amount, recoveryId: v.id }));
-    rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-    let bal = 0;
-    return rows.map(r => { bal += r.dr - r.cr; return { ...r, balance: bal }; });
-  }, [memberId, sales, memberRecoveries, hi]);
+    if (!memberId) return [];
+    const kindLabel = { sale: hi ? 'उधार बिक्री' : 'Credit sale', recovery: hi ? 'वसूली' : 'Recovery', return: hi ? 'बिक्री वापसी (उधार समायोजन)' : 'Sales return (credit adjust)' };
+    return memberCreditLedger(
+      sales,
+      memberRecoveries.map(v => ({ id: v.id, date: v.date, ref: v.voucherNo, memberId: v.memberId, amount: v.amount, isDeleted: v.isDeleted })),
+      salesReturns.map(r => ({ id: r.id, date: r.date, ref: r.returnNo, memberId: r.memberId, grandTotal: r.grandTotal, refundMode: r.refundMode, isDeleted: r.isDeleted })),
+      memberId,
+    ).map(r => ({ ...r, label: kindLabel[r.kind] }));
+  }, [memberId, sales, memberRecoveries, salesReturns, hi]);
 
   const selectMember = (id: string) => {
     setMemberId(id);

@@ -12,7 +12,7 @@ import { buildMemberPassbook, type MemberPassbook } from './dairy/registers';
 import { memberInputOutstanding, type InputBalance } from './dairy/inputs';
 import { resolveMemberInputReceivableAccountId } from './dairy/accounts';
 import { buildMemberStatement, type MemberStatement } from './housing/statement';
-import { memberOutstanding, memberAgeing, type Ageing } from './consumer/credit';
+import { memberOutstanding, memberAgeing, memberCreditLedger, type Ageing, type CreditLedgerRow } from './consumer/credit';
 
 type Row = Record<string, unknown>;
 
@@ -57,6 +57,8 @@ export interface ConsumerView {
   outstanding: number;
   ageing: Ageing;
   creditSales: { id: string; saleNo?: string; date: string; amount: number }[];
+  /** Sales (Dr), recoveries + credit-adjusted returns (Cr) — the SAME ledger the staff Member Credit page shows. */
+  ledger: CreditLedgerRow[];
   distributions: DistributionItem[];
 }
 export interface VerticalViews { dairy: DairyView | null; housing: HousingView | null; consumer: ConsumerView | null }
@@ -109,14 +111,15 @@ export function buildVerticalViews(memberId: string, p: PortalVerticalPayload, a
     id: str(s.id), memberId: str(s.memberId), paymentMode: str(s.paymentMode), date: str(s.date),
     grandTotal: num(s.grandTotal), netAmount: num(s.netAmount), saleNo: s.saleNo ? str(s.saleNo) : undefined,
   }));
-  const recoveries = arr(p.creditRecoveries).map((r) => ({ memberId: str(r.memberId), amount: num(r.amount) }));
-  const returns = arr(p.creditReturns).map((r) => ({ memberId: str(r.memberId), grandTotal: num(r.grandTotal), refundMode: str(r.refundMode) }));
+  const recoveries = arr(p.creditRecoveries).map((r) => ({ id: str(r.id), date: str(r.date), ref: r.voucherNo ? str(r.voucherNo) : undefined, memberId: str(r.memberId), amount: num(r.amount) }));
+  const returns = arr(p.creditReturns).map((r) => ({ id: str(r.id), date: str(r.date), ref: r.returnNo ? str(r.returnNo) : undefined, memberId: str(r.memberId), grandTotal: num(r.grandTotal), refundMode: str(r.refundMode) }));
   const patronage = distributions(arr(p.patronageRuns), 'patronage');
-  const consumer: ConsumerView | null = sales.length || recoveries.length || patronage.length
+  const consumer: ConsumerView | null = sales.length || recoveries.length || returns.length || patronage.length
     ? {
         outstanding: memberOutstanding(sales, recoveries, memberId, returns),
         ageing: memberAgeing(sales, recoveries, memberId, asOf, returns),
         creditSales: sales.map((s) => ({ id: s.id, saleNo: s.saleNo, date: s.date, amount: s.grandTotal > 0 ? s.grandTotal : s.netAmount })),
+        ledger: memberCreditLedger(sales, recoveries, returns, memberId),
         distributions: patronage,
       }
     : null;

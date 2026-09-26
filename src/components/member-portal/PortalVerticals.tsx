@@ -20,12 +20,14 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Distributions({ items, hi }: { items: DistributionItem[]; hi: boolean }) {
+function Distributions({ items, hi, title }: { items: DistributionItem[]; hi: boolean; title: string }) {
   if (!items.length) return null;
-  const kindLabel = (k: string) => (hi ? ({ bonus: 'बोनस', dividend: 'लाभांश', patronage: 'संरक्षण छूट (patronage)' } as Record<string, string>)[k] ?? k : k);
+  const kindLabel = (k: string) => (hi
+    ? ({ bonus: 'बोनस', dividend: 'लाभांश', patronage: 'संरक्षण छूट (patronage)' } as Record<string, string>)[k]
+    : ({ bonus: 'Bonus', dividend: 'Dividend', patronage: 'Patronage rebate' } as Record<string, string>)[k]) ?? k;
   return (
     <div className="overflow-x-auto">
-      <p className="text-sm font-medium mb-1">{hi ? 'बोनस / लाभांश (स्वीकृत)' : 'Bonus / dividend (approved)'}</p>
+      <p className="text-sm font-medium mb-1">{title}</p>
       <Table>
         <TableHeader><TableRow>
           <TableHead>{hi ? 'प्रकार' : 'Type'}</TableHead><TableHead>{hi ? 'अवधि' : 'Period'}</TableHead>
@@ -129,7 +131,7 @@ export function PortalVerticals({ views, hi }: { views: VerticalViews; hi: boole
               </details>
             )}
 
-            <Distributions items={dairy.distributions} hi={hi} />
+            <Distributions items={dairy.distributions} hi={hi} title={hi ? 'बोनस / लाभांश (स्वीकृत)' : 'Bonus / dividend (approved)'} />
           </CardContent>
         </Card>
       )}
@@ -184,26 +186,33 @@ export function PortalVerticals({ views, hi }: { views: VerticalViews; hi: boole
               <Stat label={hi ? '61–90 दिन' : '61–90 days'} value={money(consumer.ageing.b61_90)} />
               <Stat label={hi ? '90+ दिन' : '90+ days'} value={money(consumer.ageing.b90plus)} />
             </div>
-            {consumer.creditSales.length > 0 && (
+            {consumer.ledger.length > 0 && (
               <details className="rounded-lg border p-3">
-                <summary className="cursor-pointer text-sm font-medium">{hi ? `उधार बिक्री (${consumer.creditSales.length})` : `Credit purchases (${consumer.creditSales.length})`}</summary>
+                <summary className="cursor-pointer text-sm font-medium">{hi ? `उधार खाता (${consumer.ledger.length})` : `Credit ledger (${consumer.ledger.length})`}</summary>
                 <div className="overflow-x-auto mt-2">
                   <Table>
                     <TableHeader><TableRow>
-                      <TableHead>{hi ? 'तिथि' : 'Date'}</TableHead><TableHead>{hi ? 'बिल' : 'Bill'}</TableHead>
-                      <TableHead className="text-right">{hi ? 'राशि' : 'Amount'}</TableHead>
+                      <TableHead>{hi ? 'तिथि' : 'Date'}</TableHead><TableHead>{hi ? 'विवरण' : 'Particulars'}</TableHead><TableHead>{hi ? 'संदर्भ' : 'Ref'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'उधार' : 'Debit'}</TableHead><TableHead className="text-right">{hi ? 'जमा' : 'Credit'}</TableHead>
+                      <TableHead className="text-right">{hi ? 'शेष' : 'Balance'}</TableHead>
                     </TableRow></TableHeader>
-                    <TableBody>{[...consumer.creditSales].reverse().map((s) => (
-                      <TableRow key={s.id}>
-                        <TableCell className="whitespace-nowrap">{fmtDate(s.date)}</TableCell><TableCell className="font-mono">{s.saleNo || '—'}</TableCell>
-                        <TableCell className="text-right">{money(s.amount)}</TableCell>
+                    <TableBody>{consumer.ledger.map((r, i) => (
+                      <TableRow key={`${r.ref}-${i}`}>
+                        <TableCell className="whitespace-nowrap">{fmtDate(r.date)}</TableCell>
+                        <TableCell>{hi
+                          ? ({ sale: 'उधार बिक्री', recovery: 'वसूली', return: 'बिक्री वापसी' } as Record<string, string>)[r.kind]
+                          : ({ sale: 'Credit sale', recovery: 'Recovery', return: 'Sales return' } as Record<string, string>)[r.kind]}</TableCell>
+                        <TableCell className="font-mono text-xs">{r.ref}</TableCell>
+                        <TableCell className="text-right">{r.dr ? money(r.dr) : '—'}</TableCell>
+                        <TableCell className="text-right">{r.cr ? money(r.cr) : '—'}</TableCell>
+                        <TableCell className="text-right font-semibold">{money(r.balance)}</TableCell>
                       </TableRow>
                     ))}</TableBody>
                   </Table>
                 </div>
               </details>
             )}
-            <Distributions items={consumer.distributions} hi={hi} />
+            <Distributions items={consumer.distributions} hi={hi} title={hi ? 'संरक्षण छूट / लाभांश (स्वीकृत)' : 'Patronage rebate / dividend (approved)'} />
           </CardContent>
         </Card>
       )}
