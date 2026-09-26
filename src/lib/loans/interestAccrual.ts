@@ -12,7 +12,7 @@
  * Each loan's accrual is recorded (loan_interest_accruals, 069) so a repayment can later clear
  * exactly what was accrued for THAT loan. PURE.
  */
-import { loanOutstanding } from '../memberSnapshot';
+import { loanOutstanding, kccOutstanding } from '../memberSnapshot';
 
 export const ACC_INTEREST_RECEIVABLE = '3313';
 export const ACC_INTEREST_INCOME = '4408';
@@ -171,3 +171,24 @@ export function repaymentInterestSplit(interest: number, due: LoanInterestDue): 
   const toReceivable = r2(Math.min(i, due.receivable));
   return { toReceivable, toIncome: r2(i - toReceivable), releaseFromReserve: r2(Math.min(toReceivable, due.reserve)) };
 }
+
+// ── KCC (KCC-1) ─────────────────────────────────────────────────────────────────────────────
+// KCC loans accrue through the SAME rules, on the SAME outstanding the KCC page shows (RULE 2:
+// kccOutstanding). Adapter: amount = repaid + outstanding, so loanOutstanding(adapted) equals it.
+export interface KccLike {
+  id: string; loanNo: string; memberId: string; drawnAmount: number; repaidAmount: number;
+  outstandingAmount?: number; interestRate: number; dueDate: string; status: string; isDeleted?: boolean;
+}
+export function kccAsAccruable(k: KccLike): AccruableLoan {
+  const repaid = Number(k.repaidAmount) || 0;
+  const outstanding = kccOutstanding({ outstandingAmount: k.outstandingAmount as number, drawnAmount: Number(k.drawnAmount) || 0, repaidAmount: repaid });
+  return {
+    id: k.id, loanNo: k.loanNo, memberId: k.memberId, amount: Math.round((repaid + outstanding) * 100) / 100, repaidAmount: repaid,
+    interestRate: Number(k.interestRate) || 0, dueDate: k.dueDate, status: k.status === 'repaid' ? 'cleared' : k.status,
+  };
+}
+export const kccAccruables = (kcc: readonly KccLike[]): AccruableLoan[] => kcc.filter((k) => !k.isDeleted).map(kccAsAccruable);
+
+/** Journal narration prefixes — the "already posted" check is per kind (a KCC journal never marks member loans posted). */
+export const NARRATION_LOAN_ACCRUAL = 'Member Loan Interest Accrual';
+export const NARRATION_KCC_ACCRUAL = 'KCC Interest Accrual';

@@ -245,7 +245,8 @@
     "test:haryana-statutory-limits": "node scripts/test-haryana-statutory-limits.mjs",
     "test:loan-account-resolution": "node scripts/test-loan-account-resolution.mjs",
     "test:loan-interest-accrual": "node scripts/test-loan-interest-accrual.mjs",
-    "test:loan-repayment-accrual": "node scripts/test-loan-repayment-accrual.mjs"
+    "test:loan-repayment-accrual": "node scripts/test-loan-repayment-accrual.mjs",
+    "test:kcc-interest-accrual": "node scripts/test-kcc-interest-accrual.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

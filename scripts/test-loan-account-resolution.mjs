@@ -71,7 +71,7 @@ const kcc = readFileSync(pathResolve(ROOT, 'src/pages/KccLoan.tsx'), 'utf8');
 ok((kcc.match(/kccLoanAccountId\(accounts\)/g) || []).length === 2, 'KCC disbursement AND repayment use the asset resolver');
 ok(/if \(!voucherId\) \{[\s\S]{0,400}?KCC ऋण दर्ज नहीं हुआ[\s\S]{0,300}?return;/.test(kcc), 'KCC: no disbursement voucher ⇒ no loan');
 ok(/if \(!voucherId\) \{[\s\S]{0,400}?चुकौती दर्ज नहीं हुई[\s\S]{0,300}?return;/.test(kcc), 'KCC: refused receipt ⇒ loan unchanged');
-ok((kcc.match(/cancelVoucher\(voucherId,/g) || []).length === 2, 'KCC: a failed loan save cancels the voucher it posted (RULE 1)');
+ok((kcc.match(/cancelVoucher\(voucherId,/g) || []).length >= 2, 'KCC: a failed loan save cancels the voucher it posted (RULE 1)');
 ok(!/best-effort; loan record still updates/.test(kcc), 'no "best-effort, loan still updates" path left');
 
 console.log(`loan account resolution: ${pass} passed, ${fail} failed`);

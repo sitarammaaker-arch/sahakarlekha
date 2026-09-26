@@ -18,7 +18,7 @@ const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  �
 const li = strip('src/pages/LoanInterest.tsx');
 // H2-1: the rows now come from the shared accrual lib, which uses the shared loanOutstanding.
 const acc = strip('src/lib/loans/interestAccrual.ts');
-ok(/import \{ loanOutstanding \} from '\.\.\/memberSnapshot'/.test(acc) && /accrualRows\(activeLoans, toDate, days\)/.test(li), 'LoanInterest rows via the shared accrual lib (shared loanOutstanding)');
+ok(/import \{ loanOutstanding[,} ][^\n]*from '\.\.\/memberSnapshot'/.test(acc) && /accrualRows\(activeLoans, toDate, days\)/.test(li), 'LoanInterest rows via the shared accrual lib (shared loanOutstanding)');
 ok(!/l(oan)?\.amount - \(l(oan)?\.repaidAmount/.test(li), 'no private outstanding formula left on the page');
 ok(/const outstanding = Math\.max\(0, loanOutstanding\(l\)\)/.test(acc), 'interest rows: shared formula, clamped at 0 for interest only');
 ok(/'ब्याज योग्य बकाया'/.test(li) && /value=\{fmt\(rows\.reduce\(\(s, r\) => s \+ r\.outstanding, 0\)\)\}/.test(li), 'card = interest-bearing outstanding (sum of the rows), labelled so');
