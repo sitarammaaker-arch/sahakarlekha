@@ -1,12 +1,12 @@
 /**
- * NABARD CAS statements (Annexure II / III / IV) as a PDF — the same builders the screen uses.
+ * NABARD CAS statements (Annexure I / II / III / IV) as a PDF — the same builders the screen uses.
  * English labels (the CAS formats are English; the PDF font has no Devanagari).
  */
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { SocietySettings } from '@/types';
 import { addHeader, addPageNumbers, pdfFileName } from '@/lib/pdf';
-import type { CasBalanceSheet, CasProfitLoss, CasTrading, CasSection } from './pacsCas';
+import type { CasBalanceSheet, CasProfitLoss, CasTrading, CasSection, CasTrialBalance, CasTbRow } from './pacsCas';
 
 const fmt = (n: number) => {
   if (Math.abs(n) < 0.005) return '—';
@@ -37,11 +37,30 @@ function table(doc: jsPDF, startY: number, title: string, sections: CasSection[]
   return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
 }
 
-export function generateCasPdf(society: SocietySettings, bs: CasBalanceSheet, pl: CasProfitLoss, trading: CasTrading | null, asOn: string): void {
+function tbTable(doc: jsPDF, startY: number, title: string, rows: CasTbRow[], total: number): number {
+  autoTable(doc, {
+    startY,
+    head: [[title, 'Opening', 'Debit', 'Credit', 'Closing']],
+    body: [...rows.map((r) => [r.label, fmt(r.opening), fmt(r.debit), fmt(r.credit), fmt(r.closing)]),
+      [{ content: 'TOTAL', styles: { fontStyle: 'bold' } }, '', '', '', { content: fmt(total), styles: { fontStyle: 'bold' } }]],
+    styles: { fontSize: 7.5, cellPadding: 1.2 },
+    headStyles: { fillColor: [55, 65, 81] },
+    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+  });
+  return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+}
+
+export function generateCasPdf(society: SocietySettings, bs: CasBalanceSheet, pl: CasProfitLoss, trading: CasTrading | null, asOn: string, tb: { tb: CasTrialBalance; month: string } | null = null): void {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const note = 'Format: NABARD Common Accounting System (CAS) for PACS — Annexure II / III / IV';
+  const note = 'Format: NABARD Common Accounting System (CAS) for PACS — Annexure I / II / III / IV';
   const { startY, font } = addHeader(doc, 'CAS Financial Statements', society, `As on ${asOn} · ${note}`, { reportCode: 'CAS' });
   let y = startY;
+  if (tb) {
+    doc.setFont(font, 'bold'); doc.setFontSize(10); doc.text(`ANNEXURE I — TRIAL BALANCE (${tb.month})`, 14, y); y += 3;
+    y = tbTable(doc, y, 'Liabilities & Income', tb.tb.liabilitiesIncome, tb.tb.totals.liabilitiesIncome);
+    y = tbTable(doc, y, 'Assets & Expenditure', tb.tb.assetsExpenditure, tb.tb.totals.assetsExpenditure);
+    doc.addPage(); y = 16;
+  }
   if (trading) {
     doc.setFont(font, 'bold'); doc.setFontSize(10); doc.text('ANNEXURE II — TRADING ACCOUNT', 14, y); y += 3;
     y = table(doc, y, 'Debit', trading.debit, trading.debit.reduce((t, s) => t + s.total, 0));

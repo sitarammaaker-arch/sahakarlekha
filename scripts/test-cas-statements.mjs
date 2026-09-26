@@ -136,6 +136,35 @@ ok(trBad === 0, `400 random books: CAS Trading gross profit exact; both sides eq
   ok(bs.totalAssets === 1000 && bs.totalLiabilities === 1000 && C.casBalanceSheetTies(bs, lv), 'loss case balances and ties');
 }
 
+// ── 3b. Annexure I — Trial Balance (monthly) ──
+{
+  let bad = 0, rowsBad = 0;
+  for (let t = 0; t < 200; t++) {
+    const open = randomBooks();                        // balances before the month
+    const mv = {};                                     // balanced month movements
+    for (const a of leaves) if (rnd() < 0.3) mv[a.id] = { dr: r2(rnd() * 5000), cr: r2(rnd() * 5000) };
+    const drT = Object.values(mv).reduce((s, m) => s + m.dr, 0), crT = Object.values(mv).reduce((s, m) => s + m.cr, 0);
+    mv['3301'] = { dr: r2((mv['3301']?.dr ?? 0) + Math.max(0, crT - drT)), cr: r2((mv['3301']?.cr ?? 0) + Math.max(0, drT - crT)) };
+    const base = { transactionDebit: 0, transactionCredit: 0 };
+    const prevTb = leaves.map((a) => ({ account: a, openingDebit: 0, openingCredit: 0, ...base, netBalance: open[a.id] ?? 0 }));
+    const endTb = leaves.map((a) => { const m = mv[a.id] ?? { dr: 0, cr: 0 }; return { account: a, openingDebit: 0, openingCredit: 0, transactionDebit: m.dr, transactionCredit: m.cr, netBalance: r2((open[a.id] ?? 0) + m.dr - m.cr) }; });
+    const tb = C.buildCasTrialBalance(endTb, prevTb, { hasTrading: rnd() < 0.5 });
+    if (!near(tb.totals.liabilitiesIncome, tb.totals.assetsExpenditure)) bad++;
+    // every row's closing = the natural closing of its heads
+    for (const [side, cred] of [[tb.liabilitiesIncome, true], [tb.assetsExpenditure, false]]) for (const r of side) {
+      const want = r.heads.reduce((s, h) => s + (cred ? -1 : 1) * (endTb.find((b) => b.account.id === h.id).netBalance), 0);
+      if (!near(r.closing, want)) rowsBad++;
+    }
+  }
+  ok(bad === 0, `200 random months: CAS Trial Balance — both sides equal (${bad} bad)`);
+  ok(rowsBad === 0, `every TB row: opening ± month movement = its heads' closing (${rowsBad} bad)`);
+  const lines = C.buildCasTrialBalance(
+    [{ account: leaves.find((a) => a.id === '2211'), openingDebit: 0, openingCredit: 0, transactionDebit: 0, transactionCredit: 500, netBalance: -500 },
+     { account: leaves.find((a) => a.id === '3313'), openingDebit: 0, openingCredit: 0, transactionDebit: 500, transactionCredit: 0, netBalance: 500 }],
+    [], { hasTrading: true });
+  ok(lines.liabilitiesIncome[0].id === 'TB-OIR' && lines.liabilitiesIncome[0].closing === 500 && lines.assetsExpenditure[0].id === 'TB-INT', 'OIR and interest receivable keep their own CAS GL lines in the TB');
+}
+
 // ── 4. Wiring ──
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 ok(/balanceSheetLeaves\(trialBalance, \{ closingStockPosted, physicalClosingStock, netProfit \}\)/.test(read('src/pages/BalanceSheet.tsx')) && !/const typeAssetLeaf/.test(read('src/pages/BalanceSheet.tsx')), 'BalanceSheet page uses the shared leaves rule (no private copy)');
@@ -146,6 +175,7 @@ const cs = read('src/components/cas/CasStatements.tsx');
 ok(/\.has\('inventory_sales'\)/.test(cs) && /society\.state, declaredActivities\(societyActivities\), society\.activitiesCutoverEnabled/.test(cs), 'trading decision uses the same resolution as getProfitLoss');
 ok(/loanInterestDue\(id, accruals, vouchers\)/.test(cs), 'overdue interest receivable from the same loanInterestDue as the repay dialogs');
 ok(/casBalanceSheetTies\(bs, data\.leaves\)/.test(cs) && /near\(pl\.netProfit, data\.appNet\)/.test(cs) && /near\(trading\.grossProfit, data\.appGross\)/.test(cs), 'screen shows a tie check for all three statements');
+ok(/buildCasTrialBalance\(getTrialBalance\(m\.to\), getTrialBalance\(dayBefore\(m\.from\)\), \{ hasTrading \}\)/.test(cs), 'Annexure I built from month-end vs day-before-month trial balances');
 
 console.log(`CAS statements: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

@@ -355,3 +355,72 @@ export function casBalanceSheetTies(bs: CasBalanceSheet, app: { assetLeaves: rea
   const expected = r2(app.totalAssets - bs.overdueInterestProvision - ast1208 + plLoss);
   return Math.abs(bs.totalAssets - expected) < 0.01 && Math.abs(bs.totalAssets - bs.totalLiabilities) < 0.01;
 }
+
+// ── Annexure I — Trial Balance (monthly) ─────────────────────────────────────────────────────
+// "LIABILITIES & INCOME" and "ASSETS & EXPENDITURE", each head with: opening balance at the
+// beginning of the month, total debit and total credit during the month, closing balance
+// (liabilities & income: 3 + 5 − 4; assets & expenditure: 3 + 4 − 5). Heads are grouped by the
+// SAME CAS lines the statements use; a few heads have their own CAS GL line in the TB.
+export interface CasTbRow { id: string; label: string; labelHi: string; opening: number; debit: number; credit: number; closing: number; heads: { id: string; name: string }[] }
+export interface CasTrialBalance { liabilitiesIncome: CasTbRow[]; assetsExpenditure: CasTbRow[]; totals: { liabilitiesIncome: number; assetsExpenditure: number } }
+
+const TB_OWN_LINES: Record<string, { id: string; label: string; labelHi: string }> = {
+  '1208': { id: 'TB-PL', label: 'Balance in Profit and Loss Account', labelHi: 'लाभ-हानि खाते का शेष' },
+  '2211': { id: 'TB-OIR', label: 'Overdue Interest Reserve', labelHi: 'अतिदेय ब्याज संचय' },
+  '3312': { id: 'TB-INT', label: 'Interest accrued / overdue interest receivable on loans', labelHi: 'ऋणों पर उपार्जित / अतिदेय प्राप्य ब्याज' },
+  '3313': { id: 'TB-INT', label: 'Interest accrued / overdue interest receivable on loans', labelHi: 'ऋणों पर उपार्जित / अतिदेय प्राप्य ब्याज' },
+  '5150': { id: 'TB-CS', label: 'Closing Stock (Trading A/c)', labelHi: 'समापन माल (व्यापार खाता)' },
+};
+
+/** Which CAS line a head belongs to, by its NATURAL side (the TB is not sign-reclassified). */
+function lineFor(a: { id: string; subtype?: string; type: string; parentId?: string }, hasTrading: boolean): { id: string; label: string; labelHi: string } {
+  if (TB_OWN_LINES[a.id]) return TB_OWN_LINES[a.id];
+  const pick = (defs: CasSectionDef[]) => {
+    const lines = defs.flatMap((s) => s.lines);
+    return lines.find((l) => l.ids?.includes(a.id)) ?? lines.find((l) => a.subtype && l.subtypes?.includes(a.subtype)) ?? lines.find((l) => l.catchAll)!;
+  };
+  const defs = a.type === 'asset' ? CAS_BS_ASSETS
+    : a.type === 'liability' || a.type === 'equity' ? CAS_BS_LIABILITIES
+    : a.type === 'income' ? (hasTrading && a.parentId === '4100' ? CAS_TRADING_CR : CAS_PL_INCOME)
+    : (hasTrading && a.parentId === '5100' ? CAS_TRADING_DR : CAS_PL_EXPENDITURE);
+  const l = pick(defs);
+  return { id: l.id, label: l.label, labelHi: l.labelHi };
+}
+
+/**
+ * @param atMonthEnd  trial balance as on the last day of the month
+ * @param atPrevEnd   trial balance as on the day before the month starts
+ */
+export function buildCasTrialBalance(atMonthEnd: readonly AccountBalance[], atPrevEnd: readonly AccountBalance[], opts: { hasTrading: boolean }): CasTrialBalance {
+  const prev = new Map(atPrevEnd.map((b) => [b.account.id, b]));
+  const rows = new Map<string, CasTbRow & { credSide: boolean }>();
+  for (const b of atMonthEnd) {
+    if (b.account.isGroup) continue;
+    const p = prev.get(b.account.id);
+    const debit = r2((b.transactionDebit ?? 0) - (p?.transactionDebit ?? 0));
+    const credit = r2((b.transactionCredit ?? 0) - (p?.transactionCredit ?? 0));
+    const credSide = ['liability', 'equity', 'income'].includes(b.account.type);
+    const openingNet = p ? p.netBalance : r2((b.openingDebit ?? 0) - (b.openingCredit ?? 0));
+    if (Math.abs(openingNet) < 0.005 && Math.abs(debit) < 0.005 && Math.abs(credit) < 0.005 && Math.abs(b.netBalance) < 0.005) continue;
+    const line = lineFor(b.account, opts.hasTrading);
+    const key = `${credSide ? 'C' : 'D'}:${line.id}`;
+    const row = rows.get(key) ?? { ...line, opening: 0, debit: 0, credit: 0, closing: 0, heads: [], credSide };
+    row.opening = r2(row.opening + (credSide ? -openingNet : openingNet));
+    row.debit = r2(row.debit + debit);
+    row.credit = r2(row.credit + credit);
+    row.closing = r2(credSide ? row.opening + row.credit - row.debit : row.opening + row.debit - row.credit);
+    row.heads.push({ id: b.account.id, name: b.account.name });
+    rows.set(key, row);
+  }
+  const strip = ({ credSide: _c, ...r }: CasTbRow & { credSide: boolean }): CasTbRow => r;
+  const all = [...rows.values()];
+  const liabilitiesIncome = all.filter((r) => r.credSide).map(strip);
+  const assetsExpenditure = all.filter((r) => !r.credSide).map(strip);
+  return {
+    liabilitiesIncome, assetsExpenditure,
+    totals: {
+      liabilitiesIncome: r2(liabilitiesIncome.reduce((t, r) => t + r.closing, 0)),
+      assetsExpenditure: r2(assetsExpenditure.reduce((t, r) => t + r.closing, 0)),
+    },
+  };
+}
