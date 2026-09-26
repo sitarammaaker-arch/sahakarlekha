@@ -141,5 +141,5 @@ export function toMemberSnapshot(member: Member, src: Member360Sources): PortalS
 /** The staff Member-360: the same view the member sees on the portal, fed from staff state. */
 export function buildMember360(member: Member, src: Member360Sources, asOf: string): Member360 {
   const snapshot = toMemberSnapshot(member, src);
-  return { snapshot, view: buildPortalView(snapshot), verticals: buildVerticalViews(member.id, snapshot, asOf) };
+  return { snapshot, view: buildPortalView(snapshot, asOf), verticals: buildVerticalViews(member.id, snapshot, asOf) };
 }

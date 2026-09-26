@@ -6,7 +6,8 @@
 import type { Member, Voucher, Loan, KccLoan, MemberLedgerEntry } from '@/types';
 import { buildMemberShareLedger, loanOutstanding, kccOutstanding } from './memberSnapshot';
 import { toMinor, toRupees, addMinor } from './money';
-import { loanInterestDue, type LoanInterestAccrual } from './loans/interestAccrual';
+import { loanInterestDue, effectiveLoanStatus, type LoanInterestAccrual } from './loans/interestAccrual';
+import { todayStr } from './dateUtils';
 
 export const SHARE_CAP_ACCOUNT_ID = '1102';
 
@@ -51,7 +52,7 @@ export interface PortalView {
 const num = (n: unknown) => Number(n) || 0;
 const sumRupees = (values: number[]) => toRupees(addMinor(...values.map((v) => toMinor(v))));
 
-export function buildPortalView(s: PortalSnapshot): PortalView {
+export function buildPortalView(s: PortalSnapshot, asOf: string = todayStr()): PortalView {
   const m = s.member;
   const vouchers = (s.shareVouchers ?? []).map((v) => ({ ...v, amount: num(v.amount) }));
   const shareLedger = buildMemberShareLedger(
@@ -74,7 +75,8 @@ export function buildPortalView(s: PortalSnapshot): PortalView {
 
   const loans = (s.loans ?? []).map((l) => {
     const loan = { ...l, amount: num(l.amount), repaidAmount: num(l.repaidAmount) };
-    return { ...loan, outstanding: loanOutstanding(loan), ...dueOf(l.id) };
+    // The badge uses the app-wide overdue rule (due date passed, or marked), not only the stored flag.
+    return { ...loan, status: effectiveLoanStatus({ ...loan, memberId: '', interestRate: num(l.interestRate) }, asOf), outstanding: loanOutstanding(loan), ...dueOf(l.id) };
   });
   // Same scope as the Dashboard / Loan Register total: cleared loans do not count.
   const loanOutstandingTotal = sumRupees(loans.filter((l) => l.status !== 'cleared').map((l) => l.outstanding));

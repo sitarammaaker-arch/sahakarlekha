@@ -14,6 +14,8 @@ import { fmtDate } from '@/lib/dateUtils';
 import { Badge } from '@/components/ui/badge';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { loanOutstanding } from '@/lib/memberSnapshot';
+import { effectiveLoanStatus } from '@/lib/loans/interestAccrual';
+import { todayStr } from '@/lib/dateUtils';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
@@ -96,7 +98,7 @@ const Dashboard: React.FC = () => {
     const fyLocked = !!society.fyLocked;
 
     // 6. Overdue & pending objections
-    const overdueCount = loans.filter(l => l.status === 'overdue').length;
+    const overdueCount = loans.filter(l => effectiveLoanStatus(l, todayStr()) === 'overdue').length;   // one overdue rule (RULE 2)
     const pendingObjections = auditObjections.filter(o => o.status === 'pending').length;
 
     // --- P4-1: Financial Health Score (0–100) ---
@@ -206,8 +208,8 @@ const Dashboard: React.FC = () => {
   }));
 
   // Loan summary
-  const activeLoans = loans.filter(l => l.status === 'active');
-  const overdueLoans = loans.filter(l => l.status === 'overdue');
+  const activeLoans = loans.filter(l => effectiveLoanStatus(l, todayStr()) === 'active');
+  const overdueLoans = loans.filter(l => effectiveLoanStatus(l, todayStr()) === 'overdue');
   const clearedLoans = loans.filter(l => l.status === 'cleared');
   const totalOutstanding = loans.reduce((s, l) => s + loanOutstanding(l), 0);
 

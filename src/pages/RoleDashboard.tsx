@@ -15,6 +15,9 @@ import { LayoutDashboard } from 'lucide-react';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { roleWidgets, type WidgetId } from '@/lib/roleDashboard';
 import { buildComplianceCalendar, complianceNotifications } from '@/lib/complianceCalendar';
+import { effectiveLoanStatus } from '@/lib/loans/interestAccrual';
+import { todayStr } from '@/lib/dateUtils';
+import { loanOutstanding as loanOutstandingOf } from '@/lib/memberSnapshot';
 
 type Tone = 'ok' | 'warn' | 'bad' | 'neutral';
 const TONE: Record<Tone, string> = {
@@ -42,8 +45,9 @@ const RoleDashboard: React.FC = () => {
     const tbCr = tb.reduce((s, r) => s + (r.totalCredit || 0), 0);
     const tbBalanced = Math.abs(tbDr - tbCr) < 1;
     const activeMembers = members.filter(m => (!m.approvalStatus || m.approvalStatus === 'approved') && m.status === 'active').length;
-    const loanOutstanding = loans.reduce((s, l) => s + Math.max(0, (l.amount || 0) - (l.repaidAmount || 0)), 0);
-    const overdueLoans = loans.filter(l => l.status === 'overdue').length;
+    // Same scope + formula as the Loan Register / Dashboard (RULE 2): non-cleared loans, shared loanOutstanding.
+    const loanOutstanding = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + loanOutstandingOf(l), 0);
+    const overdueLoans = loans.filter(l => effectiveLoanStatus(l, todayStr()) === 'overdue').length;
     const pendingVouchers = vouchers.filter(v => !v.isDeleted && v.approvalStatus === 'pending').length;
     const rejectedVouchers = vouchers.filter(v => !v.isDeleted && v.approvalStatus === 'rejected').length;
     const pendingObjections = auditObjections.filter(o => o.status === 'pending').length;
