@@ -40,7 +40,7 @@ const STEP_LABELS: Record<AppropriationStep, { hi: string; en: string }> = {
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export const StatutoryAppropriationPanel: React.FC = () => {
-  const { society, getProfitLoss, getShareCapitalReconciliation, addStatutoryAppropriation } = useData();
+  const { society, accounts, getProfitLoss, getShareCapitalReconciliation, addStatutoryAppropriation } = useData();
   const { language } = useLanguage();
   const hi = language === 'hi';
 
@@ -56,8 +56,12 @@ export const StatutoryAppropriationPanel: React.FC = () => {
   const dividendAmt = parseFloat(dividend) || 0;
 
   const appr = useMemo(
-    () => planSocietyAppropriation({ netSurplus, shareCapital, state: society.state, asOf: date, discretionary: { dividend: dividendAmt } }),
-    [netSurplus, shareCapital, society.state, date, dividendAmt],
+    () => planSocietyAppropriation({
+      netSurplus, shareCapital, state: society.state, asOf: date, discretionary: { dividend: dividendAmt },
+      // Same head as DataContext.addStatutoryAppropriation (the preview must match what posts).
+      accounts: accounts.some((a) => a.id === '1205' && !a.isGroup) ? { bye_law_reserves: '1205' } : undefined,
+    }),
+    [netSurplus, shareCapital, society.state, date, dividendAmt, accounts],
   );
 
   // Flag-gated — additive; the legacy path stays the default until this society is flipped.

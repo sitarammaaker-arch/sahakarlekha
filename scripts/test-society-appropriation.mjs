@@ -61,11 +61,20 @@ const sum = (legs, drCr) => legs.filter((l) => l.drCr === drCr).reduce((s, l) =>
   ok(r.legs.length === 0, 'a refused appropriation carries NO legs (never posts a bad plan)');
   ok(r.plan.lines.find((l) => l.step === 'dividend').amountMinor === 1500000, 'the plan still shows the capped ₹15,000 for display'); }
 
-// ── 4. Jurisdiction resolves in one place — HR normalizes; national default applies (no state override yet) ──
+// ── 4. Jurisdiction resolves in one place — HR normalizes; Haryana's text-verified figures apply ──
+// (Act s.87(1)(a): reserve ≥10% AND bad & doubtful debt fund ≥10%; Rules r.73: education ≤2%.)
 { const a = planSocietyAppropriation({ netSurplus: 100000, shareCapital: 0, state: 'Haryana', asOf: '2026-03-31' });
   const b = planSocietyAppropriation({ netSurplus: 100000, shareCapital: 0, state: 'HR', asOf: '2026-03-31' });
   ok(a.jurisdiction === 'hr' && b.jurisdiction === 'hr', "'Haryana' and 'HR' both resolve to jurisdiction 'hr'");
-  ok(legOf(a, '1201', 'Cr').amountMinor === 2500000, 'HR uses the national 25% reserve default (no state override seeded)'); }
+  ok(!a.ok && a.legs.length === 0 && a.problems.some((p) => /bye_law_reserves has no chart account/.test(p)),
+    'HR without a Bad Debt Fund head is REFUSED (the statutory 10% is never silently dropped)');
+  const c = planSocietyAppropriation({ netSurplus: 100000, shareCapital: 0, state: 'HR', asOf: '2026-03-31', accounts: { bye_law_reserves: '1205' } });
+  ok(c.ok && legOf(c, '1201', 'Cr').amountMinor === 1000000, 'HR reserve = 10% (s.87(1)(a))');
+  ok(legOf(c, '1205', 'Cr').amountMinor === 1000000, 'HR bad & doubtful debt fund = 10% (s.87(1)(a))');
+  ok(legOf(c, '1203', 'Cr').amountMinor === 200000, 'HR education fund = 2% (r.73)');
+  ok(sum(c.legs, 'Dr') === sum(c.legs, 'Cr'), 'HR plan balanced');
+  const p = planSocietyAppropriation({ netSurplus: 100000, shareCapital: 0, state: 'PB', asOf: '2026-03-31' });
+  ok(p.ok && legOf(p, '1201', 'Cr').amountMinor === 2500000 && !legOf(p, '1205', 'Cr'), 'a state without verified figures keeps the national 25% and no bad-debt step'); }
 
 // ── 5. Refusal — a non-zero step with no chart head is rejected, never mis-posted ──
 { const r = planSocietyAppropriation({ netSurplus: 100000, shareCapital: 0, asOf: '2026-03-31', discretionary: { charitable: 5000 } });

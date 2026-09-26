@@ -18,6 +18,7 @@ import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { appropriationWaterfall } from '@/lib/appropriation';
 import { ucasReserveMinPct } from '@/lib/rules/ucas';
+import { statutoryLimits, appropriationIssues, hasVerifiedLimits, ACC_BAD_DEBT } from '@/lib/rules/statutoryLimits';
 import { useToast } from '@/hooks/use-toast';
 
 const fmt = (amount: number) =>
@@ -59,9 +60,13 @@ const ReserveFund: React.FC = () => {
   );
 
   const fundName = (a: { name: string; nameHi?: string }) => (hi && a.nameHi) ? a.nameHi : a.name;
+  // The society's statutory limits (jurisdiction from its state; verified figures only are law).
+  const limits = useMemo(() => statutoryLimits(society.state, new Date().toISOString().slice(0, 10)), [society.state]);
+  const badDebtMinPct = limits.badDebtMin.verified ? limits.badDebtMin.pct : 0;
   const defaultRate = (id: string): string =>
     id === '1201' ? String(society.reserveFundPct ?? DEFAULT_RESERVE_PCT)
     : id === '1203' ? String(DEFAULT_EDUCATION_PCT)
+    : id === ACC_BAD_DEBT && badDebtMinPct > 0 ? String(badDebtMinPct)
     : '0';
 
   // ── Per-fund editable input (% of net surplus OR flat ₹). Optional, default 0 ─
@@ -100,7 +105,18 @@ const ReserveFund: React.FC = () => {
   const canPost = netProfit > 0 && pendingFunds.length > 0;
 
   // ECR-10: suggested statutory appropriation waterfall (reserve ≥25% → education → residual).
-  const plan = useMemo(() => appropriationWaterfall(netProfit, { reservePct: society.reserveFundPct }), [netProfit, society.reserveFundPct]);
+  const hasBadDebtFund = fundAccounts.some(f => f.id === ACC_BAD_DEBT);
+  const plan = useMemo(() => appropriationWaterfall(netProfit, {
+    reservePct: society.reserveFundPct,
+    statutoryMinPct: limits.reserveMin.pct,
+    otherFunds: badDebtMinPct > 0 && hasBadDebtFund ? [{ accountId: ACC_BAD_DEBT, label: 'Bad & Doubtful Debt Fund', labelHi: 'अशोध्य एवं संदिग्ध ऋण निधि', pct: badDebtMinPct }] : [],
+  }), [netProfit, society.reserveFundPct, limits.reserveMin.pct, badDebtMinPct, hasBadDebtFund]);
+  // Each fund as % of net profit (posted funds at their posted amount) → the statutory checks.
+  const pctOf = (id: string) => (netProfit > 0 ? (effectiveAmount(id) / netProfit) * 100 : 0);
+  const issues = netProfit > 0
+    ? appropriationIssues(limits, { '1201': pctOf('1201'), '1203': pctOf('1203'), [ACC_BAD_DEBT]: pctOf(ACC_BAD_DEBT) })
+    : [];
+  const issueFor = (id: string) => issues.find(i => i.accountId === id);
   const applySuggested = () => plan.steps.forEach(s => setInput(s.accountId, { mode: 'pct', value: String(s.pct) }));
   const postedVouchers = fundAccounts.map(f => postedMap[f.id]).filter(Boolean) as (typeof vouchers)[number][];
 
@@ -171,8 +187,25 @@ const ReserveFund: React.FC = () => {
           {hi
             ? 'फंड आवंटन पूरी तरह वैकल्पिक है। नीचे हर फंड के लिए शुद्ध लाभ का % या एक निश्चित ₹ राशि चुनें (0 रखने पर वह फंड छूट जाएगी)। सामान्य सुझाव: रिज़र्व फंड 25%, शिक्षा फंड 1% — पर आप कुछ भी चुन सकते हैं।'
             : 'Fund appropriation is entirely optional. For each fund below, set a % of net surplus or a fixed ₹ amount (leave 0 to skip). Common suggestion: Reserve 25%, Education 1% — but you may choose anything.'}
+          {hasVerifiedLimits(limits) && (
+            <span className="block mt-1 font-medium">
+              {hi
+                ? `आपके राज्य का क़ानून: संचय निधि कम से कम ${limits.reserveMin.pct}%${badDebtMinPct > 0 ? `, अशोध्य एवं संदिग्ध ऋण निधि कम से कम ${badDebtMinPct}%` : ''}, शिक्षा निधि अधिकतम ${limits.educationMax.pct}%, लाभांश अधिकतम ${limits.dividendCap.pct}% (शेयर पूंजी पर)।`
+                : `Your State's law: Reserve Fund at least ${limits.reserveMin.pct}%${badDebtMinPct > 0 ? `, Bad & Doubtful Debt Fund at least ${badDebtMinPct}%` : ''}, Education Fund at most ${limits.educationMax.pct}%, dividend at most ${limits.dividendCap.pct}% (of share capital).`}
+              <span className="block text-xs font-normal opacity-80">{[limits.reserveMin.cite, limits.educationMax.cite, limits.dividendCap.cite].filter(Boolean).join(' · ')}</span>
+            </span>
+          )}
         </span>
       </div>
+
+      {badDebtMinPct > 0 && !hasBadDebtFund && (
+        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          {hi
+            ? `क़ानून के अनुसार अशोध्य एवं संदिग्ध ऋण निधि में कम से कम ${badDebtMinPct}% जाना है, पर "अशोध्य ऋण निधि" (${ACC_BAD_DEBT}) खाता नहीं है — Ledger Heads में "संचय एवं अधिशेष" के नीचे बनाएं।`
+            : `The law requires at least ${badDebtMinPct}% to the Bad & Doubtful Debt Fund, but there is no "Bad Debt Fund" (${ACC_BAD_DEBT}) account — create it under "Reserves & Surplus" in Ledger Heads.`}
+        </div>
+      )}
 
       {/* Net surplus zero/negative */}
       {netProfit <= 0 && (
@@ -192,7 +225,8 @@ const ReserveFund: React.FC = () => {
             {plan.reserveBelowStatutory && (
               <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-xs">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
-                {hi ? `वैधानिक संचय ${society.reserveFundPct ?? 25}% है — न्यूनतम 25% होना चाहिए।` : `Statutory reserve is ${society.reserveFundPct ?? 25}% — minimum 25% required.`}
+                {hi ? `वैधानिक संचय ${society.reserveFundPct ?? 25}% है — न्यूनतम ${limits.reserveMin.pct}% होना चाहिए।` : `Statutory reserve is ${society.reserveFundPct ?? 25}% — minimum ${limits.reserveMin.pct}% required.`}
+                {limits.reserveMin.cite && <span className="opacity-80"> ({limits.reserveMin.cite})</span>}
               </div>
             )}
             {plan.steps.map(s => (
@@ -232,7 +266,8 @@ const ReserveFund: React.FC = () => {
                 const posted = postedMap[f.id];
                 const inp = getInput(f.id);
                 return (
-                  <div key={f.id} className="flex items-center justify-between gap-2">
+                  <React.Fragment key={f.id}>
+                  <div className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-1 min-w-0">
                       <span className="truncate">{fundName(f)}</span>
                       <span className="text-xs text-gray-400 shrink-0">({f.id})</span>
@@ -256,6 +291,10 @@ const ReserveFund: React.FC = () => {
                       </div>
                     )}
                   </div>
+                  {issueFor(f.id) && (
+                    <p className="text-xs text-red-600 -mt-1">{hi ? issueFor(f.id)!.hi : issueFor(f.id)!.en}{issueFor(f.id)!.cite && <span className="opacity-80"> ({issueFor(f.id)!.cite})</span>}</p>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </div>

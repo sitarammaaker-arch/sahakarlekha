@@ -39,7 +39,8 @@ console.log('\n  catalog_versions — the rules change-audit trail\n');
 // The values migration 053 seeds. If a rule changes, update BOTH — that IS recording a version.
 const SEEDED = {
   tds:  { hash: 'f93f700bfff69462', ruleCount: 16, valueCount: 20, verifiedCount: 18, unverifiedCount: 2 },
-  ucas: { hash: 'aed8c453012a0bba', ruleCount: 4,  valueCount: 4,  verifiedCount: 0,  unverifiedCount: 0 },
+  // 068: Haryana's text-verified figures (Act s.87(1)(a), Rules rr.72-74) + bad_debt_fund_min_pct.
+  ucas: { hash: 'd0e62014e64728ca', ruleCount: 5,  valueCount: 8,  verifiedCount: 4,  unverifiedCount: 0 },
 };
 
 for (const [name, cat] of [['tds', TDS_RULES], ['ucas', UCAS_RULES]]) {

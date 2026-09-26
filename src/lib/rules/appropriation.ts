@@ -13,7 +13,7 @@
  * reported — a bad appropriation is refused, never silently truncated.
  */
 import { applyPercent } from '../money';
-import { ucasReserveMinPct, ucasEducationFundPct, ucasDividendCapPct, ucasCharitableMaxPct, UCAS_APPROPRIATION_ORDER, type AppropriationStep } from './ucas';
+import { ucasReserveMinPct, ucasEducationFundPct, ucasDividendCapPct, ucasCharitableMaxPct, ucasBadDebtFundMinPct, UCAS_APPROPRIATION_ORDER, type AppropriationStep } from './ucas';
 import type { ResolveOptions } from './engine';
 
 export interface AppropriationInput {
@@ -69,7 +69,10 @@ export function computeAppropriation(input: AppropriationInput, opts: ResolveOpt
 
   const reserve = applyPercent(net, reservePct).minor;
   const education = applyPercent(net, educationPct).minor;
-  const byeLaw = clampMin(input.byeLawReservesMinor);
+  // Where the statute sets a Bad & Doubtful Debt Fund minimum (Haryana s.87(1)(a): ≥10%), the
+  // bye-law reserves step carries at least that — never less than the law, never silently dropped.
+  const badDebtMinPct = ucasBadDebtFundMinPct(opts);
+  const byeLaw = Math.max(clampMin(input.byeLawReservesMinor), badDebtMinPct > 0 ? applyPercent(net, badDebtMinPct).minor : 0);
 
   const dividendCap = applyPercent(share, dividendCapPct).minor;
   const dividendProposed = clampMin(input.dividendMinor);
@@ -92,7 +95,7 @@ export function computeAppropriation(input: AppropriationInput, opts: ResolveOpt
   const byStep: Record<AppropriationStep, AppropriationLine> = {
     reserve_fund:     { step: 'reserve_fund',     amountMinor: reserve,   ratePct: reservePct,     basisMinor: net },
     education_fund:   { step: 'education_fund',   amountMinor: education, ratePct: educationPct,   basisMinor: net },
-    bye_law_reserves: { step: 'bye_law_reserves', amountMinor: byeLaw },
+    bye_law_reserves: { step: 'bye_law_reserves', amountMinor: byeLaw, ...(badDebtMinPct > 0 ? { ratePct: badDebtMinPct, basisMinor: net } : {}) },
     dividend:         { step: 'dividend',         amountMinor: dividend,  ratePct: dividendCapPct, basisMinor: share },
     patronage_bonus:  { step: 'patronage_bonus',  amountMinor: patronage },
     charitable:       { step: 'charitable',       amountMinor: charitable, ratePct: charitablePct, basisMinor: net },
