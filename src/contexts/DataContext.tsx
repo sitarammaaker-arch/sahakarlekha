@@ -52,6 +52,7 @@ import { voucherPostingLines, voucherReversalLines, voucherEventMeta } from '@/l
 import { currentPostingEventId } from '@/lib/ledger/aggregateState';
 import { persistEventAuthoritative, persistEventsAuthoritative } from '@/lib/ledger/persist';
 import { planSocietyAppropriation, appropriationVoucherContent } from '@/lib/rules/societyAppropriation';
+import { resolveRebatePayableAccountId } from '@/lib/consumer/accounts';
 import { authorizeFinalization, type AuthorityAttestation } from '@/lib/governance/authority';
 import { ledgerTrialBalance } from '@/lib/ledger/trialBalance';
 import { ledgerParity, balancesFromJournal } from '@/lib/ledger/parity';
@@ -5666,7 +5667,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       discretionary: { dividend: opts.discretionary?.dividend ?? 0 },         // core-only: reserve + education + optional dividend
       // A statutory Bad & Doubtful Debt Fund minimum (Haryana s.87(1)(a)) posts to the chart's Bad Debt
       // Fund when it exists; without it the step has no head and the plan is refused, never mis-posted.
-      accounts: accounts.some((a) => a.id === '1205' && !a.isGroup) ? { bye_law_reserves: '1205' } : undefined,
+      accounts: {
+        ...(accounts.some((a) => a.id === '1205' && !a.isGroup) ? { bye_law_reserves: '1205' } : {}),
+        // Patronage is owed to members — their rebate-payable head, never 2103 Salary Payable.
+        ...(resolveRebatePayableAccountId(accounts) ? { patronage_bonus: resolveRebatePayableAccountId(accounts) as string } : {}),
+      },
     });
     if (!appr.ok) {
       // A bad plan (cap breach / over-appropriation) is refused, never posted (RULE 1).
