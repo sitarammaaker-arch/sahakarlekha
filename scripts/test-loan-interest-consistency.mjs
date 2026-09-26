@@ -16,16 +16,18 @@ let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
 
 const li = strip('src/pages/LoanInterest.tsx');
-ok(/import \{ loanOutstanding \} from '@\/lib\/memberSnapshot'/.test(li), 'LoanInterest imports the shared loanOutstanding');
+// H2-1: the rows now come from the shared accrual lib, which uses the shared loanOutstanding.
+const acc = strip('src/lib/loans/interestAccrual.ts');
+ok(/import \{ loanOutstanding \} from '\.\.\/memberSnapshot'/.test(acc) && /accrualRows\(activeLoans, toDate, days\)/.test(li), 'LoanInterest rows via the shared accrual lib (shared loanOutstanding)');
 ok(!/l(oan)?\.amount - \(l(oan)?\.repaidAmount/.test(li), 'no private outstanding formula left on the page');
-ok(/const outstanding = Math\.max\(0, loanOutstanding\(loan\)\)/.test(li), 'interest rows: shared formula, clamped at 0 for interest only');
+ok(/const outstanding = Math\.max\(0, loanOutstanding\(l\)\)/.test(acc), 'interest rows: shared formula, clamped at 0 for interest only');
 ok(/'ब्याज योग्य बकाया'/.test(li) && /value=\{fmt\(rows\.reduce\(\(s, r\) => s \+ r\.outstanding, 0\)\)\}/.test(li), 'card = interest-bearing outstanding (sum of the rows), labelled so');
 ok(!/'कुल बकाया'/.test(li), 'no second "कुल बकाया" that disagrees with the Loan Register');
 const post = li.slice(li.indexOf('const handlePost'), li.indexOf('const csvHeaders'));
 ok(/if \(society\.fyLocked\)/.test(post) && post.indexOf('society.fyLocked') < post.indexOf('addVoucher('), 'FY-lock checked before posting (RULE 6)');
 ok(/const v = addVoucher\(/.test(post) && /if \(!v\?\.id\)/.test(post), 'refused voucher detected');
 ok(post.indexOf('if (!v?.id)') < post.indexOf('ब्याज जर्नल पोस्ट हो गया'), 'success toast only after the voucher exists');
-ok(/"ओवरड्यू" ऋणों पर यहाँ ब्याज नहीं जुड़ता/.test(li), 'page states openly that overdue loans do not accrue (founder decision)');
+ok(/अतिदेय ब्याज संचय" \(2211\)/.test(li) && /धारा 87 व्याख्या/.test(li), 'page states the s.87 overdue-interest treatment (H2-1 supersedes the interim note)');
 
 const lr = strip('src/pages/LoanRegister.tsx');
 const add = lr.slice(lr.indexOf('const handleAdd'), lr.indexOf('addLoan({'));

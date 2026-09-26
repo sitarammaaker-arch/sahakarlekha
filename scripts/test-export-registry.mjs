@@ -396,6 +396,8 @@ const EXPECTED = [
   'document_sequence', 'ledger_event', 'society_activity',
   // 066 — per-member dividend / patronage / bonus breakdown (full)
   'member_distribution_run',
+  // 069 — per-loan interest accruals (full)
+  'loan_interest_accrual',
 ].sort();
 ok(keys.join(',') === EXPECTED.join(','), `declares exactly the expected ${EXPECTED.length} tables (got ${keys.length}: ${keys.join(',')})`);
 

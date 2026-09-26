@@ -3496,3 +3496,29 @@ create table if not exists member_distribution_runs (
 create unique index if not exists member_distribution_runs_one_live
   on member_distribution_runs (society_id, "fyLabel", kind) where not "isDeleted";
 alter table member_distribution_runs enable row level security;
+
+-- ── Loan interest accruals (069) — each member loan's accrued interest per period; overdue
+-- interest is credited to the Overdue Interest Reserve (Haryana Act s.87 Explanation). Policies
+-- are created by migration 069 (tenant-scoped); none here (deny-all until 069 runs).
+create table if not exists loan_interest_accruals (
+  id            text primary key,
+  society_id    text not null,
+  "loanId"      text not null,
+  "memberId"    text,
+  "periodFrom"  text not null,
+  "periodTo"    text not null,
+  days          integer not null default 0,
+  outstanding   numeric not null default 0,
+  "ratePa"      numeric not null default 0,
+  amount        numeric not null default 0,
+  overdue       boolean not null default false,
+  recovered     numeric not null default 0,
+  "voucherId"   text,
+  "createdBy"   text,
+  "createdAt"   timestamptz not null default now(),
+  "isDeleted"   boolean not null default false
+);
+create unique index if not exists loan_interest_accruals_one_live
+  on loan_interest_accruals (society_id, "loanId", "periodFrom", "periodTo") where not "isDeleted";
+create index if not exists loan_interest_accruals_loan_idx on loan_interest_accruals (society_id, "loanId");
+alter table loan_interest_accruals enable row level security;
