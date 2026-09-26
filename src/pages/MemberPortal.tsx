@@ -48,6 +48,7 @@ function loginErrorText(k: LoginErrorKey, hi: boolean): string {
   }
 }
 
+const KYC_HI: Record<string, string> = { verified: 'सत्यापित', pending: 'लंबित', rejected: 'अस्वीकृत' };
 const DEPOSIT_TYPE_HI: Record<string, string> = { SB: 'बचत (SB)', FD: 'सावधि (FD)', RD: 'आवर्ती (RD)', PIGMY: 'पिग्मी' };
 
 export default function MemberPortal() {
@@ -345,7 +346,7 @@ export default function MemberPortal() {
           )}
           {m.aadhaarMasked && <p><span className="text-muted-foreground">Aadhaar:</span> <span className="font-mono">{m.aadhaarMasked}</span></p>}
           {m.panMasked && <p><span className="text-muted-foreground">PAN:</span> <span className="font-mono">{m.panMasked}</span></p>}
-          {m.kycStatus && <p><span className="text-muted-foreground">KYC:</span> {m.kycStatus}</p>}
+          {m.kycStatus && <p><span className="text-muted-foreground">KYC:</span> {hi ? (KYC_HI[m.kycStatus] ?? m.kycStatus) : m.kycStatus}</p>}
         </CardContent>
       </Card>
 
