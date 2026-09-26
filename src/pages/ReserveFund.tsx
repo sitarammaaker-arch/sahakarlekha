@@ -136,11 +136,18 @@ const ReserveFund: React.FC = () => {
   };
 
   const handlePost = () => {
+    setConfirmOpen(false);
+    if (society.fyLocked) {
+      toast({ title: hi ? 'FY लॉक है' : 'FY Locked', description: hi ? 'वित्त वर्ष ऑडिट-लॉक है — आवंटन पोस्ट नहीं हो सकता।' : 'Cannot post while the Financial Year is audit-locked.', variant: 'destructive' });
+      return;
+    }
     const today = new Date().toISOString().split('T')[0];
     let posted = 0;
+    const failed: string[] = [];
     pendingFunds.forEach(f => {
       const { mode, value } = getInput(f.id);
-      addVoucher({
+      // addVoucher refuses (permission / FY lock / expired plan) with an empty id — count only real ones.
+      const v = addVoucher({
         type: 'journal',
         date: today,
         debitAccountId: ACC_NET_SURPLUS,
@@ -149,14 +156,23 @@ const ReserveFund: React.FC = () => {
         narration: `${f.name} Appropriation ${mode === 'pct' ? `@ ${value}%` : '(fixed amount)'} — FY ${fy}`,
         createdBy: user?.name ?? 'System',
       });
-      posted++;
+      if (v?.id) posted++; else failed.push(fundName(f));
     });
-    setConfirmOpen(false);
-    toast({
-      title: hi
-        ? `${posted} जर्नल एंट्रियाँ सफलतापूर्वक पोस्ट की गईं`
-        : `${posted} journal entries posted successfully`,
-    });
+    if (failed.length > 0) {
+      toast({
+        title: hi ? `${failed.length} आवंटन पोस्ट नहीं हुए` : `${failed.length} appropriation(s) NOT posted`,
+        description: `${failed.join(', ')} — ${hi ? 'वाउचर नहीं बना (अनुमति / FY लॉक / प्लान)। ऊपर वाला संदेश देखें।' : 'no voucher was created (permission / FY lock / plan) — see the message above.'}`,
+        variant: 'destructive',
+        duration: 10000,
+      });
+    }
+    if (posted > 0) {
+      toast({
+        title: hi
+          ? `${posted} जर्नल एंट्रियाँ सफलतापूर्वक पोस्ट की गईं`
+          : `${posted} journal entries posted successfully`,
+      });
+    }
   };
 
   return (

@@ -176,12 +176,16 @@ const BankReconciliation: React.FC = () => {
     const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = isDeposit
       ? [{ id: lid(), accountId: activeBankId, type: 'Dr', amount }, { id: lid(), accountId: contraId, type: 'Cr', amount }]
       : [{ id: lid(), accountId: contraId, type: 'Dr', amount }, { id: lid(), accountId: activeBankId, type: 'Cr', amount }];
-    addVoucher({
+    const v = addVoucher({
       type: isDeposit ? 'receipt' : 'payment', date: row.date, lines,
       debitAccountId: isDeposit ? activeBankId : contraId, creditAccountId: isDeposit ? contraId : activeBankId, amount,
       narration: row.description || (hi ? 'बैंक समायोजन' : 'Bank adjustment'),
       createdBy: user?.name || 'System', isCleared: true, clearedDate: row.date,
     } as Parameters<typeof addVoucher>[0]);
+    if (!v?.id) {
+      toast({ title: hi ? 'प्रविष्टि दर्ज नहीं हुई' : 'Entry NOT posted', description: hi ? 'वाउचर नहीं बना — ऊपर वाला संदेश देखें (अनुमति / FY लॉक / प्लान)।' : 'No voucher was created — see the message above (permission / FY lock / plan).', variant: 'destructive', duration: 10000 });
+      return;
+    }
     setRowContra(prev => { const n = { ...prev }; delete n[idx]; return n; });
     toast({ title: hi ? '✅ प्रविष्टि दर्ज (मिलान हुआ)' : '✅ Entry posted & cleared', description: `${fmt(amount)} · ${getAccountName(contraId)}` });
   };

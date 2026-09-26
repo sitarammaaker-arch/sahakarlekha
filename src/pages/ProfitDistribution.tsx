@@ -189,16 +189,22 @@ const ProfitDistribution: React.FC = () => {
     if (!divPosted || divPaid || settlementRows.length === 0) return;
     const creditAcc = payMode === 'bank' ? (accounts.find(a => a.id === '3302')?.id || '3302') : '3301';
     let n = 0;
+    let paidTotal = 0;
+    const failed: string[] = [];
     for (const r of settlementRows) {
-      addVoucher({
+      const v = addVoucher({
         type: 'payment', date: payDate,
         debitAccountId: ACC_DIVIDEND, creditAccountId: creditAcc, amount: r.dividend,
         narration: `Dividend paid to ${r.name} — FY ${fy}`,
         createdBy: user?.name ?? 'System', memberId: r.id,
       });
-      n++;
+      // Count only vouchers that exist — a refused one (permission / FY lock / plan) is NOT a payment.
+      if (v?.id) { n++; paidTotal += r.dividend; } else failed.push(r.name);
     }
-    toast({ title: hi ? `✅ ${n} सदस्यों को डिविडेंड भुगतान` : `✅ Dividend paid to ${n} members`, description: fmt(settlementRows.reduce((s, r) => s + r.dividend, 0)) });
+    if (failed.length > 0) {
+      toast({ title: hi ? `${failed.length} सदस्यों का भुगतान दर्ज नहीं हुआ` : `${failed.length} payment(s) NOT recorded`, description: `${failed.slice(0, 5).join(', ')}${failed.length > 5 ? '…' : ''} — ${hi ? 'वाउचर नहीं बना — ऊपर वाला संदेश देखें (अनुमति / FY लॉक / प्लान)।' : 'No voucher was created — see the message above (permission / FY lock / plan).'}`, variant: 'destructive', duration: 12000 });
+    }
+    if (n > 0) toast({ title: hi ? `✅ ${n} सदस्यों को डिविडेंड भुगतान` : `✅ Dividend paid to ${n} members`, description: fmt(Math.round(paidTotal * 100) / 100) });
   };
 
   const paymentRegister = useMemo(() =>
@@ -294,7 +300,7 @@ const ProfitDistribution: React.FC = () => {
     }
 
     if (!bonusPosted && bonusAmount > 0) {
-      addVoucher({
+      const bv = addVoucher({
         type: 'journal',
         date: today,
         debitAccountId: ACC_NET_SURPLUS,
@@ -303,15 +309,18 @@ const ProfitDistribution: React.FC = () => {
         narration: `Employee Bonus Appropriation — FY ${fy}`,
         createdBy: user?.name ?? 'System',
       });
-      posted++;
+      if (bv?.id) posted++;
+      else toast({ title: hi ? 'बोनस जर्नल पोस्ट नहीं हुआ' : 'Bonus journal NOT posted', description: hi ? 'वाउचर नहीं बना — ऊपर वाला संदेश देखें (अनुमति / FY लॉक / प्लान)।' : 'No voucher was created — see the message above (permission / FY lock / plan).', variant: 'destructive', duration: 10000 });
     }
 
     setConfirmOpen(false);
-    toast({
-      title: hi
-        ? `${posted} जर्नल एंट्रियाँ पोस्ट की गईं`
-        : `${posted} journal entries posted`,
-    });
+    if (posted > 0) {
+      toast({
+        title: hi
+          ? `${posted} जर्नल एंट्रियाँ पोस्ट की गईं`
+          : `${posted} journal entries posted`,
+      });
+    }
   };
 
   // ── CSV / Excel ────────────────────────────────────────────────────────────

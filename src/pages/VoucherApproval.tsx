@@ -81,13 +81,14 @@ const VoucherApproval: React.FC = () => {
   };
 
   const handleApprove = (id: string) => {
-    approveVoucher(id, user?.name ?? 'Admin');
+    // false = a guard blocked it (FY lock / permission / self-approval / not pending) and already said why.
+    if (!approveVoucher(id, user?.name ?? 'Admin')) return;
     toast({ title: hi ? 'वाउचर स्वीकृत किया गया' : 'Voucher approved' });
   };
 
   const handleReject = () => {
     if (!rejectId || !rejectReason.trim()) return;
-    rejectVoucher(rejectId, user?.name ?? 'Admin', rejectReason.trim());
+    if (!rejectVoucher(rejectId, user?.name ?? 'Admin', rejectReason.trim())) return;
     toast({ title: hi ? 'वाउचर अस्वीकृत किया गया' : 'Voucher rejected' });
     setRejectId(null);
     setRejectReason('');

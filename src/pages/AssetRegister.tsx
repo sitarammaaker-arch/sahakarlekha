@@ -320,7 +320,7 @@ const AssetRegister: React.FC = () => {
         // Cr Profit on Sale (if profit)
         if (profitLoss > 0) lines.push({ id: lid(), accountId: '4410', type: 'Cr', amount: profitLoss });
 
-        addVoucher({
+        const dv = addVoucher({
           type: 'journal',
           date: form.disposalDate || new Date().toISOString().split('T')[0],
           debitAccountId: lines.find(l => l.type === 'Dr')?.accountId || '',
@@ -330,6 +330,13 @@ const AssetRegister: React.FC = () => {
           lines,
           createdBy: 'System',
         });
+        if (!dv?.id) {
+          // RULE 1: no disposal journal ⇒ the asset must not show as disposed — put it back.
+          updateAsset(editAsset.id, { status: editAsset.status, disposalDate: editAsset.disposalDate, saleProceeds: editAsset.saleProceeds });
+          toast({ title: hi ? 'निपटान पोस्ट नहीं हुआ' : 'Disposal NOT posted', description: hi ? 'वाउचर नहीं बना — ऊपर वाला संदेश देखें (अनुमति / FY लॉक / प्लान)। संपत्ति पहले जैसी (सक्रिय) रखी गई।' : 'No voucher was created — see the message above (permission / FY lock / plan). The asset was kept as it was.', variant: 'destructive', duration: 10000 });
+          setEditAsset(null);
+          return;
+        }
 
         toast({
           title: hi ? 'निपटान जर्नल पोस्ट किया गया' : 'Disposal journal posted',
