@@ -12,7 +12,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Download, Wheat, AlertTriangle, CheckCircle2, FileSpreadsheet } from 'lucide-react';
+import { Plus, Download, Wheat, AlertTriangle, CheckCircle2, FileSpreadsheet, BookOpen } from 'lucide-react';
+import { LedgerDialog } from '@/components/registers/LedgerDialog';
+import { loanLedger, kccLedgerInput } from '@/lib/registers/subsidiaryLedgers';
+import { loanLedgerTable } from '@/lib/registers/ledgerTables';
+import { ledgerExcel, ledgerPdf } from '@/lib/registers/ledgerExport';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
@@ -59,6 +63,13 @@ export default function KccLoan() {
   const societyId = user?.societyId || 'SOC001';
 
   const [loans, setLoans] = useState<KccLoan[]>([]);
+  // Loan Ledger for a KCC loan: the SAME sources as dueOf (live repayment vouchers + live accruals).
+  const isIncome = (id: string) => accounts.find(a => a.id === id)?.type === 'income';
+  const ledgerTableOf = (k: KccLoan) => loanLedgerTable(loanLedger(kccLedgerInput(k), vouchers, accruals, isIncome),
+    { loanNo: k.loanNo, memberName: k.memberName, kind: 'KCC', recordedOutstanding: k.outstandingAmount });
+  const [ledgerLoan, setLedgerLoan] = useState<KccLoan | null>(null);
+  const ledgerTable = ledgerLoan ? ledgerTableOf(ledgerLoan) : null;
+  const allLedgers = () => [...loans].sort((a, b) => a.loanNo.localeCompare(b.loanNo)).map(ledgerTableOf);
   const [showDialog, setShowDialog] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -302,6 +313,8 @@ export default function KccLoan() {
             <Button variant="outline" onClick={handlePDF}><Download className="h-4 w-4 mr-2" />PDF</Button>
             <Button variant="outline" onClick={handleExcel}><FileSpreadsheet className="h-4 w-4 mr-2" />Excel</Button>
             <Button variant="outline" onClick={handleCSV}><FileSpreadsheet className="h-4 w-4 mr-2" />CSV</Button>
+            {loans.length > 0 && <Button variant="outline" onClick={() => ledgerPdf(society, allLedgers(), 'KCL', 'KCC_Ledger')}><BookOpen className="h-4 w-4 mr-2" />{hi ? 'खाता-बही PDF' : 'Ledger PDF'}</Button>}
+            {loans.length > 0 && <Button variant="outline" onClick={() => ledgerExcel(allLedgers(), 'KCC_Ledger', 'KCC Ledger')}><FileSpreadsheet className="h-4 w-4 mr-2" />{hi ? 'खाता-बही Excel' : 'Ledger Excel'}</Button>}
           </div>
           <Button onClick={() => { setForm(emptyForm); setErrors({}); setShowDialog(true); }}>
             <Plus className="h-4 w-4 mr-2" />{hi ? 'नया ऋण' : 'New Loan'}
@@ -372,7 +385,9 @@ export default function KccLoan() {
                           </TableRow>
                         ) : tabData.map(l => (
                           <TableRow key={l.id} className={l.status === 'overdue' ? 'bg-red-50' : ''}>
-                            <TableCell className="font-mono text-xs">{l.loanNo}</TableCell>
+                            <TableCell className="font-mono text-xs">
+                              <button type="button" className="inline-flex items-center gap-1 text-primary hover:underline" title={hi ? 'ऋण खाता-बही' : 'Loan ledger'} onClick={() => setLedgerLoan(l)}><BookOpen className="h-3.5 w-3.5" />{l.loanNo}</button>
+                            </TableCell>
                             <TableCell className="font-medium">{l.memberName}</TableCell>
                             <TableCell>
                               <div>{l.cropName}</div>
@@ -486,6 +501,10 @@ export default function KccLoan() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <LedgerDialog table={ledgerTable} hi={hi} onClose={() => setLedgerLoan(null)}
+        onPdf={() => ledgerTable && ledgerPdf(society, [ledgerTable], 'KCL', `KCC_Ledger_${ledgerLoan?.loanNo ?? ''}`)}
+        onExcel={() => ledgerTable && ledgerExcel([ledgerTable], `KCC_Ledger_${ledgerLoan?.loanNo ?? ''}`, 'KCC Ledger')} />
     </div>
   );
 }
