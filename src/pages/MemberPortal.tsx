@@ -18,9 +18,11 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { fmtDate } from '@/lib/dateUtils';
-import { KeyRound, LogOut, Printer, Loader2, Landmark, HandCoins, PiggyBank, Wheat } from 'lucide-react';
+import { KeyRound, LogOut, Printer, Loader2, Landmark, HandCoins, PiggyBank, Wheat, Milk, Home, ShoppingBasket } from 'lucide-react';
 import { memberSignIn, memberSignOut, hasMemberSession, fetchMemberSnapshot } from '@/lib/memberPortalClient';
 import { buildPortalView, deniedMessage, type PortalSnapshot, type PortalDenied } from '@/lib/memberPortalView';
+import { buildVerticalViews, type PortalVerticalPayload } from '@/lib/memberPortalVerticals';
+import { PortalVerticals } from '@/components/member-portal/PortalVerticals';
 
 type Phase = 'checking' | 'login' | 'loading' | 'ready' | 'denied';
 
@@ -94,6 +96,11 @@ export default function MemberPortal() {
   };
 
   const view = useMemo(() => (snapshot ? buildPortalView(snapshot) : null), [snapshot]);
+  // S4b: dairy / housing / consumer — only the verticals this member has data in.
+  const verticals = useMemo(
+    () => (snapshot ? buildVerticalViews(snapshot.member.id, snapshot as PortalSnapshot & PortalVerticalPayload, new Date().toISOString().slice(0, 10)) : null),
+    [snapshot],
+  );
   const societyName = snapshot?.society ? ((hi ? snapshot.society.nameHi : snapshot.society.name) || snapshot.society.name || '') : '';
 
   if (phase === 'checking' || phase === 'loading') {
@@ -137,12 +144,17 @@ export default function MemberPortal() {
 
   const m = snapshot!.member;
   const v = view!;
+  const vv = verticals!;
+  // Share capital always; every other card only when the member has that kind of account.
   const summary = [
-    { icon: Landmark, label: hi ? 'शेयर पूँजी' : 'Share capital', value: v.shareBalance },
-    { icon: HandCoins, label: hi ? 'ऋण बकाया' : 'Loan outstanding', value: v.loanOutstandingTotal },
-    { icon: PiggyBank, label: hi ? 'कुल जमा' : 'Total deposits', value: v.depositTotal },
-    { icon: Wheat, label: hi ? 'KCC बकाया' : 'KCC outstanding', value: v.kccOutstandingTotal },
-  ];
+    { icon: Landmark, label: hi ? 'शेयर पूँजी' : 'Share capital', value: v.shareBalance, show: true },
+    { icon: HandCoins, label: hi ? 'ऋण बकाया' : 'Loan outstanding', value: v.loanOutstandingTotal, show: v.loans.length > 0 },
+    { icon: PiggyBank, label: hi ? 'कुल जमा' : 'Total deposits', value: v.depositTotal, show: v.deposits.length > 0 },
+    { icon: Wheat, label: hi ? 'KCC बकाया' : 'KCC outstanding', value: v.kccOutstandingTotal, show: v.kccLoans.length > 0 },
+    { icon: Milk, label: hi ? 'दूध भुगतान बाकी' : 'Milk payment due', value: vv.dairy?.passbook.totalOutstanding ?? 0, show: !!vv.dairy },
+    { icon: Home, label: hi ? 'रखरखाव बकाया' : 'Maintenance due', value: vv.housing?.statement.outstanding ?? 0, show: !!vv.housing },
+    { icon: ShoppingBasket, label: hi ? 'दुकान उधार' : 'Store credit due', value: vv.consumer?.outstanding ?? 0, show: !!vv.consumer },
+  ].filter((c) => c.show);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
@@ -282,6 +294,8 @@ export default function MemberPortal() {
           </CardContent>
         </Card>
       )}
+
+      <PortalVerticals views={vv} hi={hi} />
 
       <Card>
         <CardHeader><CardTitle className="text-base">{hi ? 'परिचय' : 'Profile'}</CardTitle></CardHeader>

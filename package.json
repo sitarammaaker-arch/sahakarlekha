@@ -147,6 +147,7 @@
     "test:member-portal-core": "node scripts/test-member-portal-core.mjs",
     "test:member-portal-handout": "node scripts/test-member-portal-handout.mjs",
     "test:member-portal-view": "node scripts/test-member-portal-view.mjs",
+    "test:member-portal-verticals": "node scripts/test-member-portal-verticals.mjs",
     "test:asset-reconciliation": "node scripts/test-asset-reconciliation.mjs",
     "test:approval-matrix": "node scripts/test-approval-matrix.mjs",
     "test:activities-resolver": "node scripts/test-activities-resolver.mjs",
