@@ -14,7 +14,9 @@ import { navigationService, declaredActivities } from '@/lib/navigation';
 import { balanceSheetLeaves } from '@/lib/balanceSheetLeaves';
 import { buildCasBalanceSheet, buildCasProfitLoss, buildCasTrading, buildCasTrialBalance, casBalanceSheetTies, type CasSection, type CasTbRow } from '@/lib/cas/pacsCas';
 import { generateCasPdf } from '@/lib/cas/casPdf';
-import { loanInterestDue } from '@/lib/loans/interestAccrual';
+import { loanInterestDue, kccAccruables } from '@/lib/loans/interestAccrual';
+import { averagePosition, misPosition, misRatios, overdueClassification } from '@/lib/cas/pacsMis';
+import { CasMis } from './CasMis';
 import { useLoanAccruals } from '@/hooks/useLoanAccruals';
 
 const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -122,11 +124,27 @@ export function CasStatements({ hi }: { hi: boolean }) {
       .reduce((t, id) => { const d = loanInterestDue(id, accruals, vouchers); return t + Math.min(d.reserve, d.receivable); }, 0);
     const bs = buildCasBalanceSheet({ assetLeaves: leaves.assetLeaves, capLiabLeaves: leaves.capLiabLeaves, unpostedStock: leaves.unpostedStock, netProfit: appPL.netProfit, overdueInterestReceivable: overdue });
     const pl = buildCasProfitLoss(tb, { hasTrading, grossProfit: tr.grossProfit });
+    // MIS (CAS-2b): month-end CAS Balance Sheets for the Annexure XVII averages — built by the SAME
+    // leaves rule + builder as Annexure IV. The overdue-interest split does not move any XVII figure.
+    const bsAt = (date: string) => {
+      const t = getTrialBalance(date), p = getProfitLoss(date), r = getTradingAccount(date);
+      const lv = balanceSheetLeaves(t, { closingStockPosted: r.closingStockPosted, physicalClosingStock: r.physicalClosingStock, netProfit: p.netProfit });
+      return buildCasBalanceSheet({ assetLeaves: lv.assetLeaves, capLiabLeaves: lv.capLiabLeaves, unpostedStock: lv.unpostedStock, netProfit: p.netProfit, overdueInterestReceivable: 0 });
+    };
+    const misAsOf = today < fyEnd ? today : fyEnd;
+    const monthEnds = months.filter((m) => m.to <= misAsOf).map((m) => misPosition(bsAt(m.to)));
+    const mis = {
+      asOf: misAsOf,
+      overdue: overdueClassification({ memberLoans: loans.filter((l) => !l.isDeleted), kcc: kccAccruables(kccLoans), asOf: misAsOf }),
+      avgCurrent: averagePosition(monthEnds),
+      monthsAveraged: monthEnds.length,
+      ratios: misRatios(bs, appPL.netProfit),
+    };
     const trading = hasTrading ? buildCasTrading(tb, { openingStock: tr.totalOpeningStock, closingStock: tr.totalClosingStock, procuredToStock: tr.procuredToStock, purchaseGrossUp: tr.legacyPurchaseGrossUp }) : null;
     const m = months.find((x) => x.key === tbMonth);
     const tbCas = m ? buildCasTrialBalance(getTrialBalance(m.to), getTrialBalance(dayBefore(m.from)), { hasTrading }) : null;
-    return { bs, pl, trading, appNet: appPL.netProfit, appGross: tr.grossProfit, leaves, tbCas, tbLabel: m?.label ?? '' };
-  }, [months, tbMonth, getTrialBalance, getProfitLoss, getTradingAccount, fyEnd, society.societyType, society.state, society.activitiesCutoverEnabled, societyCapabilities, societyActivities, loans, kccLoans, accruals, vouchers]);
+    return { bs, pl, trading, appNet: appPL.netProfit, appGross: tr.grossProfit, leaves, tbCas, tbLabel: m?.label ?? '', mis };
+  }, [months, tbMonth, today, getTrialBalance, getProfitLoss, getTradingAccount, fyEnd, society.societyType, society.state, society.activitiesCutoverEnabled, societyCapabilities, societyActivities, loans, kccLoans, accruals, vouchers]);
 
   const { bs, pl, trading } = data;
   const bsTies = casBalanceSheetTies(bs, data.leaves);
@@ -202,6 +220,8 @@ export function CasStatements({ hi }: { hi: boolean }) {
           </div>
         </CardContent>
       </Card>
+
+      <CasMis hi={hi} {...data.mis} />
     </div>
   );
 }
