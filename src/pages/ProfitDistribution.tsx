@@ -23,6 +23,9 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { StatutoryAppropriationPanel } from '@/components/StatutoryAppropriationPanel';
+import { useDistributionRuns } from '@/hooks/useDistributionRuns';
+import { linesTotal } from '@/lib/distribution/engine';
+import { dividendRunLines, liveRunFor, existingRunFor, dividendBreakdown, snapshotLines } from '@/lib/distribution/dividendRuns';
 
 // ── Account IDs ─────────────────────────────────────────────────────────────
 const ACC_NET_SURPLUS   = '1208';
@@ -89,6 +92,13 @@ const ProfitDistribution: React.FC = () => {
   const postedBonus    = existingBonusVoucher?.amount || 0;
   const distributable  = Math.round((netProfit - appropriatedAmt - postedDividend - postedBonus) * 100) / 100;
 
+  // Per-member dividend runs (066): the split frozen at posting time — the voucher stays the authority.
+  const { runs: distributionRuns, saveRun } = useDistributionRuns();
+  const liveDividendRun = useMemo(
+    () => (divPosted ? liveRunFor(distributionRuns, fy, 'dividend', postedDividend) : undefined),
+    [distributionRuns, fy, divPosted, postedDividend],
+  );
+
   // ── User inputs ────────────────────────────────────────────────────────────
   const [dividendRate, setDividendRate] = useState('');   // % of share capital
   const [bonusAmt, setBonusAmt]         = useState('');   // flat amount
@@ -146,14 +156,43 @@ const ProfitDistribution: React.FC = () => {
       && getVoucherLines(v).some(l => l.accountId === ACC_DIVIDEND && l.type === 'Dr')),
     [vouchers, fy]);
   const divPaid = !!existingDivPayment;
-  // Per-member split of the POSTED dividend, proportional to share capital (exact, and
-  // robust after a refresh when the rate input has reset).
-  const settlementRows = useMemo(() => {
-    if (!divPosted || totalShareCapital <= 0) return [] as { id: string; name: string; dividend: number }[];
-    return activeMembers
-      .map(m => ({ id: m.id, name: m.name, dividend: Math.round((m.shareCapital || 0) / totalShareCapital * postedDividend * 100) / 100 }))
-      .filter(r => r.dividend > 0);
-  }, [divPosted, activeMembers, totalShareCapital, postedDividend]);
+  // ── Dividend PAYMENT REGISTER — who's been paid, who's pending ─────────────
+  // Joins each member's ENTITLED dividend (settlementRows) with the actual
+  // per-member payment vouchers (Dr 1211, memberId-tagged) for audit evidence.
+  const paidByMember = useMemo(() => {
+    const m = new Map<string, { amount: number; voucherNo: string; date: string }>();
+    for (const v of vouchers) {
+      if (v.isDeleted || !v.memberId || !v.narration?.includes(fy)) continue;
+      if (!/dividend paid|डिविडेंड भुगतान/i.test(v.narration)) continue;
+      if (!getVoucherLines(v).some(l => l.accountId === ACC_DIVIDEND && l.type === 'Dr')) continue;
+      const prev = m.get(v.memberId);
+      m.set(v.memberId, { amount: Math.round(((prev?.amount || 0) + v.amount) * 100) / 100, voucherNo: v.voucherNo || prev?.voucherNo || '', date: v.date });
+    }
+    return m;
+  }, [vouchers, fy]);
+  // Each member's entitled dividend: from the frozen run (new posts); for a legacy year, the actual
+  // payment vouchers (if paid) or the old share-capital split (if not — an admin can freeze it).
+  const dividendSplit = useMemo(
+    () => (divPosted
+      ? dividendBreakdown({ run: liveDividendRun, postedAmount: postedDividend, members, paidByMember })
+      : { rows: [], source: 'proportional' as const }),
+    [divPosted, liveDividendRun, postedDividend, members, paidByMember],
+  );
+  const settlementRows = dividendSplit.rows;
+
+  const freezeLegacySplit = async () => {
+    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    if (!existingDivVoucher || dividendSplit.source !== 'proportional' || settlementRows.length === 0) return;
+    const prior = existingRunFor(distributionRuns, fy, 'dividend');
+    const res = await saveRun({
+      id: prior?.id ?? crypto.randomUUID(), fyLabel: fy, kind: 'dividend', basis: 'share_capital', ratePct: null,
+      total: postedDividend, lines: snapshotLines(settlementRows), status: 'approved', voucherId: existingDivVoucher.id,
+      source: 'snapshot', createdBy: user?.name ?? null, createdAt: new Date().toISOString(), isDeleted: false,
+    });
+    toast(res.ok
+      ? { title: hi ? '✅ सदस्यों के हिस्से पक्के हो गए' : '✅ Member shares frozen', description: hi ? 'अब शेयर बदलने पर भी ये हिस्से नहीं बदलेंगे।' : 'They will no longer change with share capital.' }
+      : { title: hi ? 'हिस्से सहेजे नहीं जा सके' : 'Could not save the shares', description: hi ? 'Cloud से संपर्क नहीं हुआ — कुछ नहीं बदला, फिर कोशिश करें।' : 'Cloud save failed — nothing changed, please retry.', variant: 'destructive', duration: 10000 });
+  };
 
   const settleDividend = () => {
     if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
@@ -172,20 +211,6 @@ const ProfitDistribution: React.FC = () => {
     toast({ title: hi ? `✅ ${n} सदस्यों को डिविडेंड भुगतान` : `✅ Dividend paid to ${n} members`, description: fmt(settlementRows.reduce((s, r) => s + r.dividend, 0)) });
   };
 
-  // ── Dividend PAYMENT REGISTER — who's been paid, who's pending ─────────────
-  // Joins each member's ENTITLED dividend (settlementRows) with the actual
-  // per-member payment vouchers (Dr 1211, memberId-tagged) for audit evidence.
-  const paidByMember = useMemo(() => {
-    const m = new Map<string, { amount: number; voucherNo: string; date: string }>();
-    for (const v of vouchers) {
-      if (v.isDeleted || !v.memberId || !v.narration?.includes(fy)) continue;
-      if (!/dividend paid|डिविडेंड भुगतान/i.test(v.narration)) continue;
-      if (!getVoucherLines(v).some(l => l.accountId === ACC_DIVIDEND && l.type === 'Dr')) continue;
-      const prev = m.get(v.memberId);
-      m.set(v.memberId, { amount: Math.round(((prev?.amount || 0) + v.amount) * 100) / 100, voucherNo: v.voucherNo || prev?.voucherNo || '', date: v.date });
-    }
-    return m;
-  }, [vouchers, fy]);
   const paymentRegister = useMemo(() =>
     settlementRows.map(r => {
       const paid = paidByMember.get(r.id);
@@ -210,7 +235,12 @@ const ProfitDistribution: React.FC = () => {
   // Appropriations (reserve/education) are OPTIONAL — never block dividend/bonus.
   const canPost = ((!divPosted && totalDividend > 0) || (!bonusPosted && bonusAmount > 0)) && remaining >= 0;
 
-  const handlePost = () => {
+  const handlePost = async () => {
+    // RULE 6: nothing is written while the FY is audit-locked (the run is saved before the voucher).
+    if (society.fyLocked) {
+      toast({ title: 'FY Locked', description: hi ? 'FY ऑडिट-लॉक है — कोई बदलाव नहीं हो सकता।' : 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' });
+      return;
+    }
     // Guard: never let dividend + bonus exceed the distributable surplus (over-appropriation). #13
     if (remaining < 0) {
       toast({
@@ -224,16 +254,48 @@ const ProfitDistribution: React.FC = () => {
     let posted = 0;
 
     if (!divPosted && totalDividend > 0) {
-      addVoucher({
-        type: 'journal',
-        date: today,
-        debitAccountId: ACC_NET_SURPLUS,
-        creditAccountId: ACC_DIVIDEND,
-        amount: totalDividend,
-        narration: `Dividend Appropriation @ ${dividendRatePct}% of Share Capital — FY ${fy}`,
-        createdBy: user?.name ?? 'System',
-      });
-      posted++;
+      // Freeze each member's share FIRST (RULE 1: nothing is posted unless the cloud has the split).
+      const lines = dividendRunLines(members, dividendRatePct);
+      const total = linesTotal(lines);
+      const run = {
+        id: existingRunFor(distributionRuns, fy, 'dividend')?.id ?? crypto.randomUUID(),
+        fyLabel: fy, kind: 'dividend' as const, basis: 'share_capital', ratePct: dividendRatePct, total, lines,
+        status: 'approved' as const, voucherId: null as string | null, source: 'posted' as const,
+        createdBy: user?.name ?? null, createdAt: new Date().toISOString(), isDeleted: false,
+      };
+      const saved = await saveRun(run);
+      // Migration 066 not run yet ⇒ the table does not exist: post the old way (as before this
+      // feature) and say so, rather than blocking the society's year-end.
+      const tableMissing = !saved.ok && /member_distribution_runs|does not exist|schema cache|PGRST205|42P01/i.test(saved.error || '');
+      if (tableMissing) {
+        toast({
+          title: hi ? 'पुराने तरीके से पोस्ट हुआ' : 'Posted the old way',
+          description: hi ? 'Migration 066 अभी नहीं चली — सदस्यों के हिस्से पक्के नहीं हुए। Admin से 066 चलवाएँ।' : 'Migration 066 has not been run — member shares were not frozen. Ask the admin to run 066.',
+          duration: 10000,
+        });
+      }
+      if (!saved.ok && !tableMissing) {
+        toast({
+          title: hi ? 'डिविडेंड पोस्ट नहीं हुआ' : 'Dividend not posted',
+          description: hi ? 'सदस्यों के हिस्से cloud में सहेजे नहीं जा सके — कुछ भी पोस्ट नहीं किया गया। फिर कोशिश करें।' : 'Member shares could not be saved to the cloud — nothing was posted. Please retry.',
+          variant: 'destructive', duration: 10000,
+        });
+      } else {
+        const v = addVoucher({
+          type: 'journal',
+          date: today,
+          debitAccountId: ACC_NET_SURPLUS,
+          creditAccountId: ACC_DIVIDEND,
+          amount: total,
+          narration: `Dividend Appropriation @ ${dividendRatePct}% of Share Capital — FY ${fy}`,
+          createdBy: user?.name ?? 'System',
+        });
+        if (v.id) {
+          // Link for audit (best effort — the run is matched to the voucher by FY + total anyway).
+          if (saved.ok) void saveRun({ ...run, voucherId: v.id });
+          posted++;
+        }
+      }
     }
 
     if (!bonusPosted && bonusAmount > 0) {
@@ -618,9 +680,24 @@ const ProfitDistribution: React.FC = () => {
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  {hi ? 'अपॉइंटमेंट पोस्ट हो चुका (Cr 1211)। नीचे भुगतान करने पर प्रत्येक सदस्य को शेयर-पूँजी अनुपात में डिविडेंड चुकता होगा (Dr 1211 / Cr नकद-बैंक)।'
-                      : 'Appropriation is posted (Cr 1211). Paying below settles each member their dividend, split by share capital (Dr 1211 / Cr Cash-Bank).'}
+                  {hi ? 'अपॉइंटमेंट पोस्ट हो चुका (Cr 1211)। नीचे भुगतान करने पर प्रत्येक सदस्य को उसका डिविडेंड चुकता होगा (Dr 1211 / Cr नकद-बैंक)।'
+                      : 'Appropriation is posted (Cr 1211). Paying below settles each member their dividend (Dr 1211 / Cr Cash-Bank).'}
                 </p>
+                {dividendSplit.source === 'run' ? (
+                  <p className="text-xs rounded-md bg-green-50 text-green-800 border border-green-200 p-2">
+                    {hi ? '✓ हर सदस्य का हिस्सा पोस्ट के समय पक्का किया गया है — शेयर बदलने पर भी नहीं बदलेगा।' : '✓ Each member’s share was frozen when posted — it will not change if share capital changes.'}
+                  </p>
+                ) : (
+                  <div className="text-xs rounded-md bg-amber-50 text-amber-800 border border-amber-200 p-2 flex flex-wrap items-center justify-between gap-2">
+                    <span>{hi ? '⚠ यह पुराना वर्ष है — हिस्से आज की शेयर पूँजी से गिने जा रहे हैं, इसलिए शेयर बदलने पर बदल सकते हैं। भुगतान से पहले इन्हें पक्का कर लें।'
+                              : '⚠ Legacy year — shares are computed from today’s share capital and may change. Freeze them before paying.'}</span>
+                    {user?.role === 'admin' && (
+                      <Button size="sm" variant="outline" className="h-7" onClick={freezeLegacySplit} disabled={settlementRows.length === 0}>
+                        {hi ? 'हिस्से पक्के करें' : 'Freeze shares'}
+                      </Button>
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                   <div className="space-y-1">
                     <Label>{hi ? 'भुगतान विधि' : 'Payment mode'}</Label>

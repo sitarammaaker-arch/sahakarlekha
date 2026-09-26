@@ -394,6 +394,8 @@ const EXPECTED = [
   'recoverable', 'kachi_aarat_entry', 'p7_entry',
   // 2026-07 — numbering authority (full), shadow event journal (sidecar), activities config (full)
   'document_sequence', 'ledger_event', 'society_activity',
+  // 066 — per-member dividend / patronage / bonus breakdown (full)
+  'member_distribution_run',
 ].sort();
 ok(keys.join(',') === EXPECTED.join(','), `declares exactly the expected ${EXPECTED.length} tables (got ${keys.length}: ${keys.join(',')})`);
 
