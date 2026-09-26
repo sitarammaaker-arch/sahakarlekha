@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { fmtDate } from '@/lib/dateUtils';
-import { KeyRound, LogOut, Printer, Loader2, Landmark, HandCoins, PiggyBank, Wheat, Milk, Home, ShoppingBasket } from 'lucide-react';
+import { Languages, KeyRound, LogOut, Printer, Loader2, Landmark, HandCoins, PiggyBank, Wheat, Milk, Home, ShoppingBasket } from 'lucide-react';
 import { memberSignIn, memberSignOut, hasMemberSession, fetchMemberSnapshot } from '@/lib/memberPortalClient';
 import { buildPortalView, deniedMessage, type PortalSnapshot, type PortalDenied } from '@/lib/memberPortalView';
 import { buildVerticalViews, type PortalVerticalPayload } from '@/lib/memberPortalVerticals';
@@ -27,12 +27,42 @@ import { PortalVerticals } from '@/components/member-portal/PortalVerticals';
 type Phase = 'checking' | 'login' | 'loading' | 'ready' | 'denied';
 
 const money = (n: number) => `₹${(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export const PORTAL_LANG_KEY = 'sl-member-portal-lang';
+function readPortalLang(): 'hi' | 'en' | null {
+  try { const v = window.sessionStorage.getItem(PORTAL_LANG_KEY); return v === 'hi' || v === 'en' ? v : null; } catch { return null; }
+}
+function writePortalLang(v: 'hi' | 'en') {
+  try { window.sessionStorage.setItem(PORTAL_LANG_KEY, v); } catch { /* storage blocked — the choice lasts for this page only */ }
+}
+// Masked-text PIN (-webkit-text-security) is supported in Chrome/Edge/Safari/Firefox 124+; detect once.
+const PIN_MASK_SUPPORTED = typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('-webkit-text-security', 'disc');
+
+type LoginErrorKey = 'fill' | 'rate' | 'network' | 'invalid' | 'reload';
+function loginErrorText(k: LoginErrorKey, hi: boolean): string {
+  switch (k) {
+    case 'fill': return hi ? 'सदस्य संख्या और 6 अंकों का PIN भरें।' : 'Enter your member number and 6-digit PIN.';
+    case 'rate': return hi ? 'बहुत बार कोशिश हुई। कुछ मिनट बाद फिर करें।' : 'Too many attempts. Please try again in a few minutes.';
+    case 'network': return hi ? 'सर्वर से संपर्क नहीं हो सका। इंटरनेट जाँचें।' : 'Could not reach the server. Check your internet.';
+    case 'reload': return hi ? 'जानकारी नहीं मिल सकी। कृपया फिर से login करें।' : 'Could not load your details. Please log in again.';
+    default: return hi ? 'सदस्य संख्या या PIN गलत है।' : 'Member number or PIN is incorrect.';
+  }
+}
+
 const DEPOSIT_TYPE_HI: Record<string, string> = { SB: 'बचत (SB)', FD: 'सावधि (FD)', RD: 'आवर्ती (RD)', PIGMY: 'पिग्मी' };
 
 export default function MemberPortal() {
   const { societyId = '' } = useParams();
   const { language } = useLanguage();
-  const hi = language !== 'en';
+  // Portal-only language (sessionStorage, like the session). Deliberately NOT setLanguage(): on a shared
+  // office computer a member choosing English must not flip the staff app's language too.
+  const [lang, setLang] = useState<'hi' | 'en'>(() => readPortalLang() ?? (language === 'en' ? 'en' : 'hi'));
+  const hi = lang !== 'en';
+  const toggleLang = () => { const next = hi ? 'en' : 'hi'; setLang(next); writePortalLang(next); };
+  const langToggle = (
+    <Button type="button" variant="ghost" size="sm" className="gap-1 text-xs" onClick={toggleLang} aria-label={hi ? 'Switch to English' : 'हिंदी में देखें'}>
+      <Languages className="h-4 w-4" />{hi ? 'English' : 'हिंदी'}
+    </Button>
+  );
   useDocumentMeta({ title: hi ? 'सदस्य portal — सहकार लेखा' : 'Member portal — SahakarLekha', robots: 'noindex, nofollow' });
 
   const [phase, setPhase] = useState<Phase>('checking');
@@ -40,7 +70,8 @@ export default function MemberPortal() {
   const [denied, setDenied] = useState('');
   const [memberNo, setMemberNo] = useState('');
   const [pin, setPin] = useState('');
-  const [error, setError] = useState('');
+  // Codes, not text: rendered in the CURRENT language, so the toggle also translates a shown error.
+  const [errorKey, setErrorKey] = useState<LoginErrorKey | ''>('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -51,14 +82,14 @@ export default function MemberPortal() {
     if (reason === 'network') {
       // A lapsed session also lands here — send the member back to the form rather than a dead end.
       await memberSignOut();
-      setError(hi ? 'जानकारी नहीं मिल सकी। कृपया फिर से login करें।' : 'Could not load your details. Please log in again.');
+      setErrorKey('reload');
       setPhase('login');
       return;
     }
-    setDenied(deniedMessage(reason, hi));
+    setDenied(reason);
     await memberSignOut();
     setPhase('denied');
-  }, [hi]);
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -68,9 +99,9 @@ export default function MemberPortal() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setErrorKey('');
     if (!memberNo.trim() || !/^\d{6}$/.test(pin)) {
-      setError(hi ? 'सदस्य संख्या और 6 अंकों का PIN भरें।' : 'Enter your member number and 6-digit PIN.');
+      setErrorKey('fill');
       return;
     }
     setBusy(true);
@@ -78,11 +109,7 @@ export default function MemberPortal() {
     setBusy(false);
     setPin('');
     if (res.ok === false) {
-      setError(res.reason === 'rate_limited'
-        ? (hi ? 'बहुत बार कोशिश हुई। कुछ मिनट बाद फिर करें।' : 'Too many attempts. Please try again in a few minutes.')
-        : res.reason === 'network'
-          ? (hi ? 'सर्वर से संपर्क नहीं हो सका। इंटरनेट जाँचें।' : 'Could not reach the server. Check your internet.')
-          : (hi ? 'सदस्य संख्या या PIN गलत है।' : 'Member number or PIN is incorrect.'));
+      setErrorKey(res.reason === 'rate_limited' ? 'rate' : res.reason === 'network' ? 'network' : 'invalid');
       return;
     }
     await load();
@@ -110,30 +137,39 @@ export default function MemberPortal() {
   if (phase === 'login' || phase === 'denied') {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 py-10 bg-muted/30">
-        <Card className="w-full max-w-sm">
+        <Card className="w-full max-w-sm relative">
+          <div className="absolute right-2 top-2">{langToggle}</div>
           <CardHeader className="text-center space-y-2">
             <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center"><KeyRound className="h-6 w-6 text-primary" /></div>
             <CardTitle className="text-xl">{hi ? 'सदस्य portal' : 'Member portal'}</CardTitle>
             <p className="text-sm text-muted-foreground">{hi ? 'अपना शेयर, ऋण और जमा का हिसाब देखें' : 'View your shares, loans and deposits'}</p>
           </CardHeader>
           <CardContent>
-            {phase === 'denied' && <p className="mb-4 text-sm rounded-md bg-destructive/10 text-destructive p-3">{denied}</p>}
+            {phase === 'denied' && <p className="mb-4 text-sm rounded-md bg-destructive/10 text-destructive p-3">{deniedMessage(denied, hi)}</p>}
             <form onSubmit={submit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="mp-no">{hi ? 'सदस्य संख्या' : 'Member number'}</Label>
-                <Input id="mp-no" value={memberNo} onChange={(e) => setMemberNo(e.target.value)} autoComplete="username" autoCapitalize="characters" placeholder={hi ? 'जैसे M-001' : 'e.g. M-001'} />
+                <Input id="mp-no" name="member-no" value={memberNo} onChange={(e) => setMemberNo(e.target.value)} autoComplete="off" autoCapitalize="characters" spellCheck={false} placeholder={hi ? 'जैसे M-001' : 'e.g. M-001'} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="mp-pin">PIN</Label>
-                <Input id="mp-pin" type="password" inputMode="numeric" pattern="\d{6}" maxLength={6} autoComplete="current-password"
+                {/* A masked TEXT field with autocomplete="one-time-code": browsers do not offer to save it, so a
+                    shared phone never remembers the PIN. Where the mask is unsupported, fall back to type=password
+                    so the PIN is never shown in clear. */}
+                <Input id="mp-pin" name="member-pin" type={PIN_MASK_SUPPORTED ? 'text' : 'password'} inputMode="numeric" pattern="\d{6}" maxLength={6}
+                  autoComplete="one-time-code" autoCorrect="off" spellCheck={false}
+                  style={PIN_MASK_SUPPORTED ? ({ WebkitTextSecurity: 'disc' } as React.CSSProperties) : undefined}
                   value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="••••••" className="tracking-widest text-lg" />
               </div>
-              {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+              {errorKey && <p className="text-sm text-destructive" role="alert">{loginErrorText(errorKey, hi)}</p>}
               <Button type="submit" className="w-full" disabled={busy}>
                 {busy && <Loader2 className="h-4 w-4 animate-spin mr-2" />}{hi ? 'देखें' : 'Log in'}
               </Button>
               <p className="text-xs text-center text-muted-foreground">
                 {hi ? 'PIN भूल गए? समिति कार्यालय से नया PIN लें।' : 'Forgot your PIN? Ask the society office for a new one.'}
+              </p>
+              <p className="text-xs text-center text-muted-foreground">
+                {hi ? 'PIN को browser में save न करें — खासकर साझा फ़ोन पर।' : 'Do not save the PIN in the browser — especially on a shared phone.'}
               </p>
             </form>
           </CardContent>
@@ -167,7 +203,8 @@ export default function MemberPortal() {
             {m.joinDate && <> · {hi ? 'सदस्यता' : 'Member since'} {fmtDate(m.joinDate)}</>}
           </p>
         </div>
-        <div className="flex gap-2 print:hidden">
+        <div className="flex flex-wrap gap-2 print:hidden">
+          {langToggle}
           <Button variant="outline" size="sm" className="gap-1" onClick={() => window.print()}><Printer className="h-4 w-4" />{hi ? 'Print / PDF' : 'Print / PDF'}</Button>
           <Button variant="outline" size="sm" className="gap-1" onClick={logout}><LogOut className="h-4 w-4" />{hi ? 'बाहर निकलें' : 'Log out'}</Button>
         </div>

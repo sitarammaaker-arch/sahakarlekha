@@ -104,7 +104,22 @@ ok(/rpc\('member_portal_snapshot'\)/.test(client) && !/\.from\(/.test(client), '
 const page = strip('src/pages/MemberPortal.tsx');
 ok(/robots: 'noindex, nofollow'/.test(page), 'portal page is noindex');
 ok(!/@\/lib\/supabase'|useAuth\(|useData\(/.test(page), 'page never touches staff auth/data contexts');
-ok(/setPin\(''\)/.test(page) && !/localStorage|sessionStorage/.test(page), 'PIN cleared after submit and never stored');
+ok(/setPin\(''\)/.test(page) && !/localStorage/.test(page), 'PIN cleared after submit; nothing in localStorage');
+// sessionStorage holds ONLY the portal language — never the PIN or member number.
+const ssCalls = page.match(/sessionStorage\.\w+\([^)]*\)/g) || [];
+ok(ssCalls.length > 0 && ssCalls.every((c) => /PORTAL_LANG_KEY/.test(c)), `sessionStorage used only for the language key (${ssCalls.length} calls)`);
+ok(!/setItem\([^)]*(pin|memberNo)/i.test(page), 'PIN / member number never written to storage');
+// Portal language is portal-local: it must not flip the staff app's language on a shared computer.
+ok(!/setLanguage\(/.test(page) && /'sl-member-portal-lang'/.test(page), 'language toggle is portal-only (no setLanguage)');
+ok(/\{langToggle\}[\s\S]*\{langToggle\}/.test(page), 'language toggle on both login card and dashboard');
+// Browsers must not offer to save the PIN; masked text + one-time-code, password fallback.
+ok(/autoComplete="one-time-code"/.test(page) && !/autoComplete="current-password"/.test(page), 'PIN field uses one-time-code (no save-password prompt)');
+ok(/type=\{PIN_MASK_SUPPORTED \? 'text' : 'password'\}/.test(page) && /WebkitTextSecurity: 'disc'/.test(page), 'PIN masked; falls back to type=password where the mask is unsupported');
+ok(/id="mp-no"[^\n]*autoComplete="off"/.test(page), 'member number not offered for autofill');
+// Errors are stored as codes and rendered in the current language (toggle translates a shown error),
+// and switching language must not refetch the snapshot.
+ok(/loginErrorText\(errorKey, hi\)/.test(page) && /deniedMessage\(denied, hi\)/.test(page), 'errors rendered in the current language');
+ok(/setPhase\('denied'\);\s*\}, \[\]\);/.test(page), 'snapshot load does not depend on language (no refetch on toggle)');
 ok(/सदस्य संख्या या PIN गलत है/.test(page), 'one generic error for wrong number/PIN');
 const app = strip('src/App.tsx');
 ok(/<Route path="\/member\/:societyId" element=\{<MemberPortal \/>\} \/>/.test(app), '/member/:societyId is a public route (no ProtectedRoute)');
