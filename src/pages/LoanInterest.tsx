@@ -31,19 +31,16 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
-import { loanOutstanding } from '@/lib/memberSnapshot';
 import { interestPeriodDefaults, type InterestPeriodMode } from '@/lib/loans/interestPeriod';
-
-// ── Account IDs ───────────────────────────────────────────────────────────────
-const ACC_INTEREST_REC  = '3313'; // Member Loan Interest Receivable (asset)
-const ACC_INTEREST_INC  = '4408'; // Interest on Member Loans (income)
+import {
+  accruableLoans, accrualRows, splitAccrual, accrualVoucherLines, accrualRecords,
+  ACC_INTEREST_RECEIVABLE as ACC_INTEREST_REC, ACC_INTEREST_INCOME as ACC_INTEREST_INC, ACC_OVERDUE_INTEREST_RESERVE as ACC_OIR,
+} from '@/lib/loans/interestAccrual';
+import { useLoanAccruals } from '@/hooks/useLoanAccruals';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
-// ── Simple interest helper ────────────────────────────────────────────────────
-const calcInterest = (principal: number, ratePa: number, days: number): number =>
-  Math.round(((principal * ratePa * days) / (365 * 100)) * 100) / 100;
 
 // ── Period label ─────────────────────────────────────────────────────────────
 const getPeriodLabel = (mode: 'monthly' | 'quarterly' | 'annual', fromDate: string, toDate: string, hi: boolean): string => {
@@ -91,13 +88,12 @@ const LoanInterest: React.FC = () => {
 
   const days = useMemo(() => daysBetween(fromDate, toDate), [fromDate, toDate]);
 
-  // ── Active loans only ──────────────────────────────────────────────────────
-  // Founder decision (2026-09-26): overdue loans do NOT accrue here until the governing rule is
-  // sourced — the page says so openly (see the info note).
-  const activeLoans = useMemo(
-    () => loans.filter(l => l.status === 'active'),
-    [loans]
-  );
+  // ── Interest-bearing loans (active AND overdue) ────────────────────────────
+  // Haryana Act s.87 Explanation (i): overdue interest IS accrued but held in the Overdue Interest
+  // Reserve (2211), not income. Overdue = marked overdue, or due date before the period end with
+  // something outstanding (founder decision D1).
+  const activeLoans = useMemo(() => accruableLoans(loans), [loans]);
+  const { saveAccruals } = useLoanAccruals();
 
   // ── Check if period already posted ────────────────────────────────────────
   const periodLabel = getPeriodLabel(mode, fromDate, toDate, hi);
@@ -105,7 +101,7 @@ const LoanInterest: React.FC = () => {
     vouchers.filter(v =>
       !v.isDeleted &&
       getVoucherLines(v).some(l => l.accountId === ACC_INTEREST_REC && l.type === 'Dr') &&
-      getVoucherLines(v).some(l => l.accountId === ACC_INTEREST_INC && l.type === 'Cr') &&
+      getVoucherLines(v).some(l => (l.accountId === ACC_INTEREST_INC || l.accountId === ACC_OIR) && l.type === 'Cr') &&
       v.narration.includes(fromDate)
     ),
     [vouchers, fromDate]
@@ -123,34 +119,26 @@ const LoanInterest: React.FC = () => {
     ratePa: number;
     days: number;
     interest: number;
+    overdue: boolean;
   }
 
-  const rows: InterestRow[] = useMemo(() => {
-    return activeLoans.map(loan => {
-      const member   = members.find(m => m.id === loan.memberId);
-      // The one outstanding formula (RULE 2); clamped at 0 ONLY for interest — never negative interest.
-      const outstanding = Math.max(0, loanOutstanding(loan));
-      const interest = calcInterest(outstanding, loan.interestRate, days);
-      return {
-        loanId: loan.id,
-        loanNo: loan.loanNo,
-        memberName: member?.name ?? '—',
-        memberId: member?.memberId ?? '—',
-        principal: loan.amount,
-        outstanding,
-        ratePa: loan.interestRate,
-        days,
-        interest,
-      };
-    });
-  }, [activeLoans, members, days]);
+  // Shared accrual rows (one formula — the shared loanOutstanding, clamped at 0 for interest only).
+  const accrual = useMemo(() => accrualRows(activeLoans, toDate, days), [activeLoans, toDate, days]);
+  const rows: InterestRow[] = useMemo(() => accrual.map(r => {
+    const member = members.find(m => m.id === r.memberId);
+    return {
+      loanId: r.loanId, loanNo: r.loanNo, memberName: member?.name ?? '—', memberId: member?.memberId ?? '—',
+      principal: r.principal, outstanding: r.outstanding, ratePa: r.ratePa, days: r.days, interest: r.interest, overdue: r.overdue,
+    };
+  }), [accrual, members]);
 
-  const totalInterest = useMemo(() => rows.reduce((s, r) => s + r.interest, 0), [rows]);
+  const split = useMemo(() => splitAccrual(accrual), [accrual]);
+  const totalInterest = split.total;
 
   // ── Confirm state ─────────────────────────────────────────────────────────
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const handlePost = () => {
+  const handlePost = async () => {
     if (totalInterest <= 0) return;
     if (society.fyLocked) {
       setConfirmOpen(false);
@@ -158,21 +146,43 @@ const LoanInterest: React.FC = () => {
       return;
     }
 
-    // Post one consolidated journal for the total period interest
+    setConfirmOpen(false);
+    // RULE 1: each loan's accrual is saved to the cloud FIRST; no per-loan record ⇒ no journal (a
+    // repayment must later be able to clear exactly what was accrued for that loan).
+    const newId = () => crypto.randomUUID();
+    const records = accrualRecords(accrual, fromDate, toDate, user?.name ?? 'System', newId);
+    const saved = await saveAccruals(records);
+    if (!saved.ok) {
+      const missing = /loan_interest_accruals|does not exist|schema cache|PGRST205|42P01/i.test(saved.error || '');
+      toast({
+        title: hi ? 'ब्याज जर्नल पोस्ट नहीं हुआ' : 'Interest journal NOT posted',
+        description: missing
+          ? (hi ? 'पहले Supabase में migration 069 (loan_interest_accruals) चलाएँ।' : 'Run migration 069 (loan_interest_accruals) in Supabase first.')
+          : `${hi ? 'प्रति-ऋण ब्याज cloud में सेव नहीं हुआ' : 'Per-loan accrual did not save to the cloud'} — ${saved.error}`,
+        variant: 'destructive',
+        duration: 12000,
+      });
+      return;
+    }
+
+    // One balanced journal: Dr 3313 total / Cr 4408 regular / Cr 2211 Overdue Interest Reserve.
+    const lines = accrualVoucherLines(split, newId);
     const v = addVoucher({
       type: 'journal',
       date: toDate,
       debitAccountId: ACC_INTEREST_REC,
-      creditAccountId: ACC_INTEREST_INC,
+      creditAccountId: split.regular > 0 ? ACC_INTEREST_INC : ACC_OIR,
       amount: totalInterest,
-      narration: `Member Loan Interest Accrual ${fromDate} to ${toDate} (${rows.length} loans, ${days} days) — FY ${fy}`,
+      lines,
+      narration: `Member Loan Interest Accrual ${fromDate} to ${toDate} (${rows.length} loans, ${days} days${split.overdue > 0 ? `; overdue ₹${split.overdue} to Overdue Interest Reserve` : ''}) — FY ${fy}`,
       createdBy: user?.name ?? 'System',
-    });
+    } as Parameters<typeof addVoucher>[0]);
 
-    setConfirmOpen(false);
     // addVoucher refuses (permission / FY lock / expired plan) by returning an empty voucher — never
     // claim success for a journal that was not created.
     if (!v?.id) {
+      // The per-loan rows have no journal — retire them so they can never be counted.
+      void saveAccruals(records.map(r => ({ ...r, isDeleted: true })));
       toast({
         title: hi ? 'ब्याज जर्नल पोस्ट नहीं हुआ' : 'Interest journal NOT posted',
         description: hi ? 'वाउचर नहीं बना — ऊपर वाला संदेश देखें (अनुमति / FY लॉक / प्लान)।' : 'No voucher was created — see the message above (permission / FY lock / plan).',
@@ -180,6 +190,11 @@ const LoanInterest: React.FC = () => {
         duration: 10000,
       });
       return;
+    }
+    // Link each row to its journal (best-effort: the rows already exist; H2-2 honours linked rows).
+    const linked = await saveAccruals(records.map(r => ({ ...r, voucherId: v.id })));
+    if (!linked.ok) {
+      toast({ title: hi ? 'चेतावनी' : 'Warning', description: hi ? 'जर्नल पोस्ट हो गया, पर प्रति-ऋण रिकॉर्ड उससे जुड़ नहीं पाया — पेज refresh करके देखें।' : 'Journal posted, but the per-loan rows could not be linked to it — refresh and check.', duration: 10000 });
     }
     toast({
       title: hi
@@ -283,8 +298,8 @@ const LoanInterest: React.FC = () => {
             : 'Formula: Interest = (Outstanding × Rate × Days) / (365 × 100) | Dr 3313 Interest Receivable / Cr 4408 Interest Income'}
           <br />
           {hi
-            ? 'ब्याज केवल "सक्रिय" ऋणों पर गिना जाता है — "ओवरड्यू" ऋणों पर यहाँ ब्याज नहीं जुड़ता। कुल बकाया (सभी ऋण) ऋण रजिस्टर में देखें।'
-            : 'Interest is computed on "active" loans only — "overdue" loans do not accrue here. See the Loan Register for total outstanding (all loans).'}
+            ? 'अतिदेय (overdue) ऋणों का ब्याज भी गिना जाता है, पर वह आय में नहीं, "अतिदेय ब्याज संचय" (2211) में जाता है — वसूली होने पर ही आय बनेगा। (हरियाणा सहकारी समिति अधिनियम 1984, धारा 87 व्याख्या) अतिदेय = जिसे overdue चुना गया हो, या जिसकी देय तिथि अवधि समाप्ति से पहले निकल गई हो।'
+            : 'Interest on overdue loans is accrued too, but credited to the "Overdue Interest Reserve" (2211), not income — it becomes income only when recovered. (Haryana Co-operative Societies Act 1984, s.87 Explanation) Overdue = marked overdue, or due date before the period end.'}
         </span>
       </div>
 
@@ -338,7 +353,7 @@ const LoanInterest: React.FC = () => {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <SummaryCard label={hi ? 'सक्रिय ऋण' : 'Active Loans'} value={String(activeLoans.length)} />
+        <SummaryCard label={hi ? 'ब्याज योग्य ऋण' : 'Interest-bearing Loans'} value={`${activeLoans.length}${split.overdue > 0 ? ` (${rows.filter(r => r.overdue).length} ${hi ? 'अतिदेय' : 'overdue'})` : ''}`} />
         <SummaryCard
           label={hi ? 'कुल मूलधन' : 'Total Principal'}
           value={fmt(activeLoans.reduce((s, l) => s + l.amount, 0))}
@@ -349,7 +364,7 @@ const LoanInterest: React.FC = () => {
         />
         <SummaryCard
           label={hi ? 'कुल ब्याज' : 'Total Interest'}
-          value={fmt(totalInterest)}
+          value={split.overdue > 0 ? `${fmt(totalInterest)} (${hi ? 'आय' : 'income'} ${fmt(split.regular)} · ${hi ? 'संचय' : 'reserve'} ${fmt(split.overdue)})` : fmt(totalInterest)}
           highlight
         />
       </div>
@@ -379,7 +394,7 @@ const LoanInterest: React.FC = () => {
         <CardContent className="p-0 overflow-x-auto">
           {rows.length === 0 ? (
             <p className="p-6 text-center text-gray-500 text-sm">
-              {hi ? 'कोई सक्रिय ऋण नहीं मिला।' : 'No active loans found.'}
+              {hi ? 'कोई ब्याज योग्य ऋण नहीं मिला।' : 'No interest-bearing loans found.'}
             </p>
           ) : (
             <Table>
@@ -393,6 +408,7 @@ const LoanInterest: React.FC = () => {
                   <TableHead className="text-right">{hi ? 'दर % प्रति वर्ष' : 'Rate % p.a.'}</TableHead>
                   <TableHead className="text-right">{hi ? 'दिन' : 'Days'}</TableHead>
                   <TableHead className="text-right">{hi ? 'ब्याज' : 'Interest'}</TableHead>
+                  <TableHead>{hi ? 'जाएगा' : 'Goes to'}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -409,6 +425,11 @@ const LoanInterest: React.FC = () => {
                     <TableCell className="text-right text-sm">{r.ratePa}%</TableCell>
                     <TableCell className="text-right text-sm">{r.days}</TableCell>
                     <TableCell className="text-right font-semibold text-blue-700">{fmt(r.interest)}</TableCell>
+                    <TableCell>
+                      {r.overdue
+                        ? <Badge variant="outline" className="border-amber-400 text-amber-700 text-[10px]">{hi ? 'अतिदेय → संचय 2211' : 'Overdue → Reserve 2211'}</Badge>
+                        : <Badge variant="outline" className="text-[10px]">{hi ? 'आय 4408' : 'Income 4408'}</Badge>}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -416,6 +437,7 @@ const LoanInterest: React.FC = () => {
                 <tr className="bg-gray-50 font-bold border-t">
                   <td colSpan={7} className="px-4 py-2 text-sm">{hi ? 'कुल' : 'Total'}</td>
                   <td className="px-4 py-2 text-right text-sm text-blue-700">{fmt(totalInterest)}</td>
+                  <td />
                 </tr>
               </tfoot>
             </Table>
@@ -470,7 +492,8 @@ const LoanInterest: React.FC = () => {
                 <p>{hi ? 'ऋण संख्या:' : 'Loans:'} {rows.length} &nbsp;|&nbsp; {hi ? 'दिन:' : 'Days:'} {days}</p>
                 <div className="bg-gray-50 rounded p-2 font-mono text-xs mt-2">
                   Dr 3313 Member Loan Interest Receivable &nbsp;{fmt(totalInterest)}<br />
-                  &nbsp;&nbsp;Cr 4408 Interest on Member Loans &nbsp;{fmt(totalInterest)}
+                  {split.regular > 0 && <>&nbsp;&nbsp;Cr 4408 Interest on Member Loans &nbsp;{fmt(split.regular)}<br /></>}
+                  {split.overdue > 0 && <>&nbsp;&nbsp;Cr 2211 Overdue Interest Reserve &nbsp;{fmt(split.overdue)}</>}
                 </div>
               </div>
             </AlertDialogDescription>

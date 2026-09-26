@@ -259,4 +259,40 @@ const memberDistributionRun: EntityDescriptor = {
   ],
 };
 
-export const CORE_ENTITIES: EntityDescriptor[] = [society, account, voucher, voucherEntry, societyActivities, memberDistributionRun];
+// ─── loan_interest_accruals (069) ─────────────────────────────────────────────────────
+// Each member loan's accrued interest per period (H2-1; Haryana Act s.87 Explanation: overdue
+// interest goes to the Overdue Interest Reserve). Belongs to one accrual voucher — backed up 'full'.
+const loanInterestAccrual: EntityDescriptor = {
+  key: 'loan_interest_accrual',
+  table: 'loan_interest_accruals',
+  domain: 'core',
+  label: 'Loan Interest Accruals',
+  labelHi: 'ऋण ब्याज उपार्जन',
+  minRole: 'accountant',
+  scope: 'society',
+  nature: 'transaction',
+  dependsOn: ['society', 'voucher'],
+  naturalKey: ['id'],
+  softDeleteField: 'isDeleted',
+  formats: ['csv', 'xlsx', 'json'],
+  backupPolicy: 'full',
+  columns: [
+    c('id', 'ID', 'आईडी', { defaultVisible: false }),
+    internal('loanId', 'Loan', 'ऋण'),
+    internal('memberId', 'Member', 'सदस्य'),
+    c('periodFrom', 'From', 'से', { type: 'date' }),
+    c('periodTo', 'To', 'तक', { type: 'date' }),
+    c('days', 'Days', 'दिन', { type: 'number' }),
+    money('outstanding', 'Outstanding', 'बकाया'),
+    c('ratePa', 'Rate % p.a.', 'दर % प्रति वर्ष', { type: 'number' }),
+    money('amount', 'Interest', 'ब्याज'),
+    c('overdue', 'Overdue', 'अतिदेय', { type: 'boolean' }),
+    money('recovered', 'Recovered', 'वसूल'),
+    internal('voucherId', 'Voucher', 'वाउचर'),
+    internal('createdBy', 'Created By', 'बनाने वाला'),
+    internal('createdAt', 'Created At', 'निर्माण समय', { type: 'date' }),
+    c('isDeleted', 'Deleted', 'हटाया गया', { type: 'boolean', defaultVisible: false }),
+  ],
+};
+
+export const CORE_ENTITIES: EntityDescriptor[] = [society, account, voucher, voucherEntry, societyActivities, memberDistributionRun, loanInterestAccrual];
