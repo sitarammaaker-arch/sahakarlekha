@@ -402,6 +402,7 @@ export const PACS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '3101', name: 'Land',                       nameHi: 'भूमि',                     type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100', subtype: 'fixed_asset' },
   { id: '3102', name: 'Building',                   nameHi: 'भवन',                      type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100', subtype: 'fixed_asset' },
   { id: '3103', name: 'Furniture',                  nameHi: 'फर्नीचर',                   type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100', subtype: 'fixed_asset' },
+  { id: '3104', name: 'Vehicle',                    nameHi: 'वाहन',                     type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100', subtype: 'fixed_asset' },
   { id: '3106', name: 'Office Equipment',           nameHi: 'कार्यालय उपकरण',           type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100', subtype: 'fixed_asset' },
   { id: '3107', name: 'Computer / IT Equipment',   nameHi: 'कंप्यूटर / IT उपकरण',      type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100', subtype: 'fixed_asset' },
   { id: '3108', name: 'Accum. Dep. - Building',     nameHi: 'संचित ह्रास - भवन',         type: 'asset',     openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '3100', subtype: 'accumulated_dep' },
@@ -424,9 +425,14 @@ export const PACS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '3312', name: 'Interest Receivable on Loans',nameHi: 'ऋण पर प्राप्य ब्याज',     type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3315', name: 'Advance to Employees',       nameHi: 'कर्मचारियों को अग्रिम',     type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3316', name: 'Overdue / NPA Loans',        nameHi: 'बकाया / NPA ऋण',           type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
+  // PACS trading heads (NABARD CAS Trading A/c: fertiliser / seed sales; purchases) — the sale/purchase defaults 4101/5101 must exist (RULE 4).
+  { id: '3400', name: 'Inventory',                  nameHi: 'माल-सूची',                 type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '3000' },
 
   // ── Income (credit-focused) ───────────────────────────────────────────────
   { id: '4000', name: 'Income',                     nameHi: 'आय',                       type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true  },
+  { id: '4100', name: 'Trading Income',             nameHi: 'व्यापारिक आय',             type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
+  { id: '4101', name: 'Fertilizer Sales',           nameHi: 'उर्वरक बिक्री',            type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100', subtype: 'trading_income' },
+  { id: '4102', name: 'Seed Sales',                 nameHi: 'बीज बिक्री',               type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100', subtype: 'trading_income' },
   { id: '4400', name: 'Interest & Other Income',    nameHi: 'ब्याज एवं अन्य आय',        type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
   { id: '4408', name: 'Interest on Member Loans',  nameHi: 'सदस्य ऋण पर ब्याज',        type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
   { id: '4403', name: 'Interest on Investments',   nameHi: 'निवेश पर ब्याज',           type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
@@ -442,6 +448,8 @@ export const PACS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
 
   // ── Expenses ─────────────────────────────────────────────────────────────
   { id: '5000', name: 'Expenses',                   nameHi: 'व्यय',                     type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: true  },
+  { id: '5100', name: 'Direct Expenses',            nameHi: 'प्रत्यक्ष व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
+  { id: '5101', name: 'Purchase',                   nameHi: 'क्रय',                     type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
   { id: '5200', name: 'Employee Expenses',          nameHi: 'कर्मचारी व्यय',            type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
   { id: '5201', name: 'Salary',                     nameHi: 'वेतन',                     type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5200', subtype: 'employee_expense' },
   { id: '5202', name: 'Wages',                      nameHi: 'मजदूरी',                   type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5200', subtype: 'employee_expense' },
@@ -662,6 +670,20 @@ const ACCOUNT_PATCHES: Record<string, Partial<LedgerAccount>> = {
 };
 
 const ACCOUNTS_TO_ADD: LedgerAccount[] = [
+  // ── G1/G2 (CAS mapping, 2026-09-27): the PACS chart lacked the trading groups/heads that sales
+  // and purchases default to (4101 / 5101) and that 4104-4108, 5110-5116, 3406 hang under, and a
+  // Vehicle asset for its 3110 accumulated depreciation. Every other chart already has these ids.
+  // Parent groups some charts lack while ACCOUNTS_TO_ADD hangs heads under them (consumer/housing:
+  // 4304/4305 → 4300; sugar: 4207/4208 → 4200). Skip-by-id keeps every chart's own group.
+  { id: '4200', name: 'Commission Income',          nameHi: 'कमीशन आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
+  { id: '4300', name: 'Scheme Income',              nameHi: 'योजना आय',                 type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
+  { id: '3104', name: 'Vehicle',                    nameHi: 'वाहन',                     type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3100', subtype: 'fixed_asset' },
+  { id: '3400', name: 'Inventory',                  nameHi: 'माल-सूची',                 type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '3000' },
+  { id: '4100', name: 'Trading Income',             nameHi: 'व्यापारिक आय',             type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
+  { id: '4101', name: 'Fertilizer Sales',           nameHi: 'उर्वरक बिक्री',            type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100', subtype: 'trading_income' },
+  { id: '4102', name: 'Seed Sales',                 nameHi: 'बीज बिक्री',               type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100', subtype: 'trading_income' },
+  { id: '5100', name: 'Direct Expenses',            nameHi: 'प्रत्यक्ष व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
+  { id: '5101', name: 'Purchase',                   nameHi: 'क्रय',                     type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
   { id: '2107', name: 'Member Deposits',            nameHi: 'सदस्य जमाराशि',            type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'deposit' },
   { id: '2109', name: 'Wages Payable',              nameHi: 'देय मज़दूरी',              type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
   { id: '3307', name: 'TDS / TCS Receivable',       nameHi: 'प्राप्य TDS / TCS',         type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
