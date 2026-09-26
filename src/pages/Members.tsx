@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import type { EntityLink } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog, Award, KeyRound } from 'lucide-react';
+import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog, Award, KeyRound, ContactRound } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MemberType, CasteCategory } from '@/types';
@@ -671,6 +671,13 @@ const Members: React.FC = () => {
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewMember(member)}>
                       <Eye className="h-4 w-4" />
                     </Button>
+                    {!showApprovalActions && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                        title={hi ? 'सदस्य 360° — पूरा हिसाब एक जगह' : 'Member 360° — whole account'}
+                        onClick={() => navigate(`/members/${member.id}`)}>
+                        <ContactRound className="h-4 w-4" />
+                      </Button>
+                    )}
                     {!showApprovalActions && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" onClick={() => setLedgerMember(member)}>
                         <BookOpen className="h-4 w-4" />

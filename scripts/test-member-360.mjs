@@ -161,5 +161,35 @@ ok(/buildPortalView\(snapshot\)/.test(lib) && /buildVerticalViews\(member\.id, s
 ok(!/from 'react'|supabase/.test(lib), 'adapter is pure (no React, no network)');
 ok(typeof toMemberSnapshot === 'function', 'snapshot adapter exported');
 
+// ── 360-b: route gate + read-only page ──
+const { moduleForRoute, DETAIL_ROUTE_PARENTS } = await imp('src/lib/navigation/routeModule.ts');
+ok(moduleForRoute('/members')?.route === '/members', 'exact route → its module');
+ok(moduleForRoute('/members/abc-123')?.route === '/members', '/members/:id inherits the /members gate (not "universal")');
+ok(moduleForRoute('/members/') === undefined || moduleForRoute('/members/')?.route === '/members', 'bare prefix does not crash');
+ok(moduleForRoute('/member-statement')?.route === '/member-statement', 'sibling route /member-statement unaffected');
+ok(moduleForRoute('/definitely-unknown') === undefined, 'unknown routes still fall through (unchanged behaviour)');
+ok(DETAIL_ROUTE_PARENTS.every((d) => d.prefix.endsWith('/')), 'detail prefixes end with "/" (no accidental /membersX match)');
+// Role gate, end to end: a role that cannot open Members cannot open /members/:id either.
+const { isModuleVisible } = await imp('src/lib/navigation/navVisibility.ts');
+const detailModule = moduleForRoute('/members/abc-123');
+const allCaps = new Set(detailModule.requiredCapabilities);
+const ctxFor = (userRole) => ({ societyType: 'pacs', capabilities: allCaps, hasRole: () => true, userRole });
+for (const role of ['boardMember', 'chairman', 'internalAuditor', 'externalCA', 'procurementOfficer']) {
+  ok(!isModuleVisible(detailModule, ctxFor(role)), `${role}: /members/:id blocked (same as /members)`);
+}
+for (const role of ['admin', 'accountant', 'manager']) ok(isModuleVisible(detailModule, ctxFor(role)), `${role}: /members/:id allowed (same as /members)`);
+const guard = readFileSync(pathResolve(ROOT, 'src/components/CapabilityGuard.tsx'), 'utf8');
+ok(/const module = moduleForRoute\(location\.pathname\)/.test(guard), 'CapabilityGuard resolves modules through moduleForRoute');
+const page360 = readFileSync(pathResolve(ROOT, 'src/pages/Member360.tsx'), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+ok(/buildMember360\(member,/.test(page360) && /<MemberAccountView member=\{snapshot\.member\} view=\{view\} verticals=\{verticals\}/.test(page360), 'page renders buildMember360 through the shared MemberAccountView');
+ok(!/\b(add|update|delete|approve|reject|record|cancel|set)[A-Z]\w*\s*[,}]/.test(page360.slice(page360.indexOf('useData()') - 200, page360.indexOf('const member ='))), 'page takes NO mutation functions from any context (read-only)');
+ok(/matchesActiveBranch\(member\.branchId\)/.test(page360), 'page respects the branch selector');
+const app = readFileSync(pathResolve(ROOT, 'src/App.tsx'), 'utf8');
+ok(/<Route path="\/members\/:id" element=\{<ProtectedRoute><Member360 \/><\/ProtectedRoute>\} \/>/.test(app), '/members/:id is a ProtectedRoute (auth + CapabilityGuard)');
+const membersPage = readFileSync(pathResolve(ROOT, 'src/pages/Members.tsx'), 'utf8');
+ok(/navigate\(`\/members\/\$\{member\.id\}`\)/.test(membersPage), 'Members list has the 360° button');
+const portalPage = readFileSync(pathResolve(ROOT, 'src/pages/MemberPortal.tsx'), 'utf8');
+ok(/<MemberAccountView member=\{m\} view=\{v\} verticals=\{vv\} hi=\{hi\} \/>/.test(portalPage), 'the member portal renders the SAME MemberAccountView');
+
 console.log(`member-360 (staff) parity: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

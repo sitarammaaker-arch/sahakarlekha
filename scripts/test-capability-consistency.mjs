@@ -49,6 +49,7 @@ const CONFIG = {
   MODULES: {
     moduleCatalog: 'src/lib/navigation/moduleCatalog.ts',
     navVisibility: 'src/lib/navigation/navVisibility.ts',
+    routeModule: 'src/lib/navigation/routeModule.ts',
   },
 
   // Source files parsed as text (no importable data exists for these).
@@ -184,10 +185,11 @@ async function main() {
   );
 
   // FAIL-CLOSED import of the real runtime modules. No catalog parsing fallback.
-  let MODULE_CATALOG, getVisibleGroups;
+  let MODULE_CATALOG, getVisibleGroups, DETAIL_ROUTE_PARENTS, moduleForRoute;
   try {
     ({ MODULE_CATALOG } = await import(abs(CONFIG.MODULES.moduleCatalog).href));
     ({ getVisibleGroups } = await import(abs(CONFIG.MODULES.navVisibility).href));
+    ({ DETAIL_ROUTE_PARENTS, moduleForRoute } = await import(abs(CONFIG.MODULES.routeModule).href));
   } catch (e) {
     console.error('\nFAIL    Could not import the real navigation modules.');
     console.error('        ' + String(e && e.message ? e.message : e).split('\n')[0]);
@@ -243,10 +245,18 @@ async function main() {
 
   // ── Check 1: Route coverage ──────────────────────────────────────────────────
   console.log('\n[ 1. route coverage ]');
-  const uncovered = missingFrom(protectedPaths, allowedSet);
+  // A DETAIL route (e.g. /members/:id) is covered when routeModule maps it to a catalog list page —
+  // CapabilityGuard then applies that page's gate. It is NOT "universal", so it never goes in the
+  // allow-list; and the mapping must actually resolve (checked on a concrete sample path).
+  const detailCovered = (p) => DETAIL_ROUTE_PARENTS.some((d) => p.startsWith(d.prefix) && catalogRouteSet.has(d.parent)
+    && moduleForRoute(p.replace(/:[^/]+/g, 'sample-id'))?.route === d.parent);
+  const uncovered = missingFrom(protectedPaths, allowedSet).filter((p) => !detailCovered(p));
   ok(uncovered.length === 0, uncovered.length === 0
-    ? 'every ProtectedRoute is in MODULE_CATALOG or UNIVERSAL_ROUTES'
+    ? 'every ProtectedRoute is in MODULE_CATALOG, UNIVERSAL_ROUTES, or a gated detail route (routeModule)'
     : `ProtectedRoute(s) not in catalog or allow-list: ${uncovered.join(', ')}`);
+  for (const d of DETAIL_ROUTE_PARENTS) {
+    ok(catalogRouteSet.has(d.parent), `detail parent ${d.parent} (for ${d.prefix}*) is a real catalog route`);
+  }
 
   // ── Check 2: Catalog coverage (orphans + duplicate mappings) ─────────────────
   console.log('\n[ 2. catalog coverage ]');
