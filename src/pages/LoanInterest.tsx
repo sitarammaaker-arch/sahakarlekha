@@ -4,7 +4,7 @@
  * Calculates simple interest on active member loans and posts
  * accrual journal entries: Dr 3313 (Interest Receivable) / Cr 4408 (Interest Income)
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -33,10 +33,13 @@ import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { interestPeriodDefaults, type InterestPeriodMode } from '@/lib/loans/interestPeriod';
 import {
-  accruableLoans, accrualRows, splitAccrual, accrualVoucherLines, accrualRecords,
+  accruableLoans, accrualRows, splitAccrual, accrualVoucherLines, accrualRecords, kccAccruables,
+  NARRATION_LOAN_ACCRUAL, NARRATION_KCC_ACCRUAL, type AccrualRow, type AccrualSplit,
   ACC_INTEREST_RECEIVABLE as ACC_INTEREST_REC, ACC_INTEREST_INCOME as ACC_INTEREST_INC, ACC_OVERDUE_INTEREST_RESERVE as ACC_OIR,
 } from '@/lib/loans/interestAccrual';
 import { useLoanAccruals } from '@/hooks/useLoanAccruals';
+import { kccLoanSelect } from '@/lib/supabaseService';
+import type { KccLoan } from '@/types';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -68,7 +71,17 @@ const buildDefaultDates = (mode: InterestPeriodMode) => interestPeriodDefaults(m
 const LoanInterest: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { loans, members, vouchers, society, addVoucher } = useData();
+  const { loans, kccLoans: ctxKccLoans, members, vouchers, society, addVoucher } = useData();
+  // KCC loans are edited on the KCC page against its own list — read the table fresh here so a
+  // repayment made earlier in this session is never accrued on a stale balance.
+  const [freshKcc, setFreshKcc] = useState<KccLoan[] | null>(null);
+  useEffect(() => {
+    if (!user?.societyId) return;
+    let live = true;
+    kccLoanSelect(user.societyId).then(({ data, error }) => { if (live && !error && data) setFreshKcc(data as KccLoan[]); });
+    return () => { live = false; };
+  }, [user?.societyId]);
+  const kccLoans = freshKcc ?? ctxKccLoans;
   const { toast } = useToast();
 
   const hi = language === 'hi';
@@ -97,16 +110,18 @@ const LoanInterest: React.FC = () => {
 
   // ── Check if period already posted ────────────────────────────────────────
   const periodLabel = getPeriodLabel(mode, fromDate, toDate, hi);
-  const alreadyPostedVouchers = useMemo(() =>
-    vouchers.filter(v =>
-      !v.isDeleted &&
-      getVoucherLines(v).some(l => l.accountId === ACC_INTEREST_REC && l.type === 'Dr') &&
-      getVoucherLines(v).some(l => (l.accountId === ACC_INTEREST_INC || l.accountId === ACC_OIR) && l.type === 'Cr') &&
-      v.narration.includes(fromDate)
-    ),
-    [vouchers, fromDate]
+  // Per kind (member loans / KCC): a KCC journal must never mark member loans posted, or vice versa.
+  const postedFor = (prefix: string) => vouchers.filter(v =>
+    !v.isDeleted &&
+    (v.narration || '').startsWith(prefix) &&
+    getVoucherLines(v).some(l => l.accountId === ACC_INTEREST_REC && l.type === 'Dr') &&
+    getVoucherLines(v).some(l => (l.accountId === ACC_INTEREST_INC || l.accountId === ACC_OIR) && l.type === 'Cr') &&
+    v.narration.includes(fromDate)
   );
+  const alreadyPostedVouchers = useMemo(() => postedFor(NARRATION_LOAN_ACCRUAL), [vouchers, fromDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  const kccPostedVouchers = useMemo(() => postedFor(NARRATION_KCC_ACCRUAL), [vouchers, fromDate]); // eslint-disable-line react-hooks/exhaustive-deps
   const isPosted = alreadyPostedVouchers.length > 0;
+  const kccIsPosted = kccPostedVouchers.length > 0;
 
   // ── Per-loan interest rows ─────────────────────────────────────────────────
   interface InterestRow {
@@ -135,11 +150,26 @@ const LoanInterest: React.FC = () => {
   const split = useMemo(() => splitAccrual(accrual), [accrual]);
   const totalInterest = split.total;
 
+  // ── KCC loans (KCC-1): same rules, same outstanding the KCC page shows, their own journal ──
+  const kccAccrual = useMemo(() => accrualRows(kccAccruables(kccLoans), toDate, days), [kccLoans, toDate, days]);
+  const kccSplit = useMemo(() => splitAccrual(kccAccrual), [kccAccrual]);
+  const kccName = (memberId: string) => members.find(m => m.id === memberId)?.name
+    ?? kccLoans.find(k => k.memberId === memberId)?.memberName ?? '—';
+
+  const [confirmKind, setConfirmKind] = useState<'loan' | 'kcc'>('loan');
+  const confirmSplit = confirmKind === 'kcc' ? kccSplit : split;
+  const confirmCount = confirmKind === 'kcc' ? kccAccrual.length : rows.length;
+
   // ── Confirm state ─────────────────────────────────────────────────────────
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const handlePost = async () => {
-    if (totalInterest <= 0) return;
+    const kind = confirmKind;
+    const kAccrual: AccrualRow[] = kind === 'kcc' ? kccAccrual : accrual;
+    const kSplit: AccrualSplit = kind === 'kcc' ? kccSplit : split;
+    const kTotal = kSplit.total;
+    const label = kind === 'kcc' ? NARRATION_KCC_ACCRUAL : NARRATION_LOAN_ACCRUAL;
+    if (kTotal <= 0) return;
     if (society.fyLocked) {
       setConfirmOpen(false);
       toast({ title: hi ? 'FY लॉक है' : 'FY Locked', description: hi ? 'वित्त वर्ष ऑडिट-लॉक है — ब्याज जर्नल पोस्ट नहीं हो सकता।' : 'Cannot post while the Financial Year is audit-locked.', variant: 'destructive' });
@@ -150,7 +180,7 @@ const LoanInterest: React.FC = () => {
     // RULE 1: each loan's accrual is saved to the cloud FIRST; no per-loan record ⇒ no journal (a
     // repayment must later be able to clear exactly what was accrued for that loan).
     const newId = () => crypto.randomUUID();
-    const records = accrualRecords(accrual, fromDate, toDate, user?.name ?? 'System', newId);
+    const records = accrualRecords(kAccrual, fromDate, toDate, user?.name ?? 'System', newId);
     const saved = await saveAccruals(records);
     if (!saved.ok) {
       const missing = /loan_interest_accruals|does not exist|schema cache|PGRST205|42P01/i.test(saved.error || '');
@@ -166,15 +196,15 @@ const LoanInterest: React.FC = () => {
     }
 
     // One balanced journal: Dr 3313 total / Cr 4408 regular / Cr 2211 Overdue Interest Reserve.
-    const lines = accrualVoucherLines(split, newId);
+    const lines = accrualVoucherLines(kSplit, newId);
     const v = addVoucher({
       type: 'journal',
       date: toDate,
       debitAccountId: ACC_INTEREST_REC,
-      creditAccountId: split.regular > 0 ? ACC_INTEREST_INC : ACC_OIR,
-      amount: totalInterest,
+      creditAccountId: kSplit.regular > 0 ? ACC_INTEREST_INC : ACC_OIR,
+      amount: kTotal,
       lines,
-      narration: `Member Loan Interest Accrual ${fromDate} to ${toDate} (${rows.length} loans, ${days} days${split.overdue > 0 ? `; overdue ₹${split.overdue} to Overdue Interest Reserve` : ''}) — FY ${fy}`,
+      narration: `${label} ${fromDate} to ${toDate} (${kAccrual.length} loans, ${days} days${kSplit.overdue > 0 ? `; overdue ₹${kSplit.overdue} to Overdue Interest Reserve` : ''}) — FY ${fy}`,
       createdBy: user?.name ?? 'System',
     } as Parameters<typeof addVoucher>[0]);
 
@@ -198,8 +228,8 @@ const LoanInterest: React.FC = () => {
     }
     toast({
       title: hi
-        ? `ब्याज जर्नल पोस्ट हो गया — ${fmt(totalInterest)}`
-        : `Interest journal posted — ${fmt(totalInterest)}`,
+        ? `${kind === 'kcc' ? 'KCC ' : ''}ब्याज जर्नल पोस्ट हो गया — ${fmt(kTotal)}`
+        : `${kind === 'kcc' ? 'KCC ' : ''}Interest journal posted — ${fmt(kTotal)}`,
     });
   };
 
@@ -382,7 +412,7 @@ const LoanInterest: React.FC = () => {
             ) : (
               <Button
                 size="sm"
-                onClick={() => setConfirmOpen(true)}
+                onClick={() => { setConfirmKind('loan'); setConfirmOpen(true); }}
                 disabled={totalInterest <= 0 || days <= 0}
                 className="bg-blue-700 hover:bg-blue-800"
               >
@@ -445,6 +475,64 @@ const LoanInterest: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* KCC loans (KCC-1) — same rules, own journal */}
+      {kccAccrual.length > 0 && (
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-base flex items-center gap-2 justify-between">
+              <span>{hi ? 'KCC ऋण — ब्याज विवरण' : 'KCC Loans — Interest Statement'}</span>
+              {kccIsPosted ? (
+                <Badge className="bg-green-100 text-green-800 border-green-300">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  {hi ? 'पोस्ट हो चुका' : 'Posted'}
+                </Badge>
+              ) : (
+                <Button size="sm" onClick={() => { setConfirmKind('kcc'); setConfirmOpen(true); }} disabled={kccSplit.total <= 0 || days <= 0} className="bg-blue-700 hover:bg-blue-800">
+                  {hi ? 'KCC ब्याज जर्नल पोस्ट करें' : 'Post KCC Interest Journal'}
+                </Button>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{hi ? 'ऋण नं.' : 'Loan No.'}</TableHead>
+                  <TableHead>{hi ? 'सदस्य' : 'Member'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'बकाया' : 'Outstanding'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'दर %' : 'Rate %'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'ब्याज' : 'Interest'}</TableHead>
+                  <TableHead>{hi ? 'जाएगा' : 'Goes to'}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {kccAccrual.map(r => (
+                  <TableRow key={r.loanId}>
+                    <TableCell className="font-mono text-sm">{r.loanNo}</TableCell>
+                    <TableCell className="text-sm">{kccName(r.memberId)}</TableCell>
+                    <TableCell className="text-right text-sm">{fmt(r.outstanding)}</TableCell>
+                    <TableCell className="text-right text-sm">{r.ratePa}%</TableCell>
+                    <TableCell className="text-right font-semibold text-blue-700">{fmt(r.interest)}</TableCell>
+                    <TableCell>
+                      {r.overdue
+                        ? <Badge variant="outline" className="border-amber-400 text-amber-700 text-[10px]">{hi ? 'अतिदेय → संचय 2211' : 'Overdue → Reserve 2211'}</Badge>
+                        : <Badge variant="outline" className="text-[10px]">{hi ? 'आय 4408' : 'Income 4408'}</Badge>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              <tfoot>
+                <tr className="bg-gray-50 font-bold border-t">
+                  <td colSpan={4} className="px-4 py-2 text-sm">{hi ? 'कुल' : 'Total'}{kccSplit.overdue > 0 && <span className="font-normal text-xs text-amber-700"> ({hi ? 'संचय' : 'reserve'} {fmt(kccSplit.overdue)})</span>}</td>
+                  <td className="px-4 py-2 text-right text-sm text-blue-700">{fmt(kccSplit.total)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Posted vouchers */}
       {isPosted && (
         <Card>
@@ -489,11 +577,11 @@ const LoanInterest: React.FC = () => {
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
                 <p>{hi ? 'अवधि:' : 'Period:'} <strong>{periodLabel}</strong></p>
-                <p>{hi ? 'ऋण संख्या:' : 'Loans:'} {rows.length} &nbsp;|&nbsp; {hi ? 'दिन:' : 'Days:'} {days}</p>
+                <p>{confirmKind === 'kcc' ? 'KCC · ' : ''}{hi ? 'ऋण संख्या:' : 'Loans:'} {confirmCount} &nbsp;|&nbsp; {hi ? 'दिन:' : 'Days:'} {days}</p>
                 <div className="bg-gray-50 rounded p-2 font-mono text-xs mt-2">
-                  Dr 3313 Member Loan Interest Receivable &nbsp;{fmt(totalInterest)}<br />
-                  {split.regular > 0 && <>&nbsp;&nbsp;Cr 4408 Interest on Member Loans &nbsp;{fmt(split.regular)}<br /></>}
-                  {split.overdue > 0 && <>&nbsp;&nbsp;Cr 2211 Overdue Interest Reserve &nbsp;{fmt(split.overdue)}</>}
+                  Dr 3313 Member Loan Interest Receivable &nbsp;{fmt(confirmSplit.total)}<br />
+                  {confirmSplit.regular > 0 && <>&nbsp;&nbsp;Cr 4408 Interest on Member Loans &nbsp;{fmt(confirmSplit.regular)}<br /></>}
+                  {confirmSplit.overdue > 0 && <>&nbsp;&nbsp;Cr 2211 Overdue Interest Reserve &nbsp;{fmt(confirmSplit.overdue)}</>}
                 </div>
               </div>
             </AlertDialogDescription>

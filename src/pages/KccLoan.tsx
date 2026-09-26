@@ -20,6 +20,11 @@ import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFil
 import type { KccLoan, CropSeasonType } from '@/types';
 import { kccLoanSelect, kccLoanInsert, kccLoanUpdate } from '@/lib/supabaseService';
 import { interestIncomeAccountId, kccLoanAccountId } from '@/lib/loans/accounts';
+import {
+  loanInterestDue, repaymentInterestSplit, REF_LOAN_REPAYMENT, REF_LOAN_INTEREST_RELEASE,
+  ACC_INTEREST_RECEIVABLE, ACC_OVERDUE_INTEREST_RESERVE, type LoanInterestDue,
+} from '@/lib/loans/interestAccrual';
+import { useLoanAccruals } from '@/hooks/useLoanAccruals';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -43,7 +48,10 @@ const emptyForm = {
 };
 
 export default function KccLoan() {
-  const { members, addVoucher, cancelVoucher, accounts, society } = useData();
+  const { members, addVoucher, cancelVoucher, accounts, society, vouchers } = useData();
+  // KCC-1: each KCC loan's open accrued interest (069 rows with a live journal − live repayments).
+  const { accruals } = useLoanAccruals();
+  const dueOf = useCallback((loanId: string): LoanInterestDue => loanInterestDue(loanId, accruals, vouchers), [accruals, vouchers]);
   const { user } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
@@ -167,6 +175,10 @@ export default function KccLoan() {
     const principal = round2(totalAmt - interest);
     const newRepaid = round2(loan.repaidAmount + principal);           // only principal reduces the loan
     const newOutstanding = Math.max(0, round2(loan.outstandingAmount - principal));
+    if (principal > loan.outstandingAmount + 0.005) {
+      toast({ title: hi ? 'मूलधन बकाया से ज़्यादा है' : 'Principal exceeds outstanding', description: hi ? 'अतिरिक्त राशि ब्याज में लिखें या चुकौती कम करें।' : 'Enter the extra as interest or reduce the repayment.', variant: 'destructive' });
+      return;
+    }
 
     // Post the receipt: Dr Cash/Bank (total) / Cr KCC Loan (principal) / Cr Interest Income (interest).
     const loanAccId = kccLoanAccountId(accounts);   // the member's KCC loan (asset) — never 2305 DCCB borrowing
@@ -174,13 +186,19 @@ export default function KccLoan() {
     const lid = () => crypto.randomUUID();
     const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: debitAccId, type: 'Dr', amount: totalAmt }];
     if (principal > 0) lines.push({ id: lid(), accountId: loanAccId, type: 'Cr', amount: principal });
-    if (interest > 0) lines.push({ id: lid(), accountId: interestIncomeAccountId(accounts), type: 'Cr', amount: interest });   // income, never 2208 Interest Payable
+    // KCC-1 (same as H2-2): accrued interest clears the receivable 3313 — never income twice; only
+    // un-accrued interest goes to income. Overdue first (founder decision D4).
+    const split = repaymentInterestSplit(interest, dueOf(loan.id));
+    const incomeAccId = interestIncomeAccountId(accounts);   // income, never 2208 Interest Payable
+    if (split.toReceivable > 0) lines.push({ id: lid(), accountId: ACC_INTEREST_RECEIVABLE, type: 'Cr', amount: split.toReceivable });
+    if (split.toIncome > 0) lines.push({ id: lid(), accountId: incomeAccId, type: 'Cr', amount: split.toIncome });
     let voucherId: string | undefined;
     try {
       const v = addVoucher({
         date, type: 'receipt', debitAccountId: debitAccId, creditAccountId: loanAccId, amount: totalAmt, lines,
         narration: `KCC Loan repayment — ${loan.memberName} (${loan.loanNo})${interest > 0 ? ` incl. interest ₹${interest.toLocaleString('en-IN')}` : ''}`,
-        createdBy: user?.name || '',
+        createdBy: user?.name || '', memberId: loan.memberId,
+        refType: REF_LOAN_REPAYMENT, refId: loan.id,
       } as Parameters<typeof addVoucher>[0]);
       voucherId = v?.id || undefined;
     } catch { voucherId = undefined; }
@@ -189,18 +207,37 @@ export default function KccLoan() {
       toast({ title: hi ? 'चुकौती दर्ज नहीं हुई' : 'Repayment NOT recorded', description: hi ? 'रसीद वाउचर नहीं बना, इसलिए ऋण में कोई बदलाव नहीं किया गया।' : 'The receipt voucher was not created, so the loan was left unchanged.', variant: 'destructive', duration: 10000 });
       return;
     }
+    // Recovered overdue interest leaves the Overdue Interest Reserve for income (s.87 Explanation (ii)).
+    let releaseId = '';
+    if (split.releaseFromReserve > 0) {
+      try {
+        const r = addVoucher({
+          type: 'journal', date, debitAccountId: ACC_OVERDUE_INTEREST_RESERVE, creditAccountId: incomeAccId, amount: split.releaseFromReserve,
+          narration: `Overdue interest recovered — ${loan.memberName} (${loan.loanNo}): reserve to income (s.87 Explanation (ii))`,
+          createdBy: user?.name || '', memberId: loan.memberId,
+          refType: REF_LOAN_INTEREST_RELEASE, refId: loan.id,
+        } as Parameters<typeof addVoucher>[0]);
+        releaseId = r?.id || '';
+      } catch { releaseId = ''; }
+      if (!releaseId) {
+        cancelVoucher(voucherId, 'Reserve release failed — auto-cancelled', user?.name || 'System');
+        toast({ title: hi ? 'चुकौती दर्ज नहीं हुई' : 'Repayment NOT recorded', description: hi ? 'अतिदेय ब्याज संचय से आय का जर्नल नहीं बना, इसलिए रसीद भी रद्द कर दी गई और ऋण में कोई बदलाव नहीं हुआ।' : 'The reserve-to-income journal was not created, so the receipt was cancelled too and the loan was left unchanged.', variant: 'destructive', duration: 10000 });
+        return;
+      }
+    }
 
     const { error } = await kccLoanUpdate(loanId, { repaidAmount: newRepaid, outstandingAmount: newOutstanding });
     if (error) {
-      // RULE 1: the loan did not update — take the receipt back out of the books too.
+      // RULE 1: the loan did not update — take the receipt (and any reserve release) back out too.
       cancelVoucher(voucherId, 'KCC repayment save failed — auto-cancelled', user?.name || 'System');
+      if (releaseId) cancelVoucher(releaseId, 'KCC repayment save failed — auto-cancelled', user?.name || 'System');
       toast({ title: hi ? 'चुकौती सेव नहीं हुई' : 'Repayment save failed', description: `${error}${hi ? ' — रसीद वाउचर रद्द कर दिया गया।' : ' — the receipt voucher was cancelled.'}`, variant: 'destructive', duration: 10000 }); return;
     }
     setLoans(prev => prev.map(l =>
       l.id !== loanId ? l : { ...l, repaidAmount: newRepaid, outstandingAmount: newOutstanding }
     ));
     toast({ title: hi ? '✅ चुकौती दर्ज (बही में पोस्ट)' : '✅ Repayment recorded & posted', description: `${totalAmt.toLocaleString('en-IN')}${interest > 0 ? ` · ${hi ? 'ब्याज' : 'interest'} ₹${interest.toLocaleString('en-IN')}` : ''}` });
-  }, [loans, accounts, society, addVoucher, cancelVoucher, user, hi, toast]);
+  }, [loans, accounts, society, addVoucher, cancelVoucher, user, hi, toast, dueOf]);
 
   const kccHeaders = ['Loan No.', 'Member', 'Crop', 'Season', 'Hectare', 'Sanctioned', 'Drawn', 'Repaid', 'Outstanding', 'Rate %', 'Due Date', 'Status'];
 
@@ -357,7 +394,7 @@ export default function KccLoan() {
                             {tab !== 'repaid' && (
                               <TableCell>
                                 {l.outstandingAmount > 0 && (
-                                  <RepayButton loan={l} hi={hi} onRepay={handleRepayment} />
+                                  <RepayButton loan={l} hi={hi} due={dueOf(l.id)} onRepay={handleRepayment} />
                                 )}
                               </TableCell>
                             )}
@@ -453,7 +490,7 @@ export default function KccLoan() {
   );
 }
 
-function RepayButton({ loan, hi, onRepay }: { loan: KccLoan; hi: boolean; onRepay: (id: string, total: number, interest: number, mode: 'cash' | 'bank', date: string) => void }) {
+function RepayButton({ loan, hi, due, onRepay }: { loan: KccLoan; hi: boolean; due: LoanInterestDue; onRepay: (id: string, total: number, interest: number, mode: 'cash' | 'bank', date: string) => void }) {
   const [open, setOpen] = useState(false);
   const [amt, setAmt] = useState('');
   const [interest, setInterest] = useState('');
@@ -475,6 +512,17 @@ function RepayButton({ loan, hi, onRepay }: { loan: KccLoan; hi: boolean; onRepa
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">{hi ? 'बकाया:' : 'Outstanding:'} <strong>{loan.outstandingAmount.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' })}</strong></p>
+            {due.receivable > 0 && (
+              <div className="flex items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                <span>
+                  {hi ? 'इस ऋण पर प्राप्य ब्याज' : 'Accrued interest receivable'}: <strong>₹{due.receivable.toLocaleString('en-IN')}</strong>
+                  {due.reserve > 0 && <> ({hi ? 'अतिदेय' : 'overdue'} ₹{due.reserve.toLocaleString('en-IN')})</>}
+                </span>
+                <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => setInterest(String(due.receivable))}>
+                  {hi ? 'प्राप्य ब्याज भरें' : 'Fill accrued interest'}
+                </Button>
+              </div>
+            )}
             <div>
               <Label>{hi ? 'कुल चुकौती राशि' : 'Total Repayment Amount'}</Label>
               <Input type="number" value={amt} onChange={e => setAmt(e.target.value)} />

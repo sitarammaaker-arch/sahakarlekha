@@ -101,7 +101,7 @@ const post = page.slice(page.indexOf('const handlePost'), page.indexOf('const cs
 ok(/accruableLoans\(loans\)/.test(page) && !/l\.status === 'active'/.test(page), 'page accrues active AND overdue loans');
 ok(post.indexOf('saveAccruals(records)') > 0 && post.indexOf('saveAccruals(records)') < post.indexOf('addVoucher('), 'per-loan rows saved BEFORE the journal');
 ok(/if \(!saved\.ok\)[\s\S]*?return;/.test(post) && /migration 069/.test(post), 'save failure ⇒ no journal (with the migration hint)');
-ok(/lines,/.test(post) && /accrualVoucherLines\(split, newId\)/.test(post), 'journal carries the split lines');
+ok(/lines,/.test(post) && /accrualVoucherLines\(k?[sS]plit, newId\)/.test(post), 'journal carries the split lines');
 ok(/if \(!v\?\.id\) \{[\s\S]*?isDeleted: true/.test(post), 'refused journal ⇒ its rows retired');
 ok(/voucherId: v\.id/.test(post), 'rows linked to the journal');
 ok(/l\.accountId === ACC_INTEREST_INC \|\| l\.accountId === ACC_OIR/.test(page), '"already posted" recognises an overdue-only journal too');
