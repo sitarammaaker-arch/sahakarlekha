@@ -207,7 +207,8 @@ export const CAS_TRADING_DR: CasSectionDef[] = [
     { id: 'TD2iv', label: '(iv) PDS Commodities', labelHi: '(iv) PDS वस्तुएँ', ids: ['5115'] },
     { id: 'TD2v', label: '(v) Non PDS consumer items', labelHi: '(v) गैर-PDS उपभोक्ता वस्तुएँ', ids: ['5112', '5114'] },
     { id: 'TD2vi', label: '(vi) Foodgrains under Govt. Procurement Scheme', labelHi: '(vi) सरकारी खरीद योजना का अनाज', ids: ['5116'] },
-    { id: 'TD2x', label: 'Purchases — not classified by category (5101)', labelHi: 'क्रय — श्रेणी-रहित (5101)', ids: ['5101'] },
+    { id: 'TD2x', label: 'Purchases — not classified by category (5101)', labelHi: 'क्रय — श्रेणी-रहित (5101)', ids: ['5101'], key: 'purchaseGrossUp' },
+    { id: 'TD2p', label: 'Purchases — goods procured directly into stock', labelHi: 'क्रय — सीधे स्टॉक में खरीदा माल', key: 'procuredToStock' },
     { id: 'TD11', label: '3–11. Transport, wages, godown and other trading expenses', labelHi: '3–11. ढुलाई, मज़दूरी, गोदाम व अन्य व्यापारिक व्यय', catchAll: true },
     { id: 'TD12', label: '12. Trading Gross Profit carried to P&L', labelHi: '12. सकल लाभ (लाभ-हानि खाते में)', key: 'grossProfit' },
   ] },
@@ -329,16 +330,23 @@ export function buildCasProfitLoss(trialBalance: readonly AccountBalance[], opts
 
 export interface CasTrading { debit: CasSection[]; credit: CasSection[]; grossProfit: number; total: number }
 
-/** Trading A/c in the CAS layout. Stock figures come from the app's own Trading Account (RULE 2). */
-export function buildCasTrading(trialBalance: readonly AccountBalance[], opts: { openingStock: number; closingStock: number }): CasTrading {
+/**
+ * Trading A/c in the CAS layout. Stock figures AND the two purchase adjustments come from the
+ * app's own Trading Account (RULE 2):
+ *  - procuredToStock: goods bought straight into a 3400 stock head (Dr stock / Cr party) are a
+ *    purchase — without them the closing stock has no matching cost and GP is overstated.
+ *  - purchaseGrossUp: a LEGACY closing-stock journal credited 5101, so 5101 is shown gross.
+ */
+export function buildCasTrading(trialBalance: readonly AccountBalance[], opts: { openingStock: number; closingStock: number; procuredToStock?: number; purchaseGrossUp?: number }): CasTrading {
+  const procured = r2(opts.procuredToStock ?? 0), grossUp = r2(opts.purchaseGrossUp ?? 0);
   const leaves = trialBalance.filter((b) => !b.account.isGroup && b.netBalance !== 0);
   const sales = leaves.filter((b) => b.account.parentId === '4100').map((b) => leafOf(b, -b.netBalance));
   // 5150 "Closing Stock (Trading A/c)" is the stock itself — carried by the closingStock figure.
   const dr = leaves.filter((b) => b.account.parentId === '5100' && b.account.id !== '5150').map((b) => leafOf(b, b.netBalance));
   const crSide = r2(sales.reduce((t, l) => t + l.amount, 0) + opts.closingStock);
-  const drSide = r2(dr.reduce((t, l) => t + l.amount, 0) + opts.openingStock);
+  const drSide = r2(dr.reduce((t, l) => t + l.amount, 0) + opts.openingStock + procured + grossUp);
   const gp = r2(crSide - drSide);
-  const debit = assign(CAS_TRADING_DR, dr, { openingStock: opts.openingStock, grossProfit: Math.max(0, gp) });
+  const debit = assign(CAS_TRADING_DR, dr, { openingStock: opts.openingStock, procuredToStock: procured, purchaseGrossUp: grossUp, grossProfit: Math.max(0, gp) });
   const credit = assign(CAS_TRADING_CR, sales, { closingStock: opts.closingStock, grossLoss: Math.max(0, -gp) });
   return { debit, credit, grossProfit: gp, total: sum(credit) };
 }

@@ -318,6 +318,8 @@ interface DataContextType {
     grossProfit: number;
     physicalClosingStock: number;    // computed from stockItems, used when no ledger closing stock
     closingStockPosted: boolean;     // true if a closing stock journal exists for current FY
+    procuredToStock: number;         // goods bought straight into a 3400 stock head (a Dr-side purchase)
+    legacyPurchaseGrossUp: number;   // closing stock added back to 5101 when the LEGACY journal reduced it
     activities: { key: string; keyHi: string; salesId: string; purchaseId: string; sales: number; purchases: number; hasRoutedPurchase: boolean; grossMargin: number }[];
     unallocated: { purchases: number; directExp: number; otherSales: number };
   };
@@ -5534,7 +5536,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     return { salesItems, closingStockItems, openingStockItems, purchaseItems, directExpItems,
       totalSales, totalClosingStock, totalOpeningStock, totalPurchases, totalDirectExp, grossProfit,
-      physicalClosingStock, closingStockPosted, activities, unallocated };
+      physicalClosingStock, closingStockPosted, activities, unallocated,
+      procuredToStock: inventoryProcurement > 0.005 ? inventoryProcurement : 0,
+      legacyPurchaseGrossUp: toRupees(subMinor(toMinor(Number(purchase5101Gross) || 0), toMinor(Number(purchase5101Net) || 0))) };
   }, [getTrialBalance, stockItems, stockMovements, sales, purchases, activeVouchers, society.financialYear, openingsInScope]);
 
   const postClosingStock = useCallback((fy?: string): { posted: boolean; amount: number; alreadyPosted: boolean } => {
