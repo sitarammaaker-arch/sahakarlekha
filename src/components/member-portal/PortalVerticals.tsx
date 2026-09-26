@@ -140,7 +140,8 @@ export function PortalVerticals({ views, hi }: { views: VerticalViews; hi: boole
           <CardContent className="space-y-4">
             {housing.flats.length > 0 && (
               <p className="text-sm text-muted-foreground">
-                {hi ? 'फ़्लैट:' : 'Flat:'} {housing.flats.map((f) => [f.blockNo, f.flatNo].filter(Boolean).join('-')).join(', ')}
+                {hi ? 'फ़्लैट:' : 'Flat:'} {/* Same label as the staff Member Statement: "flatNo · blockNo". */}
+                {housing.flats.map((f) => `${f.flatNo}${f.blockNo ? ` · ${f.blockNo}` : ''}`).join(', ')}
               </p>
             )}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

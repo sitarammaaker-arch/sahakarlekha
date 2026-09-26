@@ -137,6 +137,13 @@ for (const fn of ['buildMemberPassbook', 'memberInputOutstanding', 'resolveMembe
 }
 const ui = strip('src/components/member-portal/PortalVerticals.tsx');
 ok(!/\.reduce\(/.test(ui), 'UI computes no totals of its own (all from the staff functions)');
+// Flat label matches the staff Member Statement exactly: "flatNo · blockNo" (was "block-flat", giving "A1-A-101").
+const staffStmtPage = strip('src/pages/MemberStatement.tsx');
+ok(/\{f\.flatNo\}\{f\.blockNo \? ` · \$\{f\.blockNo\}` : ''\}/.test(staffStmtPage), 'staff flat label is flatNo · blockNo');
+ok(/`\$\{f\.flatNo\}\$\{f\.blockNo \? ` · \$\{f\.blockNo\}` : ''\}`/.test(ui) && !/\[f\.blockNo, f\.flatNo\]/.test(ui), 'portal flat label = staff format');
+// KYC status shown in Hindi on the Hindi page.
+const portalPage = strip('src/pages/MemberPortal.tsx');
+ok(/verified: 'सत्यापित'/.test(portalPage) && /KYC_HI\[m\.kycStatus\]/.test(portalPage), 'KYC status translated in Hindi');
 const page = strip('src/pages/MemberPortal.tsx');
 ok(/buildVerticalViews\(snapshot\.member\.id/.test(page) && /<PortalVerticals views=\{vv\}/.test(page), 'MemberPortal renders the vertical views');
 
