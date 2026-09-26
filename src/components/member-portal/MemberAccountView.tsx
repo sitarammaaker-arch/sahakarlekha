@@ -4,7 +4,9 @@
  * dairy / housing / consumer sections and the profile. Both callers pass views built by the same
  * builders (buildPortalView + buildVerticalViews), so staff and member always see the same thing.
  */
+import { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SectionHeader, type SectionLinks } from '@/components/member-portal/SectionHeader';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { fmtDate } from '@/lib/dateUtils';
@@ -22,9 +24,22 @@ interface Props {
   view: PortalView;
   verticals: VerticalViews;
   hi: boolean;
+  /** Staff Member-360 only: per-section links to the source page. */
+  links?: SectionLinks;
 }
 
-export function MemberAccountView({ member: m, view: v, verticals: vv, hi }: Props) {
+export function MemberAccountView({ member: m, view: v, verticals: vv, hi, links }: Props) {
+  // Print/PDF must include the collapsed sections (milk entries, credit ledger, deposit rows): open
+  // every <details> for the print, then restore. Lives here so the portal AND Member-360 both get it.
+  useEffect(() => {
+    const opened: HTMLDetailsElement[] = [];
+    const before = () => document.querySelectorAll('details').forEach((d) => { if (!d.open) { d.open = true; opened.push(d); } });
+    const after = () => { opened.splice(0).forEach((d) => { d.open = false; }); };
+    window.addEventListener('beforeprint', before);
+    window.addEventListener('afterprint', after);
+    return () => { window.removeEventListener('beforeprint', before); window.removeEventListener('afterprint', after); };
+  }, []);
+
   // Share capital always; every other card only when the member has that kind of account.
   const summary = [
     { icon: Landmark, label: hi ? 'शेयर पूँजी' : 'Share capital', value: v.shareBalance, show: true },
@@ -49,7 +64,7 @@ export function MemberAccountView({ member: m, view: v, verticals: vv, hi }: Pro
         </div>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">{hi ? 'शेयर खाता' : 'Share capital ledger'}</CardTitle></CardHeader>
+          <SectionHeader title={hi ? 'शेयर खाता' : 'Share capital ledger'} link={links?.share} />
           <CardContent className="overflow-x-auto">
             {v.shareLedger.length === 0 ? <p className="text-sm text-muted-foreground">{hi ? 'कोई प्रविष्टि नहीं।' : 'No entries.'}</p> : (
               <Table>
@@ -73,7 +88,7 @@ export function MemberAccountView({ member: m, view: v, verticals: vv, hi }: Pro
 
         {v.loans.length > 0 && (
           <Card>
-            <CardHeader><CardTitle className="text-base">{hi ? 'ऋण' : 'Loans'}</CardTitle></CardHeader>
+            <SectionHeader title={hi ? 'ऋण' : 'Loans'} link={links?.loans} />
             <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader><TableRow>
@@ -99,7 +114,7 @@ export function MemberAccountView({ member: m, view: v, verticals: vv, hi }: Pro
 
         {v.deposits.length > 0 && (
           <Card>
-            <CardHeader><CardTitle className="text-base">{hi ? 'जमा खाते' : 'Deposit accounts'}</CardTitle></CardHeader>
+            <SectionHeader title={hi ? 'जमा खाते' : 'Deposit accounts'} link={links?.deposits} />
             <CardContent className="space-y-4">
               {v.deposits.map((d) => (
                 <details key={d.id} className="rounded-lg border p-3">
@@ -139,7 +154,7 @@ export function MemberAccountView({ member: m, view: v, verticals: vv, hi }: Pro
 
         {v.kccLoans.length > 0 && (
           <Card>
-            <CardHeader><CardTitle className="text-base">{hi ? 'किसान क्रेडिट कार्ड (KCC)' : 'Kisan Credit Card (KCC)'}</CardTitle></CardHeader>
+            <SectionHeader title={hi ? 'किसान क्रेडिट कार्ड (KCC)' : 'Kisan Credit Card (KCC)'} link={links?.kcc} />
             <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader><TableRow>
@@ -160,7 +175,7 @@ export function MemberAccountView({ member: m, view: v, verticals: vv, hi }: Pro
           </Card>
         )}
 
-        <PortalVerticals views={vv} hi={hi} />
+        <PortalVerticals views={vv} hi={hi} links={links} />
 
         <Card>
           <CardHeader><CardTitle className="text-base">{hi ? 'परिचय' : 'Profile'}</CardTitle></CardHeader>

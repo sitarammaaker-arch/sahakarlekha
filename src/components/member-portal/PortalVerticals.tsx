@@ -3,10 +3,11 @@
  * buildVerticalViews (lib/memberPortalVerticals), which runs the staff functions. A section renders
  * only when the member has data in that vertical.
  */
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { fmtDate } from '@/lib/dateUtils';
 import type { VerticalViews, DistributionItem } from '@/lib/memberPortalVerticals';
+import { SectionHeader, type SectionLinks } from '@/components/member-portal/SectionHeader';
 
 const money = (n: number) => `₹${(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const qtyFmt = (n: number) => (n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
@@ -45,13 +46,17 @@ function Distributions({ items, hi, title }: { items: DistributionItem[]; hi: bo
   );
 }
 
-export function PortalVerticals({ views, hi }: { views: VerticalViews; hi: boolean }) {
+export function PortalVerticals({ views, hi, links }: { views: VerticalViews; hi: boolean; links?: SectionLinks }) {
   const { dairy, housing, consumer } = views;
+  // The portal windows milk (milkFrom set); the staff Member-360 shows the full history (no milkFrom).
+  const milkSince = (hiPrefix: string, enPrefix: string) => dairy?.milkFrom
+    ? (hi ? `${hiPrefix} (${fmtDate(dairy.milkFrom)} से)` : `${enPrefix} (since ${fmtDate(dairy.milkFrom)})`)
+    : (hi ? `${hiPrefix} (कुल)` : `${enPrefix} (all time)`);
   return (
     <>
       {dairy && (
         <Card>
-          <CardHeader><CardTitle className="text-base">{hi ? 'दूध का हिसाब' : 'Milk account'}</CardTitle></CardHeader>
+          <SectionHeader title={hi ? 'दूध का हिसाब' : 'Milk account'} link={links?.dairy} />
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {/* Dues exist only once a settlement cycle is made (same as the staff passbook) — say so, so a
@@ -61,9 +66,9 @@ export function PortalVerticals({ views, hi }: { views: VerticalViews; hi: boole
                   ? (hi ? 'भुगतान चक्र बनने पर यहाँ जुड़ेगा' : 'Added here once a payment cycle is made')
                   : undefined} />
               <Stat label={hi ? 'कुल भुगतान मिला' : 'Total paid'} value={money(dairy.passbook.totalPaid)} />
-              <Stat label={hi ? `दूध (${dairy.milkFrom ? fmtDate(dairy.milkFrom) + ' से' : 'इस वर्ष'})` : `Milk (since ${dairy.milkFrom ? fmtDate(dairy.milkFrom) : 'this year'})`} value={`${qtyFmt(dairy.passbook.totalQty)} ${hi ? 'लीटर' : 'L'}`} />
+              <Stat label={milkSince('दूध', 'Milk')} value={`${qtyFmt(dairy.passbook.totalQty)} ${hi ? 'लीटर' : 'L'}`} />
               {/* totalGross — the staff passbook's "सकल / Gross" figure, from the same buildMemberPassbook. */}
-              <Stat label={hi ? `दूध का मूल्य (${dairy.milkFrom ? fmtDate(dairy.milkFrom) + ' से' : 'इस वर्ष'})` : `Milk value (since ${dairy.milkFrom ? fmtDate(dairy.milkFrom) : 'this year'})`} value={money(dairy.passbook.totalGross)} />
+              <Stat label={milkSince('दूध का मूल्य', 'Milk value')} value={money(dairy.passbook.totalGross)} />
               <Stat label={hi ? 'आहार/आदान बाकी' : 'Inputs due'} value={money(dairy.inputs.outstanding)} />
             </div>
 
@@ -146,7 +151,7 @@ export function PortalVerticals({ views, hi }: { views: VerticalViews; hi: boole
 
       {housing && (
         <Card>
-          <CardHeader><CardTitle className="text-base">{hi ? 'रखरखाव (Maintenance)' : 'Maintenance'}</CardTitle></CardHeader>
+          <SectionHeader title={hi ? 'रखरखाव (Maintenance)' : 'Maintenance'} link={links?.housing} />
           <CardContent className="space-y-4">
             {housing.flats.length > 0 && (
               <p className="text-sm text-muted-foreground">
@@ -185,7 +190,7 @@ export function PortalVerticals({ views, hi }: { views: VerticalViews; hi: boole
 
       {consumer && (
         <Card>
-          <CardHeader><CardTitle className="text-base">{hi ? 'दुकान का उधार' : 'Store credit'}</CardTitle></CardHeader>
+          <SectionHeader title={hi ? 'दुकान का उधार' : 'Store credit'} link={links?.consumer} />
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <Stat label={hi ? 'कुल उधार बाकी' : 'Outstanding'} value={money(consumer.outstanding)} />

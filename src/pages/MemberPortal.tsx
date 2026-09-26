@@ -118,17 +118,6 @@ export default function MemberPortal() {
     setPhase('login');
   };
 
-  // Print/PDF must include the collapsed sections (milk entries, credit ledger…): open every <details>
-  // for the print, then restore what the member had open.
-  useEffect(() => {
-    const opened: HTMLDetailsElement[] = [];
-    const before = () => document.querySelectorAll('details').forEach((d) => { if (!d.open) { d.open = true; opened.push(d); } });
-    const after = () => { opened.splice(0).forEach((d) => { d.open = false; }); };
-    window.addEventListener('beforeprint', before);
-    window.addEventListener('afterprint', after);
-    return () => { window.removeEventListener('beforeprint', before); window.removeEventListener('afterprint', after); };
-  }, []);
-
   const view = useMemo(() => (snapshot ? buildPortalView(snapshot) : null), [snapshot]);
   // S4b: dairy / housing / consumer — only the verticals this member has data in.
   const verticals = useMemo(

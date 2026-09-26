@@ -191,5 +191,28 @@ ok(/navigate\(`\/members\/\$\{member\.id\}`\)/.test(membersPage), 'Members list 
 const portalPage = readFileSync(pathResolve(ROOT, 'src/pages/MemberPortal.tsx'), 'utf8');
 ok(/<MemberAccountView member=\{m\} view=\{v\} verticals=\{vv\} hi=\{hi\} \/>/.test(portalPage), 'the member portal renders the SAME MemberAccountView');
 
+// ── 360-c: labels, print, source links, admin portal status ──
+const strip2 = (f) => readFileSync(pathResolve(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+const verticalsUi = strip2('src/components/member-portal/PortalVerticals.tsx');
+ok(!/'इस वर्ष'|'this year'/.test(verticalsUi), 'no "this year" milk label (staff sees ALL milk — founder\'s Mik Member PDF)');
+ok(/\(कुल\)/.test(verticalsUi) && /\(all time\)/.test(verticalsUi), 'staff milk labels say "कुल" / "all time"');
+ok(verticals.dairy.milkFrom === undefined, 'staff snapshot carries no milk window (so the "all time" label applies)');
+const accountUi = strip2('src/components/member-portal/MemberAccountView.tsx');
+ok(/addEventListener\('beforeprint'/.test(accountUi) && /addEventListener\('afterprint'/.test(accountUi), 'print opener lives in the SHARED view (portal + 360)');
+ok(!/beforeprint/.test(strip2('src/pages/MemberPortal.tsx')), 'no duplicate print opener left in the portal page');
+ok(/print:hidden fixed bottom-5 right-5/.test(strip2('src/components/FeedbackFab.tsx')), 'feedback button is never printed (was overlapping the statement)');
+const header = strip2('src/components/member-portal/SectionHeader.tsx');
+ok(/print:hidden/.test(header), 'source links are never printed');
+const p360 = strip2('src/pages/Member360.tsx');
+for (const [k, to] of [['share', '/share-register'], ['loans', '/loan-register'], ['deposits', '/deposits'], ['kcc', '/kcc-loan'], ['dairy', '/dairy-registers'], ['housing', '/member-statement'], ['consumer', '/member-credit']]) {
+  ok(new RegExp(`${k}: \\{ to: '${to.replace('/', '\\/')}'`).test(p360), `section ${k} links to ${to}`);
+}
+const appSrc = readFileSync(pathResolve(ROOT, 'src/App.tsx'), 'utf8');
+for (const to of ['/share-register', '/loan-register', '/deposits', '/kcc-loan', '/dairy-registers', '/member-statement', '/member-credit']) {
+  ok(appSrc.includes(`path="${to}"`), `link target ${to} is a real route`);
+}
+ok(/if \(!isAdmin \|\| !id\) return;/.test(p360) && /\{isAdmin && \(\s*<MemberPortalDialog/.test(p360), 'portal-login status + dialog: admin only (non-admins never call the function)');
+ok(!/links=/.test(strip2('src/pages/MemberPortal.tsx')), 'the member portal passes NO staff links');
+
 console.log(`member-360 (staff) parity: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
