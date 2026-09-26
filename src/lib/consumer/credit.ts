@@ -100,3 +100,52 @@ export function memberAgeing(
   }
   return out;
 }
+
+// ── Member credit LEDGER (the running statement behind memberOutstanding) ─────────────────────
+// ONE source for the staff Member Credit page and the member portal (RULE 2). Before this, the staff
+// page hand-built its ledger from sales + recoveries only, silently omitting credit-adjusted returns —
+// so the same screen showed Outstanding ₹151 above a ledger ending at ₹200.
+
+export interface LedgerRecoveryRow { id?: string; date: string; ref?: string; memberId?: string; amount: number; isDeleted?: boolean }
+export interface LedgerReturnRow { id?: string; date: string; ref?: string; memberId?: string; grandTotal?: number; refundMode?: string; isDeleted?: boolean }
+export interface CreditLedgerRow {
+  date: string;
+  kind: 'sale' | 'recovery' | 'return';
+  ref: string;
+  dr: number;           // credit sale (raises the receivable)
+  cr: number;           // recovery / credit-adjusted return (lowers it)
+  balance: number;      // running receivable after this row
+  recoveryId?: string;  // set on recovery rows (the staff page can reverse those)
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+const KIND_ORDER: Record<CreditLedgerRow['kind'], number> = { sale: 0, recovery: 1, return: 2 };
+
+/**
+ * Chronological credit ledger for one member: credit sales (Dr), recoveries and credit-adjusted
+ * sales returns (Cr), with a running balance. Uses the SAME filters as memberOutstanding
+ * (memberCreditSales / !isDeleted recoveries / refundMode 'credit-adjust' returns), so whenever the
+ * member is not over-recovered the final balance === memberOutstanding(...).
+ */
+export function memberCreditLedger(
+  sales: ReadonlyArray<CreditSaleRow & { saleNo?: string }>,
+  recoveries: ReadonlyArray<LedgerRecoveryRow>,
+  returns: ReadonlyArray<LedgerReturnRow>,
+  memberId: string,
+): CreditLedgerRow[] {
+  const rows: Omit<CreditLedgerRow, 'balance'>[] = [];
+  for (const s of memberCreditSales(sales, memberId)) {
+    rows.push({ date: s.date, kind: 'sale', ref: (s as { saleNo?: string }).saleNo || '—', dr: saleTotal(s), cr: 0 });
+  }
+  for (const r of recoveries) {
+    if (r.memberId !== memberId || r.isDeleted) continue;
+    rows.push({ date: r.date, kind: 'recovery', ref: r.ref || '—', dr: 0, cr: r.amount || 0, recoveryId: r.id });
+  }
+  for (const r of returns) {
+    if (r.memberId !== memberId || r.refundMode !== 'credit-adjust' || r.isDeleted) continue;
+    rows.push({ date: r.date, kind: 'return', ref: r.ref || '—', dr: 0, cr: r.grandTotal || 0 });
+  }
+  rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : KIND_ORDER[a.kind] - KIND_ORDER[b.kind]));
+  let bal = 0;
+  return rows.map((r) => { bal = r2(bal + r.dr - r.cr); return { ...r, balance: bal }; });
+}
