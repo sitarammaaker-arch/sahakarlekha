@@ -6,6 +6,7 @@
 import { register } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve as pathResolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = pathResolve(HERE, '..', 'src');
@@ -121,6 +122,17 @@ const rupeeSum = (lines, drCr) => lines.filter((l) => l.type === drCr).reduce((s
   ok(appropriationVoucherContent(refused) === null, 'a refused appropriation (cap breach) ⇒ null content');
   const zero = planSocietyAppropriation({ netSurplus: 0, shareCapital: 0, asOf: '2026-03-31' });
   ok(appropriationVoucherContent(zero) === null, 'a zero-surplus appropriation ⇒ null content'); }
+
+// ── 12. Patronage is owed to MEMBERS — never 2103 (Salary Payable in every shipped chart) ──
+{ ok(DEFAULT_APPROPRIATION_ACCOUNTS.patronage_bonus === '', 'no default patronage head (was 2103 Salary Payable)');
+  const noHead = planSocietyAppropriation({ netSurplus: 100000, shareCapital: 0, asOf: '2026-03-31', discretionary: { patronage: 5000 } });
+  ok(!noHead.ok && noHead.legs.length === 0 && noHead.problems.some((p) => /patronage_bonus has no chart account/.test(p)), 'patronage without a member-rebate head ⇒ refused, never mis-posted');
+  const withHead = planSocietyAppropriation({ netSurplus: 100000, shareCapital: 0, asOf: '2026-03-31', discretionary: { patronage: 5000 }, accounts: { patronage_bonus: 'REBATE' } });
+  ok(withHead.ok && legOf(withHead, 'REBATE', 'Cr').amountMinor === 500000 && !legOf(withHead, '2103', 'Cr'), 'patronage posts to the member rebate-payable head');
+  const strip = (f) => readFileSync(pathResolve(HERE, '..', f), 'utf8');
+  for (const f of ['src/contexts/DataContext.tsx', 'src/components/StatutoryAppropriationPanel.tsx']) {
+    ok(/patronage_bonus: resolveRebatePayableAccountId\(accounts\)/.test(strip(f)), `${f}: passes the member rebate-payable head`);
+  } }
 
 console.log(`\nSociety appropriation adapter (T-20 wiring slice 1+2): ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

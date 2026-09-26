@@ -28,10 +28,12 @@ import {
 
 /**
  * The default chart heads the appropriation posts to (the SahakarLekha cooperative chart). The two
- * STATUTORY steps (reserve 1201, education 1203) and the two common discretionary payables (dividend
- * 1211, patronage/staff-bonus payable 2103) have dedicated heads; `bye_law_reserves` and `charitable`
- * have no standard head, so they default to '' and a caller that appropriates them MUST supply one
- * (a non-zero step with no account is refused, never mis-posted).
+ * STATUTORY steps (reserve 1201, education 1203) and dividend (1211) have dedicated heads;
+ * `bye_law_reserves`, `patronage_bonus` and `charitable` have no standard head, so they default to ''
+ * and a caller that appropriates them MUST supply one (a non-zero step with no account is refused,
+ * never mis-posted). Patronage is owed to MEMBERS — it must never default to 2103, which is
+ * "Salary Payable" (an employee liability) in every shipped chart; callers pass the society's
+ * member-rebate-payable head (resolveRebatePayableAccountId).
  */
 export const DEFAULT_APPROPRIATION_ACCOUNTS: AppropriationAccounts = {
   appropriation: '1208',    // Net Surplus (P&L Appropriation A/c) — debited for the total appropriated
@@ -39,7 +41,7 @@ export const DEFAULT_APPROPRIATION_ACCOUNTS: AppropriationAccounts = {
   education_fund: '1203',   // Education Fund
   bye_law_reserves: '',     // no standard head — caller supplies per bye-laws
   dividend: '1211',         // Dividend Distribution
-  patronage_bonus: '2103',  // Staff/Patronage Payable (liability)
+  patronage_bonus: '',      // member rebate payable — caller supplies (never 2103 Salary Payable)
   charitable: '',           // no standard head — caller supplies with sanction
 };
 

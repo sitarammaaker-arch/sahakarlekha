@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Landmark, AlertTriangle } from 'lucide-react';
 import { planSocietyAppropriation } from '@/lib/rules/societyAppropriation';
+import { resolveRebatePayableAccountId } from '@/lib/consumer/accounts';
 import type { AppropriationStep } from '@/lib/rules/ucas';
 
 const fmt = (n: number) => 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -59,7 +60,10 @@ export const StatutoryAppropriationPanel: React.FC = () => {
     () => planSocietyAppropriation({
       netSurplus, shareCapital, state: society.state, asOf: date, discretionary: { dividend: dividendAmt },
       // Same head as DataContext.addStatutoryAppropriation (the preview must match what posts).
-      accounts: accounts.some((a) => a.id === '1205' && !a.isGroup) ? { bye_law_reserves: '1205' } : undefined,
+      accounts: {
+        ...(accounts.some((a) => a.id === '1205' && !a.isGroup) ? { bye_law_reserves: '1205' } : {}),
+        ...(resolveRebatePayableAccountId(accounts) ? { patronage_bonus: resolveRebatePayableAccountId(accounts) as string } : {}),
+      },
     }),
     [netSurplus, shareCapital, society.state, date, dividendAmt, accounts],
   );
