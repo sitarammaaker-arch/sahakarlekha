@@ -10,7 +10,7 @@ import { SectionHeader, type SectionLinks } from '@/components/member-portal/Sec
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { fmtDate } from '@/lib/dateUtils';
-import { Landmark, HandCoins, PiggyBank, Wheat, Milk, Home, ShoppingBasket } from 'lucide-react';
+import { Landmark, HandCoins, PiggyBank, Wheat, Milk, Home, ShoppingBasket, Coins } from 'lucide-react';
 import type { PortalSnapshot, PortalView } from '@/lib/memberPortalView';
 import type { VerticalViews } from '@/lib/memberPortalVerticals';
 import { PortalVerticals } from '@/components/member-portal/PortalVerticals';
@@ -49,6 +49,7 @@ export function MemberAccountView({ member: m, view: v, verticals: vv, hi, links
     { icon: Milk, label: hi ? 'दूध भुगतान बाकी' : 'Milk payment due', value: vv.dairy?.passbook.totalOutstanding ?? 0, show: !!vv.dairy },
     { icon: Home, label: hi ? 'रखरखाव बकाया' : 'Maintenance due', value: vv.housing?.statement.outstanding ?? 0, show: !!vv.housing },
     { icon: ShoppingBasket, label: hi ? 'दुकान उधार' : 'Store credit due', value: vv.consumer?.outstanding ?? 0, show: !!vv.consumer },
+    { icon: Coins, label: hi ? 'लाभांश बाकी' : 'Dividend due', value: vv.dividend?.dueTotal ?? 0, show: (vv.dividend?.dueTotal ?? 0) > 0 },
   ].filter((c) => c.show);
 
   return (

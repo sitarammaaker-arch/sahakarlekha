@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 import { ExternalLink } from 'lucide-react';
 
-export type SectionKey = 'share' | 'loans' | 'deposits' | 'kcc' | 'dairy' | 'housing' | 'consumer';
+export type SectionKey = 'share' | 'loans' | 'deposits' | 'kcc' | 'dairy' | 'housing' | 'consumer' | 'dividend';
 export type SectionLinks = Partial<Record<SectionKey, { to: string; label: string }>>;
 
 export function SectionHeader({ title, link }: { title: string; link?: { to: string; label: string } }) {

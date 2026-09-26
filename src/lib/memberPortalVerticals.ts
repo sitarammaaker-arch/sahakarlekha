@@ -13,6 +13,7 @@ import { memberInputOutstanding, type InputBalance } from './dairy/inputs';
 import { resolveMemberInputReceivableAccountId } from './dairy/accounts';
 import { buildMemberStatement, type MemberStatement } from './housing/statement';
 import { memberOutstanding, memberAgeing, memberCreditLedger, type Ageing, type CreditLedgerRow } from './consumer/credit';
+import { memberDividendHistory, type DistributionRun, type MemberDividendRow } from './distribution/dividendRuns';
 
 type Row = Record<string, unknown>;
 
@@ -31,6 +32,10 @@ export interface PortalVerticalPayload {
   creditRecoveries?: Row[];
   creditReturns?: Row[];
   patronageRuns?: Row[];
+  /** General dividend (066): runs with ONLY this member's line + society total, and the vouchers the
+   *  shared rule reads (the FY's appropriation vouchers + this member's payment vouchers). */
+  dividendRuns?: Row[];
+  dividendVouchers?: Row[];
 }
 
 export interface DistributionItem {
@@ -61,7 +66,8 @@ export interface ConsumerView {
   ledger: CreditLedgerRow[];
   distributions: DistributionItem[];
 }
-export interface VerticalViews { dairy: DairyView | null; housing: HousingView | null; consumer: ConsumerView | null }
+export interface DividendView { rows: MemberDividendRow[]; dueTotal: number }
+export interface VerticalViews { dairy: DairyView | null; housing: HousingView | null; consumer: ConsumerView | null; dividend: DividendView | null }
 
 const num = (n: unknown) => Number(n) || 0;
 const str = (s: unknown) => (s == null ? '' : String(s));
@@ -124,5 +130,16 @@ export function buildVerticalViews(memberId: string, p: PortalVerticalPayload, a
       }
     : null;
 
-  return { dairy, housing, consumer };
+  // ── General dividend (the same memberDividendHistory Profit Distribution's rule feeds) ──
+  const runs = arr(p.dividendRuns).map((r) => ({
+    ...r, total: num(r.total),
+    lines: (Array.isArray(r.lines) ? r.lines : []).map((l: Row) => ({ ...l, base: num(l.base), amount: num(l.amount) })),
+  })) as unknown as DistributionRun[];
+  const dVouchers = arr(p.dividendVouchers).map((v) => ({ ...v, amount: num(v.amount) })) as unknown as Parameters<typeof memberDividendHistory>[2];
+  const dividendRows = memberDividendHistory(memberId, runs, dVouchers);
+  const dividend: DividendView | null = dividendRows.length
+    ? { rows: dividendRows, dueTotal: Math.round(dividendRows.reduce((s, r) => s + r.due, 0) * 100) / 100 }
+    : null;
+
+  return { dairy, housing, consumer, dividend };
 }

@@ -25,7 +25,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { StatutoryAppropriationPanel } from '@/components/StatutoryAppropriationPanel';
 import { useDistributionRuns } from '@/hooks/useDistributionRuns';
 import { linesTotal } from '@/lib/distribution/engine';
-import { dividendRunLines, liveRunFor, existingRunFor, dividendBreakdown, snapshotLines } from '@/lib/distribution/dividendRuns';
+import { dividendRunLines, liveRunFor, existingRunFor, dividendBreakdown, snapshotLines, postedAppropriation, dividendPaymentsByMember } from '@/lib/distribution/dividendRuns';
 
 // ── Account IDs ─────────────────────────────────────────────────────────────
 const ACC_NET_SURPLUS   = '1208';
@@ -38,19 +38,13 @@ const fmt = (n: number) =>
   'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 // ── Check if a distribution journal exists ───────────────────────────────────
+// The FY's live appropriation voucher — the shared rule (also used by Member-360 and the portal).
 const usePosted = (
   vouchers: ReturnType<typeof useData>['vouchers'],
   debitId: string,
   creditId: string,
   fy: string
-) =>
-  vouchers.find(
-    v =>
-      !v.isDeleted &&
-      getVoucherLines(v).some(l => l.accountId === debitId && l.type === 'Dr') &&
-      getVoucherLines(v).some(l => l.accountId === creditId && l.type === 'Cr') &&
-      v.narration.includes(fy)
-  );
+) => postedAppropriation(vouchers, debitId, creditId, fy);
 
 // ────────────────────────────────────────────────────────────────────────────
 const ProfitDistribution: React.FC = () => {
@@ -159,17 +153,8 @@ const ProfitDistribution: React.FC = () => {
   // ── Dividend PAYMENT REGISTER — who's been paid, who's pending ─────────────
   // Joins each member's ENTITLED dividend (settlementRows) with the actual
   // per-member payment vouchers (Dr 1211, memberId-tagged) for audit evidence.
-  const paidByMember = useMemo(() => {
-    const m = new Map<string, { amount: number; voucherNo: string; date: string }>();
-    for (const v of vouchers) {
-      if (v.isDeleted || !v.memberId || !v.narration?.includes(fy)) continue;
-      if (!/dividend paid|डिविडेंड भुगतान/i.test(v.narration)) continue;
-      if (!getVoucherLines(v).some(l => l.accountId === ACC_DIVIDEND && l.type === 'Dr')) continue;
-      const prev = m.get(v.memberId);
-      m.set(v.memberId, { amount: Math.round(((prev?.amount || 0) + v.amount) * 100) / 100, voucherNo: v.voucherNo || prev?.voucherNo || '', date: v.date });
-    }
-    return m;
-  }, [vouchers, fy]);
+  // Shared rule (Member-360 + portal show the same "paid").
+  const paidByMember = useMemo(() => dividendPaymentsByMember(vouchers, fy), [vouchers, fy]);
   // Each member's entitled dividend: from the frozen run (new posts); for a legacy year, the actual
   // payment vouchers (if paid) or the old share-capital split (if not — an admin can freeze it).
   const dividendSplit = useMemo(
