@@ -48,7 +48,17 @@ export async function startCheckout(
     body: { plan, society_id: societyId },
   });
   if (error || !data?.orderId) {
-    return { ok: false, error: error?.message || data?.error || 'Could not start payment' };
+    let msg = data?.error || error?.message || 'Could not start payment';
+    // supabase-js FunctionsHttpError carries the Response in .context — read our
+    // JSON { error } body so the toast shows the real reason, not just "non-2xx".
+    const ctx = (error as unknown as { context?: Response } | undefined)?.context;
+    if (ctx && typeof ctx.json === 'function') {
+      try {
+        const body = await ctx.json();
+        if (body?.error) msg = body.error;
+      } catch { /* body not JSON — keep msg */ }
+    }
+    return { ok: false, error: msg };
   }
   const loaded = await loadScript();
   if (!loaded || !window.Razorpay) return { ok: false, error: 'Could not load Razorpay' };
