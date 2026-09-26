@@ -243,6 +243,7 @@
     "test:member-loan-interest": "node scripts/test-member-loan-interest.mjs",
     "test:loan-interest-consistency": "node scripts/test-loan-interest-consistency.mjs",
     "test:loan-interest-period": "node scripts/test-loan-interest-period.mjs",
+    "test:overdue-one-rule": "node scripts/test-overdue-one-rule.mjs",
     "test:haryana-statutory-limits": "node scripts/test-haryana-statutory-limits.mjs",
     "test:loan-account-resolution": "node scripts/test-loan-account-resolution.mjs",
     "test:loan-interest-accrual": "node scripts/test-loan-interest-accrual.mjs",

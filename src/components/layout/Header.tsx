@@ -20,6 +20,8 @@ import { cn } from '@/lib/utils';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { MfaSetupDialog } from '@/components/security/MfaSetupDialog';
 import { helpForRoute } from '@/content/help';
+import { effectiveLoanStatus } from '@/lib/loans/interestAccrual';
+import { todayStr } from '@/lib/dateUtils';
 
 interface HeaderProps {
   sidebarCollapsed: boolean;
@@ -37,7 +39,8 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
   const [mfaOpen, setMfaOpen] = useState(false);
 
   // Live notification data
-  const overdueLoans = loans.filter(l => l.status === 'overdue');
+  // One overdue rule (due date passed, or marked) — the same the interest accrual uses (RULE 2).
+  const overdueLoans = loans.filter(l => effectiveLoanStatus(l, todayStr()) === 'overdue');
   const pendingObjections = auditObjections.filter(o => o.status === 'pending');
   const cancelledVouchers = vouchers.filter(v => v.isDeleted);
   // ECR-13: statutory deadlines needing attention (overdue + due-soon, unfiled).

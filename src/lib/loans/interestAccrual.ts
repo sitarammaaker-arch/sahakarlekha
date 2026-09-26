@@ -192,3 +192,15 @@ export const kccAccruables = (kcc: readonly KccLike[]): AccruableLoan[] => kcc.f
 /** Journal narration prefixes — the "already posted" check is per kind (a KCC journal never marks member loans posted). */
 export const NARRATION_LOAN_ACCRUAL = 'Member Loan Interest Accrual';
 export const NARRATION_KCC_ACCRUAL = 'KCC Interest Accrual';
+
+// ── One "overdue" rule for every screen (RULE 2) ─────────────────────────────────────────────
+// The accrual (H2-1) decides overdue by due date; the Dashboard, Header, Loan Register, role
+// dashboards and the member badge used ONLY the hand-set status — so a loan past its due date
+// accrued into the Overdue Interest Reserve while every screen still called it "active".
+export type EffectiveLoanStatus = 'active' | 'overdue' | 'cleared';
+
+/** Status as of a date: cleared stays cleared; otherwise the same isOverdueAt the accrual uses. */
+export function effectiveLoanStatus(loan: AccruableLoan, asOf: string): EffectiveLoanStatus {
+  if (loan.status === 'cleared') return 'cleared';
+  return isOverdueAt(loan, asOf) ? 'overdue' : 'active';
+}

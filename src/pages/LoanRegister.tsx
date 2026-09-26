@@ -23,6 +23,8 @@ import {
   ACC_INTEREST_RECEIVABLE, ACC_OVERDUE_INTEREST_RESERVE, type LoanInterestDue,
 } from '@/lib/loans/interestAccrual';
 import { useLoanAccruals } from '@/hooks/useLoanAccruals';
+import { effectiveLoanStatus } from '@/lib/loans/interestAccrual';
+import { todayStr } from '@/lib/dateUtils';
 import type { Loan, LoanType, LoanStatus } from '@/types';
 
 const EMPTY_FORM = {
@@ -207,17 +209,20 @@ const LoanRegister: React.FC = () => {
   const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
   const getMemberName = (id: string) => members.find(m => m.id === id)?.name || id;
 
+  // One overdue rule for the whole app (due date passed, or marked) — the accrual uses it too.
+  const today = todayStr();
+  const statusOf = (l: Loan) => effectiveLoanStatus(l, today);
   const filtered = loans.filter(l => {
     const memberName = getMemberName(l.memberId).toLowerCase();
     const matchSearch = memberName.includes(search.toLowerCase()) || l.loanNo.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'all' || l.status === statusFilter;
+    const matchStatus = statusFilter === 'all' || statusOf(l) === statusFilter;
     return matchSearch && matchStatus;
   });
 
   const totalDisbursed = loans.reduce((s, l) => s + l.amount, 0);
   const totalOutstanding = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + loanOutstanding(l), 0);
-  const overdueCount = loans.filter(l => l.status === 'overdue').length;
-  const activeCount = loans.filter(l => l.status === 'active').length;
+  const overdueCount = loans.filter(l => statusOf(l) === 'overdue').length;
+  const activeCount = loans.filter(l => statusOf(l) === 'active').length;
 
   // P3-2: Sec 32 compliance — total loans should not exceed 10× (share capital + reserves)
   // Share Capital accounts: 1101–1103 (parentId 1100); Reserve accounts: parentId 1200
@@ -324,7 +329,7 @@ const LoanRegister: React.FC = () => {
           <p className="text-muted-foreground">{hi ? 'सदस्य ऋण का पूर्ण विवरण' : 'Complete record of member loans'}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateLoanRegisterPDF(loans, approvedMembers, society)}>
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateLoanRegisterPDF(loans.map(l => ({ ...l, status: statusOf(l) })), approvedMembers, society)}>
             <Download className="h-4 w-4" />PDF
           </Button>
           <Button size="sm" className="gap-2" onClick={() => { setForm(EMPTY_FORM); setIsAddOpen(true); }}>
@@ -458,7 +463,7 @@ const LoanRegister: React.FC = () => {
                       <TableCell className="text-right text-green-600">{fmt(l.repaidAmount)}</TableCell>
                       <TableCell className="text-right font-semibold text-red-600">{fmt(outstanding)}</TableCell>
                       <TableCell className="text-sm">{l.dueDate}</TableCell>
-                      <TableCell>{statusBadge(l.status)}</TableCell>
+                      <TableCell>{statusBadge(statusOf(l))}</TableCell>
                       <TableCell>
                         <div className="flex gap-1 items-center">
                           {outstanding > 0.005 && <LoanRepayButton loan={l} hi={hi} due={dueOf(l.id)} onRepay={recordRepayment} />}

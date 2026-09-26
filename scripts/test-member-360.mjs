@@ -157,7 +157,7 @@ ok(bare.verticals.dairy === null && bare.verticals.housing === null && bare.vert
 
 // ── static: pure, reuses the portal builders ──
 const lib = readFileSync(pathResolve(ROOT, 'src/lib/member360.ts'), 'utf8');
-ok(/buildPortalView\(snapshot\)/.test(lib) && /buildVerticalViews\(member\.id, snapshot, asOf\)/.test(lib), 'reuses the portal view builders (no third formula)');
+ok(/buildPortalView\(snapshot(, asOf)?\)/.test(lib) && /buildVerticalViews\(member\.id, snapshot, asOf\)/.test(lib), 'reuses the portal view builders (no third formula)');
 ok(!/from 'react'|supabase/.test(lib), 'adapter is pure (no React, no network)');
 ok(typeof toMemberSnapshot === 'function', 'snapshot adapter exported');
 
