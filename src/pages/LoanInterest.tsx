@@ -32,6 +32,7 @@ import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFil
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { loanOutstanding } from '@/lib/memberSnapshot';
+import { interestPeriodDefaults, type InterestPeriodMode } from '@/lib/loans/interestPeriod';
 
 // ── Account IDs ───────────────────────────────────────────────────────────────
 const ACC_INTEREST_REC  = '3313'; // Member Loan Interest Receivable (asset)
@@ -63,26 +64,8 @@ const daysBetween = (a: string, b: string): number => {
   return Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / msPerDay));
 };
 
-// ── Build default from/to for a period mode ───────────────────────────────────
-const buildDefaultDates = (mode: 'monthly' | 'quarterly' | 'annual'): { from: string; to: string } => {
-  const now  = new Date();
-  const y    = now.getFullYear();
-  const m    = now.getMonth(); // 0-indexed
-
-  if (mode === 'monthly') {
-    const from = new Date(y, m, 1);
-    const to   = new Date(y, m + 1, 0); // last day of month
-    return { from: from.toISOString().split('T')[0], to: to.toISOString().split('T')[0] };
-  }
-  if (mode === 'quarterly') {
-    const qStart = Math.floor(m / 3) * 3;
-    const from = new Date(y, qStart, 1);
-    const to   = new Date(y, qStart + 3, 0);
-    return { from: from.toISOString().split('T')[0], to: to.toISOString().split('T')[0] };
-  }
-  // annual
-  return { from: `${y}-04-01`, to: `${y + 1}-03-31` };
-};
+// ── Default from/to for a period mode (local dates, Indian FY) — see interestPeriodDefaults ──
+const buildDefaultDates = (mode: InterestPeriodMode) => interestPeriodDefaults(mode);
 
 // ────────────────────────────────────────────────────────────────────────────
 const LoanInterest: React.FC = () => {
