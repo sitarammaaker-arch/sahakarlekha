@@ -67,7 +67,15 @@ ok(ucasCharitableMaxPct(AT) === 10, 'Charitable/public-purpose ceiling is 10%');
 
 // ── 2. Effective-dated + jurisdiction-scoped (via the engine) ────────────────
 ok(ucasReserveMinPct({ jurisdiction: 'pb', asOf: '2026-06-01' }) === 25, 'a state with no override uses the national rule');
-ok(ucasReserveMinPct({ jurisdiction: 'hr', asOf: '2026-06-01' }) === 25, 'no fabricated state override — Haryana resolves to the national default too');
+// Haryana is overridden ONLY with figures read from the Act/Rules TEXT (s.87(1)(a), rr.72-74), each cited.
+ok(ucasReserveMinPct({ jurisdiction: 'hr', asOf: '2026-06-01' }) === 10, 'Haryana reserve minimum = 10% (Act s.87(1)(a), text-verified)');
+ok(ucasDividendCapPct({ jurisdiction: 'hr', asOf: '2026-06-01' }) === 10, 'Haryana dividend cap = 10% (Rules r.72(1), text-verified)');
+ok(ucasEducationFundPct({ jurisdiction: 'hr', asOf: '2026-06-01' }) === 2, 'Haryana education fund = 2% max (Rules r.73, text-verified)');
+for (const k of ['reserve_fund_min_pct', 'bad_debt_fund_min_pct', 'education_fund_pct', 'dividend_cap_pct']) {
+  const v = UCAS_RULES[k].byJurisdiction.hr?.[0];
+  ok(v && v.verified === true && /Haryana Co-operative Societies (Act 1984 s\.87|Rules 1989 r\.7[234])/.test(v.cite), `${k}: Haryana value is verified AND cites the provision`);
+}
+ok(!Object.values(UCAS_RULES).some((r) => Object.keys(r.byJurisdiction).some((j) => j !== '' && j !== 'hr')), 'no OTHER state is overridden (nothing fabricated)');
 // Before the baseline effectiveFrom the rule does not resolve → the accessor FALLS BACK safely.
 ok(ucasReserveMinPct({ asOf: '1990-01-01' }) === 25, 'before the baseline date, the accessor falls back to the safe default (per-rule rollback)');
 ok(ucasDividendCapPct({ asOf: 'not-a-date' }) === 15, 'an unparseable asOf falls back — never a wrong figure');

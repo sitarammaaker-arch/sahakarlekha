@@ -21,6 +21,8 @@ export interface AppropriationConfig {
   reservePct?: number;    // Statutory Reserve Fund (default 25)
   educationPct?: number;  // Education Fund (default 1)
   otherFunds?: AppropriationFund[];
+  /** The statutory reserve minimum for the society's jurisdiction (default 25 — the common-Act figure). */
+  statutoryMinPct?: number;
 }
 export interface AppropriationStep {
   order: number;
@@ -60,6 +62,6 @@ export function appropriationWaterfall(netProfit: number, config: AppropriationC
     steps,
     totalAppropriated,
     residual: r2(np - totalAppropriated),
-    reserveBelowStatutory: reservePct < STATUTORY_RESERVE_MIN,
+    reserveBelowStatutory: reservePct < (config.statutoryMinPct ?? STATUTORY_RESERVE_MIN),
   };
 }

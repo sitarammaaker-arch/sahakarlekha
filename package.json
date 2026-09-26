@@ -241,7 +241,8 @@
     "build:pay-core": "esbuild supabase/functions/_shared/pay-core.entry.ts --bundle --format=esm --platform=neutral --alias:@=./src --outfile=supabase/functions/_shared/pay-core.mjs --log-level=warning",
     "test:member-portal-sql-067": "node scripts/test-member-portal-sql-067.mjs",
     "test:loan-interest-consistency": "node scripts/test-loan-interest-consistency.mjs",
-    "test:loan-interest-period": "node scripts/test-loan-interest-period.mjs"
+    "test:loan-interest-period": "node scripts/test-loan-interest-period.mjs",
+    "test:haryana-statutory-limits": "node scripts/test-haryana-statutory-limits.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

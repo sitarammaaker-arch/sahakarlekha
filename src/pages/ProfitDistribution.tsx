@@ -23,6 +23,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { StatutoryAppropriationPanel } from '@/components/StatutoryAppropriationPanel';
+import { statutoryLimits, dividendRateIssue } from '@/lib/rules/statutoryLimits';
 import { useDistributionRuns } from '@/hooks/useDistributionRuns';
 import { linesTotal } from '@/lib/distribution/engine';
 import { dividendRunLines, liveRunFor, existingRunFor, dividendBreakdown, snapshotLines, postedAppropriation, dividendPaymentsByMember } from '@/lib/distribution/dividendRuns';
@@ -102,6 +103,10 @@ const ProfitDistribution: React.FC = () => {
 
   const dividendRatePct = parseFloat(dividendRate) || 0;
   const bonusAmount     = parseFloat(bonusAmt) || 0;
+  // Statutory dividend cap for the society's State — ENFORCED only when checked against the text
+  // (Haryana Rules r.72(1): ≤10% p.a. of paid-up share capital).
+  const limits = useMemo(() => statutoryLimits(society.state, new Date().toISOString().slice(0, 10)), [society.state]);
+  const dividendCapIssue = divPosted ? null : dividendRateIssue(limits, dividendRatePct);
 
   // ── Total share capital of active members ─────────────────────────────────
   const activeMembers = useMemo(
@@ -224,6 +229,11 @@ const ProfitDistribution: React.FC = () => {
     // RULE 6: nothing is written while the FY is audit-locked (the run is saved before the voucher).
     if (society.fyLocked) {
       toast({ title: 'FY Locked', description: hi ? 'FY ऑडिट-लॉक है — कोई बदलाव नहीं हो सकता।' : 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' });
+      return;
+    }
+    // Guard: the statutory dividend cap (never post a dividend the law forbids).
+    if (dividendCapIssue) {
+      toast({ title: hi ? 'लाभांश दर क़ानूनी सीमा से अधिक' : 'Dividend rate above the legal cap', description: `${hi ? dividendCapIssue.hi : dividendCapIssue.en} (${dividendCapIssue.cite})`, variant: 'destructive', duration: 10000 });
       return;
     }
     // Guard: never let dividend + bonus exceed the distributable surplus (over-appropriation). #13
@@ -506,6 +516,9 @@ const ProfitDistribution: React.FC = () => {
                   {hi ? 'कुल' : 'Total'}: <strong>{fmt(totalDividend)}</strong>
                 </span>
               </div>
+              {dividendCapIssue && (
+                <p className="text-xs text-red-600">{hi ? dividendCapIssue.hi : dividendCapIssue.en} ({dividendCapIssue.cite})</p>
+              )}
               <p className="text-xs text-gray-500">
                 {hi
                   ? `कुल शेयर कैपिटल: ${fmt(totalShareCapital)} | ${activeMembers.length} सक्रिय सदस्य`
@@ -546,7 +559,7 @@ const ProfitDistribution: React.FC = () => {
                 <Button
                   onClick={() => setConfirmOpen(true)}
                   className="w-full bg-yellow-700 hover:bg-yellow-800"
-                  disabled={(totalDividend === 0 && bonusAmount === 0) || !shareRecon.reconciled}
+                  disabled={(totalDividend === 0 && bonusAmount === 0) || !shareRecon.reconciled || !!dividendCapIssue}
                 >
                   <Coins className="h-4 w-4 mr-2" />
                   {hi ? 'वितरण जर्नल पोस्ट करें' : 'Post Distribution Journals'}
