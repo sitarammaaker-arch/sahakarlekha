@@ -115,3 +115,59 @@ export function accrualRecords(rows: readonly AccrualRow[], periodFrom: string, 
     recovered: 0, voucherId: null, createdBy, isDeleted: false,
   }));
 }
+
+// ── H2-2: repayment against accrued interest ─────────────────────────────────────────────────
+// What a repayment already cleared is DERIVED from the live repayment vouchers of the loan (refType
+// + refId), never stored — so cancelling a repayment voucher automatically re-opens its interest.
+export const REF_LOAN_REPAYMENT = 'loan.repayment';
+export const REF_LOAN_INTEREST_RELEASE = 'loan.interest.release';
+
+type VoucherForDue = {
+  id: string; isDeleted?: boolean; refType?: string; refId?: string;
+  debitAccountId?: string; creditAccountId?: string; amount: number;
+  lines?: { accountId: string; type: 'Dr' | 'Cr'; amount: number }[];
+};
+const legs = (v: VoucherForDue) => (v.lines && v.lines.length > 0 ? v.lines
+  : [{ accountId: v.debitAccountId ?? '', type: 'Dr' as const, amount: v.amount }, { accountId: v.creditAccountId ?? '', type: 'Cr' as const, amount: v.amount }]);
+const sumLegs = (vs: readonly VoucherForDue[], acc: string, type: 'Dr' | 'Cr') =>
+  vs.reduce((s, v) => s + legs(v).filter((l) => l.accountId === acc && l.type === type).reduce((t, l) => t + (Number(l.amount) || 0), 0), 0);
+
+export interface LoanInterestDue {
+  /** Accrued interest of this loan not yet received (still in 3313). */
+  receivable: number;
+  /** Overdue interest of this loan still held in the Overdue Interest Reserve (2211). */
+  reserve: number;
+}
+
+/** Open accrued interest of one loan: its live accruals (069, journal live) minus live repayments. */
+export function loanInterestDue(loanId: string, accruals: readonly LoanInterestAccrual[], vouchers: readonly VoucherForDue[]): LoanInterestDue {
+  const live = new Set(vouchers.filter((v) => !v.isDeleted).map((v) => v.id));
+  const mine = accruals.filter((a) => a.loanId === loanId && !a.isDeleted && !!a.voucherId && live.has(a.voucherId));
+  const accrued = mine.reduce((s, a) => s + a.amount, 0);
+  const accruedOverdue = mine.filter((a) => a.overdue).reduce((s, a) => s + a.amount, 0);
+  const repayments = vouchers.filter((v) => !v.isDeleted && v.refId === loanId && v.refType === REF_LOAN_REPAYMENT);
+  const releases = vouchers.filter((v) => !v.isDeleted && v.refId === loanId && v.refType === REF_LOAN_INTEREST_RELEASE);
+  const cleared = sumLegs(repayments, ACC_INTEREST_RECEIVABLE, 'Cr');
+  const released = sumLegs(releases, ACC_OVERDUE_INTEREST_RESERVE, 'Dr');
+  return { receivable: Math.max(0, r2(accrued - cleared)), reserve: Math.max(0, r2(accruedOverdue - released)) };
+}
+
+export interface RepaymentInterestSplit {
+  /** Clears accrued interest: Cr 3313. */
+  toReceivable: number;
+  /** Interest never accrued (e.g. the current, un-posted period): Cr income directly. */
+  toIncome: number;
+  /** Overdue interest now recovered: Dr 2211 / Cr income (s.87 Explanation (ii)) — its own journal. */
+  releaseFromReserve: number;
+}
+
+/**
+ * Split the interest received on a repayment. Accrued interest is cleared first (never booked to
+ * income twice); within it, OVERDUE first (founder decision D4 — the older debt), so the reserve is
+ * released as it is recovered.
+ */
+export function repaymentInterestSplit(interest: number, due: LoanInterestDue): RepaymentInterestSplit {
+  const i = Math.max(0, r2(interest));
+  const toReceivable = r2(Math.min(i, due.receivable));
+  return { toReceivable, toIncome: r2(i - toReceivable), releaseFromReserve: r2(Math.min(toReceivable, due.reserve)) };
+}
