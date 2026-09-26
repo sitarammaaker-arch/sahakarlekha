@@ -803,9 +803,6 @@ export interface DairyDistribution {
 export type AssetCategory = 'Land' | 'Building' | 'Furniture' | 'Equipment' | 'Vehicle' | 'Computer' | 'Other';
 export type AssetStatus = 'active' | 'disposed';
 
-// HAFED Proforma 6 asset classification (higher-level grouping than AssetCategory)
-export type P6AssetCategory = 'godown' | 'land' | 'shop' | 'truck' | 'other';
-export type AssetCondition = 'serviceable' | 'unserviceable';
 
 export interface Asset {
   id: string;
@@ -827,11 +824,6 @@ export interface Asset {
   description: string;
   status: AssetStatus;
 
-  // ── HAFED Proforma 6 fields ──
-  p6Category?: P6AssetCategory;     // Godown / Land / Shop / Truck / Other
-  capacityMT?: number;              // capacity in metric tonnes (for godowns)
-  condition?: AssetCondition;       // Serviceable / Unserviceable
-  marketValue?: number;             // Market Value as on reporting date (₹)
   isDeleted?: boolean;              // P0 #2 soft-delete: archived asset (retained in DB, hidden from app)
 }
 
@@ -852,38 +844,6 @@ export type AccountSubtype =
   | 'sales_return'        // consumer — Sales Return / Returns Inward (contra-income, debit)
   | 'suspense';
 
-// ── Annual Review Report (Haryana Marketing Societies) classification tags ──
-export type CropCategory =
-  | 'wheat' | 'paddy' | 'sunflower' | 'mustard' | 'gram'
-  | 'bajra' | 'maize' | 'moong' | 'other';
-
-export type P1ExpenseBucket =
-  | 'admn'           // a) Admn. Exp.
-  | 'office'         // b) Office Over Head Exp.
-  | 'marketing'      // c) Marketing Trading Exp.
-  | 'fertPesticide'  // d) Fertilizer & Pesticides Trading Exp.
-  | 'processing'     // e) Processing Exp on Own Units
-  | 'other';         // f) Other Exp., if any
-
-export type P1IncomeCategory =
-  | 'commission'       // 1. Commission (with cropCategory)
-  | 'patronageRebate'  // 2. Patronage Rebate
-  | 'inputMargin'      // 4. Margin on distribution of inputs
-  | 'consumerSale'     // 5. Consumer products
-  | 'processingIncome' // 6. Own processing units
-  | 'truckIncome'      // 7. Trucks
-  | 'rentalIncome'     // 8. Rental income
-  | 'hafedOther'       // 9. Other income from HAFED
-  | 'nonHafedIncome';  // 10. Income other than HAFED
-
-export type TurnoverBucket =
-  | 'procurement'   // a) Turnover from procurement
-  | 'consumer'      // b) Marketing (Consumer Products)
-  | 'fertilizer'    // c) Fertilizers
-  | 'pesticide'     // d) Pesticides
-  | 'cattleFeed'    // e) Cattle Feed Plant
-  | 'nonHafed';     // f) Other than Hafed
-
 export interface LedgerAccount {
   id: string;
   name: string;
@@ -895,12 +855,6 @@ export interface LedgerAccount {
   isSystem?: boolean;
   parentId?: string;   // parent account code for hierarchy (e.g. '1100' → parent of '1101')
   isGroup?: boolean;   // true = group/header account, cannot be used in vouchers directly
-
-  // ── Annual Review Report tagging (Haryana Marketing Society Proformas) ──
-  cropCategory?: CropCategory;         // for Commission income accounts (P1 row 1)
-  p1IncomeCategory?: P1IncomeCategory; // P1 income category (rows 1–10)
-  p1ExpenseBucket?: P1ExpenseBucket;   // P1 expense bucket (row 12 a–f)
-  turnoverBucket?: TurnoverBucket;     // P1 rows 17/18 turnover split
 }
 
 // ── Recoverables (HAFED Proforma 2 — Recoverable Position) ─────────────────
@@ -1042,10 +996,6 @@ export interface SocietySettings {
   financialYear: string;
   financialYearStart: string;
   societyType?: SocietyType;
-  sanctionedStrength?: number;   // HAFED Proforma 5 — sanctioned staff strength
-  hafedDistrictOffice?: string;   // HAFED Proforma 5/7 — district office name
-  // HAFED Proforma 3 — Financial Result / District Summary
-  businessType?: 'wholesale' | 'retail' | 'both';
   previousFinancialYear?: string;
   previousYearBalances?: Record<string, number>; // accountId → amount (positive = debit, negative = credit)
   previousYearIE?: {            // Saved at FY rollover — I&E comparison column
@@ -1726,9 +1676,6 @@ export interface Customer {
 // ── Salary ────────────────────────────────────────────────────────────────────
 export type EmployeeStatus = 'active' | 'inactive';
 
-// ── HAFED Proforma 5 (Staff & Salary) classification ──
-export type EmployeeCategory = 'A' | 'B' | 'C' | 'D';
-
 export interface Employee {
   id: string;
   empNo: string;
@@ -1740,14 +1687,6 @@ export interface Employee {
   phone: string;
   bankAccount?: string;
   status: EmployeeStatus;
-
-  // ── HAFED Proforma 5 fields ──
-  category?: EmployeeCategory;        // A / B / C / D
-  payScale?: string;                   // e.g. "5200-20200 + 2400 GP"
-  isHafedDeputed?: boolean;            // Whether on Deputation from HAFED
-  isOutsourced?: boolean;              // true = outsourced, false = society own employee
-  hafedSalaryPaid?: number;            // Amount of salary paid by HAFED (₹)
-  hafedSalaryPercent?: number;         // % of salary paid by HAFED (0-100)
 
   // ── ECR-14: statutory applicability ──
   pfApplicable?: boolean;              // deduct EPF (default true when undefined)
