@@ -95,10 +95,10 @@ function TbTable({ rows, hi, total, title }: { rows: CasTbRow[]; hi: boolean; to
   );
 }
 
-function Tie({ ok, hi, what }: { ok: boolean; hi: boolean; what: string }) {
+function Tie({ ok, hi, what, detail }: { ok: boolean; hi: boolean; what: string; detail?: string }) {
   return ok
     ? <p className="flex items-center gap-1 text-xs text-green-700"><CheckCircle2 className="h-3.5 w-3.5" />{hi ? `ऐप के ${what} से मेल खाता है` : `Ties to the app's ${what}`}</p>
-    : <p className="flex items-center gap-1 text-xs text-destructive"><AlertTriangle className="h-3.5 w-3.5" />{hi ? `ऐप के ${what} से मेल नहीं — कृपया सूचित करें` : `Does not tie to the app's ${what} — please report`}</p>;
+    : <p className="flex items-center gap-1 text-xs text-destructive"><AlertTriangle className="h-3.5 w-3.5" />{hi ? `ऐप के ${what} से मेल नहीं — कृपया सूचित करें` : `Does not tie to the app's ${what} — please report`}{detail ? ` (${detail})` : ''}</p>;
 }
 
 export function CasStatements({ hi }: { hi: boolean }) {
@@ -122,7 +122,7 @@ export function CasStatements({ hi }: { hi: boolean }) {
       .reduce((t, id) => { const d = loanInterestDue(id, accruals, vouchers); return t + Math.min(d.reserve, d.receivable); }, 0);
     const bs = buildCasBalanceSheet({ assetLeaves: leaves.assetLeaves, capLiabLeaves: leaves.capLiabLeaves, unpostedStock: leaves.unpostedStock, netProfit: appPL.netProfit, overdueInterestReceivable: overdue });
     const pl = buildCasProfitLoss(tb, { hasTrading, grossProfit: tr.grossProfit });
-    const trading = hasTrading ? buildCasTrading(tb, { openingStock: tr.totalOpeningStock, closingStock: tr.totalClosingStock }) : null;
+    const trading = hasTrading ? buildCasTrading(tb, { openingStock: tr.totalOpeningStock, closingStock: tr.totalClosingStock, procuredToStock: tr.procuredToStock, purchaseGrossUp: tr.legacyPurchaseGrossUp }) : null;
     const m = months.find((x) => x.key === tbMonth);
     const tbCas = m ? buildCasTrialBalance(getTrialBalance(m.to), getTrialBalance(dayBefore(m.from)), { hasTrading }) : null;
     return { bs, pl, trading, appNet: appPL.netProfit, appGross: tr.grossProfit, leaves, tbCas, tbLabel: m?.label ?? '' };
@@ -166,7 +166,7 @@ export function CasStatements({ hi }: { hi: boolean }) {
           <CardContent className="grid gap-4 md:grid-cols-2">
             <Sections sections={trading.debit} hi={hi} total={trading.debit.reduce((t, s) => t + s.total, 0)} totalLabel={hi ? 'योग (Dr)' : 'Total (Dr)'} />
             <Sections sections={trading.credit} hi={hi} total={trading.total} totalLabel={hi ? 'योग (Cr)' : 'Total (Cr)'} />
-            <div className="md:col-span-2"><Tie ok={near(trading.grossProfit, data.appGross)} hi={hi} what={hi ? 'व्यापार खाते (सकल लाभ)' : 'Trading Account (gross profit)'} /></div>
+            <div className="md:col-span-2"><Tie ok={near(trading.grossProfit, data.appGross)} hi={hi} what={hi ? 'व्यापार खाते (सकल लाभ)' : 'Trading Account (gross profit)'} detail={`CAS ${fmt(trading.grossProfit)} · ${hi ? 'ऐप' : 'app'} ${fmt(data.appGross)}`} /></div>
           </CardContent>
         </Card>
       )}
@@ -176,7 +176,7 @@ export function CasStatements({ hi }: { hi: boolean }) {
         <CardContent className="grid gap-4 md:grid-cols-2">
           <Sections sections={pl.expenditure} hi={hi} total={pl.expenditure.reduce((t, s) => t + s.total, 0)} totalLabel={hi ? 'योग' : 'Total'} />
           <Sections sections={pl.income} hi={hi} total={pl.total} totalLabel={hi ? 'योग' : 'Total'} />
-          <div className="md:col-span-2"><Tie ok={near(pl.netProfit, data.appNet)} hi={hi} what={hi ? 'लाभ-हानि (शुद्ध लाभ)' : 'P&L (net profit)'} /></div>
+          <div className="md:col-span-2"><Tie ok={near(pl.netProfit, data.appNet)} hi={hi} what={hi ? 'लाभ-हानि (शुद्ध लाभ)' : 'P&L (net profit)'} detail={`CAS ${fmt(pl.netProfit)} · ${hi ? 'ऐप' : 'app'} ${fmt(data.appNet)}`} /></div>
         </CardContent>
       </Card>
 
@@ -186,7 +186,12 @@ export function CasStatements({ hi }: { hi: boolean }) {
           <Sections sections={bs.liabilities} hi={hi} total={bs.totalLiabilities} totalLabel={hi ? 'कुल देनदारियाँ' : 'Total Liabilities'} />
           <Sections sections={bs.assets} hi={hi} total={bs.totalAssets} totalLabel={hi ? 'कुल परिसंपत्तियाँ' : 'Total Assets'} />
           <div className="md:col-span-2 space-y-1">
-            <Tie ok={bsTies} hi={hi} what={hi ? 'तुलन पत्र' : 'Balance Sheet'} />
+            <Tie ok={bsTies} hi={hi} what={hi ? 'तुलन पत्र' : 'Balance Sheet'}
+              detail={near(data.leaves.totalAssets, data.leaves.totalLiabilities)
+                ? `CAS ${fmt(bs.totalAssets)} / ${fmt(bs.totalLiabilities)}`
+                : (hi
+                  ? `ऐप का अपना तुलन पत्र भी संतुलित नहीं: परिसंपत्तियाँ ${fmt(data.leaves.totalAssets)}, देनदारियाँ ${fmt(data.leaves.totalLiabilities)}`
+                  : `the app's own Balance Sheet is not balanced: assets ${fmt(data.leaves.totalAssets)}, liabilities ${fmt(data.leaves.totalLiabilities)}`)} />
             {bs.overdueInterestProvision > 0 && (
               <p className="text-xs text-muted-foreground">
                 {hi

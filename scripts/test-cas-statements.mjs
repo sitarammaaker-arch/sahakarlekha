@@ -165,6 +165,21 @@ ok(trBad === 0, `400 random books: CAS Trading gross profit exact; both sides eq
   ok(lines.liabilitiesIncome[0].id === 'TB-OIR' && lines.liabilitiesIncome[0].closing === 500 && lines.assetsExpenditure[0].id === 'TB-INT', 'OIR and interest receivable keep their own CAS GL lines in the TB');
 }
 
+// ── 3b. Rania shape (prod, 2026-09): wheat procured straight into stock (Dr 3400 / Cr party) ──
+{
+  // Sales 8,100 less Sales Return 2,700 (a head under 4100); Non-PDS purchases 10,656; wheat
+  // 2,94,200 procured to stock and still unsold (= closing stock). App GP = 5,400 + 2,94,200
+  // − 10,656 − 2,94,200 = −5,256. Without the procured line CAS showed +2,88,944.
+  const tb = TB({ '4101': -8100, '5112': 10656 });
+  const ret = { account: { id: 'SR-UUID', name: 'Sales Return', type: 'income', parentId: '4100', isGroup: false }, netBalance: 2700 };
+  const t = C.buildCasTrading([...tb, ret], { openingStock: 0, closingStock: 294200, procuredToStock: 294200 });
+  ok(near(t.grossProfit, -5256), `procured-to-stock goods are a Trading purchase: GP −5,256 (${t.grossProfit})`);
+  ok(near(t.debit.reduce((x, s) => x + s.total, 0), t.total), 'Trading both sides equal with a gross loss');
+  ok(t.debit.flatMap((s) => s.rows).find((r) => r.id === 'TD2p').amount === 294200, 'procured goods on their own CAS purchase line');
+  const legacy = C.buildCasTrading(TB({ '4101': -1000, '5101': 100 }), { openingStock: 0, closingStock: 300, purchaseGrossUp: 300 });
+  ok(near(legacy.grossProfit, 1000 + 300 - 400) && legacy.debit.flatMap((s) => s.rows).find((r) => r.id === 'TD2x').amount === 400, 'LEGACY closing journal: 5101 shown gross (net + gross-up)');
+}
+
 // ── 4. Wiring ──
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 ok(/balanceSheetLeaves\(trialBalance, \{ closingStockPosted, physicalClosingStock, netProfit \}\)/.test(read('src/pages/BalanceSheet.tsx')) && !/const typeAssetLeaf/.test(read('src/pages/BalanceSheet.tsx')), 'BalanceSheet page uses the shared leaves rule (no private copy)');
@@ -175,6 +190,7 @@ const cs = read('src/components/cas/CasStatements.tsx');
 ok(/\.has\('inventory_sales'\)/.test(cs) && /society\.state, declaredActivities\(societyActivities\), society\.activitiesCutoverEnabled/.test(cs), 'trading decision uses the same resolution as getProfitLoss');
 ok(/loanInterestDue\(id, accruals, vouchers\)/.test(cs), 'overdue interest receivable from the same loanInterestDue as the repay dialogs');
 ok(/casBalanceSheetTies\(bs, data\.leaves\)/.test(cs) && /near\(pl\.netProfit, data\.appNet\)/.test(cs) && /near\(trading\.grossProfit, data\.appGross\)/.test(cs), 'screen shows a tie check for all three statements');
+ok(/procuredToStock: tr\.procuredToStock, purchaseGrossUp: tr\.legacyPurchaseGrossUp/.test(cs), 'CAS Trading takes the procured-to-stock and legacy gross-up figures from getTradingAccount (RULE 2)');
 ok(/buildCasTrialBalance\(getTrialBalance\(m\.to\), getTrialBalance\(dayBefore\(m\.from\)\), \{ hasTrading \}\)/.test(cs), 'Annexure I built from month-end vs day-before-month trial balances');
 
 console.log(`CAS statements: ${pass} passed, ${fail} failed`);
