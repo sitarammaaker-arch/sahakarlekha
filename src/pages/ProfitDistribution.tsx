@@ -21,6 +21,7 @@ import autoTable from 'jspdf-autotable';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
+import { fyRange } from '@/lib/analyticsMetrics';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { StatutoryAppropriationPanel } from '@/components/StatutoryAppropriationPanel';
 import { statutoryLimits, dividendRateIssue } from '@/lib/rules/statutoryLimits';
@@ -34,6 +35,11 @@ const ACC_DIVIDEND      = '1211'; // Dividend Distribution (equity liability to 
 // Employee bonus appropriated FROM surplus is a LIABILITY (payable to staff), NOT the
 // 5207 expense. Crediting the expense reduced total expenses and inflated net profit. #12
 const ACC_BONUS_PAYABLE = '2103'; // Salary/Staff Payable (liability)
+// Employee bonus is an EXPENSE deducted BEFORE net profit — Haryana Co-operative Societies Act 1984,
+// s.87 Explanation (i) ("bonus payable to employees under any law ... " is deducted from gross profit).
+// It used to be posted as an appropriation of net surplus (Dr 1208), which overstated net profit and
+// every %-of-profit figure built on it (reserve, education fund).
+const ACC_BONUS_EXPENSE = '5207'; // Employee Bonus (expense)
 
 const fmt = (n: number) =>
   'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -80,11 +86,15 @@ const ProfitDistribution: React.FC = () => {
   // Already-posted dividend & bonus are appropriations of surplus too — subtract them so
   // Distributable stays correct after a refresh (input fields reset; posted vouchers persist). #13
   const existingDivVoucher   = usePosted(vouchers, ACC_NET_SURPLUS, ACC_DIVIDEND, fy);
-  const existingBonusVoucher = usePosted(vouchers, ACC_NET_SURPLUS, ACC_BONUS_PAYABLE, fy);
+  // Legacy years posted the bonus as an appropriation (Dr 1208) — it must still be subtracted here.
+  // New postings are an expense (Dr 5207): already inside netProfit, so subtracting again would count it twice.
+  const legacyBonusVoucher   = usePosted(vouchers, ACC_NET_SURPLUS, ACC_BONUS_PAYABLE, fy);
+  const expenseBonusVoucher  = usePosted(vouchers, ACC_BONUS_EXPENSE, ACC_BONUS_PAYABLE, fy);
+  const existingBonusVoucher = expenseBonusVoucher ?? legacyBonusVoucher;
   const divPosted   = !!existingDivVoucher;
   const bonusPosted = !!existingBonusVoucher;
   const postedDividend = existingDivVoucher?.amount || 0;
-  const postedBonus    = existingBonusVoucher?.amount || 0;
+  const postedBonus    = legacyBonusVoucher?.amount || 0;
   const distributable  = Math.round((netProfit - appropriatedAmt - postedDividend - postedBonus) * 100) / 100;
 
   // Per-member dividend runs (066): the split frozen at posting time — the voucher stays the authority.
@@ -300,13 +310,17 @@ const ProfitDistribution: React.FC = () => {
     }
 
     if (!bonusPosted && bonusAmount > 0) {
+      // An expense OF this FY: dated inside it (the FY end once the year is over), so it reduces THIS
+      // year's net profit — never next year's.
+      const fyEnd = fyRange(fy).end;
+      const bonusDate = fyEnd && today > fyEnd ? fyEnd : today;
       const bv = addVoucher({
         type: 'journal',
-        date: today,
-        debitAccountId: ACC_NET_SURPLUS,
+        date: bonusDate,
+        debitAccountId: ACC_BONUS_EXPENSE,
         creditAccountId: ACC_BONUS_PAYABLE,
         amount: bonusAmount,
-        narration: `Employee Bonus Appropriation — FY ${fy}`,
+        narration: `Employee Bonus (expense, deducted before net profit — Haryana Act s.87 Explanation (i)) — FY ${fy}`,
         createdBy: user?.name ?? 'System',
       });
       if (bv?.id) posted++;
@@ -549,6 +563,14 @@ const ProfitDistribution: React.FC = () => {
                 className="w-40"
                 disabled={bonusPosted}
               />
+              <p className="text-xs text-muted-foreground">
+                {hi
+                  ? 'बोनस खर्च (5207) के रूप में दर्ज होगा और शुद्ध लाभ में घटेगा (हरियाणा अधिनियम धारा 87 व्याख्या (i))। इसलिए इसे संचय / शिक्षा निधि आवंटन से पहले पोस्ट करें।'
+                  : 'Posted as an expense (5207), so it reduces net profit (Haryana Act s.87 Explanation (i)). Post it BEFORE the reserve / education fund appropriation.'}
+              </p>
+              {bonusPosted && legacyBonusVoucher && !expenseBonusVoucher && (
+                <p className="text-xs text-amber-700">{hi ? 'इस वर्ष का बोनस पुराने तरीके (लाभ का बँटवारा, Dr 1208) से पोस्ट है।' : "This year's bonus was posted the old way (appropriation, Dr 1208)."}</p>
+              )}
             </div>
 
             {/* Fund balances */}
@@ -809,9 +831,9 @@ const ProfitDistribution: React.FC = () => {
                 )}
                 {!bonusPosted && bonusAmount > 0 && (
                   <div className="bg-gray-50 rounded p-2 font-mono text-xs">
-                    Dr 1208 Net Surplus &nbsp;{fmt(bonusAmount)}<br />
-                    &nbsp;&nbsp;Cr 5207 Employee Bonus &nbsp;{fmt(bonusAmount)}<br />
-                    <span className="text-gray-500">Employee Bonus FY {fy}</span>
+                    Dr 5207 Employee Bonus (expense) &nbsp;{fmt(bonusAmount)}<br />
+                    &nbsp;&nbsp;Cr 2103 Salary / Staff Payable &nbsp;{fmt(bonusAmount)}<br />
+                    <span className="text-gray-500">{hi ? `खर्च — शुद्ध लाभ में घटेगा (धारा 87 व्याख्या (i)) · FY ${fy}` : `Expense — reduces net profit (s.87 Explanation (i)) · FY ${fy}`}</span>
                   </div>
                 )}
               </div>

@@ -129,6 +129,7 @@
     "test:consumer-credit-ledger": "node scripts/test-consumer-credit-ledger.mjs",
     "test:distribution-engine": "node scripts/test-distribution-engine.mjs",
     "test:dividend-runs": "node scripts/test-dividend-runs.mjs",
+    "test:employee-bonus-expense": "node scripts/test-employee-bonus-expense.mjs",
     "test:member-dividend": "node scripts/test-member-dividend.mjs",
     "test:threeway-match": "node scripts/test-threeway-match.mjs",
     "test:storage-loss": "node scripts/test-storage-loss.mjs",
