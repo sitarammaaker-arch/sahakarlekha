@@ -5,10 +5,14 @@
  * [from,to]; amount = base × rate. Dividend: per member, base = paid-up share capital; amount =
  * base × rate% / 100. The approval voucher is one appropriation entry — Dr distribution equity /
  * Cr payable, for the total (∑ lines). Balanced; [] if total ≤ 0 or an account is missing.
+ *
+ * Only the dairy BASIS (milk) lives here; lines, total, legs and outstanding come from the shared
+ * member distribution engine (lib/distribution/engine.ts), same as consumer.
  */
 import type { MilkEntry, DairyDistributionLine, DairyBonusBasis } from '@/types';
+import { round2, activeMembers, linesFromBases, linesTotal, appropriationLegs, outstandingOf, type DistributionLeg as EngineLeg } from '../distribution/engine';
 
-export const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
+export { round2 };
 
 /** Patronage bonus lines from accepted milk in the window. rate = ₹/litre or fraction of value. */
 export function computeBonusLines(
@@ -27,10 +31,11 @@ export function computeBonusLines(
     cur.base += add;
     agg.set(e.memberId, cur);
   }
-  return [...agg.entries()]
-    .map(([memberId, v]) => ({ memberId, memberName: v.name, base: round2(v.base), amount: round2(v.base * (rate || 0)) }))
-    .filter(l => l.amount > 0)
-    .sort((a, b) => a.memberName.localeCompare(b.memberName));
+  // The bonus is computed on the UNROUNDED milk base (displayed base is rounded).
+  return linesFromBases(
+    [...agg.entries()].map(([memberId, v]) => ({ memberId, memberName: v.name, base: v.base })),
+    (base) => base * (rate || 0),
+  );
 }
 
 /** Dividend lines from paid-up share capital of ACTIVE members. ratePct = % of share capital. */
@@ -38,26 +43,18 @@ export function computeDividendLines(
   members: ReadonlyArray<{ id: string; name: string; shareCapital?: number; status?: string }>,
   ratePct: number,
 ): DairyDistributionLine[] {
-  return members
-    .filter(m => !(m.status && m.status !== 'active'))   // exclude inactive/exited members
-    .map(m => ({ memberId: m.id, memberName: m.name, base: round2(m.shareCapital || 0), amount: round2((m.shareCapital || 0) * (ratePct || 0) / 100) }))
-    .filter(l => l.amount > 0)
-    .sort((a, b) => a.memberName.localeCompare(b.memberName));
+  // Exclude inactive/exited members; dividend on the UNROUNDED capital (as before).
+  return linesFromBases(
+    activeMembers(members).map((m) => ({ memberId: m.id, memberName: m.name, base: m.shareCapital || 0 })),
+    (base) => base * (ratePct || 0) / 100,
+  );
 }
 
-export const distributionTotal = (lines: ReadonlyArray<DairyDistributionLine>): number =>
-  round2(lines.reduce((s, l) => s + (l.amount || 0), 0));
+export const distributionTotal = (lines: ReadonlyArray<DairyDistributionLine>): number => linesTotal(lines);
 
-export interface DistributionLeg { accountId: string; type: 'Dr' | 'Cr'; amount: number; }
+export type DistributionLeg = EngineLeg;
 /** One appropriation entry: Dr distribution equity / Cr payable, for the total. [] if invalid. */
-export function distributionLegs(total: number, distributionAccountId: string, payableAccountId: string): DistributionLeg[] {
-  const t = round2(total);
-  if (!(t > 0) || !distributionAccountId || !payableAccountId) return [];
-  return [
-    { accountId: distributionAccountId, type: 'Dr', amount: t },
-    { accountId: payableAccountId, type: 'Cr', amount: t },
-  ];
-}
+export const distributionLegs = (total: number, distributionAccountId: string, payableAccountId: string): DistributionLeg[] =>
+  appropriationLegs(total, distributionAccountId, payableAccountId);
 
-export const distributionOutstanding = (total: number, amountPaid: number): number =>
-  round2(Math.max(0, total - (amountPaid || 0)));
+export const distributionOutstanding = (total: number, amountPaid: number): number => outstandingOf(total, amountPaid);

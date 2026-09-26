@@ -4,13 +4,15 @@
  * A cooperative store returns surplus to members in proportion to their PATRONAGE (purchases),
  * not their shares. Per active member, base = Σ their sale values (any tender) in [from,to];
  * amount = base × ratePct/100. The approval voucher is one appropriation entry —
- * Dr patronage-distribution (equity) / Cr member-rebate-payable — for the total. Mirrors the
- * Dairy distribution shapes but keyed off SALES (turnover), and stays self-contained (no
- * cross-import from the dairy domain).
+ * Dr patronage-distribution (equity) / Cr member-rebate-payable — for the total.
+ *
+ * Only the consumer BASIS (net purchases) lives here; lines, total, legs and outstanding come from
+ * the shared member distribution engine (lib/distribution/engine.ts), same as dairy.
  */
 import type { PatronageLine } from '@/types';
+import { round2, activeMembers, linesFromBases, linesTotal, appropriationLegs, outstandingOf, type DistributionLeg } from '../distribution/engine';
 
-export const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
+export { round2 };
 
 const saleValue = (s: { grandTotal?: number; netAmount?: number }): number =>
   typeof s.grandTotal === 'number' && s.grandTotal > 0 ? s.grandTotal : (s.netAmount || 0);
@@ -34,44 +36,29 @@ export function computePatronageLines(
     if (r.date < args.from || r.date > args.to) continue;
     purchase.set(r.memberId, (purchase.get(r.memberId) || 0) - (r.grandTotal || 0));
   }
-  return members
-    .filter(m => !(m.status && m.status !== 'active'))   // members on the rolls only
-    .map(m => {
-      const base = round2(Math.max(0, purchase.get(m.id) || 0));
-      return { memberId: m.id, memberName: m.name, base, amount: round2(base * (args.ratePct || 0) / 100) };
-    })
-    .filter(l => l.amount > 0)
-    .sort((a, b) => a.memberName.localeCompare(b.memberName));
+  // The rebate is computed on the ROUNDED net purchase (members on the rolls only).
+  return linesFromBases(
+    activeMembers(members).map((m) => ({ memberId: m.id, memberName: m.name, base: round2(Math.max(0, purchase.get(m.id) || 0)) })),
+    (base) => base * (args.ratePct || 0) / 100,
+  );
 }
 
-/** Dividend lines: ratePct% of paid-up share capital of ACTIVE members. */
+/** Dividend lines: ratePct% of paid-up share capital of ACTIVE members (on the rounded capital). */
 export function computeDividendLines(
   members: ReadonlyArray<{ id: string; name: string; shareCapital?: number; status?: string }>,
   ratePct: number,
 ): PatronageLine[] {
-  return members
-    .filter(m => !(m.status && m.status !== 'active'))
-    .map(m => {
-      const base = round2(m.shareCapital || 0);
-      return { memberId: m.id, memberName: m.name, base, amount: round2(base * (ratePct || 0) / 100) };
-    })
-    .filter(l => l.amount > 0)
-    .sort((a, b) => a.memberName.localeCompare(b.memberName));
+  return linesFromBases(
+    activeMembers(members).map((m) => ({ memberId: m.id, memberName: m.name, base: round2(m.shareCapital || 0) })),
+    (base) => base * (ratePct || 0) / 100,
+  );
 }
 
-export const patronageTotal = (lines: ReadonlyArray<PatronageLine>): number =>
-  round2(lines.reduce((s, l) => s + (l.amount || 0), 0));
+export const patronageTotal = (lines: ReadonlyArray<PatronageLine>): number => linesTotal(lines);
 
-export interface PatronageLeg { accountId: string; type: 'Dr' | 'Cr'; amount: number; }
+export type PatronageLeg = DistributionLeg;
 /** One appropriation entry: Dr patronage distribution / Cr member rebate payable. [] if invalid. */
-export function patronageLegs(total: number, distributionAccountId: string, payableAccountId: string): PatronageLeg[] {
-  const t = round2(total);
-  if (!(t > 0) || !distributionAccountId || !payableAccountId) return [];
-  return [
-    { accountId: distributionAccountId, type: 'Dr', amount: t },
-    { accountId: payableAccountId, type: 'Cr', amount: t },
-  ];
-}
+export const patronageLegs = (total: number, distributionAccountId: string, payableAccountId: string): PatronageLeg[] =>
+  appropriationLegs(total, distributionAccountId, payableAccountId);
 
-export const patronageOutstanding = (total: number, amountPaid: number): number =>
-  round2(Math.max(0, total - (amountPaid || 0)));
+export const patronageOutstanding = (total: number, amountPaid: number): number => outstandingOf(total, amountPaid);
