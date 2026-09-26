@@ -92,7 +92,7 @@ const ent = (key, dependsOn = [], backupPolicy = 'full', scope = 'society') =>
 
 const plan = planRestore(REGISTRY);
 
-ok(plan.insert.length === 86, `86 collections are inserted (got ${plan.insert.length})`);
+ok(plan.insert.length === 87, `87 collections are inserted (got ${plan.insert.length})`); // +1: member_distribution_runs (066)
 ok(plan.skipped.length === 10, `10 are skipped with a reason (got ${plan.skipped.length})`);
 ok(plan.insert.length + plan.skipped.length === REGISTRY.length,
   'every declared entity is either inserted or explained — no entity vanishes from a restore');
@@ -144,8 +144,8 @@ let closureErr = null;
 try { assertDependencyClosure(REGISTRY); } catch (e) { closureErr = e; }
 ok(closureErr === null, `every dependency of a restorable entity is itself restorable (${closureErr?.message ?? ''})`);
 
-ok(describePlan(plan, false).includes('86 collections'), 'the summary names the real count');
-ok(describePlan(plan, true).includes('86'), 'and says so in Hindi too');
+ok(describePlan(plan, false).includes('87 collections'), 'the summary names the real count');
+ok(describePlan(plan, true).includes('87'), 'and says so in Hindi too');
 
 // ── 2. SYNTHETIC GRAPHS ──────────────────────────────────────────────────────
 
