@@ -97,13 +97,54 @@ const bsOf = (bal, netProfit = 0) => {
   ok(M.bucketFor('2021-01-01', asOf) === 'gt6' && M.bucketFor('2021-06-01', asOf) === 'y5to6' && M.bucketFor('2026-04-01', asOf) === 'lt1' && M.bucketFor(undefined, asOf) === 'lt1', 'bucket edges');
 }
 
+// ── 2b. Annexure XVI — performance indicators ──
+{
+  // CAS P&L lines → XVI heads (Handbook: non-credit = trading profit + misc income).
+  const rows = (o) => [{ rows: Object.entries(o).map(([id, amount]) => ({ id, amount })) }];
+  const f = M.plFlows({ income: rows({ I1: 1000, I2: 500, I3i: 50, I3ii: 0, I4: 20, I5: 10, I6: 30, I7: 0 }), expenditure: rows({ E1: 0, E2i: 0, E2ii: 200, E3i: 300, E13: 40, E15: 100, E16: 970 }) });
+  ok(f.nonCreditIncome === 1030 && f.interestEarned === 550 && f.otherIncome === 30, `income heads (${JSON.stringify(f)})`);
+  ok(f.interestPaid === 200 && f.operatingExpenses === 540, 'interest paid = E2*; operating expenses exclude gross loss, provisions and the profit line');
+  const q = M.subtractFlows(f, { nonCreditIncome: 30, interestEarned: 50, otherIncome: 0, interestPaid: 0, operatingExpenses: 40 });
+  ok(q.nonCreditIncome === 1000 && q.interestEarned === 500 && q.operatingExpenses === 500, 'quarter flows = year-to-date at quarter end − at previous quarter end');
+  ok(M.subtractFlows(f, null) === f, 'first quarter: no subtraction');
+
+  const mem = [
+    { joinDate: '2026-04-10', status: 'active' },
+    { joinDate: '2026-08-01', status: 'active' },                                   // joins after the date
+    { joinDate: '2025-01-01', status: 'resigned', statusChangedAt: '2026-05-01' },  // out before the date
+    { joinDate: '2025-01-01', status: 'resigned', statusChangedAt: '2026-07-15' },  // out after the date → still counts
+    { joinDate: '2026-04-01', status: 'active', approvalStatus: 'pending' },        // not admitted
+  ];
+  ok(M.membersAt(mem, '2026-06-30') === 2, 'members on the rolls at a date (joined by then, not yet out, approved)');
+
+  const lr = [{ date: '2026-04-01', disbursed: 1000, principalRecovered: 0 }, { date: '2026-06-15', disbursed: 0, principalRecovered: 400 }, { date: '2026-08-01', disbursed: 500, principalRecovered: 0 }];
+  ok(M.principalAt(lr, '2026-06-30') === 600 && M.principalAt(lr, '2026-03-31') === 0, 'principal outstanding at a date, from the Loan Ledger rows');
+  const fl = M.loanFlowsBetween(lr, '2026-06-30', '2026-09-30');
+  ok(fl.issued === 500 && fl.recovered === 0 && M.loanFlowsBetween(lr, null, '2026-06-30').recovered === 400, 'loans issued / recovered within (after, upto]');
+  const dr = [{ date: '2026-04-01', balance: 100 }, { date: '2026-05-01', balance: 0 }];
+  ok(M.depositBalanceAt(dr, '2026-04-30') === 100 && M.depositBalanceAt(dr, '2026-06-30') === 0 && M.depositBalanceAt(dr, '2026-03-01') === 0, 'deposit balance at a date = recorded balance after the last entry by then');
+
+  const bs = bsOf({ '1102': -100000, '1201': -20000, '2107': -50000, '2301': -30000, '3301': 10000, '3302': 20000, '3303': 150000, '3207': 20000 });
+  const xb = M.xviBalances(bs);
+  ok(xb.memberCapital === 100000 && xb.deposits === 50000 && xb.borrowings === 30000 && xb.dccbBorrowings === 30000 && xb.loansOutstanding === 150000 && xb.totalAssets === 200000, `balances read off the CAS Balance Sheet (${JSON.stringify(xb)})`);
+
+  const point = { members: 200, borrowers: 50, depositors: 80, ...xb, loansIssued: 0, recovery: 0, flows: f, avgTotalAssets: 180000 };
+  const val = (k) => M.XVI_ROWS.find((r) => r.key === k).value(point);
+  ok(val('avgDep') === 250 && val('avgLoan') === 3000 && val('avgDccb') === 600, 'per-member averages (deposit / members; loans and DCCB / borrowers)');
+  ok(val('pctBorrow') === 25 && val('pctDepBor') === 160 && val('loansAssets') === 75 && val('depAssets') === 25, 'percentage indicators');
+  ok(val('opexAssets') === 0.3 && val('intCover') === 275, 'opex / average total assets; interest earned / paid');
+  ok(val('odDemand') === null && val('npa') === null && M.XVI_ROWS.filter((r) => r.why).length === 2, 'overdue-to-demand and NPA withheld with a stated reason — never guessed');
+  ok(M.XVI_ROWS.find((r) => r.key === 'avgLoan').value({ ...point, borrowers: 0 }) === null, 'no borrowers ⇒ null, not ∞');
+}
+
 // ── 3. Wiring ──
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const cs = read('src/components/cas/CasStatements.tsx');
-ok(/misPosition\(bsAt\(m\.to\)\)/.test(cs) && /buildCasBalanceSheet\(\{ assetLeaves: lv\.assetLeaves/.test(cs), 'XVII month-ends use the same leaves rule + CAS builder as Annexure IV (RULE 2)');
+ok(/\(\{ to: m\.to, bs: bsAt\(m\.to\) \}\)/.test(cs) && /monthBs\.map\(\(x\) => misPosition\(x\.bs\)\)/.test(cs) && /buildCasBalanceSheet\(\{ assetLeaves: lv\.assetLeaves/.test(cs), 'XVII month-ends use the same leaves rule + CAS builder as Annexure IV (RULE 2)');
 ok(/misRatios\(bs, appPL\.netProfit\)/.test(cs), 'XVIII ratios read the Annexure IV sheet and the app net profit');
 ok(/overdueClassification\(\{ memberLoans: loans\.filter\(\(l\) => !l\.isDeleted\), kcc: kccAccruables\(kccLoans\)/.test(cs), 'VII excludes deleted loans (RULE 5), KCC via the shared accruable adapter');
 ok(/<CasMis hi=\{hi\} \{\.\.\.data\.mis\} \/>/.test(cs), 'MIS returns rendered on the CAS screen');
 
+ok(/pointAt\(misAsOf, fyBefore, bs, plFlows\(pl\), monthBs\)/.test(cs) && /loanLedger\(memberLoanLedgerInput\(l\), vouchers, accruals, isIncome\)/.test(cs) && /depositLedger\(getDepositTransactions\(d\.id\)\)/.test(cs), 'XVI: current point from Annexure IV / III + the subsidiary ledgers (RULE 2)');
 console.log(`CAS MIS: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

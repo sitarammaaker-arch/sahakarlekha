@@ -5,7 +5,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
-import { MIS_POSITION_KEYS, OVERDUE_BUCKETS, OVERDUE_ROWS, type MisPosition, type MisRatios, type OverdueTable } from '@/lib/cas/pacsMis';
+import { MIS_POSITION_KEYS, OVERDUE_BUCKETS, OVERDUE_ROWS, XVI_ROWS, type MisPosition, type MisRatios, type OverdueTable, type XviPoint, type XviRow } from '@/lib/cas/pacsMis';
 
 const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 const cell = (n: number | null | undefined) => (n == null ? '—' : Math.abs(n) < 0.005 ? '—' : fmt(n));
@@ -18,9 +18,17 @@ export interface CasMisProps {
   avgCurrent: MisPosition | null;
   monthsAveraged: number;
   ratios: MisRatios;
+  xvi: { current: XviPoint; quarters: (XviPoint | null)[] };
 }
 
-export function CasMis({ hi, asOf, overdue, avgCurrent, monthsAveraged, ratios }: CasMisProps) {
+const xviCell = (row: XviRow, p: XviPoint | null) => {
+  if (!p) return '—';
+  const v = row.value(p);
+  if (v == null) return '—';
+  return row.unit === 'no' ? String(v) : row.unit === 'pct' ? `${v.toFixed(2)}%` : cell(v);
+};
+
+export function CasMis({ hi, asOf, overdue, avgCurrent, monthsAveraged, ratios, xvi }: CasMisProps) {
   const wf = avgCurrent?.workingFunds ?? 0;
   const ofWf = (n: number) => (Math.abs(wf) < 0.005 ? null : Math.round((n / wf) * 10000) / 100);
   return (
@@ -52,6 +60,39 @@ export function CasMis({ hi, asOf, overdue, avgCurrent, monthsAveraged, ratios }
             {hi
               ? 'अतिदेय मूल (principal) बकाया, नियत तिथि से बीती अवधि के अनुसार। अतिदेय = नियत तिथि बीत गई और बकाया है, या ऋण "अतिदेय" चिह्नित है (ऐप का एक ही नियम)। सदस्य ऋणों में कृषि / गैर-कृषि दर्ज नहीं होता, इसलिए वे "अन्य" में हैं। राशि ₹ में (प्रारूप ₹ हज़ार माँगता है)।'
               : 'Overdue principal outstanding, by time since the due date. Overdue = due date passed with a balance, or marked overdue (the app\'s one rule). Member loans carry no agri / non-agri tag, so they are under "Others". Amounts in ₹ (the format asks for ₹ \'000).'}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="py-3"><CardTitle className="text-base">{hi ? `MIS Annexure XVI — प्रदर्शन सूचक (${asOf} तक)` : `MIS Annexure XVI — Performance indicators (up to ${asOf})`}</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableBody>
+                <TableRow className="bg-muted/40 text-xs">
+                  <TableCell>{hi ? 'सूचक' : 'Indicator'}</TableCell>
+                  <TableCell className="text-right">{hi ? 'चालू वर्ष' : 'Current year'}</TableCell>
+                  <TableCell className="text-right">{hi ? 'पिछला वर्ष' : 'Previous year'}</TableCell>
+                  <TableCell className="text-right">{hi ? 'परिवर्तन %' : '% change'}</TableCell>
+                  {[1, 2, 3, 4].map((q) => <TableCell key={q} className="text-right">{hi ? `तिमाही ${q}` : `Quarter ${q}`}</TableCell>)}
+                </TableRow>
+                {XVI_ROWS.map((r) => (
+                  <TableRow key={r.key}>
+                    <TableCell>{hi ? r.labelHi : r.label}{r.why && <span className="block text-[11px] text-muted-foreground">{hi ? r.why.hi : r.why.en}</span>}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap font-medium">{xviCell(r, xvi.current)}</TableCell>
+                    <TableCell className="text-right">—</TableCell>
+                    <TableCell className="text-right">—</TableCell>
+                    {xvi.quarters.map((q, i) => <TableCell key={i} className="text-right whitespace-nowrap">{xviCell(r, q)}</TableCell>)}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {hi
+              ? 'राशि/शेष: अवधि के अंत पर; आय, व्यय, वितरित ऋण व वसूली: चालू वर्ष में वर्ष की शुरुआत से, तिमाही में उसी तिमाही के भीतर। उधारकर्ता / जमाकर्ता = उस तिथि पर बकाया ऋण / जमा शेष वाले सदस्य (ऋण व जमा खाता-बही से)। पिछले वर्ष का कॉलम तभी भरेगा जब पिछले वर्ष की पुस्तकें ऐप में हों।'
+              : 'Balances at the end of the period; income, expenses, loans issued and recovery: year-to-date for the current year, within the quarter for a quarter. Borrowers / depositors = members with a loan / deposit balance on that date (from the Loan and Deposit Ledgers). The previous-year column needs the previous year\'s books in the app.'}
           </p>
         </CardContent>
       </Card>
