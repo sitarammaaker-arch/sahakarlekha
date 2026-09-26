@@ -225,4 +225,38 @@ const societyActivities: EntityDescriptor = {
   ],
 };
 
-export const CORE_ENTITIES: EntityDescriptor[] = [society, account, voucher, voucherEntry, societyActivities];
+// ─── member_distribution_runs (066) ───────────────────────────────────────────────────
+// Per-member breakdown of a year-end dividend / patronage / bonus (any society type). Each run
+// belongs to one appropriation voucher (voucherId) — financial entitlements, so backed up 'full'.
+const memberDistributionRun: EntityDescriptor = {
+  key: 'member_distribution_run',
+  table: 'member_distribution_runs',
+  domain: 'core',
+  label: 'Member Distribution Runs',
+  labelHi: 'सदस्य वितरण (लाभांश)',
+  minRole: 'accountant',
+  scope: 'society',
+  nature: 'transaction',
+  dependsOn: ['society', 'voucher'],
+  naturalKey: ['id'],
+  softDeleteField: 'isDeleted',
+  formats: ['csv', 'xlsx', 'json'],
+  backupPolicy: 'full',
+  columns: [
+    c('id', 'ID', 'आईडी', { defaultVisible: false }),
+    c('fyLabel', 'Financial Year', 'वित्तीय वर्ष'),
+    c('kind', 'Kind', 'प्रकार', { type: 'enum' }),
+    c('basis', 'Basis', 'आधार', { type: 'enum' }),
+    c('ratePct', 'Rate %', 'दर %', { type: 'number' }),
+    money('total', 'Total', 'कुल'),
+    internal('lines', 'Member Lines', 'सदस्य पंक्तियाँ', { type: 'json' }),
+    c('status', 'Status', 'स्थिति', { type: 'enum' }),
+    internal('voucherId', 'Voucher', 'वाउचर'),
+    internal('source', 'Source', 'स्रोत', { type: 'enum' }),
+    internal('createdBy', 'Created By', 'बनाने वाला'),
+    internal('createdAt', 'Created At', 'निर्माण समय', { type: 'date' }),
+    c('isDeleted', 'Deleted', 'हटाया गया', { type: 'boolean', defaultVisible: false }),
+  ],
+};
+
+export const CORE_ENTITIES: EntityDescriptor[] = [society, account, voucher, voucherEntry, societyActivities, memberDistributionRun];

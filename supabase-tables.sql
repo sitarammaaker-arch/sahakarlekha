@@ -3473,3 +3473,26 @@ do $$ begin
   end if;
   -- Intentionally NO update/delete policy ⇒ ledger_events is WORM (append-only, CL-2).
 end $$;
+
+-- ── Member distribution runs (066) — per-member breakdown of a year-end dividend / patronage /
+-- bonus for ANY society type. Policies are created by migration 066 (tenant-scoped); none here, so
+-- re-running this file can never create a permissive policy (deny-all until 066 runs).
+create table if not exists member_distribution_runs (
+  id           text primary key,
+  society_id   text not null,
+  "fyLabel"    text not null,
+  kind         text not null check (kind in ('dividend', 'patronage', 'bonus')),
+  basis        text not null default 'share_capital',
+  "ratePct"    numeric,
+  total        numeric not null default 0,
+  lines        jsonb not null default '[]',
+  status       text not null default 'approved' check (status in ('draft', 'approved')),
+  "voucherId"  text,
+  source       text not null default 'posted' check (source in ('posted', 'snapshot')),
+  "createdBy"  text,
+  "createdAt"  timestamptz not null default now(),
+  "isDeleted"  boolean not null default false
+);
+create unique index if not exists member_distribution_runs_one_live
+  on member_distribution_runs (society_id, "fyLabel", kind) where not "isDeleted";
+alter table member_distribution_runs enable row level security;
