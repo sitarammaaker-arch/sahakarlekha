@@ -17,7 +17,8 @@ import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { toast } from '@/hooks/use-toast';
-import { MODULE_CATALOG, isModuleVisible, navigationService, declaredActivities, type NavContext } from '@/lib/navigation';
+import { isModuleVisible, navigationService, declaredActivities, type NavContext } from '@/lib/navigation';
+import { moduleForRoute } from '@/lib/navigation/routeModule';
 
 export function CapabilityGuard({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -26,7 +27,8 @@ export function CapabilityGuard({ children }: { children: React.ReactNode }) {
   const { language } = useLanguage();
   const societyType = society.societyType ?? 'other';
 
-  const module = MODULE_CATALOG.find((m) => m.route === location.pathname);
+  // Exact catalog route, or — for a detail view like /members/:id — its list page's module.
+  const module = moduleForRoute(location.pathname);
   const ctx: NavContext = {
     societyType,
     // T-11: declared activities gate within entitlement, dormant behind the cutover flag (T-12).

@@ -87,6 +87,8 @@ const BankBook = lazyWithRetry(() => import("./pages/BankBook"));
 const Vouchers = lazyWithRetry(() => import("./pages/Vouchers"));
 const Ledger = lazyWithRetry(() => import("./pages/Ledger"));
 const Members = lazyWithRetry(() => import("./pages/Members"));
+// Member-360 (staff): one member's whole account; gated like /members via routeModule.
+const Member360 = lazyWithRetry(() => import("./pages/Member360"));
 const MemberApplication = lazyWithRetry(() => import("./pages/MemberApplication"));
 const TrialBalance = lazyWithRetry(() => import("./pages/TrialBalance"));
 const BillsOutstanding = lazyWithRetry(() => import("./pages/BillsOutstanding"));
@@ -329,6 +331,7 @@ const AppRoutes = () => {
       <Route path="/vouchers" element={<ProtectedRoute><Vouchers /></ProtectedRoute>} />
       <Route path="/ledger" element={<ProtectedRoute><Ledger /></ProtectedRoute>} />
       <Route path="/members" element={<ProtectedRoute><Members /></ProtectedRoute>} />
+      <Route path="/members/:id" element={<ProtectedRoute><Member360 /></ProtectedRoute>} />
       <Route path="/member-application" element={<ProtectedRoute><MemberApplication /></ProtectedRoute>} />
       <Route path="/trial-balance" element={<ProtectedRoute><TrialBalance /></ProtectedRoute>} />
       <Route path="/bills-outstanding" element={<ProtectedRoute><BillsOutstanding /></ProtectedRoute>} />

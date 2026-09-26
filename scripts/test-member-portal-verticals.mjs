@@ -142,10 +142,11 @@ const staffStmtPage = strip('src/pages/MemberStatement.tsx');
 ok(/\{f\.flatNo\}\{f\.blockNo \? ` · \$\{f\.blockNo\}` : ''\}/.test(staffStmtPage), 'staff flat label is flatNo · blockNo');
 ok(/`\$\{f\.flatNo\}\$\{f\.blockNo \? ` · \$\{f\.blockNo\}` : ''\}`/.test(ui) && !/\[f\.blockNo, f\.flatNo\]/.test(ui), 'portal flat label = staff format');
 // KYC status shown in Hindi on the Hindi page.
-const portalPage = strip('src/pages/MemberPortal.tsx');
-ok(/verified: 'सत्यापित'/.test(portalPage) && /KYC_HI\[m\.kycStatus\]/.test(portalPage), 'KYC status translated in Hindi');
+// (The account body is the shared MemberAccountView — used by the portal AND the staff Member-360.)
+const accountView = strip('src/components/member-portal/MemberAccountView.tsx');
+ok(/verified: 'सत्यापित'/.test(accountView) && /KYC_HI\[m\.kycStatus\]/.test(accountView), 'KYC status translated in Hindi');
 const page = strip('src/pages/MemberPortal.tsx');
-ok(/buildVerticalViews\(snapshot\.member\.id/.test(page) && /<PortalVerticals views=\{vv\}/.test(page), 'MemberPortal renders the vertical views');
+ok(/buildVerticalViews\(snapshot\.member\.id/.test(page) && /<MemberAccountView member=\{m\} view=\{v\} verticals=\{vv\}/.test(page) && /<PortalVerticals views=\{vv\}/.test(accountView), 'MemberPortal renders the vertical views (via MemberAccountView)');
 
 // Milk value = the staff passbook's "Gross" (totalGross), and a hint while no settlement exists
 // (founder's real M001 Mik Member: ₹1,096 of milk, no cycle yet, "₹0 due" read as money missing).
