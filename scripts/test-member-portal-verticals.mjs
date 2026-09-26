@@ -147,5 +147,12 @@ ok(/verified: 'सत्यापित'/.test(portalPage) && /KYC_HI\[m\.kycSta
 const page = strip('src/pages/MemberPortal.tsx');
 ok(/buildVerticalViews\(snapshot\.member\.id/.test(page) && /<PortalVerticals views=\{vv\}/.test(page), 'MemberPortal renders the vertical views');
 
+// Milk value = the staff passbook's "Gross" (totalGross), and a hint while no settlement exists
+// (founder's real M001 Mik Member: ₹1,096 of milk, no cycle yet, "₹0 due" read as money missing).
+ok(/money\(dairy\.passbook\.totalGross\)/.test(ui), 'portal shows milk value from passbook.totalGross (staff "Gross")');
+ok(/collections\.length > 0 && dairy\.passbook\.settlements\.length === 0/.test(ui) && /भुगतान चक्र बनने पर यहाँ जुड़ेगा/.test(ui), 'hint shown only when milk delivered but no settlement yet');
+const unsettled = buildVerticalViews(M, { milkEntries: payload.milkEntries }, asOf);
+ok(unsettled.dairy.passbook.totalGross === buildMemberPassbook(milk, [], M).totalGross && unsettled.dairy.passbook.totalOutstanding === 0, 'no settlement: gross carried, dues 0 (same as staff)');
+
 console.log(`member-portal verticals (S4b): ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
