@@ -18,6 +18,11 @@ import { useToast } from '@/hooks/use-toast';
 import { generateLoanRegisterPDF } from '@/lib/pdf';
 import { loanOutstanding } from '@/lib/memberSnapshot';
 import { interestIncomeAccountId, memberLoanAccountId } from '@/lib/loans/accounts';
+import {
+  loanInterestDue, repaymentInterestSplit, REF_LOAN_REPAYMENT, REF_LOAN_INTEREST_RELEASE,
+  ACC_INTEREST_RECEIVABLE, ACC_OVERDUE_INTEREST_RESERVE, type LoanInterestDue,
+} from '@/lib/loans/interestAccrual';
+import { useLoanAccruals } from '@/hooks/useLoanAccruals';
 import type { Loan, LoanType, LoanStatus } from '@/types';
 
 const EMPTY_FORM = {
@@ -114,7 +119,10 @@ const LoanForm: React.FC<LoanFormProps> = ({ form, setForm, hi, members, onSubmi
 
 const LoanRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { members, loans, addLoan, updateLoan, deleteLoan, society, getTrialBalance, addVoucher, accounts } = useData();
+  const { members, loans, addLoan, updateLoan, deleteLoan, society, getTrialBalance, addVoucher, cancelVoucher, vouchers, accounts } = useData();
+  // H2-2: each loan's open accrued interest (069 rows with a live journal − live repayments).
+  const { accruals } = useLoanAccruals();
+  const dueOf = (loanId: string): LoanInterestDue => loanInterestDue(loanId, accruals, vouchers);
   const { user } = useAuth();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -137,24 +145,52 @@ const LoanRegister: React.FC = () => {
     const loanAccId = memberLoanAccountId(accounts);   // exact 3304 first; never the KCC head
     const debitAccId = mode === 'bank' ? (accounts.find(a => a.id === '3302')?.id || '3302') : '3301';
     const lid = () => crypto.randomUUID();
+    // H2-2: interest already accrued for THIS loan clears the receivable (3313) — never income twice;
+    // only interest that was never accrued goes to income. Overdue first (founder decision D4).
+    const split = repaymentInterestSplit(interest, dueOf(loan.id));
+    const incomeAccId = interestIncomeAccountId(accounts);   // income, never 2208 Interest Payable
     const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: debitAccId, type: 'Dr', amount: totalAmt }];
     if (principal > 0) lines.push({ id: lid(), accountId: loanAccId, type: 'Cr', amount: principal });
-    if (interest > 0) lines.push({ id: lid(), accountId: interestIncomeAccountId(accounts), type: 'Cr', amount: interest });   // income, never 2208 Interest Payable
+    if (split.toReceivable > 0) lines.push({ id: lid(), accountId: ACC_INTEREST_RECEIVABLE, type: 'Cr', amount: split.toReceivable });
+    if (split.toIncome > 0) lines.push({ id: lid(), accountId: incomeAccId, type: 'Cr', amount: split.toIncome });
     const member = members.find(m => m.id === loan.memberId);
     // The receipt voucher is the record of the cash — if it was refused (permission / FY lock /
     // expired plan → empty id) or threw, the loan must NOT be marked repaid.
     let posted = false;
+    let receiptId = '';
     try {
       const v = addVoucher({
         type: 'receipt', date, debitAccountId: debitAccId, creditAccountId: loanAccId, amount: totalAmt, lines,
         narration: `Loan repayment — ${member?.name || loan.memberId} (${loan.loanNo})${interest > 0 ? ` incl. interest ₹${interest.toLocaleString('en-IN')}` : ''}`,
         createdBy: user?.name ?? 'System', memberId: loan.memberId,
+        refType: REF_LOAN_REPAYMENT, refId: loan.id,
       } as Parameters<typeof addVoucher>[0]);
       posted = !!v?.id;
+      receiptId = v?.id || '';
     } catch { posted = false; }
     if (!posted) {
       toast({ title: hi ? 'चुकौती दर्ज नहीं हुई' : 'Repayment NOT recorded', description: hi ? 'रसीद वाउचर नहीं बना, इसलिए ऋण में कोई बदलाव नहीं किया गया।' : 'The receipt voucher was not created, so the loan was left unchanged.', variant: 'destructive', duration: 10000 });
       return;
+    }
+    // Overdue interest now recovered leaves the Overdue Interest Reserve for income (Haryana Act
+    // s.87 Explanation (ii)) — its own journal, so the receipt's amount stays the cash received.
+    if (split.releaseFromReserve > 0) {
+      let released = false;
+      try {
+        const r = addVoucher({
+          type: 'journal', date, debitAccountId: ACC_OVERDUE_INTEREST_RESERVE, creditAccountId: incomeAccId, amount: split.releaseFromReserve,
+          narration: `Overdue interest recovered — ${member?.name || loan.memberId} (${loan.loanNo}): reserve to income (s.87 Explanation (ii))`,
+          createdBy: user?.name ?? 'System', memberId: loan.memberId,
+          refType: REF_LOAN_INTEREST_RELEASE, refId: loan.id,
+        } as Parameters<typeof addVoucher>[0]);
+        released = !!r?.id;
+      } catch { released = false; }
+      if (!released) {
+        // RULE 1: both entries or neither — take the receipt back out and leave the loan unchanged.
+        cancelVoucher(receiptId, 'Reserve release failed — auto-cancelled', user?.name ?? 'System');
+        toast({ title: hi ? 'चुकौती दर्ज नहीं हुई' : 'Repayment NOT recorded', description: hi ? 'अतिदेय ब्याज संचय से आय का जर्नल नहीं बना, इसलिए रसीद भी रद्द कर दी गई और ऋण में कोई बदलाव नहीं हुआ।' : 'The reserve-to-income journal was not created, so the receipt was cancelled too and the loan was left unchanged.', variant: 'destructive', duration: 10000 });
+        return;
+      }
     }
     updateLoan(loan.id, { repaidAmount: newRepaid, status: (loan.amount - newRepaid) <= 0.005 ? 'cleared' : loan.status });
     toast({ title: hi ? '✅ चुकौती दर्ज (बही में पोस्ट)' : '✅ Repayment recorded & posted', description: `₹${totalAmt.toLocaleString('en-IN')}${interest > 0 ? ` · ${hi ? 'ब्याज' : 'interest'} ₹${interest.toLocaleString('en-IN')}` : ''}` });
@@ -425,7 +461,7 @@ const LoanRegister: React.FC = () => {
                       <TableCell>{statusBadge(l.status)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1 items-center">
-                          {outstanding > 0.005 && <LoanRepayButton loan={l} hi={hi} onRepay={recordRepayment} />}
+                          {outstanding > 0.005 && <LoanRepayButton loan={l} hi={hi} due={dueOf(l.id)} onRepay={recordRepayment} />}
                           <Button variant="ghost" size="icon" onClick={() => openEdit(l)}><Edit className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setDeleteId(l.id)}><Trash2 className="h-4 w-4" /></Button>
                         </div>
@@ -501,7 +537,7 @@ const LoanRegister: React.FC = () => {
   );
 };
 
-function LoanRepayButton({ loan, hi, onRepay }: { loan: Loan; hi: boolean; onRepay: (loan: Loan, total: number, interest: number, mode: 'cash' | 'bank', date: string) => void }) {
+function LoanRepayButton({ loan, hi, due, onRepay }: { loan: Loan; hi: boolean; due: LoanInterestDue; onRepay: (loan: Loan, total: number, interest: number, mode: 'cash' | 'bank', date: string) => void }) {
   const [open, setOpen] = useState(false);
   const [amt, setAmt] = useState('');
   const [interest, setInterest] = useState('');
@@ -521,6 +557,17 @@ function LoanRepayButton({ loan, hi, onRepay }: { loan: Loan; hi: boolean; onRep
           <DialogHeader><DialogTitle>{hi ? 'चुकौती दर्ज करें' : 'Record Repayment'} — {loan.loanNo}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">{hi ? 'बकाया:' : 'Outstanding:'} <strong>{outstanding.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' })}</strong></p>
+            {due.receivable > 0 && (
+              <div className="flex items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                <span>
+                  {hi ? 'इस ऋण पर प्राप्य ब्याज' : 'Accrued interest receivable'}: <strong>₹{due.receivable.toLocaleString('en-IN')}</strong>
+                  {due.reserve > 0 && <> ({hi ? 'अतिदेय' : 'overdue'} ₹{due.reserve.toLocaleString('en-IN')})</>}
+                </span>
+                <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => setInterest(String(due.receivable))}>
+                  {hi ? 'प्राप्य ब्याज भरें' : 'Fill accrued interest'}
+                </Button>
+              </div>
+            )}
             <div>
               <Label>{hi ? 'कुल चुकौती राशि' : 'Total Repayment Amount'}</Label>
               <Input type="number" value={amt} onChange={e => setAmt(e.target.value)} />
