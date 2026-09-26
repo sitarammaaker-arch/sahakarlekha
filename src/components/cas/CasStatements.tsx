@@ -4,7 +4,7 @@
  * SAME trial balance / trading / P&L / balance-sheet rules the app's own statements use (RULE 2),
  * and each statement shows whether it ties to the app's own figure.
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle, CheckCircle2, Download } from 'lucide-react';
 import { navigationService, declaredActivities } from '@/lib/navigation';
 import { balanceSheetLeaves } from '@/lib/balanceSheetLeaves';
-import { buildCasBalanceSheet, buildCasProfitLoss, buildCasTrading, casBalanceSheetTies, type CasSection } from '@/lib/cas/pacsCas';
+import { buildCasBalanceSheet, buildCasProfitLoss, buildCasTrading, buildCasTrialBalance, casBalanceSheetTies, type CasSection, type CasTbRow } from '@/lib/cas/pacsCas';
 import { generateCasPdf } from '@/lib/cas/casPdf';
 import { loanInterestDue } from '@/lib/loans/interestAccrual';
 import { useLoanAccruals } from '@/hooks/useLoanAccruals';
@@ -52,6 +52,49 @@ function Sections({ sections, hi, total, totalLabel }: { sections: CasSection[];
   );
 }
 
+/** The 12 months of the FY: [label, first day, last day]. */
+function fyMonths(fy: string): { key: string; from: string; to: string; label: string }[] {
+  const y0 = parseInt((fy || '').split('-')[0], 10);
+  if (!y0) return [];
+  return Array.from({ length: 12 }, (_, i) => {
+    const y = i < 9 ? y0 : y0 + 1, m = ((i + 3) % 12) + 1;
+    const mm = String(m).padStart(2, '0');
+    const last = new Date(y, m, 0).getDate();
+    return { key: `${y}-${mm}`, from: `${y}-${mm}-01`, to: `${y}-${mm}-${last}`, label: new Date(y, m - 1, 1).toLocaleString('en-IN', { month: 'short', year: 'numeric' }) };
+  });
+}
+const dayBefore = (iso: string) => { const d = new Date(`${iso}T00:00:00`); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
+function TbTable({ rows, hi, total, title }: { rows: CasTbRow[]; hi: boolean; total: number; title: string }) {
+  const cell = (n: number) => (Math.abs(n) < 0.005 ? '—' : fmt(n));
+  return (
+    <div className="overflow-x-auto">
+      <p className="text-sm font-semibold mb-1">{title}</p>
+      <Table>
+        <TableBody>
+          <TableRow className="bg-muted/40 text-xs">
+            <TableCell>{hi ? 'खाता शीर्ष (CAS)' : 'Head of account (CAS)'}</TableCell>
+            <TableCell className="text-right">{hi ? 'माह का प्रारंभिक शेष' : 'Opening (start of month)'}</TableCell>
+            <TableCell className="text-right">{hi ? 'माह में नाम' : 'Debit in month'}</TableCell>
+            <TableCell className="text-right">{hi ? 'माह में जमा' : 'Credit in month'}</TableCell>
+            <TableCell className="text-right">{hi ? 'अंतिम शेष' : 'Closing'}</TableCell>
+          </TableRow>
+          {rows.map((r) => (
+            <TableRow key={r.id}>
+              <TableCell>{hi ? r.labelHi : r.label}<span className="block text-[11px] text-muted-foreground">{r.heads.map((h) => h.id).join(', ')}</span></TableCell>
+              <TableCell className="text-right whitespace-nowrap">{cell(r.opening)}</TableCell>
+              <TableCell className="text-right whitespace-nowrap">{cell(r.debit)}</TableCell>
+              <TableCell className="text-right whitespace-nowrap">{cell(r.credit)}</TableCell>
+              <TableCell className="text-right whitespace-nowrap font-medium">{cell(r.closing)}</TableCell>
+            </TableRow>
+          ))}
+          <TableRow className="border-t-2"><TableCell colSpan={4} className="font-bold">{hi ? 'योग' : 'Total'}</TableCell><TableCell className="text-right font-bold whitespace-nowrap">{fmt(total)}</TableCell></TableRow>
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 function Tie({ ok, hi, what }: { ok: boolean; hi: boolean; what: string }) {
   return ok
     ? <p className="flex items-center gap-1 text-xs text-green-700"><CheckCircle2 className="h-3.5 w-3.5" />{hi ? `ऐप के ${what} से मेल खाता है` : `Ties to the app's ${what}`}</p>
@@ -62,6 +105,10 @@ export function CasStatements({ hi }: { hi: boolean }) {
   const { society, societyCapabilities, societyActivities, getTrialBalance, getProfitLoss, getTradingAccount, loans, kccLoans, vouchers } = useData();
   const { accruals } = useLoanAccruals();
   const fyEnd = `20${(society.financialYear || '').split('-')[1]}-03-31`;
+  // Annexure I is monthly: default = the latest month of the FY that has started.
+  const months = useMemo(() => fyMonths(society.financialYear), [society.financialYear]);
+  const today = new Date().toISOString().slice(0, 10);
+  const [tbMonth, setTbMonth] = useState(() => (months.filter((m) => m.from <= today).pop() ?? months[months.length - 1])?.key ?? '');
 
   const data = useMemo(() => {
     const tb = getTrialBalance(fyEnd);
@@ -76,8 +123,10 @@ export function CasStatements({ hi }: { hi: boolean }) {
     const bs = buildCasBalanceSheet({ assetLeaves: leaves.assetLeaves, capLiabLeaves: leaves.capLiabLeaves, unpostedStock: leaves.unpostedStock, netProfit: appPL.netProfit, overdueInterestReceivable: overdue });
     const pl = buildCasProfitLoss(tb, { hasTrading, grossProfit: tr.grossProfit });
     const trading = hasTrading ? buildCasTrading(tb, { openingStock: tr.totalOpeningStock, closingStock: tr.totalClosingStock }) : null;
-    return { bs, pl, trading, appNet: appPL.netProfit, appGross: tr.grossProfit, leaves };
-  }, [getTrialBalance, getProfitLoss, getTradingAccount, fyEnd, society.societyType, society.state, society.activitiesCutoverEnabled, societyCapabilities, societyActivities, loans, kccLoans, accruals, vouchers]);
+    const m = months.find((x) => x.key === tbMonth);
+    const tbCas = m ? buildCasTrialBalance(getTrialBalance(m.to), getTrialBalance(dayBefore(m.from)), { hasTrading }) : null;
+    return { bs, pl, trading, appNet: appPL.netProfit, appGross: tr.grossProfit, leaves, tbCas, tbLabel: m?.label ?? '' };
+  }, [months, tbMonth, getTrialBalance, getProfitLoss, getTradingAccount, fyEnd, society.societyType, society.state, society.activitiesCutoverEnabled, societyCapabilities, societyActivities, loans, kccLoans, accruals, vouchers]);
 
   const { bs, pl, trading } = data;
   const bsTies = casBalanceSheetTies(bs, data.leaves);
@@ -87,13 +136,29 @@ export function CasStatements({ hi }: { hi: boolean }) {
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900 dark:bg-indigo-900/20 dark:text-indigo-200">
         <span>
           {hi
-            ? 'NABARD Common Accounting System (CAS) के प्रारूप — Annexure II (व्यापार खाता), III (लाभ-हानि), IV (तुलन पत्र)। यह रिपोर्ट आपकी पुस्तकों से बनती है; खाते नहीं बदलते। जो खाता किसी CAS पंक्ति से नहीं जुड़ा, वह "अन्य" में दिखता है — कोई रकम नहीं छूटती।'
-            : 'NABARD Common Accounting System (CAS) formats — Annexure II (Trading), III (P&L), IV (Balance Sheet). Built from your books; no account changes. A head with no CAS line shows under "Others" — nothing is dropped.'}
+            ? 'NABARD Common Accounting System (CAS) के प्रारूप — Annexure I (तलपट), II (व्यापार खाता), III (लाभ-हानि), IV (तुलन पत्र)। यह रिपोर्ट आपकी पुस्तकों से बनती है; खाते नहीं बदलते। जो खाता किसी CAS पंक्ति से नहीं जुड़ा, वह "अन्य" में दिखता है — कोई रकम नहीं छूटती।'
+            : 'NABARD Common Accounting System (CAS) formats — Annexure I (Trial Balance), II (Trading), III (P&L), IV (Balance Sheet). Built from your books; no account changes. A head with no CAS line shows under "Others" — nothing is dropped.'}
         </span>
-        <Button size="sm" variant="outline" className="gap-1" onClick={() => generateCasPdf(society, bs, pl, trading, fyEnd)}>
+        <Button size="sm" variant="outline" className="gap-1" onClick={() => generateCasPdf(society, bs, pl, trading, fyEnd, data.tbCas ? { tb: data.tbCas, month: data.tbLabel } : null)}>
           <Download className="h-4 w-4" />PDF
         </Button>
       </div>
+
+      {data.tbCas && (
+        <Card>
+          <CardHeader className="py-3 flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+            <CardTitle className="text-base">{hi ? 'Annexure I — तलपट (Trial Balance)' : 'Annexure I — Trial Balance'}</CardTitle>
+            <select value={tbMonth} onChange={(e) => setTbMonth(e.target.value)} className="h-8 rounded-md border border-input bg-background px-2 text-sm">
+              {months.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+            </select>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <TbTable rows={data.tbCas.liabilitiesIncome} hi={hi} total={data.tbCas.totals.liabilitiesIncome} title={hi ? 'देनदारियाँ एवं आय' : 'Liabilities & Income'} />
+            <TbTable rows={data.tbCas.assetsExpenditure} hi={hi} total={data.tbCas.totals.assetsExpenditure} title={hi ? 'परिसंपत्तियाँ एवं व्यय' : 'Assets & Expenditure'} />
+            <Tie ok={near(data.tbCas.totals.liabilitiesIncome, data.tbCas.totals.assetsExpenditure)} hi={hi} what={hi ? 'तलपट (दोनों पक्ष बराबर)' : 'Trial Balance (both sides equal)'} />
+          </CardContent>
+        </Card>
+      )}
 
       {trading && (
         <Card>
