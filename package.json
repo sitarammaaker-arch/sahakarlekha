@@ -143,6 +143,7 @@
     "test:share-recon": "node scripts/test-share-reconciliation.mjs",
     "test:member-snapshot": "node scripts/test-member-snapshot.mjs",
     "test:member-portal-sql": "node scripts/test-member-portal-sql.mjs",
+    "test:member-portal-sql-065": "node scripts/test-member-portal-sql-065.mjs",
     "test:member-portal-core": "node scripts/test-member-portal-core.mjs",
     "test:member-portal-handout": "node scripts/test-member-portal-handout.mjs",
     "test:member-portal-view": "node scripts/test-member-portal-view.mjs",
