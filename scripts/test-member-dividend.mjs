@@ -122,7 +122,7 @@ const ui = strip('src/components/member-portal/PortalVerticals.tsx');
 ok(/\{dividend && \(/.test(ui) && /link=\{links\?\.dividend\}/.test(ui), 'dividend section rendered (with staff link)');
 ok(/label: hi \? 'लाभांश बाकी'/.test(strip('src/components/member-portal/MemberAccountView.tsx')), 'summary card "लाभांश बाकी" when due > 0');
 const p360 = strip('src/pages/Member360.tsx');
-ok(/useDistributionRuns\(\)/.test(p360) && /distributionRuns,\s*\}, new Date/.test(p360) && /dividend: \{ to: '\/profit-distribution'/.test(p360), 'Member-360 feeds runs + links to Profit Distribution');
+ok(/useDistributionRuns\(\)/.test(p360) && /distributionRuns,[^}]*\}, new Date/.test(p360) && /dividend: \{ to: '\/profit-distribution'/.test(p360), 'Member-360 feeds runs + links to Profit Distribution');
 
 console.log(`member dividend (2b-1): ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
