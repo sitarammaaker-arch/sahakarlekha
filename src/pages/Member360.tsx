@@ -13,6 +13,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useDistributionRuns } from '@/hooks/useDistributionRuns';
 import { useDairyData } from '@/contexts/DairyDataContext';
 import { useHousingData } from '@/contexts/HousingDataContext';
 import { useConsumerData } from '@/contexts/ConsumerDataContext';
@@ -41,6 +42,7 @@ export default function Member360() {
   const { memberRecoveries, salesReturns, patronageRuns } = useConsumerData();
 
   const member = members.find((m) => m.id === id);
+  const { runs: distributionRuns } = useDistributionRuns();
 
   // Admin only: the member's portal-login state + the same issue/reset/revoke dialog as the Members list.
   // (The Edge Function re-checks admin + plan; non-admins never call it.)
@@ -66,6 +68,7 @@ export default function Member360() {
     dairy: { to: '/dairy-registers', label: open('डेयरी रजिस्टर', 'Dairy Registers') },
     housing: { to: '/member-statement', label: open('सदस्य विवरण', 'Member Statement') },
     consumer: { to: '/member-credit', label: open('सदस्य उधार', 'Member Credit') },
+    dividend: { to: '/profit-distribution', label: open('लाभ का बँटवारा', 'Profit Distribution') },
   };
 
   const m360 = useMemo(() => {
@@ -75,10 +78,10 @@ export default function Member360() {
       vouchers, loans, depositAccounts, depositTransactions, kccLoans, accounts,
       milkEntries, dairySettlements: settlements, dairyInputIssues: inputIssues, dairyDistributions: distributions,
       maintenanceBills, housingFlats,
-      sales, memberRecoveries, salesReturns, patronageRuns,
+      sales, memberRecoveries, salesReturns, patronageRuns, distributionRuns,
     }, new Date().toISOString().slice(0, 10));
   }, [member, society.name, society.nameHi, vouchers, loans, depositAccounts, depositTransactions, kccLoans, accounts,
-    milkEntries, settlements, inputIssues, distributions, maintenanceBills, housingFlats, sales, memberRecoveries, salesReturns, patronageRuns]);
+    milkEntries, settlements, inputIssues, distributions, maintenanceBills, housingFlats, sales, memberRecoveries, salesReturns, patronageRuns, distributionRuns]);
 
   const back = (
     <Button asChild variant="ghost" size="sm" className="gap-1 print:hidden">

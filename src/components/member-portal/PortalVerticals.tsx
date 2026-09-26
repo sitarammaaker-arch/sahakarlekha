@@ -47,7 +47,7 @@ function Distributions({ items, hi, title }: { items: DistributionItem[]; hi: bo
 }
 
 export function PortalVerticals({ views, hi, links }: { views: VerticalViews; hi: boolean; links?: SectionLinks }) {
-  const { dairy, housing, consumer } = views;
+  const { dairy, housing, consumer, dividend } = views;
   // The portal windows milk (milkFrom set); the staff Member-360 shows the full history (no milkFrom).
   const milkSince = (hiPrefix: string, enPrefix: string) => dairy?.milkFrom
     ? (hi ? `${hiPrefix} (${fmtDate(dairy.milkFrom)} से)` : `${enPrefix} (since ${fmtDate(dairy.milkFrom)})`)
@@ -226,6 +226,35 @@ export function PortalVerticals({ views, hi, links }: { views: VerticalViews; hi
               </details>
             )}
             <Distributions items={consumer.distributions} hi={hi} title={hi ? 'संरक्षण छूट / लाभांश (स्वीकृत)' : 'Patronage rebate / dividend (approved)'} />
+          </CardContent>
+        </Card>
+      )}
+      {dividend && (
+        <Card>
+          <SectionHeader title={hi ? 'लाभांश (Dividend)' : 'Dividend'} link={links?.dividend} />
+          <CardContent className="space-y-3">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>FY</TableHead>
+                  <TableHead className="text-right">{hi ? 'हक़' : 'Entitled'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'मिला' : 'Paid'}</TableHead>
+                  <TableHead className="text-right">{hi ? 'बाकी' : 'Due'}</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>{dividend.rows.map((r) => (
+                  <TableRow key={r.fyLabel}>
+                    <TableCell>{r.fyLabel}</TableCell>
+                    <TableCell className="text-right">{money(r.entitled)}</TableCell>
+                    <TableCell className="text-right">{money(r.paid)}</TableCell>
+                    <TableCell className="text-right font-semibold">{money(r.due)}</TableCell>
+                  </TableRow>
+                ))}</TableBody>
+              </Table>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {hi ? 'हक़ = लाभांश पोस्ट होते समय पक्का हुआ आपका हिस्सा (पुराने वर्षों में: जो भुगतान हुआ)।'
+                  : 'Entitled = your share frozen when the dividend was posted (older years: what was paid).'}
+            </p>
           </CardContent>
         </Card>
       )}

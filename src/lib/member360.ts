@@ -16,6 +16,8 @@ import type {
 } from '@/types';
 import { buildPortalView, SHARE_CAP_ACCOUNT_ID, type PortalSnapshot, type PortalView } from './memberPortalView';
 import { buildVerticalViews, type PortalVerticalPayload, type VerticalViews } from './memberPortalVerticals';
+import { ACC_DIVIDEND, ACC_NET_SURPLUS, type DistributionRun } from './distribution/dividendRuns';
+import { getVoucherLines } from './voucherUtils';
 
 export interface Member360Sources {
   society?: { name?: string; nameHi?: string; address?: string };
@@ -35,6 +37,8 @@ export interface Member360Sources {
   memberRecoveries?: readonly Voucher[];
   salesReturns?: readonly SalesReturn[];
   patronageRuns?: readonly PatronageRun[];
+  /** member_distribution_runs (066). */
+  distributionRuns?: readonly DistributionRun[];
 }
 
 export interface Member360 { snapshot: PortalSnapshot & PortalVerticalPayload; view: PortalView; verticals: VerticalViews }
@@ -98,6 +102,18 @@ export function toMemberSnapshot(member: Member, src: Member360Sources): PortalS
     patronageRuns: live(src.patronageRuns)
       .filter((r) => r.status === 'approved' && ownLine(r.lines))
       .map((r) => ({ id: r.id, kind: r.kind ?? 'patronage', fyLabel: r.fyLabel, from: r.from, to: r.to, ratePct: r.ratePct, approvedAt: r.approvedAt, line: ownLine(r.lines) })),
+
+    // General dividend — runs carry ONLY this member's line (other members never leave), plus the
+    // appropriation vouchers (Dr 1208 / Cr 1211) and this member's dividend payments (Dr 1211).
+    dividendRuns: (src.distributionRuns ?? [])
+      .filter((r) => !r.isDeleted && r.kind === 'dividend')
+      .map((r) => ({ ...r, lines: r.lines.filter((l) => l.memberId === id) })) as unknown as Record<string, unknown>[],
+    dividendVouchers: activeVouchers.filter((v) => {
+      const lines = getVoucherLines(v);
+      const isAppropriation = lines.some((l) => l.accountId === ACC_NET_SURPLUS && l.type === 'Dr') && lines.some((l) => l.accountId === ACC_DIVIDEND && l.type === 'Cr');
+      const isMyPayment = v.memberId === id && lines.some((l) => l.accountId === ACC_DIVIDEND && l.type === 'Dr');
+      return isAppropriation || isMyPayment;
+    }) as unknown as Record<string, unknown>[],
   };
 }
 
