@@ -14,7 +14,7 @@ import {
   ListTree, Boxes, Truck, UserCheck, ShoppingCart, HandCoins, PackagePlus, Banknote, BadgeDollarSign, Milk, Table2,
   Scale, ArrowLeftRight, TrendingUp, FileSpreadsheet, BarChart3, Clock, Percent, TrendingDown, Receipt, Warehouse,
   Package, PiggyBank, FileJson, Hash, Landmark, ScrollText, BookMarked, ShieldCheck, Users2, FileCheck, Shield,
-  Coins, Trash2, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks, HardHat,
+  Coins, Trash2, History, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks, HardHat,
   MessageSquareWarning, Car, Wrench, Building, ScanBarcode, Tags, PackageX, Undo2, GitCompareArrows, Stethoscope,
   Download,
 } from 'lucide-react';
@@ -173,6 +173,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'fundRegister',         titleKey: 'fundRegister',         icon: PiggyBank,    route: '/fund-register',         domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant', 'auditor'], order: 11.5 },
   { id: 'profitDistribution',   titleKey: 'profitDistribution',   icon: Coins,        route: '/profit-distribution',   domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 12 },
   { id: 'deletedVouchers',      titleKey: 'deletedVouchers',      icon: Trash2,       route: '/deleted-vouchers',      domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin'], order: 13 },
+  { id: 'auditTrail',           titleKey: 'auditTrail',           icon: History,      route: '/audit-trail',           domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'auditor'], order: 13.5 },
   { id: 'kccLoan',              titleKey: 'kccLoan',              icon: Wheat,        route: '/kcc-loan',              domain: 'registers', requiredCapabilities: ['lending'], order: 14 },
   { id: 'electionModule',       titleKey: 'electionModule',       icon: Vote,         route: '/election-module',       domain: 'registers', requiredCapabilities: U, order: 15 },
   { id: 'boardOfDirectors',     titleKey: 'boardOfDirectors',     icon: Users2,       route: '/board-of-directors',    domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin'], order: 16 },

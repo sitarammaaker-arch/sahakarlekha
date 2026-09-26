@@ -166,6 +166,7 @@
     "test:kyc": "node scripts/test-kyc.mjs",
     "test:member-lifecycle": "node scripts/test-member-lifecycle.mjs",
     "test:nominees": "node scripts/test-nominees.mjs",
+    "test:audit-trail": "node scripts/test-audit-trail.mjs",
     "test:payroll-statutory": "node scripts/test-payroll-statutory.mjs",
     "test:period-lock": "node scripts/test-period-lock.mjs",
     "test:share-certificate": "node scripts/test-share-certificate.mjs",
