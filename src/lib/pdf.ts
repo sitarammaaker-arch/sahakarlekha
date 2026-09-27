@@ -12,6 +12,10 @@ import { getStateAuditFormat } from '@/lib/stateAuditFormats';
 import { statutoryLimits, scheduleLimitsLine } from '@/lib/rules/statutoryLimits';
 import { trackEvent } from '@/lib/analytics';
 import { loanOutstanding } from '@/lib/memberSnapshot';
+import { installDevanagariCells } from '@/lib/pdfDevanagari';
+
+// Hindi DATA (names, narrations) in any PDF table is drawn by the browser — labels stay English.
+installDevanagariCells();
 
 
 // G1 FIX: Use Rs. prefix — Helvetica font lacks the ₹ glyph, causing garbled output
@@ -23,7 +27,7 @@ const preparedOn = (): string => {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-/** All PDFs use English only — helvetica font always. */
+/** PDF labels are English (helvetica). Hindi DATA in tables is drawn via lib/pdfDevanagari. */
 function setupFont(_doc: jsPDF): string {
   return 'helvetica';
 }

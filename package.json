@@ -109,6 +109,7 @@
     "test:adapter-ring": "node scripts/test-adapter-ring.mjs",
     "test:gov-adapters": "node scripts/test-gov-adapters.mjs",
     "test:bank-adapters": "node scripts/test-bank-adapters.mjs",
+    "test:pdf-devanagari": "node scripts/test-pdf-devanagari.mjs",
     "test:ai-principal": "node scripts/test-ai-principal.mjs",
     "test:ai-proposal": "node scripts/test-ai-proposal.mjs",
     "test:ai-memory": "node scripts/test-ai-memory.mjs",
