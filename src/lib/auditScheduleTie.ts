@@ -100,7 +100,8 @@ export function tieSchedules(resolved: readonly ResolvedSchedule[], input: TieIn
     }
     // A ledger no line names: its own line, so nothing on the Balance Sheet is left out.
     for (const x of pool) {
-      if (used.has(x.b.account.id)) continue;
+      // A zero-balance ledger adds nothing — no line for it (else every unused head fills pages).
+      if (used.has(x.b.account.id) || Math.abs(amt(x)) < 0.005) continue;
       lines.push({ id: `${sch.id}-x-${x.b.account.id}`, label: x.b.account.name, labelHi: x.b.account.nameHi || x.b.account.name, source: { kind: 'account', accountIds: [x.b.account.id] }, indent: 0,
         currentYear: r2(amt(x)), previousYear: py([x.b.account.id]) });
     }

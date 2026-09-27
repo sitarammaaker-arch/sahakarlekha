@@ -82,6 +82,13 @@ ok(near(x.find((i) => i.isTotal).currentYear, 4524), 'X: net profit 4,524');
     .flatMap((s) => s.items.filter((i) => !i.isTotal && i.source.kind === 'account' && Math.abs(i.currentYear) > 0.005).flatMap((i) => i.source.accountIds));
   ok(ids.length === new Set(ids).size, 'no ledger counted in two schedules');
 }
+// Zero-balance heads the lines do not name get NO line (Rania prod: 15 pages of "—" rows).
+{
+  const withZeros = [...TB, row('1103', 0), { ...row('3301', 0), account: { id: 'Z1', name: 'The Dumdama PACS', nameHi: 'x', type: 'equity', isGroup: false, parentId: '1100' } }];
+  const z = tieSchedules(F.resolveAllSchedules(format, { ...ctx, trialBalance: withZeros }), { accounts: [...accounts, { id: 'Z1', name: 'The Dumdama PACS', type: 'equity', isGroup: false, parentId: '1100' }], leaves: balanceSheetLeaves(withZeros, { closingStockPosted: false, physicalClosingStock: 5340, netProfit }), trialBalance: withZeros, trading, netProfit, previousYearBalances: {} });
+  ok(!z.schedules.some((s) => s.items.some((i) => i.id.includes('-x-') && Math.abs(i.currentYear) < 0.005)), 'no line for a zero-balance head the schedule does not name');
+  ok(z.ties.ok, 'still ties');
+}
 // Punjab / other states reuse the same line items → the same tie.
 {
   const pb = tieSchedules(F.resolveAllSchedules(F.getStateAuditFormat('pb'), ctx), { accounts, leaves, trialBalance: TB, trading, netProfit, previousYearBalances: {} });
