@@ -19,7 +19,11 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { Boxes, Plus, Pencil, Trash2, Search, PackageMinus, PackagePlus, ScanLine, X, FileSpreadsheet, Download, RotateCcw } from 'lucide-react';
+import { Boxes, Plus, Pencil, Trash2, Search, PackageMinus, PackagePlus, ScanLine, X, FileSpreadsheet, Download, RotateCcw, BookOpen } from 'lucide-react';
+import { LedgerDialog } from '@/components/registers/LedgerDialog';
+import { stockRegister } from '@/lib/registers/subsidiaryLedgers';
+import { stockRegisterTable } from '@/lib/registers/ledgerTables';
+import { ledgerExcel, ledgerPdf } from '@/lib/registers/ledgerExport';
 import EmptyState from '@/components/EmptyState';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
@@ -501,7 +505,14 @@ const Inventory: React.FC = () => {
     addStockMovement,
     getEntityLinks,
     addAccount,
+    society,
   } = useData();
+  // Stock Register: item-wise inward / outward / balance from the SAME reconciled movements the
+  // quantity column uses (RULE 2) — so the register's closing equals the Inventory figure.
+  const registerTableOf = (it: StockItem) => stockRegisterTable(stockRegister(it, reconciledStockMovements), { itemCode: it.itemCode, name: it.name, unit: it.unit });
+  const [registerItem, setRegisterItem] = useState<StockItem | null>(null);
+  const registerTable = registerItem ? registerTableOf(registerItem) : null;
+  const allRegisters = () => stockItems.filter(i => i.isActive).map(registerTableOf);
 
   // Sales income accounts (parent 4100) and Purchases/Direct-expense accounts (parent 5100).
   // Shown in the per-item A/c dropdowns so user can route each stock item to its own ledger
@@ -1045,6 +1056,12 @@ const Inventory: React.FC = () => {
                     <Download className="h-4 w-4" />
                     CSV
                   </Button>
+                  {stockItems.length > 0 && (
+                    <>
+                      <Button size="sm" variant="outline" className="gap-1" onClick={() => ledgerPdf(society, allRegisters(), 'STR', 'Stock_Register')}><BookOpen className="h-4 w-4" />{hi ? 'स्टॉक रजिस्टर PDF' : 'Stock Register PDF'}</Button>
+                      <Button size="sm" variant="outline" className="gap-1" onClick={() => ledgerExcel(allRegisters(), 'Stock_Register', 'Stock Register')}><FileSpreadsheet className="h-4 w-4" />{hi ? 'स्टॉक रजिस्टर Excel' : 'Stock Register Excel'}</Button>
+                    </>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -1164,6 +1181,15 @@ const Inventory: React.FC = () => {
                                     <RotateCcw className="h-4 w-4" />
                                   </Button>
                                 )}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => setRegisterItem(item)}
+                                  title={hi ? 'स्टॉक रजिस्टर' : 'Stock register'}
+                                >
+                                  <BookOpen className="h-4 w-4" />
+                                </Button>
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1576,6 +1602,10 @@ const Inventory: React.FC = () => {
           toast({ title: hi ? `बारकोड मिला: ${code}` : `Barcode detected: ${code}` });
         }}
       />
+
+      <LedgerDialog table={registerTable} hi={hi} onClose={() => setRegisterItem(null)}
+        onPdf={() => registerTable && ledgerPdf(society, [registerTable], 'STR', `Stock_Register_${registerItem?.itemCode || registerItem?.name || ''}`)}
+        onExcel={() => registerTable && ledgerExcel([registerTable], `Stock_Register_${registerItem?.itemCode || registerItem?.name || ''}`, 'Stock Register')} />
     </div>
   );
 };

@@ -12,7 +12,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Download, Search, Edit, Trash2, Landmark, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { Plus, Download, Search, Edit, Trash2, Landmark, AlertTriangle, CheckCircle, Clock, BookOpen, FileSpreadsheet } from 'lucide-react';
+import { LedgerDialog } from '@/components/registers/LedgerDialog';
+import { loanLedger, memberLoanLedgerInput } from '@/lib/registers/subsidiaryLedgers';
+import { loanLedgerTable } from '@/lib/registers/ledgerTables';
+import { ledgerExcel, ledgerPdf } from '@/lib/registers/ledgerExport';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { generateLoanRegisterPDF } from '@/lib/pdf';
@@ -125,6 +129,13 @@ const LoanRegister: React.FC = () => {
   // H2-2: each loan's open accrued interest (069 rows with a live journal − live repayments).
   const { accruals } = useLoanAccruals();
   const dueOf = (loanId: string): LoanInterestDue => loanInterestDue(loanId, accruals, vouchers);
+  // Loan Ledger: disbursement + live repayment vouchers + live interest accruals (same sources as dueOf).
+  const isIncome = (id: string) => accounts.find(a => a.id === id)?.type === 'income';
+  const ledgerTableOf = (l: Loan) => loanLedgerTable(loanLedger(memberLoanLedgerInput(l), vouchers, accruals, isIncome),
+    { loanNo: l.loanNo, memberName: members.find(m => m.id === l.memberId)?.name ?? l.memberId, kind: 'Member loan', recordedOutstanding: loanOutstanding(l) });
+  const [ledgerLoan, setLedgerLoan] = useState<Loan | null>(null);
+  const ledgerTable = ledgerLoan ? ledgerTableOf(ledgerLoan) : null;
+  const allLedgers = () => loans.filter(l => !l.isDeleted).sort((a, b) => a.loanNo.localeCompare(b.loanNo)).map(ledgerTableOf);
   const { user } = useAuth();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -332,6 +343,12 @@ const LoanRegister: React.FC = () => {
           <Button variant="outline" size="sm" className="gap-2" onClick={() => generateLoanRegisterPDF(loans.map(l => ({ ...l, status: statusOf(l) })), approvedMembers, society)}>
             <Download className="h-4 w-4" />PDF
           </Button>
+          {loans.length > 0 && (
+            <>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => ledgerPdf(society, allLedgers(), 'LNL', 'Loan_Ledger')}><BookOpen className="h-4 w-4" />{hi ? 'खाता-बही PDF' : 'Ledger PDF'}</Button>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => ledgerExcel(allLedgers(), 'Loan_Ledger', 'Loan Ledger')}><FileSpreadsheet className="h-4 w-4" />{hi ? 'खाता-बही Excel' : 'Ledger Excel'}</Button>
+            </>
+          )}
           <Button size="sm" className="gap-2" onClick={() => { setForm(EMPTY_FORM); setIsAddOpen(true); }}>
             <Plus className="h-4 w-4" />{hi ? 'नया ऋण' : 'New Loan'}
           </Button>
@@ -467,6 +484,7 @@ const LoanRegister: React.FC = () => {
                       <TableCell>
                         <div className="flex gap-1 items-center">
                           {outstanding > 0.005 && <LoanRepayButton loan={l} hi={hi} due={dueOf(l.id)} onRepay={recordRepayment} />}
+                          <Button variant="ghost" size="icon" title={hi ? 'ऋण खाता-बही' : 'Loan ledger'} onClick={() => setLedgerLoan(l)}><BookOpen className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="icon" onClick={() => openEdit(l)}><Edit className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setDeleteId(l.id)}><Trash2 className="h-4 w-4" /></Button>
                         </div>
@@ -538,6 +556,10 @@ const LoanRegister: React.FC = () => {
           })()}
         </AlertDialogContent>
       </AlertDialog>
+
+      <LedgerDialog table={ledgerTable} hi={hi} onClose={() => setLedgerLoan(null)}
+        onPdf={() => ledgerTable && ledgerPdf(society, [ledgerTable], 'LNL', `Loan_Ledger_${ledgerLoan?.loanNo ?? ''}`)}
+        onExcel={() => ledgerTable && ledgerExcel([ledgerTable], `Loan_Ledger_${ledgerLoan?.loanNo ?? ''}`, 'Loan Ledger')} />
     </div>
   );
 };

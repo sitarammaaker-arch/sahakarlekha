@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, History, Search, Percent, Lock, ListChecks } from 'lucide-react';
+import { PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, History, Search, Percent, Lock, ListChecks, Download, FileSpreadsheet } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
 import { sbInterest } from '@/lib/depositInterest';
 import { buildRdSchedule, missedCount } from '@/lib/rdSchedule';
@@ -26,6 +26,10 @@ import { useToast } from '@/hooks/use-toast';
 import type { DepositType, DepositAccount } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
 import EmptyState from '@/components/EmptyState';
+import { LedgerDialog } from '@/components/registers/LedgerDialog';
+import { depositLedger } from '@/lib/registers/subsidiaryLedgers';
+import { depositLedgerTable } from '@/lib/registers/ledgerTables';
+import { ledgerExcel, ledgerPdf } from '@/lib/registers/ledgerExport';
 
 const TYPE_LABELS: Record<DepositType, { hi: string; en: string }> = {
   SB: { hi: 'बचत (SB)', en: 'Savings (SB)' },
@@ -39,7 +43,7 @@ const today = () => new Date().toISOString().split('T')[0];
 const Deposits: React.FC = () => {
   const { language } = useLanguage();
   const { can } = useAuth();
-  const { members, depositAccounts, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions } = useData();
+  const { members, depositAccounts, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions, vouchers, society } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
   // ECR-06 17-role: RBAC permission gate, not a hardcoded legacy list. `update` (not `create`)
@@ -156,7 +160,13 @@ const Deposits: React.FC = () => {
 
   // ── Transaction history dialog ─────────────────────────────────────────────
   const [historyAcct, setHistoryAcct] = useState<DepositAccount | null>(null);
-  const history = historyAcct ? getDepositTransactions(historyAcct.id) : [];
+  // Deposit Ledger: the same deposit_transactions the old history list showed, as a ledger with
+  // Cr / Dr / balance and PDF / Excel of exactly those rows.
+  const voucherNoOf = (id?: string) => (id ? vouchers.find(v => v.id === id)?.voucherNo ?? '' : '');
+  const ledgerTableOf = (d: DepositAccount) => depositLedgerTable(depositLedger(getDepositTransactions(d.id), voucherNoOf),
+    { accountNo: d.accountNo, memberName: memberName(d.memberId), type: TYPE_LABELS[d.depositType].en });
+  const historyTable = historyAcct ? ledgerTableOf(historyAcct) : null;
+  const allLedgers = () => [...depositAccounts].sort((a, b) => a.accountNo.localeCompare(b.accountNo)).map(ledgerTableOf);
 
   return (
     <div className="p-4 space-y-4">
@@ -175,6 +185,12 @@ const Deposits: React.FC = () => {
             Deliberately OUTSIDE `canEdit`: a viewer may export what a viewer may see.
           */}
           <EntityExportButton entityKey="deposit_account" />
+          {depositAccounts.length > 0 && (
+            <>
+              <Button variant="outline" size="sm" className="gap-1" onClick={() => ledgerPdf(society, allLedgers(), 'DPL', 'Deposit_Ledger')}><Download className="h-4 w-4" />{hi ? 'खाता-बही PDF' : 'Ledger PDF'}</Button>
+              <Button variant="outline" size="sm" className="gap-1" onClick={() => ledgerExcel(allLedgers(), 'Deposit_Ledger', 'Deposit Ledger')}><FileSpreadsheet className="h-4 w-4" />{hi ? 'खाता-बही Excel' : 'Ledger Excel'}</Button>
+            </>
+          )}
           {canEdit && (
             <>
               {agents.length > 0 && (
@@ -514,36 +530,10 @@ const Deposits: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Transaction history dialog */}
-      <Dialog open={!!historyAcct} onOpenChange={o => { if (!o) setHistoryAcct(null); }}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader><DialogTitle>{hi ? 'लेनदेन' : 'Transactions'} — {historyAcct?.accountNo}</DialogTitle></DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto">
-            {history.length === 0 ? (
-              <p className="p-6 text-center text-sm text-muted-foreground">{hi ? 'कोई लेनदेन नहीं।' : 'No transactions.'}</p>
-            ) : (
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead>{hi ? 'तिथि' : 'Date'}</TableHead>
-                  <TableHead>{hi ? 'प्रकार' : 'Type'}</TableHead>
-                  <TableHead className="text-right">{hi ? 'राशि' : 'Amount'}</TableHead>
-                  <TableHead className="text-right">{hi ? 'शेष' : 'Balance'}</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {history.map(t => (
-                    <TableRow key={t.id}>
-                      <TableCell className="text-sm">{fmtDate(t.date)}</TableCell>
-                      <TableCell><Badge variant="outline" className="text-xs">{t.txnType}</Badge></TableCell>
-                      <TableCell className={`text-right ${t.txnType === 'withdraw' ? 'text-amber-600' : 'text-emerald-600'}`}>{t.txnType === 'withdraw' ? '−' : '+'}{fmt(t.amount)}</TableCell>
-                      <TableCell className="text-right font-medium">{fmt(t.balanceAfter)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Deposit Ledger (was: transaction history) */}
+      <LedgerDialog table={historyTable} hi={hi} onClose={() => setHistoryAcct(null)}
+        onPdf={() => historyTable && ledgerPdf(society, [historyTable], 'DPL', `Deposit_Ledger_${historyAcct?.accountNo ?? ''}`)}
+        onExcel={() => historyTable && ledgerExcel([historyTable], `Deposit_Ledger_${historyAcct?.accountNo ?? ''}`, 'Deposit Ledger')} />
     </div>
   );
 };
