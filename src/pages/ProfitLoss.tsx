@@ -93,7 +93,7 @@ const ProfitLoss: React.FC = () => {
     if (isSurplus) {
       rows.push(['Expense', 'Net Surplus (to Balance Sheet)', netProfit]);
     } else {
-      rows.push(['Expense', 'Net Deficit (to Balance Sheet)', Math.abs(netProfit)]);
+      rows.push(['Income', 'Net Deficit (to Balance Sheet)', Math.abs(netProfit)]);
     }
     rows.push(['Expense', 'Total Expenditure', totalExpenses]);
     // Separate Appropriation section — actual posted amounts (read from ledger).
@@ -293,21 +293,13 @@ const ProfitLoss: React.FC = () => {
                   {/* Net Surplus / Deficit row — FULL surplus to Balance Sheet.
                       Appropriation (reserve/education) is shown SEPARATELY below,
                       per NCDC principle (l), and posted as journals — not deducted here. */}
-                  {isSurplus ? (
+                  {isSurplus && (
                     <TableRow className="bg-success/10 font-semibold">
                       <TableCell className="text-success">
                         {hi ? 'नेट सरप्लस (बैलेंस शीट में)' : 'Net Surplus (to Balance Sheet)'}
                       </TableCell>
                       {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyIE && pyIE.netProfit >= 0 ? fmt(pyIE.netProfit) : '—'}</TableCell>}
                       <TableCell className="text-right text-success">{fmt(netProfit)}</TableCell>
-                    </TableRow>
-                  ) : (
-                    <TableRow className="bg-destructive/10 font-semibold">
-                      <TableCell className="text-destructive">
-                        {hi ? 'घाटा (बैलेंस शीट में)' : 'Deficit (to Balance Sheet)'}
-                      </TableCell>
-                      {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyIE && pyIE.netProfit < 0 ? fmt(Math.abs(pyIE.netProfit)) : '—'}</TableCell>}
-                      <TableCell className="text-right text-destructive">{fmt(Math.abs(netProfit))}</TableCell>
                     </TableRow>
                   )}
                   <TableRow className="bg-muted font-bold text-lg">
@@ -348,6 +340,17 @@ const ProfitLoss: React.FC = () => {
                         <TableCell className="text-right font-medium">{fmt(item.amount)}</TableCell>
                       </TableRow>
                     ))
+                  )}
+                  {/* A deficit is the BALANCING figure on the income side (excess of expenditure over
+                      income) — shown once, here, so the income column foots to the total. */}
+                  {!isSurplus && (
+                    <TableRow className="bg-destructive/10 font-semibold">
+                      <TableCell className="text-destructive">
+                        {hi ? 'घाटा (बैलेंस शीट में)' : 'Deficit (to Balance Sheet)'}
+                      </TableCell>
+                      {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyIE && pyIE.netProfit < 0 ? fmt(Math.abs(pyIE.netProfit)) : '—'}</TableCell>}
+                      <TableCell className="text-right text-destructive">{fmt(Math.abs(netProfit))}</TableCell>
+                    </TableRow>
                   )}
                   <TableRow className="bg-muted font-bold text-lg">
                     <TableCell>{hi ? 'कुल' : 'Total'}</TableCell>

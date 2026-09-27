@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fmtDate } from '@/lib/dateUtils';
 import { Badge } from '@/components/ui/badge';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { balanceSheetLeaves } from '@/lib/balanceSheetLeaves';
 import { loanOutstanding } from '@/lib/memberSnapshot';
 import { effectiveLoanStatus } from '@/lib/loans/interestAccrual';
 import { todayStr } from '@/lib/dateUtils';
@@ -65,9 +66,9 @@ const Dashboard: React.FC = () => {
     // FY would make the Balance Sheet tally falsely fail.
     const fyEnd = `20${fy.split('-')[1]}-03-31`;
     const tb = getTrialBalance(fyEnd);
-    const { physicalClosingStock } = getTradingAccount(fyEnd);
+    const { physicalClosingStock, closingStockPosted } = getTradingAccount(fyEnd);
 
-    // 1. Reserve Fund posted (Sec 65)
+    // 1. Reserve Fund posted
     const reservePosted = activeVouchers.some(v =>
       getVoucherLines(v).some(l => l.accountId === '1208' && l.type === 'Dr') &&
       getVoucherLines(v).some(l => l.accountId === '1201' && l.type === 'Cr') &&
@@ -75,9 +76,9 @@ const Dashboard: React.FC = () => {
     );
 
     // 2. Balance Sheet tally
-    const totalAssets = tb.filter(b => b.account.type === 'asset' && !b.account.isGroup).reduce((s, b) => s + b.netBalance, 0);
-    const capLiab = tb.filter(b => (b.account.type === 'equity' || b.account.type === 'liability') && !b.account.isGroup);
-    const totalLiab = capLiab.reduce((s, b) => s + (-b.netBalance), 0) + netProfit;
+    // RULE 2: the SAME sides + closing-stock rule as the Balance Sheet page (balanceSheetLeaves) —
+    // a raw-ledger tally here disagreed with the page whenever stock was valued from inventory.
+    const { totalAssets, totalLiabilities: totalLiab } = balanceSheetLeaves(tb, { closingStockPosted, physicalClosingStock, netProfit });
     // Audit (High): tighten the tolerance from Rs.1 to 1 paisa — a sub-rupee gap is
     // a real imbalance now that Dr=Cr is enforced at save and the figures are exact.
     const bsTallied = Math.abs(totalAssets - totalLiab) < 0.01;
