@@ -26,7 +26,7 @@ import {
 } from '@/lib/stateAuditFormats';
 import { generateAuditSchedulesPDF } from '@/lib/pdf';
 import { CasStatements } from '@/components/cas/CasStatements';
-import { statutoryLimits, hasVerifiedLimits } from '@/lib/rules/statutoryLimits';
+import { statutoryLimits, scheduleLimitsLine } from '@/lib/rules/statutoryLimits';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(n));
@@ -310,13 +310,7 @@ const AuditSchedules: React.FC = () => {
           {' · '}
           {hi ? 'वित्तीय वर्ष' : 'FY'} {fy}
           {' · '}
-          {hi ? 'रिज़र्व फंड' : 'Reserve Fund'}: {society.reserveFundPct ?? 25}%
-          {' · '}
-          {hasVerifiedLimits(limits)
-            ? <>{hi ? `न्यूनतम संचय ${limits.reserveMin.pct}% · शिक्षा फंड अधिकतम ${limits.educationMax.pct}%` : `Minimum reserve ${limits.reserveMin.pct}% · Education Fund at most ${limits.educationMax.pct}%`}</>
-            : <>{hi ? 'शिक्षा फंड' : 'Education Fund'}: {format.educationFundPct}%</>}
-          {' · '}
-          {hi ? 'सहकारी विकास फंड' : 'Coop Dev Fund'}: {format.coopDevFundPct}%
+          {scheduleLimitsLine(society, limits, format, hi)}
         </div>
       </div>
 

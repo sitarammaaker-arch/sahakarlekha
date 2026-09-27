@@ -185,7 +185,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 ok(/balanceSheetLeaves\(trialBalance, \{ closingStockPosted, physicalClosingStock, netProfit \}\)/.test(read('src/pages/BalanceSheet.tsx')) && !/const typeAssetLeaf/.test(read('src/pages/BalanceSheet.tsx')), 'BalanceSheet page uses the shared leaves rule (no private copy)');
 const as = read('src/pages/AuditSchedules.tsx');
 ok(/const isPacs = society\.societyType === 'pacs'/.test(as) && /isPacs && view === 'cas' \? <CasStatements/.test(as), 'CAS view offered to PACS societies only');
-ok(/statutoryLimits\(society\.state,/.test(as) && /hasVerifiedLimits\(limits\)/.test(as), 'Audit Schedules shows the text-verified statutory limits (RULE 2)');
+ok(/statutoryLimits\(society\.state,/.test(as) && /scheduleLimitsLine\(society, limits, format, hi\)/.test(as), 'Audit Schedules shows the text-verified statutory limits (RULE 2)');
 const cs = read('src/components/cas/CasStatements.tsx');
 ok(/\.has\('inventory_sales'\)/.test(cs) && /society\.state, declaredActivities\(societyActivities\), society\.activitiesCutoverEnabled/.test(cs), 'trading decision uses the same resolution as getProfitLoss');
 ok(/loanInterestDue\(id, accruals, vouchers\)/.test(cs), 'overdue interest receivable from the same loanInterestDue as the repay dialogs');

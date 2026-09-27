@@ -114,6 +114,7 @@
     "test:capture-queue": "node scripts/test-capture-queue.mjs",
     "test:capture-store": "node scripts/test-capture-store.mjs",
     "test:sync-engine": "node scripts/test-sync-engine.mjs",
+    "test:audit-schedule-cites": "node scripts/test-audit-schedule-cites.mjs",
     "test:preservation": "node scripts/test-preservation.mjs",
     "test:federation": "node scripts/test-federation.mjs",
     "test:cas-mis": "node scripts/test-cas-mis.mjs",
