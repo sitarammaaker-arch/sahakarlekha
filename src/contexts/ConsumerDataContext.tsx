@@ -16,7 +16,6 @@
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
-import { useCapabilities } from '@/hooks/useCapabilities';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabasePaging';
@@ -24,7 +23,7 @@ import { resolveJurisdiction } from '@/lib/jurisdiction';
 import { reportError } from '@/lib/errorReporting';
 import * as storage from '@/lib/storage';
 import { resolveItemPrice } from '@/lib/consumer/pricing';
-import { resolveMemberReceivableAccountId, resolvePatronageDistributionAccountId, resolveRebatePayableAccountId, resolveDividendDistributionAccountId, resolveDividendPayableAccountId, resolveSalesReturnAccountId, MEMBER_RECEIVABLE_SUBTYPE, PATRONAGE_DISTRIBUTION_SUBTYPE, REBATE_PAYABLE_SUBTYPE, DIVIDEND_DISTRIBUTION_SUBTYPE, DIVIDEND_PAYABLE_SUBTYPE, SALES_RETURN_SUBTYPE } from '@/lib/consumer/accounts';
+import { resolveMemberReceivableAccountId, resolvePatronageDistributionAccountId, resolveRebatePayableAccountId, resolveDividendDistributionAccountId, resolveDividendPayableAccountId, resolveSalesReturnAccountId, SALES_RETURN_SUBTYPE } from '@/lib/consumer/accounts';
 import { memberOutstanding, memberAgeing, type Ageing, type RecoveryRow } from '@/lib/consumer/credit';
 import { computePatronageLines, computeDividendLines, patronageTotal, patronageLegs } from '@/lib/consumer/patronage';
 import { poTotal, buildGrnInvoice } from '@/lib/consumer/purchaseOrder';
@@ -108,8 +107,7 @@ const ConsumerDataContext = createContext<ConsumerDataContextValue | null>(null)
 
 export function ConsumerProvider({ children }: { children: ReactNode }) {
   const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase, deletePurchase, addStockMovement, purchases, suppliers, stockItems } = useData();
-  const { user, isSuperAdmin } = useAuth();
-  const { capabilities } = useCapabilities(); // T-14: raw set — seed by capability, not type
+  const { user } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
   // T-01: stamp BOTH tenancy keys (society_id + jurisdiction) — the value comes from the SSOT
@@ -179,39 +177,10 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     [consumerPrices],
   );
 
-  // ── C3: ensure the "Member Purchase Receivable" control exists (auto-id; NOT 3306, which
-  // is Rent Receivable in the CMS chart). Mirrors the Dairy dedicated-ledger seeder. ──
-  const seededRef = useRef(false);
-  useEffect(() => {
-    if (seededRef.current) return;
-    // Only seed once AUTHENTICATED — addAccount writes to the society-scoped `accounts` table,
-    // which RLS rejects pre-login (no session → the "SOC001" fallback fails the with-check, e.g.
-    // when a consumer society is still cached on the login screen). Guard BEFORE setting
-    // seededRef so it retries after login. (Deps include user?.societyId.)
-    if (!user?.societyId) return;
-    // A platform super-admin is JWT-less (societyId 'PLATFORM', no Supabase auth.uid) → the
-    // society-scoped `accounts` RLS rejects any insert ("new row violates row-level security
-    // policy for table accounts"). Never seed the chart from the super-admin context; a real
-    // society user (with a session) seeds it on their normal login.
-    if (isSuperAdmin) return;
-    if (!capabilities.has('pos_billing')) return; // T-14 (ADR-0002): seed by capability, not type
-    if (!accounts || accounts.length === 0) return;
-    if (society.fyLocked) return; // seeding mutates the chart; retry on a later unlocked load
-    const needRecv = resolveMemberReceivableAccountId(accounts) === null;
-    const needDist = resolvePatronageDistributionAccountId(accounts) === null;
-    const needPay = resolveRebatePayableAccountId(accounts) === null;
-    const needDivDist = resolveDividendDistributionAccountId(accounts) === null;
-    const needDivPay = resolveDividendPayableAccountId(accounts) === null;
-    const needSalesRet = resolveSalesReturnAccountId(accounts) === null;
-    if (!needRecv && !needDist && !needPay && !needDivDist && !needDivPay && !needSalesRet) { seededRef.current = true; return; }
-    seededRef.current = true; // attempt once per mount
-    if (needRecv) addAccount({ name: 'Member Purchase Receivable', nameHi: 'सदस्य खरीद प्राप्य', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300', subtype: MEMBER_RECEIVABLE_SUBTYPE });
-    if (needDist) addAccount({ name: 'Patronage Rebate Distribution', nameHi: 'संरक्षण रिबेट वितरण', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: PATRONAGE_DISTRIBUTION_SUBTYPE });
-    if (needPay) addAccount({ name: 'Member Rebate Payable', nameHi: 'देय सदस्य रिबेट', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: REBATE_PAYABLE_SUBTYPE });
-    if (needDivDist) addAccount({ name: 'Dividend Distribution', nameHi: 'लाभांश वितरण', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: DIVIDEND_DISTRIBUTION_SUBTYPE });
-    if (needDivPay) addAccount({ name: 'Dividend Payable', nameHi: 'देय लाभांश', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: DIVIDEND_PAYABLE_SUBTYPE });
-    if (needSalesRet) addAccount({ name: 'Sales Return', nameHi: 'बिक्री वापसी', type: 'income', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '4100', subtype: SALES_RETURN_SUBTYPE });
-  }, [user?.societyId, isSuperAdmin, capabilities, society?.fyLocked, accounts, addAccount]);
+  // C3 domain ledgers (member receivable, patronage/dividend distribution + payable, sales return)
+  // are NOT created here. The old load-time seeder wrote duplicate accounts (RM-05); they are now
+  // provisioned only by an explicit admin action — Ledger Hygiene → "डोमेन खाते बनाएँ"
+  // (useDomainAccountProvisioning). Posting paths below refuse with a toast while one is missing.
 
   const memberReceivableAccountId = resolveMemberReceivableAccountId(accounts);
 
@@ -252,7 +221,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   const recordMemberRecovery = useCallback((data: { memberId: string; memberName: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string }): Voucher | null => {
     if (guardFYLocked()) return null;
     if (!(data.amount > 0)) { toastRef.current({ title: 'मान्य राशि दर्ज करें', variant: 'destructive' }); return null; }
-    if (!memberReceivableAccountId) { toastRef.current({ title: 'सदस्य प्राप्य खाता नहीं मिला', description: 'Member receivable account missing — reload once.', variant: 'destructive' }); return null; }
+    if (!memberReceivableAccountId) { toastRef.current({ title: 'सदस्य प्राप्य खाता नहीं मिला', description: 'Member receivable account missing — Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', variant: 'destructive' }); return null; }
     const debit = data.mode === 'cash' ? CASH_ACCOUNT : (data.bankAccountId || getBankAccountIds(accounts)[0] || '3302');
     return addVoucher({
       type: 'receipt',
@@ -333,7 +302,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const label = isDiv ? 'लाभांश' : 'संरक्षण रिबेट';
     const distAcc = isDiv ? resolveDividendDistributionAccountId(accounts) : resolvePatronageDistributionAccountId(accounts);
     const payAcc = isDiv ? resolveDividendPayableAccountId(accounts) : resolveRebatePayableAccountId(accounts);
-    if (!distAcc || !payAcc) { toastRef.current({ title: 'खाते नहीं मिले', description: 'Distribution / payable ledger missing — reload once.', variant: 'destructive', duration: 12000 }); return null; }
+    if (!distAcc || !payAcc) { toastRef.current({ title: 'खाते नहीं मिले', description: 'Distribution / payable ledger missing — Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', variant: 'destructive', duration: 12000 }); return null; }
     const legs = patronageLegs(cur.total, distAcc, payAcc);
     if (legs.length === 0) { toastRef.current({ title: 'पोस्ट नहीं हुआ', variant: 'destructive' }); return null; }
     const voucher = addVoucher({
@@ -360,7 +329,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (!(amount > 0)) { toastRef.current({ title: 'कुछ बकाया नहीं', variant: 'destructive' }); return null; }
     const isDiv = cur.kind === 'dividend';
     const payAcc = isDiv ? resolveDividendPayableAccountId(accounts) : resolveRebatePayableAccountId(accounts);
-    if (!payAcc) { toastRef.current({ title: 'देय खाता नहीं मिला', variant: 'destructive' }); return null; }
+    if (!payAcc) { toastRef.current({ title: 'देय खाता नहीं मिला', description: 'Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', variant: 'destructive', duration: 12000 }); return null; }
     const creditAcc = args.mode === 'bank' ? (args.bankAccountId || getBankAccountIds(accounts)[0] || '3302') : CASH_ACCOUNT;
     const voucher = addVoucher({
       type: 'payment', date: args.date,
@@ -542,15 +511,15 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return null;
     const sale = sales.find(s => s.id === data.originalSaleId && !(s as { isDeleted?: boolean }).isDeleted);
     if (!sale) { toastRef.current({ title: 'मूल बिक्री नहीं मिली', variant: 'destructive' }); return null; }
-    // Self-heal: the chart seeder (above) only runs for pos_billing societies, so a
-    // non-consumer society (e.g. marketing) using Sales Return can lack this account —
-    // which used to make every sale-return bail here. Create it on demand instead.
+    // Self-heal: a society (e.g. marketing, or a consumer one not yet provisioned) using Sales
+    // Return can lack this account — which used to make every sale-return bail here. Create it on
+    // demand, inside this explicit user save (never at load time).
     let salesReturnAccId = resolveSalesReturnAccountId(accounts);
     if (!salesReturnAccId) {
       const created = addAccount({ name: 'Sales Return', nameHi: 'बिक्री वापसी', type: 'income', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '4100', subtype: SALES_RETURN_SUBTYPE });
       salesReturnAccId = created?.id || null;
     }
-    if (!salesReturnAccId) { toastRef.current({ title: 'बिक्री वापसी खाता नहीं बना', description: 'Sales Return account could not be created — reload once.', variant: 'destructive', duration: 12000 }); return null; }
+    if (!salesReturnAccId) { toastRef.current({ title: 'बिक्री वापसी खाता नहीं बना', description: 'Sales Return account could not be created — दोबारा कोशिश करें, या Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ (admin).', variant: 'destructive', duration: 12000 }); return null; }
     const items = data.items.filter(i => i.itemId && i.qty > 0).map(i => ({ ...i, amount: round2(i.qty * i.rate) }));
     if (items.length === 0) { toastRef.current({ title: 'कोई मात्रा नहीं', description: 'कम-से-कम एक वस्तु की वापसी मात्रा डालें।', variant: 'destructive' }); return null; }
     // Cap: returned qty (incl. prior returns) must not exceed sold qty.

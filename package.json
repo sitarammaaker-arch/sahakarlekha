@@ -224,6 +224,7 @@
     "test:global-search": "node scripts/test-global-search.mjs",
     "test:inter-branch": "node scripts/test-inter-branch.mjs",
     "test:ledger-hygiene": "node scripts/test-ledger-hygiene.mjs",
+    "test:domain-account-provisioning": "node scripts/test-domain-account-provisioning.mjs",
     "test:movement-archive": "node scripts/test-movement-archive.mjs",
     "test:notification-channels": "node scripts/test-notification-channels.mjs",
     "test:pigmy": "node scripts/test-pigmy.mjs",
