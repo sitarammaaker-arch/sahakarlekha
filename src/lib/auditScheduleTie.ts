@@ -139,3 +139,15 @@ export function tieSchedules(resolved: readonly ResolvedSchedule[], input: TieIn
   const bsLiabilities = r2(input.leaves.totalLiabilities), bsAssets = r2(input.leaves.totalAssets);
   return { schedules, ties: { liabilities, assets, bsLiabilities, bsAssets, ok: Math.abs(liabilities - bsLiabilities) < 0.01 && Math.abs(assets - bsAssets) < 0.01 } };
 }
+
+/**
+ * What a schedule SHOWS: every line with an amount (this year or last year) plus the total. A head
+ * that is nil in both years is hidden (founder, 2026-09-27) — the total still shows ("—" = Nil), so
+ * an empty schedule stays in the statutory set. Totals are unaffected: a hidden line is zero.
+ */
+export function hideZeroLines(schedules: readonly ResolvedSchedule[]): ResolvedSchedule[] {
+  return schedules.map((s) => ({
+    ...s,
+    items: s.items.filter((i) => i.isTotal || Math.abs(i.currentYear) >= 0.005 || Math.abs(i.previousYear) >= 0.005),
+  }));
+}
