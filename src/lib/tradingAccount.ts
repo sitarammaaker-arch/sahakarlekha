@@ -19,11 +19,17 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 export interface VoucherLineLite { accountId: string; type: 'Dr' | 'Cr'; amount: number; }
 
 /**
- * Cost of goods procured DIRECTLY into inventory during the period: sum of debits
- * to `inventoryAcctIds` whose voucher does NOT credit a closing-stock contra
- * (5150/5101). The year-end closing-stock journal (Dr stock / Cr 5150) is excluded
- * — its inventory debit is a reclassification of unsold purchases, not a buy — so
- * the standard periodic method is unaffected.
+ * NET goods put DIRECTLY into the stock ledger during the period: debits − credits to
+ * `inventoryAcctIds`, from every voucher that does NOT touch a closing-stock contra
+ * (5150/5101) — the year-end closing-stock journal (and its reversal) is a reclassification of
+ * unsold purchases, not a buy, so the standard periodic method is unaffected.
+ *
+ * NET, not debits only: a correcting journal (e.g. Dr MSP Receivable / Cr Trading Goods when
+ * procurement turns out to be as the agency's AGENT) or goods issued out of the ledger must
+ * reduce it. Debits-only left the "Goods Procured" purchase in the Trading A/c after the goods
+ * had left the ledger — Gross Profit understated and the Balance Sheet out by the same amount.
+ * This is the same in-year movement closingStock() adds to closing stock, so the two cancel
+ * while the goods are unsold (RULE 2).
  */
 export function inventoryProcurementCost(
   vouchers: Array<{ lines: VoucherLineLite[] }>,
@@ -33,9 +39,10 @@ export function inventoryProcurementCost(
   let total = 0;
   for (const v of vouchers) {
     const lines = v.lines || [];
-    if (lines.some(l => l.type === 'Cr' && closingStockContraIds.has(l.accountId))) continue;
+    if (lines.some(l => closingStockContraIds.has(l.accountId))) continue;
     for (const l of lines) {
-      if (l.type === 'Dr' && inventoryAcctIds.has(l.accountId)) total += l.amount || 0;
+      if (!inventoryAcctIds.has(l.accountId)) continue;
+      total += l.type === 'Dr' ? (l.amount || 0) : -(l.amount || 0);
     }
   }
   return r2(total);
