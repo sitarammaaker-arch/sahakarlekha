@@ -113,5 +113,13 @@ ok(/hideZeroLines\(tied\.schedules\)/.test(page), 'page hides nil heads (screen,
 ok(/getTrialBalance\(fyEnd\)/.test(page) && /balanceSheetLeaves\(trialBalance, \{ closingStockPosted: tr\.closingStockPosted/.test(page) && /tieSchedules\(resolveAllSchedules\(format, ctx\)/.test(page), 'page: FY-end, Balance Sheet leaves, tied schedules (screen, PDF, Excel, CSV)');
 ok(/Schedules do not tie to the Balance Sheet/.test(page), 'page reports a tie failure instead of hiding it');
 
+{
+  const pdf = fs.readFileSync(path.join(ROOT, 'src/lib/pdf.ts'), 'utf8');
+  const fn = pdf.slice(pdf.indexOf('export function generateAuditSchedulesPDF'), pdf.indexOf('addPageNumbers(doc, font, society?.name);', pdf.indexOf('export function generateAuditSchedulesPDF')));
+  ok(/tableWidth: pageW - MARGIN \* 2/.test(fn) && /1: \{ cellWidth: 'auto' \}/.test(fn), 'PDF: schedules use the full page width');
+  ok(/doc\.text\('Nil', pageW - MARGIN, y, \{ align: 'right' \}\)/.test(fn), 'PDF: an empty schedule is one "Nil" line, not an empty table');
+  ok(/sch\.items\.length <= 12 \? sch\.items\.length : 2/.test(fn) && /showHead: 'everyPage'/.test(fn), 'PDF: short schedules kept whole; long ones continue with the header repeated');
+  ok(/y \+= 10;\s*ensureSpace\(12\);/.test(fn) && !/ensureSpace\(40\)|ensureSpace\(50\)/.test(fn), 'PDF: signatures need only their own height (no orphan signature page)');
+}
 console.log(`Audit schedule tie: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

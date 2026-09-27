@@ -2224,8 +2224,13 @@ export function generateAuditSchedulesPDF(
     return n < 0 ? `(${abs})` : abs;
   };
 
-  const ensureSpace = (needed = 40) => {
-    if (y + needed > 270) { doc.addPage(); y = 16; }
+  // Page setup: 14 mm margins, tables use the full width; a schedule starts on the current page if its
+  // title + header + two rows fit (autoTable continues it, header repeated, onto the next page).
+  const MARGIN = 14;
+  const pageH = doc.internal.pageSize.getHeight();
+  const BOTTOM = pageH - 18;                  // clear of the footer / page number
+  const ensureSpace = (needed: number) => {
+    if (y + needed > BOTTOM) { doc.addPage(); y = 16; }
   };
 
   // Cover page
@@ -2249,12 +2254,29 @@ export function generateAuditSchedulesPDF(
 
   // Each schedule
   schedules.forEach(sch => {
-    ensureSpace(50);
+    const lines = sch.items.filter(i => !i.isTotal);
+    const total = sch.items.find(i => i.isTotal);
+    // A schedule with nothing in it is one line — "Nil" — not an empty table.
+    if (lines.length === 0 && (!total || (Math.abs(total.currentYear) < 0.01 && Math.abs(total.previousYear) < 0.01))) {
+      ensureSpace(9);
+      doc.setFont(font, 'bold');
+      doc.setFontSize(11);
+      doc.text(sch.name, MARGIN, y);
+      doc.setFont(font, 'normal');
+      doc.setFontSize(9);
+      doc.text('Nil', pageW - MARGIN, y, { align: 'right' });
+      y += 9;
+      return;
+    }
+    // A short schedule (≤ 12 rows) is kept whole on one page; a long one starts if its title, header
+    // and two rows fit, and continues with the header repeated.
+    const ROW = 6.8;
+    ensureSpace(6 + 8 + (sch.items.length <= 12 ? sch.items.length : 2) * ROW);
 
     doc.setFont(font, 'bold');
     doc.setFontSize(11);
-    doc.text(sch.name, 14, y);
-    y += 6;
+    doc.text(sch.name, MARGIN, y);
+    y += 3;
 
     const head = [
       ['#', 'Particulars', ...(hasPY ? [`${pyYear} (Rs.)`] : []), `${society.financialYear} (Rs.)`],
@@ -2275,13 +2297,18 @@ export function generateAuditSchedulesPDF(
       startY: y,
       head,
       body,
-      styles: { fontSize: 8, font },
+      margin: { left: MARGIN, right: MARGIN, bottom: 18 },
+      tableWidth: pageW - MARGIN * 2,
+      showHead: 'everyPage',
+      rowPageBreak: 'avoid',
+      styles: { fontSize: 8, font, cellPadding: 1.8 },
       headStyles: { fillColor: [79, 70, 229], textColor: 255 },
+      // Full width: '#' and the amount column(s) fixed, Particulars takes the rest.
       columnStyles: {
         0: { cellWidth: 10, halign: 'center' },
-        1: { cellWidth: hasPY ? 80 : 100 },
+        1: { cellWidth: 'auto' },
         ...(hasPY
-          ? { 2: { halign: 'right', cellWidth: 35 }, 3: { halign: 'right', cellWidth: 35 } }
+          ? { 2: { halign: 'right', cellWidth: 36 }, 3: { halign: 'right', cellWidth: 36 } }
           : { 2: { halign: 'right', cellWidth: 40 } }),
       },
       didParseCell: (data) => {
@@ -2298,15 +2325,15 @@ export function generateAuditSchedulesPDF(
       },
     });
 
-    y = (doc as any).lastAutoTable.finalY + 10;
+    y = (doc as any).lastAutoTable.finalY + 8;
   });
 
-  // Signature block
-  ensureSpace(40);
+  // Signature block — needs only its own height (lines + labels), kept with the last schedule.
   y += 10;
+  ensureSpace(12);
   doc.setFont(font, 'normal');
   doc.setFontSize(9);
-  const sigPositions = [14, pageW / 2 - 25, pageW - 65];
+  const sigPositions = [MARGIN, pageW / 2 - 25, pageW - MARGIN - 51];
   const sigLabels = ['Accountant', 'Secretary', 'Chairman'];
   sigPositions.forEach((x, i) => {
     doc.text('_______________________', x, y);
