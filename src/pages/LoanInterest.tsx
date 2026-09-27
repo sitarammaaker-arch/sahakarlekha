@@ -5,6 +5,7 @@
  * accrual journal entries: Dr 3313 (Interest Receivable) / Cr 4408 (Interest Income)
  */
 import React, { useEffect, useMemo, useState } from 'react';
+import { asDayCount, periodDays, DAY_COUNT_OPTIONS } from '@/lib/interestDayCount';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -59,10 +60,9 @@ const getPeriodLabel = (mode: 'monthly' | 'quarterly' | 'annual', fromDate: stri
 };
 
 // ── Days between dates ────────────────────────────────────────────────────────
-const daysBetween = (a: string, b: string): number => {
-  const msPerDay = 86_400_000;
-  return Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / msPerDay));
-};
+// Both ends included (01-09 → 30-09 = 30 days), so consecutive periods count every day once.
+// The old `to − from` dropped one day per period (a month accrued 29/30, a year 364/365).
+const daysBetween = (a: string, b: string): number => periodDays(a, b);
 
 // ── Default from/to for a period mode (local dates, Indian FY) — see interestPeriodDefaults ──
 const buildDefaultDates = (mode: InterestPeriodMode) => interestPeriodDefaults(mode);
@@ -138,7 +138,8 @@ const LoanInterest: React.FC = () => {
   }
 
   // Shared accrual rows (one formula — the shared loanOutstanding, clamped at 0 for interest only).
-  const accrual = useMemo(() => accrualRows(activeLoans, toDate, days), [activeLoans, toDate, days]);
+  const basis = asDayCount(society.interestDayCount);
+  const accrual = useMemo(() => accrualRows(activeLoans, toDate, days, basis), [activeLoans, toDate, days, basis]);
   const rows: InterestRow[] = useMemo(() => accrual.map(r => {
     const member = members.find(m => m.id === r.memberId);
     return {
@@ -151,7 +152,7 @@ const LoanInterest: React.FC = () => {
   const totalInterest = split.total;
 
   // ── KCC loans (KCC-1): same rules, same outstanding the KCC page shows, their own journal ──
-  const kccAccrual = useMemo(() => accrualRows(kccAccruables(kccLoans), toDate, days), [kccLoans, toDate, days]);
+  const kccAccrual = useMemo(() => accrualRows(kccAccruables(kccLoans), toDate, days, basis), [kccLoans, toDate, days, basis]);
   const kccSplit = useMemo(() => splitAccrual(kccAccrual), [kccAccrual]);
   const kccName = (memberId: string) => members.find(m => m.id === memberId)?.name
     ?? kccLoans.find(k => k.memberId === memberId)?.memberName ?? '—';
@@ -376,6 +377,7 @@ const LoanInterest: React.FC = () => {
             </div>
             <div className="text-sm text-gray-600 pb-1">
               {hi ? 'कुल दिन:' : 'Total days:'} <strong>{days}</strong>
+              <span className="block text-xs text-muted-foreground">{hi ? 'वर्ष-आधार:' : 'Year basis:'} {DAY_COUNT_OPTIONS.find(o => o.value === basis)?.[hi ? 'labelHi' : 'label']}</span>
             </div>
           </div>
         </CardContent>

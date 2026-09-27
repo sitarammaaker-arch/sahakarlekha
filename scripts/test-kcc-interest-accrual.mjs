@@ -64,7 +64,7 @@ ok(s.toReceivable === 230.14 && s.toIncome === 69.86 && s.releaseFromReserve ===
 // ── 4. Page wiring ──
 const strip = (f) => readFileSync(pathResolve(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
 const li = strip('src/pages/LoanInterest.tsx');
-ok(/accrualRows\(kccAccruables\(kccLoans\), toDate, days\)/.test(li), 'Loan Interest accrues KCC via the shared adapter');
+ok(/accrualRows\(kccAccruables\(kccLoans\), toDate, days, basis\)/.test(li), 'Loan Interest accrues KCC via the shared adapter');
 ok(/kccLoanSelect\(user\.societyId\)/.test(li) && /freshKcc \?\? ctxKccLoans/.test(li), 'KCC read fresh from the table (never a stale balance)');
 ok(/postedFor\(NARRATION_LOAN_ACCRUAL\)/.test(li) && /postedFor\(NARRATION_KCC_ACCRUAL\)/.test(li) && /\.startsWith\(prefix\)/.test(li), '"already posted" is per kind (KCC journal never marks member loans posted)');
 ok(/narration: `\$\{label\} \$\{fromDate\}/.test(li), 'journal narration carries its kind prefix');

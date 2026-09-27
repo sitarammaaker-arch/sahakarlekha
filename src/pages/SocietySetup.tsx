@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { asDayCount, DAY_COUNT_OPTIONS, type DayCountBasis } from '@/lib/interestDayCount';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -57,6 +58,11 @@ const SocietySetup: React.FC = () => {
   const saveApprovalThreshold = () => {
     updateSociety({ approvalThresholdAmount: approvalThresholdInput === '' ? undefined : Number(approvalThresholdInput) });
     toast({ title: language === 'hi' ? 'अनुमोदन सीमा सहेजी' : 'Approval threshold saved' });
+  };
+  // NABARD RFP §16.1.2: interest year basis (loans, KCC, SB).
+  const saveDayCount = (v: DayCountBasis) => {
+    updateSociety({ interestDayCount: v });
+    toast({ title: language === 'hi' ? 'ब्याज का वर्ष-आधार सहेजा' : 'Interest year basis saved' });
   };
   // ECR-20: godown storage-loss norm %
   const [storageLossNormInput, setStorageLossNormInput] = useState(String(society.storageLossNormPct ?? ''));
@@ -997,6 +1003,23 @@ const SocietySetup: React.FC = () => {
                       })}
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* NABARD RFP §16.1.2: interest year basis */}
+              <div className="mt-6 p-4 rounded-lg border-2 border-primary/30 bg-primary/5">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="min-w-[220px] max-w-xl">
+                    <div className="font-semibold text-primary">{language === 'hi' ? 'ब्याज का वर्ष-आधार (day count)' : 'Interest year basis (day count)'}</div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {language === 'hi'
+                        ? 'ऋण, KCC और बचत (SB) ब्याज में साल कितने दिन का माना जाए — आपकी समिति / बैंक की नीति के अनुसार। पहले से पोस्ट हुआ ब्याज नहीं बदलता; अगली गणना से लागू।'
+                        : 'How many days a year has for loan, KCC and SB interest — per your society / bank policy. Interest already posted does not change; applies from the next calculation.'}
+                    </p>
+                  </div>
+                  <select value={asDayCount(society.interestDayCount)} onChange={e => saveDayCount(e.target.value as DayCountBasis)} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+                    {DAY_COUNT_OPTIONS.map(o => <option key={o.value} value={o.value}>{language === 'hi' ? o.labelHi : o.label}</option>)}
+                  </select>
                 </div>
               </div>
 

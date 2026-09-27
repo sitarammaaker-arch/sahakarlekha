@@ -809,6 +809,8 @@ alter table society_settings add column if not exists "approvalVoucherTypes" jso
 -- ── ECR-20: godown storage-loss norm on society_settings ─────────────────────
 -- Permitted storage-loss (driage/shrinkage) %; items above it are flagged. NULL = no norm.
 alter table society_settings add column if not exists "storageLossNormPct" numeric;
+-- NABARD RFP §16.1.2: interest year basis ('365' | 'actual' | '360'); null = '365'. Migration 071.
+alter table society_settings add column if not exists "interestDayCount" text;
 
 -- ── STEP 15: platform_admins — super admin table (cross-society access) ──────
 create table if not exists platform_admins (
