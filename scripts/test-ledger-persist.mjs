@@ -102,5 +102,15 @@ const EV2 = [{ eventId: 'e1' }, { eventId: 'e2' }];
 { const single = io(); delete single.insertMany; const r = await persistEventsAuthoritative(EV2, single);
   ok(r.ok === false && /requires an insertMany/.test(r.error), 'pair without insertMany IO ⇒ ok:false'); }
 
+// 14–16. Optional verifyMany (account merge: hundreds of events) — one bulk read-back, not N.
+const withBulk = (found, error = null) => { const x = io(); x.verifyMany = async (ids) => { x.calls.push(`verifyMany:${ids.join('+')}`); return { found, error }; }; return x; };
+{ const x = withBulk(['e1', 'e2']); const r = await persistEventsAuthoritative(EV2, x);
+  ok(r.ok === true, 'verifyMany: all found ⇒ ok:true');
+  ok(x.calls.join(',') === 'insertMany,verifyMany:e1+e2', 'verifyMany replaces the per-event verify'); }
+{ const r = await persistEventsAuthoritative(EV2, withBulk(['e1']));
+  ok(r.ok === false && /e2 not found/.test(r.error), 'verifyMany: a missing row ⇒ ok:false naming it'); }
+{ const r = await persistEventsAuthoritative(EV2, withBulk([], 'read failed'));
+  ok(r.ok === false && r.error === 'read failed', 'verifyMany: read error ⇒ ok:false'); }
+
 console.log(`\nAuthoritative event append (journal-first-write slice 3+5): ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

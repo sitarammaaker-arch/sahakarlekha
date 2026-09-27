@@ -30,6 +30,12 @@ export interface AuthoritativeAppendIO {
    * Only needed by persistEventsAuthoritative when appending ≥2 events; single appends never call it.
    */
   insertMany?: (events: LedgerEvent[]) => Promise<{ error: string | null }>;
+  /**
+   * Optional bulk verify: resolve the subset of `eventIds` that exist. When present, a multi-event
+   * append verifies with this instead of one round trip per event (an account merge can journal
+   * hundreds of events). Resolve `{ error }`, never throw.
+   */
+  verifyMany?: (eventIds: string[]) => Promise<{ found: string[]; error: string | null }>;
 }
 
 export interface AppendResult {
@@ -90,6 +96,19 @@ export async function persistEventsAuthoritative(events: LedgerEvent[], io: Auth
 
   // Verify EVERY event stuck — an atomic insert is all-or-nothing, but the same RLS/cache edge that
   // can drop a single row can drop the batch, so confirm each before calling the edit saved.
+  if (io.verifyMany) {
+    let res: { found: string[]; error: string | null };
+    try {
+      res = await io.verifyMany(events.map(e => e.eventId));
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+    if (res.error) return { ok: false, error: res.error };
+    const found = new Set(res.found);
+    const missing = events.find(e => !found.has(e.eventId));
+    if (missing) return { ok: false, error: `event ${missing.eventId} not found after batch insert — the append did not persist` };
+    return { ok: true };
+  }
   for (const ev of events) {
     let ver: { found: boolean; error: string | null };
     try {

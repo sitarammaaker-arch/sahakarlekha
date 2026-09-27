@@ -50,6 +50,7 @@ import { mapLedgerEventRows } from '@/lib/ledger/rows';
 import { planOpeningDelta } from '@/lib/ledger/genesis';
 import { voucherPostingLines, voucherReversalLines, voucherEventMeta } from '@/lib/ledger/voucherEvent';
 import { currentPostingEventId } from '@/lib/ledger/aggregateState';
+import { planAccountMerge, repointVoucher, isJournaledForMerge } from '@/lib/ledger/accountMerge';
 import { persistEventAuthoritative, persistEventsAuthoritative } from '@/lib/ledger/persist';
 import { planSocietyAppropriation, appropriationVoucherContent } from '@/lib/rules/societyAppropriation';
 import { resolveRebatePayableAccountId } from '@/lib/consumer/accounts';
@@ -80,6 +81,10 @@ import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib
 /* T-09 — the `ledger_events` row → LedgerEvent mapper now lives in lib/ledger/rows.ts.
    It moved because the CAIOS D-lane must read the SAME journal from the Edge Function,
    and a local const cannot be imported there. One mapper, three readers (RULE 2). */
+
+/** mergeAccounts outcome. `accountDeleted=false` ⇒ the merge committed but the emptied account row
+ *  could not be deleted (the user was told to delete it by hand). */
+export interface AccountMergeResult { moved: number; journaled: number; accountDeleted: boolean }
 
 interface DataContextType {
   vouchers: Voucher[];
@@ -212,7 +217,8 @@ interface DataContextType {
   addAccount: (data: Omit<LedgerAccount, 'id'>) => LedgerAccount;
   updateAccount: (id: string, data: Partial<LedgerAccount>) => void;
   deleteAccount: (id: string) => boolean;
-  mergeAccounts: (keepId: string, removeId: string) => number;
+  /** Resolves null when a guard blocked the merge or the save failed (each shows its own toast). */
+  mergeAccounts: (keepId: string, removeId: string) => Promise<AccountMergeResult | null>;
   resetAccounts: (templateAccounts: LedgerAccount[]) => void;
   updateSociety: (data: Partial<SocietySettings>) => void;
   /** T-23: lock the FY as a finalization. When society.fyCloseAuthorityRequired is on, a valid board
@@ -418,6 +424,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     insertMany: async (events: LedgerEvent[]): Promise<{ error: string | null }> => {
       const { error } = await supabase.from('ledger_events').insert(events.map(toLedgerEventRow));
       return { error: error?.message ?? null };
+    },
+    // Bulk read-back for a large batch (an account merge journals two events per moved voucher) —
+    // chunked so the `in (...)` filter stays well inside the URL limit.
+    verifyMany: async (eventIds: string[]): Promise<{ found: string[]; error: string | null }> => {
+      const found: string[] = [];
+      for (let i = 0; i < eventIds.length; i += 100) {
+        const { data, error } = await supabase.from('ledger_events').select('event_id').in('event_id', eventIds.slice(i, i + 100));
+        if (error) return { found, error: error.message };
+        for (const r of (data ?? []) as { event_id: string }[]) found.push(r.event_id);
+      }
+      return { found, error: null };
     },
   };
   // Live-cancel hardening (journal-drift fix). cancelVoucher appends its reversing `voucher.cancelled`
@@ -3344,97 +3361,158 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return true;
   }, [accounts, society.fyLocked]);
 
-  // Merge duplicate accounts: move all voucher references from removeId → keepId, then delete removeId
-  const mergeAccounts = useCallback((keepId: string, removeId: string): number => {
-    if (guardFYLocked()) return 0;
-    // P0.1b: engine vouchers are immutable — never silently re-point their accounts. If any
-    // engine voucher references the account being merged away (removeId), abort the WHOLE merge
-    // (no partial merge). Correction must go through a reversal, not an edit.
+  // Merge one duplicate account into another — ONLY on an explicit, confirmed user action (the
+  // LedgerHeads AlertDialog). Never call this from a load path or an effect (RM-01 / #533).
+  //
+  // Journal-safe and all-or-nothing:
+  //   1. Guards first — any refusal toasts and resolves null with NOTHING changed.
+  //   2. planAccountMerge re-points every voucher leg and journals each live, posted voucher as
+  //      voucher.reversed + voucher.reposted (exactly like updateVoucher), so the journal-read
+  //      statements (T-09) move with the vouchers table.
+  //   3. Table writes (vouchers / suppliers / customers). Any failure → the writes that DID land are
+  //      written back to their snapshot (compensation), local state rolls back, loud toast (RULE 1).
+  //   4. The events are appended as ONE atomic, verified batch. This is the commit point: the WORM
+  //      journal cannot be un-appended, so it goes after every reversible write. Failure → the same
+  //      compensation + rollback.
+  //   5. Only then is the emptied account deleted. Its opening is 0 (guarded) and its postings have
+  //      moved, so a failed delete is not rolled back — the row is restored locally and the user is
+  //      told to delete it by hand.
+  const mergeAccounts = useCallback(async (keepId: string, removeId: string): Promise<AccountMergeResult | null> => {
+    if (guardPermission('delete', 'खाते merge करने')) return null;   // ECR-06: a merge deletes an account
+    if (guardFYLocked()) return null;                                 // RULE 6
+    const block = (description: string): null => {
+      toastRef.current({ title: 'मर्ज नहीं हो सकता', description, variant: 'destructive', duration: 12000 });
+      return null;
+    };
+    if (!keepId || !removeId || keepId === removeId) return block('एक ही खाते को खुद में merge नहीं किया जा सकता — दो अलग खाते चुनें।');
+    const keep = accounts.find(a => a.id === keepId);
+    const remove = accounts.find(a => a.id === removeId);
+    if (!keep || !remove) return block('खाता नहीं मिला — पेज refresh करके दोबारा कोशिश करें।');
+    if (remove.isSystem) return block(`"${remove.name}" सिस्टम खाता है — इसे हटाया नहीं जा सकता। इसे रखें और दूसरे खाते को इसमें merge करें।`);
+    if (keep.isGroup || remove.isGroup) return block('Group खाते merge नहीं होते — सिर्फ़ ledger खाते।');
+    if (keep.type !== remove.type) return block(`दोनों खातों का प्रकार अलग है (${keep.type} / ${remove.type}) — अलग प्रकार के खाते merge नहीं होते।`);
+    // The removed account's opening is NOT transferred automatically (Dr/Cr netting is a judgement
+    // call). The user moves it by editing the openings first; then this guard passes.
+    if (Math.abs(remove.openingBalance || 0) >= 0.005) {
+      const ob = Math.abs(remove.openingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return block(`"${remove.name}" पर ₹${ob} का opening balance है। पहले इसे "${keep.name}" के opening में जोड़कर इस खाते का opening 0 करें, फिर merge करें।`);
+    }
+    // Config that routes FUTURE postings to removeId would point at a deleted account after the merge.
+    const stockRefs = stockItems.filter(s => s.salesAccountId === removeId || s.purchaseAccountId === removeId);
+    if (stockRefs.length > 0) {
+      const names = stockRefs.slice(0, 3).map(s => s.name).join(', ') + (stockRefs.length > 3 ? ` +${stockRefs.length - 3}` : '');
+      return block(`यह खाता ${stockRefs.length} stock item का बिक्री/खरीद खाता है (${names}) — पहले Inventory में इन items का खाता "${keep.name}" करें, फिर merge करें।`);
+    }
+    const partyOf = (id: string) => suppliersRef.current.find(s => s.accountId === id)?.name ?? customersRef.current.find(c => c.accountId === id)?.name;
+    const removeParty = partyOf(removeId), keepParty = partyOf(keepId);
+    if (removeParty && keepParty) return block(`दोनों खाते अलग-अलग party के हैं ("${removeParty}" और "${keepParty}") — दो parties का ledger एक नहीं किया जा सकता।`);
+    // P0.1b: engine vouchers are immutable — never re-point their accounts; abort the WHOLE merge.
     const engineRefKind = (v: Voucher): 'Debit' | 'Credit' | 'Line' | null =>
       v.debitAccountId === removeId ? 'Debit'
         : v.creditAccountId === removeId ? 'Credit'
           : (v.lines?.some(l => l.accountId === removeId) ? 'Line' : null);
     const blocker = vouchersRef.current.find(v => isEngineVoucher(v) && engineRefKind(v) !== null);
     if (blocker) {
-      const detail = `${blocker.voucherNo || blocker.id} (${engineRefKind(blocker)})`;
-      toastRef.current({ title: 'मर्ज नहीं हो सकता', description: `इस खाते से जुड़ा सिस्टम वाउचर ${detail} है — सिस्टम वाउचर (engine-generated) के खाते बदले नहीं जा सकते। पहले reversal करें, फिर merge करें।`, variant: 'destructive', duration: 10000 });
-      return 0;
+      return block(`इस खाते से जुड़ा सिस्टम वाउचर ${blocker.voucherNo || blocker.id} (${engineRefKind(blocker)}) है — सिस्टम वाउचर (engine-generated) के खाते बदले नहीं जा सकते। पहले reversal करें, फिर merge करें।`);
     }
-    // Track which voucher IDs we actually changed BEFORE we overwrite vouchersRef
-    const changedIds = new Set<string>();
-    const updated = vouchersRef.current.map(v => {
-      let changed = false;
-      const patched = { ...v };
-      if (patched.debitAccountId === removeId) { patched.debitAccountId = keepId; changed = true; }
-      if (patched.creditAccountId === removeId) { patched.creditAccountId = keepId; changed = true; }
-      if (patched.lines && patched.lines.length > 0) {
-        const newLines = patched.lines.map(l =>
-          l.accountId === removeId ? { ...l, accountId: keepId } : l
-        );
-        if (newLines.some((l, i) => l !== patched.lines![i])) {
-          patched.lines = newLines;
-          changed = true;
-        }
-      }
-      if (changed) changedIds.add(v.id);
-      return changed ? patched : v;
-    });
-    const touchedCount = changedIds.size;
+    const liveMoving = vouchersRef.current.filter(v => !v.isDeleted && repointVoucher(v, keepId, removeId));
+    if (guardPeriodLock(...liveMoving.map(v => v.date))) return null;   // ECR-07: no re-point inside a locked period
+    // Sequences come from the in-memory journal — without the FULL log they would collide on the WORM
+    // index and the postings would silently stay on removeId. Fail closed.
+    if (!journalLoadedRef.current && liveMoving.some(v => v.approvalStatus !== 'pending')) {
+      return block('लेखा-बही (journal) अभी पूरी load नहीं हुई — पेज refresh करें, फिर merge करें।');
+    }
 
-    // RULE 1/3 — ALL-OR-NOTHING. A partial merge (some vouchers/suppliers/customers re-pointed to
-    // keepId in the cloud, others not, and then the removeId account deleted) strands rows against a
-    // deleted account → orphans on F5. So: snapshot, apply the re-points optimistically, persist them
-    // ALL, and only delete the emptied account once every re-point is confirmed durable. Any failure
-    // rolls the whole thing back and leaves the account untouched.
+    let plan: ReturnType<typeof planAccountMerge>;
+    try {
+      plan = planAccountMerge({
+        vouchers: vouchersRef.current, events: ledgerEventsRef.current, keepId, removeId,
+        tenantId: societyIdRef.current, jurisdiction: jurisdictionRef.current,
+        producerId: userRef.current?.name ?? null, occurredAt: new Date().toISOString(),
+        newEventId: () => crypto.randomUUID(),
+      });
+    } catch (e) {
+      return block(`Merge की तैयारी नहीं हो सकी — ${e instanceof Error ? e.message : String(e)}`);
+    }
+    // T-09: net the removed account's journal opening to zero (as deleteAccount does) — null when the
+    // journal already agrees with its 0 opening.
+    const zeroEvent = buildOpeningDelta({ ...remove, openingBalance: 0 });
+    const allEvents = zeroEvent ? [...plan.events, zeroEvent] : plan.events;
+    const eventIds = new Set(allEvents.map(e => e.eventId));
+
+    // Optimistic apply (snapshots for rollback).
     const voucherSnapshot = vouchersRef.current;
     const supplierSnapshot = suppliersRef.current;
     const customerSnapshot = customersRef.current;
-
-    vouchersRef.current = updated;
-    setVouchersState(updated);
+    const afterById = new Map(plan.changed.map(c => [c.after.id, c.after]));
     const reSup = suppliersRef.current.filter(s => s.accountId === removeId);
+    const reCus = customersRef.current.filter(c => c.accountId === removeId);
+    ledgerEventsRef.current = [...ledgerEventsRef.current, ...allEvents];
+    vouchersRef.current = vouchersRef.current.map(v => afterById.get(v.id) ?? v);
+    setVouchersState(vouchersRef.current);
     if (reSup.length > 0) {
       suppliersRef.current = suppliersRef.current.map(s => s.accountId === removeId ? { ...s, accountId: keepId } : s);
       setSuppliersState(suppliersRef.current);
     }
-    const reCus = customersRef.current.filter(c => c.accountId === removeId);
     if (reCus.length > 0) {
       customersRef.current = customersRef.current.map(c => c.accountId === removeId ? { ...c, accountId: keepId } : c);
       setCustomersState(customersRef.current);
     }
 
-    // Persist every re-point first; each resolves to its error message (or null). The removeId
-    // account is NOT deleted until they all succeed.
-    const changedVouchers = updated.filter(v => changedIds.has(v.id));
-    // PostgrestBuilder is a PromiseLike (thenable), not a full Promise — Promise.all accepts it, so
-    // type the array as PromiseLike to match what supabase's .then() returns.
-    const writes: PromiseLike<string | null>[] = [
-      ...changedVouchers.map(v => { const { editHistory: _eh, ...forDb } = v; return supabase.from('vouchers').upsert(withSoc(forDb)).then(({ error }) => error?.message ?? null); }),
-      ...reSup.map(s => supabase.from('suppliers').update({ accountId: keepId }).eq('id', s.id).then(({ error }) => error?.message ?? null)),
-      ...reCus.map(c => supabase.from('customers').update({ accountId: keepId }).eq('id', c.id).then(({ error }) => error?.message ?? null)),
+    // Every table write with its compensating undo. Each resolves to its error message (or null).
+    const msgOf = (p: PromiseLike<{ error: { message: string } | null }>): Promise<string | null> =>
+      Promise.resolve(p).then(({ error }) => error?.message ?? null, (e: unknown) => (e instanceof Error ? e.message : String(e)));
+    const voucherRow = (v: Voucher) => { const { editHistory: _eh, ...forDb } = v; return withSoc(forDb); };
+    const writes: { run: () => Promise<string | null>; undo: () => Promise<string | null> }[] = [
+      ...plan.changed.map(({ before, after }) => ({
+        run: () => msgOf(supabase.from('vouchers').upsert(voucherRow(after))),
+        undo: () => msgOf(supabase.from('vouchers').upsert(voucherRow(before))),
+      })),
+      ...reSup.map(s => ({
+        run: () => msgOf(supabase.from('suppliers').update({ accountId: keepId }).eq('id', s.id)),
+        undo: () => msgOf(supabase.from('suppliers').update({ accountId: removeId }).eq('id', s.id)),
+      })),
+      ...reCus.map(c => ({
+        run: () => msgOf(supabase.from('customers').update({ accountId: keepId }).eq('id', c.id)),
+        undo: () => msgOf(supabase.from('customers').update({ accountId: removeId }).eq('id', c.id)),
+      })),
     ];
 
-    const rollbackMerge = (msg: string) => {
+    const failMerge = async (msg: string, results: (string | null)[], phase: string): Promise<null> => {
+      ledgerEventsRef.current = ledgerEventsRef.current.filter(e => !eventIds.has(e.eventId));
       vouchersRef.current = voucherSnapshot; setVouchersState(voucherSnapshot);
       suppliersRef.current = supplierSnapshot; setSuppliersState(supplierSnapshot);
       customersRef.current = customerSnapshot; setCustomersState(customerSnapshot);
-      reportError('merge-accounts', msg, { keepId, removeId });
-      toastRef.current({ title: '❌ खाता merge cloud par save NAHI hua', description: `${msg}. Local badlaav wapas le liye — refresh par data lose nahi hoga; khaata jyon-ka-tyon hai, dobara merge karein.`, variant: 'destructive', duration: 15000 });
+      // Undo only the writes that landed; a failed write left its row untouched.
+      const undoErrs = await Promise.all(writes.map((w, i) => (results[i] === null ? w.undo() : Promise.resolve(null))));
+      const stuck = undoErrs.filter(e => e !== null).length;
+      reportError('merge-accounts', msg, { keepId, removeId, phase, compensationFailures: stuck });
+      toastRef.current(stuck === 0
+        ? { title: '❌ खाता merge cloud पर save नहीं हुआ', description: `${msg}. सारे बदलाव वापस ले लिए — दोनों खाते पहले जैसे हैं; refresh करने पर data lose नहीं होगा। दोबारा merge करें।`, variant: 'destructive', duration: 15000 }
+        : { title: '❌ Merge अधूरा रह गया — तुरंत ध्यान दें', description: `${msg}. ${stuck} row cloud में वापस नहीं हो सकीं। पेज refresh करके Ledger Hygiene पर जाँच करें; ज़रूरत हो तो support से संपर्क करें।`, variant: 'destructive', duration: 20000 });
+      return null;
     };
 
-    Promise.all(writes).then((errs) => {
-      const firstErr = errs.find(e => e !== null);
-      if (firstErr) { rollbackMerge(firstErr); return; }
-      // All re-points durable — rebuild the moved voucher_entries, then delete the emptied account.
-      changedVouchers.forEach(v => { if (!v.isDeleted) syncEntries(v); });
-      setAccountsState(prev => prev.filter(a => a.id !== removeId));
-      supabase.from('accounts').delete().eq('id', removeId).then(({ error }) => {
-        if (error) reportError('merge-accounts', error.message, { keepId, removeId, phase: 'account-delete' });
-      });
-    }, (rej: unknown) => rollbackMerge(rej instanceof Error ? rej.message : String(rej)));
+    const results = await Promise.all(writes.map(w => w.run()));
+    const firstErr = results.find(e => e !== null);
+    if (firstErr) return failMerge(firstErr, results, 'table');
 
-    return touchedCount;
-  }, []);
+    const appended = await persistEventsAuthoritative(allEvents, ledgerAppendIO);
+    if (!appended.ok) return failMerge(appended.error ?? 'journal append failed', results, 'journal');
+
+    // Committed. Rebuild the moved voucher_entries, then delete the emptied account.
+    plan.changed.forEach(({ after }) => { if (!after.isDeleted) syncEntries(after); });
+    setAccountsState(prev => prev.filter(a => a.id !== removeId));
+    const { error: delErr } = await supabase.from('accounts').delete().eq('id', removeId);
+    console.info(`[AUDIT-MERGE] Account id=${removeId} merged into ${keepId} (${plan.changed.length} vouchers, ${plan.journaledCount} journaled) by ${userRef.current?.name || 'unknown'} at ${new Date().toISOString()}`);
+    if (delErr) {
+      reportError('merge-accounts', delErr.message, { keepId, removeId, phase: 'account-delete' });
+      setAccountsState(prev => (prev.some(a => a.id === removeId) ? prev : [...prev, remove]));
+      toastRef.current({ title: 'Merge हो गया, पर पुराना खाता नहीं मिटा', description: `सारे वाउचर "${keep.name}" में चले गए, लेकिन खाली खाता "${remove.name}" delete नहीं हुआ (${delErr.message})। इसे Ledger Heads से हाथ से delete करें — उस पर अब कोई balance नहीं है।`, variant: 'destructive', duration: 15000 });
+      return { moved: plan.changed.length, journaled: plan.journaledCount, accountDeleted: false };
+    }
+    return { moved: plan.changed.length, journaled: plan.journaledCount, accountDeleted: true };
+  }, [accounts, stockItems]);
 
   const resetAccounts = useCallback((templateAccounts: LedgerAccount[]) => {
     if (guardFYLocked()) return;
