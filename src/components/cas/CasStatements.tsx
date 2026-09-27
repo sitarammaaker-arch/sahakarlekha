@@ -15,7 +15,8 @@ import { balanceSheetLeaves } from '@/lib/balanceSheetLeaves';
 import { buildCasBalanceSheet, buildCasProfitLoss, buildCasTrading, buildCasTrialBalance, casBalanceSheetTies, type CasSection, type CasTbRow } from '@/lib/cas/pacsCas';
 import { generateCasPdf } from '@/lib/cas/casPdf';
 import { loanInterestDue, kccAccruables } from '@/lib/loans/interestAccrual';
-import { averagePosition, misPosition, misRatios, overdueClassification } from '@/lib/cas/pacsMis';
+import { averagePosition, misPosition, misRatios, overdueClassification, plFlows, subtractFlows, membersAt, principalAt, loanFlowsBetween, depositBalanceAt, xviBalances, type XviPoint } from '@/lib/cas/pacsMis';
+import { depositLedger, kccLedgerInput, loanLedger, memberLoanLedgerInput } from '@/lib/registers/subsidiaryLedgers';
 import { CasMis } from './CasMis';
 import { useLoanAccruals } from '@/hooks/useLoanAccruals';
 
@@ -104,7 +105,7 @@ function Tie({ ok, hi, what, detail }: { ok: boolean; hi: boolean; what: string;
 }
 
 export function CasStatements({ hi }: { hi: boolean }) {
-  const { society, societyCapabilities, societyActivities, getTrialBalance, getProfitLoss, getTradingAccount, loans, kccLoans, vouchers } = useData();
+  const { society, societyCapabilities, societyActivities, getTrialBalance, getProfitLoss, getTradingAccount, loans, kccLoans, vouchers, members, accounts, depositAccounts, getDepositTransactions } = useData();
   const { accruals } = useLoanAccruals();
   const fyEnd = `20${(society.financialYear || '').split('-')[1]}-03-31`;
   // Annexure I is monthly: default = the latest month of the FY that has started.
@@ -132,19 +133,50 @@ export function CasStatements({ hi }: { hi: boolean }) {
       return buildCasBalanceSheet({ assetLeaves: lv.assetLeaves, capLiabLeaves: lv.capLiabLeaves, unpostedStock: lv.unpostedStock, netProfit: p.netProfit, overdueInterestReceivable: 0 });
     };
     const misAsOf = today < fyEnd ? today : fyEnd;
-    const monthEnds = months.filter((m) => m.to <= misAsOf).map((m) => misPosition(bsAt(m.to)));
+    const monthBs = months.filter((m) => m.to <= misAsOf).map((m) => ({ to: m.to, bs: bsAt(m.to) }));
+    const monthEnds = monthBs.map((x) => misPosition(x.bs));
+    // Annexure XVI: counts and loan flows from the subsidiary ledgers (the SAME rows the Loan /
+    // Deposit Ledger downloads show); money from the CAS Balance Sheet / P&L at each date.
+    const isIncome = (id: string) => accounts.find((a) => a.id === id)?.type === 'income';
+    const loanBooks = [
+      ...loans.filter((l) => !l.isDeleted).map((l) => ({ memberId: l.memberId, rows: loanLedger(memberLoanLedgerInput(l), vouchers, accruals, isIncome).rows })),
+      ...kccLoans.map((k) => ({ memberId: k.memberId, rows: loanLedger(kccLedgerInput(k), vouchers, accruals, isIncome).rows })),
+    ];
+    const depBooks = depositAccounts.map((d) => ({ memberId: d.memberId, rows: depositLedger(getDepositTransactions(d.id)).rows }));
+    const fyBefore = months.length ? dayBefore(months[0].from) : null;
+    const plAt = (date: string) => plFlows(buildCasProfitLoss(getTrialBalance(date), { hasTrading, grossProfit: getTradingAccount(date).grossProfit }));
+    const avgAssets = (xs: { bs: { totalAssets: number } }[]) => (xs.length ? Math.round((xs.reduce((t, x) => t + x.bs.totalAssets, 0) / xs.length) * 100) / 100 : null);
+    const pointAt = (date: string, after: string | null, sheet: typeof bs, flows: ReturnType<typeof plFlows>, monthsIn: typeof monthBs): XviPoint => {
+      const lf = loanBooks.reduce((t, b) => { const f = loanFlowsBetween(b.rows, after, date); return { issued: t.issued + f.issued, recovered: t.recovered + f.recovered }; }, { issued: 0, recovered: 0 });
+      return {
+        members: membersAt(members, date),
+        borrowers: new Set(loanBooks.filter((b) => principalAt(b.rows, date) > 0.005).map((b) => b.memberId)).size,
+        depositors: new Set(depBooks.filter((b) => depositBalanceAt(b.rows, date) > 0.005).map((b) => b.memberId)).size,
+        ...xviBalances(sheet),
+        loansIssued: Math.round(lf.issued * 100) / 100, recovery: Math.round(lf.recovered * 100) / 100,
+        flows, avgTotalAssets: avgAssets(monthsIn),
+      };
+    };
+    const quarters = [2, 5, 8, 11].map((qi, n) => {
+      const q = monthBs.find((x) => x.to === months[qi]?.to);
+      if (!q) return null;
+      const prevEnd = n === 0 ? null : months[qi - 3].to;
+      return pointAt(q.to, prevEnd ?? fyBefore, q.bs, subtractFlows(plAt(q.to), prevEnd ? plAt(prevEnd) : null), monthBs.filter((x) => x.to > (prevEnd ?? '') && x.to <= q.to));
+    });
+    const xvi = { current: pointAt(misAsOf, fyBefore, bs, plFlows(pl), monthBs), quarters };
     const mis = {
       asOf: misAsOf,
       overdue: overdueClassification({ memberLoans: loans.filter((l) => !l.isDeleted), kcc: kccAccruables(kccLoans), asOf: misAsOf }),
       avgCurrent: averagePosition(monthEnds),
       monthsAveraged: monthEnds.length,
       ratios: misRatios(bs, appPL.netProfit),
+      xvi,
     };
     const trading = hasTrading ? buildCasTrading(tb, { openingStock: tr.totalOpeningStock, closingStock: tr.totalClosingStock, procuredToStock: tr.procuredToStock, purchaseGrossUp: tr.legacyPurchaseGrossUp }) : null;
     const m = months.find((x) => x.key === tbMonth);
     const tbCas = m ? buildCasTrialBalance(getTrialBalance(m.to), getTrialBalance(dayBefore(m.from)), { hasTrading }) : null;
     return { bs, pl, trading, appNet: appPL.netProfit, appGross: tr.grossProfit, leaves, tbCas, tbLabel: m?.label ?? '', mis };
-  }, [months, tbMonth, today, getTrialBalance, getProfitLoss, getTradingAccount, fyEnd, society.societyType, society.state, society.activitiesCutoverEnabled, societyCapabilities, societyActivities, loans, kccLoans, accruals, vouchers]);
+  }, [months, tbMonth, today, getTrialBalance, getProfitLoss, getTradingAccount, fyEnd, society.societyType, society.state, society.activitiesCutoverEnabled, societyCapabilities, societyActivities, loans, kccLoans, accruals, vouchers, members, accounts, depositAccounts, getDepositTransactions]);
 
   const { bs, pl, trading } = data;
   const bsTies = casBalanceSheetTies(bs, data.leaves);
