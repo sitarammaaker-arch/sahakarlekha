@@ -25,6 +25,8 @@ import {
   type ResolverContext,
 } from '@/lib/stateAuditFormats';
 import { generateAuditSchedulesPDF } from '@/lib/pdf';
+import { balanceSheetLeaves } from '@/lib/balanceSheetLeaves';
+import { tieSchedules } from '@/lib/auditScheduleTie';
 import { CasStatements } from '@/components/cas/CasStatements';
 import { statutoryLimits, scheduleLimitsLine } from '@/lib/rules/statutoryLimits';
 
@@ -192,10 +194,14 @@ const AuditSchedules: React.FC = () => {
   const format = useMemo(() => getStateAuditFormat(society.state), [society.state]);
 
   // Resolve all schedules
-  const resolved = useMemo(() => {
-    const trialBalance = getTrialBalance();
-    const { totalIncome, totalExpenses, netProfit } = getProfitLoss();
-    const { grossProfit } = getTradingAccount();
+  // RULE 2: the SAME as-on date, leaves and closing-stock rule as the Balance Sheet page, and the
+  // app's own Trading A/c — every schedule total then ties to the statements (tieSchedules).
+  const fyEnd = `20${(fy || '').split('-')[1]}-03-31`;
+  const tied = useMemo(() => {
+    const trialBalance = getTrialBalance(fyEnd);
+    const { totalIncome, totalExpenses, netProfit } = getProfitLoss(fyEnd);
+    const tr = getTradingAccount(fyEnd);
+    const { grossProfit } = tr;
     const approvedMembers = members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved');
     const activeMembers = approvedMembers.filter(m => m.status === 'active').length;
     const totalShareCapital = approvedMembers.reduce((s, m) => s + (m.shareCapital ?? 0), 0);
@@ -214,8 +220,14 @@ const AuditSchedules: React.FC = () => {
       totalShareCapital,
     };
 
-    return resolveAllSchedules(format, ctx);
-  }, [format, getTrialBalance, getProfitLoss, getTradingAccount, accounts, members, pyBalances, society.reserveFundPct]);
+    const leaves = balanceSheetLeaves(trialBalance, { closingStockPosted: tr.closingStockPosted, physicalClosingStock: tr.physicalClosingStock, netProfit });
+    const hasTrading = Math.abs(tr.totalSales) > 0.005 || Math.abs(tr.totalPurchases) > 0.005 || Math.abs(tr.totalClosingStock) > 0.005;
+    return tieSchedules(resolveAllSchedules(format, ctx), {
+      accounts, leaves, trialBalance, netProfit, previousYearBalances: pyBalances,
+      trading: hasTrading ? tr : null,
+    });
+  }, [format, fyEnd, getTrialBalance, getProfitLoss, getTradingAccount, accounts, members, pyBalances, society.reserveFundPct]);
+  const resolved = tied.schedules;
 
   // ── Tab state ───────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('all');
@@ -333,6 +345,15 @@ const AuditSchedules: React.FC = () => {
       )}
 
       {isPacs && view === 'cas' ? <CasStatements hi={hi} /> : (<>
+      {/* Every schedule ties to the Balance Sheet (RULE 2) — shown, never assumed. */}
+      <div className={`rounded-lg border p-3 text-sm ${tied.ties.ok ? 'border-green-300 bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-200' : 'border-destructive/40 bg-destructive/5 text-destructive'}`}>
+        {tied.ties.ok
+          ? (hi ? `✓ अनुसूचियाँ तुलन पत्र से मेल खाती हैं — देनदारियाँ (I+II+III+VII) ₹${tied.ties.liabilities.toLocaleString('en-IN')} · परिसंपत्तियाँ (IV+V+VI) ₹${tied.ties.assets.toLocaleString('en-IN')}`
+                : `✓ Schedules tie to the Balance Sheet — liabilities (I+II+III+VII) ₹${tied.ties.liabilities.toLocaleString('en-IN')} · assets (IV+V+VI) ₹${tied.ties.assets.toLocaleString('en-IN')}`)
+          : (hi ? `✗ अनुसूचियाँ तुलन पत्र से मेल नहीं खातीं — अनुसूची: देनदारियाँ ₹${tied.ties.liabilities.toLocaleString('en-IN')}, परिसंपत्तियाँ ₹${tied.ties.assets.toLocaleString('en-IN')}; तुलन पत्र: ₹${tied.ties.bsLiabilities.toLocaleString('en-IN')} / ₹${tied.ties.bsAssets.toLocaleString('en-IN')} — कृपया सूचित करें`
+                : `✗ Schedules do not tie to the Balance Sheet — schedules: liabilities ₹${tied.ties.liabilities.toLocaleString('en-IN')}, assets ₹${tied.ties.assets.toLocaleString('en-IN')}; Balance Sheet: ₹${tied.ties.bsLiabilities.toLocaleString('en-IN')} / ₹${tied.ties.bsAssets.toLocaleString('en-IN')} — please report`)}
+      </div>
+
       {/* Tabbed schedules */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="overflow-x-auto">
