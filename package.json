@@ -178,6 +178,8 @@
     "test:voucher-reversal": "node scripts/test-voucher-reversal.mjs",
     "test:rm01-no-load-writes": "node scripts/test-rm01-no-load-writes.mjs",
     "test:rm02-diagnostics": "node scripts/test-rm02-diagnostics.mjs",
+    "test:db-harness-guard": "node scripts/test-db-harness-guard.mjs",
+    "db:harness": "node scripts/db-harness/harness.mjs",
     "test:ledgerheads-no-auto-merge": "node scripts/test-ledgerheads-no-auto-merge.mjs",
     "test:persist": "node scripts/test-voucher-persistence.mjs",
     "test:rp-label": "node scripts/test-rp-label.mjs",
