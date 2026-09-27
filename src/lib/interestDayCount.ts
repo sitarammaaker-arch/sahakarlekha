@@ -57,3 +57,7 @@ export function periodInterest(principal: number, ratePa: number, periodTo: stri
 }
 
 export const asDayCount = (v: unknown): DayCountBasis => (v === 'actual' || v === '360' || v === '365' ? v : DEFAULT_DAY_COUNT);
+
+/** The year-days figure for a formula line: "365", "360", or "365 / 366" (actual). */
+export const yearDaysLabel = (basis: DayCountBasis, hi = false): string =>
+  basis === 'actual' ? (hi ? '365 / 366 (वास्तविक)' : '365 / 366 (actual)') : basis;

@@ -62,16 +62,18 @@ ok(D.asDayCount('actual') === 'actual' && D.asDayCount(undefined) === '365' && D
 ok(sbInterest(50000, 4, 90) === depSimple(50000, 4, 90) && sbInterest(50000, 4, 90, '365', '2026-06-30') === depSimple(50000, 4, 90), "SB default / '365' unchanged");
 ok(sbInterest(36000, 4, 90, '360', '2026-06-30') === 360, "SB '360': 36,000 × 4% × 90/360 = 360");
 
+ok(D.yearDaysLabel('365') === '365' && D.yearDaysLabel('360') === '360' && /366/.test(D.yearDaysLabel('actual')) && /वास्तविक/.test(D.yearDaysLabel('actual', true)), 'formula label follows the basis');
 // ── Wiring ──
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const li = read('src/pages/LoanInterest.tsx');
 ok(/const daysBetween = \(a: string, b: string\): number => periodDays\(a, b\);/.test(li), 'Loan Interest page counts days with both ends included');
-ok(/accrualRows\(activeLoans, toDate, days, basis\)/.test(li) && /accrualRows\(kccAccruables\(kccLoans\), toDate, days, basis\)/.test(li) && /asDayCount\(society\.interestDayCount\)/.test(li), 'member loans and KCC use the society basis');
+ok(/accrualRows\(activeLoans, toDate, days, basis(, interestRoom)?\)/.test(li) && /accrualRows\(kccAccruables\(kccLoans\), toDate, days, basis(, interestRoom)?\)/.test(li) && /asDayCount\(society\.interestDayCount\)/.test(li), 'member loans and KCC use the society basis');
 ok(/sbInterest\(intAcct\.balance, intAcct\.interestRate \|\| 0, Number\(days\) \|\| 0, asDayCount\(society\.interestDayCount\), intDate\)/.test(read('src/pages/Deposits.tsx')), 'SB interest uses the society basis');
 ok(/updateSociety\(\{ interestDayCount: v \}\)/.test(read('src/pages/SocietySetup.tsx')), 'setting saved via updateSociety (missing column trimmed + reported, RULE 1)');
 const mig = read('supabase/migrations/071_interest_day_count.sql');
 ok(/add column if not exists "interestDayCount" text/.test(mig) && /in \('365', 'actual', '360'\)/.test(mig) && /"interestDayCount" text/.test(read('supabase-tables.sql')), 'migration 071 (+ supabase-tables.sql): nullable column, checked values');
 ok(/drop column if exists "interestDayCount"/.test(read('supabase/migrations/071_interest_day_count_down.sql')), 'down migration');
 
+ok(!/\/ \(365 [x×] 100\)/.test(li) && (li.match(/yearDaysLabel\(basis/g) || []).length === 3, 'Loan Interest formula text (screen + PDF) shows the society basis, never a hard-coded 365');
 console.log(`Interest day count: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

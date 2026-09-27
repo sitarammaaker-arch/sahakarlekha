@@ -73,6 +73,7 @@
     "test:ledger-genesis": "node scripts/test-ledger-genesis.mjs",
     "test:ledger-parity": "node scripts/test-ledger-parity.mjs",
     "test:ledger-split-tb": "node scripts/test-ledger-split-tb.mjs",
+    "test:section65": "node scripts/test-section65.mjs",
     "test:ledger-trial-balance": "node scripts/test-ledger-trial-balance.mjs",
     "test:ledger-cash-book": "node scripts/test-ledger-cash-book.mjs",
     "test:subsidiary-ledgers": "node scripts/test-subsidiary-ledgers.mjs",
