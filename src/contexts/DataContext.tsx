@@ -76,6 +76,7 @@ import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, ne
 import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS } from '@/lib/assetDisposal';
 import { fetchAllPaged as fetchAllPagedFor } from '@/lib/supabasePaging';
 import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib/diagnostics/phantomVouchers';
+import { accountDeleteFailure, coaResetBlockers } from '@/lib/accounting/accountDelete';
 
 /* T-09 — the `ledger_events` row → LedgerEvent mapper now lives in lib/ledger/rows.ts.
    It moved because the CAIOS D-lane must read the SAME journal from the Edge Function,
@@ -213,7 +214,7 @@ interface DataContextType {
   updateAccount: (id: string, data: Partial<LedgerAccount>) => void;
   deleteAccount: (id: string) => boolean;
   mergeAccounts: (keepId: string, removeId: string) => number;
-  resetAccounts: (templateAccounts: LedgerAccount[]) => void;
+  resetAccounts: (templateAccounts: LedgerAccount[]) => Promise<boolean>;
   updateSociety: (data: Partial<SocietySettings>) => void;
   /** T-23: lock the FY as a finalization. When society.fyCloseAuthorityRequired is on, a valid board
    *  resolution must authorize it (else refused). Returns true when locked. */
@@ -722,6 +723,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const membersRef = useRef<Member[]>(members);
   useEffect(() => { membersRef.current = members; }, [members]);
   const [accounts, setAccountsState] = useState<LedgerAccount[]>([]);
+  // Latest accounts for callbacks with stable identity (M1-4a: the account-delete rollbacks read it).
+  const accountsRef = useRef<LedgerAccount[]>([]);
+  useEffect(() => { accountsRef.current = accounts; }, [accounts]);
   const [society, setSocietyState] = useState<SocietySettings>(() => storage.getSociety());
   const societyRef = useRef(society);
   useEffect(() => {
@@ -3292,6 +3296,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Returns true only when the account was actually removed; false on any guard bail. Callers
   // (e.g. LedgerHeads) must gate their "deleted" success toast on this, or a blocked delete
   // would still read as success (the false-success-toast class fixed for vouchers in 3f734c8).
+  // M1-4a: the ONE way an `accounts` row is deleted. Scoped to this society (defence in depth on
+  // top of RLS), and it asks for the deleted rows back: a forbidden delete under RLS returns 0 rows
+  // and no error. On any failure — including 23503 once account_roles points at the account — the
+  // row is put back in local state and the user is told (RULE 1), instead of vanishing until F5.
+  const deleteAccountRow = useCallback((account: LedgerAccount, opts: { context: string; onSuccess?: () => void; onFail?: () => void; failTitle?: string }) => {
+    supabase.from('accounts').delete().eq('id', account.id).eq('society_id', societyIdRef.current).select('id')
+      .then(({ data, error }) => {
+        const why = accountDeleteFailure(account.name, { error, deleted: error ? null : (data?.length ?? 0) });
+        if (!why) { opts.onSuccess?.(); return; }
+        setAccountsState(prev => prev.some(a => a.id === account.id) ? prev : [...prev, account]);
+        opts.onFail?.();
+        reportError(opts.context, error?.message || 'account delete removed 0 rows', { accountId: account.id, code: error?.code });
+        toastRef.current({ title: opts.failTitle || 'खाता नहीं मिटा', description: why, variant: 'destructive', duration: 12000 });
+      });
+  }, []);
+
   const deleteAccount = useCallback((id: string): boolean => {
     if (guardPermission('delete', 'खाता मिटाने')) return false;   // ECR-06: role gate
     if (guardFYLocked()) return false;
@@ -3333,16 +3353,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // otherwise keep its old balance in the journal and break parity permanently.
     const zeroEvent = buildOpeningDelta({ ...account, openingBalance: 0 });
     if (zeroEvent) ledgerEventsRef.current = [...ledgerEventsRef.current, zeroEvent];
-    supabase.from('accounts').delete().eq('id', id).then(({ error }) => {
-      if (error) {
-        console.error('DB sync error:', error.message); reportError('db-sync', error.message);
-        if (zeroEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== zeroEvent.eventId);
-        toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' });
-      } else if (zeroEvent) persistLedgerEvent(zeroEvent);
+    deleteAccountRow(account, {
+      context: 'account-delete',
+      onSuccess: () => { if (zeroEvent) persistLedgerEvent(zeroEvent); },
+      onFail: () => { if (zeroEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== zeroEvent.eventId); },
     });
     console.info(`[AUDIT-DELETE] Account id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
     return true;
-  }, [accounts, society.fyLocked]);
+  }, [accounts, society.fyLocked, deleteAccountRow]);
 
   // Merge duplicate accounts: move all voucher references from removeId → keepId, then delete removeId
   const mergeAccounts = useCallback((keepId: string, removeId: string): number => {
@@ -3427,29 +3445,63 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (firstErr) { rollbackMerge(firstErr); return; }
       // All re-points durable — rebuild the moved voucher_entries, then delete the emptied account.
       changedVouchers.forEach(v => { if (!v.isDeleted) syncEntries(v); });
+      // The re-points are durable, so a refused delete only leaves the emptied account behind:
+      // put it back on screen and say so, rather than letting it vanish until F5.
+      const removedAccount = accountsRef.current.find(a => a.id === removeId);
       setAccountsState(prev => prev.filter(a => a.id !== removeId));
-      supabase.from('accounts').delete().eq('id', removeId).then(({ error }) => {
-        if (error) reportError('merge-accounts', error.message, { keepId, removeId, phase: 'account-delete' });
-      });
+      if (removedAccount) {
+        deleteAccountRow(removedAccount, { context: 'merge-accounts', failTitle: 'Merge हुआ, पर पुराना खाता नहीं मिटा' });
+      }
     }, (rej: unknown) => rollbackMerge(rej instanceof Error ? rej.message : String(rej)));
 
     return touchedCount;
-  }, []);
+  }, [deleteAccountRow]);
 
-  const resetAccounts = useCallback((templateAccounts: LedgerAccount[]) => {
-    if (guardFYLocked()) return;
-    setAccountsState(templateAccounts);
+  // COA reset (M1-4a): cloud FIRST, local after — so a refused or half-done reset never leaves the
+  // screen showing a chart the cloud does not have. Resolves true only when the whole template
+  // was written; the caller announces success only then.
+  const resetAccounts = useCallback(async (templateAccounts: LedgerAccount[]): Promise<boolean> => {
+    if (guardPermission('delete', 'खाता संरचना रीसेट करने')) return false;
+    if (guardFYLocked()) return false;
+    const fail = (description: string) => {
+      toastRef.current({ title: 'खाता संरचना रीसेट नहीं हुई', description, variant: 'destructive', duration: 15000 });
+      return false;
+    };
+    // An account outside the template that a voucher (incl. cancelled) or a party points at would be
+    // orphaned by the reset — refuse instead (RULE 3). Template ids come back with the same id.
+    const blockers = coaResetBlockers(
+      new Set(templateAccounts.map(a => a.id)),
+      accountsRef.current, vouchersRef.current, suppliersRef.current, customersRef.current,
+    );
+    if (blockers.length > 0) {
+      const list = blockers.slice(0, 5).map(b => `"${b.name}"`).join(', ') + (blockers.length > 5 ? ` और ${blockers.length - 5}` : '');
+      return fail(`${blockers.length} खाते template में नहीं हैं पर vouchers / suppliers / customers में इस्तेमाल हैं: ${list}। रीसेट से ये टूट जाते — कुछ नहीं बदला गया। (Accounts outside the template are in use.)`);
+    }
     const sid = societyIdRef.current;
-    supabase.from('accounts').delete().eq('society_id', sid).then(() => {
-      const BATCH = 50;
-      for (let i = 0; i < templateAccounts.length; i += BATCH) {
-        const batch = templateAccounts.slice(i, i + BATCH).map(a => ({ ...a, society_id: sid, jurisdiction: jurisdictionRef.current }));
-        supabase.from('accounts').insert(batch).then(({ error }) => {
-          if (error) console.error('Reset COA batch error:', error.message);
-        });
-      }
-    });
-  }, []);
+    const { error: delErr } = await supabase.from('accounts').delete().eq('society_id', sid);
+    if (delErr) {
+      reportError('coa-reset', delErr.message, { phase: 'delete', code: delErr.code });
+      return fail(delErr.code === '23503'
+        ? 'कुछ खाते accounting roles या दूसरे records से जुड़े हैं, इसलिए cloud ने मिटाने से मना कर दिया। कुछ नहीं बदला गया।'
+        : `Cloud ने खाते नहीं मिटाए — कुछ नहीं बदला गया। (${delErr.message})`);
+    }
+    const BATCH = 50;
+    let insertErr: string | null = null;
+    for (let i = 0; i < templateAccounts.length && !insertErr; i += BATCH) {
+      const batch = templateAccounts.slice(i, i + BATCH).map(a => ({ ...a, society_id: sid, jurisdiction: jurisdictionRef.current }));
+      const { error } = await supabase.from('accounts').insert(batch);
+      if (error) insertErr = error.message;
+    }
+    if (insertErr) {
+      // The old chart is already gone: show exactly what the cloud now holds, never the template.
+      reportError('coa-reset', insertErr, { phase: 'insert' });
+      const { data } = await fetchAllPagedFor<LedgerAccount>('accounts', sid);
+      setAccountsState(storage.migrateAccounts(data || []).accounts);
+      return fail(`पुराने खाते मिट गए पर template पूरा नहीं बना (${insertErr})। Screen पर अब वही खाते हैं जो cloud में हैं — दोबारा रीसेट करें।`);
+    }
+    setAccountsState(templateAccounts);
+    return true;
+  }, [guardPermission, guardFYLocked]);
 
   // RULE-1: optimistic + rollback. society_settings writes are admin-only at the RLS layer
   // (is_society_admin), so a non-admin's save is REJECTED by the DB — we must restore local
@@ -6697,15 +6749,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (accountReferenced) {
         // Keep the account so historical vouchers stay reconcilable; just rename it to mark orphan
         setAccountsState(prev => prev.map(a => a.id === sup.accountId ? { ...a, name: `${a.name} [Supplier deleted]`, isSystem: false } : a));
-        supabase.from('accounts').update({ name: `${sup.name} [Supplier deleted]` }).eq('id', sup.accountId)
+        supabase.from('accounts').update({ name: `${sup.name} [Supplier deleted]` }).eq('id', sup.accountId).eq('society_id', societyIdRef.current)
           .then(({ error }) => { if (error) console.error('Account rename sync:', error.message); });
       } else {
+        const supAccount = accountsRef.current.find(a => a.id === sup.accountId);
         setAccountsState(prev => prev.filter(a => a.id !== sup.accountId));
-        supabase.from('accounts').delete().eq('id', sup.accountId).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+        if (supAccount) deleteAccountRow(supAccount, { context: 'supplier-account-delete' });
       }
     }
     console.info(`[AUDIT-DELETE] Supplier id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
-  }, [suppliers]);
+  }, [suppliers, deleteAccountRow]);
 
   // ── Customers ──────────────────────────────────────────────────────────────
   // Two-step customer save (RULE 1): base columns (name, nameHi, address, phone, gstNo,
@@ -6857,15 +6910,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       );
       if (accountReferenced) {
         setAccountsState(prev => prev.map(a => a.id === cus.accountId ? { ...a, name: `${a.name} [Customer deleted]`, isSystem: false } : a));
-        supabase.from('accounts').update({ name: `${cus.name} [Customer deleted]` }).eq('id', cus.accountId)
+        supabase.from('accounts').update({ name: `${cus.name} [Customer deleted]` }).eq('id', cus.accountId).eq('society_id', societyIdRef.current)
           .then(({ error }) => { if (error) console.error('Account rename sync:', error.message); });
       } else {
+        const cusAccount = accountsRef.current.find(a => a.id === cus.accountId);
         setAccountsState(prev => prev.filter(a => a.id !== cus.accountId));
-        supabase.from('accounts').delete().eq('id', cus.accountId).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+        if (cusAccount) deleteAccountRow(cusAccount, { context: 'customer-account-delete' });
       }
     }
     console.info(`[AUDIT-DELETE] Customer id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
-  }, [customers]);
+  }, [customers, deleteAccountRow]);
 
   const getEntityLinks = useCallback((entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan' | 'asset', id: string): EntityLink[] => {
     const links: EntityLink[] = [];
