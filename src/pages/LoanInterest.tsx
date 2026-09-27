@@ -5,7 +5,7 @@
  * accrual journal entries: Dr 3313 (Interest Receivable) / Cr 4408 (Interest Income)
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { asDayCount, periodDays, DAY_COUNT_OPTIONS } from '@/lib/interestDayCount';
+import { asDayCount, periodDays, DAY_COUNT_OPTIONS, yearDaysLabel } from '@/lib/interestDayCount';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -276,7 +276,7 @@ const LoanInterest: React.FC = () => {
 
     const finalY = (doc as any).lastAutoTable.finalY + 6;
     doc.setFontSize(8);
-    doc.text(`Formula: Interest = (Outstanding x Rate x Days) / (365 x 100)`, 14, finalY);
+    doc.text(`Formula: Interest = (Outstanding x Rate x Days) / (${yearDaysLabel(basis)} x 100)`, 14, finalY);
 
     const sigY2 = finalY + 10;
     const sig = getSignatoryNames(society);
@@ -325,8 +325,8 @@ const LoanInterest: React.FC = () => {
         <Info className="h-4 w-4 mt-0.5 shrink-0" />
         <span>
           {hi
-            ? 'सूत्र: ब्याज = (बकाया × दर × दिन) / (365 × 100) | Dr 3313 ब्याज प्राप्य / Cr 4408 ब्याज आय'
-            : 'Formula: Interest = (Outstanding × Rate × Days) / (365 × 100) | Dr 3313 Interest Receivable / Cr 4408 Interest Income'}
+            ? `सूत्र: ब्याज = (बकाया × दर × दिन) / (${yearDaysLabel(basis, true)} × 100) | Dr 3313 ब्याज प्राप्य / Cr 4408 ब्याज आय`
+            : `Formula: Interest = (Outstanding × Rate × Days) / (${yearDaysLabel(basis)} × 100) | Dr 3313 Interest Receivable / Cr 4408 Interest Income`}
           <br />
           {hi
             ? 'अतिदेय (overdue) ऋणों का ब्याज भी गिना जाता है, पर वह आय में नहीं, "अतिदेय ब्याज संचय" (2211) में जाता है — वसूली होने पर ही आय बनेगा। (हरियाणा सहकारी समिति अधिनियम 1984, धारा 87 व्याख्या) अतिदेय = जिसे overdue चुना गया हो, या जिसकी देय तिथि अवधि समाप्ति से पहले निकल गई हो।'
