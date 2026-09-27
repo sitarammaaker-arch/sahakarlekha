@@ -71,6 +71,31 @@ ok(near(RANIA.reduce((t, b) => t + b.netBalance, 0), 0), 'fixture: the Trial Bal
   ok(near(oldNp, -816) && near(oldLiab - oldAssets, 288860), 'the old rules reproduce prod exactly: deficit 816, difference 2,88,860');
 }
 
+// ── 1b. Rania AFTER the founder's correction: the wheat was bought as the agency's AGENT ──
+// Correcting journal: Dr 3308 MSP Receivable 2,94,200 / Cr 3403 Trading Goods 2,94,200.
+{
+  const V = (lines) => ({ lines: lines.map(([accountId, type, amount]) => ({ accountId, type, amount })) });
+  const original = V([['3403', 'Dr', 294200], ['2105', 'Cr', 294200]]);
+  const correction = V([['3308', 'Dr', 294200], ['3403', 'Cr', 294200]]);
+  const INV = new Set(['3403']);
+  ok(T.inventoryProcurementCost([original], INV) === 294200, 'before the correction: 2,94,200 put into stock');
+  ok(T.inventoryProcurementCost([original, correction], INV) === 0, 'after the correction: NET 0 put into stock (debits-only said 2,94,200)');
+  const tb = RANIA.map((b) => (b.account.id === '3403' ? row(b.account, 0) : b)).concat([row(acc('3308', 'MSP Receivable', 'asset', '3300'), 294200)]);
+  ok(near(tb.reduce((t, b) => t + b.netBalance, 0), 0), 'corrected Trial Balance balances');
+  const cs = T.closingStock(leavesOf(tb), 5340, false);
+  ok(cs.total === 5340 && cs.items.length === 1, 'closing stock = the consumer goods only (wheat is not the society\'s stock)');
+  const gp = T.tradingGrossProfit({ sales: 5400, closingStock: cs.total, openingStock: 0, purchases: 10656 + T.inventoryProcurementCost([original, correction], INV), directExp: 0 });
+  ok(near(gp, 84), `gross profit unchanged at 84 (${gp})`);
+  const bs = balanceSheetLeaves(tb, { closingStockPosted: false, physicalClosingStock: 5340, netProfit: r2(gp + 4440) });
+  ok(near(bs.totalAssets, 373332.80) && near(bs.totalLiabilities, 373332.80) && bs.assetLeaves.some((b) => b.account.id === '3308'), `Balance Sheet balances; MSP Receivable is an asset (${bs.totalAssets})`);
+  // What the debits-only rule would have done after the correction — the trap this fixes.
+  const gpOld = T.tradingGrossProfit({ sales: 5400, closingStock: 5340, openingStock: 0, purchases: 10656 + 294200, directExp: 0 });
+  ok(near(gpOld, -294116), 'debits-only would have shown a 2,94,116 loss after the correction');
+  // Goods issued out of the ledger reduce it; the closing-stock journal and its reversal never count.
+  ok(T.inventoryProcurementCost([V([['3403', 'Dr', 1000], ['2105', 'Cr', 1000]]), V([['5201', 'Dr', 400], ['3403', 'Cr', 400]])], INV) === 600, 'an issue out of stock nets off');
+  ok(T.inventoryProcurementCost([V([['3403', 'Dr', 900], ['5150', 'Cr', 900]]), V([['5150', 'Dr', 900], ['3403', 'Cr', 900]])], INV) === 0, 'closing-stock journal and its reversal excluded');
+}
+
 // ── 2. Behaviour unchanged where there is no in-year ledger stock ──
 {
   const stale = [row(acc('3403', 'Stock', 'asset', '3400'), 1000, 1000), row(acc('1102', 'Cap', 'equity', '1100'), -1000)];

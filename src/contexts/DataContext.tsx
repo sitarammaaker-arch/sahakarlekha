@@ -5100,13 +5100,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // inflated Gross Profit / Net Surplus and the Balance Sheet went out by the stock
     // value. The year-end closing-stock journal (Cr 5150/5101) is excluded in-helper.
     const inventoryAcctIds = new Set(
-      tb.filter(b => b.account.parentId === '3400' && !b.account.isGroup).map(b => b.account.id)
+      tb.filter(b => isStockLedgerAccount(b.account)).map(b => b.account.id)
     );
     const inventoryProcurement = inventoryProcurementCost(
       closingScopedVouchers.map(v => ({ lines: getVoucherLines(v) })),
       inventoryAcctIds,
     );
-    if (inventoryProcurement > 0.005) {
+    // Signed: goods leaving the stock ledger this year (a correction / an issue) reduce it.
+    if (Math.abs(inventoryProcurement) > 0.005) {
       purchaseItems.push({ name: 'Goods Procured (to stock)', nameHi: 'माल खरीद (स्टॉक में)', amount: inventoryProcurement });
     }
 
