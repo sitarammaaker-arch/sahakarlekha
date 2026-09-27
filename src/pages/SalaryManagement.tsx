@@ -8,7 +8,7 @@ import { resolveTaxBasis } from '@/lib/rules/incomeTax';
 import { cumulativeMonthlyTds, monthsLeftInFy, fyBounds, isInFy } from '@/lib/payroll/cumulativeTds';
 import { isPeriodLocked } from '@/lib/periodLock';
 import { getTdsChallanLinks, getBankAccountIds } from '@/lib/storage';
-import { professionalTaxForState } from '@/lib/professionalTax';
+import { ptAutoFill } from '@/lib/professionalTax';
 import { build24Q, type Quarter } from '@/lib/form24Q';
 import { daysInMonth, prorate } from '@/lib/attendance';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -442,6 +442,10 @@ const SalaryManagement: React.FC = () => {
     });
   };
 
+  // RM-22: PT applies here but its slab is unsourced → nothing auto-fills; tell the clerk to enter it.
+  const ptState = ptAutoFill(0, society.state);
+  const ptNotice = ptState.levies && !ptState.verified;
+
   const loadEmployees = () => {
     const active = employees.filter(e => e.status === 'active');
     setProcessRows(
@@ -449,7 +453,7 @@ const SalaryManagement: React.FC = () => {
         employee: emp,
         allowances: 0,
         deductions: 0,
-        pt: professionalTaxForState(emp.basicSalary, society.state),   // ECR-14: auto PT by state (editable)
+        pt: ptAutoFill(emp.basicSalary, society.state).amount,   // ECR-14 / RM-22: only a SOURCED slab auto-fills (editable)
         tds: tdsFor(emp).tds,          // ECR-14: TDS-192, cumulative (editable)
         tdsExcess: tdsFor(emp).excess,
         paidDays: daysInMonth(processingMonth),   // ECR-14: full month by default
@@ -854,6 +858,13 @@ const SalaryManagement: React.FC = () => {
                       {hi ? `${monthLabel(processingMonth)} — वेतन प्रोसेसिंग` : `Salary Processing — ${monthLabel(processingMonth)}`}
                     </CardTitle>
                   </CardHeader>
+                  {ptNotice && (
+                    <p className="mx-6 mb-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                      {hi
+                        ? 'इस राज्य में व्यावसायिक कर (PT) लगता है, पर उसकी दर अभी सत्यापित नहीं है — इसलिए PT अपने-आप नहीं भरा गया। हर कर्मचारी का PT हाथ से भरें।'
+                        : 'Professional Tax applies in this state, but its slab is not yet verified — PT is not auto-filled. Enter PT for each employee manually.'}
+                    </p>
+                  )}
                   <CardContent className="p-0 overflow-x-auto">
                     <Table>
                       <TableHeader>

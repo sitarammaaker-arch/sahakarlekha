@@ -30,7 +30,9 @@ register(
     `),
 );
 
-const { resolveStateKey, professionalTax, professionalTaxForState } = await import(abs('../src/lib/professionalTax.ts'));
+const { resolveStateKey, professionalTax, professionalTaxForState, ptAutoFill, PT_SLAB_SOURCES } = await import(abs('../src/lib/professionalTax.ts'));
+const { INDIAN_STATES } = await import(abs('../src/lib/constants.ts'));
+import { readFileSync } from 'node:fs';
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -60,6 +62,32 @@ ok(professionalTaxForState(100000, 'Haryana') === 0, 'no-PT state → 0 regardle
 // 6. End-to-end via state string.
 ok(professionalTaxForState(20000, 'Maharashtra') === 200, 'end-to-end MH');
 ok(professionalTaxForState(20000, 'गुजरात') === 200 && professionalTaxForState(9000, 'गुजरात') === 0, 'Gujarat via Hindi');
+
+// 7. RM-22 — society_settings.state is the INDIAN_STATES CODE ('mh'), not the name.
+const CODE_KEYS = { mh: 'maharashtra', ka: 'karnataka', wb: 'westbengal', mp: 'madhyapradesh', gj: 'gujarat', ap: 'andhra', tg: 'telangana', tn: 'tamilnadu' };
+for (const { value } of INDIAN_STATES) {
+  const want = CODE_KEYS[value] || 'none';
+  ok(resolveStateKey(value) === want, `state code '${value}' → ${want}`);
+}
+ok(resolveStateKey(' MH ') === 'maharashtra', 'code is case/space tolerant');
+ok(resolveStateKey('hr') === 'none', "Haryana code 'hr' → none");
+
+// 8. RM-22 decision A — only a SOURCED slab auto-fills.
+ok(Object.keys(PT_SLAB_SOURCES).length === 0, 'no slab is marked sourced yet');
+const mh = ptAutoFill(20000, 'mh');
+ok(mh.stateKey === 'maharashtra' && mh.levies && !mh.verified && mh.amount === 0, 'unsourced PT state → levies, unverified, auto-fills ₹0');
+const hr = ptAutoFill(20000, 'hr');
+ok(!hr.levies && !hr.verified && hr.amount === 0, 'no-PT state → no notice, ₹0');
+PT_SLAB_SOURCES.maharashtra = 'https://example.test/mh-pt-act';
+const mhSourced = ptAutoFill(20000, 'mh');
+ok(mhSourced.verified && mhSourced.amount === 200, 'once a source is recorded, the slab auto-fills');
+delete PT_SLAB_SOURCES.maharashtra;
+
+// 9. SalaryManagement starts rows from ptAutoFill (never the raw unsourced slab) and warns.
+const sm = readFileSync(pathResolve(HERE, '../src/pages/SalaryManagement.tsx'), 'utf8');
+ok(/pt: ptAutoFill\(emp\.basicSalary, society\.state\)\.amount/.test(sm), 'salary rows start PT from ptAutoFill');
+ok(!/professionalTaxForState\(/.test(sm), 'SalaryManagement no longer auto-fills the raw slab');
+ok(/const ptNotice = ptState\.levies && !ptState\.verified/.test(sm) && /\{ptNotice && \(/.test(sm), 'unverified-PT notice is shown');
 
 console.log(`\nProfessional tax (pure): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

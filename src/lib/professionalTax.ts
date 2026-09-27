@@ -9,9 +9,21 @@
  */
 export type PtState = 'maharashtra' | 'karnataka' | 'westbengal' | 'madhyapradesh' | 'gujarat' | 'andhra' | 'telangana' | 'tamilnadu' | 'none';
 
-/** Map an English/Hindi state name to a PT slab key ('none' = state levies no PT). */
+/**
+ * RM-22: society_settings.state holds the INDIAN_STATES CODE ('mh', 'ka' … — src/lib/constants.ts),
+ * not the name. Matching names only made every PT state resolve to 'none', so PT always
+ * auto-filled ₹0 (production 2026-09-27: 8 mh, 2 mp, 1 gj, 1 ka societies).
+ */
+const STATE_CODE_TO_KEY: Record<string, PtState> = {
+  mh: 'maharashtra', ka: 'karnataka', wb: 'westbengal', mp: 'madhyapradesh',
+  gj: 'gujarat', ap: 'andhra', tg: 'telangana', tn: 'tamilnadu',
+};
+
+/** Map a state code ('mh') or English/Hindi state name to a PT slab key ('none' = no slab known). */
 export function resolveStateKey(state?: string): PtState {
-  const s = (state || '').toLowerCase().replace(/\s+/g, '');
+  const code = (state || '').trim().toLowerCase();
+  if (STATE_CODE_TO_KEY[code]) return STATE_CODE_TO_KEY[code];
+  const s = code.replace(/\s+/g, '');
   const has = (...keys: string[]) => keys.some(k => s.includes(k));
   if (has('maharashtra', 'महाराष्ट्र')) return 'maharashtra';
   if (has('karnataka', 'कर्नाटक')) return 'karnataka';
@@ -41,7 +53,32 @@ export function professionalTax(gross: number, stateKey: PtState): number {
   }
 }
 
-/** Convenience: PT for a gross salary given the society's state string. */
+/** Convenience: PT for a gross salary given the society's state string (raw slab, unverified). */
 export function professionalTaxForState(gross: number, state?: string): number {
   return professionalTax(gross, resolveStateKey(state));
+}
+
+/**
+ * Slabs checked against the state's Act / notification TEXT, with the URL — a slab is only
+ * auto-filled once it is here. EMPTY today: the figures above are simplified and unsourced
+ * (RM-22 decision A, 2026-09-27), so no state auto-fills yet.
+ */
+export const PT_SLAB_SOURCES: Partial<Record<PtState, string>> = {};
+
+export interface PtAutoFill {
+  stateKey: PtState;
+  /** The state has a PT slab in this file (it levies PT). */
+  levies: boolean;
+  /** That slab is verified against a source (PT_SLAB_SOURCES). */
+  verified: boolean;
+  /** What the salary row starts with: the slab when verified, otherwise ₹0 for the user to enter. */
+  amount: number;
+}
+
+/** The PT a salary row should START with — never an unsourced statutory figure. */
+export function ptAutoFill(gross: number, state?: string): PtAutoFill {
+  const stateKey = resolveStateKey(state);
+  const levies = stateKey !== 'none';
+  const verified = levies && !!PT_SLAB_SOURCES[stateKey];
+  return { stateKey, levies, verified, amount: verified ? professionalTax(gross, stateKey) : 0 };
 }
