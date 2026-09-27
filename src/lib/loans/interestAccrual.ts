@@ -13,6 +13,7 @@
  * exactly what was accrued for THAT loan. PURE.
  */
 import { loanOutstanding, kccOutstanding } from '../memberSnapshot';
+import { DEFAULT_DAY_COUNT, periodInterest, type DayCountBasis } from '@/lib/interestDayCount';
 
 export const ACC_INTEREST_RECEIVABLE = '3313';
 export const ACC_INTEREST_INCOME = '4408';
@@ -78,12 +79,13 @@ export function isOverdueAt(loan: AccruableLoan, periodTo: string): boolean {
 export const accruableLoans = <L extends AccruableLoan>(loans: readonly L[]): L[] =>
   loans.filter((l) => l.status !== 'cleared' && loanOutstanding(l) > 0.005);
 
-export function accrualRows(loans: readonly AccruableLoan[], periodTo: string, days: number): AccrualRow[] {
+export function accrualRows(loans: readonly AccruableLoan[], periodTo: string, days: number, basis: DayCountBasis = DEFAULT_DAY_COUNT): AccrualRow[] {
   return accruableLoans(loans).map((l) => {
     const outstanding = Math.max(0, loanOutstanding(l));   // shared formula; clamp only for interest
     return {
       loanId: l.id, loanNo: l.loanNo, memberId: l.memberId, principal: l.amount, outstanding,
-      ratePa: l.interestRate, days, interest: simpleInterest(outstanding, l.interestRate, days),
+      // '365' keeps the exact historical formula; other bases use the society's year basis.
+      ratePa: l.interestRate, days, interest: basis === '365' ? simpleInterest(outstanding, l.interestRate, days) : periodInterest(outstanding, l.interestRate, periodTo, days, basis),
       overdue: isOverdueAt(l, periodTo),
     };
   });

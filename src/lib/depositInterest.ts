@@ -8,6 +8,7 @@
  */
 
 import { toMinor, toRupees, addMinor, roundMinor } from '@/lib/money';
+import { DEFAULT_DAY_COUNT, yearFraction, type DayCountBasis } from '@/lib/interestDayCount';
 
 /** Simple interest on a principal for a number of days (365-day year). */
 export function simpleInterest(principal: number, ratePct: number, days: number): number {
@@ -15,9 +16,10 @@ export function simpleInterest(principal: number, ratePct: number, days: number)
   return toRupees(roundMinor(toMinor(Number(principal) || 0) * (ratePct / 100) * (days / 365)));
 }
 
-/** SB — interest on the balance held for a period (days). */
-export const sbInterest = (balance: number, ratePct: number, days: number): number =>
-  simpleInterest(balance, ratePct, days);
+/** SB — interest on the balance held for `days` days ending on `periodTo`, on the society's year basis. */
+export const sbInterest = (balance: number, ratePct: number, days: number, basis: DayCountBasis = DEFAULT_DAY_COUNT, periodTo = ''): number =>
+  basis === '365' ? simpleInterest(balance, ratePct, days)
+    : toRupees(roundMinor(toMinor(Number(balance) || 0) * (ratePct / 100) * yearFraction(periodTo || new Date().toISOString().slice(0, 10), days, basis)));
 
 /** FD — simple interest portion over a term in months. */
 export function fdInterest(principal: number, ratePct: number, months: number): number {

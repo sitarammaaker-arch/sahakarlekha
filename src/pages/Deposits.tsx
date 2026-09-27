@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, History, Search, Percent, Lock, ListChecks, Download, FileSpreadsheet } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
 import { sbInterest } from '@/lib/depositInterest';
+import { asDayCount } from '@/lib/interestDayCount';
 import { buildRdSchedule, missedCount } from '@/lib/rdSchedule';
 import { pigmyAgents, pigmyAccountsForAgent, collectionTotal } from '@/lib/pigmy';
 import { useToast } from '@/hooks/use-toast';
@@ -127,11 +128,11 @@ const Deposits: React.FC = () => {
   const [intDate, setIntDate] = useState(today());
   const openInterest = (a: DepositAccount) => {
     setIntAcct(a); setIntDays('90'); setIntDate(today());
-    setIntAmt(String(sbInterest(a.balance, a.interestRate || 0, 90)));   // quarterly suggestion
+    setIntAmt(String(sbInterest(a.balance, a.interestRate || 0, 90, asDayCount(society.interestDayCount), today())));   // quarterly suggestion
   };
   const recomputeInterest = (days: string) => {
     setIntDays(days);
-    if (intAcct) setIntAmt(String(sbInterest(intAcct.balance, intAcct.interestRate || 0, Number(days) || 0)));
+    if (intAcct) setIntAmt(String(sbInterest(intAcct.balance, intAcct.interestRate || 0, Number(days) || 0, asDayCount(society.interestDayCount), intDate)));
   };
   const submitInterest = () => {
     if (!intAcct) return;
