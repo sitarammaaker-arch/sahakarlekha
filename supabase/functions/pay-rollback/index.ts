@@ -34,6 +34,13 @@ Deno.serve(async (req: Request) => {
   const CORS = corsFor(req);
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json(405, { error: 'POST only' }, CORS);
+  // Kill-switch (M0 finding R23, approved 2026-09-27): this path writes vouchers via a direct DB
+  // connection — no `lines`, no ledger_events journal event, no FY / period-lock check, RLS
+  // bypassed. OFF until payroll posts through the Phase-3 posting service; set
+  // PAY_LEDGER_POSTING_ENABLED=true only once it does. Checked before any auth or DB work.
+  if ((Deno.env.get('PAY_LEDGER_POSTING_ENABLED') ?? '').toLowerCase() !== 'true') {
+    return json(503, { error: 'Payroll की बही-posting अभी बंद है — नई posting service आने तक। (Payroll ledger posting is disabled.)', code: 'PAY_LEDGER_POSTING_DISABLED' }, CORS);
+  }
 
   const supaUrl = Deno.env.get('SUPABASE_URL') ?? '', anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   const dbUrl = Deno.env.get('PAY_DB_URL') ?? Deno.env.get('SUPABASE_DB_URL') ?? '';
