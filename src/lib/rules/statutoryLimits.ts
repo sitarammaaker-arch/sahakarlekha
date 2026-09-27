@@ -38,6 +38,30 @@ export function statutoryLimits(state: string | null | undefined, asOf: string):
 export const hasVerifiedLimits = (l: StatutoryLimits) =>
   l.reserveMin.verified || l.badDebtMin.verified || l.educationMax.verified || l.dividendCap.verified;
 
+/**
+ * The statutory-limits line shown under the Audit Schedules title — the SAME text on screen and in
+ * the PDF (RULE 2). Where the State's figures are checked against the Act / Rules text, only those
+ * are shown; otherwise the format's own (unchecked) defaults, as before.
+ */
+export function scheduleLimitsLine(
+  society: { reserveFundPct?: number },
+  l: StatutoryLimits,
+  format: { educationFundPct: number; coopDevFundPct: number },
+  hi: boolean,
+  sep = ' · ',
+): string {
+  const parts = [`${hi ? 'रिज़र्व फंड' : 'Reserve Fund'}: ${society.reserveFundPct ?? 25}%`];
+  if (hasVerifiedLimits(l)) {
+    parts.push(hi ? `न्यूनतम संचय ${pctStr(l.reserveMin.pct)}` : `Minimum reserve ${pctStr(l.reserveMin.pct)}`);
+    if (l.badDebtMin.verified && l.badDebtMin.pct > 0) parts.push(hi ? `अशोध्य ऋण निधि न्यूनतम ${pctStr(l.badDebtMin.pct)}` : `Bad & doubtful debt fund at least ${pctStr(l.badDebtMin.pct)}`);
+    parts.push(hi ? `शिक्षा फंड अधिकतम ${pctStr(l.educationMax.pct)}` : `Education Fund at most ${pctStr(l.educationMax.pct)}`);
+  } else {
+    parts.push(`${hi ? 'शिक्षा फंड' : 'Education Fund'}: ${format.educationFundPct}%`);
+    parts.push(`${hi ? 'सहकारी विकास फंड' : 'Coop Dev Fund'}: ${format.coopDevFundPct}%`);
+  }
+  return parts.join(sep);
+}
+
 export interface LimitIssue { accountId: string; hi: string; en: string; cite: string | null }
 
 const pctStr = (n: number) => `${Math.round(n * 100) / 100}%`;

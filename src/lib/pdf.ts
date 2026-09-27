@@ -9,6 +9,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { INDIAN_STATES } from '@/lib/constants';
 import { getStateAuditFormat } from '@/lib/stateAuditFormats';
+import { statutoryLimits, scheduleLimitsLine } from '@/lib/rules/statutoryLimits';
 import { trackEvent } from '@/lib/analytics';
 import { loanOutstanding } from '@/lib/memberSnapshot';
 
@@ -2235,7 +2236,8 @@ export function generateAuditSchedulesPDF(
   doc.text(society.name, pageW / 2, y, { align: 'center' }); y += 5;
   doc.text(`Registration No: ${society.registrationNo || 'N/A'}`, pageW / 2, y, { align: 'center' }); y += 5;
   doc.text(`Financial Year: ${society.financialYear}`, pageW / 2, y, { align: 'center' }); y += 5;
-  doc.text(`Reserve Fund: ${society.reserveFundPct ?? 25}% | Education Fund: ${format.educationFundPct}% | Coop Dev Fund: ${format.coopDevFundPct}%`, pageW / 2, y, { align: 'center' }); y += 5;
+  // Same line as the screen (RULE 2): the State's text-checked limits where they exist.
+  doc.text(scheduleLimitsLine(society, statutoryLimits(society.state, new Date().toISOString().slice(0, 10)), format, false, ' | '), pageW / 2, y, { align: 'center' }); y += 5;
   doc.text(`Generated: ${preparedOn()}`, pageW / 2, y, { align: 'center' });
   y += 12;
 

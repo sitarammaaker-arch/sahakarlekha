@@ -206,7 +206,9 @@ export function resolveAllSchedules(
 }
 
 // ── Haryana ─────────────────────────────────────────────────────────────────
-// Haryana Cooperative Societies Act, 1984 (Sec 63–68)
+// Haryana Cooperative Societies Act, 1984. Section notes are checked against the Act's text:
+// s.87(1)(a) reserve fund + bad & doubtful debt fund (at least 10% each), s.87(1)(b) co-operative
+// education fund (not exceeding 5%). (s.65 is "Limitation of interest" — NOT the reserve fund.)
 
 const HARYANA_SCHEDULES: ScheduleDefinition[] = [
   // Schedule I: Share Capital
@@ -225,15 +227,15 @@ const HARYANA_SCHEDULES: ScheduleDefinition[] = [
   {
     id: 'sch-II', name: 'Schedule II — Reserves & Surplus', nameHi: 'अनुसूची II — संचय एवं अधिशेष', shortName: 'II',
     lineItems: [
-      { id: 'II-1', label: 'Statutory Reserve Fund', labelHi: 'वैधानिक संचय निधि', source: { kind: 'account', accountIds: ['1201'] }, indent: 0, note: 'Sec 65' },
+      { id: 'II-1', label: 'Statutory Reserve Fund', labelHi: 'वैधानिक संचय निधि', source: { kind: 'account', accountIds: ['1201'] }, indent: 0, note: 'Sec 87(1)(a)' },
       { id: 'II-2', label: 'Building Fund', labelHi: 'भवन निधि', source: { kind: 'account', accountIds: ['1202'] }, indent: 0 },
-      { id: 'II-3', label: 'Education Fund', labelHi: 'शिक्षा निधि', source: { kind: 'account', accountIds: ['1203'] }, indent: 0, note: 'Sec 65(2)' },
+      { id: 'II-3', label: 'Education Fund', labelHi: 'शिक्षा निधि', source: { kind: 'account', accountIds: ['1203'] }, indent: 0, note: 'Sec 87(1)(b)' },
       { id: 'II-4', label: 'Risk Fund', labelHi: 'जोखिम निधि', source: { kind: 'account', accountIds: ['1204'] }, indent: 0 },
-      { id: 'II-5', label: 'Bad Debt Fund', labelHi: 'अशोध्य ऋण निधि', source: { kind: 'account', accountIds: ['1205'] }, indent: 0 },
+      { id: 'II-5', label: 'Bad Debt Fund', labelHi: 'अशोध्य ऋण निधि', source: { kind: 'account', accountIds: ['1205'] }, indent: 0, note: 'Sec 87(1)(a)' },
       { id: 'II-6', label: 'Depreciation Fund', labelHi: 'ह्रास निधि', source: { kind: 'account', accountIds: ['1206'] }, indent: 0 },
       { id: 'II-7', label: 'Welfare Fund', labelHi: 'कल्याण निधि', source: { kind: 'account', accountIds: ['1207'] }, indent: 0 },
       { id: 'II-8', label: 'Price Stabilization Fund', labelHi: 'मूल्य स्थिरता निधि', source: { kind: 'account', accountIds: ['1209'] }, indent: 0 },
-      { id: 'II-9', label: 'Social / Cooperative Dev Fund', labelHi: 'सहकारी विकास निधि', source: { kind: 'account', accountIds: ['1210'] }, indent: 0, note: 'Sec 65(3)' },
+      { id: 'II-9', label: 'Social / Cooperative Dev Fund', labelHi: 'सहकारी विकास निधि', source: { kind: 'account', accountIds: ['1210'] }, indent: 0 },
       { id: 'II-10', label: 'Dividend Distribution (Contra)', labelHi: 'लाभांश वितरण (विपरीत)', source: { kind: 'account', accountIds: ['1211'] }, indent: 0 },
       // Audit C-4: Patronage Rebate is an appropriation of surplus (member distribution), not opex.
       { id: 'II-10b', label: 'Patronage Rebate (Contra)', labelHi: 'संरक्षण छूट (विपरीत)', source: { kind: 'account', accountIds: ['4406'] }, indent: 0 },
@@ -481,7 +483,9 @@ export const PUNJAB_FORMAT: StateAuditFormat = {
   actName: 'Punjab Cooperative Societies Act, 1961',
   actNameHi: 'पंजाब सहकारी समिति अधिनियम, 1961',
   actYear: 1961,
-  schedules: HARYANA_SCHEDULES,
+  // Same line items as Haryana, but Haryana's SECTION numbers do not belong on a Punjab schedule —
+  // the Punjab Act's sections are not checked, so no section note is shown.
+  schedules: HARYANA_SCHEDULES.map((s) => ({ ...s, lineItems: s.lineItems.map(({ note: _note, ...li }) => li) })),
   reservePct: 25,
   educationFundPct: 1,
   coopDevFundPct: 3,
