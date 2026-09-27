@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { analyzeLedgerHygiene, hygieneSummary, type HygieneCategory, type HygieneSeverity, type LedgerUsage } from '@/lib/ledgerHygiene';
 import type { LedgerParitySnapshot } from '@/lib/ledger/reportParity';
+import DomainAccountsCard from '@/components/DomainAccountsCard';
 
 const SEV_CLS: Record<HygieneSeverity, string> = {
   error: 'bg-red-100 text-red-800 border-red-300',
@@ -161,6 +162,9 @@ const LedgerHygiene: React.FC = () => {
           ))}
         </CardContent>
       </Card>
+
+      {/* RM-05: domain (Consumer/Dairy) accounts — read-only duplicate list + explicit provisioning. */}
+      <DomainAccountsCard hi={hi} />
 
       {findings.length === 0 ? (
         <Card><CardContent className="pt-6 text-center text-muted-foreground">

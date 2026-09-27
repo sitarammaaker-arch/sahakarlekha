@@ -25,11 +25,14 @@ export const DAIRY_ACCOUNT_IDS = {
 
 type Acc = Pick<LedgerAccount, 'id' | 'name' | 'nameHi' | 'subtype'> & { isDeleted?: boolean };
 
+const nameHit = (a: Acc, nameHints: ReadonlyArray<string>): boolean =>
+  nameHints.some((h) => (a.nameHi || '').includes(h) || (a.name || '').toLowerCase().includes(h.toLowerCase()));
+
 const findBy = (
   accounts: ReadonlyArray<Acc>,
   subtype: string | null,
   id: string,
-  nameHints: string[],
+  nameHints: ReadonlyArray<string>,
 ): string | null => {
   const live = accounts.filter((a) => !a.isDeleted);
   if (subtype) {
@@ -38,17 +41,32 @@ const findBy = (
   }
   const byId = live.find((a) => a.id === id);
   if (byId) return byId.id;
-  const byName = live.find((a) =>
-    nameHints.some((h) => (a.nameHi || '').includes(h) || (a.name || '').toLowerCase().includes(h.toLowerCase())),
-  );
+  const byName = live.find((a) => nameHit(a, nameHints));
   return byName ? byName.id : null;
 };
 
+/**
+ * True when `a` is one findBy(subtype, id, nameHints) COULD pick — the union of its three passes.
+ * findBy returns only the first hit; this lets a diagnostic list every candidate without changing
+ * which one is chosen.
+ */
+export const dairyAccountMatches = (a: Acc, subtype: string | null, id: string, nameHints: ReadonlyArray<string>): boolean =>
+  !a.isDeleted && ((!!subtype && a.subtype === subtype) || a.id === id || nameHit(a, nameHints));
+
+/** Name fallbacks for the ledgers the old load-time seeder created (shared with dairyAccountMatches). */
+export const DAIRY_HINTS = {
+  milkProcurement: ['दुग्ध खरीदी', 'दूध खरीद', 'Milk Procurement'],
+  milkBulkSales: ['दुग्ध बिक्री', 'Milk Sales'],
+  memberInputReceivable: ['सदस्य आदान प्राप्य', 'Member Input Receivable'],
+  bonusDistribution: ['संरक्षण बोनस वितरण', 'Patronage Bonus Distribution'],
+  bonusPayable: ['देय बोनस', 'Bonus Payable'],
+} as const;
+
 export const resolveMilkProcurementAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
-  findBy(accounts, 'milk_procurement', DAIRY_ACCOUNT_IDS.milkProcurement, ['दुग्ध खरीदी', 'दूध खरीद', 'Milk Procurement']);
+  findBy(accounts, 'milk_procurement', DAIRY_ACCOUNT_IDS.milkProcurement, DAIRY_HINTS.milkProcurement);
 
 export const resolveMilkBulkSalesAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
-  findBy(accounts, 'milk_sales', DAIRY_ACCOUNT_IDS.milkBulkSales, ['दुग्ध बिक्री', 'Milk Sales']);
+  findBy(accounts, 'milk_sales', DAIRY_ACCOUNT_IDS.milkBulkSales, DAIRY_HINTS.milkBulkSales);
 
 export const resolveMilkPayableAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
   findBy(accounts, null, DAIRY_ACCOUNT_IDS.milkPayable, ['देय दुग्ध', 'दुग्ध भुगतान', 'Milk Payment Payable', 'Milk Payable']);
@@ -57,12 +75,12 @@ export const resolveUnionReceivableAccountId = (accounts: ReadonlyArray<Acc>): s
   findBy(accounts, null, DAIRY_ACCOUNT_IDS.unionReceivable, ['विविध देनदार', 'Sundry Debtors', 'Union Receivable']);
 
 export const resolveMemberInputReceivableAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
-  findBy(accounts, null, DAIRY_ACCOUNT_IDS.memberInputReceivable, ['सदस्य आदान प्राप्य', 'Member Input Receivable']);
+  findBy(accounts, null, DAIRY_ACCOUNT_IDS.memberInputReceivable, DAIRY_HINTS.memberInputReceivable);
 
 export const resolveBonusDistributionAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
-  findBy(accounts, null, DAIRY_ACCOUNT_IDS.bonusDistribution, ['संरक्षण बोनस वितरण', 'Patronage Bonus Distribution']);
+  findBy(accounts, null, DAIRY_ACCOUNT_IDS.bonusDistribution, DAIRY_HINTS.bonusDistribution);
 export const resolveBonusPayableAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
-  findBy(accounts, null, DAIRY_ACCOUNT_IDS.bonusPayable, ['देय बोनस', 'Bonus Payable']);
+  findBy(accounts, null, DAIRY_ACCOUNT_IDS.bonusPayable, DAIRY_HINTS.bonusPayable);
 export const resolveDividendDistributionAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
   findBy(accounts, null, DAIRY_ACCOUNT_IDS.dividendDistribution, ['लाभांश वितरण', 'Dividend Distribution']);
 export const resolveDividendPayableAccountId = (accounts: ReadonlyArray<Acc>): string | null =>

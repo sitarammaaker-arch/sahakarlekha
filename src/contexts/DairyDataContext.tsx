@@ -3,20 +3,19 @@
  *
  * This context does NOT fork the accounting / voucher / posting / reports / audit engines.
  * Those stay in DataContext (the single SSOT). It COMPOSES the core: reads `society` (FY-lock)
- * and `accounts` from useData(), `societyId` from useAuth(), and calls useData().addVoucher /
- * addAccount for all accounting. Persistence mirrors the Housing pattern: optimistic local +
+ * and `accounts` from useData(), `societyId` from useAuth(), and calls useData().addVoucher
+ * for all accounting. Persistence mirrors the Housing pattern: optimistic local +
  * localStorage + Supabase upsert with RULE-1 visible rollback and a RULE-6 FY-lock guard.
  *
- * Delivery D1 adds: Fat+SNF milk rate charts (master + pricing) and an additive "ensure-accounts"
- * seeder that creates the dedicated milk ledgers (procurement / bulk-sales) for a dairy society
- * that predates the D1 template — the C-A conflict resolution, so milk never posts to the generic
- * 4101/5101 fallbacks. The collection hot-path posting (which absorbs the existing MilkCollection
+ * Delivery D1 adds: Fat+SNF milk rate charts (master + pricing). Dedicated milk ledgers
+ * (procurement / bulk-sales) for a dairy society that predates the D1 template — the C-A conflict
+ * resolution, so milk never posts to the generic 4101/5101 fallbacks — are created by the explicit
+ * admin provisioning action (useDomainAccountProvisioning), no longer by a load-time seeder. The collection hot-path posting (which absorbs the existing MilkCollection
  * page — C-B) lands in D2.
  */
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
-import { useCapabilities } from '@/hooks/useCapabilities';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabasePaging';
@@ -97,9 +96,8 @@ interface DairyDataContextValue {
 const DairyDataContext = createContext<DairyDataContextValue | null>(null);
 
 export function DairyProvider({ children }: { children: ReactNode }) {
-  const { society, accounts, members, addAccount, addVoucher, cancelVoucher } = useData();
+  const { society, accounts, members, addVoucher, cancelVoucher } = useData();
   const { user } = useAuth();
-  const { capabilities } = useCapabilities(); // T-14: raw set (no super-admin bypass) — seed by capability, not type
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
   // T-01: stamp BOTH tenancy keys (society_id + jurisdiction) — the value comes from the SSOT
@@ -199,36 +197,10 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     );
   }, [user?.societyId]);
 
-  // ── C-A ensure-accounts: seed dedicated milk ledgers for a pre-D1 dairy society (additive) ──
-  const seededRef = useRef(false);
-  useEffect(() => {
-    if (seededRef.current) return;
-    if (!capabilities.has('dairy_collection')) return; // T-14 (ADR-0002): seed by capability, not type
-    if (!accounts || accounts.length === 0) return;
-    if (society.fyLocked) return; // seeding mutates the chart; retry on a later load when unlocked
-    const needsProc = resolveMilkProcurementAccountId(accounts) === null;
-    const needsSales = resolveMilkBulkSalesAccountId(accounts) === null;
-    const needsInput = resolveMemberInputReceivableAccountId(accounts) === null;
-    const needsBonusDist = resolveBonusDistributionAccountId(accounts) === null;
-    const needsBonusPay = resolveBonusPayableAccountId(accounts) === null;
-    if (!needsProc && !needsSales && !needsInput && !needsBonusDist && !needsBonusPay) { seededRef.current = true; return; }
-    seededRef.current = true; // attempt once per mount
-    if (needsProc) {
-      addAccount({ name: 'Milk Procurement (Direct)', nameHi: 'दुग्ध खरीदी लागत (प्रत्यक्ष)', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '5100', subtype: 'milk_procurement' });
-    }
-    if (needsSales) {
-      addAccount({ name: 'Milk Sales — Bulk / Union', nameHi: 'दुग्ध बिक्री — यूनियन', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100', subtype: 'milk_sales' });
-    }
-    if (needsInput) {
-      addAccount({ name: 'Member Input Receivable', nameHi: 'सदस्य आदान प्राप्य', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300' });
-    }
-    if (needsBonusDist) {
-      addAccount({ name: 'Patronage Bonus Distribution', nameHi: 'संरक्षण बोनस वितरण', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' });
-    }
-    if (needsBonusPay) {
-      addAccount({ name: 'Bonus Payable', nameHi: 'देय बोनस', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' });
-    }
-  }, [capabilities, society?.fyLocked, accounts, addAccount]);
+  // C-A dedicated milk ledgers (procurement, bulk sales, member input receivable, bonus
+  // distribution + payable) are NOT created here. The old load-time seeder wrote duplicate accounts
+  // (RM-05); they are now provisioned only by an explicit admin action — Ledger Hygiene →
+  // "डोमेन खाते बनाएँ" (useDomainAccountProvisioning). Posting paths refuse with a toast while missing.
 
   const addRateChart = useCallback((data: Omit<DairyRateChart, 'id' | 'createdAt'>): DairyRateChart => {
     if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as DairyRateChart;
@@ -392,7 +364,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!cur || cur.status !== 'draft') { toastRef.current({ title: 'पहले से approved', variant: 'destructive' }); return sentinel; }
     const milkCost = resolveMilkProcurementAccountId(accounts);
     const payable = resolveMilkPayableAccountId(accounts);
-    if (!milkCost || !payable) { toastRef.current({ title: 'दुग्ध खाते नहीं मिले', description: 'Milk procurement / payable ledger missing.', variant: 'destructive', duration: 12000 }); return sentinel; }
+    if (!milkCost || !payable) { toastRef.current({ title: 'दुग्ध खाते नहीं मिले', description: 'Milk procurement / payable ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', variant: 'destructive', duration: 12000 }); return sentinel; }
     const legs = settlementLegs(cur.gross, cur.deductionLines, milkCost, payable);
     if (legs.length === 0) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'Legs balanced nahi (कटौती > सकल या खाता गुम).', variant: 'destructive' }); return sentinel; }
     const net = netPayable(cur.gross, cur.deductionLines);
@@ -468,7 +440,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (qty <= 0 || amount <= 0) { toastRef.current({ title: 'अधूरी जानकारी', description: 'लीटर और दर ज़रूरी हैं।', variant: 'destructive' }); return sentinel; }
     const rcv = resolveUnionReceivableAccountId(accounts);
     const sales = resolveMilkBulkSalesAccountId(accounts);
-    if (!rcv || !sales) { toastRef.current({ title: 'खाते नहीं मिले', description: 'Union receivable / bulk-sales ledger missing.', variant: 'destructive', duration: 12000 }); return sentinel; }
+    if (!rcv || !sales) { toastRef.current({ title: 'खाते नहीं मिले', description: 'Union receivable / bulk-sales ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', variant: 'destructive', duration: 12000 }); return sentinel; }
     const binding = { 'milk.dispatch.receivable': rcv, 'milk.bulk.sales': sales };
     const specs = buildEngineVoucherLines(resolveDairyPostingLegs('RecogniseMilkDispatch', { amount, currency: 'INR' }, binding, accounts));
     if (specs.length !== 2) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'Legs resolve nahi hui.', variant: 'destructive' }); return sentinel; }
@@ -542,7 +514,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const amount = +(data.amount || 0).toFixed(2);
     if (amount <= 0 || !data.memberId || !data.incomeAccountId) { toastRef.current({ title: 'अधूरी जानकारी', description: 'सदस्य, राशि और आय-खाता ज़रूरी हैं।', variant: 'destructive' }); return sentinel; }
     const rcv = resolveMemberInputReceivableAccountId(accounts);
-    if (!rcv || !accounts.some(a => a.id === data.incomeAccountId)) { toastRef.current({ title: 'खाता नहीं मिला', description: 'Member input receivable / income ledger missing.', variant: 'destructive', duration: 12000 }); return sentinel; }
+    if (!rcv || !accounts.some(a => a.id === data.incomeAccountId)) { toastRef.current({ title: 'खाता नहीं मिला', description: 'Member input receivable / income ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', variant: 'destructive', duration: 12000 }); return sentinel; }
     const voucher = addVoucher({
       type: 'journal', date: data.date,
       debitAccountId: rcv, creditAccountId: data.incomeAccountId, amount,
@@ -620,7 +592,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!args.resolutionNo || !args.resolutionNo.trim()) { toastRef.current({ title: 'प्रस्ताव संख्या आवश्यक', description: 'बोनस/लाभांश वितरण के लिए सभा/बोर्ड प्रस्ताव संख्या ज़रूरी है।', variant: 'destructive', duration: 10000 }); return sentinel; }
     const distAcc = cur.kind === 'bonus' ? resolveBonusDistributionAccountId(accounts) : resolveDividendDistributionAccountId(accounts);
     const payAcc = cur.kind === 'bonus' ? resolveBonusPayableAccountId(accounts) : resolveDividendPayableAccountId(accounts);
-    if (!distAcc || !payAcc) { toastRef.current({ title: 'खाते नहीं मिले', description: 'Distribution / payable ledger missing.', variant: 'destructive', duration: 12000 }); return sentinel; }
+    if (!distAcc || !payAcc) { toastRef.current({ title: 'खाते नहीं मिले', description: 'Distribution / payable ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', variant: 'destructive', duration: 12000 }); return sentinel; }
     const legs = distributionLegs(cur.total, distAcc, payAcc);
     if (legs.length === 0) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'Legs balanced nahi.', variant: 'destructive' }); return sentinel; }
     const kindHi = cur.kind === 'bonus' ? 'बोनस' : 'लाभांश';
@@ -648,7 +620,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const amount = +Math.min(args.amount, outstandingAmt).toFixed(2);
     if (!(amount > 0)) { toastRef.current({ title: 'कुछ बकाया नहीं', variant: 'destructive' }); return sentinel; }
     const payAcc = cur.kind === 'bonus' ? resolveBonusPayableAccountId(accounts) : resolveDividendPayableAccountId(accounts);
-    if (!payAcc) { toastRef.current({ title: 'देय खाता नहीं मिला', variant: 'destructive' }); return sentinel; }
+    if (!payAcc) { toastRef.current({ title: 'देय खाता नहीं मिला', description: 'Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', variant: 'destructive', duration: 12000 }); return sentinel; }
     const creditAcc = args.mode === 'bank' ? (args.bankAccountId || '3302') : '3301';
     const kindHi = cur.kind === 'bonus' ? 'बोनस' : 'लाभांश';
     const voucher = addVoucher({
