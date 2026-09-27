@@ -260,7 +260,7 @@ const SocietySetup: React.FC = () => {
     setResetCoaOpen(true);
   };
 
-  const handleResetCoa = () => {
+  const handleResetCoa = async () => {
     // Security 3: Type-to-confirm
     if (resetConfirmText.trim().toLowerCase() !== society.name.trim().toLowerCase()) {
       toast({ title: language === 'hi' ? 'समिति का नाम सही नहीं है' : 'Society name does not match', variant: 'destructive' });
@@ -280,7 +280,10 @@ const SocietySetup: React.FC = () => {
 
     const type = form.societyType || society.societyType || 'marketing_processing';
     const template = SOCIETY_TEMPLATES[type] || SOCIETY_TEMPLATES['marketing_processing'];
-    resetAccounts(template);
+    // resetAccounts toasts its own refusal / failure; announce success only when the cloud has the
+    // whole template (M1-4a — no false-success toast).
+    const ok = await resetAccounts(template);
+    if (!ok) return;
     setResetCoaOpen(false);
     setResetConfirmText('');
     toast({
@@ -379,8 +382,8 @@ const SocietySetup: React.FC = () => {
 
   const handleDeleteAccount = (id: string, name: string) => {
     if (!window.confirm(language === 'hi' ? `"${name}" खाता हटाएं?` : `Delete account "${name}"?`)) return;
-    deleteAccount(id);
-    toast({ title: language === 'hi' ? 'खाता हटाया गया' : 'Account deleted' });
+    // deleteAccount bails with its own toast on a guard — only announce a delete that started.
+    if (deleteAccount(id)) toast({ title: language === 'hi' ? 'खाता हटाया गया' : 'Account deleted' });
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);

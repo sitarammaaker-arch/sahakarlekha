@@ -159,7 +159,7 @@ const iEngine = at(/isEngineVoucher\(v\)/), iPeriod = at(/guardPeriodLock\(/), i
 const iPlan = at(/planAccountMerge\(/), iApply = at(/setVouchersState\(vouchersRef\.current\)/);
 const iWrites = at(/await Promise\.all\(writes\.map\(w => w\.run\(\)\)\)/);
 const iAppend = at(/await persistEventsAuthoritative\(allEvents, ledgerAppendIO\)/);
-const iDelete = at(/from\('accounts'\)\.delete\(\)\.eq\('id', removeId\)/);
+const iDelete = at(/await new Promise<boolean>\(resolve => deleteAccountRow\(remove,/);
 ok([iPerm, iFy, iOpening, iSystem, iType, iStock, iEngine, iPeriod, iJournal].every(i => i >= 0), 'all guards present (permission, FY, opening, system, type, stock routing, engine, period, journal-loaded)');
 ok([iPerm, iFy, iOpening, iSystem, iType, iStock, iEngine, iPeriod, iJournal].every(i => i < iPlan && i < iApply), 'every guard runs before any planning or optimistic change');
 ok(iPerm < iFy && iPerm === at(/guardPermission/), 'permission is the first check');
@@ -172,7 +172,7 @@ ok(/vouchersRef\.current = voucherSnapshot/.test(FM) && /suppliersRef\.current =
 ok(/variant: 'destructive'/.test(FM) && /return null;/.test(FM), 'failMerge shows a destructive toast and resolves null');
 ok(/buildOpeningDelta\(\{ \.\.\.remove, openingBalance: 0 \}\)/.test(M), 'removed account journal opening is zeroed in the same batch');
 const DEL = M.slice(iDelete);
-ok(/if \(delErr\)/.test(DEL) && /toastRef\.current\(\{[\s\S]*?variant: 'destructive'[\s\S]*?accountDeleted: false/.test(DEL) && /accountDeleted: false/.test(DEL), 'account-delete failure is surfaced with a destructive toast (not only reportError)');
+ok(/onFail: \(\) => resolve\(false\)/.test(DEL) && /accountDeleted \};/.test(DEL), 'account delete goes through deleteAccountRow (M1-4a: restores the row + destructive toast on refusal) and reports accountDeleted');
 ok(!/return 0;/.test(M), 'no ambiguous numeric return — blocked resolves null');
 ok(!/persistLedgerEvent\(/.test(M), 'no best-effort event persist inside merge (the batch is authoritative)');
 
