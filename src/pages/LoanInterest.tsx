@@ -5,6 +5,8 @@
  * accrual journal entries: Dr 3313 (Interest Receivable) / Cr 4408 (Interest Income)
  */
 import React, { useEffect, useMemo, useState } from 'react';
+import { appliesSection65, isShortTermS65, section65Room, interestTakenToDate, S65_CITE } from '@/lib/loans/section65';
+import type { AccruableLoan } from '@/lib/loans/interestAccrual';
 import { asDayCount, periodDays, DAY_COUNT_OPTIONS } from '@/lib/interestDayCount';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -71,7 +73,7 @@ const buildDefaultDates = (mode: InterestPeriodMode) => interestPeriodDefaults(m
 const LoanInterest: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { loans, kccLoans: ctxKccLoans, members, vouchers, society, addVoucher } = useData();
+  const { loans, kccLoans: ctxKccLoans, members, vouchers, society, addVoucher, accounts } = useData();
   // KCC loans are edited on the KCC page against its own list — read the table fresh here so a
   // repayment made earlier in this session is never accrued on a stale balance.
   const [freshKcc, setFreshKcc] = useState<KccLoan[] | null>(null);
@@ -106,7 +108,7 @@ const LoanInterest: React.FC = () => {
   // Reserve (2211), not income. Overdue = marked overdue, or due date before the period end with
   // something outstanding (founder decision D1).
   const activeLoans = useMemo(() => accruableLoans(loans), [loans]);
-  const { saveAccruals } = useLoanAccruals();
+  const { saveAccruals, accruals: postedAccruals } = useLoanAccruals();
 
   // ── Check if period already posted ────────────────────────────────────────
   const periodLabel = getPeriodLabel(mode, fromDate, toDate, hi);
@@ -135,16 +137,25 @@ const LoanInterest: React.FC = () => {
     days: number;
     interest: number;
     overdue: boolean;
+    cappedBySection65?: boolean;
   }
 
   // Shared accrual rows (one formula — the shared loanOutstanding, clamped at 0 for interest only).
   const basis = asDayCount(society.interestDayCount);
-  const accrual = useMemo(() => accrualRows(activeLoans, toDate, days, basis), [activeLoans, toDate, days, basis]);
+  // Haryana Act s.65: on a short-term loan (≤ 15 months) the interest taken may not exceed the
+  // principal advanced — the accrual is capped at what is still allowed.
+  const s65 = appliesSection65(society.state);
+  const interestRoom = useMemo(() => {
+    if (!s65) return undefined;
+    const isIncome = (id: string) => accounts.find(a => a.id === id)?.type === 'income';
+    return (l: AccruableLoan) => (isShortTermS65(l) ? section65Room(l.amount, interestTakenToDate(l, postedAccruals, vouchers, isIncome)) : null);
+  }, [s65, accounts, postedAccruals, vouchers]);
+  const accrual = useMemo(() => accrualRows(activeLoans, toDate, days, basis, interestRoom), [activeLoans, toDate, days, basis, interestRoom]);
   const rows: InterestRow[] = useMemo(() => accrual.map(r => {
     const member = members.find(m => m.id === r.memberId);
     return {
       loanId: r.loanId, loanNo: r.loanNo, memberName: member?.name ?? '—', memberId: member?.memberId ?? '—',
-      principal: r.principal, outstanding: r.outstanding, ratePa: r.ratePa, days: r.days, interest: r.interest, overdue: r.overdue,
+      principal: r.principal, outstanding: r.outstanding, ratePa: r.ratePa, days: r.days, interest: r.interest, overdue: r.overdue, cappedBySection65: r.cappedBySection65,
     };
   }), [accrual, members]);
 
@@ -152,7 +163,7 @@ const LoanInterest: React.FC = () => {
   const totalInterest = split.total;
 
   // ── KCC loans (KCC-1): same rules, same outstanding the KCC page shows, their own journal ──
-  const kccAccrual = useMemo(() => accrualRows(kccAccruables(kccLoans), toDate, days, basis), [kccLoans, toDate, days, basis]);
+  const kccAccrual = useMemo(() => accrualRows(kccAccruables(kccLoans), toDate, days, basis, interestRoom), [kccLoans, toDate, days, basis, interestRoom]);
   const kccSplit = useMemo(() => splitAccrual(kccAccrual), [kccAccrual]);
   const kccName = (memberId: string) => members.find(m => m.id === memberId)?.name
     ?? kccLoans.find(k => k.memberId === memberId)?.memberName ?? '—';
@@ -456,7 +467,7 @@ const LoanInterest: React.FC = () => {
                     <TableCell className="text-right text-sm">{fmt(r.outstanding)}</TableCell>
                     <TableCell className="text-right text-sm">{r.ratePa}%</TableCell>
                     <TableCell className="text-right text-sm">{r.days}</TableCell>
-                    <TableCell className="text-right font-semibold text-blue-700">{fmt(r.interest)}</TableCell>
+                    <TableCell className="text-right font-semibold text-blue-700">{fmt(r.interest)}{r.cappedBySection65 && <span className="block text-[10px] font-normal text-amber-700" title={S65_CITE}>{hi ? 'धारा 65: मूलधन तक सीमित' : 's.65: limited to principal'}</span>}</TableCell>
                     <TableCell>
                       {r.overdue
                         ? <Badge variant="outline" className="border-amber-400 text-amber-700 text-[10px]">{hi ? 'अतिदेय → संचय 2211' : 'Overdue → Reserve 2211'}</Badge>
@@ -514,7 +525,7 @@ const LoanInterest: React.FC = () => {
                     <TableCell className="text-sm">{kccName(r.memberId)}</TableCell>
                     <TableCell className="text-right text-sm">{fmt(r.outstanding)}</TableCell>
                     <TableCell className="text-right text-sm">{r.ratePa}%</TableCell>
-                    <TableCell className="text-right font-semibold text-blue-700">{fmt(r.interest)}</TableCell>
+                    <TableCell className="text-right font-semibold text-blue-700">{fmt(r.interest)}{r.cappedBySection65 && <span className="block text-[10px] font-normal text-amber-700" title={S65_CITE}>{hi ? 'धारा 65: मूलधन तक सीमित' : 's.65: limited to principal'}</span>}</TableCell>
                     <TableCell>
                       {r.overdue
                         ? <Badge variant="outline" className="border-amber-400 text-amber-700 text-[10px]">{hi ? 'अतिदेय → संचय 2211' : 'Overdue → Reserve 2211'}</Badge>

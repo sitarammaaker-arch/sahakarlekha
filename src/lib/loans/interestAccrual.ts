@@ -27,6 +27,8 @@ export interface AccruableLoan {
   repaidAmount: number;
   interestRate: number;
   dueDate?: string;
+  disbursementDate?: string;
+  loanType?: string;
   status: string;
 }
 
@@ -40,6 +42,8 @@ export interface AccrualRow {
   days: number;
   interest: number;
   overdue: boolean;
+  /** Interest was cut down to what s.65 (Haryana) still allows on this short-term loan. */
+  cappedBySection65?: boolean;
 }
 
 export interface LoanInterestAccrual {
@@ -79,14 +83,22 @@ export function isOverdueAt(loan: AccruableLoan, periodTo: string): boolean {
 export const accruableLoans = <L extends AccruableLoan>(loans: readonly L[]): L[] =>
   loans.filter((l) => l.status !== 'cleared' && loanOutstanding(l) > 0.005);
 
-export function accrualRows(loans: readonly AccruableLoan[], periodTo: string, days: number, basis: DayCountBasis = DEFAULT_DAY_COUNT): AccrualRow[] {
+/**
+ * `interestRoom(loan)` — the most interest the law still allows on the loan (s.65, Haryana), or null
+ * when no limit applies. The accrual is capped at it and flagged; never negative.
+ */
+export function accrualRows(loans: readonly AccruableLoan[], periodTo: string, days: number, basis: DayCountBasis = DEFAULT_DAY_COUNT, interestRoom?: (loan: AccruableLoan) => number | null): AccrualRow[] {
   return accruableLoans(loans).map((l) => {
     const outstanding = Math.max(0, loanOutstanding(l));   // shared formula; clamp only for interest
+    const full = basis === '365' ? simpleInterest(outstanding, l.interestRate, days) : periodInterest(outstanding, l.interestRate, periodTo, days, basis);
+    const room = interestRoom ? interestRoom(l) : null;
+    const capped = room == null ? full : Math.min(full, Math.max(0, room));
     return {
       loanId: l.id, loanNo: l.loanNo, memberId: l.memberId, principal: l.amount, outstanding,
       // '365' keeps the exact historical formula; other bases use the society's year basis.
-      ratePa: l.interestRate, days, interest: basis === '365' ? simpleInterest(outstanding, l.interestRate, days) : periodInterest(outstanding, l.interestRate, periodTo, days, basis),
+      ratePa: l.interestRate, days, interest: capped,
       overdue: isOverdueAt(l, periodTo),
+      ...(capped < full ? { cappedBySection65: true } : {}),
     };
   });
 }
@@ -179,14 +191,14 @@ export function repaymentInterestSplit(interest: number, due: LoanInterestDue): 
 // kccOutstanding). Adapter: amount = repaid + outstanding, so loanOutstanding(adapted) equals it.
 export interface KccLike {
   id: string; loanNo: string; memberId: string; drawnAmount: number; repaidAmount: number;
-  outstandingAmount?: number; interestRate: number; dueDate: string; status: string; isDeleted?: boolean;
+  outstandingAmount?: number; interestRate: number; dueDate: string; disbursementDate?: string; status: string; isDeleted?: boolean;
 }
 export function kccAsAccruable(k: KccLike): AccruableLoan {
   const repaid = Number(k.repaidAmount) || 0;
   const outstanding = kccOutstanding({ outstandingAmount: k.outstandingAmount as number, drawnAmount: Number(k.drawnAmount) || 0, repaidAmount: repaid });
   return {
     id: k.id, loanNo: k.loanNo, memberId: k.memberId, amount: Math.round((repaid + outstanding) * 100) / 100, repaidAmount: repaid,
-    interestRate: Number(k.interestRate) || 0, dueDate: k.dueDate, status: k.status === 'repaid' ? 'cleared' : k.status,
+    interestRate: Number(k.interestRate) || 0, dueDate: k.dueDate, disbursementDate: k.disbursementDate, status: k.status === 'repaid' ? 'cleared' : k.status,
   };
 }
 export const kccAccruables = (kcc: readonly KccLike[]): AccruableLoan[] => kcc.filter((k) => !k.isDeleted).map(kccAsAccruable);
