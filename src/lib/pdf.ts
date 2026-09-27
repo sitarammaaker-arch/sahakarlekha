@@ -748,8 +748,8 @@ export function generateBalanceSheetPDF(
       pyTotal += orphanPY;
       groupRows.push(body.length);
       body.push(hasPY
-        ? [language === 'hi' ? 'अन्य' : 'OTHER', orphanPY ? fmt(orphanPY) : '', '', fmt(orphanTotal)]
-        : [language === 'hi' ? 'अन्य' : 'OTHER', '', fmt(orphanTotal)]);
+        ? ['OTHER', orphanPY ? fmt(orphanPY) : '', '', fmt(orphanTotal)]
+        : ['OTHER', '', fmt(orphanTotal)]);
       // Summary: collapse the long catch-all "Other" list to its total only.
       if (detailed) orphans.forEach(b => {
         const val = signFlip ? -b.netBalance : b.netBalance;
@@ -790,7 +790,8 @@ export function generateBalanceSheetPDF(
   // Closing Stock — auto-valued from inventory (matches the on-screen Balance Sheet).
   if (Math.abs(unpostedClosingStock) > 0.005) {
     asset.groupRows.push(asset.body.length);
-    const csLabel = language === 'hi' ? 'समापन माल' : 'CLOSING STOCK';
+    // PDFs are English-only (helvetica has no Devanagari — a Hindi label prints as garbage).
+    const csLabel = 'CLOSING STOCK';
     asset.body.push(hasPY
       ? [csLabel, '', '', fmt(unpostedClosingStock)]
       : [csLabel, '', fmt(unpostedClosingStock)]);
