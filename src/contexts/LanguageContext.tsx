@@ -41,6 +41,7 @@ export const translations: Translations = {
   depreciationSchedule: { hi: 'डेप्रिसिएशन शेड्यूल', en: 'Depreciation Schedule' },
   auditRegister: { hi: 'ऑडिट रजिस्टर', en: 'Audit Register' },
   deletedVouchers: { hi: 'रद्द वाउचर', en: 'Deleted Vouchers' },
+  auditTrail: { hi: 'ऑडिट ट्रेल', en: 'Audit Trail' },
   bankReconciliation: { hi: 'बैंक मिलान (BRS)', en: 'Bank Reconciliation' },
   reserveFund: { hi: 'रिज़र्व फंड आवंटन', en: 'Reserve Fund' },
   profitDistribution: { hi: 'लाभ का बँटवारा', en: 'Profit Distribution' },

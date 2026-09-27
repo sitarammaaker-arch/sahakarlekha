@@ -122,6 +122,7 @@ const Payroll = lazyWithRetry(() => import("./pages/Payroll"));
 const Suppliers = lazyWithRetry(() => import("./pages/Suppliers"));
 const Customers = lazyWithRetry(() => import("./pages/Customers"));
 const DeletedVouchers = lazyWithRetry(() => import("./pages/DeletedVouchers"));
+const AuditTrail = lazyWithRetry(() => import("./pages/AuditTrail"));
 const BankReconciliation = lazyWithRetry(() => import("./pages/BankReconciliation"));
 const ReserveFund = lazyWithRetry(() => import("./pages/ReserveFund"));
 const ProfitDistribution = lazyWithRetry(() => import("./pages/ProfitDistribution"));
@@ -365,6 +366,7 @@ const AppRoutes = () => {
       <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
       <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
       <Route path="/deleted-vouchers" element={<ProtectedRoute><DeletedVouchers /></ProtectedRoute>} />
+      <Route path="/audit-trail" element={<ProtectedRoute><AuditTrail /></ProtectedRoute>} />
       <Route path="/bank-reconciliation" element={<ProtectedRoute><BankReconciliation /></ProtectedRoute>} />
       <Route path="/reserve-fund" element={<ProtectedRoute><ReserveFund /></ProtectedRoute>} />
       <Route path="/profit-distribution" element={<ProtectedRoute><ProfitDistribution /></ProtectedRoute>} />
