@@ -181,6 +181,7 @@
     "test:rm02-diagnostics": "node scripts/test-rm02-diagnostics.mjs",
     "test:db-harness-guard": "node scripts/test-db-harness-guard.mjs",
     "test:m1-2-financial-years": "node scripts/test-m1-2-financial-years.mjs",
+    "test:m1-3-account-roles": "node scripts/test-m1-3-account-roles.mjs",
     "db:harness": "node scripts/db-harness/harness.mjs",
     "test:ledgerheads-no-auto-merge": "node scripts/test-ledgerheads-no-auto-merge.mjs",
     "test:persist": "node scripts/test-voucher-persistence.mjs",

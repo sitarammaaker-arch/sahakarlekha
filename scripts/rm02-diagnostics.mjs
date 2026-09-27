@@ -43,6 +43,28 @@ export function wrapReadOnly(code) {
   return `begin transaction read only; ${code}; rollback;`;
 }
 
+/**
+ * Runs one read-only SELECT against the linked Supabase project and returns its rows.
+ * The SQL is guard-checked, sent as a file (it can exceed the Windows command-line limit) and
+ * wrapped in a read-only transaction that rolls back.
+ */
+export function runReadOnlyQuery(sql, workdir) {
+  const query = assertReadOnlySql(sql);
+  const dir = mkdtempSync(pathResolve(tmpdir(), 'rm02-'));
+  const file = pathResolve(dir, 'query.sql');
+  writeFileSync(file, wrapReadOnly(query));
+  let raw;
+  try {
+    raw = execFileSync(
+      'npx', ['--no-install', 'supabase', 'db', 'query', '--linked', ...(workdir ? ['--workdir', workdir] : []), '--file', file, '-o', 'json'],
+      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, shell: process.platform === 'win32', stdio: ['ignore', 'pipe', 'inherit'] },
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  return JSON.parse(raw.slice(raw.indexOf('{'))).rows || [];
+}
+
 function main() {
   const i = process.argv.indexOf('--out');
   const out = i > 0 ? process.argv[i + 1] : null;
@@ -51,23 +73,7 @@ function main() {
     process.exit(2);
   }
   const w = process.argv.indexOf('--workdir');
-  const workdir = w > 0 ? ['--workdir', process.argv[w + 1]] : [];
-  const query = assertReadOnlySql(readFileSync(SQL_PATH, 'utf8'));
-  // Passed as a file: the query is longer than the Windows command-line limit.
-  const dir = mkdtempSync(pathResolve(tmpdir(), 'rm02-'));
-  const file = pathResolve(dir, 'query.sql');
-  writeFileSync(file, wrapReadOnly(query));
-  let raw;
-  try {
-    raw = execFileSync(
-      'npx', ['--no-install', 'supabase', 'db', 'query', '--linked', ...workdir, '--file', file, '-o', 'json'],
-      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, shell: process.platform === 'win32', stdio: ['ignore', 'pipe', 'inherit'] },
-    );
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  const parsed = JSON.parse(raw.slice(raw.indexOf('{')));
-  const rows = parsed.rows || [];
+  const rows = runReadOnlyQuery(readFileSync(SQL_PATH, 'utf8'), w > 0 ? process.argv[w + 1] : undefined);
   writeFileSync(out, JSON.stringify({ capturedAt: new Date().toISOString(), rows }, null, 2));
 
   const flag = (r) => [
