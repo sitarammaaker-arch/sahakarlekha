@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,7 +51,7 @@ const TYPE_BADGE_CLASS: Record<AccountType, string> = {
 
 const LedgerHeads: React.FC = () => {
   const { language } = useLanguage();
-  const { accounts, society, addAccount, updateAccount, deleteAccount, mergeAccounts, getEntityLinks, getAccountBalance } = useData();
+  const { accounts, society, addAccount, updateAccount, deleteAccount, getEntityLinks, getAccountBalance } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -142,29 +142,12 @@ const LedgerHeads: React.FC = () => {
     return Object.values(groups).filter(g => g.length > 1);
   }, [accounts]);
 
-  // Auto-clean genuine duplicates (same name + type) silently — no user should ever
-  // see a "Duplicate Account" warning and mistake it for an error. Keep the lowest
-  // code, merge the rest into it (reuses the proven mergeAccounts). Skips when the FY
-  // is audit-locked (no mutation allowed — the gated banner below signals it instead).
-  const autoMergedRef = useRef(false);
-  useEffect(() => {
-    if (autoMergedRef.current || duplicateGroups.length === 0 || society.fyLocked) return;
-    autoMergedRef.current = true;
-    duplicateGroups.forEach(group => {
-      const sorted = [...group].sort((a, b) => a.id.localeCompare(b.id));
-      sorted.slice(1).forEach(dup => mergeAccounts(sorted[0].id, dup.id));
-    });
-  }, [duplicateGroups, society.fyLocked, mergeAccounts]);
-
-  const handleMerge = (keepId: string, removeId: string, name: string) => {
-    const count = mergeAccounts(keepId, removeId);
-    toast({
-      title: hi ? 'खाते मर्ज किए गए' : 'Accounts Merged',
-      description: hi
-        ? `"${name}" — ${count} वाउचर अपडेट किए गए, डुप्लिकेट हटाया गया`
-        : `"${name}" — ${count} voucher${count !== 1 ? 's' : ''} updated, duplicate removed`,
-    });
-  };
+  // Duplicates are REPORTED, never auto-merged. Opening this page must not write accounting
+  // data (same class as RM-01 #531): an earlier load-time effect called mergeAccounts for every
+  // duplicate, silently re-pointing historical vouchers and deleting accounts. The merge action
+  // stays disabled until mergeAccounts is journal-safe — today it re-points vouchers without
+  // appending voucher.reversed/posted events (journal postings stay on the removed account) and
+  // drops the removed account's opening balance without a zero event.
 
   const handleCSV = () => {
     const headers = ['Name', 'Name (Hindi)', 'Type', 'Opening Balance', 'Balance Type', 'Group'];
@@ -302,44 +285,48 @@ const LedgerHeads: React.FC = () => {
         </div>
       </div>
 
-      {/* Duplicate accounts warning + merge */}
-      {/* Banner only when the FY is locked (auto-merge can't run then); otherwise duplicates self-clean above. */}
-      {society.fyLocked && duplicateGroups.length > 0 && (
+      {/* Same-name accounts — informational only. Nothing here writes data (see the note above
+          duplicateGroups); the Merge button is disabled until mergeAccounts is journal-safe. */}
+      {duplicateGroups.length > 0 && (
         <Card className="border-amber-300 bg-amber-50 dark:bg-amber-900/20">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2 text-amber-800 dark:text-amber-200">
               <AlertTriangle className="h-5 w-5" />
               {hi
-                ? `${duplicateGroups.length} डुप्लिकेट खाते पाए गए`
-                : `${duplicateGroups.length} Duplicate Account${duplicateGroups.length > 1 ? 's' : ''} Found`}
+                ? `${duplicateGroups.length} नाम ऐसे हैं जिनके एक से ज़्यादा खाते हैं`
+                : `${duplicateGroups.length} name${duplicateGroups.length > 1 ? 's have' : ' has'} more than one account`}
             </CardTitle>
+            <p className="text-xs text-amber-800/80 dark:text-amber-200/80">
+              {hi
+                ? 'यह सिर्फ़ जानकारी है — कोई खाता या वाउचर अपने-आप नहीं बदला जाता। Merge अभी उपलब्ध नहीं है; journal-safe merge जल्द आएगा।'
+                : 'For information only — no account or voucher is changed automatically. Merge is not available yet; a journal-safe merge is coming.'}
+            </p>
           </CardHeader>
           <CardContent className="space-y-3">
-            {duplicateGroups.map((group, gi) => {
-              const sorted = [...group].sort((a, b) => {
-                const aVouchers = Math.abs(getAccountBalance(a.id));
-                const bVouchers = Math.abs(getAccountBalance(b.id));
-                return bVouchers - aVouchers;
-              });
-              const keep = sorted[0];
-              const remove = sorted[1];
+            {duplicateGroups.map((group) => {
+              const sorted = [...group].sort((a, b) => a.id.localeCompare(b.id));
               return (
-                <div key={gi} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg bg-white dark:bg-background border">
+                <div key={`${sorted[0].type}|${sorted[0].id}`} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg bg-white dark:bg-background border">
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{keep.name}</p>
+                    <p className="font-medium text-sm truncate">{sorted[0].name}</p>
                     <p className="text-xs text-muted-foreground">
                       {hi ? `${group.length} खाते एक ही नाम` : `${group.length} accounts with same name`}
-                      {' · '}
-                      {hi ? 'रखें' : 'Keep'}: <span className="font-mono">{keep.id.length > 8 ? keep.id.slice(0, 8) + '…' : keep.id}</span>
-                      {' → '}
-                      {hi ? 'हटाएं' : 'Remove'}: <span className="font-mono">{remove.id.length > 8 ? remove.id.slice(0, 8) + '…' : remove.id}</span>
                     </p>
+                    <ul className="mt-1 text-xs text-muted-foreground space-y-0.5">
+                      {sorted.map(a => (
+                        <li key={a.id} className="flex flex-wrap gap-x-2">
+                          <span className="font-mono">{a.id.length > 8 ? a.id.slice(0, 8) + '…' : a.id}</span>
+                          <span>{hi ? 'शेष' : 'Balance'}: {fmt(getAccountBalance(a.id))}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="gap-1.5 shrink-0 border-amber-300 text-amber-700 hover:bg-amber-100"
-                    onClick={() => handleMerge(keep.id, remove.id, keep.name)}
+                    className="gap-1.5 shrink-0 border-amber-300 text-amber-700"
+                    disabled
+                    title={hi ? 'Merge अभी उपलब्ध नहीं है' : 'Merge is not available yet'}
                   >
                     <Merge className="h-3.5 w-3.5" />
                     {hi ? 'मर्ज करें' : 'Merge'}
