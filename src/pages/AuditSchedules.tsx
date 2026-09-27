@@ -26,7 +26,7 @@ import {
 } from '@/lib/stateAuditFormats';
 import { generateAuditSchedulesPDF } from '@/lib/pdf';
 import { balanceSheetLeaves } from '@/lib/balanceSheetLeaves';
-import { tieSchedules } from '@/lib/auditScheduleTie';
+import { tieSchedules, hideZeroLines } from '@/lib/auditScheduleTie';
 import { CasStatements } from '@/components/cas/CasStatements';
 import { statutoryLimits, scheduleLimitsLine } from '@/lib/rules/statutoryLimits';
 
@@ -227,7 +227,8 @@ const AuditSchedules: React.FC = () => {
       trading: hasTrading ? tr : null,
     });
   }, [format, fyEnd, getTrialBalance, getProfitLoss, getTradingAccount, accounts, members, pyBalances, society.reserveFundPct]);
-  const resolved = tied.schedules;
+  // Nil heads (zero this year and last) are hidden on screen, PDF, Excel and CSV; totals stay.
+  const resolved = useMemo(() => hideZeroLines(tied.schedules), [tied]);
 
   // ── Tab state ───────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('all');

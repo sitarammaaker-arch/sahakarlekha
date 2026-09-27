@@ -89,6 +89,19 @@ ok(near(x.find((i) => i.isTotal).currentYear, 4524), 'X: net profit 4,524');
   ok(!z.schedules.some((s) => s.items.some((i) => i.id.includes('-x-') && Math.abs(i.currentYear) < 0.005)), 'no line for a zero-balance head the schedule does not name');
   ok(z.ties.ok, 'still ties');
 }
+// Nil heads hidden (founder 2026-09-27): only lines with an amount + the totals.
+{
+  const { hideZeroLines } = await imp('src/lib/auditScheduleTie.ts');
+  const shown = hideZeroLines(schedules);
+  const I = shown.find((s) => s.id === 'sch-I').items;
+  ok(I.length === 2 && I[0].label === 'Individual Member Share Capital' && I[1].isTotal, `I: only the share line + total (${I.map((i) => i.label).join(' | ')})`);
+  const III = shown.find((s) => s.id === 'sch-III').items;
+  ok(III.length === 1 && III[0].isTotal && III[0].currentYear === 0, 'an empty schedule keeps just its total (Nil)');
+  ok(shown.every((s) => s.items.filter((i) => !i.isTotal).every((i) => Math.abs(i.currentYear) >= 0.005 || Math.abs(i.previousYear) >= 0.005)), 'no nil line anywhere');
+  ok(shown.every((s, k) => (s.items.find((i) => i.isTotal)?.currentYear ?? 0) === (schedules[k].items.find((i) => i.isTotal)?.currentYear ?? 0)), 'totals unchanged by hiding');
+  const pyOnly = hideZeroLines([{ id: 'x', name: 'x', nameHi: 'x', shortName: 'x', items: [{ id: 'a', label: 'a', labelHi: 'a', source: { kind: 'account', accountIds: ['1'] }, currentYear: 0, previousYear: 500 }] }]);
+  ok(pyOnly[0].items.length === 1, 'a line with a previous-year amount stays');
+}
 // Punjab / other states reuse the same line items → the same tie.
 {
   const pb = tieSchedules(F.resolveAllSchedules(F.getStateAuditFormat('pb'), ctx), { accounts, leaves, trialBalance: TB, trading, netProfit, previousYearBalances: {} });
@@ -96,6 +109,7 @@ ok(near(x.find((i) => i.isTotal).currentYear, 4524), 'X: net profit 4,524');
 }
 
 const page = fs.readFileSync(path.join(ROOT, 'src/pages/AuditSchedules.tsx'), 'utf8');
+ok(/hideZeroLines\(tied\.schedules\)/.test(page), 'page hides nil heads (screen, PDF, Excel, CSV all read `resolved`)');
 ok(/getTrialBalance\(fyEnd\)/.test(page) && /balanceSheetLeaves\(trialBalance, \{ closingStockPosted: tr\.closingStockPosted/.test(page) && /tieSchedules\(resolveAllSchedules\(format, ctx\)/.test(page), 'page: FY-end, Balance Sheet leaves, tied schedules (screen, PDF, Excel, CSV)');
 ok(/Schedules do not tie to the Balance Sheet/.test(page), 'page reports a tie failure instead of hiding it');
 
