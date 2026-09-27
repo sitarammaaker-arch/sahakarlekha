@@ -360,12 +360,12 @@ const BalanceSheet: React.FC = () => {
           )}
 
           {/* Closing Stock — auto-valued from inventory at the as-on date (Tally-style) */}
-          {!isLiabSide && unpostedStock > 0 && (
+          {!isLiabSide && Math.abs(unpostedStock) > 0.005 && (
             <TableRow className="font-semibold">
               {hasPY && <TableCell></TableCell>}
               {hasPY && <TableCell></TableCell>}
               <TableCell className="text-sm">
-                {hi ? 'समापन माल (इन्वेंट्री से)' : 'Closing Stock (from Inventory)'}
+                {hi ? 'समापन माल (इन्वेंट्री + इस वर्ष स्टॉक खाते में आया माल)' : 'Closing Stock (inventory + goods put into stock this year)'}
               </TableCell>
               <TableCell></TableCell>
               <TableCell className="text-right">{fmt(unpostedStock)}</TableCell>

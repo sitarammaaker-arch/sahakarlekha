@@ -156,6 +156,7 @@
     "test:member-portal-core": "node scripts/test-member-portal-core.mjs",
     "test:member-portal-handout": "node scripts/test-member-portal-handout.mjs",
     "test:member-portal-view": "node scripts/test-member-portal-view.mjs",
+    "test:closing-stock-one-rule": "node scripts/test-closing-stock-one-rule.mjs",
     "test:member-portal-verticals": "node scripts/test-member-portal-verticals.mjs",
     "test:member-360": "node scripts/test-member-360.mjs",
     "test:print-chrome": "node scripts/test-print-chrome.mjs",

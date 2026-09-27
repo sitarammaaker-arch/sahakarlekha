@@ -518,7 +518,8 @@ export function generateIncomeExpenditurePDF(
 
   const expBody: string[][] = [
     ...expenseItems.map(i => [i.name, fmt(i.amount)]),
-    ...(isSurplus ? [['Surplus carried to Balance Sheet', fmt(surplusToBS)]] : [['Deficit carried to Balance Sheet', fmt(Math.abs(netProfit))]]),
+    // A surplus balances the EXPENDITURE side; a deficit balances the INCOME side (below) — never both.
+    ...(isSurplus ? [['Surplus carried to Balance Sheet', fmt(surplusToBS)]] : []),
   ];
   const incBody: string[][] = [
     ...incomeItems.map(i => [i.name, fmt(i.amount)]),
@@ -787,9 +788,9 @@ export function generateBalanceSheetPDF(
       }), groupRows: [] as number[], pyTotal: assetBalances.reduce((s, b) => s + getPY(b.account.id), 0) };
 
   // Closing Stock — auto-valued from inventory (matches the on-screen Balance Sheet).
-  if (unpostedClosingStock > 0) {
+  if (Math.abs(unpostedClosingStock) > 0.005) {
     asset.groupRows.push(asset.body.length);
-    const csLabel = language === 'hi' ? 'समापन माल (इन्वेंट्री से)' : 'CLOSING STOCK (FROM INVENTORY)';
+    const csLabel = language === 'hi' ? 'समापन माल' : 'CLOSING STOCK';
     asset.body.push(hasPY
       ? [csLabel, '', '', fmt(unpostedClosingStock)]
       : [csLabel, '', fmt(unpostedClosingStock)]);

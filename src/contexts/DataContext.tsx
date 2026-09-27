@@ -23,7 +23,7 @@ import { buildInterBranchTransfer, INTER_BRANCH_CONTROL_ID } from '@/lib/interBr
 import { getVoucherLines, buildVoucherEntries, splitNetByAccount } from '@/lib/voucherUtils';
 import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
-import { inventoryProcurementCost } from '@/lib/tradingAccount';
+import { inventoryProcurementCost, closingStock, isStockLedgerAccount } from '@/lib/tradingAccount';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
 import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
@@ -5057,16 +5057,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     );
     const closingStockPosted = closingViaLegacy || closingViaDedicated;
 
-    // Use ledger closing stock if journals are posted; otherwise use physical stock as synthetic item
-    const closingStockItems = ledgerClosingItems.length > 0
-      ? ledgerClosingItems
-      : physicalClosingStock > 0
-        ? [{ name: 'Closing Stock (Physical)', nameHi: 'समापन माल (भौतिक)', amount: physicalClosingStock }]
-        : [];
+    // RULE 2: THE closing-stock rule (lib/tradingAccount.closingStock) — the SAME one the Balance
+    // Sheet uses, so a society holding BOTH tracked items and goods put straight into the stock
+    // ledger counts both, in both reports.
+    const stockLeaves = tb.filter(b => isStockLedgerAccount(b.account))
+      .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, netBalance: b.netBalance, openingDebit: b.openingDebit, openingCredit: b.openingCredit }));
+    const closing = closingStock(stockLeaves, physicalClosingStock, closingStockPosted);
+    const closingStockItems = closing.items;
+    void ledgerClosingItems;
 
     // Dr side: Opening Stock = opening debit balances of inventory accounts
     const openingStockItems = tb
-      .filter(b => b.account.parentId === '3400')
+      .filter(b => isStockLedgerAccount(b.account))
       .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.openingDebit }))
       .filter(i => i.amount > 0);
 
