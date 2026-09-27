@@ -75,6 +75,7 @@ import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLine
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, nextFY } from '@/lib/depreciation';
 import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS } from '@/lib/assetDisposal';
 import { fetchAllPaged as fetchAllPagedFor } from '@/lib/supabasePaging';
+import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib/diagnostics/phantomVouchers';
 
 /* T-09 — the `ledger_events` row → LedgerEvent mapper now lives in lib/ledger/rows.ts.
    It moved because the CAIOS D-lane must read the SAME journal from the Edge Function,
@@ -287,6 +288,9 @@ interface DataContextType {
   /** T-06 shadow dual-write: the immutable ledger events emitted this session as vouchers are
    *  posted. Read-only; reporting still derives from vouchers (the ledger cutover is T-09). */
   getLedgerEvents: () => LedgerEvent[];
+  /** RM-01: read-only report of what the removed load-time writers used to "fix" — suspected phantom
+   *  member vouchers and sale/purchase ↔ voucher gaps. Never mutates anything. */
+  getPhantomVoucherDiagnostics: () => PhantomVoucherDiagnostics;
   /** T-09 pre-flight: does the journal reproduce every report this tenant reads? Read-only — the
    *  answer that decides whether `ledgerReadsEnabled` is safe to flip. Surfaced on Ledger Hygiene. */
   getLedgerReportParity: () => LedgerParitySnapshot;
@@ -790,6 +794,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return true; // blocked
   }, []);
+  // Phase 2a-4c: new entries are paused while the subscription is expired (reads stay available).
+  // Returns true (and toasts) when BLOCKED — same convention as guardFYLocked. Shared by addVoucher
+  // and guardVoucherPostable so both refuse for the identical reason (RULE 2).
+  const guardSubscriptionExpired = useCallback((): boolean => {
+    if (!subExpiredRef.current) return false;
+    toastRef.current({
+      title: 'Plan expired / प्लान समाप्त',
+      description: 'Subscription expired — new entries are paused. Please renew; your data is safe. कृपया renew करें, डेटा सुरक्षित है।',
+      variant: 'destructive',
+    });
+    return true;
+  }, []);
+  // RM-01: the voucher-birth refusals addVoucher applies (permission, FY lock, expired plan, period
+  // lock), checked BEFORE a sale/purchase touches stock, movements or its old voucher. Without the
+  // load-time repair loop nothing re-creates a missing voucher later, so a flow must never get past a
+  // point it cannot finish. Returns true (and toasts) when BLOCKED. Every supplied date is checked, so
+  // an edit can neither start from nor move into a locked period.
+  const guardVoucherPostable = useCallback((...dates: (string | undefined)[]): boolean => {
+    if (guardPermission('create', 'वाउचर बनाने')) return true;
+    if (guardFYLocked()) return true;
+    if (guardSubscriptionExpired()) return true;
+    if (guardPeriodLock(...dates)) return true;
+    return false;
+  }, [guardPermission, guardFYLocked, guardSubscriptionExpired, guardPeriodLock]);
   const [loans, setLoansState] = useState<Loan[]>([]);
   const [depositAccounts, setDepositAccountsState] = useState<DepositAccount[]>([]);
   const [depositTransactions, setDepositTransactionsState] = useState<DepositTransaction[]>([]);
@@ -967,41 +995,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { accounts: baseAccts, changed: acctsMigrated, newlyAdded } = storage.migrateAccounts(rawAccts);
         setAccountsState(baseAccts);
         storage.setAccounts(baseAccts);
-        // Only INSERT truly new accounts (don't delete+reinsert — preserves user customizations)
-        if (acctsMigrated && newlyAdded.length > 0) {
-          const rows = newlyAdded.map(a => ({ ...a, society_id: sid, jurisdiction: jurisdictionRef.current }));
-          supabase.from('accounts').upsert(rows).then(({ error }) => {
-            if (error) console.warn('Account migration sync error:', error.message);
-          });
-        }
+        // RM-01 (S0 emergency safety fix): the load path NEVER writes to the database. The template
+        // accounts migrateAccounts adds are merged into LOCAL state only (every device merges the same
+        // deterministic list on load); they used to be upserted into `accounts` here on every load.
+        // Persisting them is an explicit, reviewed step (Phase-3 M2), never a side effect of loading.
+        void acctsMigrated; void newlyAdded;
 
-        // Auto-create missing member vouchers — wrapped in try-catch so it never breaks main data load
-        try {
-          const existingVouchers: Voucher[] = vData || [];
-          const fyStr: string = (socData && socData.length > 0 ? socData[0] : society).financialYear || '2024-25';
-          const autoVouchers: Voucher[] = [];
-          for (const member of (mData || [])) {
-            const mv = existingVouchers.filter(v => v.memberId === member.id && !v.isDeleted);
-            if (!mv.some(v => v.creditAccountId === ACCOUNT_IDS.SHARE_CAP) && (member.shareCapital || 0) > 0) {
-              const allSoFar = [...existingVouchers, ...autoVouchers];
-              autoVouchers.push({ id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', fyStr, allSoFar), type: 'receipt', date: member.joinDate || new Date().toISOString().split('T')[0], debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: Number(member.shareCapital), narration: `Share Capital received from ${member.name}`, memberId: member.id, createdAt: new Date().toISOString(), createdBy: 'System' });
-            }
-            if (!mv.some(v => v.creditAccountId === ACCOUNT_IDS.ADM_FEE) && (member.admissionFee || 0) > 0) {
-              const allSoFar = [...existingVouchers, ...autoVouchers];
-              autoVouchers.push({ id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', fyStr, allSoFar), type: 'receipt', date: member.joinDate || new Date().toISOString().split('T')[0], debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: Number(member.admissionFee), narration: `Admission Fee received from ${member.name}`, memberId: member.id, createdAt: new Date().toISOString(), createdBy: 'System' });
-            }
-          }
-          if (autoVouchers.length > 0) {
-            const allVouchers = [...existingVouchers, ...autoVouchers];
-            setVouchersState(allVouchers);
-            storage.setVouchers(allVouchers);
-            for (const v of autoVouchers) {
-              supabase.from('vouchers').upsert({ ...v, society_id: sid, jurisdiction: jurisdictionRef.current }).then(({ error }) => { if (error) console.error('Auto member voucher sync error:', error.message); });
-            }
-          }
-        } catch (migErr) {
-          console.warn('Auto member voucher migration error (non-fatal):', migErr);
-        }
+        // RM-01 (S0 emergency safety fix): loading members NEVER creates an accounting voucher.
+        // This used to post a Cash receipt (Dr 3301 / Cr 1102 share capital, Cr 4407 admission fee) for
+        // every member whose scalar shareCapital/admissionFee had no matching voucher — judged only by
+        // the legacy creditAccountId, so imported vouchers were missed and duplicates were posted on
+        // every load (production M0: 846 duplicate System vouchers in one society). Share capital and
+        // admission fee are posted only by explicit transactions (addMember, Share Register actions).
+        // Suspected phantoms are REPORTED, never repaired, by getPhantomVoucherDiagnostics().
+
         setLoansState((lData || []).filter(l => !l.isDeleted));            // ECR-02: exclude archived loans
         setAssetsState((asData || []).filter(a => !a.isDeleted));          // P0 #2: exclude archived
         setAuditObjectionsState((aoData || []).filter(o => !o.isDeleted)); // P0 #2: exclude archived
@@ -1113,346 +1120,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           () => setMusterEntriesState(storage.getMusterEntries()),
         );
 
-        // ── Auto-repair orphan Sale / Purchase vouchers ─────────────────────
-        // Two cases handled:
-        // (a) Sale / purchase has NO matching voucher (orphan): create one.
-        // (b) Sale / purchase HAS a previous auto-repair voucher that posted to
-        //     the hardcoded 4101 / 5101, but the items map to a different
-        //     salesAccountId / purchaseAccountId (e.g. Sugar → 4103 Consumer
-        //     Goods Sales). Re-route the voucher in-place with proper per-item
-        //     account splitting via the multi-line `lines` field.
-        try {
-          const vList = ((vData || []) as Voucher[]);
-          const voucherById = new Map<string, Voucher>(vList.map(v => [v.id, v]));
-          // Index repair vouchers by their refId so we can REUSE an existing repair
-          // (instead of creating a new one every F5) when the sale.voucherId patch
-          // earlier didn't make it to Supabase. This prevents the vouchers table from
-          // ballooning past the row-limit and silently dropping the user's newest
-          // entries (like a fresh Contra) on F5.
-          const repairByRefId = new Map<string, Voucher>();
-          const duplicateRepairs: Voucher[] = []; // to soft-delete
-          // AGGRESSIVE DEDUP: For each (refType, refId) combination, keep ONLY the
-          // latest non-deleted voucher. Older duplicates get soft-deleted. This catches
-          // both [auto-repair] tagged duplicates AND any other duplicate sale/purchase
-          // vouchers (e.g. from an accidental double-save or pre-tag-era repair runs).
-          // refType + refId uniquely identifies a parent sale or purchase, so only one
-          // voucher should ever reference it.
-          for (const v of vList) {
-            if (v.isDeleted) continue;
-            if (!v.refId) continue;
-            if (v.refType !== 'sale' && v.refType !== 'purchase') continue;
-            const key = `${v.refType}:${v.refId}`;
-            const existing = repairByRefId.get(key);
-            if (!existing) {
-              repairByRefId.set(key, v);
-            } else {
-              // Pick the one with later createdAt as "primary"; mark the older as duplicate
-              const keep = (v.createdAt || '') > (existing.createdAt || '') ? v : existing;
-              const drop = keep === v ? existing : v;
-              repairByRefId.set(key, keep);
-              if (!drop.isDeleted) duplicateRepairs.push(drop);
-            }
-          }
-          const fyStr2: string = (socData && socData.length > 0 ? socData[0] : society).financialYear || '2024-25';
-          const newRepairVouchers: Voucher[] = [];
-          const updatedVouchers = new Map<string, Voucher>(); // id → updated voucher
-          const patchedSales: Sale[] = [];
-          const patchedPurchases: Purchase[] = [];
-          const allVouchersSoFar: Voucher[] = [...vList];
-          const stockMap = new Map<string, StockItem>(((siData || []) as StockItem[]).map(i => [i.id, i]));
-
-          const computeSaleAccBuckets = (sale: Sale) => {
-            const totalItemAmount = sale.items.reduce((s, it) => s + it.amount, 0) || 1;
-            const netAmt = sale.netAmount || (sale.grandTotal - (sale.taxAmount || 0));
-            const buckets = new Map<string, number>();
-            sale.items.forEach(it => {
-              const stock = stockMap.get(it.itemId);
-              const acc = stock?.salesAccountId || '4101';
-              const portion = (it.amount / totalItemAmount) * netAmt;
-              buckets.set(acc, (buckets.get(acc) || 0) + portion);
-            });
-            return buckets;
-          };
-          const computePurchaseAccBuckets = (p: Purchase) => {
-            const totalItemAmount = p.items.reduce((s, it) => s + it.amount, 0) || 1;
-            const netAmt = p.netAmount || (p.grandTotal - (p.taxAmount || 0) + (p.tdsAmount || 0));
-            const buckets = new Map<string, number>();
-            p.items.forEach(it => {
-              const stock = stockMap.get(it.itemId);
-              const acc = stock?.purchaseAccountId || '5101';
-              const portion = (it.amount / totalItemAmount) * netAmt;
-              buckets.set(acc, (buckets.get(acc) || 0) + portion);
-            });
-            return buckets;
-          };
-          const dominantAcc = (buckets: Map<string, number>, fallback: string) => {
-            let best = fallback, max = 0;
-            buckets.forEach((amt, acc) => { if (amt > max) { max = amt; best = acc; } });
-            return best;
-          };
-
-          // SALES
-          for (const sale of ((slData || []) as Sale[])) {
-            // A soft-deleted sale is archived (hidden from the app) but its row stays in the DB
-            // for audit. setSalesState filters it out (line ~1343: `.filter(s => !s.isDeleted)`) —
-            // so the repair loop MUST too, or it repairs a sale the rest of the app has deleted.
-            // Without this, cancelling the orphan voucher is futile: the deleted sale is still in
-            // slData, so the next load resurrects the voucher under a new number, forever. RULE-5.
-            if (sale.isDeleted) continue;
-            // First try sale.voucherId; if missing, look up by refId from existing repair vouchers
-            // (handles the case where the sale.voucherId Supabase patch failed previously —
-            //  prevents creating a brand-new duplicate every F5).
-            let existing = sale.voucherId ? voucherById.get(sale.voucherId) : undefined;
-            if (!existing || existing.isDeleted) existing = repairByRefId.get(`sale:${sale.id}`);
-            // Re-point sale.voucherId at the kept-latest voucher BEFORE the skip check,
-            // so user-made vouchers also benefit from the patch when their voucherId
-            // pointed to a now-deduped older duplicate.
-            if (existing && !existing.isDeleted && sale.voucherId !== existing.id) {
-              patchedSales.push({ ...sale, voucherId: existing.id });
-            }
-            const isAutoRepair = !!existing?.narration?.includes('[auto-repair]');
-            // Don't touch user-made vouchers — only rebuild if missing OR an old auto-repair
-            if (existing && !existing.isDeleted && !isAutoRepair) continue;
-
-            const customerAcc = sale.customerId ? ((cusData || []) as Customer[]).find(c => c.id === sale.customerId)?.accountId : undefined;
-            const debitAccId = sale.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
-              : sale.paymentMode === 'bank' ? (sale.bankAccountId || getBankAccountIds((aData || []) as LedgerAccount[])[0] || ACCOUNT_IDS.BANK)
-              : (customerAcc || '3303');
-            const vType: VoucherType = sale.paymentMode === 'credit' ? 'sale' : 'receipt';
-            const grandTotal = sale.grandTotal ?? sale.netAmount;
-            if (grandTotal <= 0) continue;
-            const buckets = computeSaleAccBuckets(sale);
-            const lines: VoucherLine[] = [];
-            const lid = () => crypto.randomUUID();
-            lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
-            // T-02 / RULE 4: allocate net (grandTotal − tax) across accounts in exact paise so
-            // the Cr lines sum to exactly the net and the voucher balances by construction.
-            splitNetByAccount(
-              sale.items.map(it => ({ accountId: stockMap.get(it.itemId)?.salesAccountId || '4101', weight: it.amount })),
-              grandTotal, sale.taxAmount || 0,
-            ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Cr', amount }));
-            if ((sale.taxAmount ?? 0) > 0) {
-              lines.push({ id: lid(), accountId: '2201', type: 'Cr', amount: sale.taxAmount!, narration: `GST: CGST ₹${sale.cgstAmount||0} + SGST ₹${sale.sgstAmount||0} + IGST ₹${sale.igstAmount||0}` });
-            }
-            const dominantCr = dominantAcc(buckets, '4101');
-
-            if (existing && isAutoRepair) {
-              // Re-route in place — preserve id/voucherNo/createdAt
-              const updated: Voucher = {
-                ...existing,
-                type: vType,
-                date: sale.date,
-                debitAccountId: debitAccId,
-                creditAccountId: dominantCr,
-                amount: grandTotal,
-                narration: `Sale: ${sale.customerName} — ${sale.saleNo} [auto-repair v2]`,
-                lines,
-                refType: 'sale',
-                refId: sale.id,
-              };
-              updatedVouchers.set(existing.id, updated);
-              // Also reflect in allVouchersSoFar for voucherNo uniqueness
-              const idx = allVouchersSoFar.findIndex(v => v.id === existing.id);
-              if (idx >= 0) allVouchersSoFar[idx] = updated;
-            } else {
-              const newId = crypto.randomUUID();
-              const voucherNo = storage.getNextVoucherNo(vType as 'receipt' | 'payment' | 'journal' | 'contra', fyStr2, allVouchersSoFar);
-              const v: Voucher = {
-                id: newId,
-                voucherNo,
-                type: vType,
-                date: sale.date,
-                debitAccountId: debitAccId,
-                creditAccountId: dominantCr,
-                amount: grandTotal,
-                narration: `Sale: ${sale.customerName} — ${sale.saleNo} [auto-repair v2]`,
-                createdAt: new Date().toISOString(),
-                createdBy: sale.createdBy || 'System (repair)',
-                refType: 'sale',
-                refId: sale.id,
-                lines,
-              };
-              newRepairVouchers.push(v);
-              allVouchersSoFar.push(v);
-              patchedSales.push({ ...sale, voucherId: newId });
-            }
-          }
-
-          // PURCHASES
-          for (const purchase of ((puData || []) as Purchase[])) {
-            // A soft-deleted purchase is archived (hidden from the app) but its row stays in the
-            // DB for audit. setPurchasesState filters it out (line ~1344: `.filter(p => !p.isDeleted)`)
-            // — so the repair loop MUST too, or it repairs a purchase the rest of the app has
-            // deleted. This is the ghost-voucher bug: cancel the orphan payment voucher, and the
-            // next load recreates it from the still-present deleted purchase, under a new number,
-            // forever. The founder hit exactly this: PV/372 → cancel → refresh → PV/373. RULE-5.
-            if (purchase.isDeleted) continue;
-            let existing = purchase.voucherId ? voucherById.get(purchase.voucherId) : undefined;
-            if (!existing || existing.isDeleted) existing = repairByRefId.get(`purchase:${purchase.id}`);
-            if (existing && !existing.isDeleted && purchase.voucherId !== existing.id) {
-              patchedPurchases.push({ ...purchase, voucherId: existing.id });
-            }
-            const isAutoRepair = !!existing?.narration?.includes('[auto-repair]');
-            if (existing && !existing.isDeleted && !isAutoRepair) continue;
-
-            const supplierAcc = purchase.supplierId ? ((supData || []) as Supplier[]).find(s => s.id === purchase.supplierId)?.accountId : undefined;
-            const creditAccId = purchase.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
-              : purchase.paymentMode === 'bank' ? (purchase.bankAccountId || getBankAccountIds((aData || []) as LedgerAccount[])[0] || ACCOUNT_IDS.BANK)
-              : (supplierAcc || '2101');
-            const vType: VoucherType = purchase.paymentMode === 'credit' ? 'purchase' : 'payment';
-            const grandTotal = purchase.grandTotal ?? purchase.netAmount;
-            if (grandTotal <= 0) continue;
-            const buckets = computePurchaseAccBuckets(purchase);
-            const lines: VoucherLine[] = [];
-            const lid = () => crypto.randomUUID();
-            // T-02 / RULE 4: allocate net (grandTotal − tax + tds) across accounts in exact
-            // paise so the Dr lines sum to exactly the net and the voucher balances by construction.
-            splitNetByAccount(
-              purchase.items.map(it => ({ accountId: stockMap.get(it.itemId)?.purchaseAccountId || '5101', weight: it.amount })),
-              grandTotal, purchase.taxAmount || 0, purchase.tdsAmount || 0, purchase.tcsAmount || 0,
-            ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Dr', amount }));
-            if ((purchase.taxAmount ?? 0) > 0) {
-              lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: purchase.taxAmount!, narration: `GST ITC: CGST ₹${purchase.cgstAmount||0} + SGST ₹${purchase.sgstAmount||0} + IGST ₹${purchase.igstAmount||0}` });
-            }
-            if ((purchase.tcsAmount ?? 0) > 0) {
-              lines.push({ id: lid(), accountId: ACCOUNT_IDS.TAX_CREDIT, type: 'Dr', amount: purchase.tcsAmount!, narration: `TCS ${purchase.tcsPct||0}% — collected by ${purchase.supplierName}` });
-            }
-            // grandTotal ALREADY carries tax + TCS and nets TDS (= net + tax + tcs − tds). The
-            // supplier/cash payable IS grandTotal; the TDS is the separate Cr to 2202 below.
-            // Subtracting tds again here double-counted it and left the Cr side short.
-            const netPayable = grandTotal;
-            if (netPayable > 0) {
-              lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: netPayable });
-            }
-            if ((purchase.tdsAmount ?? 0) > 0) {
-              lines.push({ id: lid(), accountId: '2202', type: 'Cr', amount: purchase.tdsAmount!, narration: `TDS ${purchase.tdsPct||0}%` });
-            }
-            const dominantDr = dominantAcc(buckets, '5101');
-
-            if (existing && isAutoRepair) {
-              const updated: Voucher = {
-                ...existing,
-                type: vType,
-                date: purchase.date,
-                debitAccountId: dominantDr,
-                creditAccountId: creditAccId,
-                amount: grandTotal,
-                narration: `Purchase: ${purchase.supplierName} — ${purchase.purchaseNo} [auto-repair v2]`,
-                lines,
-                refType: 'purchase',
-                refId: purchase.id,
-              };
-              updatedVouchers.set(existing.id, updated);
-              const idx = allVouchersSoFar.findIndex(v => v.id === existing.id);
-              if (idx >= 0) allVouchersSoFar[idx] = updated;
-            } else {
-              const newId = crypto.randomUUID();
-              const voucherNo = storage.getNextVoucherNo(vType as 'receipt' | 'payment' | 'journal' | 'contra', fyStr2, allVouchersSoFar);
-              const v: Voucher = {
-                id: newId,
-                voucherNo,
-                type: vType,
-                date: purchase.date,
-                debitAccountId: dominantDr,
-                creditAccountId: creditAccId,
-                amount: grandTotal,
-                narration: `Purchase: ${purchase.supplierName} — ${purchase.purchaseNo} [auto-repair v2]`,
-                createdAt: new Date().toISOString(),
-                createdBy: purchase.createdBy || 'System (repair)',
-                refType: 'purchase',
-                refId: purchase.id,
-                lines,
-              };
-              newRepairVouchers.push(v);
-              allVouchersSoFar.push(v);
-              patchedPurchases.push({ ...purchase, voucherId: newId });
-            }
-          }
-
-          // Soft-delete duplicate repair vouchers (caused by previous F5s creating new
-          // vouchers when sale.voucherId patch silently failed). Mark them isDeleted in
-          // state + Supabase so they don't pollute Trial Balance and don't keep growing
-          // past the PostgREST row-limit.
-          if (duplicateRepairs.length > 0) {
-            const dropIds = new Set(duplicateRepairs.map(v => v.id));
-            const now = new Date().toISOString();
-            for (let i = 0; i < allVouchersSoFar.length; i++) {
-              if (dropIds.has(allVouchersSoFar[i].id)) {
-                allVouchersSoFar[i] = {
-                  ...allVouchersSoFar[i],
-                  isDeleted: true,
-                  deletedAt: now,
-                  deletedBy: 'System (repair cleanup)',
-                  deletedReason: 'Duplicate auto-repair voucher cleaned up',
-                };
-              }
-            }
-            duplicateRepairs.forEach(v => {
-              supabase.from('vouchers').update({
-                isDeleted: true,
-                deletedAt: now,
-                deletedBy: 'System (repair cleanup)',
-                deletedReason: 'Duplicate auto-repair voucher cleaned up',
-              }).eq('id', v.id).then(({ error }) => { if (error) console.warn('Duplicate repair cleanup:', error.message); });
-            });
-            console.log(`[REPAIR v2] Cleaned ${duplicateRepairs.length} duplicate auto-repair voucher(s).`);
-          }
-
-          const totalAffected = newRepairVouchers.length + updatedVouchers.size + duplicateRepairs.length;
-          if (totalAffected > 0) {
-            setVouchersState(allVouchersSoFar);
-            storage.setVouchers(allVouchersSoFar);
-            const patchedSalesIds = new Set(patchedSales.map(s => s.id));
-            const finalSales = ((slData || []) as Sale[]).map(s => patchedSalesIds.has(s.id)
-              ? patchedSales.find(ps => ps.id === s.id)! : s);
-            const patchedPurchaseIds = new Set(patchedPurchases.map(p => p.id));
-            const finalPurchases = ((puData || []) as Purchase[]).map(p => patchedPurchaseIds.has(p.id)
-              ? patchedPurchases.find(pp => pp.id === p.id)! : p);
-            setSalesState(finalSales.filter(s => !s.isDeleted)); // ECR-02: exclude archived
-            setPurchasesState(finalPurchases.filter(p => !p.isDeleted)); // P0 #2: exclude archived
-
-            // Persist NEW repair vouchers
-            for (const v of newRepairVouchers) {
-              const { lines: vlines, refType, refId, ...base } = v;
-              supabase.from('vouchers').upsert({ ...base, society_id: sid, jurisdiction: jurisdictionRef.current }).then(({ error }) => {
-                if (error) { console.error('Repair voucher save error:', error.message); return; }
-                supabase.from('vouchers').update({ lines: vlines, refType, refId }).eq('id', v.id)
-                  .then(({ error: e2 }) => { if (e2) console.warn('Repair lines patch:', e2.message); });
-              });
-            }
-            // Persist UPDATED auto-repair vouchers (in-place re-route)
-            updatedVouchers.forEach((v) => {
-              const { lines: vlines, refType, refId, ...base } = v;
-              supabase.from('vouchers').upsert({ ...base, society_id: sid, jurisdiction: jurisdictionRef.current }).then(({ error }) => {
-                if (error) { console.error('Repair voucher update error:', error.message); return; }
-                supabase.from('vouchers').update({ lines: vlines, refType, refId }).eq('id', v.id)
-                  .then(({ error: e2 }) => { if (e2) console.warn('Re-route lines patch:', e2.message); });
-              });
-            });
-            for (const s of patchedSales) {
-              supabase.from('sales').update({ voucherId: s.voucherId }).eq('id', s.id)
-                .then(({ error }) => { if (error) console.warn('Sale voucherId patch:', error.message); });
-            }
-            for (const p of patchedPurchases) {
-              supabase.from('purchases').update({ voucherId: p.voucherId }).eq('id', p.id)
-                .then(({ error }) => { if (error) console.warn('Purchase voucherId patch:', error.message); });
-            }
-            console.log(`[REPAIR v2] New: ${newRepairVouchers.length}, Re-routed: ${updatedVouchers.size}, Cleaned duplicates: ${duplicateRepairs.length}.`);
-            toastRef.current({
-              title: `${totalAffected} voucher(s) auto-repaired`,
-              description: `${newRepairVouchers.length} created, ${updatedVouchers.size} re-routed, ${duplicateRepairs.length} duplicate(s) cleaned.`,
-              variant: 'default',
-              duration: 8000,
-            });
-          } else {
-            setSalesState((slData || []).filter(s => !s.isDeleted)); // ECR-02: exclude archived
-            setPurchasesState((puData || []).filter(p => !p.isDeleted)); // P0 #2: exclude archived
-          }
-        } catch (repairErr) {
-          console.warn('Sale/Purchase voucher auto-repair non-fatal error:', repairErr);
-          setSalesState((slData || []).filter(s => !s.isDeleted)); // ECR-02: exclude archived
-          setPurchasesState(puData || []);
-        }
+        // RM-01 (S0 emergency safety fix): loading NEVER repairs, re-routes, renumbers or soft-deletes
+        // vouchers, and never patches sales/purchases. The old "REPAIR v2" loop created vouchers for
+        // sales/purchases without one, rewrote earlier repair vouchers in place, soft-deleted "duplicate"
+        // ref vouchers and patched voucherId — bypassing the FY lock, period lock, approval and the
+        // journal. Gaps are now REPORTED by getPhantomVoucherDiagnostics(); fixing one is an explicit act.
+        setSalesState((slData || []).filter(s => !s.isDeleted));          // ECR-02: exclude archived
+        setPurchasesState((puData || []).filter(p => !p.isDeleted));      // P0 #2: exclude archived
 
         setEmployeesState((emData || []).filter(e => !e.isDeleted));       // ECR-02: exclude archived employees
         setSalaryRecordsState(srData || []);
@@ -1463,40 +1137,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setKachiAaratEntriesState(kaData || []);
         setP7EntriesState(p7Data || []);
 
-        // ── One-time voucher_entries migration ──────────────────────────────
-        // For any existing voucher that has no entries in voucher_entries yet,
-        // build and upsert rows so the relational table is always in sync.
-        try {
-          const { data: existingEntries } = await supabase
-            .from('voucher_entries').select('voucherId').eq('society_id', sid);
-          const migratedIds = new Set((existingEntries || []).map((e: { voucherId: string }) => e.voucherId));
-          const allVouchers: Voucher[] = vData || [];
-          const toMigrate = allVouchers.filter(v => !v.isDeleted && !migratedIds.has(v.id));
-          if (toMigrate.length > 0) {
-            const rows = toMigrate.flatMap(v =>
-              getVoucherLines(v).map(l => ({
-                id: `${v.id}-${l.id}`,
-                voucherId: v.id,
-                accountId: l.accountId,
-                dr: l.type === 'Dr' ? l.amount : 0,
-                cr: l.type === 'Cr' ? l.amount : 0,
-                narration: l.narration,
-                society_id: sid,
-                jurisdiction: jurisdictionRef.current,   // T-01: residency key (replay ignores it)
-              }))
-            );
-            // Batch upsert in chunks of 500 to avoid payload limits
-            for (let i = 0; i < rows.length; i += 500) {
-              const chunk = rows.slice(i, i + 500);
-              supabase.from('voucher_entries').upsert(chunk).then(({ error }) => {
-                if (error) console.warn('voucher_entries migration error:', error.message);
-              });
-            }
-            console.log(`voucher_entries: migrated ${toMigrate.length} vouchers (${rows.length} entries)`);
-          }
-        } catch (migErr) {
-          console.warn('voucher_entries migration non-fatal error:', migErr);
-        }
+        // RM-01 (S0 emergency safety fix): loading NEVER writes voucher_entries. The one-time
+        // "migration" that upserted entries for any voucher without them ran on every load; a voucher
+        // missing its entries is now listed by getPhantomVoucherDiagnostics() instead.
 
         if (socData && socData.length > 0) {
           // Supabase is the single source of truth for society settings.
@@ -1748,12 +1391,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     // Phase 2a-4c: block NEW entries when the subscription has expired (read-only).
     // Reads/reports/export stay available and data is never deleted (RULE-1).
-    if (subExpiredRef.current) {
-      toastRef.current({
-        title: 'Plan expired / प्लान समाप्त',
-        description: 'Subscription expired — new entries are paused. Please renew; your data is safe. कृपया renew करें, डेटा सुरक्षित है।',
-        variant: 'destructive',
-      });
+    if (guardSubscriptionExpired()) {
       return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     }
     // ECR-07: block back-dating a new voucher into a locked period.
@@ -5923,6 +5561,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ── Sales ──────────────────────────────────────────────────────────────────
   const addSale = useCallback((data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>): Sale => {
     if (guardFYLocked()) return { ...data, id: '' } as unknown as Sale;
+    // RM-01: refuse up front for the reasons addVoucher would — no load-time repair re-creates the voucher later.
+    if (guardVoucherPostable(data.date)) return { ...data, id: '' } as unknown as Sale;
     // Enforce per-item Sales A/c (group): block posting if any STOCK item being
     // sold has no salesAccountId, so sales never silently fall back to '4101'.
     const unmappedNames = data.items
@@ -5983,6 +5623,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       refType: 'sale',
       refId: saleId,
     });
+    // RM-01: no voucher ⇒ no sale. addVoucher already toasted why; stop before stock or the sale row
+    // is written, so a sale can never exist without its voucher (nothing repairs it on load any more).
+    if (!newVoucher.id) return { ...data, id: '' } as unknown as Sale;
 
     // Stock movements
     data.items.forEach(item => {
@@ -6129,6 +5772,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'Sale not found', variant: 'destructive' });
       return null;
     }
+    // RM-01: check every voucher-birth refusal BEFORE stock is adjusted or the old voucher is cancelled —
+    // both the original date and the new one — so an edit cannot stop half-way.
+    if (guardVoucherPostable(original.date, data.date)) return null;
 
     const now = new Date().toISOString();
     const lid = () => crypto.randomUUID();
@@ -6209,6 +5855,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       refType: 'sale',
       refId: id,
     });
+    // RM-01: the pre-check above makes this rare (e.g. an unbalanced edit). If the new voucher was still
+    // refused, the old one is already cancelled — say so loudly instead of leaving a silent gap; the
+    // document now shows in getPhantomVoucherDiagnostics() for an explicit fix.
+    if (!newVoucher.id) {
+      reportError('sale-edit-voucher-refused', 'replacement voucher refused after the original was cancelled', { id, no: original.saleNo });
+      toastRef.current({ title: '❌ नया वाउचर नहीं बना', description: `${original.saleNo}: पुराना वाउचर रद्द हो चुका है पर नया नहीं बना — इस entry को दोबारा edit करके save करें। (Replacement voucher was refused.)`, variant: 'destructive', duration: 15000 });
+    }
 
     // 4️⃣ Add fresh stock_movement rows for the edited sale
     data.items.forEach(item => {
@@ -6260,6 +5913,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ── Purchases ──────────────────────────────────────────────────────────────
   const addPurchase = useCallback((data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>): Purchase => {
     if (guardFYLocked()) return { ...data, id: '' } as unknown as Purchase;
+    // RM-01: refuse up front for the reasons addVoucher would — no load-time repair re-creates the voucher later.
+    if (guardVoucherPostable(data.date)) return { ...data, id: '' } as unknown as Purchase;
     // Enforce per-item Purchase A/c (group): block posting if any STOCK item being
     // purchased has no purchaseAccountId, so purchases never silently fall to '5101'.
     const unmappedNames = data.items
@@ -6333,6 +5988,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       refType: 'purchase',
       refId: purchaseId,
     });
+    // RM-01: no voucher ⇒ no purchase (see addSale). Stop before stock or the purchase row is written.
+    if (!newVoucher.id) return { ...data, id: '' } as unknown as Purchase;
 
     // Stock movements
     data.items.forEach(item => {
@@ -6475,6 +6132,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'Purchase not found', variant: 'destructive' });
       return null;
     }
+    // RM-01: check every voucher-birth refusal BEFORE stock is adjusted or the old voucher is cancelled.
+    if (guardVoucherPostable(original.date, data.date)) return null;
 
     const now = new Date().toISOString();
     const lid = () => crypto.randomUUID();
@@ -6566,6 +6225,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       refType: 'purchase',
       refId: id,
     });
+    // RM-01: the pre-check above makes this rare (e.g. an unbalanced edit). If the new voucher was still
+    // refused, the old one is already cancelled — say so loudly instead of leaving a silent gap; the
+    // document now shows in getPhantomVoucherDiagnostics() for an explicit fix.
+    if (!newVoucher.id) {
+      reportError('purchase-edit-voucher-refused', 'replacement voucher refused after the original was cancelled', { id, no: original.purchaseNo });
+      toastRef.current({ title: '❌ नया वाउचर नहीं बना', description: `${original.purchaseNo}: पुराना वाउचर रद्द हो चुका है पर नया नहीं बना — इस entry को दोबारा edit करके save करें। (Replacement voucher was refused.)`, variant: 'destructive', duration: 15000 });
+    }
 
     // 4️⃣ Add fresh stock_movement rows for the edited purchase
     //    (stock currentStock was already updated above via net-delta;
@@ -7361,6 +7027,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // split / selector, tracked separately. Deps mirror the value object exactly (exhaustive, so a
   // changed field is never missed and the value can never go stale).
   const getLedgerEvents = useCallback(() => [...ledgerEventsRef.current], []);
+  // RM-01: computed on demand from what is already loaded — a pure read, never run by the load path.
+  const getPhantomVoucherDiagnostics = useCallback(
+    () => phantomVoucherDiagnostics({ vouchers, members, sales, purchases }),
+    [vouchers, members, sales, purchases],
+  );
 
   const contextValue = useMemo<DataContextType>(() => ({
     branches, activeBranchId, setActiveBranch, addBranch, updateBranch, deleteBranch, transferBetweenBranches, matchesActiveBranch, isBranchRestricted,
@@ -7398,7 +7069,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addCustomer, updateCustomer, deleteCustomer,
     getAccountBalance, getShareCapitalReconciliation, getAssetRegisterReconciliation, getCashBookEntries, getBankBookEntries,
     getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments, postClosingStock, recordFundUtilisation,
-    getLedgerEvents, getLedgerReportParity, loadLedgerJournal,
+    getLedgerEvents, getLedgerReportParity, loadLedgerJournal, getPhantomVoucherDiagnostics,
     getEntityLinks,
     isLoading,
   }), [
@@ -7437,7 +7108,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addCustomer, updateCustomer, deleteCustomer,
     getAccountBalance, getShareCapitalReconciliation, getAssetRegisterReconciliation, getCashBookEntries, getBankBookEntries,
     getTrialBalance, getProfitLoss, getTradingAccount, getMemberLedger, getReceiptsPayments, postClosingStock, recordFundUtilisation,
-    getLedgerEvents, getLedgerReportParity, loadLedgerJournal,
+    getLedgerEvents, getLedgerReportParity, loadLedgerJournal, getPhantomVoucherDiagnostics,
     getEntityLinks,
     isLoading,
   ]);
