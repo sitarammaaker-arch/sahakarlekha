@@ -176,6 +176,7 @@
     "test:share-ops": "node scripts/test-share-ops.mjs",
     "test:share-premium": "node scripts/test-share-premium.mjs",
     "test:voucher-reversal": "node scripts/test-voucher-reversal.mjs",
+    "test:rm01-no-load-writes": "node scripts/test-rm01-no-load-writes.mjs",
     "test:persist": "node scripts/test-voucher-persistence.mjs",
     "test:rp-label": "node scripts/test-rp-label.mjs",
     "test:db-retry": "node scripts/test-db-retry.mjs",
