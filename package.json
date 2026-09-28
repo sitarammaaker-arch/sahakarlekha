@@ -196,6 +196,7 @@
     "test:m1-apply-preflight": "node scripts/test-m1-apply-preflight.mjs",
     "test:s2-voucher-lines": "node scripts/test-s2-voucher-lines.mjs",
     "test:m1-4c-seed-roles": "node scripts/test-m1-4c-seed-roles.mjs",
+    "test:s3a-post-voucher": "node scripts/test-s3a-post-voucher.mjs",
     "db:harness": "node scripts/db-harness/harness.mjs",
     "test:ledgerheads-no-auto-merge": "node scripts/test-ledgerheads-no-auto-merge.mjs",
     "test:persist": "node scripts/test-voucher-persistence.mjs",
