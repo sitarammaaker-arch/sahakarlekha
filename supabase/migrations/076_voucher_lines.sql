@@ -6,9 +6,9 @@
 -- rule (getVoucherLines / buildVoucherEntries — RULE 2), never a second SQL copy of it.
 --
 -- WHAT THIS DOES
---   1. Refuses (changes nothing) if any live voucher is dated AFTER its society's current FY —
---      that society's FY label must be fixed first (Society Settings), or its vouchers would have
---      no year to belong to.
+--   1. Refuses (changes nothing) if a society with live vouchers has no OPEN financial year.
+--      A society with vouchers dated AFTER its open FY (label never rolled over) is REPORTED
+--      (NOTICE) and must be left out of the backfill (--exclude-society) until its FY is fixed.
 --   2. Historical financial years (decision A): for every society, one row per earlier FY
 --      ('YYYY-YY', 1 Apr – 31 Mar) in which it has live vouchers dated before its current FY,
 --      status 'closed', close_authority 'backfill (S2): pre-M1 history'. No year-close ran for
@@ -41,8 +41,11 @@ begin
   join public.financial_years cur on cur.society_id = v.society_id::text and cur.status = 'open'
   where not coalesce(v."isDeleted", false)
     and substr(v.date::text, 1, 10) > cur.end_date::text;
+  -- A society whose FY row lags its vouchers (its label was never rolled over) is NOT blocked here:
+  -- it is reported and left out of the S2 backfill (scripts/s2-backfill-voucher-lines.mjs
+  -- --exclude-society) until its FY is corrected. Its earlier years still get their rows below.
   if n > 0 then
-    raise exception '076: % live vouchers are dated after their society''s open FY — fix that FY first (nothing changed): %', n, list;
+    raise notice '076: % live vouchers are dated after their society''s open FY — exclude these societies from the backfill until their FY is fixed: %', n, list;
   end if;
 end $chk$;
 

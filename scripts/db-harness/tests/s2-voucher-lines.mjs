@@ -7,7 +7,7 @@
 // vouchers untouched; a re-run refuses; the undo empties it. Also REPORTS (not fails) where the
 // journal disagrees — that is the known journal drift (e.g. vouchers without postings).
 //
-// Run: node scripts/db-harness/tests/s2-voucher-lines.mjs
+// Run: node scripts/db-harness/tests/s2-voucher-lines.mjs   (S2_EXCLUDE=<sid,...> to leave societies out, as in prod)
 
 import { register } from 'node:module';
 import { execFileSync } from 'node:child_process';
@@ -45,12 +45,14 @@ const pre = (await inRollback((tx) => tx.query("select to_regclass('public.vouch
 if (!pre || !pre.rows[0].vl) throw new Error('s2 test: apply 072 + 073 + 076 to the harness first');
 if (pre.rows[0].n) throw new Error('s2 test: voucher_lines is not empty');
 
+const EXCLUDE = (process.env.S2_EXCLUDE || '').split(',').map((x) => x.trim()).filter(Boolean);
+const exSql = EXCLUDE.length ? ` and v.society_id::text not in (${EXCLUDE.map((x) => `'${x}'`).join(',')})` : '';
 const vh = async () => (await inRollback((tx) => tx.query(`select md5(string_agg(to_jsonb(v)::text, '|' order by id)) as h from public.vouchers v`))).rows[0].h;
 const beforeHash = await vh();
 const dir = mkdtempSync(join(tmpdir(), 's2-'));
 try {
   console.log('Plan + apply');
-  const plan = execFileSync(process.execPath, [pathResolve(ROOT, 'scripts/s2-backfill-voucher-lines.mjs'), '--out', join(dir, 'b'), '--source', 'harness'], { encoding: 'utf8' });
+  const plan = execFileSync(process.execPath, [pathResolve(ROOT, 'scripts/s2-backfill-voucher-lines.mjs'), '--out', join(dir, 'b'), '--source', 'harness', ...EXCLUDE.flatMap((x) => ['--exclude-society', x])], { encoding: 'utf8' });
   const nLines = Number((plan.match(/lines: (\d+)/) || [])[1]);
   ok(`planner produced lines with no problems (${nLines})`, nLines > 0 && !/PROBLEMS/.test(plan));
   apply(join(dir, 'b.sql'));
@@ -59,11 +61,12 @@ try {
     const r = (await tx.query(`select
       (select count(*)::int from public.voucher_lines) as lines,
       (select count(*)::int from public.vouchers v where not coalesce(v."isDeleted", false) and coalesce(v."approvalStatus", 'approved') <> 'pending'
-         and not exists (select 1 from public.voucher_lines l where l.voucher_id = v.id)) as live_without_lines,
+         and not exists (select 1 from public.voucher_lines l where l.voucher_id = v.id)${exSql}) as live_without_lines,
       (select count(*)::int from (select voucher_id from public.voucher_lines group by 1 having sum(dr_minor) <> sum(cr_minor)) x) as unbalanced,
       (select count(*)::int from public.voucher_lines l join public.financial_years f on f.id = l.fy_id where l.entry_date not between f.start_date and f.end_date) as outside_fy,
       (select count(*)::int from public.voucher_lines l join public.vouchers v on v.id = l.voucher_id where coalesce(v."isDeleted", false)) as lines_of_deleted`)).rows[0];
     ok(`all ${r.lines} planned lines inserted`, r.lines === nLines);
+    if (EXCLUDE.length) ok('excluded societies got no lines', (await tx.query(`select count(*)::int as n from public.voucher_lines where society_id = any($1)`, [EXCLUDE])).rows[0].n === 0);
     ok('every live, posted voucher has lines', r.live_without_lines === 0, String(r.live_without_lines));
     ok('every voucher balances in paise', r.unbalanced === 0, String(r.unbalanced));
     ok('every line sits inside its financial year', r.outside_fy === 0, String(r.outside_fy));
@@ -71,7 +74,7 @@ try {
 
     // Fidelity: per society × account, net from lines == net from the app's posting rule over vouchers.
     const fromLines = new Map((await tx.query(`select society_id || '|' || account_id as k, sum(dr_minor - cr_minor)::bigint as n from public.voucher_lines group by 1`)).rows.map((x) => [x.k, Number(x.n)]));
-    const vouchers = (await tx.query(`select to_jsonb(v) as r from public.vouchers v where not coalesce(v."isDeleted", false) and coalesce(v."approvalStatus", 'approved') <> 'pending'`)).rows.map((x) => x.r);
+    const vouchers = (await tx.query(`select to_jsonb(v) as r from public.vouchers v where not coalesce(v."isDeleted", false) and coalesce(v."approvalStatus", 'approved') <> 'pending'${exSql}`)).rows.map((x) => x.r);
     const fromRule = new Map();
     for (const v of vouchers) for (const l of getVoucherLines(v)) {
       const k = `${v.society_id}|${l.accountId}`;
