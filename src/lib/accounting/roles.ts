@@ -96,7 +96,10 @@ export const ROLE_CATALOG: readonly RoleDef[] = [
   // Trading
   { role: 'sales.default', capability: 'trading', types: ['income'], match: /\bsales\b|बिक्री/i, subtypes: ['trading_income'], exclude: /(profit|loss) on sale|asset|संपत्ति/i, preferIds: ['4101'], label: 'Default sales (when an item has none)' },
   { role: 'purchase.default', capability: 'trading', types: ['expense'], match: /^purchases?\b|क्रय/i, preferIds: ['5101'], label: 'Default purchase (when an item has none)' },
-  { role: 'inventory.default', capability: 'trading', types: ['asset'], match: /trading goods|trading stock/i, subtypes: ['inventory'], preferIds: ['3403'], label: 'Default inventory' },
+  // NOT matched by subtype 'inventory' alone: every chart gets 3406 Packing Material (subtype inventory)
+  // from ACCOUNTS_TO_ADD, so a subtype match made it the "only candidate" — the default stock — in
+  // housing / dairy charts (M1-4c review, 2026-09-28). Name or the conventional 3403 only.
+  { role: 'inventory.default', capability: 'trading', types: ['asset'], match: /trading goods|trading stock/i, preferIds: ['3403'], label: 'Default inventory' },
   { role: 'closing_stock.contra', capability: 'trading', types: ['income', 'expense'], match: /closing stock/i, label: 'Closing stock (contra)' },
 
   // Assets
