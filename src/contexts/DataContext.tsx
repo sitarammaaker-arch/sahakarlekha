@@ -77,6 +77,7 @@ import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS } from '@
 import { fetchAllPaged as fetchAllPagedFor } from '@/lib/supabasePaging';
 import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib/diagnostics/phantomVouchers';
 import { accountDeleteFailure, coaResetBlockers } from '@/lib/accounting/accountDelete';
+import { planJoiningReceipts } from '@/lib/members/joiningReceipts';
 
 /* T-09 — the `ledger_events` row → LedgerEvent mapper now lives in lib/ledger/rows.ts.
    It moved because the CAIOS D-lane must read the SAME journal from the Edge Function,
@@ -186,7 +187,7 @@ interface DataContextType {
   upsertP7Entry: (data: Omit<P7Entry, 'id' | 'createdAt'> & { id?: string }) => P7Entry;
   deleteP7Entry: (id: string) => void;
 
-  addMember: (data: Omit<Member, 'id'>) => Member;
+  addMember: (data: Omit<Member, 'id'>, opts?: { quiet?: boolean }) => Member;
   updateMember: (id: string, data: Partial<Member>) => void;
   changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string) => boolean;
   deleteMember: (id: string) => void;
@@ -2408,7 +2409,55 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('p7_entries').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
   }, []);
 
-  const addMember = useCallback((data: Omit<Member, 'id'>): Member => {
+  // Member joining receipts (share capital / admission fee) — ONE rule for add, import and approve
+  // (src/lib/members/joiningReceipts.ts). A member who joined BEFORE this FY gets no receipt: that
+  // money belongs in the opening balances, not in this year's cash (it overstated the Rania demo's
+  // cash by decades of receipts). Cheque / online go to the default bank, not cash. A receipt dated
+  // in a locked period is not posted. `quiet` (bulk import) suppresses the per-member toasts — the
+  // importer shows one summary from the same planner.
+  const postJoiningReceipts = useCallback((m: Member, opts: { quiet?: boolean; fallbackBranch?: string } = {}): 'posted' | 'historical' | 'locked' | 'none' => {
+    const plan = planJoiningReceipts(m, {
+      financialYear: societyRef.current?.financialYear || '',
+      today: new Date().toISOString().slice(0, 10),
+      bankAccountId: getBankAccountIds(accountsRef.current)[0] || null,
+    });
+    if (plan.mode === 'historical') {
+      if (!opts.quiet) {
+        toastRef.current({
+          title: 'पुराना सदस्य — नकद रसीद नहीं बनी',
+          description: `${m.name} वर्तमान वित्तीय वर्ष से पहले जुड़े हैं, इसलिए शेयर ₹${plan.historicalShare}${plan.historicalAdmission ? ` / प्रवेश शुल्क ₹${plan.historicalAdmission}` : ''} की रसीद नहीं बनाई गई। यह राशि opening balance (शेयर पूँजी 1102) में शामिल करें। (Joined before this FY — carry it in the opening balances.)`,
+          duration: 12000,
+        });
+      }
+      return 'historical';
+    }
+    if (plan.mode !== 'post') return 'none';
+    if (isPeriodLocked(plan.date)) {
+      if (!opts.quiet) guardPeriodLock(plan.date);
+      return 'locked';
+    }
+    if (plan.bankFallbackToCash && !opts.quiet) {
+      toastRef.current({ title: 'बैंक खाता नहीं मिला', description: `${m.name} का भुगतान cheque/online है, पर समिति में कोई बैंक खाता नहीं — रसीद नकद में दर्ज हुई। बैंक खाता जोड़कर voucher सुधारें।`, variant: 'destructive', duration: 12000 });
+    }
+    for (const r of plan.receipts) {
+      // ECR-17 Phase 5: stamp the member's branch — this construction bypasses addVoucher's stamp,
+      // and an unbranched voucher would be invisible to a branch-restricted creator's verify-read.
+      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', societyRef.current?.financialYear || '', vouchersRef.current), type: 'receipt', date: plan.date, debitAccountId: plan.debitAccountId, creditAccountId: r.creditAccountId, amount: r.amount, narration: r.narration, memberId: m.id, branchId: m.branchId ?? opts.fallbackBranch, createdAt: new Date().toISOString(), createdBy: 'System' };
+      vouchersRef.current = [...vouchersRef.current, v];
+      setVouchersState(prev => [...prev, v]);
+      // RULE 1: persistVoucher rolls the optimistic receipt back if the cloud save fails.
+      persistVoucher(v, { isUpdate: false, onBaseFail: () => {
+        vouchersRef.current = vouchersRef.current.filter(x => x.id !== v.id);
+        setVouchersState(prev => prev.filter(x => x.id !== v.id));
+      } });
+    }
+    return 'posted';
+    // persistVoucher is a plain per-render function that only reads refs — same omission as the
+    // other voucher-writing callbacks here; listing it would rebuild addMember every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guardPeriodLock]);
+
+  const addMember = useCallback((data: Omit<Member, 'id'>, opts: { quiet?: boolean } = {}): Member => {
     if (guardFYLocked()) return { ...data, id: '' } as Member;
     const newMember: Member = { ...data, id: crypto.randomUUID(), branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) };
     setMembersState(prev => {
@@ -2437,36 +2486,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     attemptMemberSave(newMember);
     // Skip auto-vouchers for pending applications (created on approval)
     if (newMember.approvalStatus === 'pending') return newMember;
-    // Auto-create Receipt vouchers for Share Capital and Admission Fee
-    if ((newMember.shareCapital || 0) > 0) {
-      // ECR-17 Phase 5: stamp the member's branch (this construction bypasses addVoucher's stamp;
-      // an unbranched voucher would be invisible to a branch-restricted creator's verify-read).
-      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: newMember.shareCapital, narration: `Share Capital received from ${newMember.name}`, memberId: newMember.id, branchId: newMember.branchId, createdAt: new Date().toISOString(), createdBy: 'System' };
-      vouchersRef.current = [...vouchersRef.current, v];
-      setVouchersState(prev => { const updated = [...prev, v]; return updated; });
-      // RULE 1: use persistVoucher so a failed cloud save ROLLS BACK the optimistic local voucher
-      // (these are real Share Capital / Admission Fee receipts — silently keeping them local-only,
-      // to vanish on F5, is exactly the divergence RULE 1 forbids). onBaseFail removes the row.
-      persistVoucher(v, { isUpdate: false, onBaseFail: () => {
-        vouchersRef.current = vouchersRef.current.filter(x => x.id !== v.id);
-        setVouchersState(prev => prev.filter(x => x.id !== v.id));
-      } });
-    }
-    if ((newMember.admissionFee || 0) > 0) {
-      // ECR-17 Phase 5: stamp the member's branch (see the Share Capital voucher above).
-      const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: newMember.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: newMember.admissionFee!, narration: `Admission Fee received from ${newMember.name}`, memberId: newMember.id, branchId: newMember.branchId, createdAt: new Date().toISOString(), createdBy: 'System' };
-      vouchersRef.current = [...vouchersRef.current, v];
-      setVouchersState(prev => { const updated = [...prev, v]; return updated; });
-      // RULE 1: use persistVoucher so a failed cloud save ROLLS BACK the optimistic local voucher
-      // (these are real Share Capital / Admission Fee receipts — silently keeping them local-only,
-      // to vanish on F5, is exactly the divergence RULE 1 forbids). onBaseFail removes the row.
-      persistVoucher(v, { isUpdate: false, onBaseFail: () => {
-        vouchersRef.current = vouchersRef.current.filter(x => x.id !== v.id);
-        setVouchersState(prev => prev.filter(x => x.id !== v.id));
-      } });
-    }
+    // Share capital / admission fee receipts — one rule for add / import / approve (see postJoiningReceipts).
+    postJoiningReceipts(newMember, { quiet: opts.quiet });
     return newMember;
-  }, [society.financialYear]);
+  }, [postJoiningReceipts]);
 
   const updateMember = useCallback((id: string, data: Partial<Member>) => {
     if (guardFYLocked()) return;
@@ -3189,35 +3212,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       // Member approval is durable — ONLY now create the auto-vouchers (never before, so a
       // failed approve can never leave orphan share-capital / admission-fee vouchers).
-      if ((approved.shareCapital || 0) > 0) {
-        // ECR-17 Phase 5: stamp the member's branch (falling back to the approver's active branch)
-        // — this construction bypasses addVoucher's stamp, and an unbranched voucher would be
-        // invisible to a branch-restricted approver's verify-read.
-        const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: approved.shareCapital, narration: `Share Capital received from ${approved.name}`, memberId: approved.id, branchId: approved.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current), createdAt: new Date().toISOString(), createdBy: 'System' };
-        vouchersRef.current = [...vouchersRef.current, v];
-        setVouchersState(prev => [...prev, v]);
-        // RULE 1: persistVoucher rolls the optimistic voucher back if the cloud save fails, so an
-        // approved member's Share Capital / Admission Fee receipt can't silently exist local-only.
-        persistVoucher(v, { isUpdate: false, onBaseFail: () => {
-          vouchersRef.current = vouchersRef.current.filter(x => x.id !== v.id);
-          setVouchersState(prev => prev.filter(x => x.id !== v.id));
-        } });
-      }
-      if ((approved.admissionFee || 0) > 0) {
-        // ECR-17 Phase 5: stamp the member's branch (see the Share Capital voucher above).
-        const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', society.financialYear, vouchersRef.current), type: 'receipt', date: approved.joinDate, debitAccountId: ACCOUNT_IDS.CASH, creditAccountId: ACCOUNT_IDS.ADM_FEE, amount: approved.admissionFee!, narration: `Admission Fee received from ${approved.name}`, memberId: approved.id, branchId: approved.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current), createdAt: new Date().toISOString(), createdBy: 'System' };
-        vouchersRef.current = [...vouchersRef.current, v];
-        setVouchersState(prev => [...prev, v]);
-        // RULE 1: persistVoucher rolls the optimistic voucher back if the cloud save fails, so an
-        // approved member's Share Capital / Admission Fee receipt can't silently exist local-only.
-        persistVoucher(v, { isUpdate: false, onBaseFail: () => {
-          vouchersRef.current = vouchersRef.current.filter(x => x.id !== v.id);
-          setVouchersState(prev => prev.filter(x => x.id !== v.id));
-        } });
-      }
+      // One rule for add / import / approve (postJoiningReceipts): a member who joined before this FY
+      // gets no receipt; cheque / online go to the bank. Falls back to the approver's active branch.
+      postJoiningReceipts(approved, { fallbackBranch: branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) });
     });
     console.info(`[AUDIT] Member id=${id} approved by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
-  }, [society.financialYear]);
+  }, [postJoiningReceipts]);
 
   const rejectMember = useCallback((id: string) => {
     if (guardFYLocked()) return;   // RULE 6
