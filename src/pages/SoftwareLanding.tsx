@@ -32,7 +32,7 @@ const SoftwareLanding: React.FC = () => {
 const HubPage: React.FC = () => {
   useDocumentMeta({
     title: 'सहकारी समिति लेखा सॉफ्टवेयर — हर प्रकार के लिए | Cooperative Society Software',
-    description: 'PACS, दुग्ध, विपणन, उपभोक्ता, आवास, चीनी, श्रमिक व बहुउद्देशीय — हर प्रकार की सहकारी समिति के लिए मुफ़्त लेखा सॉफ्टवेयर। अपनी समिति का प्रकार चुनें।',
+    description: 'PACS, दुग्ध, विपणन, उपभोक्ता, आवास, चीनी, श्रमिक व बहुउद्देशीय — हर प्रकार की सहकारी समिति के लिए लेखा सॉफ्टवेयर, ₹1,499/FY से। अपनी समिति का प्रकार चुनें।',
     canonicalPath: '/software',
   });
 
@@ -44,11 +44,11 @@ const HubPage: React.FC = () => {
           <span>/</span><span className="text-foreground font-medium">सॉफ्टवेयर</span>
         </nav>
         <h1 className="text-3xl md:text-4xl font-extrabold text-foreground leading-tight">
-          हर प्रकार की सहकारी समिति के लिए मुफ़्त लेखा सॉफ्टवेयर
+          हर प्रकार की सहकारी समिति के लिए लेखा सॉफ्टवेयर
         </h1>
         <p className="mt-3 text-muted-foreground max-w-2xl">
           अपनी समिति का प्रकार चुनें — हर प्रकार के लिए अनुकूलित खाता-संरचना (COA), रिपोर्ट व अनुपालन।
-          <span className="block mt-1 text-sm">Free cooperative society accounting software, tailored for every society type in India.</span>
+          <span className="block mt-1 text-sm">Cooperative society accounting software, tailored for every society type in India — from ₹1,499/FY.</span>
         </p>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
@@ -70,7 +70,7 @@ const HubPage: React.FC = () => {
         </div>
 
         <div className="mt-10 flex flex-wrap gap-3">
-          <Link to="/register"><Button className="gap-2">मुफ़्त रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
+          <Link to="/register"><Button className="gap-2">रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
           <Link to="/guide"><Button variant="outline" className="gap-2"><GraduationCap className="h-4 w-4" /> सीखें (मुफ़्त गाइड)</Button></Link>
         </div>
 
@@ -110,7 +110,7 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
         name: 'SahakarLekha',
         applicationCategory: 'BusinessApplication',
         operatingSystem: 'Web Browser',
-        offers: { '@type': 'Offer', price: '0', priceCurrency: 'INR' },
+        offers: { '@type': 'Offer', price: '1499', priceCurrency: 'INR' },
       },
       breadcrumb: {
         '@type': 'BreadcrumbList',
@@ -146,7 +146,7 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link to="/register"><Button className="gap-2">मुफ़्त शुरू करें <ArrowRight className="h-4 w-4" /></Button></Link>
+          <Link to="/register"><Button className="gap-2">शुरू करें <ArrowRight className="h-4 w-4" /></Button></Link>
           <Link to="/guide"><Button variant="outline" className="gap-2"><GraduationCap className="h-4 w-4" /> मुफ़्त गाइड</Button></Link>
         </div>
 
@@ -183,7 +183,7 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
           <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-primary" /> RCS ऑडिट प्रारूप</span>
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> TDS 26Q · GST</span>
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> हिंदी + English</span>
-          <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> 100% मुफ़्त</span>
+          <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> ₹1,499/FY से</span>
         </div>
 
         {/* Knowledge-graph edges: type-specific guide/blog/help/cookbook (GOS-11) */}
@@ -194,9 +194,9 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
 
         {/* CTA */}
         <div className="mt-8 rounded-xl bg-primary/5 border border-primary/20 p-6 text-center">
-          <p className="font-semibold text-foreground">अपनी {data.nameHi} का खाता आज ही डिजिटल करें — बिल्कुल मुफ़्त।</p>
+          <p className="font-semibold text-foreground">अपनी {data.nameHi} का खाता आज ही डिजिटल करें — ₹1,499/FY से।</p>
           <div className="mt-4 flex flex-wrap justify-center gap-3">
-            <Link to="/register"><Button className="gap-2">मुफ़्त रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
+            <Link to="/register"><Button className="gap-2">रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
             <Link to="/contact"><Button variant="outline">डेमो/संपर्क</Button></Link>
           </div>
         </div>

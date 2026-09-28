@@ -32,7 +32,7 @@ const ROUTE_LABELS: Record<string, string> = {
   '/balance-sheet': 'बैलेंस शीट', '/profit-loss': 'लाभ-हानि', '/trial-balance': 'ट्रायल बैलेंस',
   '/receipts-payments': 'रसीद-भुगतान', '/reports': 'रिपोर्ट', '/dashboard': 'डैशबोर्ड',
   '/society-setup': 'समिति सेटअप', '/backup-restore': 'बैकअप व रिस्टोर', '/bank-reconciliation': 'बैंक समाधान',
-  '/register': 'मुफ्त रजिस्टर', '/software': 'सॉफ्टवेयर', '/pricing': 'मूल्य',
+  '/register': 'रजिस्टर करें', '/software': 'सॉफ्टवेयर', '/pricing': 'मूल्य',
   '/guide': 'गाइड', '/blog': 'ब्लॉग', '/faq': 'सामान्य प्रश्न', '/ask': 'पूछें',
 };
 const routeLabel = (r: string) => ROUTE_LABELS[r] || r.replace(/^\//, '').replace(/-/g, ' ');
@@ -257,10 +257,10 @@ const GlossaryTerm: React.FC = () => {
         {/* Register CTA */}
         <Card className="mt-10 bg-primary/5 border-primary/20">
           <CardContent className="p-6 text-center">
-            <p className="font-bold text-lg text-foreground">अपनी समिति का खाता डिजिटल कीजिए — मुफ्त</p>
+            <p className="font-bold text-lg text-foreground">अपनी समिति का खाता डिजिटल कीजिए — ₹1,499/FY से</p>
             <p className="text-sm text-muted-foreground mt-1">सहकारी समितियों के लिए ही बना, हिन्दी-केंद्रित प्लेटफ़ॉर्म।</p>
             <div className="flex flex-wrap gap-3 justify-center mt-4">
-              <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'glossary_footer', target: 'register', term: slug })}><Button className="gap-2">मुफ्त रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
+              <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'glossary_footer', target: 'register', term: slug })}><Button className="gap-2">रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
               <Link to="/glossary" onClick={() => trackEvent('cta_click', { location: 'glossary_footer', target: 'glossary', term: slug })}><Button variant="outline">पूरा शब्दकोश</Button></Link>
             </div>
           </CardContent>

@@ -41,7 +41,7 @@ const StateLanding: React.FC = () => {
         name: 'SahakarLekha',
         applicationCategory: 'BusinessApplication',
         operatingSystem: 'Web Browser',
-        offers: { '@type': 'Offer', price: '0', priceCurrency: 'INR' },
+        offers: { '@type': 'Offer', price: '1499', priceCurrency: 'INR' },
       },
       breadcrumb: {
         '@type': 'BreadcrumbList',
@@ -78,7 +78,7 @@ const StateLanding: React.FC = () => {
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link to="/register"><Button className="gap-2">मुफ़्त शुरू करें <ArrowRight className="h-4 w-4" /></Button></Link>
+          <Link to="/register"><Button className="gap-2">शुरू करें <ArrowRight className="h-4 w-4" /></Button></Link>
           <Link to="/guide"><Button variant="outline" className="gap-2"><GraduationCap className="h-4 w-4" /> मुफ़्त गाइड</Button></Link>
         </div>
 
@@ -117,7 +117,7 @@ const StateLanding: React.FC = () => {
           <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-primary" /> RCS ऑडिट प्रारूप</span>
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> TDS 26Q · GST</span>
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> हिंदी + English</span>
-          <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> 100% मुफ़्त</span>
+          <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> ₹1,499/FY से</span>
         </div>
 
         {/* Knowledge-graph edges: state-specific guide/blog/cookbook (GOS-11) */}
@@ -128,9 +128,9 @@ const StateLanding: React.FC = () => {
 
         {/* CTA */}
         <div className="mt-8 rounded-xl bg-primary/5 border border-primary/20 p-6 text-center">
-          <p className="font-semibold text-foreground">अपनी {data.nameHi} की सहकारी समिति का हिसाब आज ही डिजिटल करें — बिल्कुल मुफ़्त।</p>
+          <p className="font-semibold text-foreground">अपनी {data.nameHi} की सहकारी समिति का हिसाब आज ही डिजिटल करें — ₹1,499/FY से।</p>
           <div className="mt-4 flex flex-wrap justify-center gap-3">
-            <Link to="/register"><Button className="gap-2">मुफ़्त रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
+            <Link to="/register"><Button className="gap-2">रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
             <Link to="/contact"><Button variant="outline">डेमो/संपर्क</Button></Link>
           </div>
         </div>

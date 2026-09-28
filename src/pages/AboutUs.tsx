@@ -25,7 +25,7 @@ const COMPLIANCE_ITEMS = [
 const AboutUs: React.FC = () => {
   useDocumentMeta({
     title: 'हमारे बारे में — SahakarLekha | सहकारी समिति लेखा सॉफ्टवेयर',
-    description: 'SahakarLekha भारत की सहकारी समितियों के लिए मुफ़्त लेखा प्लेटफ़ॉर्म है — हमारा उद्देश्य, दृष्टि व अनुपालन (RCS, TDS, GST, NABARD). Learn about our mission to digitise cooperative society accounting across India.',
+    description: 'SahakarLekha भारत की सहकारी समितियों के लिए बना लेखा प्लेटफ़ॉर्म है — हमारा उद्देश्य, दृष्टि व अनुपालन (RCS, TDS, GST, NABARD). Learn about our mission to digitise cooperative society accounting across India.',
     canonicalPath: '/about',
   });
   return (
@@ -74,10 +74,10 @@ const AboutUs: React.FC = () => {
                   <h2 className="text-xl font-bold text-foreground">Mission / लक्ष्य</h2>
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                  मुफ्त, अनुपालन-युक्त, द्विभाषी सॉफ्टवेयर बनाना जो हर सहकारी समिति के लिए सुलभ हो। कोई छिपा शुल्क नहीं, कोई जटिलता नहीं।
+                  किफ़ायती, अनुपालन-युक्त, द्विभाषी सॉफ्टवेयर बनाना जो हर सहकारी समिति के लिए सुलभ हो। कोई छिपा शुल्क नहीं, कोई जटिलता नहीं।
                 </p>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Build free, compliant, bilingual accounting software accessible to every cooperative society. No hidden charges, no complexity.
+                  Build affordable, compliant, bilingual accounting software accessible to every cooperative society. No hidden charges, no complexity.
                 </p>
               </CardContent>
             </Card>
@@ -115,9 +115,9 @@ const AboutUs: React.FC = () => {
             </Card>
             <Card className="text-center">
               <CardContent className="p-6">
-                <p className="text-3xl md:text-4xl font-extrabold text-primary">₹0</p>
-                <p className="mt-2 font-semibold text-foreground text-sm">हमेशा मुफ्त / Forever Free</p>
-                <p className="mt-1 text-xs text-muted-foreground">No credit card, no trial period</p>
+                <p className="text-3xl md:text-4xl font-extrabold text-primary">₹1,499</p>
+                <p className="mt-2 font-semibold text-foreground text-sm">प्रति वर्ष से / Per FY, from</p>
+                <p className="mt-1 text-xs text-muted-foreground">No hidden charges, export anytime</p>
               </CardContent>
             </Card>
           </div>

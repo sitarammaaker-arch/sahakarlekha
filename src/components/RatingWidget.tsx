@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { trackEvent } from '@/lib/analytics';
 import { Star, CheckCircle2, ArrowRight, MessageCircle } from 'lucide-react';
 
-const SHARE_TEXT = 'SahakarLekha — सहकारी समितियों के लिए मुफ्त, आधुनिक लेखा सॉफ्टवेयर। देखें: https://sahakarlekha.com';
+const SHARE_TEXT = 'SahakarLekha — सहकारी समितियों के लिए आधुनिक, किफ़ायती लेखा सॉफ्टवेयर। देखें: https://sahakarlekha.com';
 
 const RatingWidget: React.FC<{ className?: string }> = ({ className = '' }) => {
   const { toast } = useToast();
@@ -65,7 +65,7 @@ const RatingWidget: React.FC<{ className?: string }> = ({ className = '' }) => {
         <p className="text-sm text-muted-foreground mt-1">आपकी रेटिंग मिल गई — समीक्षा के बाद यह यहाँ दिखेगी।</p>
         <div className="flex flex-wrap gap-3 justify-center mt-4">
           <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'rating_thanks', target: 'register' })}>
-            <Button size="sm" className="gap-1.5">मुफ्त शुरू करें <ArrowRight className="h-3.5 w-3.5" /></Button>
+            <Button size="sm" className="gap-1.5">शुरू करें <ArrowRight className="h-3.5 w-3.5" /></Button>
           </Link>
           <a
             href={`https://wa.me/?text=${encodeURIComponent(SHARE_TEXT)}`}
