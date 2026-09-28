@@ -110,6 +110,10 @@ ok("'Bad and Doubtful Fund' is recognised as the bad debt fund", role(bdf, 'fund
 // Production shape found by the proposal run (2026-09-27): 4407 still typed equity under 1200 in 7 societies.
 const oldAdm = proposeRoleMap([acc('4407', 'Admission Fee', 'equity', { subtype: 'reserve' })]);
 ok('4407 Admission Fee still typed equity is flagged, not proposed', role(oldAdm, 'member.admission_fee').accountId === null && role(oldAdm, 'member.admission_fee').idCollision?.id === '4407');
+const packing = proposeRoleMap([acc('3406', 'Packing Material', 'asset', { subtype: 'inventory' })]);
+ok('Packing Material (subtype inventory) is never the default inventory', role(packing, 'inventory.default').accountId === null && role(packing, 'inventory.default').basis === 'missing');
+const trading = proposeRoleMap([acc('3406', 'Packing Material', 'asset', { subtype: 'inventory' }), acc('3403', 'Trading Goods', 'asset', { subtype: 'inventory' })]);
+ok('Trading Goods is the default inventory next to Packing Material', role(trading, 'inventory.default').accountId === '3403');
 const input = deepFreeze([acc('3301', 'Cash in Hand', 'asset')]);
 let threw = false; try { proposeRoleMap(input); } catch { threw = true; }
 ok('proposal never mutates its input (deep-frozen chart)', !threw);
