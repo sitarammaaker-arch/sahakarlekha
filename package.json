@@ -191,6 +191,7 @@
     "test:pay-ledger-gate": "node scripts/test-pay-ledger-gate.mjs",
     "test:rm01-phantom-cancel": "node scripts/test-rm01-phantom-cancel.mjs",
     "test:member-joining-receipts": "node scripts/test-member-joining-receipts.mjs",
+    "test:voucher-entries-sync": "node scripts/test-voucher-entries-sync.mjs",
     "db:harness": "node scripts/db-harness/harness.mjs",
     "test:ledgerheads-no-auto-merge": "node scripts/test-ledgerheads-no-auto-merge.mjs",
     "test:persist": "node scripts/test-voucher-persistence.mjs",
