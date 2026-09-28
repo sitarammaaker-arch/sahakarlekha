@@ -8,7 +8,7 @@
 // Nothing is written if any voucher is unbalanced in paise or any date has no financial year.
 //
 // Usage: node scripts/s2-backfill-voucher-lines.mjs --out <path-without-ext> [--society <id>]
-//          [--source linked|harness] [--workdir <linked checkout>]
+//          [--exclude-society <id> ...] [--source linked|harness] [--workdir <linked checkout>]
 // The SQL holds society and voucher ids — keep it out of git (this repo is public).
 
 import { register } from 'node:module';
@@ -128,7 +128,7 @@ async function read(sql, source, workdir) {
 async function main() {
   const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
   const out = arg('--out'); const source = arg('--source', 'linked'); const soc = arg('--society');
-  if (!out) { console.error('usage: --out <path> [--society <id>] [--source linked|harness] [--workdir <dir>]'); process.exit(2); }
+  if (!out) { console.error('usage: --out <path> [--society <id>] [--exclude-society <id> ...] [--source linked|harness] [--workdir <dir>]'); process.exit(2); }
   const esc = (s) => s.replace(/'/g, "''");
   const f = soc ? ` and society_id::text = '${esc(soc)}'` : '';
   const vouchers = (await read(`select to_jsonb(v) as r from vouchers v where not coalesce(v."isDeleted", false)${f.replace('society_id', 'v.society_id')}`, source, arg('--workdir'))).map((x) => x.r);
@@ -136,14 +136,19 @@ async function main() {
   const { getVoucherLines } = await import(pathToFileURL(pathResolve(SRC, 'lib/voucherUtils.ts')).href);
   const { toMinor } = await import(pathToFileURL(pathResolve(SRC, 'lib/money.ts')).href);
 
+  // --exclude-society <id> (repeatable): a society whose FY row lags its vouchers (076 NOTICE) stays
+  // out of S2 until its FY is fixed. Explicit on purpose — problems anywhere else still stop the run.
+  const excluded = new Set(process.argv.flatMap((a, i) => (a === '--exclude-society' ? [process.argv[i + 1]] : [])));
   const bySoc = new Map();
   for (const v of vouchers) (bySoc.get(String(v.society_id)) ?? bySoc.set(String(v.society_id), []).get(String(v.society_id))).push(v);
-  const all = []; const problems = [];
+  const all = []; const problems = []; const skipped = [];
   for (const [sid, vs] of bySoc) {
+    if (excluded.has(sid)) { skipped.push(`${sid} (${vs.length} vouchers)`); continue; }
     const r = buildLines(vs, fyRows.filter((x) => String(x.society_id) === sid), { getVoucherLines, toMinor });
     all.push(...r.lines); problems.push(...r.problems.map((p) => `[${sid.slice(0, 8)}] ${p}`));
   }
   console.log(`s2-backfill: ${vouchers.length} live vouchers in ${bySoc.size} societies (${source})`);
+  if (skipped.length) console.log(`  EXCLUDED (not back-filled): ${skipped.join(', ')}`);
   console.log(`  lines: ${all.length}`);
   if (problems.length) { console.log(`  PROBLEMS (${problems.length}) — no SQL written:`); problems.slice(0, 20).forEach((p) => console.log(`    • ${p}`)); process.exit(1); }
   const runAt = new Date().toISOString();

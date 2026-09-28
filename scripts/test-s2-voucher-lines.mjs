@@ -68,7 +68,10 @@ const raw = readFileSync(pathResolve(HERE, '../supabase/migrations/076_voucher_l
 const code = raw.replace(/--[^\n]*/g, ' ').replace(/'(?:[^']|'')*'/g, "''").toLowerCase();
 const noPriv = code.replace(/\b(revoke|grant)\b[^;]*;/g, ' ');
 ok('wrapped in begin … commit', /^\s*begin;[\s\S]*commit;\s*$/.test(code));
-ok('refuses before any change if a voucher is after its OPEN FY (checked on financial_years)', code.indexOf('raise exception') < code.indexOf('insert into public.financial_years') && /cur\.status = ''/.test(code) && /> cur\.end_date::text/.test(code));
+ok('refuses before any change if a society with vouchers has no open FY', code.indexOf('raise exception') > 0 && code.indexOf('raise exception') < code.indexOf('insert into public.financial_years') && /f\.status = ''/.test(code));
+ok('vouchers after the OPEN FY row are only REPORTED (notice), checked on financial_years', /raise notice ''/.test(code) && /> cur\.end_date::text/.test(code) && !/> cur\.end_date::text[\s\S]{0,80}raise exception/.test(code));
+const bf = readFileSync(pathResolve(HERE, 's2-backfill-voucher-lines.mjs'), 'utf8');
+ok('backfill has an explicit, repeatable --exclude-society', /a === '--exclude-society'/.test(bf) && /if \(excluded\.has\(sid\)\) \{ skipped\.push/.test(bf));
 ok('historical FYs are inserted closed, never open', /'closed',\s*now\(\),\s*'backfill \(S2\): pre-M1 history'/.test(raw) && /on conflict \(society_id, fy_label\) do nothing/.test(code));
 ok('no UPDATE / DELETE / DROP of existing data', !/\bupdate\s+(public\.)?\w+\s+set\b|\bdelete\s+from\b|\bdrop\s+table\b/.test(noPriv));
 ok('voucher_lines: FKs to vouchers, financial_years and accounts (id, society_id)', /references public\.vouchers \(id\)/.test(code) && /references public\.financial_years \(id\)/.test(code) && /foreign key \(account_id, society_id\) references public\.accounts \(id, society_id\)/.test(code));
