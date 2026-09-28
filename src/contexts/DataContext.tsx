@@ -29,6 +29,7 @@ import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
 import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
+import { buildPostVoucherPayload, postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVoucherClient';
 import { reverseEntryLines, isEditLocked } from '@/lib/voucherReversal';
 import { canTransitionMember } from '@/lib/memberLifecycle';
 import { computeStock, computeStockValue, computeStockCostRate, reconcileMovements } from '@/lib/stockUtils';
@@ -470,6 +471,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // no read path consumes it (reporting still derives from vouchers), so it changes no behavior;
   // the ledger cutover that flips reports to the projection is T-09. In-memory this session.
   const ledgerEventsRef = useRef<LedgerEvent[]>([]);
+  // S3-b: society_flags.posting_service — when true, a new posted voucher is saved by ONE server call
+  // (post_voucher, migration 077) instead of the client's multi-call save. Read-only, fail-safe: any
+  // read error / missing table leaves it false, i.e. today's path.
+  const postingServiceRef = useRef(false);
   // True once the FULL journal has been paged into the ref (society load for a cut-over tenant, or
   // the on-demand diagnostic load). Until then the ref holds only this session's events, so a
   // sequence derived from it would be too low and collide with a not-yet-loaded genesis event on the
@@ -957,6 +962,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const loadFromSupabase = async () => {
       try {
+        // S3-b: read-only flag read (RM-01-safe); never blocks or fails the load.
+        postingServiceRef.current = false;
+        supabase.from('society_flags').select('posting_service').eq('society_id', sid).maybeSingle()
+          .then(({ data, error }) => { postingServiceRef.current = !error && data?.posting_service === true; }, () => { /* stays false */ });
         const [
           { data: vData, error: vErr }, { data: mData }, { data: aData },
           { data: lData }, { data: asData }, { data: aoData },
@@ -1560,6 +1569,59 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             onBaseFail: () => reportError('voucher-table-projection', 'table write failed after durable journal append (recoverable)', { voucherId: finalVoucher.id, voucherNo: finalNo }),
           });
         });
+      });
+      return newVoucher;
+    }
+
+    // ── S3-b posting service — per-society flag (society_flags.posting_service), default OFF ─────
+    // ONE server call writes the vouchers row, voucher_lines, voucher_entries and the journal event in
+    // one transaction (post_voucher, migration 077) — no half-saved voucher on a dropped connection.
+    // The posting rule stays here (RULE 2): the payload carries getVoucherLines legs + the same event.
+    // Any refusal/failure → rollback + destructive toast (RULE 1). Flag OFF → the path below, unchanged.
+    if (postingServiceRef.current && shadowEvent) {
+      const provisionalNo = newVoucher.voucherNo;
+      const eventFor = (v: Voucher) => buildEvent({
+        eventType: 'voucher.posted', tenantId: societyIdRef.current, jurisdiction: jurisdictionRef.current,
+        aggregateType: 'voucher', aggregateId: v.id, sequence: 1,
+        producer: { kind: 'human', id: userRef.current?.name ?? null },
+        payload: { lines: voucherPostingLines(v), ...voucherEventMeta(v) },
+      }, { eventId: shadowEvent!.eventId, occurredAt: shadowEvent!.occurredAt });
+      const restamp = (v: Voucher, ev: LedgerEvent) => {
+        vouchersRef.current = vouchersRef.current.map(x => x.id === v.id ? v : x);
+        setVouchersState(prev => prev.map(x => x.id === v.id ? v : x));
+        ledgerEventsRef.current = ledgerEventsRef.current.map(e => e.eventId === ev.eventId ? ev : e);
+      };
+      const fail = (msg: string, raw: string) => {
+        reportError('voucher-post-service', raw, { voucherId: newVoucher.id, voucherNo: provisionalNo });
+        rollbackOptimistic();
+        toastRef.current({ title: '❌ Voucher cloud par save NAHI hua', description: `${msg}. Local state se entry hata di gayi — refresh karne par data lose nahi hoga.`, variant: 'destructive', duration: 15000 });
+      };
+      const attempt = (v: Voucher, tries: number) => {
+        const ev = eventFor(v);
+        restamp(v, ev);
+        const p = buildPostVoucherPayload(v, ev);
+        supabase.rpc('post_voucher', p).then(({ error }) => {
+          if (!error) return; // 'posted' or 'exists' (idempotent retry) — both mean the voucher is durable.
+          if (isUniqueViolation(error) && tries < MAX_RENUMBER_RETRIES) {
+            // Another device took this number — bump to max+1 in the same series and retry.
+            const m = v.voucherNo?.match(/^(.*)\/(\d+)$/);
+            const head = m ? m[1] : (v.voucherNo || '');
+            let max = 0;
+            for (const vx of vouchersRef.current) { const mm = vx.voucherNo?.match(/^(.*)\/(\d+)$/); if (mm && mm[1] === head) max = Math.max(max, parseInt(mm[2], 10)); }
+            attempt({ ...v, voucherNo: `${head}/${String(max + 1).padStart(3, '0')}` }, tries + 1);
+            return;
+          }
+          const code = postVoucherErrorCode(error.message);
+          fail(postVoucherMessage(code, error.message), error.message);
+        }, (rejection: unknown) => {
+          const msg = rejection instanceof Error ? rejection.message : String(rejection);
+          fail(`Network error — ${msg}`, msg);
+        });
+      };
+      // T-03: take the official (gapless) number first, exactly as the table path does.
+      issueOfficialNumber(nextDocNumber, societyIdRef.current, provisionalNo).then((officialNo) => {
+        const finalNo = officialNo ?? provisionalNo;
+        attempt(finalNo === provisionalNo ? newVoucher : { ...newVoucher, voucherNo: finalNo }, 0);
       });
       return newVoucher;
     }
