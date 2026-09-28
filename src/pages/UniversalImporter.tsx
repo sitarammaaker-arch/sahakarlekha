@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { LedgerAccount, Member, VoucherType } from '@/types';
 import { mapImportedOpenings, type ImportedOpeningRow } from '@/lib/openingBalances';
+import { planJoiningReceipts, summariseJoiningPlans, type JoiningReceiptPlan } from '@/lib/members/joiningReceipts';
+import { getBankAccountIds } from '@/lib/storage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -382,11 +384,14 @@ const UniversalImporter: React.FC = () => {
     setMemberImporting(true);
     let imported = 0;
     let skipped = 0;
+    // Same rule addMember applies per member (joiningReceipts) — collected for ONE summary instead of a toast per row.
+    const plans: JoiningReceiptPlan[] = [];
+    const planOpts = { financialYear: society.financialYear, today: new Date().toISOString().split('T')[0], bankAccountId: getBankAccountIds(accounts)[0] || null };
     for (const row of validRows) {
       const mid = row.data.member_id.trim();
       const exists = members.find(m => m.memberId === mid);
       if (exists) { skipped++; continue; }
-      addMember({
+      const memberData: Omit<Member, 'id'> = {
         memberId: mid,
         name: row.data.name.trim(),
         fatherName: row.data.father_name?.trim() || '',
@@ -416,15 +421,26 @@ const UniversalImporter: React.FC = () => {
         nomineeOccupation: row.data.nominee_occupation?.trim() || undefined,
         nomineeAddress: row.data.nominee_address?.trim() || undefined,
         nomineeShares: parseInt(row.data.nominee_shares) || undefined,
-      });
+      };
+      addMember(memberData, { quiet: true });
+      plans.push(planJoiningReceipts(memberData, planOpts));
       imported++;
     }
     setMemberImporting(false);
     setMemberPreview(null);
+    const sum = summariseJoiningPlans(plans);
     toast({
       title: `${imported} Members Import हुए`,
       description: skipped > 0 ? `${skipped} members पहले से exist थे (same Member ID), skip किए गए` : 'सभी members successfully import हो गए',
     });
+    if (sum.historicalMembers > 0) {
+      // Old members get no cash receipt — their share belongs in the opening balances (joiningReceipts).
+      toast({
+        title: `${sum.historicalMembers} पुराने सदस्य — नकद रसीद नहीं बनी`,
+        description: `ये सदस्य इस वित्तीय वर्ष से पहले जुड़े थे। इनकी शेयर पूँजी ₹${sum.historicalShare}${sum.historicalAdmission ? ` (प्रवेश शुल्क ₹${sum.historicalAdmission})` : ''} opening balance में शामिल करें (शेयर पूँजी 1102)। (Joined before this FY — carry these amounts in the opening balances.)`,
+        duration: 15000,
+      });
+    }
   }
 
   // ── Opening Balances ──

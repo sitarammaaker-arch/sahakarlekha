@@ -124,7 +124,8 @@ ok(gaps.filter(g => g.kind === 'duplicate_ref_voucher').length === 2, 'two live 
 ok(gaps.some(g => g.kind === 'voucher_without_parent' && g.voucherId === 'vorph'), 'voucher whose purchase is gone → reported');
 
 // ── Part C: guards + the explicit posting path ───────────────────────────────────────────────────
-const fnBody = (name) => code(blockAfter(SRC, SRC.indexOf(`const ${name} = useCallback(`)));
+// From the arrow's body brace — a parameter type literal (`opts: { quiet?: boolean }`) is not the body.
+const fnBody = (name) => code(blockAfter(SRC, SRC.indexOf('=> {', SRC.indexOf(`const ${name} = useCallback(`))));
 const ADD_SALE = fnBody('addSale'), ADD_PUR = fnBody('addPurchase'), UPD_SALE = fnBody('updateSale'), UPD_PUR = fnBody('updatePurchase');
 ok(/guardVoucherPostable\(data\.date\)/.test(ADD_SALE) && /guardVoucherPostable\(data\.date\)/.test(ADD_PUR), 'addSale/addPurchase refuse up front for addVoucher\'s reasons');
 const stopsBeforeStock = (body) => { const g = body.indexOf('if (!newVoucher.id) return'); const st = body.indexOf('data.items.forEach'); return g > 0 && st > g; };
@@ -132,7 +133,10 @@ ok(stopsBeforeStock(ADD_SALE) && stopsBeforeStock(ADD_PUR), 'addSale/addPurchase
 const preBeforeCancel = (body) => { const g = body.indexOf('guardVoucherPostable(original.date, data.date)'); const c = body.indexOf('isDeleted: true'); return g > 0 && c > g; };
 ok(preBeforeCancel(UPD_SALE) && preBeforeCancel(UPD_PUR), 'updateSale/updatePurchase check refusals BEFORE cancelling the old voucher');
 const ADD_MEMBER = fnBody('addMember');
-ok(/Share Capital received from/.test(ADD_MEMBER) && /persistVoucher\(/.test(ADD_MEMBER), '10. explicit addMember posting path still exists (separate from load)');
+// The receipt logic moved into postJoiningReceipts (one rule for add / approve / import).
+const JOIN_RECEIPTS = fnBody('postJoiningReceipts');
+ok(/postJoiningReceipts\(newMember/.test(ADD_MEMBER) && /planJoiningReceipts\(/.test(JOIN_RECEIPTS) && /persistVoucher\(/.test(JOIN_RECEIPTS),
+  '10. explicit addMember posting path still exists (separate from load)');
 ok(/getPhantomVoucherDiagnostics/.test(SRC) && /phantomVoucherDiagnostics\(\{ vouchers, members, sales, purchases \}\)/.test(SRC), 'diagnostics exposed on the context as an on-demand read');
 
 console.log(`\nRM-01 no-load-writes: ${pass} passed, ${fail} failed`);
