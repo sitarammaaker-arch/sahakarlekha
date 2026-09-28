@@ -56,7 +56,7 @@ ok('one helper plans with planJoiningReceipts', /planJoiningReceipts\(m, \{/.tes
 ok('historical → returns before creating any voucher', helper.indexOf("return 'historical'") > 0 && helper.indexOf("return 'historical'") < helper.indexOf('const v: Voucher'));
 ok('a locked period posts nothing', /if \(isPeriodLocked\(plan\.date\)\)/.test(helper) && helper.indexOf("return 'locked'") < helper.indexOf('const v: Voucher'));
 ok('receipts use the planned debit account (not hard-coded cash)', /debitAccountId: plan\.debitAccountId/.test(helper) && !/debitAccountId: ACCOUNT_IDS\.CASH/.test(helper));
-ok('receipts persist through persistVoucher with rollback (RULE 1)', /persistVoucher\(v, \{ isUpdate: false, onBaseFail/.test(helper));
+ok('receipts persist through persistVoucher with rollback (RULE 1)', /persistVoucher\(v, \{\s*isUpdate: false,[\s\S]*?onBaseFail: \(\) => \{\s*vouchersRef\.current = vouchersRef\.current\.filter/.test(helper));
 const add = dc.slice(dc.indexOf('const addMember = useCallback'), dc.indexOf('const updateMember = useCallback'));
 ok('addMember uses the helper and no longer builds cash receipts itself', /postJoiningReceipts\(newMember, \{ quiet: opts\.quiet \}\)/.test(add) && !/ACCOUNT_IDS\.CASH/.test(add));
 const appr = dc.slice(dc.indexOf('const approveMember = useCallback'), dc.indexOf('const rejectMember = useCallback'));

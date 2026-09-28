@@ -1222,10 +1222,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // T-01: stamp jurisdiction alongside society_id. voucher_entries is replay-derived, and
     // REPLAY_FIELDS deliberately excludes tenant/storage columns (society_id, jurisdiction), so the
     // T-33 replay comparison is unaffected — the row just carries the residency key like every other.
-    const rows = buildVoucherEntries(v, sid).map(e => ({ ...e, society_id: sid, jurisdiction: jurisdictionRef.current }));
+    // The table's tenant column is society_id; VoucherEntry.societyId (the replay model's name) has no
+    // column, and sending it made PostgREST reject EVERY upsert — hidden for months by the load-time
+    // backfill RM-01 removed (no voucher created after 2026-09-26 had entries). Send only real columns.
+    const rows = buildVoucherEntries(v, sid).map(({ societyId: _sid, ...e }) => ({ ...e, society_id: sid, jurisdiction: jurisdictionRef.current }));
     if (rows.length === 0) return;
     supabase.from('voucher_entries').upsert(rows).then(({ error }) => {
-      if (error) console.warn('voucher_entries sync error:', error.message);
+      if (error) { console.warn('voucher_entries sync error:', error.message); reportError('voucher-entries-sync', error.message, { voucherId: v.id }); }
     });
   };
 
@@ -2445,11 +2448,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const v: Voucher = { id: crypto.randomUUID(), voucherNo: storage.getNextVoucherNo('receipt', societyRef.current?.financialYear || '', vouchersRef.current), type: 'receipt', date: plan.date, debitAccountId: plan.debitAccountId, creditAccountId: r.creditAccountId, amount: r.amount, narration: r.narration, memberId: m.id, branchId: m.branchId ?? opts.fallbackBranch, createdAt: new Date().toISOString(), createdBy: 'System' };
       vouchersRef.current = [...vouchersRef.current, v];
       setVouchersState(prev => [...prev, v]);
+      // T-06 / T-09: the same `voucher.posted` journal event addVoucher emits — without it the receipt
+      // is invisible to every journal read and breaks the society's parity. Appended durably only
+      // after the voucher row is confirmed (WORM-safe), dropped with the voucher on failure.
+      let postedEvent: LedgerEvent | null = null;
+      try {
+        postedEvent = buildEvent({
+          eventType: 'voucher.posted', tenantId: societyIdRef.current, jurisdiction: jurisdictionRef.current,
+          aggregateType: 'voucher', aggregateId: v.id, sequence: 1,
+          producer: { kind: 'human', id: userRef.current?.name ?? null },
+          payload: { lines: voucherPostingLines(v), ...voucherEventMeta(v) },
+        }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
+        ledgerEventsRef.current = [...ledgerEventsRef.current, postedEvent];
+      } catch { /* shadow ledger is best-effort — never touches the receipt save */ }
       // RULE 1: persistVoucher rolls the optimistic receipt back if the cloud save fails.
-      persistVoucher(v, { isUpdate: false, onBaseFail: () => {
-        vouchersRef.current = vouchersRef.current.filter(x => x.id !== v.id);
-        setVouchersState(prev => prev.filter(x => x.id !== v.id));
-      } });
+      persistVoucher(v, {
+        isUpdate: false,
+        onBaseSuccess: () => { if (postedEvent) persistLedgerEvent(postedEvent); },
+        onBaseFail: () => {
+          vouchersRef.current = vouchersRef.current.filter(x => x.id !== v.id);
+          setVouchersState(prev => prev.filter(x => x.id !== v.id));
+          if (postedEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== postedEvent!.eventId);
+        },
+      });
     }
     return 'posted';
     // persistVoucher is a plain per-render function that only reads refs — same omission as the
