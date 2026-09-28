@@ -114,7 +114,7 @@ const FAQ: React.FC = () => {
           <div className="flex flex-wrap justify-center gap-3">
             <Link to="/register">
               <Button size="lg" variant="secondary" className="gap-2">
-                मुफ्त रजिस्टर करें / Start Free <ArrowRight className="h-4 w-4" />
+                रजिस्टर करें / Get Started <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <Link to="/contact">

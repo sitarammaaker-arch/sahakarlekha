@@ -223,11 +223,11 @@ const BlogIndex: React.FC = () => {
               <div className="flex-1 text-center sm:text-left">
                 <p className="font-bold text-lg text-foreground">हर हफ्ते एक नया लेख</p>
                 <p className="text-sm text-muted-foreground">
-                  सहकारी लेखांकन की नई जानकारी सीधे पाएँ — और अपनी समिति का खाता आज ही मुफ्त डिजिटल कीजिए।
+                  सहकारी लेखांकन की नई जानकारी सीधे पाएँ — और अपनी समिति का खाता आज ही डिजिटल कीजिए।
                 </p>
               </div>
               <div className="flex flex-wrap gap-3 justify-center flex-shrink-0">
-                <Link to="/register"><Button className="gap-2">मुफ्त शुरू करें <ArrowRight className="h-4 w-4" /></Button></Link>
+                <Link to="/register"><Button className="gap-2">शुरू करें <ArrowRight className="h-4 w-4" /></Button></Link>
                 <a href="https://x.com/sahakarlekha" target="_blank" rel="noopener noreferrer">
                   <Button variant="outline" className="gap-1.5">X पर फॉलो करें <ArrowUpRight className="h-3.5 w-3.5" /></Button>
                 </a>

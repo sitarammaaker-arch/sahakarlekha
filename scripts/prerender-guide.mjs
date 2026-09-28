@@ -118,25 +118,77 @@ const HUB_LINKS = [
 ];
 
 /**
- * Wrap page content in a minimal, readable semantic shell. Shown only until the
+ * Scoped styles for the static shell. Real users see this HTML for a few seconds
+ * on slow mobile networks before the SPA mounts, so it must look like the site
+ * (brand bar, theme colours) — not a bare document. Everything is scoped under
+ * .sl-pre so Tailwind's preflight (loaded in <head>) can't flatten it, and it is
+ * removed together with the shell when createRoot replaces #root's children.
+ * Colours mirror src/index.css: --primary 215 70% 28%, --background 210 20% 98%.
+ */
+const SHELL_CSS =
+  `.sl-pre{min-height:100vh;background:#f8fafc;color:#1e2533;font-family:'Hind','Inter',system-ui,sans-serif;line-height:1.7;overflow-x:hidden}` +
+  `.sl-pre a{color:#15417a;text-decoration:underline;text-underline-offset:2px}` +
+  `.sl-pre .sl-bar{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid #e5e7eb;box-shadow:0 1px 2px rgba(0,0,0,.05)}` +
+  `.sl-pre .sl-bar-in{max-width:80rem;margin:0 auto;padding:0 16px;height:64px;display:flex;align-items:center}` +
+  `.sl-pre .sl-brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:#1e2533}` +
+  `.sl-pre .sl-mark{height:40px;width:40px;border-radius:8px;background:#15417a;color:#fff;font-weight:700;font-size:1.125rem;display:flex;align-items:center;justify-content:center}` +
+  `.sl-pre .sl-name{display:block;font-weight:700;font-size:1.125rem;line-height:1.2}` +
+  `.sl-pre .sl-sub{display:block;font-size:.75rem;color:#64748b}` +
+  `.sl-pre .sl-main{max-width:48rem;margin:0 auto;padding:24px 16px 40px}` +
+  `.sl-pre h1{font-size:1.75rem;font-weight:800;line-height:1.25;margin:0 0 14px}` +
+  `.sl-pre h2{font-size:1.3rem;font-weight:700;line-height:1.35;margin:26px 0 10px}` +
+  `.sl-pre h3{font-size:1.1rem;font-weight:600;margin:18px 0 8px}` +
+  `.sl-pre p{margin:0 0 12px}` +
+  `.sl-pre ul,.sl-pre ol{margin:0 0 14px;padding-left:1.4rem;list-style:disc}` +
+  `.sl-pre ol{list-style:decimal}` +
+  `.sl-pre li{margin:4px 0}` +
+  `.sl-pre table{border-collapse:collapse;margin:0 0 14px;display:block;overflow-x:auto}` +
+  `.sl-pre th,.sl-pre td{border:1px solid #e5e7eb;padding:6px 10px;text-align:left}` +
+  `.sl-pre .sl-crumb{font-size:.9rem;margin-bottom:14px;color:#64748b}` +
+  `.sl-pre .sl-explore{margin-top:28px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:.9rem}` +
+  `.sl-pre .sl-hero{background:linear-gradient(135deg,#eef3fa,#f8fafc 50%,#e6edf7);padding:36px 16px 40px;text-align:center}` +
+  `.sl-pre .sl-hero-in{max-width:40rem;margin:0 auto}` +
+  `.sl-pre .sl-badge{display:inline-block;padding:4px 12px;border-radius:999px;background:#e3eaf4;color:#15417a;font-size:.75rem;font-weight:600;margin-bottom:14px}` +
+  `.sl-pre .sl-hero h1{font-size:1.9rem}` +
+  `.sl-pre .sl-hero h1 span{color:#15417a}` +
+  `.sl-pre .sl-lead{color:#526072}` +
+  `.sl-pre .sl-ctas{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:20px 0 10px}` +
+  `.sl-pre .sl-btn{display:inline-block;padding:11px 26px;border-radius:8px;background:#15417a;color:#fff;font-weight:600;text-decoration:none}` +
+  `.sl-pre .sl-btn-o{background:#fff;color:#15417a;border:1px solid #cbd5e1}` +
+  `.sl-pre .sl-ticks{font-size:.8rem;color:#64748b;margin:0}` +
+  `.sl-pre .sl-cards{list-style:none;padding:0;display:grid;gap:10px}` +
+  `.sl-pre .sl-cards li{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin:0}` +
+  `@media(min-width:768px){.sl-pre h1{font-size:2.25rem}.sl-pre .sl-hero{padding:64px 24px 56px}.sl-pre .sl-hero h1{font-size:2.75rem}.sl-pre .sl-cards{grid-template-columns:1fr 1fr}}`;
+
+/** Brand bar mirroring PublicLayout's navbar. Deliberately NO Login/Register
+    buttons: a logged-in user also sees this for a moment, and a page that says
+    "Login" to a signed-in user reads as "my session is gone". */
+const BRAND_BAR =
+  `<header class="sl-bar"><div class="sl-bar-in">` +
+  `<a class="sl-brand" href="/"><span class="sl-mark" aria-hidden="true">स</span>` +
+  `<span><span class="sl-name">SahakarLekha</span><span class="sl-sub">सहकार लेखा</span></span></a>` +
+  `</div></header>`;
+
+/**
+ * Wrap page content in a branded, readable semantic shell. Shown only until the
  * SPA mounts (createRoot replaces #root children); crawlers see it as the page.
  * crumbs: [[href, label], ...] + current (string).
+ * hero: optional full-width HTML rendered above the main column (homepage).
  */
-function shell({ crumbs = [], current = '', html }) {
+function shell({ crumbs = [], current = '', html, hero = '' }) {
   const bc = crumbs.length || current
-    ? `<nav aria-label="breadcrumb" style="font-size:.9rem;margin-bottom:14px;color:#556">` +
+    ? `<nav aria-label="breadcrumb" class="sl-crumb">` +
       [...crumbs.map(([href, label]) => `<a href="${href}">${esc(label)}</a>`), current ? esc(current) : null]
         .filter(Boolean).join(' › ') +
       `</nav>`
     : '';
   const explore =
-    `<hr style="margin:28px 0 14px;border:none;border-top:1px solid #ddd">` +
-    `<nav aria-label="explore" style="font-size:.9rem"><p><strong>और देखें:</strong> ` +
+    `<nav aria-label="explore" class="sl-explore"><p><strong>और देखें:</strong> ` +
     HUB_LINKS.map(([href, label]) => `<a href="${href}">${esc(label)}</a>`).join(' · ') +
     `</p></nav>`;
   return (
-    `<div style="max-width:48rem;margin:0 auto;padding:24px 16px;font-family:'Hind','Inter',system-ui,sans-serif;line-height:1.75;color:#1a202c">` +
-    bc + html + explore + `</div>`
+    `<div class="sl-pre"><style>${SHELL_CSS}</style>` + BRAND_BAR + hero +
+    `<main class="sl-main">` + bc + html + explore + `</main></div>`
   );
 }
 
@@ -312,14 +364,14 @@ function softwarePages(DATA) {
     {
       path: '/software',
       title: 'सहकारी समिति लेखा सॉफ्टवेयर — हर प्रकार के लिए | Cooperative Society Software',
-      description: 'PACS, दुग्ध, विपणन, उपभोक्ता, आवास, चीनी, श्रमिक व बहुउद्देशीय — हर प्रकार की सहकारी समिति के लिए मुफ़्त लेखा सॉफ्टवेयर। अपनी समिति का प्रकार चुनें।',
+      description: 'PACS, दुग्ध, विपणन, उपभोक्ता, आवास, चीनी, श्रमिक व बहुउद्देशीय — हर प्रकार की सहकारी समिति के लिए लेखा सॉफ्टवेयर, ₹1,499/FY से। अपनी समिति का प्रकार चुनें।',
       lastmod: LASTMOD.software,
       jsonLd: [crumb([{ name: 'Software', item: `${SITE}/software` }])],
       body: types.length
         ? shell({
             current: 'सॉफ्टवेयर',
             html:
-              `<h1>हर प्रकार की सहकारी समिति के लिए मुफ़्त लेखा सॉफ्टवेयर</h1>` +
+              `<h1>हर प्रकार की सहकारी समिति के लिए लेखा सॉफ्टवेयर</h1>` +
               `<p>अपनी समिति का प्रकार चुनें:</p><ul>` +
               types.map((t) => `<li><a href="/software/${t.slug}">${esc(t.nameHi)} (${esc(t.nameEn)})</a> — ${esc(t.introHi || '')}</li>`).join('') +
               `</ul><h2>राज्य के अनुसार</h2><ul>` +
@@ -937,19 +989,28 @@ function staticExtraPages(DATA) {
     title: 'SahakarLekha — Cooperative Accounting & Management Platform for India',
     description: 'भारतीय cooperative societies के लिए accounting, GST/TDS, member records, reports और audit-ready workflows — PACS, Dairy, Marketing, Consumer व अन्य। SahakarLekha ₹1,499/FY से शुरू करें, Hindi + English।',
     lastmod: LASTMOD.static,
+    // Mirrors LandingPage's hero (same h1/lead/CTA copy) so the hand-off to React is
+    // near-seamless. Pricing copy must match the paid model: no public free plan.
     body: shell({
+      hero:
+        `<section class="sl-hero"><div class="sl-hero-in">` +
+          `<span class="sl-badge">Cooperative-first Accounting Platform</span>` +
+          `<h1>सहकारी समिति का <span>Accounting, Compliance और Control</span> — एक ही जगह।</h1>` +
+          `<p class="sl-lead">PACS, dairy, marketing, consumer और अन्य cooperative societies के लिए बनाया गया — जहाँ vouchers से लेकर financial statements, GST/TDS और audit-ready reports तक एक connected system में रहते हैं।</p>` +
+          `<p>Professional cooperative accounting <strong>₹1,499/FY से</strong>। Team व operations बढ़ें तो Plus या Pro के साथ आगे बढ़ें।</p>` +
+          `<div class="sl-ctas"><a class="sl-btn" href="/register">शुरू करें / Get Started →</a><a class="sl-btn sl-btn-o" href="/pricing">मूल्य देखें</a></div>` +
+          `<p class="sl-ticks">✓ Unlimited Vouchers · ✓ Unlimited Members · ✓ Data Export Anytime · ✓ ₹1,499/FY से</p>` +
+        `</div></section>`,
       html:
-        `<h1>सहकारी समिति का Accounting, Compliance और Control — एक ही जगह।</h1>` +
-        `<p>PACS, dairy, marketing, consumer और अन्य cooperative societies के लिए बनाया गया SahakarLekha — जहाँ vouchers से लेकर financial statements, GST/TDS और audit-ready reports तक एक connected system में रहते हैं। हिन्दी + English। <strong>Professional accounting ₹1,499/FY से।</strong></p>` +
-        `<p>Purpose-built for Indian cooperative societies — PACS, dairy, marketing, consumer and housing. Vouchers, ledgers and statutory reports (Trial Balance, Balance Sheet, Receipts &amp; Payments, TDS/GST summaries, RCS / statutory audit-ready formats). Core accounting free; Plus and Pro plans for staff and multi-branch operations.</p>` +
-        `<ul>` +
+        `<h2>एक ही system में सब कुछ</h2>` +
+        `<ul class="sl-cards">` +
           `<li>असीमित वाउचर व सदस्य — नकद/बैंक, खरीद-बिक्री, वेतन, ऋण, जमा</li>` +
-          `<li>सभी रिपोर्ट PDF/Excel में — ट्रायल बैलेंस, बैलेंस शीट, आय-व्यय, TDS/GST</li>` +
+          `<li>सभी रिपोर्ट PDF/Excel में — ट्रायल बैलेंस, बैलेंस शीट, आय-व्यय, प्राप्ति-भुगतान, TDS/GST</li>` +
           `<li>सहकारी-विशेष — धारा 32 ऋण सीमा, आरक्षित निधि, नामांकन, RCS ऑडिट प्रारूप</li>` +
-          `<li>क्लाउड बैकअप · हिन्दी + English · कोई लॉक-इन नहीं</li>` +
+          `<li>क्लाउड बैकअप · हिन्दी + English · डेटा कभी भी export करें, कोई लॉक-इन नहीं</li>` +
         `</ul>` +
-        `<p>✓ कोई कार्ड नहीं · ✓ डेटा कभी भी निर्यात करें · ✓ कोई लॉक-इन नहीं</p>` +
-        `<p><a href="/software">अपनी समिति के प्रकार के लिए</a> · <a href="/guide">मुफ्त गाइड व कोर्स</a> · <a href="/blog">ब्लॉग</a> · <a href="/tools">कैलकुलेटर</a> · <a href="/glossary">शब्दकोश</a></p>` +
+        `<p>PACS, dairy, marketing, consumer, housing — हर प्रकार की समिति के लिए। Starter ₹1,499/FY · Plus ₹3,999/FY · Pro ₹9,999/FY — <a href="/pricing">सभी plans देखें</a>।</p>` +
+        `<p><a href="/software">अपनी समिति के प्रकार के लिए</a> · <a href="/guide">मुफ़्त गाइड व कोर्स</a> · <a href="/blog">ब्लॉग</a> · <a href="/tools">कैलकुलेटर</a> · <a href="/glossary">शब्दकोश</a></p>` +
         registerCta(),
     }),
   });
@@ -958,15 +1019,15 @@ function staticExtraPages(DATA) {
   pages.push({
     path: '/about',
     title: 'हमारे बारे में — SahakarLekha | सहकारी समिति लेखा सॉफ्टवेयर',
-    description: 'SahakarLekha भारत की सहकारी समितियों के लिए मुफ़्त लेखा प्लेटफ़ॉर्म है — हमारा उद्देश्य, दृष्टि व अनुपालन (RCS, TDS, GST, NABARD). Learn about our mission to digitise cooperative society accounting across India.',
+    description: 'SahakarLekha भारत की सहकारी समितियों के लिए बना लेखा प्लेटफ़ॉर्म है — हमारा उद्देश्य, दृष्टि व अनुपालन (RCS, TDS, GST, NABARD). Learn about our mission to digitise cooperative society accounting across India.',
     lastmod: LASTMOD.static,
     jsonLd: [crumb([{ name: 'हमारे बारे में', item: `${SITE}/about` }])],
     body: shell({
       current: 'हमारे बारे में',
       html:
         `<h1>हमारे बारे में — About SahakarLekha</h1>` +
-        `<p>SahakarLekha भारत का <strong>पहला सहकारी-विशेष क्लाउड लेखा प्लेटफ़ॉर्म</strong> है। हमारा उद्देश्य — भारत की हर सहकारी समिति को, चाहे गाँव की छोटी समिति हो या राज्य-स्तरीय फेडरेशन, आधुनिक, पारदर्शी व मुफ़्त लेखा प्रणाली देना।</p>` +
-        `<p>India's first cooperative-specific cloud accounting platform — built for PACS, dairy, marketing, consumer and housing societies, in Hindi and English, free forever.</p>` +
+        `<p>SahakarLekha भारत का <strong>पहला सहकारी-विशेष क्लाउड लेखा प्लेटफ़ॉर्म</strong> है। हमारा उद्देश्य — भारत की हर सहकारी समिति को, चाहे गाँव की छोटी समिति हो या राज्य-स्तरीय फेडरेशन, आधुनिक, पारदर्शी व किफ़ायती लेखा प्रणाली देना — <a href="/pricing">₹1,499/FY से</a>।</p>` +
+        `<p>India's first cooperative-specific cloud accounting platform — built for PACS, dairy, marketing, consumer and housing societies, in Hindi and English, from ₹1,499 per financial year.</p>` +
         `<h2>अनुपालन (Compliance)</h2>` +
         `<ul>` +
           `<li>राज्य सहकारी अधिनियम (Haryana 1984, Maharashtra 1960) व Multi-State Co-op Societies Act 2002</li>` +
@@ -995,7 +1056,7 @@ function staticExtraPages(DATA) {
           `<li><strong>WhatsApp:</strong> +91 94679 18545</li>` +
           `<li><strong>ईमेल / Email:</strong> support@sahakarlekha.com</li>` +
         `</ul>` +
-        `<p>अपनी समिति अभी मुफ़्त शुरू करें, या पहले <a href="/guide">गाइड</a> व <a href="/faq">सामान्य प्रश्न</a> देखें।</p>` +
+        `<p>अपनी समिति अभी शुरू करें (<a href="/pricing">₹1,499/FY से</a>), या पहले <a href="/guide">गाइड</a> व <a href="/faq">सामान्य प्रश्न</a> देखें।</p>` +
         registerCta(),
     }),
   });

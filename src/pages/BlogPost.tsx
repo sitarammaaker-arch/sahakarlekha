@@ -409,12 +409,12 @@ const BlogPost: React.FC = () => {
             <Card className="mt-10 bg-primary/5 border-primary/20">
               <CardContent className="p-6 text-center">
                 <Newspaper className="h-9 w-9 text-primary mx-auto mb-2" />
-                <p className="font-bold text-lg text-foreground">अपनी समिति का खाता डिजिटल कीजिए — बिल्कुल मुफ्त</p>
+                <p className="font-bold text-lg text-foreground">अपनी समिति का खाता डिजिटल कीजिए — ₹1,499/FY से</p>
                 <p className="text-sm text-muted-foreground mt-1 max-w-xl mx-auto">
                   वाउचर से बैलेंस शीट तक, सब एक क्लिक पर। सहकारी समितियों के लिए ही बना, हिन्दी-केंद्रित प्लेटफ़ॉर्म।
                 </p>
                 <div className="flex flex-wrap gap-3 justify-center mt-4">
-                  <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'register', post: slug })}><Button className="gap-2">मुफ्त रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
+                  <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'register', post: slug })}><Button className="gap-2">रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
                   <Link to="/guide" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'guide', post: slug })}><Button variant="outline">संपूर्ण गाइड पढ़ें</Button></Link>
                 </div>
               </CardContent>
