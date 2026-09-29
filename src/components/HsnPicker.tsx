@@ -48,7 +48,9 @@ export function HsnPicker({ value, onChange, hi }: HsnPickerProps) {
   const currentCode = type === 'HSN' ? value.hsnCode : value.sacCode;
 
   useEffect(() => {
-    if (cache.has(societyId)) { setRows(cache.get(societyId)!); return; }
+    // Show the cached master instantly, but ALWAYS refetch — codes added/edited in the
+    // HSN/SAC master after the first fetch must appear without a full page reload.
+    if (cache.has(societyId)) setRows(cache.get(societyId)!);
     let alive = true;
     hsnSelect(societyId).then(({ data, error }) => {
       if (!alive || error || !data) return;
