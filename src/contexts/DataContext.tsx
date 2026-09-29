@@ -399,11 +399,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     reversal_of: ev.reversalOf ?? null,
     payload: ev.payload,
   });
+  // A failed append stays best-effort for the SAVE, but it must never be silent: Assandh (ddcb71c2)
+  // lost the journal for 451 of 452 vouchers (2026-07-16 → 08-19) and the cause is unknowable because
+  // this only ever reached the browser console. Every failure now lands in error_log with its code.
   const persistLedgerEvent = (ev: LedgerEvent) => {
+    const report = (msg: string, code?: string) => {
+      console.warn('ledger_events append (best-effort):', msg);
+      reportError('ledger-event-append', msg, { eventType: ev.eventType, aggregateId: ev.aggregateId, sequence: ev.sequence, code: code ?? null });
+    };
     try {
       supabase.from('ledger_events').insert(toLedgerEventRow(ev))
-        .then(({ error }) => { if (error) console.warn('ledger_events append (best-effort):', error.message); });
-    } catch { /* best-effort — never affects the voucher save */ }
+        .then(({ error }) => { if (error) report(error.message, error.code); },
+              (e: unknown) => report(e instanceof Error ? e.message : String(e)));
+    } catch (e) { report(e instanceof Error ? e.message : String(e)); }   // never affects the voucher save
   };
   // journal-first-write (slice 4): the AUTHORITATIVE append IO — insert + verify the event persisted.
   // Passed to persistEventAuthoritative so a voucher's save is a durable, confirmed journal write.
