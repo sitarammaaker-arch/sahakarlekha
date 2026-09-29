@@ -78,6 +78,8 @@ const MESSAGES: Record<string, string> = {
   voucher_reversed: 'यह वाउचर reverse हो चुका है — बदला या रद्द नहीं हो सकता।',
   engine_voucher: 'सिस्टम (engine) वाउचर — सुधार केवल reversal से होता है।',
   voucher_in_closed_fy: 'यह वाउचर बंद वित्तीय वर्ष का है — बदला या रद्द नहीं हो सकता।',
+  self_approval: 'आप अपना ही बनाया वाउचर approve नहीं कर सकते — कोई दूसरा अधिकारी approve करे।',
+  not_pending: 'यह वाउचर स्वीकृति के लिए रुका हुआ नहीं है।',
 };
 
 export function postVoucherMessage(code: string | null, raw?: string): string {
