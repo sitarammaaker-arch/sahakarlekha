@@ -161,6 +161,10 @@ interface DataContextType {
   addStatutoryAppropriation: (opts: { date: string; narration?: string; discretionary?: { dividend?: number }; attestation: AuthorityAttestation }) => Voucher | null;
   /** true when the restore was applied (a later cloud failure rolls back with its own toast); false = blocked, already toasted. */
   restoreVoucher: (id: string) => boolean;
+  /** True when this society saves through the posting service (society_flags.posting_service): a new
+   *  sale/purchase number is then issued by the server AFTER addSale/addPurchase returns — pages show the
+   *  number from the list (restamped) and leave the success toast to DataContext. */
+  usesPostingService: () => boolean;
   clearVoucher: (id: string, clearedDate?: string) => void;
   unclearVoucher: (id: string) => void;
   /** true = approved; false = a guard blocked it (it already toasted why) — never toast success on false. */
@@ -1330,6 +1334,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setVouchersState(prev => prev.map(v => v.id === voucher.id ? { ...v, ...vPatch } : v));
       const evs = mapLedgerEventRows(r.events ?? []);
       if (evs.length) ledgerEventsRef.current = [...ledgerEventsRef.current.filter(e => e.eventId !== event.eventId), ...evs];
+      // The success toast carries the OFFICIAL number (the page no longer toasts the provisional one).
+      toastRef.current({ title: `✅ ${label} सहेजी गई: ${docNo}`, description: kind === 'sale' ? `Sale saved: ${docNo}` : `Purchase saved: ${docNo}` });
     }, (e: unknown) => fail(`Network error — ${e instanceof Error ? e.message : String(e)}`));
   };
 
@@ -2440,6 +2446,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // voucher.cancelled as final, and the old restore emitted no event — the row came back while the
   // journal kept it cancelled (TB/cash-book drift). A cancelled voucher stays cancelled; a correction
   // is a NEW voucher (as in Tally). Kept as a function so any caller gets the explanation, not a crash.
+  const usesPostingService = useCallback((): boolean => postingServiceRef.current, []);
+
   const restoreVoucher = useCallback((_id: string): boolean => {
     toastRef.current({ title: 'रद्द वाउचर वापस नहीं आता', description: 'रद्द किया गया वाउचर restore नहीं होता — ज़रूरत हो तो नया वाउचर बनाएँ।', variant: 'destructive', duration: 10000 });
     return false;
@@ -7472,7 +7480,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment,
-    addVoucher, updateVoucher, cancelVoucher, reverseVoucher, addStatutoryAppropriation, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
+    addVoucher, updateVoucher, cancelVoucher, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
     addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
@@ -7511,7 +7519,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment,
-    addVoucher, updateVoucher, cancelVoucher, reverseVoucher, addStatutoryAppropriation, restoreVoucher, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
+    addVoucher, updateVoucher, cancelVoucher, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
     addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,

@@ -33,7 +33,7 @@ type CounterTender = Extract<PaymentMode, 'cash' | 'bank' | 'credit'>;
 const RetailCounter: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { sales, stockItems, reconciledStockMovements, customers, members, addSale, society } = useData();
+  const { sales, stockItems, reconciledStockMovements, customers, members, addSale, society, usesPostingService } = useData();
   const { resolvePrice, memberReceivableAccountId, getMemberOutstanding } = useConsumerData();
 
   const { toast } = useToast();
@@ -50,6 +50,9 @@ const RetailCounter: React.FC = () => {
   const [query, setQuery] = useState('');
   const [highlightIdx, setHighlightIdx] = useState(0);
   const [lastSaleNo, setLastSaleNo] = useState<string | null>(null);
+  // The last sale's id: its number is read from the list, so the server-issued number shows once restamped.
+  const [lastSaleId, setLastSaleId] = useState<string | null>(null);
+  const shownSaleNo = (lastSaleId && sales.find(s => s.id === lastSaleId)?.saleNo) || lastSaleNo;
   const searchRef = useRef<HTMLInputElement>(null);
 
   const focusSearch = useCallback(() => setTimeout(() => searchRef.current?.focus(), 0), []);
@@ -235,10 +238,12 @@ const RetailCounter: React.FC = () => {
         createdBy: user?.name ?? 'Counter',
       });
       setLastSaleNo(newSale.saleNo);
+      setLastSaleId(newSale.id || null);
       setCart([]);
       setCustomerId('');
       setMemberId('');
-      toast({ title: hi ? `बिक्री दर्ज: ${newSale.saleNo}` : `Sale posted: ${newSale.saleNo}` });
+      // Posting service: the server issues the number after this returns — DataContext toasts it then.
+      if (!usesPostingService()) toast({ title: hi ? `बिक्री दर्ज: ${newSale.saleNo}` : `Sale posted: ${newSale.saleNo}` });
       focusSearch();
     } catch (err) {
       toast({
@@ -315,17 +320,17 @@ const RetailCounter: React.FC = () => {
         </div>
       </div>
 
-      {lastSaleNo && (
+      {shownSaleNo && (
         <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
           <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
           <span className="text-green-700 font-medium">
-            {hi ? `बिक्री दर्ज हुई — ${lastSaleNo}` : `Sale posted — ${lastSaleNo}`}
+            {hi ? `बिक्री दर्ज हुई — ${shownSaleNo}` : `Sale posted — ${shownSaleNo}`}
           </span>
-          <Button variant="outline" size="sm" className="ml-auto gap-1" onClick={() => printReceipt(lastSaleNo)}>
+          <Button variant="outline" size="sm" className="ml-auto gap-1" onClick={() => printReceipt(shownSaleNo)}>
             <Printer className="h-4 w-4" />
             {hi ? 'रसीद' : 'Receipt'}
           </Button>
-          <Button variant="ghost" size="icon" className="text-green-700" onClick={() => setLastSaleNo(null)}>
+          <Button variant="ghost" size="icon" className="text-green-700" onClick={() => { setLastSaleNo(null); setLastSaleId(null); }}>
             <X className="h-4 w-4" />
           </Button>
         </div>

@@ -62,7 +62,7 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const PurchaseManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { purchases, stockItems, suppliers, accounts, addPurchase, updatePurchase, deletePurchase, addStockItem, society } = useData();
+  const { purchases, stockItems, suppliers, accounts, addPurchase, updatePurchase, deletePurchase, addStockItem, society, usesPostingService } = useData();
   const { toast } = useToast();
 
   // ── New Purchase form state ───────────────────────────────────────────────
@@ -85,6 +85,9 @@ const PurchaseManagement: React.FC = () => {
   const [bankAccountId, setBankAccountId] = useState<string>('');   // which bank, when mode = 'bank'
   const [narration, setNarration] = useState('');
   const [savedPurchaseNo, setSavedPurchaseNo] = useState<string | null>(null);
+  // The saved purchase's id: its number is read from the list, so the server-issued number shows once restamped.
+  const [savedPurchaseId, setSavedPurchaseId] = useState<string | null>(null);
+  const shownPurchaseNo = (savedPurchaseId && purchases.find(p => p.id === savedPurchaseId)?.purchaseNo) || savedPurchaseNo;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'new-purchase' | 'purchase-list'>('new-purchase');
 
@@ -216,6 +219,7 @@ const PurchaseManagement: React.FC = () => {
     setBankAccountId(purchase.bankAccountId || '');
     setNarration(purchase.narration || '');
     setSavedPurchaseNo(null);
+    setSavedPurchaseId(null);
     setActiveTab('new-purchase');
   };
 
@@ -296,6 +300,7 @@ const PurchaseManagement: React.FC = () => {
         const updated = updatePurchase(editingId, payload);
         if (updated) {
           setSavedPurchaseNo(updated.purchaseNo);
+          setSavedPurchaseId(null);
           toast({
             title: language === 'hi'
               ? `खरीद अपडेट हुई: ${updated.purchaseNo}`
@@ -316,7 +321,9 @@ const PurchaseManagement: React.FC = () => {
       } else {
         const newPurchase = addPurchase(payload);
         setSavedPurchaseNo(newPurchase.purchaseNo);
-        toast({
+        setSavedPurchaseId(newPurchase.id || null);
+        // Posting service: the server issues the number after this returns — DataContext toasts it then.
+        if (!usesPostingService()) toast({
           title: language === 'hi'
             ? `खरीद सहेजी गई: ${newPurchase.purchaseNo}`
             : `Purchase saved: ${newPurchase.purchaseNo}`,
@@ -504,18 +511,18 @@ const PurchaseManagement: React.FC = () => {
               </Button>
             </div>
           )}
-          {savedPurchaseNo && (
+          {shownPurchaseNo && (
             <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
               <span className="text-green-700 font-medium">
                 {language === 'hi'
-                  ? `खरीद सफलतापूर्वक सहेजी गई — ${savedPurchaseNo}`
-                  : `Purchase saved successfully — ${savedPurchaseNo}`}
+                  ? `खरीद सफलतापूर्वक सहेजी गई — ${shownPurchaseNo}`
+                  : `Purchase saved successfully — ${shownPurchaseNo}`}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
                 className="ml-auto text-green-700"
-                onClick={() => setSavedPurchaseNo(null)}
+                onClick={() => { setSavedPurchaseNo(null); setSavedPurchaseId(null); }}
               >
                 ×
               </Button>
