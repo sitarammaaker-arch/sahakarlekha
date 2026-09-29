@@ -209,6 +209,7 @@
     "test:s3f1-doc-number": "node scripts/test-s3f1-doc-number.mjs",
     "test:s3f2-cancel-stock-document": "node scripts/test-s3f2-cancel-stock-document.mjs",
     "test:s3f3-update-stock-document": "node scripts/test-s3f3-update-stock-document.mjs",
+    "test:stock-doc-toast-number": "node scripts/test-stock-doc-toast-number.mjs",
     "db:harness": "node scripts/db-harness/harness.mjs",
     "test:ledgerheads-no-auto-merge": "node scripts/test-ledgerheads-no-auto-merge.mjs",
     "test:persist": "node scripts/test-voucher-persistence.mjs",

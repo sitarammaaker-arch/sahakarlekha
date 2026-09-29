@@ -63,7 +63,7 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const SaleManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { sales, stockItems, reconciledStockMovements, customers, accounts, addSale, updateSale, deleteSale, addStockItem, society } = useData();
+  const { sales, stockItems, reconciledStockMovements, customers, accounts, addSale, updateSale, deleteSale, addStockItem, society, usesPostingService } = useData();
   // Available qty is ALWAYS movement-based (RULE 2), reconciled to live docs (RULE 3). Never read
   // stockItem.currentStock here — that cache drifts when a purchase voucher is edited/deleted and
   // caused the "sale shows 120 but stock report shows 0" bug.
@@ -84,6 +84,9 @@ const SaleManagement: React.FC = () => {
   const [bankAccountId, setBankAccountId] = useState<string>('');   // which bank, when mode = 'bank'
   const [narration, setNarration] = useState('');
   const [savedSaleNo, setSavedSaleNo] = useState<string | null>(null);
+  // The saved sale's id: its number is read from the list, so the server-issued number shows once restamped.
+  const [savedSaleId, setSavedSaleId] = useState<string | null>(null);
+  const shownSaleNo = (savedSaleId && sales.find(s => s.id === savedSaleId)?.saleNo) || savedSaleNo;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'new-sale' | 'sale-list'>('new-sale');
 
@@ -207,6 +210,7 @@ const SaleManagement: React.FC = () => {
     setBankAccountId(sale.bankAccountId || '');
     setNarration(sale.narration || '');
     setSavedSaleNo(null);
+    setSavedSaleId(null);
     setActiveTab('new-sale');
   };
 
@@ -302,6 +306,7 @@ const SaleManagement: React.FC = () => {
         const updated = updateSale(editingId, payload);
         if (updated) {
           setSavedSaleNo(updated.saleNo);
+          setSavedSaleId(null);
           toast({
             title: language === 'hi'
               ? `बिक्री अपडेट हुई: ${updated.saleNo}`
@@ -313,7 +318,9 @@ const SaleManagement: React.FC = () => {
       } else {
         const newSale = addSale(payload);
         setSavedSaleNo(newSale.saleNo);
-        toast({
+        setSavedSaleId(newSale.id || null);
+        // Posting service: the server issues the number after this returns — DataContext toasts it then.
+        if (!usesPostingService()) toast({
           title: language === 'hi'
             ? `बिक्री सहेजी गई: ${newSale.saleNo}`
             : `Sale saved: ${newSale.saleNo}`,
@@ -483,18 +490,18 @@ const SaleManagement: React.FC = () => {
               </Button>
             </div>
           )}
-          {savedSaleNo && (
+          {shownSaleNo && (
             <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
               <span className="text-green-700 font-medium">
                 {language === 'hi'
-                  ? `बिक्री सफलतापूर्वक सहेजी गई — ${savedSaleNo}`
-                  : `Sale saved successfully — ${savedSaleNo}`}
+                  ? `बिक्री सफलतापूर्वक सहेजी गई — ${shownSaleNo}`
+                  : `Sale saved successfully — ${shownSaleNo}`}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
                 className="ml-auto text-green-700"
-                onClick={() => setSavedSaleNo(null)}
+                onClick={() => { setSavedSaleNo(null); setSavedSaleId(null); }}
               >
                 ×
               </Button>
