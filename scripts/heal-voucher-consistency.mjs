@@ -1,0 +1,254 @@
+#!/usr/bin/env node
+// S3-d-3 · make each voucher's DERIVED rows agree with the voucher itself (approved 2026-09-29).
+//
+// The old multi-call edit/cancel left three kinds of drift (all fixed at the root by migration 078
+// for the posting-service path; this heals what already happened):
+//   • a CANCELLED voucher still holding voucher_entries                      → delete the entries
+//   • a cancelled voucher whose journal posting was never reversed           → append voucher.cancelled
+//   • a LIVE voucher whose voucher_entries / journal kept a pre-edit amount  → rebuild the entries from
+//     the voucher (buildVoucherEntries) and, if the journal's current posting differs, append
+//     voucher.reversed + voucher.reposted (or one voucher.posted when the journal holds none)
+// The VOUCHER ROW is the truth; it is never edited. Rows are built with the app's own builders (RULE 2).
+//
+// READS only (read-only transaction on the linked project, or the local db-harness) and writes:
+//   <out>.sql       one self-checking transaction; logs every deleted row (full old row) and every
+//                   inserted id to data_fix_log first
+//   <out>.undo.sql  deletes exactly the inserted rows and re-inserts exactly the deleted ones
+//
+// Usage: node scripts/heal-voucher-consistency.mjs --out <path-without-ext> [--source linked|harness] [--workdir <dir>]
+// The SQL holds society and voucher ids — keep it out of git (this repo is public).
+
+import { register } from 'node:module';
+import { writeFileSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+register('data:text/javascript,' + encodeURIComponent(`
+  import { existsSync } from 'node:fs'; import { fileURLToPath, pathToFileURL } from 'node:url'; import { resolve as PR } from 'node:path';
+  const SRC = ${JSON.stringify(SRC)}; const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+  export async function resolve(spec, ctx, next) {
+    if (spec.startsWith('@/')) { const b = PR(SRC, spec.slice(2)); for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true }; }
+    if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) { for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; } }
+    return next(spec, ctx);
+  }`));
+const imp = (p) => import(pathToFileURL(pathResolve(SRC, p)).href);
+const { buildVoucherEntries } = await imp('lib/voucherUtils.ts');
+const { buildEvent } = await imp('lib/ledger/event.ts');
+const { voucherPostingLines, voucherEventMeta, voucherReversalLines } = await imp('lib/ledger/voucherEvent.ts');
+
+export const FIX = 's3d3-voucher-consistency';
+const q = (s) => (s === null || s === undefined ? 'null' : `'${String(s).replace(/'/g, "''")}'`);
+const j = (o) => { const s = JSON.stringify(o); if (s.includes('$fx$')) throw new Error('payload contains the dollar-quote tag'); return `$fx$${s}$fx$::jsonb`; };
+const legKey = (ls) => JSON.stringify((ls || []).map((l) => [l.accountId, l.drCr, Number(l.amountMinor)]));
+const flip = (ls) => (ls || []).map((l) => ({ accountId: l.accountId, drCr: l.drCr === 'Dr' ? 'Cr' : 'Dr', amountMinor: Number(l.amountMinor) }));
+const minorOf = (x) => Math.round(Number(x) * 100);
+
+/** The journal's current posting for a voucher: latest reposted, else posted (as aggregateState). */
+export function currentPosting(evs) {
+  const reposts = evs.filter((e) => e.event_type === 'voucher.reposted').sort((a, b) => b.sequence - a.sequence);
+  return reposts[0] ?? evs.find((e) => e.event_type === 'voucher.posted') ?? null;
+}
+
+/**
+ * PURE. For each voucher (with its entries rows and journal events) decide what to delete / insert so
+ * that: entries = the voucher's legs (none when cancelled) and the journal's net = the same.
+ * Returns { actions: [{ voucher, kind, deleteEntries, insertEntries, events }] } — only vouchers that change.
+ */
+export function planConsistency(vouchers, entriesByVoucher, eventsByVoucher, runAt) {
+  const actions = [];
+  for (const v of vouchers) {
+    const sid = String(v.society_id);
+    const ents = entriesByVoucher.get(v.id) || [];
+    const evs = (eventsByVoucher.get(v.id) || []).slice().sort((a, b) => a.sequence - b.sequence);
+    const maxSeq = evs.reduce((m, e) => Math.max(m, e.sequence), 0);
+    const posting = currentPosting(evs);
+    const cancelled = evs.some((e) => e.event_type === 'voucher.cancelled');
+    const base = { tenantId: sid, jurisdiction: v.jurisdiction ?? undefined, aggregateType: 'voucher', aggregateId: v.id, producer: { kind: 'import', id: FIX } };
+    const events = [];
+    let insertEntries = [];
+    let kind;
+    if (v.isDeleted) {
+      if (posting && !cancelled) {
+        events.push(buildEvent({ ...base, eventType: 'voucher.cancelled', sequence: maxSeq + 1, reversalOf: posting.event_id,
+          payload: { ...(posting.payload || {}), lines: flip(posting.payload?.lines), reason: 'heal: cancel never journaled', healed: true } },
+          { eventId: `${FIX}-${v.id}-c${maxSeq + 1}`, occurredAt: runAt }));
+      }
+      if (!ents.length && !events.length) continue;
+      kind = events.length ? 'cancelled-journal' : 'cancelled-entries';
+    } else {
+      if (v.approvalStatus === 'pending') continue;
+      insertEntries = buildVoucherEntries(v, sid).map(({ societyId: _s, ...e }) => ({ ...e, society_id: sid, jurisdiction: v.jurisdiction ?? null }));
+      const want = voucherPostingLines(v);
+      const entryKey = (rows) => JSON.stringify(rows.map((e) => [e.id, e.accountId, minorOf(e.dr), minorOf(e.cr)]).sort());
+      const entriesOk = entryKey(ents) === entryKey(insertEntries);
+      if (!posting) {
+        events.push(buildEvent({ ...base, eventType: 'voucher.posted', sequence: maxSeq + 1, payload: { lines: want, ...voucherEventMeta(v), healed: true } },
+          { eventId: `${FIX}-${v.id}-p${maxSeq + 1}`, occurredAt: runAt }));
+      } else if (legKey(posting.payload?.lines) !== legKey(want)) {
+        events.push(buildEvent({ ...base, eventType: 'voucher.reversed', sequence: maxSeq + 1, reversalOf: posting.event_id,
+          payload: { ...(posting.payload || {}), lines: flip(posting.payload?.lines), reason: 'heal: edit never journaled', healed: true } },
+          { eventId: `${FIX}-${v.id}-r${maxSeq + 1}`, occurredAt: runAt }));
+        // Keep the posting's createdAt string (the same-date sort key) — the DB row's timestamp loses the 'Z'.
+        const meta = { ...voucherEventMeta(v), createdAt: posting.payload?.createdAt ?? voucherEventMeta(v).createdAt };
+        events.push(buildEvent({ ...base, eventType: 'voucher.reposted', sequence: maxSeq + 2, payload: { lines: want, ...meta, healed: true } },
+          { eventId: `${FIX}-${v.id}-r${maxSeq + 2}`, occurredAt: runAt }));
+      }
+      if (entriesOk && !events.length) continue;
+      if (entriesOk) insertEntries = [];
+      kind = events.length ? 'live-journal+entries' : 'live-entries';
+      // Mismatched entries are ALWAYS removed (even when the voucher's legs produce no rows).
+      actions.push({ voucher: v, kind, deleteEntries: entriesOk ? [] : ents, insertEntries, events });
+      continue;
+    }
+    actions.push({ voucher: v, kind, deleteEntries: ents, insertEntries, events });
+  }
+  return { actions };
+}
+// voucherReversalLines is the app's flip of a voucher's OWN legs; the heal flips the journal's posting
+// instead (that is what must net out). Kept imported so a rename in the app breaks this script loudly.
+void voucherReversalLines;
+
+/** PURE. Forward SQL: re-check the plan still holds, log, delete, insert, verify — one transaction. */
+export function buildConsistencySql({ runAt, actions }) {
+  const del = actions.flatMap((a) => a.deleteEntries);
+  const ins = actions.flatMap((a) => a.insertEntries);
+  const evs = actions.flatMap((a) => a.events);
+  const vids = actions.map((a) => q(a.voucher.id)).join(', ') || "''";
+  const delIds = del.map((e) => q(e.id)).join(', ') || "''";
+  const insIds = ins.map((e) => q(e.id)).join(', ') || "''";
+  const seqChecks = actions.map((a) => {
+    const max = a.events.length ? Math.min(...a.events.map((e) => e.sequence)) - 1 : null;
+    return max === null ? '' : `  select coalesce(max(sequence), 0) into n from public.ledger_events where aggregate_type = 'voucher' and aggregate_id = ${q(a.voucher.id)};
+  if n <> ${max} then raise exception '${FIX}: journal of ${a.voucher.voucherNo} changed since the plan — re-plan; nothing changed'; end if;`;
+  }).filter(Boolean).join('\n');
+  const rowChecks = actions.map((a) => `  select count(*) into n from public.vouchers where id = ${q(a.voucher.id)} and coalesce("isDeleted", false) = ${a.voucher.isDeleted ? 'true' : 'false'}
+    and round(amount * 100) = ${minorOf(a.voucher.amount)} and lines is not distinct from ${a.voucher.lines == null ? 'null::jsonb' : j(a.voucher.lines)};
+  if n <> 1 then raise exception '${FIX}: voucher ${a.voucher.voucherNo} changed since the plan — re-plan; nothing changed'; end if;`).join('\n');
+  const log = [
+    ...del.map((e) => `(${q(FIX)}, ${q(e.society_id)}, 'voucher_entry_deleted', ${q(e.id)}, ${j(e)})`),
+    ...ins.map((e) => `(${q(FIX)}, ${q(e.society_id)}, 'voucher_entry', ${q(e.id)}, ${j({ inserted: true, voucherId: e.voucherId })})`),
+    ...evs.map((e) => `(${q(FIX)}, ${q(e.tenantId)}, 'ledger_event', ${q(e.eventId)}, ${j({ inserted: true, voucherId: e.aggregateId, eventType: e.eventType })})`),
+  ].join(',\n');
+  const insRows = ins.map((e) => `(${[q(e.id), q(e.voucherId), q(e.accountId), e.dr, e.cr, q(e.narration ?? null), q(e.society_id), q(e.workOrderId ?? null), q(e.costCentreId ?? null), q(e.jurisdiction ?? null)].join(', ')})`).join(',\n');
+  const evRows = evs.map((e) => `(${[q(e.eventId), q(e.eventType), e.schemaVersion, q(e.tenantId), q(e.jurisdiction || null), q(e.aggregateType), q(e.aggregateId), e.sequence, q(e.occurredAt), q(e.producer.kind), q(e.producer.id ?? null), q(e.producer.onBehalfOf ?? null), q(e.reversalOf ?? null), j(e.payload)].join(', ')})`).join(',\n');
+  const summary = actions.map((a) => `--   ${a.voucher.voucherNo} (${String(a.voucher.society_id).slice(0, 8)}) ${a.kind}: -${a.deleteEntries.length} +${a.insertEntries.length} entries, events [${a.events.map((e) => e.eventType).join(', ')}]`).join('\n');
+  return `-- ${FIX} · FORWARD · ${actions.length} vouchers · ${del.length} entries deleted, ${ins.length} inserted, ${evs.length} journal events · generated ${runAt}
+-- The voucher row is the truth and is never edited. ONE transaction; any failed check aborts with nothing changed.
+${summary}
+begin;
+
+create table if not exists public.data_fix_log (
+  id bigserial primary key, fix text not null, society_id text not null, entity text not null,
+  entity_id text not null, old_row jsonb not null, logged_at timestamptz not null default now()
+);
+alter table public.data_fix_log enable row level security;
+revoke all on public.data_fix_log from anon, authenticated;
+
+do $chk$
+declare n int;
+begin
+  select count(*) into n from public.data_fix_log where fix = ${q(FIX)};
+  if n > 0 then raise exception '${FIX}: already applied — nothing changed'; end if;
+  select count(*) into n from public.voucher_entries where id in (${delIds});
+  if n <> ${del.length} then raise exception '${FIX}: % of ${del.length} entries to delete still exist — re-plan; nothing changed', n; end if;
+${rowChecks}
+${seqChecks}
+end $chk$;
+${log ? `
+insert into public.data_fix_log (fix, society_id, entity, entity_id, old_row) values
+${log};
+` : ''}${del.length ? `
+delete from public.voucher_entries where id in (${delIds});
+` : ''}${ins.length ? `
+insert into public.voucher_entries (id, "voucherId", "accountId", dr, cr, narration, society_id, "workOrderId", "costCentreId", jurisdiction) values
+${insRows};
+` : ''}${evs.length ? `
+insert into public.ledger_events
+  (event_id, event_type, schema_version, society_id, jurisdiction, aggregate_type, aggregate_id, sequence, occurred_at,
+   producer_kind, producer_id, on_behalf_of, reversal_of, payload)
+values
+${evRows};
+` : ''}
+-- Post-check: for every healed voucher, voucher_entries and the journal's net both equal its legs
+-- (zero for a cancelled voucher), per account, to the paisa.
+do $chk$
+declare bad text;
+begin
+  with v as (select id, "voucherNo" no, coalesce("isDeleted", false) del from public.vouchers where id in (${vids})),
+  j as (select e.aggregate_id vid, l ->> 'accountId' acc, sum(case when l ->> 'drCr' = 'Dr' then 1 else -1 end * (l ->> 'amountMinor')::bigint) net
+        from public.ledger_events e, jsonb_array_elements(e.payload -> 'lines') l where e.aggregate_id in (${vids}) group by 1, 2),
+  n as (select "voucherId" vid, "accountId" acc, round(sum(dr - cr) * 100)::bigint net from public.voucher_entries where "voucherId" in (${vids}) group by 1, 2),
+  a as (select vid, acc from j union select vid, acc from n)
+  select string_agg(distinct v.no, ', ') into bad
+  from v left join a on a.vid = v.id left join j on j.vid = a.vid and j.acc = a.acc left join n on n.vid = a.vid and n.acc = a.acc
+  where coalesce(j.net, 0) <> coalesce(n.net, 0) or (v.del and (coalesce(j.net, 0) <> 0 or exists (select 1 from public.voucher_entries x where x."voucherId" = v.id)));
+  if bad is not null then raise exception '${FIX}: post-check failed for % — rolled back', bad; end if;
+  if (select count(*) from public.voucher_entries where id in (${insIds})) <> ${ins.length} then raise exception '${FIX}: inserted entries missing — rolled back'; end if;
+end $chk$;
+
+commit;
+`;
+}
+
+export function buildConsistencyUndoSql({ runAt }) {
+  return `-- ${FIX} · UNDO · for the forward fix generated ${runAt}
+begin;
+delete from public.ledger_events where event_id in (select entity_id from public.data_fix_log where fix = ${q(FIX)} and entity = 'ledger_event');
+delete from public.voucher_entries where id in (select entity_id from public.data_fix_log where fix = ${q(FIX)} and entity = 'voucher_entry');
+insert into public.voucher_entries select (jsonb_populate_record(null::public.voucher_entries, old_row)).*
+  from public.data_fix_log where fix = ${q(FIX)} and entity = 'voucher_entry_deleted';
+delete from public.data_fix_log where fix = ${q(FIX)};
+commit;
+`;
+}
+
+async function read(sql, source, workdir) {
+  if (source === 'harness') {
+    const { harnessClient } = await import('./db-harness/lib.mjs');
+    const c = harnessClient(); await c.connect();
+    try { await c.query('begin transaction read only'); const r = (await c.query(sql)).rows; await c.query('rollback'); return r; } finally { await c.end(); }
+  }
+  const { runReadOnlyQuery } = await import('./rm02-diagnostics.mjs');
+  return runReadOnlyQuery(sql, workdir);
+}
+
+// The approved set (2026-09-29): cancelled vouchers still holding entries, and live vouchers whose
+// entries' Dr total differs from their own legs.
+const CANDIDATES = `
+with e as (select "voucherId" vid, round(sum(dr), 2) dr from public.voucher_entries group by 1)
+select to_jsonb(v) as r from public.vouchers v join e on e.vid = v.id
+where coalesce(v."isDeleted", false)
+   or e.dr <> case when jsonb_typeof(v.lines) = 'array' and jsonb_array_length(v.lines) > 0
+                   then (select round(sum((x ->> 'amount')::numeric), 2) from jsonb_array_elements(v.lines) x where x ->> 'type' = 'Dr')
+                   else round(v.amount, 2) end`;
+
+async function main() {
+  const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
+  const out = arg('--out'); const source = arg('--source', 'linked'); const wd = arg('--workdir');
+  if (!out) { console.error('usage: --out <path> [--source linked|harness] [--workdir <dir>]'); process.exit(2); }
+  const vouchers = (await read(CANDIDATES, source, wd)).map((x) => x.r);
+  const ids = vouchers.map((v) => q(v.id)).join(',') || "''";
+  const entriesByVoucher = new Map(); const eventsByVoucher = new Map();
+  for (const e of (await read(`select to_jsonb(x) as r from public.voucher_entries x where "voucherId" in (${ids})`, source, wd)).map((x) => x.r)) {
+    (entriesByVoucher.get(e.voucherId) ?? entriesByVoucher.set(e.voucherId, []).get(e.voucherId)).push(e);
+  }
+  for (const e of await read(`select aggregate_id, event_id, event_type, sequence, payload from public.ledger_events where aggregate_type = 'voucher' and aggregate_id in (${ids})`, source, wd)) {
+    (eventsByVoucher.get(e.aggregate_id) ?? eventsByVoucher.set(e.aggregate_id, []).get(e.aggregate_id)).push(e);
+  }
+  const runAt = new Date().toISOString();
+  const { actions } = planConsistency(vouchers, entriesByVoucher, eventsByVoucher, runAt);
+  console.log(`${FIX}: ${vouchers.length} candidates (${source}) → ${actions.length} to heal`);
+  const byKind = {};
+  for (const a of actions) (byKind[a.kind] ??= []).push(`${a.voucher.voucherNo}@${String(a.voucher.society_id).slice(0, 8)}`);
+  for (const [k, list] of Object.entries(byKind)) console.log(`  ${k}: ${list.length}  [${list.join(', ')}]`);
+  if (!actions.length) { console.log('  nothing to heal — no SQL written'); return; }
+  writeFileSync(`${out}.sql`, buildConsistencySql({ runAt, actions }));
+  writeFileSync(`${out}.undo.sql`, buildConsistencyUndoSql({ runAt }));
+  console.log(`  wrote ${out}.sql and ${out}.undo.sql`);
+}
+
+if (process.argv[1] && pathResolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((e) => { console.error(e.message); process.exit(1); });
+}
