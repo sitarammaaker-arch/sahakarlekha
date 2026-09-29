@@ -201,6 +201,7 @@
     "test:s3d-edit-cancel-voucher": "node scripts/test-s3d-edit-cancel-voucher.mjs",
     "test:s3d2-wire-edit-cancel": "node scripts/test-s3d2-wire-edit-cancel.mjs",
     "test:heal-voucher-consistency": "node scripts/test-heal-voucher-consistency.mjs",
+    "test:heal-stock-cache": "node scripts/test-heal-stock-cache.mjs",
     "test:s3e1-cascade-cancel": "node scripts/test-s3e1-cascade-cancel.mjs",
     "test:s3e2-approve-voucher": "node scripts/test-s3e2-approve-voucher.mjs",
     "test:s3e3-member-resync": "node scripts/test-s3e3-member-resync.mjs",
