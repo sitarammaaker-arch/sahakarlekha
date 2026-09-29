@@ -207,6 +207,7 @@
     "test:journal-append-report": "node scripts/test-journal-append-report.mjs",
     "test:s3f1-post-stock-document": "node scripts/test-s3f1-post-stock-document.mjs",
     "test:s3f1-doc-number": "node scripts/test-s3f1-doc-number.mjs",
+    "test:s3f2-cancel-stock-document": "node scripts/test-s3f2-cancel-stock-document.mjs",
     "db:harness": "node scripts/db-harness/harness.mjs",
     "test:ledgerheads-no-auto-merge": "node scripts/test-ledgerheads-no-auto-merge.mjs",
     "test:persist": "node scripts/test-voucher-persistence.mjs",
