@@ -130,7 +130,8 @@ const ADD_SALE = fnBody('addSale'), ADD_PUR = fnBody('addPurchase'), UPD_SALE = 
 ok(/guardVoucherPostable\(data\.date\)/.test(ADD_SALE) && /guardVoucherPostable\(data\.date\)/.test(ADD_PUR), 'addSale/addPurchase refuse up front for addVoucher\'s reasons');
 const stopsBeforeStock = (body) => { const g = body.indexOf('if (!newVoucher.id) return'); const st = body.indexOf('data.items.forEach'); return g > 0 && st > g; };
 ok(stopsBeforeStock(ADD_SALE) && stopsBeforeStock(ADD_PUR), 'addSale/addPurchase stop before stock/row writes when the voucher is refused (no voucher ⇒ no document)');
-const preBeforeCancel = (body) => { const g = body.indexOf('guardVoucherPostable(original.date, data.date)'); const c = body.indexOf('isDeleted: true'); return g > 0 && c > g; };
+// S3-e-1: the old voucher is cancelled through cancelLinkedVouchers (with its journal event).
+const preBeforeCancel = (body) => { const g = body.indexOf('guardVoucherPostable(original.date, data.date)'); const c = body.indexOf('cancelLinkedVouchers('); return g > 0 && c > g; };
 ok(preBeforeCancel(UPD_SALE) && preBeforeCancel(UPD_PUR), 'updateSale/updatePurchase check refusals BEFORE cancelling the old voucher');
 const ADD_MEMBER = fnBody('addMember');
 // The receipt logic moved into postJoiningReceipts (one rule for add / approve / import).
