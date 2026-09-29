@@ -206,6 +206,7 @@
     "test:s3e3-member-resync": "node scripts/test-s3e3-member-resync.mjs",
     "test:journal-append-report": "node scripts/test-journal-append-report.mjs",
     "test:s3f1-post-stock-document": "node scripts/test-s3f1-post-stock-document.mjs",
+    "test:s3f1-doc-number": "node scripts/test-s3f1-doc-number.mjs",
     "db:harness": "node scripts/db-harness/harness.mjs",
     "test:ledgerheads-no-auto-merge": "node scripts/test-ledgerheads-no-auto-merge.mjs",
     "test:persist": "node scripts/test-voucher-persistence.mjs",
