@@ -23,7 +23,7 @@ register('data:text/javascript,' + encodeURIComponent(`
     return next(spec, ctx);
   }`));
 const imp = (p) => import(pathToFileURL(pathResolve(SRC, p)).href);
-const { buildPostVoucherPayload, postVoucherErrorCode } = await imp('lib/ledger/postVoucherClient.ts');
+const { buildPostVoucherPayload, buildEditVoucherPayload, postVoucherErrorCode } = await imp('lib/ledger/postVoucherClient.ts');
 const { voucherPostingLines, voucherEventMeta } = await imp('lib/ledger/voucherEvent.ts');
 const { buildEvent } = await imp('lib/ledger/event.ts');
 const { getVoucherLines } = await imp('lib/voucherUtils.ts');
@@ -43,7 +43,8 @@ const post = (tx, v, sid) => {
   const p = buildPostVoucherPayload(v, ev);
   return tx.attempt('select public.post_voucher($1::jsonb, $2::jsonb, $3::jsonb) as r', [JSON.stringify(p.p_voucher), JSON.stringify(p.p_lines), JSON.stringify(p.p_event)]);
 };
-const edit = (tx, v) => tx.attempt('select public.edit_voucher($1::jsonb, $2::jsonb, $3) as r', [JSON.stringify(v), JSON.stringify(legsOf(v)), 'Harness']);
+// The app's own edit payload (S3-d-2): editable fields + getVoucherLines legs.
+const edit = (tx, v) => { const p = buildEditVoucherPayload(v); return tx.attempt('select public.edit_voucher($1::jsonb, $2::jsonb, $3) as r', [JSON.stringify(p.p_voucher), JSON.stringify(p.p_lines), 'Harness']); };
 const cancel = (tx, id, reason = 'harness') => tx.attempt('select public.cancel_voucher($1, $2, $3) as r', [id, reason, 'Harness']);
 
 /** Per-account net (paise) of: the journal, voucher_entries, posted voucher_lines — and the voucher's own legs. */

@@ -29,7 +29,7 @@ import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
 import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
-import { buildPostVoucherPayload, postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVoucherClient';
+import { buildPostVoucherPayload, buildEditVoucherPayload, postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVoucherClient';
 import { reverseEntryLines, isEditLocked } from '@/lib/voucherReversal';
 import { canTransitionMember } from '@/lib/memberLifecycle';
 import { computeStock, computeStockValue, computeStockCostRate, reconcileMovements } from '@/lib/stockUtils';
@@ -159,7 +159,8 @@ interface DataContextType {
    *  the canonical engine (effective-dated UCAS rates). Flag-gated (society.statutoryAppropriation).
    *  Returns the posted voucher, or null when blocked/refused (a toast explains why). */
   addStatutoryAppropriation: (opts: { date: string; narration?: string; discretionary?: { dividend?: number }; attestation: AuthorityAttestation }) => Voucher | null;
-  restoreVoucher: (id: string) => void;
+  /** true when the restore was applied (a later cloud failure rolls back with its own toast); false = blocked, already toasted. */
+  restoreVoucher: (id: string) => boolean;
   clearVoucher: (id: string, clearedDate?: string) => void;
   unclearVoucher: (id: string) => void;
   /** true = approved; false = a guard blocked it (it already toasted why) — never toast success on false. */
@@ -1902,6 +1903,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (editEvents.length) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => !editEvents.some(x => x.eventId === e.eventId));
     };
 
+    // ── S3-d posting service — society_flags.posting_service, default OFF ─────────────────────────
+    // ONE server call (edit_voucher, migration 078) updates the row, replaces voucher_lines and
+    // voucher_entries (no stale entries) and appends the reversed/reposted pair it builds from the
+    // journal itself. The server's events replace the optimistic ones. Failure → revert + toast (RULE 1).
+    if (postingServiceRef.current && current.approvalStatus !== 'pending') {
+      const p = buildEditVoucherPayload(updatedVoucher);
+      supabase.rpc('edit_voucher', { ...p, p_producer: userRef.current?.name ?? null }).then(({ data, error }) => {
+        if (error) {
+          reportError('voucher-edit-post-service', error.message, { voucherId: id });
+          revertEdit();
+          toastRef.current({ title: '❌ Voucher edit cloud par save NAHI hua', description: `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)}. Badlav local se hata diya — refresh par purana data safe hai.`, variant: 'destructive', duration: 15000 });
+          return;
+        }
+        const serverEvents = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
+        ledgerEventsRef.current = [...ledgerEventsRef.current.filter(e => !editEvents.some(x => x.eventId === e.eventId)), ...serverEvents];
+      }, (rejection: unknown) => {
+        const msg = rejection instanceof Error ? rejection.message : String(rejection);
+        reportError('voucher-edit-post-service', msg, { voucherId: id });
+        revertEdit();
+        toastRef.current({ title: '❌ Voucher edit cloud par save NAHI hua', description: `Network error — ${msg}. Badlav local se hata diya.`, variant: 'destructive', duration: 15000 });
+      });
+      return true;
+    }
+
     // ── journal-first-write (slice 6) — DORMANT, per-tenant flag, default OFF ─────────────────────
     // A POSTINGS-CHANGED edit under the flag makes the reverse+repost PAIR the authoritative save
     // (whole-or-nothing via persistEventsAuthoritative — a half-written pair on a WORM log is a
@@ -2078,6 +2103,33 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return updated;
     });
 
+    // ── S3-d posting service — society_flags.posting_service, default OFF ─────────────────────────
+    // ONE server call (cancel_voucher, migration 078): soft-delete + lines reversed + entries removed +
+    // voucher.cancelled built from the journal in the DB (so it is never skipped because the journal
+    // was not loaded here). The server's event replaces the optimistic one. Failure → un-cancel + toast.
+    if (postingServiceRef.current) {
+      const undoCancel = () => {
+        setVouchersState(prev => prev.map(v => v.id === id ? current : v));
+        if (cancelEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent!.eventId);
+      };
+      supabase.rpc('cancel_voucher', { p_id: id, p_reason: reason, p_deleted_by: deletedBy ?? null }).then(({ data, error }) => {
+        if (error) {
+          reportError('voucher-cancel-post-service', error.message, { voucherId: id });
+          undoCancel();
+          toastRef.current({ title: '❌ Voucher cancel cloud par save NAHI hua', description: `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)}. Cancel local se hata diya — refresh par voucher safe hai.`, variant: 'destructive', duration: 15000 });
+          return;
+        }
+        const serverEvents = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
+        ledgerEventsRef.current = [...ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent?.eventId), ...serverEvents];
+      }, (rejection: unknown) => {
+        const msg = rejection instanceof Error ? rejection.message : String(rejection);
+        reportError('voucher-cancel-post-service', msg, { voucherId: id });
+        undoCancel();
+        toastRef.current({ title: '❌ Voucher cancel cloud par save NAHI hua', description: `Network error — ${msg}. Cancel local se hata diya.`, variant: 'destructive', duration: 15000 });
+      });
+      return true;
+    }
+
     // ── journal-first-write (slice 6) — DORMANT, per-tenant flag, default OFF ─────────────────────
     // Under the flag, when there IS a posting to reverse, the cancel's SAVE is the authoritative
     // append of the reversing event (which nets the voucher's postings out of the journal); the table
@@ -2174,11 +2226,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return reversal;
   }, [addVoucher]);
 
-  const restoreVoucher = useCallback((id: string) => {
-    if (guardFYLocked()) return;
+  const restoreVoucher = useCallback((id: string): boolean => {
+    if (guardFYLocked()) return false;
     const current = vouchersRef.current.find(v => v.id === id);
-    if (!current) return;
-    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return; }
+    if (!current) return false;
+    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
+    // S3-d: the journal has no "un-cancel" yet (every reader treats voucher.cancelled as final), so a
+    // restore here would re-activate the row while the journal keeps it cancelled. Under the posting
+    // service the restore is refused until that is designed; flag off → unchanged.
+    if (postingServiceRef.current) {
+      toastRef.current({ title: 'Restore अभी बंद है', description: 'रद्द वाउचर को वापस लाना अभी उपलब्ध नहीं है — ज़रूरत हो तो नया वाउचर बनाएँ।', variant: 'destructive', duration: 10000 });
+      return false;
+    }
     // H6: If parent record (purchase / sale) has already been hard-deleted, blocking restore prevents
     // creating a "ghost" voucher with no item rows and inconsistent stock.
     if (current.refType === 'purchase' && current.refId) {
@@ -2189,7 +2248,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           description: 'Linked Purchase has been deleted. Create a new purchase from Purchase Management instead.',
           variant: 'destructive',
         });
-        return;
+        return false;
       }
     }
     if (current.refType === 'sale' && current.refId) {
@@ -2200,7 +2259,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           description: 'Linked Sale has been deleted. Create a new sale from Sale Management instead.',
           variant: 'destructive',
         });
-        return;
+        return false;
       }
     }
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -2219,6 +2278,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       else syncEntries(restoredVoucher); // re-populate voucher_entries so SQL reports see it again
     });
+    return true;
   }, []);
 
   const clearVoucher = useCallback((id: string, clearedDate?: string) => {
