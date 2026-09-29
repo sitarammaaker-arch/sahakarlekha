@@ -1333,6 +1333,53 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, (e: unknown) => fail(`Network error — ${e instanceof Error ? e.message : String(e)}`));
   };
 
+  // S3-f-2 · a sale / purchase deleted in ONE server call (cancel_stock_document, migration 082): row
+  // soft-deleted, every linked voucher cancelled with its journal (cancel_voucher), movements removed,
+  // currentStock restored from them — all or nothing. Local state changes optimistically (the same
+  // changes the old path made) and is restored wholesale if the server refuses (RULE 1).
+  const cancelStockDocument = (kind: 'sale' | 'purchase', doc: Sale | Purchase, docNo: string, voucherIds: string[], reason: string) => {
+    const label = kind === 'sale' ? 'बिक्री' : 'खरीद';
+    const vTargets = vouchersRef.current.filter(v => voucherIds.includes(v.id) && !v.isDeleted && !isEngineVoucher(v));
+    const vIds = new Set(vTargets.map(v => v.id));
+    const movs = stockMovementsRef.current.filter(m => m.referenceNo === docNo);
+    const qtyBy = new Map<string, number>();
+    for (const m of movs) if (m.type === kind) qtyBy.set(m.itemId, (qtyBy.get(m.itemId) ?? 0) + m.qty);
+    const stockBefore = new Map<string, number>();
+    const now = new Date().toISOString();
+    // Local, optimistic — mirrors the server.
+    if (kind === 'sale') { salesRef.current = salesRef.current.filter(x => x.id !== doc.id); setSalesState(prev => prev.filter(x => x.id !== doc.id)); }
+    else { purchasesRef.current = purchasesRef.current.filter(x => x.id !== doc.id); setPurchasesState(prev => prev.filter(x => x.id !== doc.id)); }
+    const cancelV = (v: Voucher) => vIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: 'System', deletedReason: reason } : v;
+    vouchersRef.current = vouchersRef.current.map(cancelV);
+    setVouchersState(prev => prev.map(cancelV));
+    stockMovementsRef.current = stockMovementsRef.current.filter(m => m.referenceNo !== docNo);
+    setStockMovementsState(prev => prev.filter(m => m.referenceNo !== docNo));
+    setStockItemsState(prev => prev.map(i => {
+      const q = qtyBy.get(i.id);
+      if (q === undefined) return i;
+      stockBefore.set(i.id, i.currentStock);
+      return { ...i, currentStock: kind === 'sale' ? i.currentStock + q : Math.max(0, i.currentStock - q) };
+    }));
+    if (movs.length) emitAudit({ entityType: 'stockMovement', entityId: docNo, action: 'delete', before: { count: movs.length, movements: snapshotDeletedMovements(movs) }, reason });
+    const undo = (msg: string) => {
+      if (kind === 'sale') { salesRef.current = [...salesRef.current, doc as Sale]; setSalesState(prev => [...prev, doc as Sale]); }
+      else { purchasesRef.current = [...purchasesRef.current, doc as Purchase]; setPurchasesState(prev => [...prev, doc as Purchase]); }
+      const back = new Map(vTargets.map(v => [v.id, v]));
+      vouchersRef.current = vouchersRef.current.map(v => back.get(v.id) ?? v);
+      setVouchersState(prev => prev.map(v => back.get(v.id) ?? v));
+      stockMovementsRef.current = [...stockMovementsRef.current, ...movs];
+      setStockMovementsState(prev => [...prev, ...movs]);
+      setStockItemsState(prev => prev.map(i => stockBefore.has(i.id) ? { ...i, currentStock: stockBefore.get(i.id)! } : i));
+      reportError(`${kind}-cancel-post-service`, msg, { documentId: doc.id });
+      toastRef.current({ title: `❌ ${label} delete cloud par save NAHI hua`, description: `${msg}. ${label} wapas dikha di gayi — kuch nahi badla.`, variant: 'destructive', duration: 15000 });
+    };
+    supabase.rpc('cancel_stock_document', { p_kind: kind, p_id: doc.id, p_reason: reason, p_by: userRef.current?.name || 'System' }).then(({ data, error }) => {
+      if (error) { undo(postVoucherMessage(postVoucherErrorCode(error.message), error.message)); return; }
+      const evs = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
+      if (evs.length) ledgerEventsRef.current = [...ledgerEventsRef.current, ...evs];
+    }, (e: unknown) => undo(`Network error — ${e instanceof Error ? e.message : String(e)}`));
+  };
+
   // S3-e-1 · the ONE way a parent-record cascade (member / loan / asset / sale / purchase / salary
   // slip deleted or edited) cancels its linked vouchers. The old per-site code only flipped isDeleted:
   // the journal kept a LIVE posting for every such voucher (69 in prod, ~₹37L, 2026-09-29) and a failed
@@ -6015,6 +6062,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deleteSale = useCallback((id: string) => {
     if (guardPermission('delete', 'बिक्री मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
+    // S3-f-2: under the posting service the whole delete is one server transaction.
+    if (postingServiceRef.current) {
+      const sale = salesRef.current.find(s => s.id === id);
+      if (!sale) return;
+      cancelStockDocument('sale', sale, sale.saleNo, [sale.voucherId, ...(sale.gstVoucherIds ?? [])].filter(Boolean) as string[], `Sale ${sale.saleNo} deleted`);
+      emitAudit({ entityType: 'sale', entityId: id, action: 'delete', reason: 'Sale deleted' });
+      return;
+    }
     setSalesState(prev => {
       const sale = prev.find(s => s.id === id);
       if (sale) {
@@ -6365,6 +6420,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deletePurchase = useCallback((id: string) => {
     if (guardPermission('delete', 'खरीद मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
+    // S3-f-2: under the posting service the whole delete is one server transaction.
+    if (postingServiceRef.current) {
+      const purchase = purchasesRef.current.find(p => p.id === id);
+      if (!purchase) return;
+      cancelStockDocument('purchase', purchase, purchase.purchaseNo, [purchase.voucherId, ...(purchase.taxVoucherIds ?? [])].filter(Boolean) as string[], `Purchase ${purchase.purchaseNo} deleted`);
+      emitAudit({ entityType: 'purchase', entityId: id, action: 'delete', reason: 'Purchase deleted' });
+      return;
+    }
     setPurchasesState(prev => {
       const purchase = prev.find(p => p.id === id);
       if (purchase) {
