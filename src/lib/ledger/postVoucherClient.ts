@@ -51,6 +51,29 @@ export function buildEditVoucherPayload(v: Voucher): { p_voucher: Record<string,
   return { p_voucher, p_lines };
 }
 
+/** Routing-only / local-only document fields that are never columns (the server ignores unknown keys
+ *  anyway; stripping keeps the payload honest). */
+const DOC_LOCAL_ONLY = ['receivableAccountId', 'society_id'] as const;
+
+/**
+ * S3-f-1 · post_stock_document payload (migration 080): the sale/purchase row, its voucher + legs + event
+ * (exactly buildPostVoucherPayload — the posting rule stays here, RULE 2) and its stock movements.
+ */
+export function buildStockDocumentPayload(
+  kind: 'sale' | 'purchase', doc: object, voucher: Voucher, event: LedgerEvent, movements: readonly object[],
+) {
+  const p_doc: Record<string, unknown> = { ...(doc as Record<string, unknown>) };
+  for (const k of DOC_LOCAL_ONLY) delete p_doc[k];
+  const v = buildPostVoucherPayload(voucher, event);
+  const p_movements = movements.map((m) => {
+    const x: Record<string, unknown> = { ...(m as Record<string, unknown>) };
+    if (!x.godownId) delete x.godownId;
+    delete x.society_id;
+    return x;
+  });
+  return { p_kind: kind, p_doc, p_voucher: v.p_voucher, p_lines: v.p_lines, p_event: v.p_event, p_movements };
+}
+
 /** The `post_voucher:<code>` a refusal carries, or null for other errors. */
 export function postVoucherErrorCode(message: string | undefined | null): string | null {
   const m = String(message ?? '').match(/post_voucher:(\w+)/);
