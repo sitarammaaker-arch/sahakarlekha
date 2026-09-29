@@ -436,6 +436,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // and collide on the unique index). It NEVER appends when there is no posting: that would be an orphan
   // reversal (legs cancelling nothing), the exact CV/320/329 parity break scripts/reconcile-cancelled-
   // ledger.mjs exists to repair. Idempotent: skips if a voucher.cancelled already exists.
+  const flipLegs = (payload: unknown): { accountId: string; drCr: 'Dr' | 'Cr'; amountMinor: number }[] | null => {
+    const ls = (payload as { lines?: { accountId: string; drCr: 'Dr' | 'Cr'; amountMinor: number }[] } | null)?.lines;
+    return Array.isArray(ls) && ls.length ? ls.map(l => ({ accountId: l.accountId, drCr: l.drCr === 'Dr' ? 'Cr' as const : 'Dr' as const, amountMinor: l.amountMinor })) : null;
+  };
   const ensureVoucherCancelEvent = async (voucher: Voucher, deletedBy: string, reason: string) => {
     try {
       const { data, error } = await supabase.from('ledger_events')
@@ -456,10 +460,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         sequence: maxSeq + 1,
         reversalOf: posting,
         producer: { kind: 'human', id: deletedBy ?? null },
-        payload: { lines: voucherReversalLines(voucher), ...voucherEventMeta(voucher), reason },
+        // Reverse what the JOURNAL holds (its current posting's legs), not the voucher's own legs — they
+        // differ when an earlier edit never reached the journal, and only the former nets to zero.
+        payload: { lines: flipLegs(evs.find(e => e.eventId === posting)?.payload) ?? voucherReversalLines(voucher), ...voucherEventMeta(voucher), reason },
       }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
       const { error: insErr } = await supabase.from('ledger_events').insert(toLedgerEventRow(cancelEvent));
-      if (insErr) console.warn('ensureVoucherCancelEvent append (best-effort):', insErr.message);
+      if (insErr) { console.warn('ensureVoucherCancelEvent append (best-effort):', insErr.message); reportError('voucher-cancel-journal', insErr.message, { voucherId: voucher.id }); }
+      else if (journalLoadedRef.current && !ledgerEventsRef.current.some(e => e.aggregateId === voucher.id && e.eventType === 'voucher.cancelled')) {
+        ledgerEventsRef.current = [...ledgerEventsRef.current, cancelEvent];   // keep the in-session journal in step
+      }
     } catch { /* best-effort — never affects the cancel */ }
   };
   // P0 #3: append-only audit. Actor is read from a ref so it is never stale inside the
@@ -1247,6 +1256,48 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('voucher_entries').delete().eq('voucherId', voucherId).then(({ error }) => {
       if (error) console.warn('voucher_entries delete error:', error.message);
     });
+  };
+
+  // S3-e-1 · the ONE way a parent-record cascade (member / loan / asset / sale / purchase / salary
+  // slip deleted or edited) cancels its linked vouchers. The old per-site code only flipped isDeleted:
+  // the journal kept a LIVE posting for every such voucher (69 in prod, ~₹37L, 2026-09-29) and a failed
+  // write left the voucher cancelled on screen only. Here every voucher is cancelled WITH its journal:
+  //   • posting service on → cancel_voucher (row + lines + entries + voucher.cancelled, one transaction)
+  //   • off → targeted soft-delete, then entries removed and voucher.cancelled appended from the DB
+  //     journal (ensureVoucherCancelEvent — never skipped because the journal wasn't loaded here)
+  // A failed cancel puts that voucher back on screen with a destructive toast (RULE 1). Idempotent:
+  // already-cancelled / engine vouchers are skipped, so a re-run (or a StrictMode double call) is a no-op.
+  // Limitation (S3-f): the parent row / stock writes are still separate calls from these.
+  const cancelLinkedVouchers = (ids: readonly string[], reason: string, by: string) => {
+    const targets = vouchersRef.current.filter(v => ids.includes(v.id) && !v.isDeleted && !isEngineVoucher(v));
+    if (!targets.length) return;
+    const now = new Date().toISOString();
+    const byId = new Map(targets.map(v => [v.id, v]));
+    const cancel = (v: Voucher) => byId.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: by, deletedReason: reason } : v;
+    vouchersRef.current = vouchersRef.current.map(cancel);
+    setVouchersState(prev => prev.map(cancel));
+    const undo = (v: Voucher, msg: string) => {
+      vouchersRef.current = vouchersRef.current.map(x => x.id === v.id ? v : x);
+      setVouchersState(prev => prev.map(x => x.id === v.id ? v : x));
+      reportError('voucher-cascade-cancel', msg, { voucherId: v.id, voucherNo: v.voucherNo, reason });
+      toastRef.current({ title: '❌ जुड़ा वाउचर रद्द नहीं हुआ', description: `${v.voucherNo}: ${msg}. वाउचर अभी भी चालू है — refresh करके दोबारा देखें।`, variant: 'destructive', duration: 15000 });
+    };
+    for (const v of targets) {
+      const fail = (e: unknown) => undo(v, e instanceof Error ? e.message : String(e));
+      if (postingServiceRef.current) {
+        supabase.rpc('cancel_voucher', { p_id: v.id, p_reason: reason, p_deleted_by: by }).then(({ data, error }) => {
+          if (error) { undo(v, postVoucherMessage(postVoucherErrorCode(error.message), error.message)); return; }
+          const evs = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
+          if (evs.length) ledgerEventsRef.current = [...ledgerEventsRef.current, ...evs];
+        }, fail);
+      } else {
+        supabase.from('vouchers').update({ isDeleted: true, deletedAt: now, deletedBy: by, deletedReason: reason }).eq('id', v.id).then(({ error }) => {
+          if (error) { undo(v, error.message); return; }
+          deleteEntries(v.id);
+          void ensureVoucherCancelEvent(v, by, reason);
+        }, fail);
+      }
+    }
   };
 
   // ── Voucher persistence helper (two-step + rollback) ──────────────────────
@@ -2709,14 +2760,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('members').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     // RULE 3: soft-cancel the member's auto-generated vouchers (share capital /
     // admission fee) so no ghost Share Capital lingers in the Trial Balance.
-    const now = new Date().toISOString();
-    const linkedIds = new Set(vouchersRef.current.filter(v => v.memberId === id && !v.isDeleted && !isEngineVoucher(v)).map(v => v.id));
-    if (linkedIds.size > 0) {
-      const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Member deleted' } : v;
-      vouchersRef.current = vouchersRef.current.map(cancel);
-      setVouchersState(prev => prev.map(cancel));
-      linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) reportCascade('Member voucher cancel sync', error); else deleteEntries(vid); }));
-    }
+    cancelLinkedVouchers(vouchersRef.current.filter(v => v.memberId === id).map(v => v.id), 'Member deleted', user?.name || 'System');
     emitAudit({ entityType: 'member', entityId: id, action: 'delete', reason: 'Member deleted' });
     console.info(`[AUDIT-DELETE] Member id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
@@ -4756,12 +4800,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         : (loan.loanNo
             ? new Set(vouchersRef.current.filter(v => !v.isDeleted && v.memberId === loan.memberId && v.narration?.includes(loan.loanNo) && !isEngineVoucher(v)).map(v => v.id))
             : new Set<string>());
-      if (linkedIds.size > 0) {
-        const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Loan deleted' } : v;
-        vouchersRef.current = vouchersRef.current.map(cancel);
-        setVouchersState(prev => prev.map(cancel));
-        linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) reportCascade('Loan voucher cancel sync', error); else deleteEntries(vid); }));
-      }
+      cancelLinkedVouchers([...linkedIds], 'Loan deleted', user?.name || 'System');
     }
     console.info(`[AUDIT-DELETE] Loan id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
@@ -4888,12 +4927,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         : (asset.assetNo
             ? new Set(vouchersRef.current.filter(v => !v.isDeleted && v.narration?.includes(asset.assetNo) && !isEngineVoucher(v)).map(v => v.id))
             : new Set<string>());
-      if (linkedIds.size > 0) {
-        const cancel = (v: Voucher) => linkedIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: user?.name || 'System', deletedReason: 'Asset deleted' } : v;
-        vouchersRef.current = vouchersRef.current.map(cancel);
-        setVouchersState(prev => prev.map(cancel));
-        linkedIds.forEach(vid => supabase.from('vouchers').update({ isDeleted: true }).eq('id', vid).then(({ error }) => { if (error) reportCascade('Asset voucher cancel sync', error); else deleteEntries(vid); }));
-      }
+      cancelLinkedVouchers([...linkedIds], 'Asset deleted', user?.name || 'System');
     }
     emitAudit({ entityType: 'asset', entityId: id, action: 'delete', reason: 'Asset deleted' });
     console.info(`[AUDIT-DELETE] Asset id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
@@ -5863,22 +5897,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const now = new Date().toISOString();
         // Soft-delete all linked vouchers (main + GST)
         const linkedIds = ([sale.voucherId, ...(sale.gstVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
-        if (linkedIds.length > 0) {
-          setVouchersState(v => {
-            const updated = v.map(x => linkedIds.includes(x.id)
-              ? { ...x, isDeleted: true, deletedAt: now, deletedBy: 'System', deletedReason: `Sale ${sale.saleNo} deleted` }
-              : x
-            );
-            linkedIds.forEach(vid => {
-              const cancelled = updated.find(x => x.id === vid);
-              if (cancelled) supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', vid).then(({ error }) => {
-                if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
-                else deleteEntries(vid); // cascade: remove from voucher_entries so SQL reports see the cancellation
-              });
-            });
-            return updated;
-          });
-        }
+        cancelLinkedVouchers(linkedIds, `Sale ${sale.saleNo} deleted`, 'System');
         // Reverse stock deductions on stock_items.currentStock
         sale.items.forEach(item => {
           setStockItemsState(s => {
@@ -5959,22 +5978,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // 2️⃣ Soft-cancel the original sale voucher(s) + drop voucher_entries
     const linkedIds = ([original.voucherId, ...(original.gstVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
-    if (linkedIds.length > 0) {
-      setVouchersState(v => {
-        const updated = v.map(x => linkedIds.includes(x.id)
-          ? { ...x, isDeleted: true, deletedAt: now, deletedBy: data.createdBy || 'System', deletedReason: `Sale ${original.saleNo} edited` }
-          : x
-        );
-        linkedIds.forEach(vid => {
-          const cancelled = updated.find(x => x.id === vid);
-          if (cancelled) supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', vid).then(({ error }) => {
-            if (error) reportCascade('Voucher cancel sync', error);
-            else deleteEntries(vid);
-          });
-        });
-        return updated;
-      });
-    }
+    cancelLinkedVouchers(linkedIds, `Sale ${original.saleNo} edited`, data.createdBy || 'System');
 
     // 3️⃣ Build fresh voucher lines from new data
     const grandTotal = data.grandTotal ?? data.netAmount;
@@ -6222,22 +6226,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const now = new Date().toISOString();
         // Cascade soft-delete: main voucher + all GST/TDS tax vouchers
         const linkedIds = ([purchase.voucherId, ...(purchase.taxVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
-        if (linkedIds.length > 0) {
-          setVouchersState(v => {
-            const updated = v.map(x => linkedIds.includes(x.id)
-              ? { ...x, isDeleted: true, deletedAt: now, deletedBy: 'System', deletedReason: `Purchase ${purchase.purchaseNo} deleted` }
-              : x
-            );
-            linkedIds.forEach(vid => {
-              const cancelled = updated.find(x => x.id === vid);
-              if (cancelled) supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', vid).then(({ error }) => {
-                if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
-                else deleteEntries(vid); // cascade: remove from voucher_entries so SQL reports see the cancellation
-              });
-            });
-            return updated;
-          });
-        }
+        cancelLinkedVouchers(linkedIds, `Purchase ${purchase.purchaseNo} deleted`, 'System');
         // Reverse stock additions on stock_items.currentStock
         purchase.items.forEach(item => {
           setStockItemsState(s => {
@@ -6321,22 +6310,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // 2️⃣ Soft-delete the original purchase voucher(s)
     const linkedIds = ([original.voucherId, ...(original.taxVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
-    if (linkedIds.length > 0) {
-      setVouchersState(v => {
-        const updated = v.map(x => linkedIds.includes(x.id)
-          ? { ...x, isDeleted: true, deletedAt: now, deletedBy: data.createdBy || 'System', deletedReason: `Purchase ${original.purchaseNo} edited` }
-          : x
-        );
-        linkedIds.forEach(vid => {
-          const cancelled = updated.find(x => x.id === vid);
-          if (cancelled) supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', vid).then(({ error }) => {
-            if (error) reportCascade('Voucher cancel sync', error);
-            else deleteEntries(vid); // cascade: remove from voucher_entries
-          });
-        });
-        return updated;
-      });
-    }
+    cancelLinkedVouchers(linkedIds, `Purchase ${original.purchaseNo} edited`, data.createdBy || 'System');
 
     // 3️⃣ Build new voucher lines from updated data
     const grandTotal = data.grandTotal ?? data.netAmount;
@@ -6579,15 +6553,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (oldRecord.isPaid && !data.isPaid && oldRecord.voucherId) {
       // (a) Cancel the linked voucher
-      const v = vouchersRef.current.find(x => x.id === oldRecord.voucherId);
-      if (v && !v.isDeleted && !isEngineVoucher(v)) {
-        const cancelled = { ...v, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy: 'System', deletedReason: `Salary slip ${oldRecord.slipNo} marked unpaid` };
-        setVouchersState(prev => prev.map(x => x.id === v.id ? cancelled : x));
-        supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', v.id).then(({ error }) => {
-          if (error) console.error('Salary voucher cancel sync:', error.message);
-          else deleteEntries(v.id);
-        });
-      }
+      cancelLinkedVouchers([oldRecord.voucherId], `Salary slip ${oldRecord.slipNo} marked unpaid`, 'System');
       merged.voucherId = undefined;
     } else if (!oldRecord.isPaid && data.isPaid && !oldRecord.voucherId) {
       // (b) Create the payment voucher. If the salary was accrued (Cr Salary Payable 2103),
@@ -6681,17 +6647,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // liability and cash all reverse cleanly.
     const record = salaryRecordsRef.current.find(r => r.id === id);
     const cancelIds = [record?.voucherId, record?.accrualVoucherId].filter(Boolean) as string[];
-    for (const vid of cancelIds) {
-      const v = vouchersRef.current.find(x => x.id === vid);
-      if (v && !v.isDeleted && !isEngineVoucher(v)) {
-        const cancelled = { ...v, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy: 'System', deletedReason: `Salary slip ${record?.slipNo} deleted` };
-        setVouchersState(prev => prev.map(x => x.id === v.id ? cancelled : x));
-        supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelled.deletedAt, deletedBy: cancelled.deletedBy, deletedReason: cancelled.deletedReason }).eq('id', v.id).then(({ error }) => {
-          if (error) console.error('Salary voucher cancel sync:', error.message);
-          else deleteEntries(v.id);
-        });
-      }
-    }
+    cancelLinkedVouchers(cancelIds, `Salary slip ${record?.slipNo} deleted`, 'System');
     setSalaryRecordsState(prev => prev.filter(r => r.id !== id));
     salaryRecordsRef.current = salaryRecordsRef.current.filter(r => r.id !== id);
     supabase.from('salary_records').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
