@@ -2713,28 +2713,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     attemptMemberUpdate(updatedMember);
     // Helper: re-sync a member's auto-voucher (Share Capital / Admission Fee).
-    // Updates amount + narration + lines AND syncs voucher_entries so SQL reports match.
+    // S3-e-3: through the ONE voucher-edit path (updateVoucher) — its guards, its rollback, its journal
+    // events (reversed + reposted) and, under the posting service, edit_voucher (one transaction that
+    // also replaces voucher_entries). The old direct upsert changed the amount with NO journal event,
+    // left the old entries behind (new line ids + upsert) and never rolled back. An amount set to 0
+    // cancels the voucher (with its journal) instead of leaving a ₹0 receipt.
     // If the voucher was cancelled earlier, warn the user instead of silently no-op.
     const resyncMemberVoucher = (creditAccountId: string, newAmount: number, kind: string) => {
       const active = vouchersRef.current.find(v => v.memberId === id && v.creditAccountId === creditAccountId && !v.isDeleted);
       if (active) {
+        if (!(newAmount > 0)) {
+          cancelLinkedVouchers([active.id], `${kind} set to 0 for ${updatedMember.name}`, userRef.current?.name || 'System');
+          return;
+        }
         const lid = () => crypto.randomUUID();
         // Rebuild lines so multi-line vouchers stay consistent; legacy single-line use derived
         const newLines: VoucherLine[] = [
           { id: lid(), accountId: active.debitAccountId, type: 'Dr', amount: newAmount },
           { id: lid(), accountId: creditAccountId, type: 'Cr', amount: newAmount },
         ];
-        const updatedV: Voucher = {
-          ...active,
-          amount: newAmount,
-          lines: newLines,
-          narration: `${kind} updated for ${updatedMember.name}`,
-        };
-        setVouchersState(prev => prev.map(v => v.id === active.id ? updatedV : v));
-        supabase.from('vouchers').upsert(withSoc(updatedV)).then(({ error }) => {
-          if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); }
-          else syncEntries(updatedV); // rebuild voucher_entries rows with new amount
-        });
+        const applied = updateVoucher(active.id, { amount: newAmount, lines: newLines, narration: `${kind} updated for ${updatedMember.name}` });
+        if (!applied) {
+          // updateVoucher already said why (FY/period lock, role, reversed…). Make the split visible.
+          toastRef.current({ title: `${kind} वाउचर नहीं बदला`, description: `सदस्य की राशि ₹${newAmount} हो गई, पर ${active.voucherNo} पुरानी राशि पर है — ऊपर बताया कारण देखें और वाउचर अलग से ठीक करें।`, variant: 'destructive', duration: 12000 });
+        }
       } else {
         const cancelled = vouchersRef.current.find(v => v.memberId === id && v.creditAccountId === creditAccountId && v.isDeleted);
         if (cancelled) {
@@ -2753,7 +2755,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (data.admissionFee !== undefined && data.admissionFee !== oldMember.admissionFee) {
       resyncMemberVoucher(ACCOUNT_IDS.ADM_FEE, data.admissionFee, 'Admission Fee');
     }
-  }, []);
+  }, [updateVoucher]);
 
   // ECR-16 (member lifecycle): record a lifecycle transition (resign/expel/death/reactivate)
   // with reason + date. `status` (base column) is persisted reliably; the reason/date

@@ -203,6 +203,7 @@
     "test:heal-voucher-consistency": "node scripts/test-heal-voucher-consistency.mjs",
     "test:s3e1-cascade-cancel": "node scripts/test-s3e1-cascade-cancel.mjs",
     "test:s3e2-approve-voucher": "node scripts/test-s3e2-approve-voucher.mjs",
+    "test:s3e3-member-resync": "node scripts/test-s3e3-member-resync.mjs",
     "db:harness": "node scripts/db-harness/harness.mjs",
     "test:ledgerheads-no-auto-merge": "node scripts/test-ledgerheads-no-auto-merge.mjs",
     "test:persist": "node scripts/test-voucher-persistence.mjs",
