@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve as pathResolve } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const { planConsistency, buildConsistencySql, buildConsistencyUndoSql, currentPosting, FIX } =
+const { planConsistency, buildConsistencySql, buildConsistencyUndoSql, currentPosting, FIX, setFix } =
   await import(pathToFileURL(pathResolve(HERE, 'heal-voucher-consistency.mjs')).href);
 
 let pass = 0, fail = 0;
@@ -53,6 +53,21 @@ ok('already consistent → nothing', a.length === 0);
 a = plan([V({ id: 'l4' })], { l4: [ent('l4', 'l4-dr', '3301', 250, 0), ent('l4', 'l4-cr', '1102', 0, 250)] }, {});
 ok('live with no journal event → one voucher.posted, entries kept', a[0].events.length === 1 && a[0].events[0].eventType === 'voucher.posted' && !a[0].deleteEntries.length && !a[0].insertEntries.length);
 ok('pending vouchers are skipped', plan([V({ id: 'l5', approvalStatus: 'pending' })], { l5: [ent('l5', 'x', '3301', 9, 0)] }, {}).length === 0);
+ok('rejected vouchers are skipped', plan([V({ id: 'l7', approvalStatus: 'rejected' })], {}, {}).length === 0);
+
+console.log('S3-e-4: live voucher with no journal event (Assandh)');
+a = plan([V({ id: 'a1', approvalStatus: 'approved' })], { a1: [ent('a1', 'a1-dr', '3301', 250, 0), ent('a1', 'a1-cr', '1102', 0, 250)] }, {});
+ok('matching entries, no event → one voucher.posted (seq 1), entries untouched', a.length === 1 && a[0].events.length === 1 && a[0].events[0].eventType === 'voucher.posted'
+  && a[0].events[0].sequence === 1 && !a[0].deleteEntries.length && !a[0].insertEntries.length);
+ok('posted meta createdAt gets the UTC "Z" the app writes', a[0].events[0].payload.createdAt === '2026-08-22T02:48:03.815Z');
+a = plan([V({ id: 'a2' })], {}, {});
+ok('no entries and no event → entries built + voucher.posted', a[0].insertEntries.length === 2 && a[0].events.length === 1);
+setFix('s3e4-test-run');
+a = plan([V({ id: 'a3' })], {}, {});
+ok('setFix names the run: event id + producer carry it', a[0].events[0].eventId.startsWith('s3e4-test-run-a3-') && a[0].events[0].producer.id === 's3e4-test-run');
+let threw = false; try { setFix('Bad Id!'); } catch { threw = true; }
+ok('setFix rejects an unsafe id', threw);
+setFix('s3d3-voucher-consistency');
 const e2 = [posted('p', [L('a', 'Dr', 1)], 1), { ...posted('p', [L('b', 'Dr', 1)], 3), event_type: 'voucher.reposted' }, { ...posted('p', [L('c', 'Dr', 1)], 5), event_type: 'voucher.reposted' }];
 ok('current posting = latest reposted', currentPosting(e2).sequence === 5);
 

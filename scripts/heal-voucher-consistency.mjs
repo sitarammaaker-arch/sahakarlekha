@@ -8,6 +8,8 @@
 //   • a LIVE voucher whose voucher_entries / journal kept a pre-edit amount  → rebuild the entries from
 //     the voucher (buildVoucherEntries) and, if the journal's current posting differs, append
 //     voucher.reversed + voucher.reposted (or one voucher.posted when the journal holds none)
+//   • a LIVE voucher with NO journal event at all (S3-e-4: Assandh's appends failed 07-16 → 08-19)
+//                                                                              → append voucher.posted
 // The VOUCHER ROW is the truth; it is never edited. Rows are built with the app's own builders (RULE 2).
 //
 // READS only (read-only transaction on the linked project, or the local db-harness) and writes:
@@ -15,7 +17,9 @@
 //                   inserted id to data_fix_log first
 //   <out>.undo.sql  deletes exactly the inserted rows and re-inserts exactly the deleted ones
 //
-// Usage: node scripts/heal-voucher-consistency.mjs --out <path-without-ext> [--source linked|harness] [--workdir <dir>]
+// Usage: node scripts/heal-voucher-consistency.mjs --out <path-without-ext> [--fix <id>] [--source linked|harness] [--workdir <dir>]
+//   --fix names this run in data_fix_log (default s3d3-voucher-consistency); each run gets its own id so
+//   its undo touches only its rows and a re-apply of THAT run is refused.
 // The SQL holds society and voucher ids — keep it out of git (this repo is public).
 
 import { register } from 'node:module';
@@ -38,7 +42,12 @@ const { buildVoucherEntries } = await imp('lib/voucherUtils.ts');
 const { buildEvent } = await imp('lib/ledger/event.ts');
 const { voucherPostingLines, voucherEventMeta, voucherReversalLines } = await imp('lib/ledger/voucherEvent.ts');
 
-export const FIX = 's3d3-voucher-consistency';
+export let FIX = 's3d3-voucher-consistency';
+/** Name this run (data_fix_log.fix, event ids, producer). */
+export function setFix(id) { if (!/^[a-z0-9-]+$/.test(id)) throw new Error('fix id: lowercase letters, digits and dashes only'); FIX = id; }
+/** The DB row's timestamp has no zone ('2026-07-20T09:09:53.886'); the app's createdAt is ISO with 'Z'
+ *  (voucherEventMeta's same-date sort key) — the column is UTC, so append the 'Z'. */
+const isoZ = (t) => (typeof t === 'string' && /^\d{4}-\d{2}-\d{2}T[\d:.]+$/.test(t) ? `${t}Z` : t);
 const q = (s) => (s === null || s === undefined ? 'null' : `'${String(s).replace(/'/g, "''")}'`);
 const j = (o) => { const s = JSON.stringify(o); if (s.includes('$fx$')) throw new Error('payload contains the dollar-quote tag'); return `$fx$${s}$fx$::jsonb`; };
 const legKey = (ls) => JSON.stringify((ls || []).map((l) => [l.accountId, l.drCr, Number(l.amountMinor)]));
@@ -78,20 +87,20 @@ export function planConsistency(vouchers, entriesByVoucher, eventsByVoucher, run
       if (!ents.length && !events.length) continue;
       kind = events.length ? 'cancelled-journal' : 'cancelled-entries';
     } else {
-      if (v.approvalStatus === 'pending') continue;
+      if (v.approvalStatus === 'pending' || v.approvalStatus === 'rejected') continue;
       insertEntries = buildVoucherEntries(v, sid).map(({ societyId: _s, ...e }) => ({ ...e, society_id: sid, jurisdiction: v.jurisdiction ?? null }));
       const want = voucherPostingLines(v);
       const entryKey = (rows) => JSON.stringify(rows.map((e) => [e.id, e.accountId, minorOf(e.dr), minorOf(e.cr)]).sort());
       const entriesOk = entryKey(ents) === entryKey(insertEntries);
       if (!posting) {
-        events.push(buildEvent({ ...base, eventType: 'voucher.posted', sequence: maxSeq + 1, payload: { lines: want, ...voucherEventMeta(v), healed: true } },
+        events.push(buildEvent({ ...base, eventType: 'voucher.posted', sequence: maxSeq + 1, payload: { lines: want, ...voucherEventMeta({ ...v, createdAt: isoZ(v.createdAt) }), healed: true } },
           { eventId: `${FIX}-${v.id}-p${maxSeq + 1}`, occurredAt: runAt }));
       } else if (legKey(posting.payload?.lines) !== legKey(want)) {
         events.push(buildEvent({ ...base, eventType: 'voucher.reversed', sequence: maxSeq + 1, reversalOf: posting.event_id,
           payload: { ...(posting.payload || {}), lines: flip(posting.payload?.lines), reason: 'heal: edit never journaled', healed: true } },
           { eventId: `${FIX}-${v.id}-r${maxSeq + 1}`, occurredAt: runAt }));
         // Keep the posting's createdAt string (the same-date sort key) — the DB row's timestamp loses the 'Z'.
-        const meta = { ...voucherEventMeta(v), createdAt: posting.payload?.createdAt ?? voucherEventMeta(v).createdAt };
+        const meta = { ...voucherEventMeta(v), createdAt: posting.payload?.createdAt ?? isoZ(v.createdAt) };
         events.push(buildEvent({ ...base, eventType: 'voucher.reposted', sequence: maxSeq + 2, payload: { lines: want, ...meta, healed: true } },
           { eventId: `${FIX}-${v.id}-r${maxSeq + 2}`, occurredAt: runAt }));
       }
@@ -214,19 +223,26 @@ async function read(sql, source, workdir) {
   return runReadOnlyQuery(sql, workdir);
 }
 
-// The approved set (2026-09-29): cancelled vouchers still holding entries, and live vouchers whose
-// entries' Dr total differs from their own legs.
+// The approved sets (2026-09-29): S3-d-3 — cancelled vouchers still holding entries, and live vouchers
+// whose entries' Dr total differs from their own legs; S3-e-4 — live vouchers with no journal event at
+// all, and cancelled vouchers whose journal posting was never reversed.
 const CANDIDATES = `
 with e as (select "voucherId" vid, round(sum(dr), 2) dr from public.voucher_entries group by 1)
-select to_jsonb(v) as r from public.vouchers v join e on e.vid = v.id
-where coalesce(v."isDeleted", false)
+select to_jsonb(v) as r from public.vouchers v left join e on e.vid = v.id
+where (e.vid is not null and (coalesce(v."isDeleted", false)
    or e.dr <> case when jsonb_typeof(v.lines) = 'array' and jsonb_array_length(v.lines) > 0
                    then (select round(sum((x ->> 'amount')::numeric), 2) from jsonb_array_elements(v.lines) x where x ->> 'type' = 'Dr')
-                   else round(v.amount, 2) end`;
+                   else round(v.amount, 2) end))
+   or (not coalesce(v."isDeleted", false) and coalesce(v."approvalStatus", '') not in ('pending', 'rejected')
+       and not exists (select 1 from public.ledger_events x where x.aggregate_type = 'voucher' and x.aggregate_id = v.id))
+   or (coalesce(v."isDeleted", false)
+       and exists (select 1 from public.ledger_events x where x.aggregate_type = 'voucher' and x.aggregate_id = v.id and x.event_type in ('voucher.posted', 'voucher.reposted'))
+       and not exists (select 1 from public.ledger_events x where x.aggregate_type = 'voucher' and x.aggregate_id = v.id and x.event_type = 'voucher.cancelled'))`;
 
 async function main() {
   const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
   const out = arg('--out'); const source = arg('--source', 'linked'); const wd = arg('--workdir');
+  if (arg('--fix')) setFix(arg('--fix'));
   if (!out) { console.error('usage: --out <path> [--source linked|harness] [--workdir <dir>]'); process.exit(2); }
   const vouchers = (await read(CANDIDATES, source, wd)).map((x) => x.r);
   const ids = vouchers.map((v) => q(v.id)).join(',') || "''";
