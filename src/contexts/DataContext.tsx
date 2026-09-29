@@ -2226,59 +2226,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return reversal;
   }, [addVoucher]);
 
-  const restoreVoucher = useCallback((id: string): boolean => {
-    if (guardFYLocked()) return false;
-    const current = vouchersRef.current.find(v => v.id === id);
-    if (!current) return false;
-    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
-    // S3-d: the journal has no "un-cancel" yet (every reader treats voucher.cancelled as final), so a
-    // restore here would re-activate the row while the journal keeps it cancelled. Under the posting
-    // service the restore is refused until that is designed; flag off → unchanged.
-    if (postingServiceRef.current) {
-      toastRef.current({ title: 'Restore अभी बंद है', description: 'रद्द वाउचर को वापस लाना अभी उपलब्ध नहीं है — ज़रूरत हो तो नया वाउचर बनाएँ।', variant: 'destructive', duration: 10000 });
-      return false;
-    }
-    // H6: If parent record (purchase / sale) has already been hard-deleted, blocking restore prevents
-    // creating a "ghost" voucher with no item rows and inconsistent stock.
-    if (current.refType === 'purchase' && current.refId) {
-      const parentExists = purchasesRef.current.some(p => p.id === current.refId);
-      if (!parentExists) {
-        toastRef.current({
-          title: 'Cannot restore',
-          description: 'Linked Purchase has been deleted. Create a new purchase from Purchase Management instead.',
-          variant: 'destructive',
-        });
-        return false;
-      }
-    }
-    if (current.refType === 'sale' && current.refId) {
-      const parentExists = salesRef.current.some(s => s.id === current.refId);
-      if (!parentExists) {
-        toastRef.current({
-          title: 'Cannot restore',
-          description: 'Linked Sale has been deleted. Create a new sale from Sale Management instead.',
-          variant: 'destructive',
-        });
-        return false;
-      }
-    }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { deletedAt: _da, deletedBy: _db, deletedReason: _dr, ...rest } = current as Voucher & { deletedAt?: string; deletedBy?: string; deletedReason?: string };
-    const restoredVoucher = { ...rest, isDeleted: false };
-    emitAudit({ entityType: 'voucher', entityId: id, action: 'restore' });
-    setVouchersState(prev => {
-      const updated = prev.map(v => v.id === id ? restoredVoucher : v);
-      return updated;
-    });
-    supabase.from('vouchers').upsert(withSoc(restoredVoucher)).then(({ error }) => {
-      if (error) {
-        console.error('DB sync error:', error.message); reportError('db-sync', error.message);
-        setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back to deleted state
-        toastRef.current({ title: 'रिस्टोर सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
-      }
-      else syncEntries(restoredVoucher); // re-populate voucher_entries so SQL reports see it again
-    });
-    return true;
+  // Restore of a cancelled voucher is DISABLED (founder decision A, 2026-09-29). The journal has no
+  // "un-cancel": every reader (resolveCurrentVouchers, ask-core, the genesis/reconcile scripts) treats a
+  // voucher.cancelled as final, and the old restore emitted no event — the row came back while the
+  // journal kept it cancelled (TB/cash-book drift). A cancelled voucher stays cancelled; a correction
+  // is a NEW voucher (as in Tally). Kept as a function so any caller gets the explanation, not a crash.
+  const restoreVoucher = useCallback((_id: string): boolean => {
+    toastRef.current({ title: 'रद्द वाउचर वापस नहीं आता', description: 'रद्द किया गया वाउचर restore नहीं होता — ज़रूरत हो तो नया वाउचर बनाएँ।', variant: 'destructive', duration: 10000 });
+    return false;
   }, []);
 
   const clearVoucher = useCallback((id: string, clearedDate?: string) => {
