@@ -471,6 +471,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     } catch { /* best-effort — never affects the cancel */ }
   };
+  // S3-e-2 · an APPROVED voucher must be in the journal. A pending voucher gets no voucher.posted when it
+  // is created (addVoucher skips it), and approval used to flip the status only — 342 approved vouchers
+  // since T-09 had no journal event (prod, 2026-09-29). After a table-first approval this checks the DB
+  // journal (ground truth, not the maybe-unloaded ref) and appends voucher.posted IFF the voucher has no
+  // posting and no cancel yet. Best-effort + idempotent; failures are reported, never block the approval.
+  const ensureVoucherPostedEvent = async (voucher: Voucher, by: string) => {
+    try {
+      const { data, error } = await supabase.from('ledger_events').select('event_type, sequence')
+        .eq('aggregate_type', 'voucher').eq('aggregate_id', voucher.id);
+      if (error || !data) { if (error) reportError('voucher-approve-journal', error.message, { voucherId: voucher.id }); return; }
+      if (data.some(e => e.event_type === 'voucher.posted' || e.event_type === 'voucher.reposted' || e.event_type === 'voucher.cancelled')) return;
+      const maxSeq = data.reduce((m, e) => Math.max(m, (e.sequence as number) || 0), 0);
+      const posted = buildEvent({
+        eventType: 'voucher.posted', tenantId: societyIdRef.current, jurisdiction: jurisdictionRef.current,
+        aggregateType: 'voucher', aggregateId: voucher.id, sequence: maxSeq + 1,
+        producer: { kind: 'human', id: by ?? null },
+        payload: { lines: voucherPostingLines(voucher), ...voucherEventMeta(voucher) },
+      }, { eventId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
+      const { error: insErr } = await supabase.from('ledger_events').insert(toLedgerEventRow(posted));
+      if (insErr) reportError('voucher-approve-journal', insErr.message, { voucherId: voucher.id });
+      else if (journalLoadedRef.current && !ledgerEventsRef.current.some(e => e.aggregateId === voucher.id && e.eventType === 'voucher.posted')) {
+        ledgerEventsRef.current = [...ledgerEventsRef.current, posted];
+      }
+    } catch (e) { reportError('voucher-approve-journal', e instanceof Error ? e.message : String(e), { voucherId: voucher.id }); }
+  };
+
   // P0 #3: append-only audit. Actor is read from a ref so it is never stale inside the
   // delete/approve useCallbacks; emitAudit is fire-and-forget and never blocks the write.
   const userRef = useRef(user);
@@ -2342,13 +2368,33 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updated = { ...current, approvalStatus: 'approved' as const, approvedBy, approvedAt: new Date().toISOString() };
     emitAudit({ entityType: 'voucher', entityId: id, action: 'approve', before: { approvalStatus: current.approvalStatus ?? null }, after: { approvalStatus: 'approved' } });
     setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); return u; });
+    // S3-e-2 · posting service: ONE server call (approve_voucher, migration 079) flips the status AND
+    // writes the lines, entries and voucher.posted in one transaction. Failure → roll back + toast.
+    if (postingServiceRef.current) {
+      const undoApprove = (msg: string) => {
+        setVouchersState(prev => prev.map(v => v.id === id ? current : v));
+        reportError('voucher-approve-post-service', msg, { voucherId: id });
+        toastRef.current({ title: 'अप्रूवल सेव नहीं हुआ', description: `${msg}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 15000 });
+      };
+      supabase.rpc('approve_voucher', { p_id: id, p_lines: buildEditVoucherPayload(updated).p_lines, p_approved_by: approvedBy }).then(({ data, error }) => {
+        if (error) undoApprove(postVoucherMessage(postVoucherErrorCode(error.message), error.message));
+        else {
+          const evs = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
+          if (evs.length) ledgerEventsRef.current = [...ledgerEventsRef.current, ...evs];
+        }
+      }, (e: unknown) => undoApprove(`Network error — ${e instanceof Error ? e.message : String(e)}`));
+      return true;
+    }
     supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
         toastRef.current({ title: 'अप्रूवल सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
       }
-      else syncEntries(updated); // mirror to voucher_entries so SQL reports see the approved entries
+      else {
+        syncEntries(updated); // mirror to voucher_entries so SQL reports see the approved entries
+        void ensureVoucherPostedEvent(updated, approvedBy); // S3-e-2: the approved voucher enters the journal
+      }
     });
     return true;
   }, [society.fyLocked]);
