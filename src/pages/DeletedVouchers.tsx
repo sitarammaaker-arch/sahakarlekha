@@ -209,7 +209,8 @@ const DeletedVouchers: React.FC = () => {
                           variant="outline"
                           className="gap-1 text-xs h-7 text-green-700 border-green-300 hover:bg-green-50"
                           onClick={() => {
-                            restoreVoucher(v.id);
+                            // false = blocked (a guard already toasted why) — never toast success then.
+                            if (!restoreVoucher(v.id)) return;
                             toast({ title: hi ? 'वाउचर पुनर्स्थापित किया गया' : 'Voucher restored', description: v.voucherNo });
                           }}
                         >

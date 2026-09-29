@@ -199,6 +199,7 @@
     "test:s3a-post-voucher": "node scripts/test-s3a-post-voucher.mjs",
     "test:s3b-post-voucher-client": "node scripts/test-s3b-post-voucher-client.mjs",
     "test:s3d-edit-cancel-voucher": "node scripts/test-s3d-edit-cancel-voucher.mjs",
+    "test:s3d2-wire-edit-cancel": "node scripts/test-s3d2-wire-edit-cancel.mjs",
     "db:harness": "node scripts/db-harness/harness.mjs",
     "test:ledgerheads-no-auto-merge": "node scripts/test-ledgerheads-no-auto-merge.mjs",
     "test:persist": "node scripts/test-voucher-persistence.mjs",

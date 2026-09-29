@@ -38,6 +38,19 @@ export function buildPostVoucherPayload(v: Voucher, event: LedgerEvent): PostVou
   return { p_voucher, p_lines, p_event };
 }
 
+/** The fields edit_voucher (migration 078) accepts; the server ignores everything else anyway. */
+const EDITABLE = ['id', 'type', 'date', 'debitAccountId', 'creditAccountId', 'amount', 'narration', 'memberId', 'lines', 'editHistory'] as const;
+
+/** edit_voucher payload for an edited voucher: its editable fields + its legs (getVoucherLines, RULE 2). */
+export function buildEditVoucherPayload(v: Voucher): { p_voucher: Record<string, unknown>; p_lines: PostVoucherLeg[] } {
+  const p_voucher: Record<string, unknown> = {};
+  for (const k of EDITABLE) if (k in v) p_voucher[k] = (v as unknown as Record<string, unknown>)[k];
+  const p_lines = getVoucherLines(v).map((l) => ({
+    id: l.id, accountId: l.accountId, drCr: l.type, amountMinor: toMinor(Number(l.amount) || 0), narration: l.narration ?? null,
+  }));
+  return { p_voucher, p_lines };
+}
+
 /** The `post_voucher:<code>` a refusal carries, or null for other errors. */
 export function postVoucherErrorCode(message: string | undefined | null): string | null {
   const m = String(message ?? '').match(/post_voucher:(\w+)/);
@@ -59,6 +72,12 @@ const MESSAGES: Record<string, string> = {
   bad_event: 'बही की entry सही नहीं बनी।',
   pending_not_supported: 'स्वीकृति के लिए रुका वाउचर अभी इस रास्ते से नहीं बनता।',
   voucher_id_taken: 'यह वाउचर id पहले से किसी और का है।',
+  role_cannot_delete: 'आपकी भूमिका को वाउचर रद्द करने की अनुमति नहीं है।',
+  voucher_not_found: 'यह वाउचर cloud पर नहीं मिला — page refresh करें।',
+  voucher_cancelled: 'यह वाउचर रद्द हो चुका है — बदला नहीं जा सकता।',
+  voucher_reversed: 'यह वाउचर reverse हो चुका है — बदला या रद्द नहीं हो सकता।',
+  engine_voucher: 'सिस्टम (engine) वाउचर — सुधार केवल reversal से होता है।',
+  voucher_in_closed_fy: 'यह वाउचर बंद वित्तीय वर्ष का है — बदला या रद्द नहीं हो सकता।',
 };
 
 export function postVoucherMessage(code: string | null, raw?: string): string {
