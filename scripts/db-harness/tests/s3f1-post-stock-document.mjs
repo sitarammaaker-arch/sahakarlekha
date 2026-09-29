@@ -106,6 +106,20 @@ await inRollback(async (tx) => {
   ok('currentStock +2 and purchaseRate = 250', (await stock(items[0].id)) === pb + 2
     && Number((await tx.query(`select "purchaseRate"::numeric r from public.stock_items where id = $1`, [items[0].id])).rows[0].r) === 250);
 
+  console.log('Four-part voucher numbers already taken (the Rania pilot failure, fixed by 081)');
+  const [{ taken, pfx, mx }] = (await tx.query(`select "voucherNo" taken, substring("voucherNo" from '^(.*)/[0-9]+$') pfx,
+      (select max((substring(v2."voucherNo" from '/([0-9]+)$'))::bigint) from public.vouchers v2 where v2.society_id::text = $1
+        and substring(v2."voucherNo" from '^(.*)/[0-9]+$') = substring(v."voucherNo" from '^(.*)/[0-9]+$')) mx
+    from public.vouchers v where society_id::text = $1 and array_length(string_to_array("voucherNo", '/'), 1) = 4 and "voucherNo" like 'RV/%' limit 1`, [sid])).rows;
+  const s4 = doc('sale', { voucher: { voucherNo: taken } });
+  await asAdmin();
+  r = await post(tx, s4);
+  ok(`a taken 4-part voucher number (${taken}) → posts with the prefix's max + 1`, r.ok && r.rows[0].r.voucherNo === `${pfx}/${String(Number(mx) + 1).padStart(taken.split('/').pop().length, '0')}`,
+    `${code(r)} ${r.ok ? r.rows[0].r.voucherNo : ''}`);
+  const s5 = doc('sale', { voucher: { voucherNo: `${pfx}/99999999` } });
+  r = await post(tx, s5);
+  ok('a FREE 4-part provisional number is kept as is', r.ok && r.rows[0].r.voucherNo === `${pfx}/99999999`, `${code(r)} ${r.ok ? r.rows[0].r.voucherNo : ''}`);
+
   console.log('Refusals write nothing');
   const nothing = async (x) => {
     const a = await tx.query(`select count(*) n from public.sales where id = $1`, [x.document.id]);
