@@ -29,7 +29,7 @@ import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
 import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
-import { buildPostVoucherPayload, buildEditVoucherPayload, postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVoucherClient';
+import { buildPostVoucherPayload, buildEditVoucherPayload, buildStockDocumentPayload, postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVoucherClient';
 import { reverseEntryLines, isEditLocked } from '@/lib/voucherReversal';
 import { canTransitionMember } from '@/lib/memberLifecycle';
 import { computeStock, computeStockValue, computeStockCostRate, reconcileMovements } from '@/lib/stockUtils';
@@ -1292,6 +1292,47 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   };
 
+  // S3-f-1 · a sale / purchase saved in ONE server call (post_stock_document, migration 080): official
+  // numbers, the voucher (every post_voucher check), the document row, its movements and the currentStock
+  // cache — all or nothing. On success the server's numbers / narration / event are restamped into local
+  // state (the document, its movements and its voucher then carry ONE number); on any failure every
+  // optimistic change is undone with a destructive toast (RULE 1).
+  const postStockDocument = (args: {
+    kind: 'sale' | 'purchase'; doc: Sale | Purchase; voucher: Voucher; event: LedgerEvent; movements: StockMovement[];
+    rollbackVoucher: () => void; undoLocal: () => void;
+  }) => {
+    const { kind, doc, voucher, event, movements } = args;
+    const docNoKey = kind === 'sale' ? 'saleNo' : 'purchaseNo';
+    const label = kind === 'sale' ? 'बिक्री' : 'खरीद';
+    const fail = (msg: string) => {
+      args.rollbackVoucher();
+      args.undoLocal();
+      reportError(`${kind}-post-service`, msg, { documentId: doc.id });
+      toastRef.current({ title: `❌ ${label} cloud par save NAHI hui`, description: `${msg}. Local se hata di gayi — refresh par data lose nahi hoga.`, variant: 'destructive', duration: 15000 });
+    };
+    const p = buildStockDocumentPayload(kind, doc, voucher, event, movements);
+    supabase.rpc('post_stock_document', p).then(({ data, error }) => {
+      if (error) { fail(postVoucherMessage(postVoucherErrorCode(error.message), error.message)); return; }
+      const r = (data ?? {}) as { docNo?: string; voucherNo?: string; narration?: string; events?: Record<string, unknown>[] };
+      const docNo = r.docNo ?? (doc as unknown as Record<string, string>)[docNoKey];
+      const mvIds = new Set(movements.map(m => m.id));
+      if (kind === 'sale') {
+        salesRef.current = salesRef.current.map(x => x.id === doc.id ? { ...x, saleNo: docNo } : x);
+        setSalesState(prev => prev.map(x => x.id === doc.id ? { ...x, saleNo: docNo } : x));
+      } else {
+        purchasesRef.current = purchasesRef.current.map(x => x.id === doc.id ? { ...x, purchaseNo: docNo } : x);
+        setPurchasesState(prev => prev.map(x => x.id === doc.id ? { ...x, purchaseNo: docNo } : x));
+      }
+      stockMovementsRef.current = stockMovementsRef.current.map(m => mvIds.has(m.id) ? { ...m, referenceNo: docNo } : m);
+      setStockMovementsState(prev => prev.map(m => mvIds.has(m.id) ? { ...m, referenceNo: docNo } : m));
+      const vPatch = { ...(r.voucherNo ? { voucherNo: r.voucherNo } : {}), ...(r.narration !== undefined ? { narration: r.narration } : {}) };
+      vouchersRef.current = vouchersRef.current.map(v => v.id === voucher.id ? { ...v, ...vPatch } : v);
+      setVouchersState(prev => prev.map(v => v.id === voucher.id ? { ...v, ...vPatch } : v));
+      const evs = mapLedgerEventRows(r.events ?? []);
+      if (evs.length) ledgerEventsRef.current = [...ledgerEventsRef.current.filter(e => e.eventId !== event.eventId), ...evs];
+    }, (e: unknown) => fail(`Network error — ${e instanceof Error ? e.message : String(e)}`));
+  };
+
   // S3-e-1 · the ONE way a parent-record cascade (member / loan / asset / sale / purchase / salary
   // slip deleted or edited) cancels its linked vouchers. The old per-site code only flipped isDeleted:
   // the journal kept a LIVE posting for every such voucher (69 in prod, ~₹37L, 2026-09-29) and a failed
@@ -1476,7 +1517,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }): Voucher => {
+  // opts.persistWith (S3-f-1): the caller persists this voucher TOGETHER with its document in one server
+  // call (post_stock_document). addVoucher builds + applies it optimistically exactly as always, then hands
+  // over the voucher, its voucher.posted event and the rollback instead of saving it itself.
+  type VoucherPersistWith = (v: Voucher, ev: LedgerEvent, rollback: () => void) => void;
+  const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }, opts?: { persistWith?: VoucherPersistWith }): Voucher => {
     // ECR-06: role gate at the voucher choke point — every composite flow (sale/purchase/salary/
     // loan/reversal) and page funnels through here, so one guard covers every voucher birth.
     if (guardPermission('create', 'वाउचर बनाने')) {
@@ -1614,6 +1659,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setVouchersState(prev => prev.filter(v => v.id !== newVoucher.id));
       if (shadowEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== shadowEvent!.eventId);
     };
+
+    if (opts?.persistWith && shadowEvent) { opts.persistWith(newVoucher, shadowEvent, rollbackOptimistic); return newVoucher; }
 
     // ── journal-first-write (slice 4) — DORMANT, per-tenant flag, default OFF ────────────────────
     // When journalFirstWrites is on AND this voucher is journaled (posted, has a shadow event), the
@@ -5854,6 +5901,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const vType = data.paymentMode === 'credit' ? 'sale' : 'receipt';
     const saleId = lid();
+    // S3-f-1: under the posting service the voucher is saved together with the sale (postStockDocument).
+    let viaServer: { v: Voucher; ev: LedgerEvent; rollback: () => void } | null = null;
     const newVoucher = addVoucher({
       type: vType,
       date: data.date,
@@ -5865,26 +5914,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       createdBy: data.createdBy,
       refType: 'sale',
       refId: saleId,
-    });
+    }, postingServiceRef.current ? { persistWith: (v, ev, rollback) => { viaServer = { v, ev, rollback }; } } : undefined);
     // RM-01: no voucher ⇒ no sale. addVoucher already toasted why; stop before stock or the sale row
     // is written, so a sale can never exist without its voucher (nothing repairs it on load any more).
     if (!newVoucher.id) return { ...data, id: '' } as unknown as Sale;
 
-    // Stock movements
+    // Stock movements (under the posting service: local only — the server writes them with the sale)
+    const server = viaServer as { v: Voucher; ev: LedgerEvent; rollback: () => void } | null;
+    const saleMovements: StockMovement[] = [];
+    const stockBefore = new Map(stockItems.map(i => [i.id, i.currentStock]));
     data.items.forEach(item => {
       setStockItemsState(prev => {
         const updated = prev.map(i => {
           if (i.id !== item.itemId) return i;
           const newStock = Math.max(0, i.currentStock - item.qty);
-          supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id)
+          if (!server) supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id)
             .then(({ error }) => { if (error) { reportCascade('Stock sync error', error); toastRef.current({ title: 'Stock save failed', description: error.message, variant: 'destructive' }); } });
           return { ...i, currentStock: newStock };
         });
         return updated;
       });
       const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'sale', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: saleNo, narration: `Sale to ${data.customerName}`, godownId: activeGodownIdRef.current || undefined, createdAt: new Date().toISOString() };
+      saleMovements.push(mv);
       setStockMovementsState(prev => [...prev, mv]);
-      persistMovement(mv);
+      if (!server) persistMovement(mv);
     });
 
     // receivableAccountId is routing-only (chose the credit debtor above) — never store it on
@@ -5893,6 +5946,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const sale: Sale = { ...saleFields, id: saleId, saleNo, voucherId: newVoucher.id, gstVoucherIds: undefined, createdAt: new Date().toISOString(), branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) };
     salesRef.current = [...salesRef.current, sale];
     setSalesState(prev => [...prev, sale]);
+
+    if (server) {
+      const mvIds = new Set(saleMovements.map(m => m.id));
+      postStockDocument({
+        kind: 'sale', doc: sale, voucher: server.v, event: server.ev, movements: saleMovements, rollbackVoucher: server.rollback,
+        undoLocal: () => {
+          salesRef.current = salesRef.current.filter(s => s.id !== sale.id);
+          setSalesState(prev => prev.filter(s => s.id !== sale.id));
+          stockMovementsRef.current = stockMovementsRef.current.filter(m => !mvIds.has(m.id));
+          setStockMovementsState(prev => prev.filter(m => !mvIds.has(m.id)));
+          setStockItemsState(prev => prev.map(i => stockBefore.has(i.id) && data.items.some(it => it.itemId === i.id) ? { ...i, currentStock: stockBefore.get(i.id)! } : i));
+        },
+      });
+      return sale;
+    }
 
     // Two-step save — same pattern as purchases fix:
     // Step 1: upsert base columns only (schema cache always knows these)
@@ -6189,6 +6257,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const vType = data.paymentMode === 'credit' ? 'purchase' : 'payment';
     const purchaseId = lid();
+    // S3-f-1: under the posting service the voucher is saved together with the purchase (postStockDocument).
+    let viaServer: { v: Voucher; ev: LedgerEvent; rollback: () => void } | null = null;
     const newVoucher = addVoucher({
       type: vType,
       date: data.date,
@@ -6200,30 +6270,49 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       createdBy: data.createdBy,
       refType: 'purchase',
       refId: purchaseId,
-    });
+    }, postingServiceRef.current ? { persistWith: (v, ev, rollback) => { viaServer = { v, ev, rollback }; } } : undefined);
     // RM-01: no voucher ⇒ no purchase (see addSale). Stop before stock or the purchase row is written.
     if (!newVoucher.id) return { ...data, id: '' } as unknown as Purchase;
 
-    // Stock movements
+    // Stock movements (under the posting service: local only — the server writes them with the purchase)
+    const server = viaServer as { v: Voucher; ev: LedgerEvent; rollback: () => void } | null;
+    const purMovements: StockMovement[] = [];
+    const stockBefore = new Map(stockItems.map(i => [i.id, { cs: i.currentStock, rate: i.purchaseRate }]));
     data.items.forEach(item => {
       setStockItemsState(prev => {
         const updated = prev.map(i => {
           if (i.id !== item.itemId) return i;
           const newStock = i.currentStock + item.qty;
-          supabase.from('stock_items').update({ currentStock: newStock, purchaseRate: item.rate }).eq('id', i.id)
+          if (!server) supabase.from('stock_items').update({ currentStock: newStock, purchaseRate: item.rate }).eq('id', i.id)
             .then(({ error }) => { if (error) { reportCascade('Stock sync error', error); toastRef.current({ title: 'Stock save failed', description: error.message, variant: 'destructive' }); } });
           return { ...i, currentStock: newStock, purchaseRate: item.rate };
         });
         return updated;
       });
       const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'purchase', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: purchaseNo, narration: `Purchase from ${data.supplierName}`, godownId: activeGodownIdRef.current || undefined, createdAt: new Date().toISOString() };
+      purMovements.push(mv);
       setStockMovementsState(prev => [...prev, mv]);
-      persistMovement(mv);
+      if (!server) persistMovement(mv);
     });
 
     const purchase: Purchase = { ...data, id: purchaseId, purchaseNo, voucherId: newVoucher.id, taxVoucherIds: undefined, createdAt: new Date().toISOString(), branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) };
     purchasesRef.current = [...purchasesRef.current, purchase];
     setPurchasesState(prev => [...prev, purchase]);
+
+    if (server) {
+      const mvIds = new Set(purMovements.map(m => m.id));
+      postStockDocument({
+        kind: 'purchase', doc: purchase, voucher: server.v, event: server.ev, movements: purMovements, rollbackVoucher: server.rollback,
+        undoLocal: () => {
+          purchasesRef.current = purchasesRef.current.filter(p => p.id !== purchase.id);
+          setPurchasesState(prev => prev.filter(p => p.id !== purchase.id));
+          stockMovementsRef.current = stockMovementsRef.current.filter(m => !mvIds.has(m.id));
+          setStockMovementsState(prev => prev.filter(m => !mvIds.has(m.id)));
+          setStockItemsState(prev => prev.map(i => stockBefore.has(i.id) && data.items.some(it => it.itemId === i.id) ? { ...i, currentStock: stockBefore.get(i.id)!.cs, purchaseRate: stockBefore.get(i.id)!.rate } : i));
+        },
+      });
+      return purchase;
+    }
 
     // Two-step save — same pattern as editHistory fix for vouchers:
     // Step 1: upsert ONLY the original-table base columns (schema cache always knows these → never fails)
