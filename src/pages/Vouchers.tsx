@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, CheckCircle, RotateCcw, EyeOff, Eye, Pencil, Printer, Zap, Settings2, ArrowLeft, ArrowLeftRight, Search, FileSpreadsheet, Download, HandCoins } from 'lucide-react';
+import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, CheckCircle, EyeOff, Eye, Pencil, Printer, Zap, Settings2, ArrowLeft, ArrowLeftRight, Search, FileSpreadsheet, Download, HandCoins } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import BillWiseSettlement from '@/components/BillWiseSettlement';
 import { generateVoucherPDF } from '@/lib/pdf';
@@ -50,8 +50,8 @@ const Vouchers: React.FC = () => {
   // `create` is scoped to audit objections, so `update` keeps them read-only on financial
   // pages — byte-identical to the old hardcoded gate for all 4 legacy roles.
   const canEdit = can('update');    // create + edit + reverse (correction)
-  const canDelete = can('delete');  // cancel / restore — admin/societyAdmin/secretary only
-  const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, reverseVoucher, restoreVoucher, getTrialBalance, matchesActiveBranch } = useData();
+  const canDelete = can('delete');  // cancel — admin/societyAdmin/secretary only (restore is disabled)
+  const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, reverseVoucher, getTrialBalance, matchesActiveBranch } = useData();
   const [submitForApproval, setSubmitForApproval] = useState(false);
   const { toast } = useToast();
 
@@ -495,8 +495,8 @@ const Vouchers: React.FC = () => {
     toast({
       title: language === 'hi' ? 'बल्क रद्द पूरा' : 'Bulk cancel done',
       description: language === 'hi'
-        ? `${ok} वाउचर रद्द${skipped ? ` · ${skipped} छोड़े गए (system/linked)` : ''}. Cancelled सूची से restore हो सकते हैं।`
-        : `${ok} cancelled${skipped ? ` · ${skipped} skipped (system/linked)` : ''}. Restorable from the Cancelled list.`,
+        ? `${ok} वाउचर रद्द${skipped ? ` · ${skipped} छोड़े गए (system/linked)` : ''}. ये Cancelled सूची में दिखेंगे।`
+        : `${ok} cancelled${skipped ? ` · ${skipped} skipped (system/linked)` : ''}. They are listed under Cancelled.`,
     });
     setSelectedIds(new Set());
     setBulkOpen(false); setBulkReason(''); setBulkConfirm('');
@@ -1275,17 +1275,12 @@ const Vouchers: React.FC = () => {
                                   <ArrowLeftRight className="h-4 w-4" />
                                 </Button>
                               )}
-                              {canDelete && (cancelled ? (
-                                <Button variant="ghost" size="icon" className="h-9 w-9 text-blue-600 hover:text-blue-700" title={language === 'hi' ? 'पुनर्स्थापित करें' : 'Restore'}
-                                  onClick={() => restoreVoucher(v.id)}>
-                                  <RotateCcw className="h-4 w-4" />
-                                </Button>
-                              ) : (
+                              {canDelete && !cancelled && (
                                 <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
                                   onClick={() => { setCancelId(v.id); setCancelReason(''); }}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
-                              ))}
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1524,8 +1519,8 @@ const Vouchers: React.FC = () => {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {language === 'hi'
-                ? 'चुने हुए सभी वाउचर soft-cancel होंगे (उनकी entries/stock/sale सहित)। ये Cancelled सूची में जाएँगे और ज़रूरत पड़ने पर restore हो सकते हैं — hard-delete नहीं होता।'
-                : 'All selected vouchers will be soft-cancelled (with their entries/stock/sale). They move to the Cancelled list and can be restored — nothing is hard-deleted.'}
+                ? 'चुने हुए सभी वाउचर soft-cancel होंगे (उनकी entries/stock/sale सहित)। ये Cancelled सूची में दिखेंगे (hard-delete नहीं होता), पर वापस restore नहीं होंगे — ग़लती हो तो नया वाउचर बनाएँ।'
+                : 'All selected vouchers will be soft-cancelled (with their entries/stock/sale). They stay visible in the Cancelled list (nothing is hard-deleted) but cannot be restored — post a new voucher instead.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="px-4 pb-2 space-y-3">

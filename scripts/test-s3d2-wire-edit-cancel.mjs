@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // S3-d-2 · the app side of edit_voucher / cancel_voucher: unit tests of buildEditVoucherPayload plus
-// static checks of the updateVoucher / cancelVoucher / restoreVoucher wiring (flag-gated, revert on
-// failure, server events swapped in, restore refused under the flag, no false success toast). CI-safe.
+// static checks of the updateVoucher / cancelVoucher wiring (flag-gated, revert on failure, server
+// events swapped in) and of restore being disabled everywhere (founder decision A). CI-safe.
 // The same payload against a real restored DB: scripts/db-harness/tests/s3d-edit-cancel-voucher.mjs.
 //
 // Run: node scripts/test-s3d2-wire-edit-cancel.mjs
@@ -64,12 +64,16 @@ ok("cancelVoucher: the server's event replaces the optimistic cancel event", /fi
 ok('cancelVoucher: RPC branch never writes vouchers / voucher_entries / events itself', !/from\('vouchers'\)|deleteEntries\(|persistLedgerEvent\(|ensureVoucherCancelEvent\(/.test(canRpc));
 ok('cancelVoucher: flag-off default path unchanged', /supabase\.from\('vouchers'\)\.update\(\{ isDeleted: true, deletedAt: cancelledVoucher\.deletedAt, deletedBy, deletedReason: reason \}\)\.eq\('id', id\)\.then\(\(\{ error \}\) => \{\s*if \(error\) \{/.test(can));
 
+console.log('Restore disabled everywhere (founder decision A, 2026-09-29)');
 const res = between('const restoreVoucher = useCallback(', 'const clearVoucher = useCallback(');
-ok('restoreVoucher returns boolean', /const restoreVoucher = useCallback\(\(id: string\): boolean =>/.test(res) && /restoreVoucher: \(id: string\) => boolean;/.test(dc));
-ok('restoreVoucher: refused under the flag with a Hindi toast, before any write', /if \(postingServiceRef\.current\) \{[\s\S]*?Restore अभी बंद है[\s\S]*?return false;/.test(res) && res.indexOf('postingServiceRef.current') < res.indexOf("from('vouchers')"));
-ok('restoreVoucher: every guard returns false, the applied path returns true', !/return;\s/.test(res) && /return true;\s*\}, \[\]\);?\s*$/.test(res));
+ok('restoreVoucher only refuses: Hindi toast + return false, no write at all', /const restoreVoucher = useCallback\(\(_id: string\): boolean =>/.test(res) && /रद्द वाउचर वापस नहीं आता/.test(res)
+  && /return false;/.test(res) && !/supabase|syncEntries|setVouchersState|return true/.test(res));
+ok('context type still returns boolean', /restoreVoucher: \(id: string\) => boolean;/.test(dc));
 const dv = readFileSync(pathResolve(SRC, 'pages/DeletedVouchers.tsx'), 'utf8');
-ok('DeletedVouchers: success toast only when the restore was applied (no false success)', /if \(!restoreVoucher\(v\.id\)\) return;\s*toast\(/.test(dv));
+const vp = readFileSync(pathResolve(SRC, 'pages/Vouchers.tsx'), 'utf8');
+ok('no Restore button on the Cancelled-vouchers page', !/restoreVoucher|RotateCcw|पुनर्स्थापित/.test(dv));
+ok('no Restore button in the Vouchers list; cancel only for live vouchers', !/restoreVoucher|RotateCcw/.test(vp) && /\{canDelete && !cancelled && \(/.test(vp));
+ok('bulk-cancel copy no longer promises a restore', !/restore हो सकते हैं|can be restored/.test(vp) && /restore नहीं होंगे/.test(vp));
 
 console.log(`\nS3-d-2 edit/cancel wiring: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
