@@ -3,6 +3,7 @@ import { getAuthSession, setAuthSession } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import { can as rbacCan, type Permission } from '@/lib/rbac';
 import { generateSecret, otpauthUri } from '@/lib/totp';
+import { isMfaPending } from '@/lib/auth/mfaPending';
 
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes of inactivity
 
@@ -146,6 +147,32 @@ async function checkSuperAdmin(_email?: string): Promise<boolean> {
   }
 }
 
+/** Login, BEFORE the 2FA challenge: is this email a platform admin? Identity, not privilege — after
+ *  migration 085 a token that still owes a 2FA code has no is_platform_admin() rights, so login asks
+ *  platform_admin_identity() instead. Falls back to is_platform_admin until 085 is applied. */
+async function checkPlatformAdminIdentity(): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc('platform_admin_identity');
+    if (!error) return data === true;
+  } catch {
+    // fall through to the pre-085 check
+  }
+  return checkSuperAdmin();
+}
+
+/** SEC-03 (migration 085): after a correct 2FA / recovery code, swap the pending token for a verified
+ *  one — the access-token hook re-runs on refresh and sees the verified session. Fails closed: a
+ *  refresh error, or a token still marked pending, means the login is not finished. */
+async function refreshVerifiedSession(): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error || !data.session) return false;
+    return !isMfaPending(data.session.access_token);
+  } catch {
+    return false;
+  }
+}
+
 /** The platform admin's 2FA enrolment state (migration 025), or null if it could not be
  *  established. One retry absorbs a transient blip; anything else — RPC error, non-boolean
  *  payload, network throw — stays indeterminate, and the caller must refuse the login
@@ -195,6 +222,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const email = session?.user?.email;
+      // SEC-03: a stored session that still owes a 2FA code (e.g. the page was reloaded mid-challenge)
+      // sees no data server-side — sign it out rather than show a signed-in shell over empty screens.
+      if (session && isMfaPending(session.access_token)) {
+        await supabase.auth.signOut().catch(() => { /* cleared locally regardless */ });
+        doLogout();
+        return;
+      }
       if (!email) {
         // P0-3 (localStorage-role): a restored app session with NO Supabase Auth JWT is unverified —
         // its role/societyId came from client-editable localStorage and can't be trusted. Sign it out
@@ -244,9 +278,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
         doLogout();
+      } else if (event === 'TOKEN_REFRESHED' && !pendingMfaRef.current && getAuthSession()
+        && isMfaPending(session?.access_token)) {
+        // SEC-03: a finished login whose refreshed token says 2FA is owed (its verified session was
+        // cleared server-side) — sign out. Deferred: supabase-js must not be re-entered from here.
+        setTimeout(() => { supabase.auth.signOut().catch(() => doLogout()); }, 0);
       }
     });
     return () => subscription.unsubscribe();
@@ -300,6 +339,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ? await supabase.rpc('platform_admin_mfa_verify', { p_code: code })
         : await supabase.rpc('app_verify_mfa', { p_email: pending.user.email, p_code: code });
       if (error || data !== true) return false;
+      if (!(await refreshVerifiedSession())) return false;
     } catch {
       return false; // offline → cannot verify → fail closed.
     }
@@ -341,6 +381,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ? await supabase.rpc('platform_admin_verify_recovery', { p_code: code })
         : await supabase.rpc('app_verify_recovery', { p_email: pending.user.email, p_code: code });
       if (error || data !== true) return false;
+      if (!(await refreshVerifiedSession())) return false;
     } catch {
       return false;
     }
@@ -365,8 +406,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return finishOrChallenge(buildUser(userData));
         }
 
-        // Super admin may not be in society_users — check platform_admins
-        const isSA = await checkSuperAdmin(email);
+        // Super admin may not be in society_users — check platform_admins (identity only: the
+        // token may still owe a 2FA code, which strips is_platform_admin() rights — SEC-03).
+        const isSA = await checkPlatformAdminIdentity();
         if (isSA) {
           const u: User = {
             id: authData.user.id,

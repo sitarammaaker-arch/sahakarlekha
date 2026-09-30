@@ -3169,12 +3169,22 @@ begin
 end;
 $fn$;
 
-grant execute on function app_mfa_enroll(text, text, text)  to anon, authenticated;
-grant execute on function app_verify_mfa(text, text)        to anon, authenticated;
-grant execute on function app_mfa_disable(text, text)       to anon, authenticated;
-grant execute on function app_mfa_admin_reset(text, text)   to anon, authenticated;
-grant execute on function app_mfa_gen_recovery(text, text)  to anon, authenticated;
-grant execute on function app_verify_recovery(text, text)   to anon, authenticated;
+-- SUPERSEDED (Phase-2 SEC-01/02/03): the app_mfa_* bodies above trust a caller-supplied email.
+-- supabase/migrations/084_mfa_identity_from_jwt.sql + 085_mfa_session_binding.sql replace them
+-- (identity from the JWT, session-bound 2FA, throttle). If this block is ever re-run, re-run 084
+-- and 085 right after it. Never grant these to anon again.
+revoke execute on function app_mfa_enroll(text, text, text)  from public, anon;
+revoke execute on function app_verify_mfa(text, text)        from public, anon;
+revoke execute on function app_mfa_disable(text, text)       from public, anon;
+revoke execute on function app_mfa_admin_reset(text, text)   from public, anon;
+revoke execute on function app_mfa_gen_recovery(text, text)  from public, anon;
+revoke execute on function app_verify_recovery(text, text)   from public, anon;
+grant execute on function app_mfa_enroll(text, text, text)  to authenticated;
+grant execute on function app_verify_mfa(text, text)        to authenticated;
+grant execute on function app_mfa_disable(text, text)       to authenticated;
+grant execute on function app_mfa_admin_reset(text, text)   to authenticated;
+grant execute on function app_mfa_gen_recovery(text, text)  to authenticated;
+grant execute on function app_verify_recovery(text, text)   to authenticated;
 
 -- RFC 6238 SELF-TEST — run this once after creating the functions. Expected:
 -- t59 = t1234567890 = t1111111111 = true, and wrong = false.
