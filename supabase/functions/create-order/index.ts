@@ -15,6 +15,12 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
+// SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
+// token; its payload is read only to refuse more (unreadable → pending).
+const mfaPending = (t: string): boolean => {
+  try { return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).mfa_pending === true; } catch { return true; }
+};
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -50,6 +56,26 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
+
+    // WHO is paying — verified by value, never from the body (Phase-2 A5). The gateway's verify_jwt
+    // accepts the public anon key too, so without this anyone could open an order for any society id
+    // and read its current plan / renewal date back from the prorated amount. The caller must be an
+    // active user OF that society, on a session that has passed 2FA (SEC-03).
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const bearer = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
+    if (!bearer || bearer === anonKey) return json({ error: 'Please sign in again' }, 401);
+    if (mfaPending(bearer)) return json({ error: '2FA required — finish the 2FA step and sign in again' }, 403);
+    const { data: authData, error: authErr } = await createClient(Deno.env.get('SUPABASE_URL') ?? '', anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    }).auth.getUser(bearer);
+    const callerEmail = authData?.user?.email?.toLowerCase();
+    if (authErr || !callerEmail) return json({ error: 'Please sign in again' }, 401);
+    // Exact, case-insensitive email match (ilike would treat '_' / '%' in an email as wildcards).
+    const { data: staff } = await supa
+      .from('society_users').select('email')
+      .eq('society_id', society_id).eq('is_active', true);
+    const isMember = (staff ?? []).some((r: { email?: string }) => (r.email ?? '').toLowerCase() === callerEmail);
+    if (!isMember) return json({ error: 'Not a user of this society' }, 403);
 
     // Amount + resulting period_end are decided HERE from the CURRENT subscription
     // (server-side; the client never sets them). Upgrade = prorated difference for the
