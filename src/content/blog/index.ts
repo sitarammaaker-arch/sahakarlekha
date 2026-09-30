@@ -30,6 +30,10 @@ export interface BlogPost {
   accent: 'emerald' | 'sky' | 'violet' | 'amber' | 'rose' | 'indigo';
   /** topic tags */
   tags: string[];
+  /** optional featured image (path under /public) → hero, og:image, JSON-LD */
+  image?: string;
+  /** alt text for the featured image */
+  imageAlt?: string;
 }
 
 // Reverse-chronological is enforced by sorting on `date` below.
@@ -1362,6 +1366,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'MSP दर, किसानों को ₹9,029 करोड़ का सीधा भुगतान और नमी जैसे गुणवत्ता मानक — खरीफ़ 2025-26 सीज़न की पूरी तस्वीर।',
     accent: 'sky',
     tags: ['HAFED', 'धान खरीद', 'MSP'],
+    image: '/blog/hafed-paddy-procurement-2026-msp-commission-guide.webp',
+    imageAlt: 'हरियाणा की मंडी में धान की बाली हाथ में लिए मुस्कुराता किसान और तौल करते सहकारी समिति अधिकारी — HAFED धान खरीद 2026 MSP गाइड',
   },
   {
     slug: 'hafed-tender-2026-latest-eligibility-apply-guide',
