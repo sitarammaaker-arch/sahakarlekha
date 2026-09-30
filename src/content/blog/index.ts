@@ -430,6 +430,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'हर पदाधिकारी की अलग भूमिका — अध्यक्षता, रोज़मर्रा प्रशासन/रिकॉर्ड, और कोष की निगरानी।',
     accent: 'violet',
     tags: ['पदाधिकारी', 'सचिव', 'शासन'],
+    image: '/blog/office-bearers-chairman-secretary-treasurer.webp',
+    imageAlt: 'सहकारी समिति के कार्यालय में प्रधान, सचिव और कोषाध्यक्ष एक साथ रजिस्टर के साथ — पदाधिकारियों की ज़िम्मेदारियाँ',
   },
   // ── Socio-economic role of cooperatives ──
   {
