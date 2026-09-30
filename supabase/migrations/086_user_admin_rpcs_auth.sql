@@ -12,6 +12,8 @@
 -- anon (the only caller, UserManagement, is always signed in). Bodies are otherwise unchanged.
 -- Idempotent. Undo: 086_user_admin_rpcs_auth_down.sql.
 
+begin;
+
 CREATE OR REPLACE FUNCTION public.app_add_society_user(p_email text, p_password text, p_name text, p_role text, p_society_id text, p_is_active boolean DEFAULT true)
  RETURNS text
  LANGUAGE plpgsql
@@ -168,3 +170,8 @@ revoke execute on function public.app_add_society_user(text, text, text, text, t
 revoke execute on function public.app_reset_society_user_password(text, text)                from public, anon;
 grant  execute on function public.app_add_society_user(text, text, text, text, text, boolean) to authenticated;
 grant  execute on function public.app_reset_society_user_password(text, text)                to authenticated;
+
+insert into public.app_migrations (version, name) values ('086', 'user_admin_rpcs_auth')
+  on conflict (version) do nothing;
+
+commit;

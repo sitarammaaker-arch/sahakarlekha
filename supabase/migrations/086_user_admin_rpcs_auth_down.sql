@@ -1,5 +1,7 @@
 -- 086 undo · restores the pre-086 bodies and grants EXACTLY. WARNING: re-opens the anon takeover.
 
+begin;
+
 CREATE OR REPLACE FUNCTION public.app_add_society_user(p_email text, p_password text, p_name text, p_role text, p_society_id text, p_is_active boolean DEFAULT true)
  RETURNS text
  LANGUAGE plpgsql
@@ -145,3 +147,7 @@ $function$;
 
 grant execute on function public.app_add_society_user(text, text, text, text, text, boolean) to public, anon, authenticated;
 grant execute on function public.app_reset_society_user_password(text, text)                to public, anon, authenticated;
+
+delete from public.app_migrations where version = '086';
+
+commit;
