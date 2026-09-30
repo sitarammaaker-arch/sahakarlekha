@@ -32,7 +32,12 @@
 | A6 Critical RLS verification | COMPLETE (harness) | `scripts/db-harness/tests/a6-tenant-isolation.mjs`, **469/469** on the 2026-09-30 prod dump. Coverage: all 104 tables with society_id × read / update / delete / insert-copy / move-own-row as an S1 admin against a real S2; anon and a signed-in stranger see 0 rows in every table; platform tables (platform_admins, societies, user_mfa…, app_migrations…) cannot be written or read by anon or a stranger. Deny-all tables (account_reclass_log, data_fix_log, member_portal_users) refuse with permission denied. By design: public INSERT on error_log + feedback (unreadable by clients; a foreign society_id only pollutes a log, P3). A 2FA-pending token is covered by a3 (085). |
 
 ### Phase B — Accounting integrity (from the audit)
-B1 server posting architecture: verified for Rania (S3, migs 077–083 live). B2 rollout to all societies: NOT STARTED (next candidate 7f2919f0). B3–B10: NOT STARTED.
+| Task | Status | Notes |
+|---|---|---|
+| B1 verify server posting architecture | COMPLETE (audit) | Only DataContext writes `vouchers`; each write site was mapped against the flag. Bypasses under the flag: postJoiningReceipts, updateSalaryRecord, clear/unclear/reject (whole-row upsert), reverseVoucher links, mergeAccounts. |
+| B3 disable unsafe client writes | PARTIAL, PR #587 | Fixed: salary edits now repost the journal (a JRN-01 source, flag on AND off); joining receipts go via the server; clear/unclear/reject use a targeted update; editedBy. Static test 15/15. Remaining: mergeAccounts, and the flag-off cancelLinkedVouchers path. Runtime spot-check after deploy: edit a paid salary in Rania. |
+| B2 rollout to all societies | NOT STARTED | Needs #587 live first. Next candidate is 7f2919f0. The flag flip is a prod write, so it needs the founder's go. |
+| B4–B10 | NOT STARTED | |
 
 ### Phases C–M
 NOT STARTED. See the roadmap in the master prompt; the order follows the dependency rule.
