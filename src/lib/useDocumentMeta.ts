@@ -39,8 +39,10 @@ export function useDocumentMeta(opts: {
   jsonLd?: object | object[];
   /** Optional robots directive (e.g. 'noindex') applied while this page is mounted. */
   robots?: string;
+  /** Optional absolute or site-relative image → og:image + twitter:image. */
+  image?: string;
 }) {
-  const { title, description, canonicalPath, jsonLd, robots } = opts;
+  const { title, description, canonicalPath, jsonLd, robots, image } = opts;
   // Stringify once so the effect dep is stable across re-renders (inline objects change identity each render).
   const jsonLdStr = jsonLd ? JSON.stringify(jsonLd) : undefined;
   useEffect(() => {
@@ -62,6 +64,11 @@ export function useDocumentMeta(opts: {
     if (title) {
       set(metaByProp('og:title'), 'content', title);
       set(metaByName('twitter:title'), 'content', title);
+    }
+    if (image) {
+      const abs = image.startsWith('http') ? image : SITE + image;
+      set(metaByProp('og:image'), 'content', abs);
+      set(metaByName('twitter:image'), 'content', abs);
     }
     if (robots) {
       set(metaByName('robots'), 'content', robots);
@@ -95,7 +102,7 @@ export function useDocumentMeta(opts: {
         else el.setAttribute(attr, old);
       }
     };
-  }, [title, description, canonicalPath, jsonLdStr, robots]);
+  }, [title, description, canonicalPath, jsonLdStr, robots, image]);
 }
 
 /**

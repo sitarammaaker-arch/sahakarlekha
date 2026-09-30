@@ -220,6 +220,7 @@ const BlogPost: React.FC = () => {
       keywords: post.tags.join(', '),
       author: { '@type': 'Person', name: author.name, jobTitle: author.designation, url: `${SITE}/author/${author.slug}`, ...(author.photo ? { image: `${SITE}${author.photo}` } : {}) },
       publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
+      ...(post.image ? { image: `${SITE}${post.image}` } : {}),
     },
     {
       '@context': 'https://schema.org',
@@ -245,6 +246,7 @@ const BlogPost: React.FC = () => {
     description: post?.metaDescription,
     canonicalPath: `/blog/${slug}`,
     jsonLd,
+    image: post?.image,
   });
 
   // Unknown post, missing body, or a still-scheduled (future-dated) post → bounce
@@ -326,6 +328,20 @@ const BlogPost: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {post.image && (
+        <div className="mx-auto max-w-3xl px-4 pt-8">
+          <img
+            src={post.image}
+            alt={post.imageAlt || post.title}
+            width={1376}
+            height={768}
+            fetchPriority="high"
+            decoding="async"
+            className="w-full h-auto rounded-xl border shadow-sm"
+          />
+        </div>
+      )}
 
       <div className="mx-auto px-4 py-10 md:py-12 max-w-6xl">
         <div className="grid lg:grid-cols-[1fr_240px] gap-8">

@@ -485,6 +485,12 @@ function blogPages(DATA) {
       posts.push({ slug, title, description, date, updated });
     }
   }
+  // optional featured image per post (declared after `slug:` in the same entry)
+  const images = {};
+  if (existsSync(BLOG_FILE)) {
+    const isrc = readFileSync(BLOG_FILE, 'utf-8');
+    for (const im of isrc.matchAll(/slug:\s*'([^']+)'(?:(?!slug:)[\s\S])*?image:\s*'([^']+)'/g)) images[im[1]] = im[2];
+  }
   posts.sort((a, b) => (a.date < b.date ? 1 : -1));
 
   const pages = [
@@ -529,6 +535,7 @@ function blogPages(DATA) {
       title: p.title,
       description: p.description,
       lastmod: p.updated || p.date,
+      image: images[p.slug] ? `${SITE}${images[p.slug]}` : undefined,
       body,
       jsonLd: [
         {
@@ -541,7 +548,7 @@ function blogPages(DATA) {
           mainEntityOfPage: url,
           datePublished: p.date,
           dateModified: p.updated || p.date,
-          image: `${SITE}/og-image.png`,
+          image: images[p.slug] ? `${SITE}${images[p.slug]}` : `${SITE}/og-image.png`,
           author: BLOG_AUTHOR,
           publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE, logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` } },
         },
@@ -1264,6 +1271,10 @@ function transform(template, page) {
   sub(/<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${url}" />`);
   sub(/<meta property="og:title"[^>]*>/, `<meta property="og:title" content="${esc(page.title)}" />`);
   sub(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(page.description)}" />`);
+  if (page.image) {
+    sub(/<meta property="og:image" [^>]*>/, `<meta property="og:image" content="${page.image}" />`);
+    sub(/<meta name="twitter:image"[^>]*>/, `<meta name="twitter:image" content="${page.image}" />`);
+  }
   sub(/<meta name="twitter:title"[^>]*>/, `<meta name="twitter:title" content="${esc(page.title)}" />`);
   sub(/<meta name="twitter:description"[^>]*>/, `<meta name="twitter:description" content="${esc(page.description)}" />`);
   if (page.jsonLd && page.jsonLd.length) {
