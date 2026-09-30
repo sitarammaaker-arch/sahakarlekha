@@ -1,6 +1,8 @@
 -- 084 undo · restores the pre-084 app_mfa_* definitions and grants EXACTLY (prod catalog 2026-09-30).
 -- WARNING: this re-opens SEC-01/SEC-02 (anon-callable, caller-supplied email). Use only to back out a broken 084.
 
+begin;
+
 CREATE OR REPLACE FUNCTION public.app_mfa_admin_reset(p_admin_email text, p_target_email text)
  RETURNS boolean
  LANGUAGE plpgsql
@@ -132,3 +134,7 @@ grant execute on function public.app_mfa_gen_recovery(text, text)  to public, an
 grant execute on function public.app_verify_recovery(text, text)   to public, anon, authenticated;
 drop function if exists public._mfa_assert_self(text, text);
 drop function if exists public._mfa_caller_email();
+
+delete from public.app_migrations where version = '084';
+
+commit;

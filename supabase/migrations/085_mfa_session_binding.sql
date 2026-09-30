@@ -34,6 +34,9 @@
 -- Idempotent. Undo: 085_mfa_session_binding_down.sql.
 
 -- ── tables (RLS on, no policies, no grants → RPC-only) ─────────────────────────────────────────────
+
+begin;
+
 create table if not exists public.mfa_verified_sessions (
   session_id  text primary key,
   email       text not null,
@@ -438,3 +441,8 @@ revoke execute on function public.platform_admin_identity()    from public, anon
 grant  execute on function public.platform_admin_identity()    to authenticated;
 grant  execute on function public.jwt_mfa_pending()            to anon, authenticated;
 -- The hook runs as supabase_auth_admin; it keeps its 028 grant (create or replace preserves ACLs).
+
+insert into public.app_migrations (version, name) values ('085', 'mfa_session_binding')
+  on conflict (version) do nothing;
+
+commit;

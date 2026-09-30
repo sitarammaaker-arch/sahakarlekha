@@ -21,6 +21,9 @@
 -- Undo: 084_mfa_identity_from_jwt_down.sql.
 
 -- The caller's verified email, or an error. Never trusts a parameter.
+
+begin;
+
 create or replace function public._mfa_caller_email()
 returns text language plpgsql stable
 set search_path = public, extensions as $fn$
@@ -176,3 +179,8 @@ grant  execute on function public.app_mfa_disable(text, text)            to auth
 grant  execute on function public.app_mfa_admin_reset(text, text)        to authenticated;
 grant  execute on function public.app_mfa_gen_recovery(text, text)       to authenticated;
 grant  execute on function public.app_verify_recovery(text, text)        to authenticated;
+
+insert into public.app_migrations (version, name) values ('084', 'mfa_identity_from_jwt')
+  on conflict (version) do nothing;
+
+commit;

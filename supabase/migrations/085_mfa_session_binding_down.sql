@@ -1,6 +1,8 @@
 -- 085 undo · restores the pre-085 (= 084) definitions exactly, drops the session-binding objects.
 -- Re-opens SEC-03 (2FA enforced only by the client) and removes the TOTP throttle.
 
+begin;
+
 CREATE OR REPLACE FUNCTION public.app_mfa_disable(p_email text, p_code text)
  RETURNS boolean
  LANGUAGE plpgsql
@@ -339,3 +341,7 @@ drop function if exists public._mfa_enrolled(text);
 drop function if exists public.jwt_mfa_pending();
 drop table if exists public.mfa_failures;
 drop table if exists public.mfa_verified_sessions;
+
+delete from public.app_migrations where version = '085';
+
+commit;
