@@ -92,5 +92,13 @@ let threw = false; try { setFix('Bad!'); } catch { threw = true; }
 ok('setFix rejects an unsafe id', threw);
 setFix('rm01-phantom-cancel');
 
+console.log('Mode zero-receipts (founder decision 2026-09-30, option क)');
+const { selectZeroMemberReceipts } = await import(pathToFileURL(pathResolve(HERE, 'rm01-phantom-cancel.mjs')).href);
+const Z = (id, over) => ({ id, creditAccountId: '1102', memberId: 'm', amount: 0, createdBy: 'System', isDeleted: false, ...over });
+const z = selectZeroMemberReceipts([Z('z1'), Z('z2', { creditAccountId: '4407' }), Z('paid', { amount: 250 }), Z('manual', { createdBy: null }),
+  Z('gone', { isDeleted: true }), Z('loan', { creditAccountId: '2301' }), Z('nom', { memberId: null })]);
+ok('only live, System-made Rs 0 member receipts are targets', z.targets.map((v) => v.id).sort().join() === 'z1,z2');
+ok('a paid System receipt is kept; manual / cancelled / other-account / untagged are ignored', z.kept.map((v) => v.id).join() === 'paid');
+
 console.log(`\nRM-01 phantom cancel (unit): ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

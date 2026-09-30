@@ -21,6 +21,10 @@
 // wrongly inflate cash) OR tagged to a member id that no longer exists. Current-FY receipts are kept.
 // A voucher with no posting in the journal is cancelled without an event (it contributes nothing there).
 //
+// Third mode (founder decision 2026-09-30, option क): --mode zero-receipts cancels a society's live Rs 0
+// member receipts made by the removed load loop (createdBy 'System', amount 0, Cr 1102 | 4407). The members
+// themselves are kept.
+//
 // Usage:
 //   node scripts/rm01-phantom-cancel.mjs --society <id> --out <path-without-ext> [--mode duplicates|old-receipts]
 //        [--before <YYYY-MM-DD>] [--fix <id>] [--source linked|harness] [--workdir <linked checkout>]
@@ -86,6 +90,17 @@ export function classifyLoopVouchers(vouchers) {
     if (twin) { duplicates.push(v); twinOf.set(v.id, twin.id); } else solo.push(v);
   }
   return { duplicates, solo, twinOf };
+}
+
+/** PURE. Mode zero-receipts: live, loop-made (createdBy 'System'), Rs 0, member receipts (Cr 1102 | 4407). */
+export function selectZeroMemberReceipts(vouchers) {
+  const targets = [];
+  const kept = [];
+  for (const v of vouchers.filter(live)) {
+    if (!MEMBER_ACCOUNTS.has(v.creditAccountId) || !v.memberId || v.createdBy !== 'System') continue;
+    if (amountOf(v) === 0) targets.push({ ...v, _why: 'zero' }); else kept.push(v);
+  }
+  return { targets, kept };
 }
 
 /**
@@ -266,7 +281,8 @@ async function main() {
   const before = arg('--before');
   if (arg('--fix')) setFix(arg('--fix'));
   if (mode === 'old-receipts' && !/^\d{4}-\d{2}-\d{2}$/.test(before || '')) { console.error('--mode old-receipts needs --before YYYY-MM-DD'); process.exit(2); }
-  if (mode === 'old-receipts' && FIX === 'rm01-phantom-cancel') { console.error('--mode old-receipts needs its own --fix id'); process.exit(2); }
+  if (mode !== 'duplicates' && FIX === 'rm01-phantom-cancel') { console.error(`--mode ${mode} needs its own --fix id`); process.exit(2); }
+  if (!['duplicates', 'old-receipts', 'zero-receipts'].includes(mode)) { console.error('--mode duplicates | old-receipts | zero-receipts'); process.exit(2); }
   if (!societyId || !out) { console.error('usage: --society <id> --out <path-without-ext> [--source linked|harness] [--workdir <dir>]'); process.exit(2); }
 
   const { buildEvent } = await import(abs('../src/lib/ledger/event.ts'));
@@ -276,11 +292,14 @@ async function main() {
   const { vouchers, events, memberIds } = await readInputs(societyId, source, arg('--workdir'));
   let duplicates, solo;
   if (mode === 'old-receipts') ({ targets: duplicates, kept: solo } = selectOldMemberReceipts(vouchers, memberIds, before));
+  else if (mode === 'zero-receipts') ({ targets: duplicates, kept: solo } = selectZeroMemberReceipts(vouchers));
   else ({ duplicates, solo } = classifyLoopVouchers(vouchers));
   const runAt = new Date().toISOString();
-  const actor = mode === 'old-receipts' ? 'Old member receipts cleanup (founder-approved 2026-09-30)' : 'RM-01 phantom cleanup (founder-approved 2026-09-28)';
+  const actor = mode === 'old-receipts' ? 'Old member receipts cleanup (founder-approved 2026-09-30)'
+    : mode === 'zero-receipts' ? 'Rs 0 member receipts cleanup (founder-approved 2026-09-30)' : 'RM-01 phantom cleanup (founder-approved 2026-09-28)';
   const reason = mode === 'old-receipts'
     ? `Old member receipt (joined before ${before}, or member no longer exists) — not a cash receipt of this year`
+    : mode === 'zero-receipts' ? 'Rs 0 member receipt made by the removed load-time loop — no money was received'
     : 'RM-01: duplicate of an older receipt, posted by the removed load-time loop';
 
   const evByAgg = new Map();
@@ -297,7 +316,7 @@ async function main() {
       if ((e.event_type === 'voucher.posted' || e.event_type === 'voucher.reposted') && (e.sequence || 0) > postSeq) { postSeq = e.sequence || 0; posting = e.event_id; }
     }
     if (!posting) {
-      if (mode === 'old-receipts') { planned.push({ v, ev: null }); continue; }   // nothing in the journal to reverse
+      if (mode !== 'duplicates') { planned.push({ v, ev: null }); continue; }   // nothing in the journal to reverse
       problems.push(`${v.voucherNo}: no posting in the journal`); continue;
     }
     const maxSeq = evs.reduce((m, e) => Math.max(m, e.sequence || 0), 0);
@@ -323,6 +342,7 @@ async function main() {
   }
   const targetPredicate = mode === 'old-receipts'
     ? `v."debitAccountId" = '3301' and v."creditAccountId" in ('1102', '4407') and v."memberId" is not null`
+    : mode === 'zero-receipts' ? `v."createdBy" = 'System' and coalesce(v.amount, 0) = 0 and v."creditAccountId" in ('1102', '4407')`
     : undefined;
   writeFileSync(`${out}.sql`, buildForwardSql({ societyId, duplicates: planned.map((p) => p.v), events: planned.filter((p) => p.ev).map((p) => p.ev), runAt, actor, reason, ...(targetPredicate ? { targetPredicate } : {}) }));
   writeFileSync(`${out}.undo.sql`, buildUndoSql({ societyId, runAt }));
