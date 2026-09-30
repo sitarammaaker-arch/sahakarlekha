@@ -2042,7 +2042,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     );
     const snapshot: VoucherEditSnapshot | undefined = changedFields.length > 0 ? {
       editedAt: new Date().toISOString(),
-      editedBy: current.createdBy,
+      editedBy: userRef.current?.name ?? current.createdBy,
       before: Object.fromEntries(changedFields.map(k => [k, current[k]])) as VoucherEditSnapshot['before'],
     } : undefined;
     const updatedVoucher = {
@@ -2448,10 +2448,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     vouchersRef.current = vouchersRef.current.map(v => v.id === reversal.id ? linkedReversal : v.id === id ? linkedOriginal : v);
     setVouchersState(prev => prev.map(v => v.id === reversal.id ? linkedReversal : v.id === id ? linkedOriginal : v));
     supabase.from('vouchers').update({ reversalOf: current.id }).eq('id', reversal.id).then(({ error }) => {
-      if (error) console.warn('Reversal link (reversalOf) not persisted — run latest migration:', error.message);
+      if (error) reportError('voucher-reversal-link', error.message, { voucherId: reversal.id, field: 'reversalOf' });
     });
     supabase.from('vouchers').update({ reversedBy: reversal.id }).eq('id', id).then(({ error }) => {
-      if (error) console.warn('Reversal link (reversedBy) not persisted — run latest migration:', error.message);
+      if (error) reportError('voucher-reversal-link', error.message, { voucherId: id, field: 'reversedBy' });
     });
     emitAudit({ entityType: 'voucher', entityId: id, action: 'reverse', before: { reversedBy: null }, after: { reversedBy: reversal.id }, reason });
     toastRef.current({ title: '🔁 Reversal बन गया', description: `${current.voucherNo} के लिए reversal ${reversal.voucherNo} पोस्ट हो गया। दोनों entries ledger में दिखेंगी (net zero)।`, variant: 'default', duration: 8000 });
@@ -2476,7 +2476,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!current) return;
     const cleared = { ...current, isCleared: true, clearedDate: clearedDate ?? new Date().toISOString().split('T')[0] };
     setVouchersState(prev => { const updated = prev.map(v => v.id === id ? cleared : v); return updated; });
-    supabase.from('vouchers').upsert(withSoc(cleared)).then(({ error }) => {
+    // Only the two changed columns — re-upserting the whole client copy could overwrite server-owned
+    // fields (e.g. a server-assigned number) with a stale local copy (B3).
+    supabase.from('vouchers').update({ isCleared: true, clearedDate: cleared.clearedDate }).eq('id', id).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
@@ -2491,7 +2493,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!current) return;
     const uncleared = { ...current, isCleared: false, clearedDate: undefined };
     setVouchersState(prev => { const updated = prev.map(v => v.id === id ? uncleared : v); return updated; });
-    supabase.from('vouchers').upsert(withSoc(uncleared)).then(({ error }) => {
+    supabase.from('vouchers').update({ isCleared: false, clearedDate: null }).eq('id', id).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
@@ -2570,7 +2572,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updated = { ...current, approvalStatus: 'rejected' as const, approvalRemarks: reason, approvedBy: rejectedBy, approvedAt: new Date().toISOString() };
     emitAudit({ entityType: 'voucher', entityId: id, action: 'reject', before: { approvalStatus: current.approvalStatus ?? null }, after: { approvalStatus: 'rejected' }, reason });
     setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); return u; });
-    supabase.from('vouchers').upsert(withSoc(updated)).then(({ error }) => {
+    supabase.from('vouchers').update({ approvalStatus: 'rejected', approvalRemarks: reason, approvedBy: rejectedBy, approvedAt: updated.approvedAt }).eq('id', id).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
@@ -2773,6 +2775,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (plan.bankFallbackToCash && !opts.quiet) {
       toastRef.current({ title: 'बैंक खाता नहीं मिला', description: `${m.name} का भुगतान cheque/online है, पर समिति में कोई बैंक खाता नहीं — रसीद नकद में दर्ज हुई। बैंक खाता जोड़कर voucher सुधारें।`, variant: 'destructive', duration: 12000 });
     }
+    // B3 (Phase 2): under the posting service a joining receipt is posted by the SERVER like every
+    // other voucher (addVoucher → post_voucher: row + lines + entries + journal in one transaction).
+    // The client-side three-step save below stays for societies with the flag OFF (byte-identical).
+    if (postingServiceRef.current) {
+      for (const r of plan.receipts) {
+        addVoucher({ type: 'receipt', date: plan.date, debitAccountId: plan.debitAccountId, creditAccountId: r.creditAccountId, amount: r.amount,
+          narration: r.narration, memberId: m.id, branchId: m.branchId ?? opts.fallbackBranch, createdBy: 'System' });
+      }
+      return 'posted';
+    }
     for (const r of plan.receipts) {
       // ECR-17 Phase 5: stamp the member's branch — this construction bypasses addVoucher's stamp,
       // and an unbranched voucher would be invisible to a branch-restricted creator's verify-read.
@@ -2807,7 +2819,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // persistVoucher is a plain per-render function that only reads refs — same omission as the
     // other voucher-writing callbacks here; listing it would rebuild addMember every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [guardPeriodLock]);
+  }, [guardPeriodLock, addVoucher]);
 
   const addMember = useCallback((data: Omit<Member, 'id'>, opts: { quiet?: boolean } = {}): Member => {
     if (guardFYLocked()) return { ...data, id: '' } as Member;
@@ -6940,6 +6952,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const merged = { ...oldRecord, ...data };
     const lid = () => crypto.randomUUID();
 
+    // B3 / JRN-01: a paid salary's vouchers are re-synced through updateVoucher (which appends the
+    // reversed/reposted journal pair — or calls edit_voucher under the posting service). The old code
+    // rewrote the rows directly and never touched the journal, so journal-read statements drifted.
+    // Pre-check both vouchers: if either may not be edited in place, change NOTHING (not even the record).
+    const amountChanged = data.netSalary !== undefined && data.netSalary !== oldRecord.netSalary;
+    {
+      const payV = oldRecord.isPaid && data.isPaid && oldRecord.voucherId ? vouchersRef.current.find(x => x.id === oldRecord.voucherId) : undefined;
+      const accV = amountChanged && oldRecord.accrualVoucherId ? vouchersRef.current.find(x => x.id === oldRecord.accrualVoucherId) : undefined;
+      const payTouched = payV && !payV.isDeleted && (amountChanged || (data.paidDate !== undefined && data.paidDate !== oldRecord.paidDate) || (data.paymentMode !== undefined && data.paymentMode !== oldRecord.paymentMode));
+      for (const v of [payTouched ? payV : undefined, accV && !accV.isDeleted && !isEngineVoucher(accV) ? accV : undefined]) {
+        if (v && isEditLocked(v, !!societyRef.current?.approvalRequired)) {
+          toastRef.current({ title: 'वेतन बदलाव नहीं हुआ', description: `वाउचर ${v.voucherNo} सीधे edit नहीं हो सकता (approved / reversed) — पहले उसे reverse करें, फिर वेतन बदलें।`, variant: 'destructive', duration: 12000 });
+          return;
+        }
+      }
+    }
+
     // H8: Voucher lifecycle —
     // (a) Was paid, now unpaid → cancel existing voucher
     // (b) Was unpaid, now paid → create new voucher
@@ -6969,7 +6998,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (newV.id) merged.voucherId = newV.id;
     } else if (oldRecord.isPaid && data.isPaid && oldRecord.voucherId) {
       // (c) Still paid — re-sync voucher if amount / date / paymentMode changed
-      const amountChanged = data.netSalary !== undefined && data.netSalary !== oldRecord.netSalary;
       const dateChanged = data.paidDate !== undefined && data.paidDate !== oldRecord.paidDate;
       const modeChanged = data.paymentMode !== undefined && data.paymentMode !== oldRecord.paymentMode;
       if (amountChanged || dateChanged || modeChanged) {
@@ -6982,30 +7010,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             { id: lid(), accountId: payDebit, type: 'Dr', amount: merged.netSalary },
             { id: lid(), accountId: creditAcc, type: 'Cr', amount: merged.netSalary },
           ];
-          const updatedV: Voucher = {
-            ...v,
+          // RULE 1 + journal: updateVoucher reverts on a failed save and appends the repost pair.
+          if (!updateVoucher(v.id, {
             date: merged.paidDate || v.date,
+            debitAccountId: payDebit,
             creditAccountId: creditAcc,
             amount: merged.netSalary,
             lines: newLines,
             narration: `Salary paid: ${emp?.name || ''} - ${oldRecord.month}`,
-          };
-          setVouchersState(prev => prev.map(x => x.id === v.id ? updatedV : x));
-          // RULE 1: persistVoucher (isUpdate) restores the prior voucher if the cloud save fails, so a
-          // failed salary-amount/date edit can't leave local diverged from Supabase. persistVoucher
-          // skips syncEntries for updates, so re-sync the ledger lines only on a confirmed base save.
-          persistVoucher(updatedV, {
-            isUpdate: true,
-            onBaseSuccess: () => syncEntries(updatedV),
-            onBaseFail: () => setVouchersState(prev => prev.map(x => x.id === v.id ? v : x)),
-          });
+          })) return;
         }
       }
     }
 
     // Accrual re-sync: if the salary AMOUNT changed and the record was accrued, keep the
     // accrual voucher (Dr 5201 / Cr 2103) in step so the expense + liability stay correct.
-    if (data.netSalary !== undefined && data.netSalary !== oldRecord.netSalary && oldRecord.accrualVoucherId) {
+    if (amountChanged && oldRecord.accrualVoucherId) {
       const av = vouchersRef.current.find(x => x.id === oldRecord.accrualVoucherId);
       if (av && !av.isDeleted && !isEngineVoucher(av)) {
         const payableAcc = accounts.find(a => a.id === '2103')?.id || '2103';
@@ -7013,12 +7033,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           { id: lid(), accountId: '5201', type: 'Dr', amount: merged.netSalary },
           { id: lid(), accountId: payableAcc, type: 'Cr', amount: merged.netSalary },
         ];
-        const updatedAv: Voucher = { ...av, amount: merged.netSalary, creditAccountId: payableAcc, lines: accLines };
-        setVouchersState(prev => prev.map(x => x.id === av.id ? updatedAv : x));
-        supabase.from('vouchers').upsert(withSoc(updatedAv)).then(({ error }) => {
-          if (error) console.error('Salary accrual resync:', error.message);
-          else syncEntries(updatedAv);
-        });
+        if (!updateVoucher(av.id, { amount: merged.netSalary, debitAccountId: '5201', creditAccountId: payableAcc, lines: accLines })) return;
       }
     }
 
@@ -7032,7 +7047,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
       }
     });
-  }, [employees, accounts, addVoucher]);
+  }, [employees, accounts, addVoucher, updateVoucher]);
 
   const deleteSalaryRecord = useCallback((id: string) => {
     if (guardPermission('delete', 'वेतन रिकॉर्ड मिटाने')) return;   // ECR-06: role gate
