@@ -10,7 +10,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
+import { repointVoucher } from '@/lib/ledger/accountMerge';
 import type { EntityLink } from '@/types';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -51,7 +56,7 @@ const TYPE_BADGE_CLASS: Record<AccountType, string> = {
 
 const LedgerHeads: React.FC = () => {
   const { language } = useLanguage();
-  const { accounts, society, addAccount, updateAccount, deleteAccount, getEntityLinks, getAccountBalance } = useData();
+  const { accounts, vouchers, society, addAccount, updateAccount, deleteAccount, mergeAccounts, getEntityLinks, getAccountBalance } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -61,6 +66,9 @@ const LedgerHeads: React.FC = () => {
   const [editAccount, setEditAccount] = useState<LedgerAccount | null>(null);
   const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
   const [form, setForm] = useState(EMPTY_FORM);
+  // Merge confirmation — the ONLY way a merge runs is the user confirming this dialog.
+  const [mergeTarget, setMergeTarget] = useState<{ group: LedgerAccount[]; keepId: string; removeId: string } | null>(null);
+  const [merging, setMerging] = useState(false);
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -144,10 +152,51 @@ const LedgerHeads: React.FC = () => {
 
   // Duplicates are REPORTED, never auto-merged. Opening this page must not write accounting
   // data (same class as RM-01 #531): an earlier load-time effect called mergeAccounts for every
-  // duplicate, silently re-pointing historical vouchers and deleting accounts. The merge action
-  // stays disabled until mergeAccounts is journal-safe — today it re-points vouchers without
-  // appending voucher.reversed/posted events (journal postings stay on the removed account) and
-  // drops the removed account's opening balance without a zero event.
+  // duplicate, silently re-pointing historical vouchers and deleting accounts. A merge now runs
+  // only when the user picks the two accounts and confirms the AlertDialog below; mergeAccounts
+  // itself journals the moved postings and refuses unsafe cases (opening balance, stock routing…).
+  const liveVoucherRefs = (keepId: string, removeId: string) =>
+    vouchers.filter(v => !v.isDeleted && repointVoucher(v, keepId, removeId) !== null).length;
+
+  const openMergeDialog = (group: LedgerAccount[]) => {
+    // Default: keep the account most vouchers already use (a system account wins a tie).
+    const uses = (id: string) => vouchers.filter(v => !v.isDeleted &&
+      (v.debitAccountId === id || v.creditAccountId === id || !!v.lines?.some(l => l.accountId === id))).length;
+    const ranked = [...group].sort((a, b) =>
+      Number(!!b.isSystem) - Number(!!a.isSystem) || uses(b.id) - uses(a.id) || a.id.localeCompare(b.id));
+    setMergeTarget({ group, keepId: ranked[0].id, removeId: ranked[1].id });
+  };
+
+  const setMergeSide = (side: 'keepId' | 'removeId', id: string) => {
+    setMergeTarget(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, [side]: id };
+      // Picking the same account on both sides swaps them instead of leaving an invalid pair.
+      if (next.keepId === next.removeId) {
+        const other = side === 'keepId' ? prev.keepId : prev.removeId;
+        next[side === 'keepId' ? 'removeId' : 'keepId'] = other;
+      }
+      return next;
+    });
+  };
+
+  const confirmMerge = async () => {
+    if (!mergeTarget || merging) return;
+    const keep = accounts.find(a => a.id === mergeTarget.keepId);
+    setMerging(true);
+    const result = await mergeAccounts(mergeTarget.keepId, mergeTarget.removeId);
+    setMerging(false);
+    if (!result) return;   // blocked or failed — mergeAccounts already showed why
+    setMergeTarget(null);
+    if (result.accountDeleted) {
+      toast({
+        title: hi ? 'खाते merge हो गए' : 'Accounts merged',
+        description: hi
+          ? `${result.moved} वाउचर "${keep?.name ?? ''}" में ले जाए गए; दूसरा खाता हटा दिया गया।`
+          : `${result.moved} voucher(s) moved to "${keep?.name ?? ''}"; the other account was removed.`,
+      });
+    }
+  };
 
   const handleCSV = () => {
     const headers = ['Name', 'Name (Hindi)', 'Type', 'Opening Balance', 'Balance Type', 'Group'];
@@ -285,8 +334,8 @@ const LedgerHeads: React.FC = () => {
         </div>
       </div>
 
-      {/* Same-name accounts — informational only. Nothing here writes data (see the note above
-          duplicateGroups); the Merge button is disabled until mergeAccounts is journal-safe. */}
+      {/* Same-name accounts. Nothing here writes data on its own (see the note above
+          duplicateGroups); Merge only opens the confirmation dialog. */}
       {duplicateGroups.length > 0 && (
         <Card className="border-amber-300 bg-amber-50 dark:bg-amber-900/20">
           <CardHeader className="pb-2">
@@ -298,8 +347,8 @@ const LedgerHeads: React.FC = () => {
             </CardTitle>
             <p className="text-xs text-amber-800/80 dark:text-amber-200/80">
               {hi
-                ? 'यह सिर्फ़ जानकारी है — कोई खाता या वाउचर अपने-आप नहीं बदला जाता। Merge अभी उपलब्ध नहीं है; journal-safe merge जल्द आएगा।'
-                : 'For information only — no account or voucher is changed automatically. Merge is not available yet; a journal-safe merge is coming.'}
+                ? 'कोई खाता या वाउचर अपने-आप नहीं बदला जाता। Merge सिर्फ़ तब होगा जब आप "मर्ज करें" दबाकर खाते चुनें और पुष्टि करें।'
+                : 'No account or voucher is changed automatically. A merge happens only when you click Merge, pick the accounts and confirm.'}
             </p>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -325,8 +374,8 @@ const LedgerHeads: React.FC = () => {
                     size="sm"
                     variant="outline"
                     className="gap-1.5 shrink-0 border-amber-300 text-amber-700"
-                    disabled
-                    title={hi ? 'Merge अभी उपलब्ध नहीं है' : 'Merge is not available yet'}
+                    disabled={society.fyLocked}
+                    onClick={() => openMergeDialog(sorted)}
                   >
                     <Merge className="h-3.5 w-3.5" />
                     {hi ? 'मर्ज करें' : 'Merge'}
@@ -682,6 +731,80 @@ const LedgerHeads: React.FC = () => {
       </Dialog>
 
       {/* Delete Guard */}
+      {/* Merge confirmation — mergeAccounts runs only from this dialog's confirm action. */}
+      <AlertDialog open={!!mergeTarget} onOpenChange={o => { if (!o && !merging) setMergeTarget(null); }}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{hi ? 'खाते merge करें?' : 'Merge accounts?'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {hi
+                ? 'हटाए जाने वाले खाते के सारे वाउचर रखे जाने वाले खाते में चले जाएँगे और हटाया जाने वाला खाता मिटा दिया जाएगा।'
+                : 'Every voucher of the account being removed moves to the account being kept, and the removed account is deleted.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {mergeTarget && (() => {
+            const keep = accounts.find(a => a.id === mergeTarget.keepId);
+            const remove = accounts.find(a => a.id === mergeTarget.removeId);
+            const moving = liveVoucherRefs(mergeTarget.keepId, mergeTarget.removeId);
+            const side = (label: string, key: 'keepId' | 'removeId', acc: LedgerAccount | undefined) => (
+              <div className="space-y-1.5 rounded-md border p-3">
+                <Label>{label}</Label>
+                <Select value={mergeTarget[key]} onValueChange={id => setMergeSide(key, id)} disabled={merging}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {mergeTarget.group.map(a => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name} · {a.id.length > 8 ? a.id.slice(0, 8) + '…' : a.id}{a.isSystem ? (hi ? ' (सिस्टम)' : ' (system)') : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {acc && (
+                  <div className="text-xs text-muted-foreground space-y-0.5">
+                    <p>{hi ? 'शेष' : 'Balance'}: <span className="font-medium text-foreground">{fmt(getAccountBalance(acc.id))}</span></p>
+                    <p>{hi ? 'प्रारंभिक शेष' : 'Opening'}: {fmtBalance(acc.openingBalance || 0, acc.openingBalanceType || 'debit')}</p>
+                  </div>
+                )}
+              </div>
+            );
+            return (
+              <div className="space-y-3 text-sm">
+                {side(hi ? 'रखा जाने वाला खाता' : 'Account to keep', 'keepId', keep)}
+                {side(hi ? 'हटाया जाने वाला खाता' : 'Account to remove', 'removeId', remove)}
+                <p>
+                  {hi
+                    ? <><span className="font-semibold">{moving}</span> चालू वाउचर "{remove?.name}" से "{keep?.name}" में जाएँगे।</>
+                    : <><span className="font-semibold">{moving}</span> active voucher(s) will move from "{remove?.name}" to "{keep?.name}".</>}
+                </p>
+                {!!remove && Math.abs(remove.openingBalance || 0) >= 0.005 && (
+                  <p className="text-amber-700 text-xs">
+                    {hi
+                      ? 'हटाए जाने वाले खाते पर opening balance है — merge रुक जाएगा। पहले उसका opening रखे जाने वाले खाते में ले जाकर 0 करें।'
+                      : 'The account being removed has an opening balance — the merge will be refused. Move its opening to the kept account and set it to 0 first.'}
+                  </p>
+                )}
+                <p className="flex items-start gap-2 rounded-md border border-red-300 bg-red-50 dark:bg-red-900/20 p-2 text-red-700 dark:text-red-300 text-xs">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  {hi
+                    ? 'यह कार्य वापस नहीं किया जा सकता। वाउचर की लेखा-बही (journal) में यह बदलाव स्थायी रूप से दर्ज होगा।'
+                    : 'This cannot be undone. The change is recorded permanently in the voucher journal.'}
+                </p>
+              </div>
+            );
+          })()}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={merging}>{hi ? 'रद्द करें' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={merging}
+              onClick={e => { e.preventDefault(); void confirmMerge(); }}
+            >
+              {merging ? (hi ? 'Merge हो रहा है…' : 'Merging…') : (hi ? 'हाँ, merge करें' : 'Yes, merge')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <LinkedDeleteDialog
         open={deleteGuard.open}
         onOpenChange={o => setDeleteGuard(g => ({ ...g, open: o }))}

@@ -53,7 +53,7 @@ ok('deleteAccountRow shows a destructive toast and reports the error', /variant:
 const del = dc.slice(dc.indexOf('const deleteAccount = useCallback'), dc.indexOf('const mergeAccounts = useCallback'));
 ok('deleteAccount uses deleteAccountRow and drops the journal zero-event on failure', /deleteAccountRow\(account,/.test(del) && /onFail: \(\) => \{ if \(zeroEvent\) ledgerEventsRef\.current = ledgerEventsRef\.current\.filter/.test(del));
 const merge = dc.slice(dc.indexOf('const mergeAccounts = useCallback'), dc.indexOf('const resetAccounts = useCallback'));
-ok('mergeAccounts deletes the emptied account through deleteAccountRow', /deleteAccountRow\(removedAccount,/.test(merge) && /accountsRef\.current\.find\(a => a\.id === removeId\)/.test(merge));
+ok('mergeAccounts deletes the emptied account through deleteAccountRow', /deleteAccountRow\(remove,/.test(merge) && /const remove = accounts\.find\(a => a\.id === removeId\)/.test(merge) && !/from\('accounts'\)\.delete\(\)/.test(merge));
 for (const [who, key] of [['deleteSupplier', 'supAccount'], ['deleteCustomer', 'cusAccount']]) {
   const body = dc.slice(dc.indexOf(`const ${who} = useCallback`), dc.indexOf(`const ${who} = useCallback`) + 4000);
   ok(`${who} deletes its party account through deleteAccountRow`, new RegExp(`deleteAccountRow\\(${key},`).test(body));

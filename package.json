@@ -213,6 +213,7 @@
     "test:stock-doc-toast-number": "node scripts/test-stock-doc-toast-number.mjs",
     "db:harness": "node scripts/db-harness/harness.mjs",
     "test:ledgerheads-no-auto-merge": "node scripts/test-ledgerheads-no-auto-merge.mjs",
+    "test:account-merge-journal": "node scripts/test-account-merge-journal.mjs",
     "test:persist": "node scripts/test-voucher-persistence.mjs",
     "test:rp-label": "node scripts/test-rp-label.mjs",
     "test:db-retry": "node scripts/test-db-retry.mjs",
