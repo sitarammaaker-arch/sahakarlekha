@@ -16,6 +16,7 @@
     "test:backup-retention": "node scripts/test-backup-retention.mjs",
     "test:backup-placement-config": "node scripts/test-backup-placement-config.mjs",
     "test:jwt-role-helpers": "node scripts/test-jwt-role-helpers.mjs",
+    "test:mfa-pending": "node scripts/test-mfa-pending.mjs",
     "test:role-access": "node scripts/test-role-access.mjs",
     "test:calc": "node scripts/test-calculators.mjs",
     "test:nav": "node scripts/test-nav.mjs",

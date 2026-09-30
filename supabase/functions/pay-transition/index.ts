@@ -14,6 +14,12 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js';
 import { canTransition } from '../_shared/pay-core.mjs';
 
+// SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
+// token; its payload is read only to refuse more (unreadable → pending).
+const mfaPending = (t: string): boolean => {
+  try { return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).mfa_pending === true; } catch { return true; }
+};
+
 const ACTIONS: Record<string, { event: string; target: string; roles: string[] }> = {
   verify: { event: 'verified', target: 'verified', roles: ['admin', 'accountant'] },
   approve: { event: 'approved', target: 'approved', roles: ['admin'] },
@@ -37,6 +43,7 @@ Deno.serve(async (req: Request) => {
   const dbUrl = Deno.env.get('PAY_DB_URL') ?? Deno.env.get('SUPABASE_DB_URL') ?? '';
   const jwt = (req.headers.get('Authorization') ?? '').replace('Bearer ', '').trim();
   if (!jwt) return json(401, { error: 'missing bearer token' }, CORS);
+  if (mfaPending(jwt)) return json(403, { error: '2FA required — finish the 2FA step and sign in again' }, CORS);
   const { data: { user } } = await createClient(supaUrl, anonKey, { global: { headers: { Authorization: `Bearer ${jwt}` } } }).auth.getUser();
   if (!user?.email) return json(401, { error: 'invalid session' }, CORS);
 

@@ -20,6 +20,12 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { ask, CORPUS, resolveAiFlags, classify, mapLedgerEventRows } from '../_shared/ask-core.mjs';
 
+// SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
+// token; its payload is read only to refuse more (unreadable → pending).
+const mfaPending = (t: string): boolean => {
+  try { return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).mfa_pending === true; } catch { return true; }
+};
+
 /* CORS — and the bug that made this seam unreachable from a browser for a day.
    The allow-list used to be a hand-written 'authorization, content-type, apikey'. But
    supabase-js sets X-Client-Info on EVERY request (DEFAULT_HEADERS, supabase-js/dist/
@@ -161,7 +167,8 @@ Deno.serve(async (req: Request) => {
       authTimes.getUserMs = Date.now() - tGetUser;
       if (error) authTrace.getUserError = error.message;
       else if (!data?.user?.email) authTrace.getUserError = 'verified but no email on user';
-      if (!error && data?.user?.email) {
+      if (!error && data?.user?.email && mfaPending(bearer)) authTrace.getUserError = '2FA pending (mfa_pending claim)';
+      else if (!error && data?.user?.email) {
         userEmail = data.user.email.toLowerCase();
         // The branch claim the auth hook stamps (mig 038). Read from the VERIFIED user,
         // so a caller cannot widen their own scope by asking nicely.

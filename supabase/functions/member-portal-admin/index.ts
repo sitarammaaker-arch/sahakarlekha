@@ -19,6 +19,12 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import {
+
+// SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
+// token; its payload is read only to refuse more (unreadable → pending).
+const mfaPending = (t: string): boolean => {
+  try { return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).mfa_pending === true; } catch { return true; }
+};
   memberLoginEmail, normalizeMemberNo, generatePin, canManagePortal, portalPlanAllowed,
   memberEligible, parseRequest, orphanReclaimable, MESSAGES,
 } from '../_shared/member-portal-core.mjs';
@@ -64,6 +70,7 @@ Deno.serve(async (req) => {
   // ── 1. WHO is calling — verified by value, never from the body ──
   const bearer = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
   if (!bearer || bearer === anonKey) return fail('unauthenticated', 401);
+  if (mfaPending(bearer)) return fail('forbidden', 403);
   const { data: authData, error: authErr } = await createClient(url, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   }).auth.getUser(bearer);
