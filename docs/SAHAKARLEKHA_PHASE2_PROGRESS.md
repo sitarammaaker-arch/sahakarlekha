@@ -16,7 +16,8 @@
 ## Current position
 - **Phase:** A — Critical security
 - **Current task:** A1–A4 are code-complete in PR (branch `sec/mfa-jwt-identity`): AWAITING-FOUNDER (merge, deploy edge fns, apply 084 + 085).
-- **Next task:** A5 (SECURITY DEFINER function audit), which does not depend on 084/085 being live.
+- **A5 in progress.** It found a **P0**: anon could add an admin to any society or reset any password. The fix, migration 086 in PR #585, is AWAITING-FOUNDER and should be applied FIRST. STOP condition 2 applies (prod data at risk), so the founder has been told.
+- **Next task:** finish A5 (remaining SD fns below), then A6.
 
 ## Roadmap status
 
@@ -27,7 +28,7 @@
 | A2 MFA admin reset (SEC-02) | AWAITING-FOUNDER | mig 084 (same functions) |
 | A3 MFA bound to session / JWT (SEC-03) | AWAITING-FOUNDER | mig 085 + AuthContext + 8 edge fns; harness 41/41 |
 | A4 TOTP brute-force | AWAITING-FOUNDER | mig 085: 5 fails / 15 min per email |
-| A5 SECURITY DEFINER audit | NOT STARTED | 51 SD fns, 24 anon-exec (audit). Known leads: `create-order` edge fn takes `society_id` from the body with no caller check; `issue_certificate` overwrites holder_name; `society_users_bootstrap` anon insert (P3); `app_set_my_password` allowed while 2FA pending (DoS only, by design: the password-reset flow needs it) |
+| A5 SECURITY DEFINER audit | IN PROGRESS | **A5-1 P0 FIXED in PR #585 (mig 086, harness 7/7):** app_add_society_user / app_reset_society_user_password skipped auth when the JWT email was null, and anon held EXECUTE. Reviewed OK: admin_feedback_* (is_platform_admin; the p_email/p_password args are ignored), pay_payslip_lines (tenant guard), public_reviews/increment_blog_view/verify_certificate (public by design), society_has_users (boolean only), register_society/app_register_admin (signup; only for a user-less society = P3). Still to review: `create-order` edge fn takes `society_id` from the body with no caller check; `issue_certificate` overwrites holder_name; `society_users_bootstrap` anon insert (P3); `app_set_my_password` allowed while 2FA pending (DoS only, by design: the password-reset flow needs it) |
 | A6 Critical RLS verification | NOT STARTED | |
 
 ### Phase B — Accounting integrity (from the audit)
@@ -42,6 +43,7 @@ NOT STARTED. See the roadmap in the master prompt; the order follows the depende
 | SEC-01 | MFA enrolment anon + caller email | fix in PR (084) |
 | SEC-02 | MFA admin reset trusts caller email | fix in PR (084) |
 | SEC-03 | 2FA not bound to JWT | fix in PR (085) |
+| SEC-04 (new, P0) | anon user-add / password-reset bypass | fix in PR #585 (086) |
 | ACC-01 | server posting rollout (only Rania) | open → B2 |
 | ACC-02 | FY closing only sets fyLocked | open → C |
 | S4 | client accounting writes still allowed | open → B3 |
@@ -56,6 +58,11 @@ NOT STARTED. See the roadmap in the master prompt; the order follows the depende
 | DEEP-01 | domain modules not traced end-to-end | open → H |
 
 ## Completed-work log
+
+### 2026-09-30 — A5-1 anon user-admin bypass (branch `sec/user-admin-anon-bypass`, PR #585)
+- **Files:** `supabase/migrations/086_user_admin_rpcs_auth{,_down}.sql`, `scripts/db-harness/tests/a5-user-admin-rpcs.mjs`.
+- **Tests:** harness 7/7 after 086 and 3/7 before it (reproduces both takeovers). Idempotent re-apply; the down file was re-verified.
+- **Prod read-only evidence:** among recent logins, no unknown admin was added to an existing society. Use cannot be ruled out.
 
 ### 2026-09-30 — A1–A4 MFA (branch `sec/mfa-jwt-identity`)
 - **Files:**
