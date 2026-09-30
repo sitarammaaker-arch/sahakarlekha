@@ -65,5 +65,32 @@ ok('re-inserts the logged voucher_entries', /jsonb_populate_record\(null::public
 ok("removes only this fix's journal events", new RegExp(`event_id like '${FIX}-%'`).test(undo));
 ok('appends restore audit rows and clears its log', /'restore'/.test(undo) && /delete from public\.data_fix_log where fix = /.test(undo));
 
+console.log('Mode old-receipts (founder decision 2026-09-30)');
+const { selectOldMemberReceipts, setFix } = await import(pathToFileURL(pathResolve(HERE, 'rm01-phantom-cancel.mjs')).href);
+const R = (id, over) => ({ id, voucherNo: id, debitAccountId: '3301', creditAccountId: '1102', memberId: 'm1', amount: 100, date: '1975-05-01', isDeleted: false, ...over });
+const sel = selectOldMemberReceipts([
+  R('hist'), R('histAdm', { creditAccountId: '4407', amount: 5 }),
+  R('cur', { date: '2026-06-01' }),
+  R('orphan', { memberId: 'gone', date: '2022-05-26' }),
+  R('orphanCur', { memberId: 'gone', date: '2026-07-01' }),
+  R('dead', { isDeleted: true }),
+  R('bank', { debitAccountId: '3302' }),
+  R('loan', { creditAccountId: '2301' }),
+  R('noMember', { memberId: null }),
+], ['m1'], '2026-04-01');
+ok('historical (before the cut-off) and orphan (member gone, any date) are targets', sel.targets.map((v) => v.id).sort().join() === 'hist,histAdm,orphan,orphanCur');
+ok('a current-FY receipt of a live member is kept', sel.kept.map((v) => v.id).join() === 'cur');
+ok('cancelled / bank / non-member-account / untagged vouchers are never touched', !sel.targets.some((v) => ['dead', 'bank', 'loan', 'noMember'].includes(v.id)));
+ok('each target says why', sel.targets.find((v) => v.id === 'orphan')._why === 'orphan' && sel.targets.find((v) => v.id === 'hist')._why === 'historical');
+setFix('old-receipts-test');
+const sql2 = buildForwardSql({ societyId: 'S1', duplicates: sel.targets, events: [], runAt: 't', actor: 'A', reason: 'R',
+  targetPredicate: `v."debitAccountId" = '3301' and v."creditAccountId" in ('1102', '4407') and v."memberId" is not null` });
+ok('its own fix id guards re-apply (a previous run on the same society does not block it)', /fix = 'old-receipts-test' and society_id = 'S1'/.test(sql2));
+ok('pre-check uses the old-receipts predicate (manual rows have NULL createdBy)', /not coalesce\(v\."isDeleted", false\) and v\."debitAccountId" = '3301'/.test(sql2) && !/v\."createdBy" = 'System'/.test(sql2));
+ok('no journal insert when nothing is posted; post-check expects 0 events', !/insert into public\.ledger_events/.test(sql2) && /n_ev <> 0/.test(sql2));
+let threw = false; try { setFix('Bad!'); } catch { threw = true; }
+ok('setFix rejects an unsafe id', threw);
+setFix('rm01-phantom-cancel');
+
 console.log(`\nRM-01 phantom cancel (unit): ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

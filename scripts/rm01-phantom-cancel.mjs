@@ -15,8 +15,15 @@
 //   <out>.sql       forward fix (one transaction, self-checking, aborts with nothing changed on any surprise)
 //   <out>.undo.sql  exact undo, from the data_fix_log rows the forward fix writes first
 //
+// Second mode (founder decision 2026-09-30, demo society Rania): --mode old-receipts --before <YYYY-MM-DD>
+// cancels a society's OLD member receipts — live Dr 3301 Cash / Cr 1102 Share Capital or 4407 Admission Fee
+// vouchers of a member, dated before the given date (join-date receipts of historical members, which
+// wrongly inflate cash) OR tagged to a member id that no longer exists. Current-FY receipts are kept.
+// A voucher with no posting in the journal is cancelled without an event (it contributes nothing there).
+//
 // Usage:
-//   node scripts/rm01-phantom-cancel.mjs --society <id> --out <path-without-ext> [--source linked|harness] [--workdir <linked checkout>]
+//   node scripts/rm01-phantom-cancel.mjs --society <id> --out <path-without-ext> [--mode duplicates|old-receipts]
+//        [--before <YYYY-MM-DD>] [--fix <id>] [--source linked|harness] [--workdir <linked checkout>]
 // The SQL holds society and voucher ids — keep it out of git (this repo is public).
 
 import { register } from 'node:module';
@@ -48,7 +55,9 @@ register(
     `),
 );
 
-export const FIX = 'rm01-phantom-cancel';
+export let FIX = 'rm01-phantom-cancel';
+/** Name this run (data_fix_log.fix + event ids) — each run's undo and re-apply guard stay run-scoped. */
+export function setFix(id) { if (!/^[a-z0-9-]+$/.test(id)) throw new Error('fix id: lowercase letters, digits and dashes only'); FIX = id; }
 export const AUTO_SHARE = 'Share Capital received from ';
 export const AUTO_ADMISSION = 'Admission Fee received from ';
 const MEMBER_ACCOUNTS = new Set(['1102', '4407']);
@@ -79,6 +88,24 @@ export function classifyLoopVouchers(vouchers) {
   return { duplicates, solo, twinOf };
 }
 
+/**
+ * PURE. Mode old-receipts: a society's live member receipts (Dr 3301 / Cr 1102|4407, member-tagged) that are
+ * dated before `before` (YYYY-MM-DD) or whose member no longer exists. Returns { targets, kept } — kept are
+ * the current, live-member receipts.
+ */
+export function selectOldMemberReceipts(vouchers, memberIds, before) {
+  const members = new Set(memberIds);
+  const targets = [];
+  const kept = [];
+  for (const v of vouchers.filter(live)) {
+    if (v.debitAccountId !== '3301' || !MEMBER_ACCOUNTS.has(v.creditAccountId) || !v.memberId) continue;
+    const orphan = !members.has(v.memberId);
+    const old = String(v.date || '').slice(0, 10) < before;
+    if (orphan || old) targets.push({ ...v, _why: orphan ? 'orphan' : 'historical' }); else kept.push(v);
+  }
+  return { targets, kept };
+}
+
 const q = (s) => (s === null || s === undefined ? 'null' : `'${String(s).replace(/'/g, "''")}'`);
 const j = (o) => {
   const s = JSON.stringify(o);
@@ -87,8 +114,10 @@ const j = (o) => {
 };
 
 /** PURE. The forward SQL: one transaction, self-checking; logs everything it changes before changing it. */
-export function buildForwardSql({ societyId, duplicates, events, runAt, actor, reason }) {
+export function buildForwardSql({ societyId, duplicates, events, runAt, actor, reason,
+  targetPredicate = `v."createdBy" = 'System' and v."creditAccountId" in ('1102', '4407')` }) {
   const ids = duplicates.map((v) => v.id);
+  const nEv = events.length;
   const n = ids.length;
   const idList = ids.map((id) => `(${q(id)})`).join(',\n  ');
   const evRows = events.map((e) => `(${[
@@ -124,8 +153,7 @@ begin
   select count(*) into n_done from public.data_fix_log where fix = ${q(FIX)} and society_id = ${q(societyId)};
   if n_done > 0 then raise exception '${FIX}: already applied for this society (% log rows) — nothing changed', n_done; end if;
   select count(*) into n_live from public.vouchers v join fx_targets t on t.id = v.id
-   where v.society_id::text = ${q(societyId)} and not coalesce(v."isDeleted", false) and v."createdBy" = 'System'
-     and v."creditAccountId" in ('1102', '4407');
+   where v.society_id::text = ${q(societyId)} and not coalesce(v."isDeleted", false) and ${targetPredicate};
   if n_live <> ${n} then raise exception '${FIX}: expected ${n} live target vouchers, found % — data changed since the plan; nothing changed', n_live; end if;
 end $chk$;
 
@@ -145,11 +173,12 @@ where t.id = v.id and v.society_id::text = ${q(societyId)};
 delete from public.voucher_entries e using fx_targets t
 where e."voucherId" = t.id and e.society_id::text = ${q(societyId)};
 
-insert into public.ledger_events
+${nEv ? `insert into public.ledger_events
   (event_id, event_type, schema_version, society_id, jurisdiction, aggregate_type, aggregate_id, sequence, occurred_at,
    producer_kind, producer_id, on_behalf_of, reversal_of, payload)
 values
 ${evRows};
+` : '-- (no journal postings to reverse)'}
 
 insert into public.audit_log
   (id, society_id, actor_name, actor_email, actor_role, entity_type, entity_id, action, before, after, reason, source, created_at)
@@ -163,7 +192,7 @@ begin
    where v.society_id::text = ${q(societyId)} and v."isDeleted" and v."deletedReason" = ${q(reason)};
   select count(*) into n_ev from public.ledger_events e join fx_targets t on t.id = e.aggregate_id
    where e.event_id like '${FIX}-%' and e.event_type = 'voucher.cancelled';
-  if n_del <> ${n} or n_ev <> ${n} then raise exception '${FIX}: post-check failed (cancelled %, events %) — rolled back', n_del, n_ev; end if;
+  if n_del <> ${n} or n_ev <> ${nEv} then raise exception '${FIX}: post-check failed (cancelled %, events %) — rolled back', n_del, n_ev; end if;
 end $chk$;
 
 commit;
@@ -207,6 +236,7 @@ commit;
 async function readInputs(societyId, source, workdir) {
   const vSql = `select to_jsonb(v) as r from vouchers v where v.society_id::text = '${societyId.replace(/'/g, "''")}'`;
   const eSql = `select to_jsonb(e) as r from ledger_events e where e.society_id::text = '${societyId.replace(/'/g, "''")}' and e.aggregate_type = 'voucher'`;
+  const mSql = `select id as r from members m where m.society_id::text = '${societyId.replace(/'/g, "''")}'`;
   if (source === 'harness') {
     const { harnessClient } = await import('./db-harness/lib.mjs');
     const c = harnessClient(); await c.connect();
@@ -214,14 +244,16 @@ async function readInputs(societyId, source, workdir) {
       await c.query('begin transaction read only');
       const vouchers = (await c.query(vSql)).rows.map((x) => x.r);
       const events = (await c.query(eSql)).rows.map((x) => x.r);
+      const memberIds = (await c.query(mSql)).rows.map((x) => x.r);
       await c.query('rollback');
-      return { vouchers, events };
+      return { vouchers, events, memberIds };
     } finally { await c.end(); }
   }
   const { runReadOnlyQuery } = await import('./rm02-diagnostics.mjs');
   return {
     vouchers: runReadOnlyQuery(vSql, workdir).map((x) => x.r),
     events: runReadOnlyQuery(eSql, workdir).map((x) => x.r),
+    memberIds: runReadOnlyQuery(mSql, workdir).map((x) => x.r),
   };
 }
 
@@ -230,17 +262,26 @@ async function main() {
   const societyId = arg('--society');
   const out = arg('--out');
   const source = arg('--source', 'linked');
+  const mode = arg('--mode', 'duplicates');
+  const before = arg('--before');
+  if (arg('--fix')) setFix(arg('--fix'));
+  if (mode === 'old-receipts' && !/^\d{4}-\d{2}-\d{2}$/.test(before || '')) { console.error('--mode old-receipts needs --before YYYY-MM-DD'); process.exit(2); }
+  if (mode === 'old-receipts' && FIX === 'rm01-phantom-cancel') { console.error('--mode old-receipts needs its own --fix id'); process.exit(2); }
   if (!societyId || !out) { console.error('usage: --society <id> --out <path-without-ext> [--source linked|harness] [--workdir <dir>]'); process.exit(2); }
 
   const { buildEvent } = await import(abs('../src/lib/ledger/event.ts'));
   const { voucherReversalLines, voucherEventMeta } = await import(abs('../src/lib/ledger/voucherEvent.ts'));
   const { projectTrialBalance } = await import(abs('../src/lib/ledger/projections.ts'));
 
-  const { vouchers, events } = await readInputs(societyId, source, arg('--workdir'));
-  const { duplicates, solo } = classifyLoopVouchers(vouchers);
+  const { vouchers, events, memberIds } = await readInputs(societyId, source, arg('--workdir'));
+  let duplicates, solo;
+  if (mode === 'old-receipts') ({ targets: duplicates, kept: solo } = selectOldMemberReceipts(vouchers, memberIds, before));
+  else ({ duplicates, solo } = classifyLoopVouchers(vouchers));
   const runAt = new Date().toISOString();
-  const actor = 'RM-01 phantom cleanup (founder-approved 2026-09-28)';
-  const reason = 'RM-01: duplicate of an older receipt, posted by the removed load-time loop';
+  const actor = mode === 'old-receipts' ? 'Old member receipts cleanup (founder-approved 2026-09-30)' : 'RM-01 phantom cleanup (founder-approved 2026-09-28)';
+  const reason = mode === 'old-receipts'
+    ? `Old member receipt (joined before ${before}, or member no longer exists) — not a cash receipt of this year`
+    : 'RM-01: duplicate of an older receipt, posted by the removed load-time loop';
 
   const evByAgg = new Map();
   for (const e of events) (evByAgg.get(e.aggregate_id) ?? evByAgg.set(e.aggregate_id, []).get(e.aggregate_id)).push(e);
@@ -255,7 +296,10 @@ async function main() {
     for (const e of evs) {
       if ((e.event_type === 'voucher.posted' || e.event_type === 'voucher.reposted') && (e.sequence || 0) > postSeq) { postSeq = e.sequence || 0; posting = e.event_id; }
     }
-    if (!posting) { problems.push(`${v.voucherNo}: no posting in the journal`); continue; }
+    if (!posting) {
+      if (mode === 'old-receipts') { planned.push({ v, ev: null }); continue; }   // nothing in the journal to reverse
+      problems.push(`${v.voucherNo}: no posting in the journal`); continue;
+    }
     const maxSeq = evs.reduce((m, e) => Math.max(m, e.sequence || 0), 0);
     const ev = buildEvent({
       eventType: 'voucher.cancelled', tenantId: societyId, jurisdiction: v.jurisdiction ?? undefined,
@@ -269,14 +313,18 @@ async function main() {
   }
 
   const sum = (acc) => duplicates.filter((v) => v.creditAccountId === acc).reduce((s, v) => s + amountOf(v), 0);
-  console.log(`${FIX}: society ${societyId} (${source})`);
-  console.log(`  duplicates to cancel: ${duplicates.length}  (share ₹${sum('1102')}, admission ₹${sum('4407')}, total ₹${sum('1102') + sum('4407')})`);
-  console.log(`  solo loop vouchers kept: ${solo.length}  (₹${solo.reduce((s, v) => s + amountOf(v), 0)})`);
+  console.log(`${FIX}: society ${societyId} (${source}, mode ${mode})`);
+  console.log(`  to cancel: ${duplicates.length}  (share ₹${sum('1102')}, admission ₹${sum('4407')}, total ₹${sum('1102') + sum('4407')})`);
+  if (mode === 'old-receipts') console.log(`    historical ${duplicates.filter((v) => v._why === 'historical').length}, orphan ${duplicates.filter((v) => v._why === 'orphan').length}; ${planned.filter((p) => !p.ev).length} have no journal posting`);
+  console.log(`  kept: ${solo.length}  (₹${solo.reduce((s, v) => s + amountOf(v), 0)})`);
   if (problems.length) {
     console.log(`  PROBLEMS (${problems.length}) — no SQL written:`); for (const p of problems.slice(0, 20)) console.log(`    • ${p}`);
     process.exit(1);
   }
-  writeFileSync(`${out}.sql`, buildForwardSql({ societyId, duplicates: planned.map((p) => p.v), events: planned.map((p) => p.ev), runAt, actor, reason }));
+  const targetPredicate = mode === 'old-receipts'
+    ? `v."debitAccountId" = '3301' and v."creditAccountId" in ('1102', '4407') and v."memberId" is not null`
+    : undefined;
+  writeFileSync(`${out}.sql`, buildForwardSql({ societyId, duplicates: planned.map((p) => p.v), events: planned.filter((p) => p.ev).map((p) => p.ev), runAt, actor, reason, ...(targetPredicate ? { targetPredicate } : {}) }));
   writeFileSync(`${out}.undo.sql`, buildUndoSql({ societyId, runAt }));
   console.log(`  wrote ${out}.sql and ${out}.undo.sql`);
 }
