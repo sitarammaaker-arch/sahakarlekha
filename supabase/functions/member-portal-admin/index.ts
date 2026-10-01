@@ -19,15 +19,15 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import {
+  memberLoginEmail, normalizeMemberNo, generatePin, canManagePortal, portalPlanAllowed,
+  memberEligible, parseRequest, orphanReclaimable, MESSAGES,
+} from '../_shared/member-portal-core.mjs';
 
 // SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
 // token; its payload is read only to refuse more (unreadable → pending).
 const mfaPending = (t: string): boolean => {
   try { return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).mfa_pending === true; } catch { return true; }
 };
-  memberLoginEmail, normalizeMemberNo, generatePin, canManagePortal, portalPlanAllowed,
-  memberEligible, parseRequest, orphanReclaimable, MESSAGES,
-} from '../_shared/member-portal-core.mjs';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
