@@ -26,7 +26,7 @@ function catColor(cat: string): string {
 }
 
 /** First few sentences of the article body (markdown stripped) for the hero card. */
-function introPreview(post: BlogPost, max = 360): string {
+function introPreview(post: BlogPost, max = 300): string {
   const raw = loadBlogRaw(post.slug);
   if (!raw) return post.excerpt;
   const paras = raw
@@ -43,8 +43,8 @@ function introPreview(post: BlogPost, max = 360): string {
     out = out ? out + ' ' + t : t;
     if (out.length >= max) break;
   }
-  if (!out) return post.excerpt;
-  return out.length > max ? out.slice(0, max).replace(/\s+\S*$/, '') + '…' : out;
+  // Whole paragraphs only — never cut mid-sentence.
+  return out || post.excerpt;
 }
 
 const Meta: React.FC<{ post: BlogPost; views?: number; className?: string }> = ({ post, views, className = '' }) => (
@@ -97,7 +97,7 @@ const BlogIndex: React.FC = () => {
   }, []);
 
   const featured = posts[0];
-  const secondary = posts.slice(1, 5);
+  const secondary = posts.slice(1, 6);
   const bentoSlugs = new Set([featured, ...secondary].filter(Boolean).map((p) => p.slug));
 
   const mostRead = React.useMemo(() => {
@@ -181,7 +181,7 @@ const BlogIndex: React.FC = () => {
                     </div>
                     <CardContent className="p-5 flex flex-col flex-1">
                       <h2 className="font-serif text-xl md:text-2xl font-bold text-foreground leading-tight group-hover:text-primary transition-colors">{featured.title}</h2>
-                      <p className="text-sm md:text-base text-muted-foreground mt-3 line-clamp-5 leading-relaxed">{introPreview(featured)}</p>
+                      <p className="text-sm md:text-base text-muted-foreground mt-3 leading-relaxed">{introPreview(featured)}</p>
                       <Meta post={featured} views={views[featured.slug]} className="mt-4" />
                     </CardContent>
                   </Card>
