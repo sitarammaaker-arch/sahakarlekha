@@ -42,14 +42,24 @@ with legs as (
     from public.vouchers v
     cross join lateral (values (v."debitAccountId", round(v.amount * 100)::bigint), (v."creditAccountId", -round(v.amount * 100)::bigint)) x(acc, net)
    where not coalesce(v."isDeleted", false) and coalesce(v."approvalStatus", '') not in ('pending', 'rejected')
-     and not (jsonb_typeof(v.lines) = 'array' and jsonb_array_length(v.lines) > 0)
+     and coalesce(jsonb_array_length(case when jsonb_typeof(v.lines) = 'array' then v.lines end), 0) = 0   -- NULL lines too
 ),
 truth as (select sid, acc, sum(net) net from legs group by 1, 2),
+-- The journal read exactly as every statement reads it (resolveCurrentVouchers): a cancelled voucher
+-- counts nothing; otherwise its latest voucher.reposted, else its voucher.posted. (A raw sum over-counts
+-- an old edit that appended a repost without its reversal — the statements never did.) Same rule as
+-- ledger_drift() (migration 092) and close_financial_year (091).
+ev as (select e.society_id::text sid, e.aggregate_id, e.event_type, e.sequence, e.payload from public.ledger_events e where e.aggregate_type = 'voucher'),
+cur as (
+  select distinct on (aggregate_id) sid, aggregate_id, payload from ev
+   where event_type in ('voucher.posted', 'voucher.reposted')
+     and aggregate_id not in (select aggregate_id from ev where event_type = 'voucher.cancelled')
+   order by aggregate_id, (event_type = 'voucher.reposted') desc, sequence desc
+),
 journal as (
-  select e.society_id::text sid, l ->> 'accountId' acc,
+  select cur.sid, l ->> 'accountId' acc,
          sum((case when l ->> 'drCr' = 'Dr' then 1 else -1 end) * (l ->> 'amountMinor')::bigint) net
-    from public.ledger_events e, jsonb_array_elements(coalesce(e.payload -> 'lines', '[]'::jsonb)) l
-   where e.aggregate_type = 'voucher'
+    from cur, jsonb_array_elements(coalesce(cur.payload -> 'lines', '[]'::jsonb)) l
    group by 1, 2
 ),
 entries as (
@@ -91,7 +101,8 @@ select s.id::text sid,
 
 /** PURE. One status per society (see header). */
 export function classifyReadiness(row, today = new Date().toISOString().slice(0, 10)) {
-  if (row.flag) return 'ON';
+  // An ON society is still checked: drift there means a heal is due (the nightly job reports it too).
+  if (row.flag) return Number(row.journal_accounts) > 0 || Number(row.entries_accounts) > 0 ? 'ON-DRIFT' : 'ON';
   if (blockReasons(row).length) return 'BLOCKED';
   // Before 090 a society whose open year has ended would stop posting at its rollover; with 090 live the
   // rollover opens the next year on the server, so it is ready like any other.
@@ -119,10 +130,10 @@ async function main() {
   const by = {};
   for (const r of out) (by[r.status] ??= []).push(r);
   console.log(`posting readiness — ${out.length} societies`);
-  for (const k of ['ON', 'READY', 'EMPTY', 'HEAL', 'WAIT-FY', 'BLOCKED']) {
+  for (const k of ['ON', 'ON-DRIFT', 'READY', 'EMPTY', 'HEAL', 'WAIT-FY', 'BLOCKED']) {
     const list = by[k] || [];
     console.log(`  ${k.padEnd(8)} ${String(list.length).padStart(4)}`);
-    for (const r of list.filter(() => ['HEAL', 'WAIT-FY', 'BLOCKED'].includes(k))) {
+    for (const r of list.filter(() => ['ON-DRIFT', 'HEAL', 'WAIT-FY', 'BLOCKED'].includes(k))) {
       console.log(`    ${r.sid.slice(0, 8)}  vouchers ${r.live_vouchers}  journal drift ${r.journal_accounts} acc / ₹${(Number(r.journal_abs_minor) / 100).toFixed(2)}  entries drift ${r.entries_accounts} acc / ₹${(Number(r.entries_abs_minor) / 100).toFixed(2)}${r.blocked.length ? `  — ${r.blocked.join(', ')}` : k === 'WAIT-FY' ? `  — open FY ended ${r.open_fy_end}` : ''}`);
     }
   }
