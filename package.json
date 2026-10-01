@@ -309,7 +309,8 @@
     "test:sales-return-account": "node scripts/test-sales-return-account.mjs",
     "test:fy-period": "node scripts/test-fy-period.mjs",
     "test:fy-close-client": "node scripts/test-fy-close-client.mjs",
-    "test:tax02-delete-rollback": "node scripts/test-tax02-delete-rollback.mjs"
+    "test:tax02-delete-rollback": "node scripts/test-tax02-delete-rollback.mjs",
+    "test:purchase-tds-advice": "node scripts/test-purchase-tds-advice.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
