@@ -32,6 +32,7 @@ import { computeInvoiceTotals } from '@/lib/invoiceTotals';
 import { toMinor, toRupees, mulMinor } from '@/lib/money';
 import { useToast } from '@/hooks/use-toast';
 import type { PurchaseItem, PaymentMode } from '@/types';
+import { purchaseTdsAdvice } from '@/lib/tax/purchaseTdsAdvice';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -148,6 +149,15 @@ const PurchaseManagement: React.FC = () => {
   // T-02: net / GST / TDS / TCS / grand-total born exact in integer paise (shared with SaleManagement).
   const { netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, tdsAmount, tcsAmount, grandTotal } =
     computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct, tdsPct, tcsPct });
+
+  // Phase-2 D3: 194Q ADVICE from the sourced TDS engine — this FY's purchases from the supplier
+  // (this bill included) against the threshold. Never changes the bill; the TDS % stays the user's.
+  const tdsAdvice = useMemo(() => purchaseTdsAdvice({
+    supplierSection: suppliers.find(s => s.id === supplierId)?.tdsSection,
+    supplierId: supplierId || undefined,
+    bill: { id: editingId ?? undefined, date: purchaseDate, netAmount },
+    purchases: purchases as unknown as { id?: string; supplierId?: string; date: string; netAmount: number; isDeleted?: boolean }[],
+  }), [suppliers, supplierId, editingId, purchaseDate, netAmount, purchases]);
 
   // ── Item row helpers ──────────────────────────────────────────────────────
   const updateItem = (index: number, patch: Partial<PurchaseItem>) => {
@@ -775,6 +785,24 @@ const PurchaseManagement: React.FC = () => {
                         an hour on it before sending a screenshot. */}
                     <span className="w-24 text-right text-destructive font-medium">{tdsAmount > 0 ? `(${fmt(tdsAmount)})` : fmt(0)}</span>
                   </div>
+                  {tdsAdvice.kind !== 'none' && (
+                    <div className="text-xs rounded border border-orange-200 bg-white/70 dark:bg-transparent p-2 space-y-1" data-testid="tds-194q-advice">
+                      <p className="font-medium">{language === 'hi' ? 'धारा 194Q — सुझाव (बिल नहीं बदलता)' : 'Section 194Q — advice (does not change the bill)'}</p>
+                      {tdsAdvice.kind === 'refused' && <p>{tdsAdvice.reason}</p>}
+                      {tdsAdvice.kind === 'below' && <p>{tdsAdvice.explain}</p>}
+                      {tdsAdvice.kind === 'above' && (
+                        <p>
+                          {tdsAdvice.explain}{' '}
+                          {language === 'hi'
+                            ? `इस बिल का हिस्सा: ${fmt(tdsAdvice.billTdsMinor / 100)} (बिल का लगभग ${tdsAdvice.billTdsPct}%)।`
+                            : `This bill's share: ${fmt(tdsAdvice.billTdsMinor / 100)} (≈ ${tdsAdvice.billTdsPct}% of the bill).`}
+                        </p>
+                      )}
+                      {(tdsAdvice.kind === 'below' || tdsAdvice.kind === 'above') && tdsAdvice.caveats.map(c => (
+                        <p key={c} className="text-amber-700">⚠ {c}</p>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* TCS Section — the SELLER collects; the bill goes UP. Forest-depot timber, scrap,
