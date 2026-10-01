@@ -2401,9 +2401,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else {
         deleteEntries(id); // remove from voucher_entries so cancelled voucher has no SQL-visible impact
         if (cancelEvent) persistLedgerEvent(cancelEvent); // durable append only after the cancel is confirmed
-        // Journal not loaded → the sync guard above couldn't see the posting and built no cancelEvent.
-        // Check the DB directly and append the reversing event iff a posting really exists (else no-op).
-        else if (!journalLoadedRef.current) void ensureVoucherCancelEvent(current, deletedBy, reason);
+        // No cancelEvent → the in-memory journal did not hold this voucher's posting: either it was never
+        // loaded, OR the posting was written AFTER this tab loaded (another user / device — e.g. a voucher
+        // approved by a checker; 2026-10-01 Assandh JV/2026/27/6720). Check the DB directly and append the
+        // reversing event iff a posting really exists (idempotent; no posting → no-op).
+        else void ensureVoucherCancelEvent(current, deletedBy, reason);
       }
     });
     return true;
@@ -2463,6 +2465,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // voucher.cancelled as final, and the old restore emitted no event — the row came back while the
   // journal kept it cancelled (TB/cash-book drift). A cancelled voucher stays cancelled; a correction
   // is a NEW voucher (as in Tally). Kept as a function so any caller gets the explanation, not a crash.
+  // B2: the posting-service flag is read once at load. A tab left open across a flag change kept the
+  // OLD client path (2026-10-01: a tab opened before the batch flip cancelled a voucher client-side).
+  // Re-read it whenever the tab becomes visible again and every 5 minutes; a failed read keeps the value.
+  useEffect(() => {
+    const refreshPostingFlag = () => {
+      const sid = societyIdRef.current;
+      if (!sid || document.visibilityState !== 'visible') return;
+      supabase.from('society_flags').select('posting_service').eq('society_id', sid).maybeSingle()
+        .then(({ data, error }) => { if (!error) postingServiceRef.current = data?.posting_service === true; }, () => { /* keep */ });
+    };
+    document.addEventListener('visibilitychange', refreshPostingFlag);
+    const timer = setInterval(refreshPostingFlag, 5 * 60 * 1000);
+    return () => { document.removeEventListener('visibilitychange', refreshPostingFlag); clearInterval(timer); };
+  }, []);
+
   const usesPostingService = useCallback((): boolean => postingServiceRef.current, []);
 
   const restoreVoucher = useCallback((_id: string): boolean => {
