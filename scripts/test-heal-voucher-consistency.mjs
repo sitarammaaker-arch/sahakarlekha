@@ -53,6 +53,20 @@ ok('already consistent → nothing', a.length === 0);
 a = plan([V({ id: 'l4' })], { l4: [ent('l4', 'l4-dr', '3301', 250, 0), ent('l4', 'l4-cr', '1102', 0, 250)] }, {});
 ok('live with no journal event → one voucher.posted, entries kept', a[0].events.length === 1 && a[0].events[0].eventType === 'voucher.posted' && !a[0].deleteEntries.length && !a[0].insertEntries.length);
 ok('pending vouchers are skipped', plan([V({ id: 'l5', approvalStatus: 'pending' })], { l5: [ent('l5', 'x', '3301', 9, 0)] }, {}).length === 0);
+{
+  // 2026-10-01: a cancelled voucher with a live posting AND still-posted voucher_lines.
+  const lines = new Map([['l10', ['vl1', 'vl2']]]);
+  const r = planConsistency([V({ id: 'l10', isDeleted: true })], new Map(), new Map([['l10', [{ event_id: 'e-l10-1', event_type: 'voucher.posted', sequence: 1,
+    payload: { lines: [{ accountId: '5301', drCr: 'Dr', amountMinor: 100 }, { accountId: '3301', drCr: 'Cr', amountMinor: 100 }] } }]]]), AT, lines).actions;
+  ok('cancelled + live posting + posted lines → cancel event AND lines reversed', r.length === 1 && r[0].events[0].eventType === 'voucher.cancelled' && r[0].reverseLines.join() === 'vl1,vl2');
+  const r2 = planConsistency([V({ id: 'l11', isDeleted: true })], new Map(), new Map([['l11', [{ event_id: 'x', event_type: 'voucher.posted', sequence: 1, payload: { lines: [] } },
+    { event_id: 'y', event_type: 'voucher.cancelled', sequence: 2, payload: { lines: [] } }]]]), AT, new Map([['l11', ['vl3']]])).actions;
+  ok('cancelled, journal already reconciled, lines still posted → lines only', r2.length === 1 && r2[0].kind === 'cancelled-lines' && !r2[0].events.length && r2[0].reverseLines.join() === 'vl3');
+  const lsql = buildConsistencySql({ runAt: AT, actions: r });
+  ok('SQL logs the line status before flipping it and the undo restores it', lsql.indexOf("'voucher_line_status'") > 0 && lsql.indexOf("'voucher_line_status'") < lsql.indexOf("update public.voucher_lines set status = 'reversed'")
+    && /update public\.voucher_lines set status = 'posted'/.test(buildConsistencyUndoSql({ runAt: AT })));
+  ok('post-check refuses a cancelled voucher that still has posted lines', /still has posted lines/.test(lsql));
+}
 ok('a rejected voucher with nothing left is skipped', plan([V({ id: 'l7', approvalStatus: 'rejected' })], {}, {}).length === 0);
 {
   // B2: a rejected voucher still holding a live posting + entries → cancelled like a cancelled voucher.

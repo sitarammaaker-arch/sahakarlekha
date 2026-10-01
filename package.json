@@ -301,7 +301,8 @@
     "test:kcc-interest-accrual": "node scripts/test-kcc-interest-accrual.mjs",
     "test:no-false-success": "node scripts/test-no-false-success.mjs",
     "test:posting-readiness": "node scripts/test-posting-readiness.mjs",
-    "test:posting-flag-batch": "node scripts/test-posting-flag-batch.mjs"
+    "test:posting-flag-batch": "node scripts/test-posting-flag-batch.mjs",
+    "test:cancel-stale-tab": "node scripts/test-cancel-stale-tab.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
