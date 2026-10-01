@@ -1382,6 +1382,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'गोदाम निर्माण की 10-वर्षीय गारंटीड PEG स्कीम के ज़रिए — HAFED टेंडर की सामान्य संरचना व शर्तें समझें।',
     accent: 'violet',
     tags: ['HAFED', 'टेंडर', 'PEG स्कीम'],
+    image: '/blog/hafed-tender-2026-latest-eligibility-apply-guide.webp',
+    imageAlt: 'HAFED टेंडर और PEG गोदाम स्कीम: गोदाम के सामने सहकारी समिति के पदाधिकारी टेंडर फ़ाइल और नक्शे के साथ',
   },
   {
     slug: 'pacs-employee-dccb-clerk-promotion-haryana-exam',
@@ -1394,6 +1396,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'यह एक स्वतंत्र प्रत्यक्ष भर्ती परीक्षा है, प्रमोशन नहीं — PACS अनुभव से सिर्फ़ आयु में छूट मिलती है। पूरी सच्चाई।',
     accent: 'rose',
     tags: ['DCCB', 'HARCO Bank', 'भर्ती'],
+    image: '/blog/pacs-employee-dccb-clerk-promotion-haryana-exam.webp',
+    imageAlt: 'PACS कर्मचारी से DCCB/HARCO Bank क्लर्क बनने की भर्ती प्रक्रिया: परीक्षा फ़ॉर्म और किताबों के साथ युवा उम्मीदवार, पीछे PACS कार्यालय और बैंक शाखा',
   },
   {
     slug: 'dccb-haryana-pacs-harco-bank-credit-structure',
