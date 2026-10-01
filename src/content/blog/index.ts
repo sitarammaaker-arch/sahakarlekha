@@ -1382,6 +1382,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'गोदाम निर्माण की 10-वर्षीय गारंटीड PEG स्कीम के ज़रिए — HAFED टेंडर की सामान्य संरचना व शर्तें समझें।',
     accent: 'violet',
     tags: ['HAFED', 'टेंडर', 'PEG स्कीम'],
+    image: '/blog/hafed-tender-2026-latest-eligibility-apply-guide.webp',
+    imageAlt: 'HAFED टेंडर और PEG गोदाम स्कीम: गोदाम के सामने सहकारी समिति के पदाधिकारी टेंडर फ़ाइल और नक्शे के साथ',
   },
   {
     slug: 'pacs-employee-dccb-clerk-promotion-haryana-exam',
