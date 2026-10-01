@@ -17,6 +17,7 @@
     "test:backup-placement-config": "node scripts/test-backup-placement-config.mjs",
     "test:jwt-role-helpers": "node scripts/test-jwt-role-helpers.mjs",
     "test:mfa-pending": "node scripts/test-mfa-pending.mjs",
+    "test:edge-functions-parse": "node scripts/test-edge-functions-parse.mjs",
     "test:b3-client-voucher-writes": "node scripts/test-b3-client-voucher-writes.mjs",
     "test:role-access": "node scripts/test-role-access.mjs",
     "test:calc": "node scripts/test-calculators.mjs",
