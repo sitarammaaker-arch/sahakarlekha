@@ -10,6 +10,10 @@
 //     voucher.reversed + voucher.reposted (or one voucher.posted when the journal holds none)
 //   • a LIVE voucher with NO journal event at all (S3-e-4: Assandh's appends failed 07-16 → 08-19)
 //                                                                              → append voucher.posted
+//   • (B2, 2026-10-01) a REJECTED voucher still holding a live posting / entries — a rejected voucher
+//     never counts, exactly like a cancelled one → append voucher.cancelled, delete the entries
+//   • (B2) a LIVE voucher whose entries carry the right TOTAL on the wrong account / side (edits saved
+//     while syncEntries was rejecting every write) — the candidate query now compares per account
 // The VOUCHER ROW is the truth; it is never edited. Rows are built with the app's own builders (RULE 2).
 //
 // READS only (read-only transaction on the linked project, or the local db-harness) and writes:
@@ -78,16 +82,18 @@ export function planConsistency(vouchers, entriesByVoucher, eventsByVoucher, run
     const events = [];
     let insertEntries = [];
     let kind;
-    if (v.isDeleted) {
+    // A rejected voucher never counts — same target state as a cancelled one (no posting, no entries).
+    const voided = v.isDeleted || v.approvalStatus === 'rejected';
+    if (voided) {
       if (posting && !cancelled) {
         events.push(buildEvent({ ...base, eventType: 'voucher.cancelled', sequence: maxSeq + 1, reversalOf: posting.event_id,
-          payload: { ...(posting.payload || {}), lines: flip(posting.payload?.lines), reason: 'heal: cancel never journaled', healed: true } },
+          payload: { ...(posting.payload || {}), lines: flip(posting.payload?.lines), reason: v.isDeleted ? 'heal: cancel never journaled' : 'heal: rejected voucher was journaled', healed: true } },
           { eventId: `${FIX}-${v.id}-c${maxSeq + 1}`, occurredAt: runAt }));
       }
       if (!ents.length && !events.length) continue;
-      kind = events.length ? 'cancelled-journal' : 'cancelled-entries';
+      kind = (v.isDeleted ? 'cancelled-' : 'rejected-') + (events.length ? 'journal' : 'entries');
     } else {
-      if (v.approvalStatus === 'pending' || v.approvalStatus === 'rejected') continue;
+      if (v.approvalStatus === 'pending') continue;
       insertEntries = buildVoucherEntries(v, sid).map(({ societyId: _s, ...e }) => ({ ...e, society_id: sid, jurisdiction: v.jurisdiction ?? null }));
       const want = voucherPostingLines(v);
       const entryKey = (rows) => JSON.stringify(rows.map((e) => [e.id, e.accountId, minorOf(e.dr), minorOf(e.cr)]).sort());
@@ -133,6 +139,7 @@ export function buildConsistencySql({ runAt, actions }) {
   if n <> ${max} then raise exception '${FIX}: journal of ${a.voucher.voucherNo} changed since the plan — re-plan; nothing changed'; end if;`;
   }).filter(Boolean).join('\n');
   const rowChecks = actions.map((a) => `  select count(*) into n from public.vouchers where id = ${q(a.voucher.id)} and coalesce("isDeleted", false) = ${a.voucher.isDeleted ? 'true' : 'false'}
+    and coalesce("approvalStatus", '') = ${q(a.voucher.approvalStatus ?? '')}
     and round(amount * 100) = ${minorOf(a.voucher.amount)} and lines is not distinct from ${a.voucher.lines == null ? 'null::jsonb' : j(a.voucher.lines)};
   if n <> 1 then raise exception '${FIX}: voucher ${a.voucher.voucherNo} changed since the plan — re-plan; nothing changed'; end if;`).join('\n');
   const log = [
@@ -185,7 +192,7 @@ ${evRows};
 do $chk$
 declare bad text;
 begin
-  with v as (select id, "voucherNo" no, coalesce("isDeleted", false) del from public.vouchers where id in (${vids})),
+  with v as (select id, "voucherNo" no, (coalesce("isDeleted", false) or "approvalStatus" = 'rejected') del from public.vouchers where id in (${vids})),
   j as (select e.aggregate_id vid, l ->> 'accountId' acc, sum(case when l ->> 'drCr' = 'Dr' then 1 else -1 end * (l ->> 'amountMinor')::bigint) net
         from public.ledger_events e, jsonb_array_elements(e.payload -> 'lines') l where e.aggregate_id in (${vids}) group by 1, 2),
   n as (select "voucherId" vid, "accountId" acc, round(sum(dr - cr) * 100)::bigint net from public.voucher_entries where "voucherId" in (${vids}) group by 1, 2),
@@ -226,6 +233,9 @@ async function read(sql, source, workdir) {
 // The approved sets (2026-09-29): S3-d-3 — cancelled vouchers still holding entries, and live vouchers
 // whose entries' Dr total differs from their own legs; S3-e-4 — live vouchers with no journal event at
 // all, and cancelled vouchers whose journal posting was never reversed.
+const LEGS_SQL = `case when jsonb_typeof(v.lines) = 'array' and jsonb_array_length(v.lines) > 0
+            then (select coalesce(jsonb_agg(jsonb_build_object('acc', x ->> 'accountId', 'n', round((case when x ->> 'type' = 'Dr' then 1 else -1 end) * (x ->> 'amount')::numeric * 100))), '[]'::jsonb) from jsonb_array_elements(v.lines) x)
+            else jsonb_build_array(jsonb_build_object('acc', v."debitAccountId", 'n', round(v.amount * 100)), jsonb_build_object('acc', v."creditAccountId", 'n', -round(v.amount * 100))) end`;
 const CANDIDATES = `
 with e as (select "voucherId" vid, round(sum(dr), 2) dr from public.voucher_entries group by 1)
 select to_jsonb(v) as r from public.vouchers v left join e on e.vid = v.id
@@ -237,7 +247,18 @@ where (e.vid is not null and (coalesce(v."isDeleted", false)
        and not exists (select 1 from public.ledger_events x where x.aggregate_type = 'voucher' and x.aggregate_id = v.id))
    or (coalesce(v."isDeleted", false)
        and exists (select 1 from public.ledger_events x where x.aggregate_type = 'voucher' and x.aggregate_id = v.id and x.event_type in ('voucher.posted', 'voucher.reposted'))
-       and not exists (select 1 from public.ledger_events x where x.aggregate_type = 'voucher' and x.aggregate_id = v.id and x.event_type = 'voucher.cancelled'))`;
+       and not exists (select 1 from public.ledger_events x where x.aggregate_type = 'voucher' and x.aggregate_id = v.id and x.event_type = 'voucher.cancelled'))
+   -- B2: a rejected voucher holding entries, or a posting that was never cancelled
+   or (not coalesce(v."isDeleted", false) and v."approvalStatus" = 'rejected'
+       and (e.vid is not null
+            or (exists (select 1 from public.ledger_events x where x.aggregate_type = 'voucher' and x.aggregate_id = v.id and x.event_type in ('voucher.posted', 'voucher.reposted'))
+                and not exists (select 1 from public.ledger_events x where x.aggregate_type = 'voucher' and x.aggregate_id = v.id and x.event_type = 'voucher.cancelled'))))
+   -- B2: a live voucher whose entries differ from its legs on any ACCOUNT (right total, wrong account/side)
+   or (not coalesce(v."isDeleted", false) and coalesce(v."approvalStatus", '') not in ('pending', 'rejected')
+       and exists (
+         select 1 from (select ve."accountId" acc, sum(round((ve.dr - ve.cr) * 100)) n from public.voucher_entries ve where ve."voucherId" = v.id group by 1) en
+         full join (select l ->> 'acc' acc, sum((l ->> 'n')::numeric) n from jsonb_array_elements(${LEGS_SQL}) l group by 1) lg using (acc)
+         where coalesce(en.n, 0) <> coalesce(lg.n, 0)))`;
 
 async function main() {
   const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };

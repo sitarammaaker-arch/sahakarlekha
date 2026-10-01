@@ -53,7 +53,17 @@ ok('already consistent → nothing', a.length === 0);
 a = plan([V({ id: 'l4' })], { l4: [ent('l4', 'l4-dr', '3301', 250, 0), ent('l4', 'l4-cr', '1102', 0, 250)] }, {});
 ok('live with no journal event → one voucher.posted, entries kept', a[0].events.length === 1 && a[0].events[0].eventType === 'voucher.posted' && !a[0].deleteEntries.length && !a[0].insertEntries.length);
 ok('pending vouchers are skipped', plan([V({ id: 'l5', approvalStatus: 'pending' })], { l5: [ent('l5', 'x', '3301', 9, 0)] }, {}).length === 0);
-ok('rejected vouchers are skipped', plan([V({ id: 'l7', approvalStatus: 'rejected' })], {}, {}).length === 0);
+ok('a rejected voucher with nothing left is skipped', plan([V({ id: 'l7', approvalStatus: 'rejected' })], {}, {}).length === 0);
+{
+  // B2: a rejected voucher still holding a live posting + entries → cancelled like a cancelled voucher.
+  const r = plan([V({ id: 'l8', approvalStatus: 'rejected' })], { l8: [ent('l8', 'a', '3301', 500, 0), ent('l8', 'b', '1102', 0, 500)] },
+    { l8: [{ event_id: 'e-l8-1', event_type: 'voucher.posted', sequence: 1, payload: { lines: [{ accountId: '3301', drCr: 'Dr', amountMinor: 50000 }, { accountId: '1102', drCr: 'Cr', amountMinor: 50000 }] } }] });
+  ok('rejected + live posting → voucher.cancelled flipping the posting, entries deleted', r.length === 1 && r[0].kind === 'rejected-journal'
+    && r[0].events.length === 1 && r[0].events[0].eventType === 'voucher.cancelled' && r[0].events[0].reversalOf === 'e-l8-1'
+    && r[0].events[0].payload.lines[0].drCr === 'Cr' && r[0].deleteEntries.length === 2 && !r[0].insertEntries.length);
+  const r2 = plan([V({ id: 'l9', approvalStatus: 'rejected' })], { l9: [ent('l9', 'a', '3301', 5, 0)] }, {});
+  ok('rejected with stale entries only → entries deleted, no event', r2.length === 1 && r2[0].kind === 'rejected-entries' && !r2[0].events.length && r2[0].deleteEntries.length === 1);
+}
 
 console.log('S3-e-4: live voucher with no journal event (Assandh)');
 a = plan([V({ id: 'a1', approvalStatus: 'approved' })], { a1: [ent('a1', 'a1-dr', '3301', 250, 0), ent('a1', 'a1-cr', '1102', 0, 250)] }, {});
@@ -81,6 +91,8 @@ ok('refuses a second apply', new RegExp(`from public\\.data_fix_log where fix = 
 ok('re-checks each voucher row and journal sequence before writing', /changed since the plan/.test(sql) && sql.indexOf('changed since the plan') < sql.indexOf('delete from public.voucher_entries'));
 ok('logs every deleted entry with its FULL old row before deleting', sql.indexOf("'voucher_entry_deleted'") > 0 && sql.indexOf("'voucher_entry_deleted'") < sql.indexOf('delete from public.voucher_entries'));
 ok('post-check: entries = journal per account, cancelled = nothing', /post-check failed for/.test(sql) && /union select vid, acc from n/.test(sql));
+ok('re-checks the approval status too (a rejected voucher re-approved since the plan aborts)', /coalesce\("approvalStatus", ''\) = /.test(sql));
+ok('post-check treats a rejected voucher like a cancelled one (must end at zero)', /\(coalesce\("isDeleted", false\) or "approvalStatus" = 'rejected'\) del/.test(sql));
 ok('never updates or deletes a vouchers row or a journal event', !/update public\.vouchers|delete from public\.vouchers|delete from public\.ledger_events/.test(sql));
 const undo = buildConsistencyUndoSql({ runAt: AT });
 ok('undo: removes inserted events + entries, re-inserts deleted entries from the log', /delete from public\.ledger_events where event_id in/.test(undo) && /delete from public\.voucher_entries where id in/.test(undo)
