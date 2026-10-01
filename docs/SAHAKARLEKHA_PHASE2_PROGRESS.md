@@ -15,9 +15,9 @@
 
 ## Current position
 - **Phase:** A — Critical security
-- **Current task:** A1–A4 are code-complete in PR (branch `sec/mfa-jwt-identity`): AWAITING-FOUNDER (merge, deploy edge fns, apply 084 + 085).
-- **A5 in progress.** It found a **P0**: anon could add an admin to any society or reset any password. The fix, migration 086 in PR #585, is AWAITING-FOUNDER and should be applied FIRST. STOP condition 2 applies (prod data at risk), so the founder has been told.
-- **Next task:** finish A5 (remaining SD fns below), then A6.
+- **Current task:** A1–A4. PR #584 is MERGED and the client is deployed (2026-09-30 16:20 UTC). Still AWAITING-FOUNDER: deploy the 8 edge fns, then apply 084 + 085 (files staged in `D:\SahakarLekha-Backups\sec\`).
+- **A5:** the P0 (086) is **LIVE**. The founder applied it 2026-09-30 ~16:15 UTC after backup `sahakarlekha-prod-20260930-1613Z.dump`. Verified read-only: anon EXECUTE is false for both fns, the guard is in the body, and the app_migrations row is 086. PR #585 is awaiting merge. The last A5 items (087 issue_certificate, create-order caller check) are in PR `sec/a5-order-cert`.
+- **Next task:** Phase A is code-complete. Next is **B1/B2** (server-posting rollout readiness; the next society is 7f2919f0), then B3.
 
 ## Roadmap status
 
@@ -28,11 +28,16 @@
 | A2 MFA admin reset (SEC-02) | AWAITING-FOUNDER | mig 084 (same functions) |
 | A3 MFA bound to session / JWT (SEC-03) | AWAITING-FOUNDER | mig 085 + AuthContext + 8 edge fns; harness 41/41 |
 | A4 TOTP brute-force | AWAITING-FOUNDER | mig 085: 5 fails / 15 min per email |
-| A5 SECURITY DEFINER audit | IN PROGRESS | **A5-1 P0 FIXED in PR #585 (mig 086, harness 7/7):** app_add_society_user / app_reset_society_user_password skipped auth when the JWT email was null, and anon held EXECUTE. Reviewed OK: admin_feedback_* (is_platform_admin; the p_email/p_password args are ignored), pay_payslip_lines (tenant guard), public_reviews/increment_blog_view/verify_certificate (public by design), society_has_users (boolean only), register_society/app_register_admin (signup; only for a user-less society = P3). Still to review: `create-order` edge fn takes `society_id` from the body with no caller check; `issue_certificate` overwrites holder_name; `society_users_bootstrap` anon insert (P3); `app_set_my_password` allowed while 2FA pending (DoS only, by design: the password-reset flow needs it) |
-| A6 Critical RLS verification | NOT STARTED | |
+| A5 SECURITY DEFINER audit | AWAITING-FOUNDER (086 LIVE; 087 + create-order in PR) | **A5-1 P0 FIXED in PR #585 (mig 086, harness 7/7):** app_add_society_user / app_reset_society_user_password skipped auth when the JWT email was null, and anon held EXECUTE. Reviewed OK: admin_feedback_* (is_platform_admin; the p_email/p_password args are ignored), pay_payslip_lines (tenant guard), public_reviews/increment_blog_view/verify_certificate (public by design), society_has_users (boolean only), register_society/app_register_admin (signup; only for a user-less society = P3). **A5-2 (P2):** issue_certificate let anyone rename a certificate's holder, which breaks verification for the real holder. Fix: mig 087, harness 7/7 (3/7 before). **A5-3 (P2):** the create-order edge fn accepted the anon key plus any society_id and leaked plan/renewal via the prorated amount. Fix: the caller must be an active user of that society, on a non-pending session. Remaining leads, all accepted as P3: `create-order` edge fn takes `society_id` from the body with no caller check; `issue_certificate` overwrites holder_name; `society_users_bootstrap` anon insert (P3); `app_set_my_password` allowed while 2FA pending (DoS only, by design: the password-reset flow needs it) |
+| A6 Critical RLS verification | COMPLETE (harness) | `scripts/db-harness/tests/a6-tenant-isolation.mjs`, **469/469** on the 2026-09-30 prod dump. Coverage: all 104 tables with society_id × read / update / delete / insert-copy / move-own-row as an S1 admin against a real S2; anon and a signed-in stranger see 0 rows in every table; platform tables (platform_admins, societies, user_mfa…, app_migrations…) cannot be written or read by anon or a stranger. Deny-all tables (account_reclass_log, data_fix_log, member_portal_users) refuse with permission denied. By design: public INSERT on error_log + feedback (unreadable by clients; a foreign society_id only pollutes a log, P3). A 2FA-pending token is covered by a3 (085). |
 
 ### Phase B — Accounting integrity (from the audit)
-B1 server posting architecture: verified for Rania (S3, migs 077–083 live). B2 rollout to all societies: NOT STARTED (next candidate 7f2919f0). B3–B10: NOT STARTED.
+| Task | Status | Notes |
+|---|---|---|
+| B1 verify server posting architecture | COMPLETE (audit) | Only DataContext writes `vouchers`; each write site was mapped against the flag. Bypasses under the flag: postJoiningReceipts, updateSalaryRecord, clear/unclear/reject (whole-row upsert), reverseVoucher links, mergeAccounts. |
+| B3 disable unsafe client writes | PARTIAL, PR #587 | Fixed: salary edits now repost the journal (a JRN-01 source, flag on AND off); joining receipts go via the server; clear/unclear/reject use a targeted update; editedBy. Static test 15/15. Remaining: mergeAccounts, and the flag-off cancelLinkedVouchers path. Runtime spot-check after deploy: edit a paid salary in Rania. |
+| B2 rollout to all societies | NOT STARTED | Needs #587 live first. Next candidate is 7f2919f0. The flag flip is a prod write, so it needs the founder's go. |
+| B4–B10 | NOT STARTED | |
 
 ### Phases C–M
 NOT STARTED. See the roadmap in the master prompt; the order follows the dependency rule.
@@ -43,7 +48,7 @@ NOT STARTED. See the roadmap in the master prompt; the order follows the depende
 | SEC-01 | MFA enrolment anon + caller email | fix in PR (084) |
 | SEC-02 | MFA admin reset trusts caller email | fix in PR (084) |
 | SEC-03 | 2FA not bound to JWT | fix in PR (085) |
-| SEC-04 (new, P0) | anon user-add / password-reset bypass | fix in PR #585 (086) |
+| SEC-04 (new, P0) | anon user-add / password-reset bypass | **FIXED, LIVE** (086, 2026-09-30) |
 | ACC-01 | server posting rollout (only Rania) | open → B2 |
 | ACC-02 | FY closing only sets fyLocked | open → C |
 | S4 | client accounting writes still allowed | open → B3 |
