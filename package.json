@@ -303,7 +303,8 @@
     "test:posting-readiness": "node scripts/test-posting-readiness.mjs",
     "test:posting-flag-batch": "node scripts/test-posting-flag-batch.mjs",
     "test:cancel-stale-tab": "node scripts/test-cancel-stale-tab.mjs",
-    "test:fy-rollover-client": "node scripts/test-fy-rollover-client.mjs"
+    "test:fy-rollover-client": "node scripts/test-fy-rollover-client.mjs",
+    "test:sales-return-account": "node scripts/test-sales-return-account.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

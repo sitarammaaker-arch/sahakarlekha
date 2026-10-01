@@ -35,6 +35,7 @@ const VARIANCE_LABEL: Record<MatchReason, string> = {
   'under-billed-qty': 'कम बिल (मात्रा)', 'price-variance': 'दर अंतर', 'unbilled': 'बिल नहीं', 'extra-invoice-line': 'अतिरिक्त बिल पंक्ति',
 };
 import { getBankAccountIds } from '@/lib/storage';
+import { salesReturnCreditAccountId } from '@/lib/consumer/salesReturnAccount';
 import { isUniqueViolation, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import type { ConsumerPrice, ConsumerPriceTier, Voucher, PatronageRun, PurchaseOrder, PurchaseOrderItem, Purchase, SalesReturn, SalesReturnItem, SalesReturnRefund, PurchaseReturn, PurchaseReturnItem, PurchaseReturnRefund } from '@/types';
 
@@ -541,10 +542,13 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const fy = society.financialYear;
     const seq = salesReturns.filter(r => r.returnNo?.includes(fy)).reduce((m, r) => { const x = r.returnNo?.match(/\/(\d+)$/); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0) + 1;
     const returnNo = `SRET/${fy}/${String(seq).padStart(3, '0')}`;
-    // Refund destination: cash/bank, else adjust the buyer's credit (member receivable / debtor).
-    const creditAccId = data.refundMode === 'cash' ? '3301'
-      : data.refundMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || '3302')
-      : (sale.memberId ? (resolveMemberReceivableAccountId(accounts) || '3303') : (sale.customerId ? '3303' : '3303'));
+    // Refund destination: cash/bank, else credit the receivable the ORIGINAL sale debited (the customer's
+    // own ledger / member receivable) so the buyer's outstanding drops — never the bare 3303 control.
+    const creditAccId = salesReturnCreditAccountId({
+      refundMode: data.refundMode, bankAccountId: data.bankAccountId, bankAccountIds: getBankAccountIds(accounts),
+      saleVoucher: sale.voucherId ? vouchers.find(v => v.id === sale.voucherId) : null,
+      memberId: sale.memberId, memberReceivableAccountId: resolveMemberReceivableAccountId(accounts),
+    });
     const lid = () => crypto.randomUUID();
     const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: salesReturnAccId, type: 'Dr', amount: netAmount }];
     if (taxAmount > 0) lines.push({ id: lid(), accountId: '2201', type: 'Dr', amount: taxAmount });
@@ -573,7 +577,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     });
     toastRef.current({ title: `✅ वापसी दर्ज — ${returnNo}`, description: `स्टॉक वापस + ₹${grandTotal.toLocaleString('en-IN')}` });
     return ret;
-  }, [sales, salesReturns, accounts, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, user]);
+  }, [sales, salesReturns, accounts, vouchers, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, user]);
 
   // Edit a posted sales return (fix a wrong quantity/refund). Reverses the old return's
   // voucher + stock, then re-posts the new one under the SAME return number & id. RULE 1/2/3.
@@ -612,9 +616,11 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     cur.items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: `${cur.returnNo}/EDIT`, narration: `Sales return edited — reverse old ${cur.saleNo}` }));
 
     // 2) Post the NEW voucher (same return no. kept on the record).
-    const creditAccId = data.refundMode === 'cash' ? '3301'
-      : data.refundMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || '3302')
-      : (sale.memberId ? (resolveMemberReceivableAccountId(accounts) || '3303') : '3303');
+    const creditAccId = salesReturnCreditAccountId({
+      refundMode: data.refundMode, bankAccountId: data.bankAccountId, bankAccountIds: getBankAccountIds(accounts),
+      saleVoucher: sale.voucherId ? vouchers.find(v => v.id === sale.voucherId) : null,
+      memberId: sale.memberId, memberReceivableAccountId: resolveMemberReceivableAccountId(accounts),
+    });
     const lid = () => crypto.randomUUID();
     const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: salesReturnAccId, type: 'Dr', amount: netAmount }];
     if (taxAmount > 0) lines.push({ id: lid(), accountId: '2201', type: 'Dr', amount: taxAmount });
@@ -638,7 +644,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     commitSalesReturn(updated, cur);
     toastRef.current({ title: `✅ वापसी संशोधित — ${cur.returnNo}`, description: `नई राशि ₹${grandTotal.toLocaleString('en-IN')}` });
     return updated;
-  }, [sales, salesReturns, accounts, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, user]);
+  }, [sales, salesReturns, accounts, vouchers, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, user]);
 
   const deleteSalesReturn = useCallback((id: string) => {
     if (guardFYLocked()) return;
