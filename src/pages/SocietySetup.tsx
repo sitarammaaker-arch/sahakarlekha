@@ -315,6 +315,7 @@ const SocietySetup: React.FC = () => {
   }, [getProfitLoss, vouchers, society.financialYear]);
 
   const handleRolloverFY = () => {
+    const prevFY = society.financialYear;
     const [startYY, endYY] = society.financialYear.split('-');
     const newFY = `${parseInt(startYY) + 1}-${String(parseInt(endYY) + 1).slice(-2)}`;
 
@@ -348,15 +349,18 @@ const SocietySetup: React.FC = () => {
       fyLocked: false,
       fyLockedAt: undefined,
       fyLockedBy: undefined,
+    }, {
+      // Announce only what the cloud accepted: the server may refuse a rollover (migration 090 — e.g. the
+      // previous year is still 'closing'); updateSociety then rolls back and shows the reason itself.
+      onSaved: () => toast({
+        title: language === 'hi' ? `वित्त वर्ष ${newFY} प्रारंभ हुआ` : `Rolled over to FY ${newFY}`,
+        description: language === 'hi'
+          ? `पिछला वर्ष ${prevFY} अब "closing" है — close होने तक उसमें भी entry हो सकती है। नई entries ${newFY} में करें।`
+          : `${prevFY} is now closing (late entries allowed until it is closed). Start entries for ${newFY}.`,
+      }),
     });
 
     setRolloverOpen(false);
-    toast({
-      title: language === 'hi' ? `वित्त वर्ष ${newFY} प्रारंभ हुआ` : `Rolled over to FY ${newFY}`,
-      description: language === 'hi'
-        ? `पिछले वर्ष ${society.financialYear} के शेष सहेजे गए। अब ${newFY} में एंट्रियां करें।`
-        : `Closing balances of ${society.financialYear} saved as previous year data. Start entries for ${newFY}.`,
-    });
   };
 
   const [showAddAccount, setShowAddAccount] = useState(false);
