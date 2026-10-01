@@ -121,9 +121,22 @@ export function computeTds(input: TdsInput): TdsOutcome {
     };
   }
 
-  // 194Q taxes only the EXCESS over the threshold, not the whole value — the single
-  // most commonly mis-applied part of this section, and the reason a deterministic
-  // function must own it rather than whoever is typing the voucher.
+  // Above the threshold: on the EXCESS only, or on the WHOLE sum? That is per-section statute
+  // (194Q: excess only — its Note 1(b)). It used to be "excess" for every section, which
+  // understates TDS wherever the text charges the whole sum. Now it must be a verified rule;
+  // without one this REFUSES rather than pick a basis (AI-N8).
+  const excessOnly = verifiedValue(`tds.${s}.charge_on_excess_only`, input.ctx);
+  if (!excessOnly || excessOnly.value !== 1) {
+    return {
+      applicable: false,
+      refused: true,
+      reason: `कुल ${inr(input.aggregateMinor)} धारा ${s.toUpperCase()} की सीमा ${inr(thresholdMinor)} से अधिक है, ` +
+        `पर इस धारा में TDS पूरी राशि पर लगता है या केवल सीमा से ऊपर की राशि पर — इसका प्रमाणित नियम मेरे पास नहीं है, ` +
+        `इसलिए मैं राशि नहीं बताऊँगा। नियम जोड़ें: tds.${s}.charge_on_excess_only (src/lib/rules/tax.ts)`,
+      missing: [`tds.${s}.charge_on_excess_only`],
+    };
+  }
+  basis.push({ key: `tds.${s}.charge_on_excess_only`, version: excessOnly.version, effectiveFrom: excessOnly.effectiveFrom, cite: excessOnly.cite });
   const taxableMinor = (input.aggregateMinor - thresholdMinor) as Minor;
   const { minor: tdsMinor } = applyPercent(taxableMinor, rate.value);
 

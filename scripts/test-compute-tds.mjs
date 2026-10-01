@@ -122,8 +122,13 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
   const j = computeTds({ section: '194j', aggregateMinor: 900000000, ctx: CTX });
   ok('194J: compute refuses when the caller did not say which rate applies', isRefusal(j));
   ok('194J: ...and blames the QUESTION, not the catalog', isRefusal(j) && j.reason.includes('निर्भर'));
-  ok('194J: told the service type, it computes',
-    !isRefusal(computeTds({ section: '194j', aggregateMinor: 900000000, ctx: { ...CTX, attrs: { serviceType: 'technical' } } })));
+  // Told the service type, the RATE resolves; above the threshold it then stops only for the missing
+  // sourced excess/whole basis (Phase-2 D) — not for the rate any more. Below the threshold it answers.
+  const jt = computeTds({ section: '194j', aggregateMinor: 900000000, ctx: { ...CTX, attrs: { serviceType: 'technical' } } });
+  ok('194J: told the service type, the rate resolves; it refuses only for the unsourced basis',
+    isRefusal(jt) && jt.missing.join() === 'tds.194j.charge_on_excess_only');
+  ok('194J: told the service type, below the threshold it answers (no TDS)',
+    !isRefusal(computeTds({ section: '194j', aggregateMinor: 4000000, ctx: { ...CTX, attrs: { serviceType: 'technical' } } })));
 
   // 194A — the threshold doubles for a senior citizen; there IS a default.
   ok('194A: senior citizen → ₹1,00,000',
@@ -185,13 +190,21 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
      correctly refuses (§1) and cannot exercise the maths. The rules are DATA; which
      section demonstrates the engine is incidental, and pinning these to a contested one
      would mean the maths goes untested for as long as the dispute lasts. */
-  // ₹90,00,000 aggregate → excess over ₹20,000 is ₹89,80,000 → 2% = ₹1,79,600.
-  const r = computeTds({ section: '194h', aggregateMinor: 900000000, ctx: CTX });
+  /* Phase-2 D (2026-10-01): "excess only vs whole sum" is per-section STATUTE, now a sourced
+     rule (tds.<s>.charge_on_excess_only). The maths runs on 194Q, whose threshold, rate and
+     basis are all read from the section text (s.393(1) Sl. 8(ii) + Note 1(b)). 194H has no
+     sourced basis, so above its threshold it must REFUSE — this test used to pin 194H to
+     "excess only", which was exactly the unsourced assumption. */
+  // ₹90,00,000 aggregate → excess over ₹50,00,000 is ₹40,00,000 → 0.1% = ₹4,000.
+  const r = computeTds({ section: '194q', aggregateMinor: 900000000, ctx: CTX });
   ok('compute: applicable above the threshold', r.applicable === true);
-  ok('compute: taxes only the EXCESS, not the whole value', r.taxableMinor === 898000000);
-  ok('compute: ₹1,79,600 exactly, in paise', r.tdsMinor === 17960000);
-  ok('compute: records the rule version that produced it', r.basis.length === 2 && r.basis[0].version === 2);
+  ok('compute: 194Q taxes only the EXCESS (its Note 1(b)), not the whole value', r.taxableMinor === 400000000);
+  ok('compute: ₹4,000 exactly, in paise', r.tdsMinor === 400000);
+  ok('compute: records the rule versions incl. the basis rule', r.basis.length === 3 && r.basis[0].version === 2 && r.basis[2].key === 'tds.194q.charge_on_excess_only');
   ok('compute: explains in Hindi', r.explain.includes('TDS'));
+  const h = computeTds({ section: '194h', aggregateMinor: 900000000, ctx: CTX });
+  ok('compute: 194H above its threshold REFUSES — no sourced excess/whole basis', h.refused === true && h.missing.includes('tds.194h.charge_on_excess_only'));
+  ok('compute: …and the refusal says why, in Hindi', /पूरी राशि पर लगता है या केवल सीमा से ऊपर/.test(h.reason));
 
   const below = computeTds({ section: '194h', aggregateMinor: 1000000, ctx: CTX });
   ok('compute: below threshold ⇒ zero, not a refusal', below.applicable === false && below.tdsMinor === 0);

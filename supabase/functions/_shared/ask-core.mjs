@@ -525,6 +525,18 @@ var TDS_RULES = {
     'Income-tax Act 2025 s.393(1) Table Sl. No. 8(ii) [1961: s.194Q] \u2014 "Rate: 0.1%". SOURCE: the section text itself, incometaxindia.gov.in/w/section-393-5.',
     TY2627
   ),
+  /* HOW the rate applies once the threshold is crossed — on the EXCESS only, or on the WHOLE
+     sum — is itself a statutory rule, and it differs by section. 194Q's is in its own text
+     (Note 1(b)). computeTds used to apply "excess only" to EVERY section; for a section
+     whose text says the whole sum (commonly assumed for 194C / 194H) that understates the
+     TDS. Now it is data with a source: 1 = on the excess only. A section WITHOUT this rule
+     refuses above its threshold rather than pick a basis nobody verified (AI-N8). */
+  "tds.194q.charge_on_excess_only": verified(
+    "tds.194q.charge_on_excess_only",
+    1,
+    'Income-tax Act 2025 s.393(1) Table Sl. No. 8(ii), Note 1(b) \u2014 "The tax shall be deducted on the sum exceeding fifty lakh rupees." SOURCE: incometaxindia.gov.in/w/section-393-5.',
+    TY2627
+  ),
   /* 🚨 THE GATE THAT WAS MISSING ENTIRELY, and it matters more than the threshold.
        Per the founder (2026-07-16): 194Q applies ONLY IF THE BUYER's turnover in the
        PRECEDING financial year exceeded ₹10 crore.
@@ -1064,7 +1076,7 @@ function occurredBy(event, asOfMs) {
   const t = Date.parse(event.occurredAt);
   return Number.isNaN(t) ? false : t <= asOfMs;
 }
-function projectSplitTrialBalance(events, asOf) {
+function projectSplitTrialBalance(events, asOf, fyStart) {
   const cutoff = asOfMillis(asOf);
   const acc = /* @__PURE__ */ new Map();
   let count = 0;
@@ -1088,10 +1100,21 @@ function projectSplitTrialBalance(events, asOf) {
   for (const v of resolveCurrentVouchers(events)) {
     if (asOf && v.date > asOf) continue;
     count++;
+    const prior = !!fyStart && v.date < fyStart;
     for (const l of v.legs) {
       const b = bucket(l.accountId);
-      if (l.drCr === "Dr") b.tDr += l.amountMinor;
+      if (prior) {
+        if (l.drCr === "Dr") b.oDr += l.amountMinor;
+        else b.oCr += l.amountMinor;
+      } else if (l.drCr === "Dr") b.tDr += l.amountMinor;
       else b.tCr += l.amountMinor;
+    }
+  }
+  if (fyStart) {
+    for (const b of acc.values()) {
+      const n = b.oDr - b.oCr;
+      b.oDr = n > 0 ? n : 0;
+      b.oCr = n < 0 ? -n : 0;
     }
   }
   const lines = [...acc.keys()].sort().map((accountId) => {
@@ -1106,8 +1129,8 @@ function projectSplitTrialBalance(events, asOf) {
 }
 
 // src/lib/ledger/trialBalance.ts
-function ledgerTrialBalance(events, accounts, asOf) {
-  const split = projectSplitTrialBalance(events, asOf);
+function ledgerTrialBalance(events, accounts, asOf, fyStart) {
+  const split = projectSplitTrialBalance(events, asOf, fyStart);
   const byId = new Map(split.lines.map((l) => [l.accountId, l]));
   const results = [];
   const seen = /* @__PURE__ */ new Set();
@@ -1472,6 +1495,16 @@ function computeTds(input) {
       basis
     };
   }
+  const excessOnly = verifiedValue(`tds.${s}.charge_on_excess_only`, input.ctx);
+  if (!excessOnly || excessOnly.value !== 1) {
+    return {
+      applicable: false,
+      refused: true,
+      reason: `\u0915\u0941\u0932 ${inr2(input.aggregateMinor)} \u0927\u093E\u0930\u093E ${s.toUpperCase()} \u0915\u0940 \u0938\u0940\u092E\u093E ${inr2(thresholdMinor)} \u0938\u0947 \u0905\u0927\u093F\u0915 \u0939\u0948, \u092A\u0930 \u0907\u0938 \u0927\u093E\u0930\u093E \u092E\u0947\u0902 TDS \u092A\u0942\u0930\u0940 \u0930\u093E\u0936\u093F \u092A\u0930 \u0932\u0917\u0924\u093E \u0939\u0948 \u092F\u093E \u0915\u0947\u0935\u0932 \u0938\u0940\u092E\u093E \u0938\u0947 \u090A\u092A\u0930 \u0915\u0940 \u0930\u093E\u0936\u093F \u092A\u0930 \u2014 \u0907\u0938\u0915\u093E \u092A\u094D\u0930\u092E\u093E\u0923\u093F\u0924 \u0928\u093F\u092F\u092E \u092E\u0947\u0930\u0947 \u092A\u093E\u0938 \u0928\u0939\u0940\u0902 \u0939\u0948, \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u0930\u093E\u0936\u093F \u0928\u0939\u0940\u0902 \u092C\u0924\u093E\u090A\u0901\u0917\u093E\u0964 \u0928\u093F\u092F\u092E \u091C\u094B\u0921\u093C\u0947\u0902: tds.${s}.charge_on_excess_only (src/lib/rules/tax.ts)`,
+      missing: [`tds.${s}.charge_on_excess_only`]
+    };
+  }
+  basis.push({ key: `tds.${s}.charge_on_excess_only`, version: excessOnly.version, effectiveFrom: excessOnly.effectiveFrom, cite: excessOnly.cite });
   const taxableMinor = input.aggregateMinor - thresholdMinor;
   const { minor: tdsMinor } = applyPercent(taxableMinor, rate.value);
   return {

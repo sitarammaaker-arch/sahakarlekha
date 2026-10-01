@@ -154,6 +154,19 @@ export const TDS_RULES: RuleCatalog = {
     TY2627,
   ),
 
+  /* HOW the rate applies once the threshold is crossed — on the EXCESS only, or on the WHOLE
+     sum — is itself a statutory rule, and it differs by section. 194Q's is in its own text
+     (Note 1(b)). computeTds used to apply "excess only" to EVERY section; for a section
+     whose text says the whole sum (commonly assumed for 194C / 194H) that understates the
+     TDS. Now it is data with a source: 1 = on the excess only. A section WITHOUT this rule
+     refuses above its threshold rather than pick a basis nobody verified (AI-N8). */
+  'tds.194q.charge_on_excess_only': verified(
+    'tds.194q.charge_on_excess_only', 1,
+    'Income-tax Act 2025 s.393(1) Table Sl. No. 8(ii), Note 1(b) — "The tax shall be deducted on the sum ' +
+      'exceeding fifty lakh rupees." SOURCE: incometaxindia.gov.in/w/section-393-5.',
+    TY2627,
+  ),
+
   /* 🚨 THE GATE THAT WAS MISSING ENTIRELY, and it matters more than the threshold.
      Per the founder (2026-07-16): 194Q applies ONLY IF THE BUYER's turnover in the
      PRECEDING financial year exceeded ₹10 crore.
