@@ -37,7 +37,8 @@
 | B1 verify server posting architecture | COMPLETE (audit) | Only DataContext writes `vouchers`; each write site was mapped against the flag. Bypasses under the flag: postJoiningReceipts, updateSalaryRecord, clear/unclear/reject (whole-row upsert), reverseVoucher links, mergeAccounts. |
 | B3 disable unsafe client writes | PARTIAL, PR #587 | Fixed: salary edits now repost the journal (a JRN-01 source, flag on AND off); joining receipts go via the server; clear/unclear/reject use a targeted update; editedBy. Static test 15/15. Remaining: mergeAccounts, and the flag-off cancelLinkedVouchers path. Runtime spot-check after deploy: edit a paid salary in Rania. |
 | B2 rollout to all societies | AWAITING-FOUNDER | **Founder's direction (2026-10-01): no per-society work; one rule for every society.**<br>• `scripts/posting-readiness.mjs` classifies ALL societies in one read-only pass: ON / READY / EMPTY / HEAL / WAIT-FY / BLOCKED. Parity is checked per account: vouchers vs journal vs entries.<br>• Prod 2026-10-01: ON 1, READY 8, EMPTY 9, HEAL 4, WAIT-FY 1, BLOCKED 3.<br>• `heal-voucher-consistency` was extended. A rejected voucher whose posting was live gets a voucher.cancelled event (₹500 cash overstated in 2 societies). Entries on the wrong account/side are fixed (historical: the syncEntries outage).<br>• `posting-flag-batch.mjs` turns ON every READY/EMPTY society in one tx. It re-checks readiness inside the tx and aborts on drift.<br>• mig 088: a new society gets its open FY row. mig 089: a new society starts with posting ON.<br>• Harness verified: heal clears all drift, then the flip turns on 21 (+Rania = 22). Re-apply is refused, undo is exact, and the abort-on-drift works. b2-new-society-fy 7/7 (3/6 before 088).<br>• **WAIT-FY/BLOCKED (4) need FY rollover = Phase C**, and the rollover rule needs the founder's decision. |
-| B4–B10 | NOT STARTED | |
+| B7 journal/ledger parity | AWAITING-FOUNDER (PR #599) | mig 092 `ledger_drift()` and `log_ledger_drift()` plus the nightly pg_cron job (02:00 IST), for all societies. The journal is read as the statements read it. Readiness uses the same rule and also checks ON societies. On the harness (latest prod dump) no society drifts. |
+| B4–B6, B8–B10 | NOT STARTED | |
 
 ### Phase C — Financial year
 | Task | Status | Notes |
@@ -73,7 +74,7 @@ NOT STARTED. See the roadmap in the master prompt; the order follows the depende
 | S4 | client accounting writes still allowed | open → B3 |
 | JRN-01 | residual journal drift | open → B7/B8 |
 | TAX-01 | TDS engine absent, validateTds unused | open → D |
-| TAX-02 | TDS register / bank-reco delete: console.warn only | open → D8 / G |
+| TAX-02 | TDS register / bank-reco delete: console.warn only | fix in PR: rollback + destructive toast on failure OR RLS 0-row refusal, FY-lock guard, a deleted challan unlinks its entries |
 | PAY-01 | payroll ledger posting off; TDS not cumulative | open → E |
 | OFF-01 | offline fallback restores a partial state | open → F |
 | OPS-01 | no vite build.target (old-browser crashes) | open → G1 / L1 |

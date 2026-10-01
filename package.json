@@ -306,7 +306,8 @@
     "test:fy-rollover-client": "node scripts/test-fy-rollover-client.mjs",
     "test:sales-return-account": "node scripts/test-sales-return-account.mjs",
     "test:fy-period": "node scripts/test-fy-period.mjs",
-    "test:fy-close-client": "node scripts/test-fy-close-client.mjs"
+    "test:fy-close-client": "node scripts/test-fy-close-client.mjs",
+    "test:tax02-delete-rollback": "node scripts/test-tax02-delete-rollback.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

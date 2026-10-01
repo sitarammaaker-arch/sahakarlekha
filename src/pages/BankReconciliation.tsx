@@ -24,6 +24,7 @@ import autoTable from 'jspdf-autotable';
 import type { BankReconciliationRecord } from '@/types';
 
 import * as XLSX from 'xlsx';
+import { reportError } from '@/lib/errorReporting';
 
 // ── CSV/Excel Import helpers ──────────────────────────────────────────────────
 interface CsvRow { date: string; description: string; debit: number; credit: number; balance: number }
@@ -220,11 +221,15 @@ const BankReconciliation: React.FC = () => {
   };
 
   const deleteReconciliation = (id: string) => {
+    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', description: hi ? 'ऑडिट-लॉक होने पर हटा नहीं सकते।' : 'Cannot delete while FY is audit-locked.', variant: 'destructive' }); return; }
     const prev = records;
     persistRecords(records.filter(r => r.id !== id));
-    supabase.from('bank_reconciliations').update({ isDeleted: true }).eq('id', id).then(({ error }) => {
-      if (error) { persistRecords(prev); toast({ title: hi ? 'हटाया नहीं गया' : 'Delete failed', description: error.message, variant: 'destructive' }); }
-    });
+    // RULE 1 (TAX-02): RLS can refuse with 0 rows and NO error — count the rows, not just the error.
+    const fail = (msg: string) => { persistRecords(prev); reportError('brs-delete', msg, { id }); toast({ title: hi ? 'हटाया नहीं गया' : 'Delete failed', description: `${msg} — बदलाव वापस लिया गया।`, variant: 'destructive', duration: 12000 }); };
+    supabase.from('bank_reconciliations').update({ isDeleted: true }).eq('id', id).select('id').then(({ data, error }) => {
+      if (error || !data?.length) fail(error?.message ?? (hi ? 'अनुमति नहीं' : 'not permitted'));
+      else toast({ title: hi ? 'समाधान हटाया गया' : 'Reconciliation deleted' });
+    }, () => fail('network'));
   };
 
   // ── Printable BRS statement (PDF) ─────────────────────────────────────────
