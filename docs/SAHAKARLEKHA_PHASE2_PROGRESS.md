@@ -24,11 +24,11 @@
 ### Phase A — Critical security
 | Task | Status | Notes |
 |---|---|---|
-| A1 MFA enrolment (SEC-01) | AWAITING-FOUNDER | mig 084; harness 34/34; the down file reproduces the hole |
-| A2 MFA admin reset (SEC-02) | AWAITING-FOUNDER | mig 084 (same functions) |
-| A3 MFA bound to session / JWT (SEC-03) | AWAITING-FOUNDER | mig 085 + AuthContext + 8 edge fns; harness 41/41 |
-| A4 TOTP brute-force | AWAITING-FOUNDER | mig 085: 5 fails / 15 min per email |
-| A5 SECURITY DEFINER audit | AWAITING-FOUNDER (086 LIVE; 087 + create-order in PR) | **A5-1 P0 FIXED in PR #585 (mig 086, harness 7/7):** app_add_society_user / app_reset_society_user_password skipped auth when the JWT email was null, and anon held EXECUTE. Reviewed OK: admin_feedback_* (is_platform_admin; the p_email/p_password args are ignored), pay_payslip_lines (tenant guard), public_reviews/increment_blog_view/verify_certificate (public by design), society_has_users (boolean only), register_society/app_register_admin (signup; only for a user-less society = P3). **A5-2 (P2):** issue_certificate let anyone rename a certificate's holder, which breaks verification for the real holder. Fix: mig 087, harness 7/7 (3/7 before). **A5-3 (P2):** the create-order edge fn accepted the anon key plus any society_id and leaked plan/renewal via the prorated amount. Fix: the caller must be an active user of that society, on a non-pending session. Remaining leads, all accepted as P3: `create-order` edge fn takes `society_id` from the body with no caller check; `issue_certificate` overwrites holder_name; `society_users_bootstrap` anon insert (P3); `app_set_my_password` allowed while 2FA pending (DoS only, by design: the password-reset flow needs it) |
+| A1 MFA enrolment (SEC-01) | COMPLETE (LIVE 2026-10-01) | mig 084; harness 34/34; the down file reproduces the hole |
+| A2 MFA admin reset (SEC-02) | COMPLETE (LIVE 2026-10-01) | mig 084 (same functions) |
+| A3 MFA bound to session / JWT (SEC-03) | LIVE, awaiting the founder's re-login check | mig 085 + AuthContext + 8 edge fns; harness 41/41 |
+| A4 TOTP brute-force | COMPLETE (LIVE 2026-10-01) | mig 085: 5 fails / 15 min per email |
+| A5 SECURITY DEFINER audit | COMPLETE (086 + 087 + create-order LIVE 2026-10-01) | **A5-1 P0 FIXED in PR #585 (mig 086, harness 7/7):** app_add_society_user / app_reset_society_user_password skipped auth when the JWT email was null, and anon held EXECUTE. Reviewed OK: admin_feedback_* (is_platform_admin; the p_email/p_password args are ignored), pay_payslip_lines (tenant guard), public_reviews/increment_blog_view/verify_certificate (public by design), society_has_users (boolean only), register_society/app_register_admin (signup; only for a user-less society = P3). **A5-2 (P2):** issue_certificate let anyone rename a certificate's holder, which breaks verification for the real holder. Fix: mig 087, harness 7/7 (3/7 before). **A5-3 (P2):** the create-order edge fn accepted the anon key plus any society_id and leaked plan/renewal via the prorated amount. Fix: the caller must be an active user of that society, on a non-pending session. Remaining leads, all accepted as P3: `create-order` edge fn takes `society_id` from the body with no caller check; `issue_certificate` overwrites holder_name; `society_users_bootstrap` anon insert (P3); `app_set_my_password` allowed while 2FA pending (DoS only, by design: the password-reset flow needs it) |
 | A6 Critical RLS verification | COMPLETE (harness) | `scripts/db-harness/tests/a6-tenant-isolation.mjs`, **469/469** on the 2026-09-30 prod dump. Coverage: all 104 tables with society_id × read / update / delete / insert-copy / move-own-row as an S1 admin against a real S2; anon and a signed-in stranger see 0 rows in every table; platform tables (platform_admins, societies, user_mfa…, app_migrations…) cannot be written or read by anon or a stranger. Deny-all tables (account_reclass_log, data_fix_log, member_portal_users) refuse with permission denied. By design: public INSERT on error_log + feedback (unreadable by clients; a foreign society_id only pollutes a log, P3). A 2FA-pending token is covered by a3 (085). |
 
 ### Phase B — Accounting integrity (from the audit)
@@ -41,6 +41,15 @@
 
 ### Phases C–M
 NOT STARTED. See the roadmap in the master prompt; the order follows the dependency rule.
+
+## 2026-10-01: Phase A went live
+- The founder took backup `sahakarlekha-prod-20261001-0115Z.dump`, then applied 087, 084 and 085 (all "SQL OK"). PRs #584–#587 are merged and deployed (Vercel `125cff0`).
+- Claude deployed 9 edge fns (create-order, ai-ask, pay-employee/pay/post/rollback/run/transition, member-portal-admin). member-portal-admin first failed to bundle because the helper sat inside a multi-line import; it was fixed, redeployed, and a CI parse test was added (PR #588).
+- **Verified from the public internet (anon key only):**
+  - app_mfa_enroll, app_mfa_admin_reset, app_add_society_user, app_reset_society_user_password and app_totp_matches all return 42501.
+  - create-order, member-portal-admin and pay-run return 401.
+- **Prod catalog:** app_migrations shows 084–087, the hook stamps mfa_pending, and platform_admin_identity exists.
+- **Pending:** the founder logs out and back in (2FA). After that, mfa_verified_sessions should have 1 row.
 
 ## Tracked audit findings
 | ID | Area | Status |
