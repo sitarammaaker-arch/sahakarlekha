@@ -292,7 +292,7 @@ const BlogPost: React.FC = () => {
 
       {/* Clean editorial header (Medium/Ahrefs-style, replaces the gradient hero) */}
       <header className="border-b bg-background">
-        <div className="mx-auto max-w-3xl px-4 pt-8 md:pt-12 pb-6">
+        <div className="mx-auto max-w-6xl px-4 pt-8 md:pt-12 pb-6 [&>*]:max-w-3xl">
           <nav className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground mb-5">
             <Link to="/" className="inline-flex items-center gap-1 hover:text-primary"><Home className="h-3.5 w-3.5" /> होम</Link>
             <ChevronRight className="h-3.5 w-3.5" />
@@ -330,7 +330,7 @@ const BlogPost: React.FC = () => {
       </header>
 
       {post.image && (
-        <div className="mx-auto max-w-3xl px-4 pt-8">
+        <div className="mx-auto max-w-6xl px-4 pt-8">
           <img
             src={post.image}
             alt={post.imageAlt || post.title}
@@ -338,7 +338,7 @@ const BlogPost: React.FC = () => {
             height={768}
             fetchPriority="high"
             decoding="async"
-            className="w-full h-auto rounded-xl border shadow-sm"
+            className="w-full max-w-3xl aspect-[2/1] object-cover rounded-xl border shadow-sm"
           />
         </div>
       )}
