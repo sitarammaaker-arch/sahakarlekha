@@ -5550,7 +5550,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       getVoucherLines(v).some(l => l.accountId === '5150' && l.type === 'Cr') &&
       v.narration.includes(fy)
     );
-    const closingStockPosted = closingViaLegacy || closingViaDedicated;
+    // Phase-2 C (091): the server's year-close posts the closing stock as ONE journal moving the stock
+    // ledger to the counted value — Dr 3403 / Cr 5150 for an increase, the reverse for a decrease.
+    const closingViaYearClose = closingScopedVouchers.some(v =>
+      (v as { refType?: string }).refType === 'fy.close.stock' && v.narration.includes(fy));
+    const closingStockPosted = closingViaLegacy || closingViaDedicated || closingViaYearClose;
 
     // RULE 2: THE closing-stock rule (lib/tradingAccount.closingStock) — the SAME one the Balance
     // Sheet uses, so a society holding BOTH tracked items and goods put straight into the stock

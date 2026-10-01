@@ -305,7 +305,8 @@
     "test:cancel-stale-tab": "node scripts/test-cancel-stale-tab.mjs",
     "test:fy-rollover-client": "node scripts/test-fy-rollover-client.mjs",
     "test:sales-return-account": "node scripts/test-sales-return-account.mjs",
-    "test:fy-period": "node scripts/test-fy-period.mjs"
+    "test:fy-period": "node scripts/test-fy-period.mjs",
+    "test:fy-close-client": "node scripts/test-fy-close-client.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
