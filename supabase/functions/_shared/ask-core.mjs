@@ -394,7 +394,7 @@ var ACTION = [
   "post it"
 ];
 function classify(text, hasSociety) {
-  const t = text.toLowerCase().trim();
+  const t = text.toLowerCase().trim().replace(/[?？!।]+/g, " ") + " ";
   if (has(t, ACTION)) {
     return { lane: "A", corpus: [], reason: "action verb \u2014 draft only, human commits (AI-P4)" };
   }

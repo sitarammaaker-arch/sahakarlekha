@@ -90,7 +90,9 @@ const ACTION = [
  * degraded one (§4.3) — it just cannot reach society data (§5.1, CAIOS-K8).
  */
 export function classify(text: string, hasSociety: boolean): Intent {
-  const t = text.toLowerCase().trim();
+  // A trailing space (and ?/!/। as a word end) so a cue that ends the question still matches:
+  // 'दर ' carries a space on purpose (never "दरवाज़ा"), which used to miss "194H की दर".
+  const t = text.toLowerCase().trim().replace(/[?？!।]+/g, ' ') + ' ';
 
   if (has(t, ACTION)) {
     return { lane: 'A', corpus: [], reason: 'action verb — draft only, human commits (AI-P4)' };
