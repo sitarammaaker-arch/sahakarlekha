@@ -14,6 +14,7 @@ ok('no vouchers → EMPTY', c({ live_vouchers: 0 }) === 'EMPTY');
 ok('journal drift → HEAL', c({ journal_accounts: 2 }) === 'HEAL');
 ok('entries drift → HEAL', c({ entries_accounts: 1 }) === 'HEAL');
 ok('open FY ended before today → WAIT-FY (rollover would stop posting)', c({ open_fy_end: '2026-03-31', last_date: '2026-03-31' }) === 'WAIT-FY');
+ok('open FY ended but rollover (090) live → READY', c({ open_fy_end: '2026-03-31', last_date: '2026-03-31', rollover_live: true }) === 'READY');
 ok('no open FY → BLOCKED', c({ open_fy_end: null }) === 'BLOCKED');
 ok('vouchers after the open FY (stale label) → BLOCKED with the reason', c({ open_fy_end: '2022-03-31', last_date: '2026-07-09' }) === 'BLOCKED'
   && blockReasons({ ...base, open_fy_end: '2022-03-31', last_date: '2026-07-09' })[0].startsWith('vouchers dated after'));

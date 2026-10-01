@@ -9,7 +9,7 @@
 //   • fyEnded      — that open FY ended before today: the society is still finishing an old year and
 //                    will roll over soon — with no server-side rollover yet (Phase C) every post would
 //                    then be refused, so it waits
-//   • lateVouchers — live vouchers dated AFTER the open FY (e.g. a stale FY label) would be refused
+//   • lateVouchers — LIVE (not cancelled / rejected) vouchers dated AFTER the open FY would be refused
 //   • parity       — per account: vouchers (truth: live, non-pending legs) = journal (all voucher events)
 //                    = voucher_entries (rows of live, non-pending vouchers). Any account off by ≥ 1 paisa is drift.
 //   • flag         — society_flags.posting_service today
@@ -17,7 +17,7 @@
 //   ON        flag already on
 //   READY     settings + open FY + all three copies agree → can be switched on as part of the batch
 //   HEAL      prerequisites fine, books drift → run heal-voucher-consistency first, then switch on
-//   WAIT-FY   books fine, but the open FY has ended → switch on after FY rollover exists (Phase C)
+//   WAIT-FY   books fine, but the open FY has ended and server-side rollover (090) is not live yet
 //   BLOCKED   no settings row, no open FY, FY locked, or vouchers after the open FY → own fix first
 //   EMPTY     no vouchers at all → READY by definition (new / unused society)
 //
@@ -69,7 +69,8 @@ drift as (
    group by 1
 ),
 vc as (
-  select society_id::text sid, count(*) filter (where not coalesce("isDeleted", false)) live, max(date) last_date
+  select society_id::text sid, count(*) filter (where not coalesce("isDeleted", false)) live,
+         max(date) filter (where not coalesce("isDeleted", false) and coalesce("approvalStatus", '') <> 'rejected') last_date
     from public.vouchers group by 1
 )
 select s.id::text sid,
@@ -77,6 +78,7 @@ select s.id::text sid,
        coalesce(ss."fyLocked", false) fy_locked,
        (select f.end_date from public.financial_years f where f.society_id = s.id::text and f.status = 'open' limit 1)::text open_fy_end,
        coalesce(sf.posting_service, false) flag,
+       exists (select 1 from public.app_migrations m where m.version = '090') rollover_live,
        coalesce(vc.live, 0) live_vouchers, vc.last_date,
        coalesce(d.journal_accounts, 0) journal_accounts, coalesce(d.journal_abs_minor, 0) journal_abs_minor,
        coalesce(d.entries_accounts, 0) entries_accounts, coalesce(d.entries_abs_minor, 0) entries_abs_minor
@@ -91,7 +93,9 @@ select s.id::text sid,
 export function classifyReadiness(row, today = new Date().toISOString().slice(0, 10)) {
   if (row.flag) return 'ON';
   if (blockReasons(row).length) return 'BLOCKED';
-  if (row.open_fy_end < today) return 'WAIT-FY';
+  // Before 090 a society whose open year has ended would stop posting at its rollover; with 090 live the
+  // rollover opens the next year on the server, so it is ready like any other.
+  if (row.open_fy_end < today && !row.rollover_live) return 'WAIT-FY';
   if (Number(row.live_vouchers) === 0) return 'EMPTY';
   if (Number(row.journal_accounts) > 0 || Number(row.entries_accounts) > 0) return 'HEAL';
   return 'READY';

@@ -39,7 +39,15 @@
 | B2 rollout to all societies | AWAITING-FOUNDER | **Founder's direction (2026-10-01): no per-society work; one rule for every society.**<br>• `scripts/posting-readiness.mjs` classifies ALL societies in one read-only pass: ON / READY / EMPTY / HEAL / WAIT-FY / BLOCKED. Parity is checked per account: vouchers vs journal vs entries.<br>• Prod 2026-10-01: ON 1, READY 8, EMPTY 9, HEAL 4, WAIT-FY 1, BLOCKED 3.<br>• `heal-voucher-consistency` was extended. A rejected voucher whose posting was live gets a voucher.cancelled event (₹500 cash overstated in 2 societies). Entries on the wrong account/side are fixed (historical: the syncEntries outage).<br>• `posting-flag-batch.mjs` turns ON every READY/EMPTY society in one tx. It re-checks readiness inside the tx and aborts on drift.<br>• mig 088: a new society gets its open FY row. mig 089: a new society starts with posting ON.<br>• Harness verified: heal clears all drift, then the flip turns on 21 (+Rania = 22). Re-apply is refused, undo is exact, and the abort-on-drift works. b2-new-society-fy 7/7 (3/6 before 088).<br>• **WAIT-FY/BLOCKED (4) need FY rollover = Phase C**, and the rollover rule needs the founder's decision. |
 | B4–B10 | NOT STARTED | |
 
-### Phases C–M
+### Phase C — Financial year
+| Task | Status | Notes |
+|---|---|---|
+| C1 rollover rule | DECIDED | Founder decision (अ), 2026-10-01: after moving to the new FY, the previous FY stays 'closing' and accepts postings until it is closed or audited. |
+| C5 create next FY (server) | AWAITING-FOUNDER (PR) | **mig 090:** the society_settings trigger performs the rollover when the label moves to the NEXT year: open → closing, next year inserted 'open' (previous_fy_id linked). It REFUSES (the app rolls back and shows the message) a jump of more than one year, a missing open year, or a year still 'closing'. All 6 server posting fns accept 'open' or 'closing'. SocietySetup announces success only after the cloud accepts (`updateSociety(…, { onSaved, onFailed })`). Harness c1-fy-rollover 13/13 (8/13 on the pre-090 schema); the s3*/a*/b2 suites are green. |
+| C2/C3/C4 closing validation, closing entries, closing → closed | NOT STARTED | Needed before the NEXT rollover of any rolled society (only one 'closing' year is allowed). |
+| C6/C7 carry-forward, previous closing = next opening | NOT STARTED | The client snapshot (previousYearBalances) still runs. A server-side opening event is to be designed. |
+
+### Phases D–M
 NOT STARTED. See the roadmap in the master prompt; the order follows the dependency rule.
 
 ## 2026-10-01: Phase A went live

@@ -61,11 +61,11 @@ await inRollback(async (tx) => {
   const p = await tx.attempt('select public.post_voucher($1::jsonb, $2::jsonb, $3::jsonb) as r', [JSON.stringify(pl.p_voucher), JSON.stringify(pl.p_lines), JSON.stringify(pl.p_event)]);
   ok('post_voucher works for the new society', p.ok && p.rows[0].r?.status === 'posted', p.ok ? JSON.stringify(p.rows[0].r) : p.error.message);
 
-  // Existing society: a label change never adds or moves a year (rollover is Phase C).
+  // Existing society: re-saving its label never adds a year.
   await tx.asOwner();
   const [{ old }] = (await tx.query(`select society_id::text old from public.society_settings where society_id::text <> $1 and "financialYear" = '2026-27' limit 1`, [sid])).rows;
   const fyOld = (await tx.query('select count(*) n from public.financial_years where society_id = $1', [old])).rows[0].n;
-  await tx.query(`update public.society_settings set "financialYear" = '2027-28' where society_id::text = $1`, [old]);
+  await tx.query(`update public.society_settings set "financialYear" = '2026-27' where society_id::text = $1`, [old]);   // (a NEXT-year move is a rollover since 090 — c1-fy-rollover)
   ok('an existing society\'s label change adds no FY row', (await tx.query('select count(*) n from public.financial_years where society_id = $1', [old])).rows[0].n === fyOld);
   await tx.query(`update public.society_settings set "financialYear" = 'not-a-year' where society_id::text = $1`, [sid]);
   ok('an invalid label is ignored (no error)', true);

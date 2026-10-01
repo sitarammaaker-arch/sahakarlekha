@@ -51,7 +51,7 @@ begin
   with r as (${READINESS_SQL.trim()})
   select string_agg(left(sid, 8), ', ') into bad from r
    where sid in (${ids})
-     and (flag or not has_settings or fy_locked or open_fy_end is null or open_fy_end::date < current_date
+     and (flag or not has_settings or fy_locked or open_fy_end is null or (open_fy_end::date < current_date and not rollover_live)
           or (last_date is not null and last_date::date > open_fy_end::date)
           or journal_accounts > 0 or entries_accounts > 0);
   if bad is not null then raise exception '${FIX}: no longer ready: % — re-plan; nothing changed', bad; end if;
