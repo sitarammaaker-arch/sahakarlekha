@@ -70,7 +70,12 @@ const core = await import(pathToFileURL(BUNDLE).href);
 const { verifyArchive } = await import(pathToFileURL(pathResolve(SRC, 'lib', 'backup', 'verify.ts')).href);
 
 ok(typeof core.buildArchive === 'function', 'the bundle exports buildArchive');
-ok(Array.isArray(core.REGISTRY) && core.REGISTRY.length === 96, `the bundle carries the full registry (${core.REGISTRY?.length})`);
+// Compare with the SOURCE registry rather than a pinned number — a pin only proves the count at
+// the time it was written, and it went stale (96 vs 98) when two entities were added without a rebuild.
+const { REGISTRY: SOURCE_REGISTRY } = await import(pathToFileURL(pathResolve(SRC, 'lib', 'export', 'registry.ts')).href);
+const keys = (r) => r.map((e) => e.key).sort().join(',');
+ok(Array.isArray(core.REGISTRY) && keys(core.REGISTRY) === keys(SOURCE_REGISTRY),
+  `the bundle carries the full source registry (bundle ${core.REGISTRY?.length}, source ${SOURCE_REGISTRY.length})`);
 
 // 3. Build an archive with the BUNDLE, verify it with the SOURCE verifier.
 const fetchRows = async (e) => ({
