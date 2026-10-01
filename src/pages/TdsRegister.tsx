@@ -25,6 +25,7 @@ import { generate26QText, download26Q, validate26QData, getQuarterFromDate, getQ
 import { applyPercent, toMinor, toRupees } from '@/lib/money';
 import type { TdsEntry, TdsChallan, TdsChallanLink, TdsSection, TdsDeducteeType, TdsQuarter } from '@/types';
 import { resolveSectionRef, describeSectionRef, isAct2025 } from '@/lib/rules/tdsSections';
+import { reportError } from '@/lib/errorReporting';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -235,7 +236,10 @@ const TdsRegister: React.FC = () => {
         if (error) { console.error('TDS link save error:', error.message); persistLinks(prev); toast({ title: hi ? 'चालान लिंक सेव नहीं हुआ' : 'Challan link not saved', description: `Cloud save fail — ${error.message}. (Pehli baar: tds_challan_links block chalayein.)`, variant: 'destructive', duration: 12000 }); }
       });
     } else {
-      supabase.from('tds_challan_links').delete().eq('society_id', societyId).eq('entryId', entryId).then(({ error }) => { if (error) console.warn('TDS link delete sync:', error.message); });
+      // RULE 1 (TAX-02): an unlink that did not reach the cloud is rolled back and shown.
+      supabase.from('tds_challan_links').delete().eq('society_id', societyId).eq('entryId', entryId).then(({ error }) => {
+        if (error) { reportError('tds-unlink', error.message, { entryId }); persistLinks(prev); toast({ title: hi ? 'चालान लिंक नहीं हटा' : 'Challan link not removed', description: `Cloud save fail — ${error.message}. बदलाव वापस लिया गया।`, variant: 'destructive', duration: 12000 }); }
+      }, () => { persistLinks(prev); toast({ title: hi ? 'चालान लिंक नहीं हटा' : 'Challan link not removed', description: 'Network error', variant: 'destructive', duration: 12000 }); });
     }
   };
 
@@ -292,15 +296,39 @@ const TdsRegister: React.FC = () => {
   };
 
   // Delete a manual entry / challan (auto-imported purchase entries can't be deleted here)
+  // RULE 1 (TAX-02): a delete is applied on screen, then confirmed by the cloud — a failure OR a refusal
+  // (RLS lets the update touch 0 rows without an error) rolls it back with a destructive toast. Before
+  // this, a failed delete only reached console.warn and the row came back on refresh.
+  const failDelete = (what: string, msg: string, rollback: () => void) => {
+    rollback();
+    reportError('tds-delete', msg, { what });
+    toast({ title: hi ? `${what} नहीं हटा` : `${what} not deleted`, description: `Cloud save fail — ${msg}. बदलाव वापस लिया गया; refresh पर भी वही दिखेगा।`, variant: 'destructive', duration: 12000 });
+  };
   const handleDeleteEntry = (id: string) => {
     if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    const prev = entries;
     persistEntries(entries.filter(e => e.id !== id));
-    supabase.from('tds_entries').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) console.warn('TDS entry delete sync:', error.message); });
+    supabase.from('tds_entries').update({ isDeleted: true }).eq('id', id).select('id').then(({ data, error }) => {
+      if (error || !data?.length) failDelete(hi ? 'TDS एंट्री' : 'TDS entry', error?.message ?? (hi ? 'अनुमति नहीं' : 'not permitted'), () => persistEntries(prev));
+      else toast({ title: hi ? 'TDS एंट्री हटाई गई' : 'TDS entry deleted' });
+    }, () => failDelete(hi ? 'TDS एंट्री' : 'TDS entry', 'network', () => persistEntries(prev)));
   };
   const handleDeleteChallan = (id: string) => {
     if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    const prevChallans = challans;
+    const prevLinks = links;
     persistChallans(challans.filter(c => c.id !== id));
-    supabase.from('tds_challans').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) console.warn('TDS challan delete sync:', error.message); });
+    persistLinks(links.filter(l => l.challanId !== id));   // RULE 3: entries of a deleted challan are unlinked
+    supabase.from('tds_challans').update({ isDeleted: true }).eq('id', id).select('id').then(({ data, error }) => {
+      if (error || !data?.length) {
+        failDelete(hi ? 'चालान' : 'Challan', error?.message ?? (hi ? 'अनुमति नहीं' : 'not permitted'), () => { persistChallans(prevChallans); persistLinks(prevLinks); });
+        return;
+      }
+      supabase.from('tds_challan_links').delete().eq('society_id', societyId).eq('challanId', id).then(({ error: le }) => {
+        if (le) { reportError('tds-unlink', le.message, { challanId: id }); toast({ title: hi ? 'चालान हटा, पर उसके लिंक नहीं हटे' : 'Challan deleted, links not removed', description: le.message, variant: 'destructive', duration: 12000 }); }
+        else toast({ title: hi ? 'चालान हटाया गया' : 'Challan deleted' });
+      });
+    }, () => failDelete(hi ? 'चालान' : 'Challan', 'network', () => { persistChallans(prevChallans); persistLinks(prevLinks); }));
   };
 
   // 26Q Export
