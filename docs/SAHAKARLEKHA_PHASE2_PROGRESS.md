@@ -62,6 +62,25 @@ NOT STARTED. See the roadmap in the master prompt; the order follows the depende
 - **Verified:** platform admin login at 01:48:02 UTC, then 2FA, then the session was marked verified at 01:48:51 UTC. mfa_verified_sessions has 1 row and mfa_failures has 0. The dashboard opened normally.
 - **Lesson:** put the undo command under a clearly separate "only if it fails" heading.
 
+### 2026-10-01 (evening): live summary
+- **C (FY):**
+  - 090 rollover (decision अ), C-a TB opening b/f, and 091 close_financial_year (D1–D4) are all LIVE.
+  - D5 (Bacher's 2024-25 year-transfer) is deferred by the founder.
+- **B7:** 092 nightly-ledger-drift (02:00 IST) is LIVE. It returned 0 drifting societies at go-live.
+- **TAX-02:** delete rollback is LIVE (#600).
+- **D (tax):**
+  - 093 recorded the catalog version.
+  - `tds.<s>.charge_on_excess_only`: only 194Q has it, sourced from Note 1(b). computeTds refuses above the threshold without it.
+  - /ask end-of-question cue fix (#607).
+  - 194Q purchase advice (#608, advice only).
+  - ai-ask was redeployed twice. Verified: "194H की दर" → F-lane 2%, "194Q की सीमा" → ₹50,00,000.
+- **Backup bundles:** rebuilt to registry 98 in a separate session (#606), with a CI gate `check:edge-bundles`.
+- **Open questions for the CA** (each needs an Act/circular URL):
+  - (a) Where does the 194Q buyer-turnover gate sit in the 2025 Act?
+  - (b) Is GST in the 194Q base?
+  - (c) For 194C / 194H above the threshold, is TDS on the whole sum or the excess?
+- **Next:** E (payroll TDS cumulative, PAY-01), then F (offline policy), then G1 (old-browser build target).
+
 ## Tracked audit findings
 | ID | Area | Status |
 |---|---|---|
