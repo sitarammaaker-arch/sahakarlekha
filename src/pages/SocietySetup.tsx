@@ -24,6 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { unlockAction } from '@/lib/dualControlUnlock';
 import { NotificationChannelsCard } from '@/components/settings/NotificationChannelsCard';
+import { YearCloseCard } from '@/components/fy/YearCloseCard';
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
 import { ucasReserveMinPct } from '@/lib/rules/ucas';
 import { SOCIETY_TEMPLATES } from '@/lib/storage';
@@ -1109,6 +1110,7 @@ const SocietySetup: React.FC = () => {
                   </Button>
                 </div>
               </div>
+              <YearCloseCard />
               <NotificationChannelsCard />
             </CardContent>
           </Card>
