@@ -10,7 +10,7 @@ import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
-import { publishedOrder, readingMinutes, type BlogPost } from '@/content/blog';
+import { publishedOrder, readingMinutes, loadBlogRaw, type BlogPost } from '@/content/blog';
 import { formatDate } from '@/components/blog/blogTheme';
 import { fetchBlogViewCounts, formatViews } from '@/lib/blogViews';
 import { ArrowRight, Calendar, Clock, Eye, Rss, ArrowUpRight, Flame } from 'lucide-react';
@@ -23,6 +23,28 @@ function catColor(cat: string): string {
   let h = 0;
   for (const ch of cat) h += ch.charCodeAt(0);
   return CAT_COLORS[h % CAT_COLORS.length];
+}
+
+/** First few sentences of the article body (markdown stripped) for the hero card. */
+function introPreview(post: BlogPost, max = 360): string {
+  const raw = loadBlogRaw(post.slug);
+  if (!raw) return post.excerpt;
+  const paras = raw
+    .split(/\r?\n\s*\r?\n/)
+    .map((b) => b.trim())
+    .filter((b) => b && !/^(#|>|[-*]\s|\d+\.\s|\||---|```)/.test(b));
+  let out = '';
+  for (const b of paras) {
+    const t = b
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/[*_`]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    out = out ? out + ' ' + t : t;
+    if (out.length >= max) break;
+  }
+  if (!out) return post.excerpt;
+  return out.length > max ? out.slice(0, max).replace(/\s+\S*$/, '') + '…' : out;
 }
 
 const Meta: React.FC<{ post: BlogPost; views?: number; className?: string }> = ({ post, views, className = '' }) => (
@@ -75,7 +97,7 @@ const BlogIndex: React.FC = () => {
   }, []);
 
   const featured = posts[0];
-  const secondary = posts.slice(1, 3);
+  const secondary = posts.slice(1, 5);
   const bentoSlugs = new Set([featured, ...secondary].filter(Boolean).map((p) => p.slug));
 
   const mostRead = React.useMemo(() => {
@@ -159,12 +181,12 @@ const BlogIndex: React.FC = () => {
                     </div>
                     <CardContent className="p-5 flex flex-col flex-1">
                       <h2 className="font-serif text-xl md:text-2xl font-bold text-foreground leading-tight group-hover:text-primary transition-colors">{featured.title}</h2>
-                      <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{featured.excerpt}</p>
+                      <p className="text-sm md:text-base text-muted-foreground mt-3 line-clamp-5 leading-relaxed">{introPreview(featured)}</p>
                       <Meta post={featured} views={views[featured.slug]} className="mt-4" />
                     </CardContent>
                   </Card>
                 </Link>
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 gap-4 content-start">
                   {secondary.map((post) => (
                     <Link key={post.slug} to={`/blog/${post.slug}`} className="group block">
                       <Card className="h-full transition-all hover:shadow-md hover:border-primary/40">
