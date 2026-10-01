@@ -91,5 +91,23 @@ ok(line(withCancel, '1001').totalDrMinor === 600000 && line(withCancel, '1001').
 ok(withCancel.totalDrMinor === tb.totalDrMinor && withCancel.totalCrMinor === tb.totalCrMinor && withCancel.balanced,
   'grand totals identical to the no-cancel TB — a cancelled voucher adds nothing to gross');
 
+
+// 7. Multi-year books (Phase-2 C, D1): with fyStart, an earlier year's vouchers fold into ONE net
+//    brought-forward opening; the transaction columns hold only the year; net/total unchanged.
+{
+  const prev = planGenesisEvents([{ voucher: v('p1', { date: '2025-03-10', amount: 700 }), tenantId: 'SOC001', jurisdiction: 'hr' },
+    { voucher: v('p2', { date: '2025-03-20', debitAccountId: '4101', creditAccountId: '1001', amount: 200 }), tenantId: 'SOC001', jurisdiction: 'hr' }]).events;
+  const cur = [...openings, ...prev, ...posting];
+  const plain = projectSplitTrialBalance(cur, '2025-12-31');
+  const fy = projectSplitTrialBalance(cur, '2025-12-31', '2025-04-01');
+  ok(line(fy, '1001').openingDrMinor === 500000 + 70000 - 20000 && line(fy, '1001').openingCrMinor === 0, 'fyStart: 1001 b/f = static 5000 + prior net 500 (one net figure)');
+  ok(line(fy, '1001').txnDrMinor === 100000 && line(fy, '1001').txnCrMinor === 0, 'fyStart: transactions only from this FY');
+  ok(line(fy, '1001').netMinor === line(plain, '1001').netMinor && line(fy, '4101').netMinor === line(plain, '4101').netMinor, 'fyStart: net per account unchanged');
+  ok(fy.balanced, 'fyStart: still balanced');
+  const single = projectSplitTrialBalance([...openings, ...posting], '2025-12-31', '2025-04-01');
+  const singlePlain = projectSplitTrialBalance([...openings, ...posting], '2025-12-31');
+  ok(JSON.stringify(single.lines) === JSON.stringify(singlePlain.lines), 'a single-year society: fyStart changes nothing');
+}
+
 console.log(`\nSplit trial balance (T-09): ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
