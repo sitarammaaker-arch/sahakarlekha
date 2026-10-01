@@ -18,8 +18,10 @@ export function ledgerTrialBalance(
   events: readonly LedgerEvent[],
   accounts: readonly LedgerAccount[],
   asOf?: string,
+  /** Multi-year books: vouchers before this date are the brought-forward opening (see projections). */
+  fyStart?: string,
 ): AccountBalance[] {
-  const split = projectSplitTrialBalance(events, asOf);
+  const split = projectSplitTrialBalance(events, asOf, fyStart);
   const byId = new Map(split.lines.map((l) => [l.accountId, l]));
   const results: AccountBalance[] = [];
   const seen = new Set<string>();

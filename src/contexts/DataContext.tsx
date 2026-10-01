@@ -31,6 +31,7 @@ import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount 
 import { issueOfficialNumber } from '@/lib/numbering';
 import { buildPostVoucherPayload, buildEditVoucherPayload, buildStockDocumentPayload, postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVoucherClient';
 import { reverseEntryLines, isEditLocked } from '@/lib/voucherReversal';
+import { fyStartOf, fyStartFromLabel, netOpening } from '@/lib/fyPeriod';
 import { canTransitionMember } from '@/lib/memberLifecycle';
 import { computeStock, computeStockValue, computeStockCostRate, reconcileMovements } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
@@ -4871,6 +4872,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // BUG-03 FIX: Accept optional asOnDate to filter vouchers up to that date.
   const getTrialBalance = useCallback((asOnDate?: string): AccountBalance[] => {
+    // Phase-2 C (D1, one continuous ledger): the opening columns are the balance brought forward at the
+    // start of the as-of date's financial year — earlier years' vouchers fold into it — and the
+    // transaction columns hold only that year. Net balances are unchanged; a society whose vouchers all
+    // sit in one year sees exactly the old columns.
+    const tbFyStart = asOnDate ? fyStartOf(asOnDate) : fyStartFromLabel(societyRef.current?.financialYear);
     // T-09 (ADR-0001): the ledger read cut. When this tenant is cut over AND the journal reproduces
     // the vouchers RIGHT NOW (ledgerParity — belt-and-suspenders), serve the trial balance from the
     // event log. If parity fails (journal not fully loaded/seeded, or drifted) we fall through to the
@@ -4881,7 +4887,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (societyRef.current?.ledgerReadsEnabled
       && activeBranchIdRef.current === ALL_BRANCHES
       && ledgerParity(ledgerEventsRef.current, activeVouchers, accounts).matches) {
-      return ledgerTrialBalance(ledgerEventsRef.current, accounts, asOnDate);
+      return ledgerTrialBalance(ledgerEventsRef.current, accounts, asOnDate, tbFyStart);
     }
 
     const vouchersToUse = asOnDate
@@ -4901,10 +4907,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // O(vouchers×lines + accounts). The sums are identical: addMinor is exact integer paise and
     // order-independent, and both known and orphan legs land in the same map (split out below).
     const txnByAccount = new Map<string, { dr: Minor; cr: Minor }>();
+    const priorByAccount = new Map<string, { dr: Minor; cr: Minor }>();   // earlier FYs → brought forward
     vouchersToUse.forEach(v => {
+      const target = tbFyStart && v.date < tbFyStart ? priorByAccount : txnByAccount;
       getVoucherLines(v).forEach(l => {
-        let bucket = txnByAccount.get(l.accountId);
-        if (!bucket) { bucket = { dr: 0, cr: 0 }; txnByAccount.set(l.accountId, bucket); }
+        let bucket = target.get(l.accountId);
+        if (!bucket) { bucket = { dr: 0, cr: 0 }; target.set(l.accountId, bucket); }
         if (l.type === 'Dr') bucket.dr = addMinor(bucket.dr, toMinor(Number(l.amount) || 0));
         else bucket.cr = addMinor(bucket.cr, toMinor(Number(l.amount) || 0));
       });
@@ -4912,8 +4920,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const results = accounts.filter(a => !a.isGroup).map(account => {
       // ECR-17: openings belong to the Head Office scope (see openingsInScope above).
-      const openingDebitMinor = openingsInScope && account.openingBalanceType === 'debit' ? toMinor(Number(account.openingBalance) || 0) : 0;
-      const openingCreditMinor = openingsInScope && account.openingBalanceType === 'credit' ? toMinor(Number(account.openingBalance) || 0) : 0;
+      const staticDr = openingsInScope && account.openingBalanceType === 'debit' ? toMinor(Number(account.openingBalance) || 0) : 0;
+      const staticCr = openingsInScope && account.openingBalanceType === 'credit' ? toMinor(Number(account.openingBalance) || 0) : 0;
+      const prior = priorByAccount.get(account.id);
+      // No earlier-year vouchers → the static opening exactly as before; otherwise one NET b/f figure.
+      const { drMinor: openingDebitMinor, crMinor: openingCreditMinor } = prior
+        ? netOpening(addMinor(staticDr, prior.dr), addMinor(staticCr, prior.cr))
+        : { drMinor: staticDr, crMinor: staticCr };
       const txn = txnByAccount.get(account.id);
       const txnDebitMinor: Minor = txn ? txn.dr : 0;
       const txnCreditMinor: Minor = txn ? txn.cr : 0;
@@ -4932,21 +4945,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     // Orphaned transactions (legs referencing deleted/missing accounts) — read straight from the map.
-    const orphanMap: Record<string, { dr: Minor; cr: Minor }> = {};
-    txnByAccount.forEach((bucket, id) => {
-      if (!accountIds.has(id)) orphanMap[id] = bucket;
-    });
-    // Add orphaned accounts as synthetic entries so TB can balance
-    Object.entries(orphanMap).forEach(([id, { dr, cr }]) => {
+    const orphanIds = new Set<string>();
+    txnByAccount.forEach((_b, id) => { if (!accountIds.has(id)) orphanIds.add(id); });
+    priorByAccount.forEach((_b, id) => { if (!accountIds.has(id)) orphanIds.add(id); });
+    // Add orphaned accounts as synthetic entries so TB can balance (earlier-year legs as a net b/f).
+    orphanIds.forEach((id) => {
+      const t = txnByAccount.get(id) ?? { dr: 0, cr: 0 };
+      const p = priorByAccount.get(id);
+      const o = p ? netOpening(p.dr, p.cr) : { drMinor: 0, crMinor: 0 };
       const syntheticAccount: LedgerAccount = {
         id, name: `[Deleted] ${id.slice(0, 8)}...`, nameHi: `[हटाया] ${id.slice(0, 8)}...`,
         type: 'liability', openingBalance: 0, openingBalanceType: 'credit',
       };
-      results.push({ account: syntheticAccount, openingDebit: 0, openingCredit: 0, transactionDebit: toRupees(dr), transactionCredit: toRupees(cr), totalDebit: toRupees(dr), totalCredit: toRupees(cr), netBalance: toRupees(subMinor(dr, cr)) });
+      const totDr = addMinor(o.drMinor, t.dr), totCr = addMinor(o.crMinor, t.cr);
+      results.push({ account: syntheticAccount, openingDebit: toRupees(o.drMinor), openingCredit: toRupees(o.crMinor), transactionDebit: toRupees(t.dr), transactionCredit: toRupees(t.cr), totalDebit: toRupees(totDr), totalCredit: toRupees(totCr), netBalance: toRupees(subMinor(totDr, totCr)) });
     });
 
     return results;
-  }, [accounts, activeVouchers, openingsInScope]);
+  }, [accounts, activeVouchers, openingsInScope, society.financialYear]);
 
   const getMemberLedger = useCallback((memberId: string): MemberLedgerEntry[] => {
     const member = members.find(m => m.id === memberId);

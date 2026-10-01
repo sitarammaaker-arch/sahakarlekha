@@ -133,7 +133,13 @@ export interface SplitTrialBalance {
  * these lines onto the AccountBalance shape (join account metadata + toRupees); the split logic lives
  * here so it is unit-testable in isolation, before it is wired into the read path.
  */
-export function projectSplitTrialBalance(events: readonly LedgerEvent[], asOf?: string): SplitTrialBalance {
+/**
+ * `fyStart` (optional, 'YYYY-MM-DD'): multi-year books (Phase-2 C, D1). Vouchers dated BEFORE it are
+ * folded into the OPENING columns, shown as one NET brought-forward figure, so the transaction columns
+ * hold only that financial year. Totals/net per account are unchanged. Omitted → the original behaviour
+ * (static openings only), which every existing caller (e.g. the /ask tools) keeps.
+ */
+export function projectSplitTrialBalance(events: readonly LedgerEvent[], asOf?: string, fyStart?: string): SplitTrialBalance {
   const cutoff = asOfMillis(asOf);
   const acc = new Map<string, { oDr: number; oCr: number; tDr: number; tCr: number }>();
   let count = 0;
@@ -164,10 +170,15 @@ export function projectSplitTrialBalance(events: readonly LedgerEvent[], asOf?: 
   for (const v of resolveCurrentVouchers(events)) {
     if (asOf && v.date > asOf) continue;
     count++;
+    const prior = !!fyStart && v.date < fyStart;   // an earlier year's voucher → brought forward
     for (const l of v.legs) {
       const b = bucket(l.accountId);
-      if (l.drCr === 'Dr') b.tDr += l.amountMinor; else b.tCr += l.amountMinor;
+      if (prior) { if (l.drCr === 'Dr') b.oDr += l.amountMinor; else b.oCr += l.amountMinor; }
+      else if (l.drCr === 'Dr') b.tDr += l.amountMinor; else b.tCr += l.amountMinor;
     }
+  }
+  if (fyStart) {
+    for (const b of acc.values()) { const n = b.oDr - b.oCr; b.oDr = n > 0 ? n : 0; b.oCr = n < 0 ? -n : 0; }
   }
   const lines = [...acc.keys()].sort().map((accountId) => {
     const b = acc.get(accountId)!;
