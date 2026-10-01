@@ -177,7 +177,69 @@ var societyActivities = {
     internal("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E", { type: "boolean" })
   ]
 };
-var CORE_ENTITIES = [society, account, voucher, voucherEntry, societyActivities];
+var memberDistributionRun = {
+  key: "member_distribution_run",
+  table: "member_distribution_runs",
+  domain: "core",
+  label: "Member Distribution Runs",
+  labelHi: "\u0938\u0926\u0938\u094D\u092F \u0935\u093F\u0924\u0930\u0923 (\u0932\u093E\u092D\u093E\u0902\u0936)",
+  minRole: "accountant",
+  scope: "society",
+  nature: "transaction",
+  dependsOn: ["society", "voucher"],
+  naturalKey: ["id"],
+  softDeleteField: "isDeleted",
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  columns: [
+    c("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c("fyLabel", "Financial Year", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937"),
+    c("kind", "Kind", "\u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
+    c("basis", "Basis", "\u0906\u0927\u093E\u0930", { type: "enum" }),
+    c("ratePct", "Rate %", "\u0926\u0930 %", { type: "number" }),
+    money("total", "Total", "\u0915\u0941\u0932"),
+    internal("lines", "Member Lines", "\u0938\u0926\u0938\u094D\u092F \u092A\u0902\u0915\u094D\u0924\u093F\u092F\u093E\u0901", { type: "json" }),
+    c("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
+    internal("voucherId", "Voucher", "\u0935\u093E\u0909\u091A\u0930"),
+    internal("source", "Source", "\u0938\u094D\u0930\u094B\u0924", { type: "enum" }),
+    internal("createdBy", "Created By", "\u092C\u0928\u093E\u0928\u0947 \u0935\u093E\u0932\u093E"),
+    internal("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" }),
+    c("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false })
+  ]
+};
+var loanInterestAccrual = {
+  key: "loan_interest_accrual",
+  table: "loan_interest_accruals",
+  domain: "core",
+  label: "Loan Interest Accruals",
+  labelHi: "\u090B\u0923 \u092C\u094D\u092F\u093E\u091C \u0909\u092A\u093E\u0930\u094D\u091C\u0928",
+  minRole: "accountant",
+  scope: "society",
+  nature: "transaction",
+  dependsOn: ["society", "voucher"],
+  naturalKey: ["id"],
+  softDeleteField: "isDeleted",
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  columns: [
+    c("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    internal("loanId", "Loan", "\u090B\u0923"),
+    internal("memberId", "Member", "\u0938\u0926\u0938\u094D\u092F"),
+    c("periodFrom", "From", "\u0938\u0947", { type: "date" }),
+    c("periodTo", "To", "\u0924\u0915", { type: "date" }),
+    c("days", "Days", "\u0926\u093F\u0928", { type: "number" }),
+    money("outstanding", "Outstanding", "\u092C\u0915\u093E\u092F\u093E"),
+    c("ratePa", "Rate % p.a.", "\u0926\u0930 % \u092A\u094D\u0930\u0924\u093F \u0935\u0930\u094D\u0937", { type: "number" }),
+    money("amount", "Interest", "\u092C\u094D\u092F\u093E\u091C"),
+    c("overdue", "Overdue", "\u0905\u0924\u093F\u0926\u0947\u092F", { type: "boolean" }),
+    money("recovered", "Recovered", "\u0935\u0938\u0942\u0932"),
+    internal("voucherId", "Voucher", "\u0935\u093E\u0909\u091A\u0930"),
+    internal("createdBy", "Created By", "\u092C\u0928\u093E\u0928\u0947 \u0935\u093E\u0932\u093E"),
+    internal("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" }),
+    c("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false })
+  ]
+};
+var CORE_ENTITIES = [society, account, voucher, voucherEntry, societyActivities, memberDistributionRun, loanInterestAccrual];
 
 // src/lib/export/entities/member.ts
 var c2 = (key, header, headerHi, over = {}) => ({ key, header, headerHi, type: "string", piiClass: "none", defaultVisible: true, ...over });
@@ -3000,7 +3062,7 @@ var REGISTRY = [
   ...PLATFORM_ENTITIES
 ];
 
-// node_modules/fflate/esm/browser.js
+// ../../../node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
