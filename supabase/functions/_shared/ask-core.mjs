@@ -1064,7 +1064,7 @@ function occurredBy(event, asOfMs) {
   const t = Date.parse(event.occurredAt);
   return Number.isNaN(t) ? false : t <= asOfMs;
 }
-function projectSplitTrialBalance(events, asOf) {
+function projectSplitTrialBalance(events, asOf, fyStart) {
   const cutoff = asOfMillis(asOf);
   const acc = /* @__PURE__ */ new Map();
   let count = 0;
@@ -1088,10 +1088,21 @@ function projectSplitTrialBalance(events, asOf) {
   for (const v of resolveCurrentVouchers(events)) {
     if (asOf && v.date > asOf) continue;
     count++;
+    const prior = !!fyStart && v.date < fyStart;
     for (const l of v.legs) {
       const b = bucket(l.accountId);
-      if (l.drCr === "Dr") b.tDr += l.amountMinor;
+      if (prior) {
+        if (l.drCr === "Dr") b.oDr += l.amountMinor;
+        else b.oCr += l.amountMinor;
+      } else if (l.drCr === "Dr") b.tDr += l.amountMinor;
       else b.tCr += l.amountMinor;
+    }
+  }
+  if (fyStart) {
+    for (const b of acc.values()) {
+      const n = b.oDr - b.oCr;
+      b.oDr = n > 0 ? n : 0;
+      b.oCr = n < 0 ? -n : 0;
     }
   }
   const lines = [...acc.keys()].sort().map((accountId) => {
@@ -1106,8 +1117,8 @@ function projectSplitTrialBalance(events, asOf) {
 }
 
 // src/lib/ledger/trialBalance.ts
-function ledgerTrialBalance(events, accounts, asOf) {
-  const split = projectSplitTrialBalance(events, asOf);
+function ledgerTrialBalance(events, accounts, asOf, fyStart) {
+  const split = projectSplitTrialBalance(events, asOf, fyStart);
   const byId = new Map(split.lines.map((l) => [l.accountId, l]));
   const results = [];
   const seen = /* @__PURE__ */ new Set();

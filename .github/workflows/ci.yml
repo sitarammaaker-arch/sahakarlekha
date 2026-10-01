@@ -39,13 +39,20 @@ jobs:
         # Point at the app project so this actually gates types. (`npm run typecheck` = the same.)
         run: npx tsc --noEmit -p tsconfig.app.json
 
+      - name: Edge-Function bundles match src/
+        # scheduled-backup / backup-rehearsal / ai-ask import COMMITTED esbuild bundles
+        # (supabase/functions/_shared/*.mjs), not src/. Nothing rebuilt them, so a new registry
+        # entity silently never reached the weekly server backup. Rebuild each from source into a
+        # temp file and fail if it differs from the committed one. Fix: npm run build:edge-bundles.
+        run: npm run check:edge-bundles
+
       - name: Tests
-        # Run every test:* script EXCEPT the ones that need a prior build artifact (dist / esbuild
-        # bundles) — those belong in the build job, not the pure-logic gate. Collect failures so one
-        # broken test doesn't hide the others, then fail the job listing them.
-        # Excludes only dist/bundle — they need a prior build artifact and belong in a build job.
+        # Run every test:* script EXCEPT test:dist, which needs a prior `vite build` (dist/) and
+        # belongs in a build job. Collect failures so one broken test doesn't hide the others, then
+        # fail the job listing them. (The *-bundle tests build their own esbuild bundle, so they run
+        # here. The old filter /dist|bundle/ also silently skipped test:distribution-engine.)
         run: |
-          tests=$(node -e "const s=require('./package.json').scripts;console.log(Object.keys(s).filter(k=>k.startsWith('test:')&&!/dist|bundle/.test(k)).join(' '))")
+          tests=$(node -e "const s=require('./package.json').scripts;console.log(Object.keys(s).filter(k=>k.startsWith('test:')&&k!=='test:dist').join(' '))")
           fails=""
           for t in $tests; do
             echo "::group::npm run $t"
