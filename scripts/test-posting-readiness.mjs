@@ -10,6 +10,7 @@ const base = { flag: false, has_settings: true, fy_locked: false, open_fy_end: '
 const c = (o) => classifyReadiness({ ...base, ...o }, T);
 ok('consistent, current FY → READY', c({}) === 'READY');
 ok('flag on → ON whatever else', c({ flag: true, has_settings: false }) === 'ON');
+ok('flag on but drift → ON-DRIFT (an ON society is still checked)', c({ flag: true, journal_accounts: 2 }) === 'ON-DRIFT');
 ok('no vouchers → EMPTY', c({ live_vouchers: 0 }) === 'EMPTY');
 ok('journal drift → HEAL', c({ journal_accounts: 2 }) === 'HEAL');
 ok('entries drift → HEAL', c({ entries_accounts: 1 }) === 'HEAL');
