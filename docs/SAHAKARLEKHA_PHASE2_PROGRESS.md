@@ -15,7 +15,7 @@
 
 ## Current position
 - **Phase:** A — Critical security
-- **Current task:** A1–A4. PR #584 is MERGED and the client is deployed (2026-09-30 16:20 UTC). Still AWAITING-FOUNDER: deploy the 8 edge fns, then apply 084 + 085 (files staged in `D:\SahakarLekha-Backups\sec\`).
+- **Phase A: COMPLETE and LIVE.** (Old note follows.) A1–A4. PR #584 is MERGED and the client is deployed (2026-09-30 16:20 UTC). Still AWAITING-FOUNDER: deploy the 8 edge fns, then apply 084 + 085 (files staged in `D:\SahakarLekha-Backups\sec\`).
 - **A5:** the P0 (086) is **LIVE**. The founder applied it 2026-09-30 ~16:15 UTC after backup `sahakarlekha-prod-20260930-1613Z.dump`. Verified read-only: anon EXECUTE is false for both fns, the guard is in the body, and the app_migrations row is 086. PR #585 is awaiting merge. The last A5 items (087 issue_certificate, create-order caller check) are in PR `sec/a5-order-cert`.
 - **Next task:** Phase A is code-complete. Next is **B1/B2** (server-posting rollout readiness; the next society is 7f2919f0), then B3.
 
@@ -26,7 +26,7 @@
 |---|---|---|
 | A1 MFA enrolment (SEC-01) | COMPLETE (LIVE 2026-10-01) | mig 084; harness 34/34; the down file reproduces the hole |
 | A2 MFA admin reset (SEC-02) | COMPLETE (LIVE 2026-10-01) | mig 084 (same functions) |
-| A3 MFA bound to session / JWT (SEC-03) | LIVE, awaiting the founder's re-login check | mig 085 + AuthContext + 8 edge fns; harness 41/41 |
+| A3 MFA bound to session / JWT (SEC-03) | COMPLETE (LIVE 2026-10-01; founder re-login verified) | mig 085 + AuthContext + 8 edge fns; harness 41/41 |
 | A4 TOTP brute-force | COMPLETE (LIVE 2026-10-01) | mig 085: 5 fails / 15 min per email |
 | A5 SECURITY DEFINER audit | COMPLETE (086 + 087 + create-order LIVE 2026-10-01) | **A5-1 P0 FIXED in PR #585 (mig 086, harness 7/7):** app_add_society_user / app_reset_society_user_password skipped auth when the JWT email was null, and anon held EXECUTE. Reviewed OK: admin_feedback_* (is_platform_admin; the p_email/p_password args are ignored), pay_payslip_lines (tenant guard), public_reviews/increment_blog_view/verify_certificate (public by design), society_has_users (boolean only), register_society/app_register_admin (signup; only for a user-less society = P3). **A5-2 (P2):** issue_certificate let anyone rename a certificate's holder, which breaks verification for the real holder. Fix: mig 087, harness 7/7 (3/7 before). **A5-3 (P2):** the create-order edge fn accepted the anon key plus any society_id and leaked plan/renewal via the prorated amount. Fix: the caller must be an active user of that society, on a non-pending session. Remaining leads, all accepted as P3: `create-order` edge fn takes `society_id` from the body with no caller check; `issue_certificate` overwrites holder_name; `society_users_bootstrap` anon insert (P3); `app_set_my_password` allowed while 2FA pending (DoS only, by design: the password-reset flow needs it) |
 | A6 Critical RLS verification | COMPLETE (harness) | `scripts/db-harness/tests/a6-tenant-isolation.mjs`, **469/469** on the 2026-09-30 prod dump. Coverage: all 104 tables with society_id × read / update / delete / insert-copy / move-own-row as an S1 admin against a real S2; anon and a signed-in stranger see 0 rows in every table; platform tables (platform_admins, societies, user_mfa…, app_migrations…) cannot be written or read by anon or a stranger. Deny-all tables (account_reclass_log, data_fix_log, member_portal_users) refuse with permission denied. By design: public INSERT on error_log + feedback (unreadable by clients; a foreign society_id only pollutes a log, P3). A 2FA-pending token is covered by a3 (085). |
@@ -49,7 +49,9 @@ NOT STARTED. See the roadmap in the master prompt; the order follows the depende
   - app_mfa_enroll, app_mfa_admin_reset, app_add_society_user, app_reset_society_user_password and app_totp_matches all return 42501.
   - create-order, member-portal-admin and pay-run return 401.
 - **Prod catalog:** app_migrations shows 084–087, the hook stamps mfa_pending, and platform_admin_identity exists.
-- **Pending:** the founder logs out and back in (2FA). After that, mfa_verified_sessions should have 1 row.
+- The founder ran 085_down by mistake at 01:28 UTC (they had read the undo command as a step). They re-applied it at 01:36 UTC after backup `sahakarlekha-prod-20261001-0133Z.dump`.
+- **Verified:** platform admin login at 01:48:02 UTC, then 2FA, then the session was marked verified at 01:48:51 UTC. mfa_verified_sessions has 1 row and mfa_failures has 0. The dashboard opened normally.
+- **Lesson:** put the undo command under a clearly separate "only if it fails" heading.
 
 ## Tracked audit findings
 | ID | Area | Status |
