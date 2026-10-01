@@ -138,8 +138,22 @@ const BlogIndex: React.FC = () => {
               <div className="grid md:grid-cols-[1.5fr_1fr] gap-4 mb-12">
                 <Link to={`/blog/${featured.slug}`} className="group block">
                   <Card className="h-full overflow-hidden flex flex-col transition-all hover:shadow-lg hover:border-primary/40">
-                    <div className="bg-primary/10 h-24 sm:h-28 flex items-end p-4">
-                      <span className="inline-flex items-center rounded-full bg-background/90 px-3 py-1 text-xs font-semibold" style={{ color: catColor(featured.category) }}>
+                    <div className={featured.image ? 'relative aspect-[2/1] bg-primary/10 overflow-hidden' : 'bg-primary/10 h-24 sm:h-28 flex items-end p-4'}>
+                      {featured.image && (
+                        <img
+                          src={featured.image}
+                          alt={featured.imageAlt || featured.title}
+                          width={1376}
+                          height={768}
+                          fetchPriority="high"
+                          decoding="async"
+                          className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                        />
+                      )}
+                      <span
+                        className={featured.image ? 'absolute left-4 bottom-4 inline-flex items-center rounded-full bg-background/90 px-3 py-1 text-xs font-semibold shadow-sm' : 'inline-flex items-center rounded-full bg-background/90 px-3 py-1 text-xs font-semibold'}
+                        style={{ color: catColor(featured.category) }}
+                      >
                         ✦ नवीनतम · {featured.category}
                       </span>
                     </div>
