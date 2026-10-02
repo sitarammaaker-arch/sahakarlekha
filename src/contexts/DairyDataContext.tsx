@@ -15,6 +15,7 @@
  */
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
+import { useCapabilityEnabled } from '@/contexts/useCapabilityEnabled';
 import { refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -100,6 +101,10 @@ const DairyDataContext = createContext<DairyDataContextValue | null>(null);
 export function DairyProvider({ children }: { children: ReactNode }) {
   const { society, accounts, members, addVoucher, cancelVoucher, registerVoucherOwner } = useData();
   const { user } = useAuth();
+  // J6b: load this module's tables only when its capability is on for the society (same rule as the
+  // sidebar / CapabilityGuard) — societies that don't use dairy no longer fetch them on every login.
+  const moduleOn = useCapabilityEnabled(['dairy_collection']);
+  const loadSid = moduleOn ? user?.societyId : undefined;
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
   // T-01: stamp BOTH tenancy keys (society_id + jurisdiction) — the value comes from the SSOT
@@ -137,18 +142,18 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   useEffect(() => registerVoucherOwner('dairy', id => findVoucherOwner(ownerGroupsRef.current, id)), [registerVoucherOwner]);
 
   useEffect(() => {
-    const sid = user?.societyId;
+    const sid = loadSid;
     if (!sid) { setRateChartsState([]); return; }
     fetchAllPaged<DairyRateChart>('dairy_rate_charts', sid).then(
       ({ data, error }) => setRateChartsState(error || !data ? storage.getDairyRateCharts() : (data as DairyRateChart[])),
       () => setRateChartsState(storage.getDairyRateCharts()),
     );
-  }, [user?.societyId]);
+  }, [loadSid]);
 
   // Milk entries — SSOT load; C-B: adopt any rows left in the former page's bespoke
   // `sl_milk_entries_${sid}` key (offline-only entries that never synced) so nothing is lost.
   useEffect(() => {
-    const sid = user?.societyId;
+    const sid = loadSid;
     if (!sid) { setMilkEntriesState([]); return; }
     let legacy: MilkEntry[] = [];
     try { const raw = localStorage.getItem(`sl_milk_entries_${sid}`); if (raw) legacy = JSON.parse(raw) as MilkEntry[]; } catch { /* ignore */ }
@@ -166,43 +171,43 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       ({ data, error }) => setMilkEntriesState(merge(error || !data ? storage.getMilkEntries() : (data as MilkEntry[]))),
       () => setMilkEntriesState(merge(storage.getMilkEntries())),
     );
-  }, [user?.societyId]);
+  }, [loadSid]);
 
   useEffect(() => {
-    const sid = user?.societyId;
+    const sid = loadSid;
     if (!sid) { setSettlementsState([]); return; }
     fetchAllPaged<DairySettlement>('dairy_settlements', sid).then(
       ({ data, error }) => setSettlementsState(error || !data ? storage.getDairySettlements() : (data as DairySettlement[])),
       () => setSettlementsState(storage.getDairySettlements()),
     );
-  }, [user?.societyId]);
+  }, [loadSid]);
 
   useEffect(() => {
-    const sid = user?.societyId;
+    const sid = loadSid;
     if (!sid) { setDispatchesState([]); return; }
     fetchAllPaged<DairyDispatch>('dairy_dispatches', sid).then(
       ({ data, error }) => setDispatchesState(error || !data ? storage.getDairyDispatches() : (data as DairyDispatch[])),
       () => setDispatchesState(storage.getDairyDispatches()),
     );
-  }, [user?.societyId]);
+  }, [loadSid]);
 
   useEffect(() => {
-    const sid = user?.societyId;
+    const sid = loadSid;
     if (!sid) { setInputIssuesState([]); return; }
     fetchAllPaged<DairyInputIssue>('dairy_input_issues', sid).then(
       ({ data, error }) => setInputIssuesState(error || !data ? storage.getDairyInputIssues() : (data as DairyInputIssue[])),
       () => setInputIssuesState(storage.getDairyInputIssues()),
     );
-  }, [user?.societyId]);
+  }, [loadSid]);
 
   useEffect(() => {
-    const sid = user?.societyId;
+    const sid = loadSid;
     if (!sid) { setDistributionsState([]); return; }
     fetchAllPaged<DairyDistribution>('dairy_distributions', sid).then(
       ({ data, error }) => setDistributionsState(error || !data ? storage.getDairyDistributions() : (data as DairyDistribution[])),
       () => setDistributionsState(storage.getDairyDistributions()),
     );
-  }, [user?.societyId]);
+  }, [loadSid]);
 
   // C-A dedicated milk ledgers (procurement, bulk sales, member input receivable, bonus
   // distribution + payable) are NOT created here. The old load-time seeder wrote duplicate accounts
