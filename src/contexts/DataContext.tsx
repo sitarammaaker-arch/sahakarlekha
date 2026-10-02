@@ -33,7 +33,8 @@ import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount 
 import { issueOfficialNumber } from '@/lib/numbering';
 import { buildPostVoucherPayload, buildEditVoucherPayload, buildStockDocumentPayload, postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVoucherClient';
 import { reverseEntryLines, isEditLocked } from '@/lib/voucherReversal';
-import { fyStartOf, fyStartFromLabel, netOpening } from '@/lib/fyPeriod';
+import { fyStartOf, fyStartFromLabel } from '@/lib/fyPeriod';
+import { computeTrialBalance } from '@/lib/reports/trialBalance';
 import { canTransitionMember } from '@/lib/memberLifecycle';
 import { computeStock, computeStockValue, computeStockCostRate, reconcileMovements } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
@@ -5009,78 +5010,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return ledgerTrialBalance(ledgerEventsRef.current, accounts, asOnDate, tbFyStart);
     }
 
-    const vouchersToUse = asOnDate
-      ? activeVouchers.filter(v => v.date <= asOnDate)
-      : activeVouchers;
-
-    // Build results for existing accounts.
-    // T-02 (money precision / ADR-0006): every leg is summed in exact integer paise, so a
-    // trial balance over thousands of legs cannot drift in the last paisa the way float
-    // accumulation does (RULE 2 / CA-02, the phantom-balance class). Storage stays rupees;
-    // only this COMPUTE is minor-unit. Values return as rupees in the same shape — correct
-    // data yields identical numbers, drifty data is now exact.
-    const accountIds = new Set(accounts.filter(a => !a.isGroup).map(a => a.id));
-
-    // Single pass over vouchers×lines: accumulate Dr/Cr per accountId ONCE. This was
-    // O(accounts×vouchers×lines) — every account re-scanned the whole voucher set — and is now
-    // O(vouchers×lines + accounts). The sums are identical: addMinor is exact integer paise and
-    // order-independent, and both known and orphan legs land in the same map (split out below).
-    const txnByAccount = new Map<string, { dr: Minor; cr: Minor }>();
-    const priorByAccount = new Map<string, { dr: Minor; cr: Minor }>();   // earlier FYs → brought forward
-    vouchersToUse.forEach(v => {
-      const target = tbFyStart && v.date < tbFyStart ? priorByAccount : txnByAccount;
-      getVoucherLines(v).forEach(l => {
-        let bucket = target.get(l.accountId);
-        if (!bucket) { bucket = { dr: 0, cr: 0 }; target.set(l.accountId, bucket); }
-        if (l.type === 'Dr') bucket.dr = addMinor(bucket.dr, toMinor(Number(l.amount) || 0));
-        else bucket.cr = addMinor(bucket.cr, toMinor(Number(l.amount) || 0));
-      });
-    });
-
-    const results = accounts.filter(a => !a.isGroup).map(account => {
-      // ECR-17: openings belong to the Head Office scope (see openingsInScope above).
-      const staticDr = openingsInScope && account.openingBalanceType === 'debit' ? toMinor(Number(account.openingBalance) || 0) : 0;
-      const staticCr = openingsInScope && account.openingBalanceType === 'credit' ? toMinor(Number(account.openingBalance) || 0) : 0;
-      const prior = priorByAccount.get(account.id);
-      // No earlier-year vouchers → the static opening exactly as before; otherwise one NET b/f figure.
-      const { drMinor: openingDebitMinor, crMinor: openingCreditMinor } = prior
-        ? netOpening(addMinor(staticDr, prior.dr), addMinor(staticCr, prior.cr))
-        : { drMinor: staticDr, crMinor: staticCr };
-      const txn = txnByAccount.get(account.id);
-      const txnDebitMinor: Minor = txn ? txn.dr : 0;
-      const txnCreditMinor: Minor = txn ? txn.cr : 0;
-      const totalDebitMinor = addMinor(openingDebitMinor, txnDebitMinor);
-      const totalCreditMinor = addMinor(openingCreditMinor, txnCreditMinor);
-      return {
-        account,
-        openingDebit: toRupees(openingDebitMinor),
-        openingCredit: toRupees(openingCreditMinor),
-        transactionDebit: toRupees(txnDebitMinor),
-        transactionCredit: toRupees(txnCreditMinor),
-        totalDebit: toRupees(totalDebitMinor),
-        totalCredit: toRupees(totalCreditMinor),
-        netBalance: toRupees(subMinor(totalDebitMinor, totalCreditMinor)),
-      };
-    });
-
-    // Orphaned transactions (legs referencing deleted/missing accounts) — read straight from the map.
-    const orphanIds = new Set<string>();
-    txnByAccount.forEach((_b, id) => { if (!accountIds.has(id)) orphanIds.add(id); });
-    priorByAccount.forEach((_b, id) => { if (!accountIds.has(id)) orphanIds.add(id); });
-    // Add orphaned accounts as synthetic entries so TB can balance (earlier-year legs as a net b/f).
-    orphanIds.forEach((id) => {
-      const t = txnByAccount.get(id) ?? { dr: 0, cr: 0 };
-      const p = priorByAccount.get(id);
-      const o = p ? netOpening(p.dr, p.cr) : { drMinor: 0, crMinor: 0 };
-      const syntheticAccount: LedgerAccount = {
-        id, name: `[Deleted] ${id.slice(0, 8)}...`, nameHi: `[हटाया] ${id.slice(0, 8)}...`,
-        type: 'liability', openingBalance: 0, openingBalanceType: 'credit',
-      };
-      const totDr = addMinor(o.drMinor, t.dr), totCr = addMinor(o.crMinor, t.cr);
-      results.push({ account: syntheticAccount, openingDebit: toRupees(o.drMinor), openingCredit: toRupees(o.crMinor), transactionDebit: toRupees(t.dr), transactionCredit: toRupees(t.cr), totalDebit: toRupees(totDr), totalCredit: toRupees(totCr), netBalance: toRupees(subMinor(totDr, totCr)) });
-    });
-
-    return results;
+    // K1: the voucher-state compute is a pure module (lib/reports/trialBalance) — same formula, testable alone.
+    return computeTrialBalance({ accounts, vouchers: activeVouchers, asOnDate, fyStart: tbFyStart, openingsInScope });
   }, [accounts, activeVouchers, openingsInScope, society.financialYear]);
 
   const getMemberLedger = useCallback((memberId: string): MemberLedgerEntry[] => {

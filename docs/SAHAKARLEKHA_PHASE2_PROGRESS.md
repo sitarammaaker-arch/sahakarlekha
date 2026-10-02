@@ -255,6 +255,20 @@
   - It did not reproduce in 5 later runs.
   - #631 keeps permanent diagnostics in the cancel spec.
 
+### 2026-10-02: Phase J (perf) closed, Phase K (architecture) started
+- **J results, measured on a production build:**
+  - J1: chunk split. Initial JS per page went from 819 to 465 KB.
+  - J2: lazy blog bodies. Landing and blog pages are −50%.
+  - J6: no society load while logged out. Public-page requests went from 41 to 0.
+  - J6b (#642): capability-gated Housing, Labour and Dairy loads. Post-login requests went from 82 to 60.
+- **#643:** e2e waits for the save/cancel RPC before reloading. A CDP initiator log stays in the cancel spec.
+- **K1 (#646):** `getTrialBalance`'s voucher-state compute moved verbatim to `src/lib/reports/trialBalance.ts`.
+  - DataContext keeps the T-09 source decision.
+  - A one-off randomized old-vs-new check ran 400 cases with 0 mismatches.
+  - New `test:trial-balance` and `e2e/trial-balance.spec.ts` (balanced on staging).
+  - **K approach:** lift pure computes out of DataContext one at a time, each with an equivalence check plus a unit test. No state or behaviour change.
+  - **Next candidates:** P&L, Trading A/c, Receipts & Payments, cash/bank books.
+
 ## Tracked audit findings
 | ID | Area | Status |
 |---|---|---|
