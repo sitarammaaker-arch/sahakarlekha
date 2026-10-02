@@ -44,7 +44,7 @@ export const GUIDE_UI: Record<string, { hi: string; en: string }> = {
   'hub.cert.view': { hi: 'प्रमाणपत्र देखें', en: 'View certificate' },
   'hub.cert.verify': { hi: 'प्रमाणपत्र सत्यापित करें', en: 'Verify a certificate' },
   'hub.cta.title': { hi: 'तैयार हैं? अपनी समिति शुरू करें', en: 'Ready? Start your society' },
-  'hub.cta.desc': { hi: 'पढ़ते जाइए, साथ-साथ अपनी समिति में अभ्यास कीजिए — सहकार लेखा बिल्कुल मुफ़्त है।', en: 'Read on and practise in your own society — SahakarLekha is completely free.' },
+  'hub.cta.desc': { hi: 'पढ़ते जाइए, साथ-साथ अपनी समिति में अभ्यास कीजिए — यह गाइड मुफ़्त है; सहकार लेखा ₹1,499/वित्त वर्ष से।', en: 'Read on and practise in your own society — this guide is free; SahakarLekha starts at ₹1,499/FY.' },
   'hub.cta.start': { hi: 'अभी शुरू करें', en: 'Get started' },
   // chapter
   'ch.home': { hi: 'गाइड', en: 'Guide' },

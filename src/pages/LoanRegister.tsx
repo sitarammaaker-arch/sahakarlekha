@@ -235,7 +235,8 @@ const LoanRegister: React.FC = () => {
   const overdueCount = loans.filter(l => statusOf(l) === 'overdue').length;
   const activeCount = loans.filter(l => statusOf(l) === 'active').length;
 
-  // P3-2: Sec 32 compliance — total loans should not exceed 10× (share capital + reserves)
+  // P3-2: loan-exposure ceiling — total loans should not exceed 10× (share capital + reserves).
+  // Not an Act section (Haryana s.32 = first committee); legacy "sec32" names kept.
   // Share Capital accounts: 1101–1103 (parentId 1100); Reserve accounts: parentId 1200
   const sec32Limit = (() => {
     const tb = getTrialBalance();
@@ -383,13 +384,13 @@ const LoanRegister: React.FC = () => {
         </Card>
       </div>
 
-      {/* P3-2: Sec 32 compliance alert */}
+      {/* P3-2: loan-exposure ceiling alert */}
       {sec32Breach && (
         <div className="flex items-start gap-3 p-4 rounded-lg border-2 border-destructive bg-destructive/5">
           <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
           <div>
             <p className="font-semibold text-destructive">
-              {hi ? 'धारा 32 उल्लंघन — ऋण सीमा पार' : 'Sec. 32 Breach — Loan Limit Exceeded'}
+              {hi ? 'ऋण सीमा पार — स्वामित्व निधि के 10 गुना से अधिक' : 'Loan Limit Exceeded — above 10× owned funds'}
             </p>
             <p className="text-sm text-destructive/80 mt-0.5">
               {hi
@@ -404,8 +405,8 @@ const LoanRegister: React.FC = () => {
           <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
           <span className="text-amber-800 dark:text-amber-300">
             {hi
-              ? `सावधान: बकाया ऋण (${fmt(totalOutstanding)}) धारा 32 की सीमा (${fmt(sec32Limit.limit)}) के 80% से अधिक हो गया है।`
-              : `Caution: Outstanding loans (${fmt(totalOutstanding)}) have crossed 80% of the Sec. 32 limit (${fmt(sec32Limit.limit)}).`}
+              ? `सावधान: बकाया ऋण (${fmt(totalOutstanding)}) 10× स्वामित्व निधि की सीमा (${fmt(sec32Limit.limit)}) के 80% से अधिक हो गया है।`
+              : `Caution: Outstanding loans (${fmt(totalOutstanding)}) have crossed 80% of the 10× owned-funds limit (${fmt(sec32Limit.limit)}).`}
           </span>
         </div>
       )}

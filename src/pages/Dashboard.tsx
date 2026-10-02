@@ -86,7 +86,8 @@ const Dashboard: React.FC = () => {
     // 3. Closing stock — auto-valued from inventory at report time (no journal needed)
     const stockOk = true;
 
-    // 4. Sec 32 loan limit
+    // 4. Loan-exposure ceiling: outstanding loans ≤ 10 × (share capital + reserves). Not tied to any
+    //    Act section (Haryana s.32 = first committee) — variable names keep the legacy "sec32" prefix.
     const shareCapital = tb.filter(b => b.account.parentId === '1100' && !b.account.isGroup).reduce((s, b) => s + Math.abs(b.netBalance), 0);
     const reserves = tb.filter(b => b.account.parentId === '1200' && !b.account.isGroup).reduce((s, b) => s + Math.abs(b.netBalance), 0);
     const loanBase = shareCapital + reserves;
@@ -124,9 +125,9 @@ const Dashboard: React.FC = () => {
     if (!bsTallied)
       advisories.push({ severity: 'critical', route: '/trial-balance', en: 'Balance Sheet is not balanced — check for missing or duplicate journal entries', hi: 'बैलेंस शीट असंतुलित है — अपूर्ण या दोहरी जर्नल एंट्रियां जांचें' });
     if (!sec32Ok)
-      advisories.push({ severity: 'critical', route: '/loan-register', en: `Loan portfolio exceeds Sec 32 limit (${sec32Pct.toFixed(0)}% utilized) — pause new loans or increase member share capital`, hi: `ऋण पोर्टफोलियो धारा 32 सीमा से अधिक (${sec32Pct.toFixed(0)}% उपयोग) — नए ऋण रोकें या शेयर कैपिटल बढ़ाएं` });
+      advisories.push({ severity: 'critical', route: '/loan-register', en: `Loan portfolio exceeds 10× owned funds (share capital + reserves) (${sec32Pct.toFixed(0)}% utilized) — check the limit in your bye-laws / Registrar's orders before new loans`, hi: `ऋण पोर्टफोलियो स्वामित्व निधि (शेयर कैपिटल + रिज़र्व) के 10 गुना से अधिक (${sec32Pct.toFixed(0)}% उपयोग) — नए ऋण से पहले उपनियम/रजिस्ट्रार आदेश की सीमा जाँचें` });
     else if (sec32Pct >= 80 && loanLimit > 0)
-      advisories.push({ severity: 'warning', route: '/loan-register', en: `Loan utilisation at ${sec32Pct.toFixed(0)}% of Sec 32 limit — approaching regulatory ceiling`, hi: `ऋण उपयोग धारा 32 सीमा का ${sec32Pct.toFixed(0)}% — नियामक सीमा के निकट` });
+      advisories.push({ severity: 'warning', route: '/loan-register', en: `Loan utilisation at ${sec32Pct.toFixed(0)}% of 10× owned funds — approaching the ceiling`, hi: `ऋण उपयोग स्वामित्व निधि के 10 गुना का ${sec32Pct.toFixed(0)}% — सीमा के निकट` });
     if (overdueCount > 0)
       advisories.push({ severity: 'warning', route: '/loan-register', en: `${overdueCount} overdue loan${overdueCount > 1 ? 's' : ''} — initiate recovery proceedings promptly`, hi: `${overdueCount} अतिदेय ऋण — तत्काल वसूली कार्यवाही प्रारंभ करें` });
     if (pendingObjections > 0)
@@ -538,7 +539,7 @@ const Dashboard: React.FC = () => {
                 na: false,
               },
               {
-                label: language === 'hi' ? 'ऋण सीमा (धारा 32)' : 'Loan Limit (Sec 32)',
+                label: language === 'hi' ? 'ऋण सीमा (10× स्वामित्व निधि)' : 'Loan Limit (10× owned funds)',
                 ok: complianceChecks.sec32Ok,
                 na: false,
               },
