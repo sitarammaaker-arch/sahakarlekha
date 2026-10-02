@@ -100,8 +100,8 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
     items: [
       {
         q: 'डेटा कहाँ स्टोर होता है? / Where is data stored?',
-        aHi: 'सभी डेटा Supabase (PostgreSQL) क्लाउड डेटाबेस में स्टोर होता है। Supabase के अनुसार डेटा स्थिर अवस्था में AES-256 और ट्रांज़िट में TLS से एन्क्रिप्ट होता है। हर समिति का डेटा Row-Level Security (RLS) से अलग रखा जाता है।',
-        aEn: 'All data is stored in a Supabase (PostgreSQL) cloud database. Per Supabase, data is encrypted at rest with AES-256 and in transit with TLS. Each society\'s data is kept separate with Row-Level Security (RLS).',
+        aHi: 'सभी डेटा Supabase (PostgreSQL) क्लाउड डेटाबेस में स्टोर होता है, जो टोक्यो, जापान (ap-northeast-1) क्षेत्र में होस्ट है। Supabase के अनुसार डेटा स्थिर अवस्था में AES-256 और ट्रांज़िट में TLS से एन्क्रिप्ट होता है। हर समिति का डेटा Row-Level Security (RLS) से अलग रखा जाता है।',
+        aEn: 'All data is stored in a Supabase (PostgreSQL) cloud database hosted in the Tokyo, Japan (ap-northeast-1) region. Per Supabase, data is encrypted at rest with AES-256 and in transit with TLS. Each society\'s data is kept separate with Row-Level Security (RLS).',
       },
       {
         q: 'मोबाइल पर चलता है? / Does it work on mobile?',
