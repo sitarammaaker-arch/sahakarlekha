@@ -81,6 +81,13 @@ test('perf probe: login → dashboard data load', async ({ page }) => {
     return [...out].sort((a, b) => b[1] - a[1]);
   }, perfClick);
   for (const [k, n] of attrib) console.log(`[perf] commits after ${k}: ${n}`);
+  // Timeline: commit times and response ends, ms after the login click, to see bursts / periodic commits.
+  const tl = await page.evaluate((f) => {
+    const w = window as unknown as { __commits: number[]; __fetchEnds: { t: number; u: string }[] };
+    return { c: w.__commits.filter(t => t >= f).map(t => Math.round(t - f)), r: w.__fetchEnds.filter(e => e.t >= f).map(e => `${Math.round(e.t - f)}:${e.u}`) };
+  }, perfClick);
+  console.log(`[perf] commit times: ${tl.c.join(' ')}`);
+  console.log(`[perf] response ends: ${tl.r.join(' ')}`);
   console.log(`[perf] distinct tables/rpcs: ${tables.size}; repeated: ${[...tables].filter(([, n]) => n > 1).map(([t, n]) => `${t}×${n}`).join(', ')}`);
   for (const r of reqs.filter(x => /\/rest\/v1\/(vouchers|society_settings)\?/.test(x.url))) console.log(`[perf] dup? start+${r.start - tClick} ms  ${r.url.replace(/^.*\/rest\/v1\//, '').slice(0, 110)}`);
   for (const r of slow) console.log(`[perf] slow ${String(r.end! - r.start).padStart(5)} ms  start+${r.start - tClick}  ${r.url.replace(/^.*\/rest\/v1\//, '').slice(0, 90)}`);
